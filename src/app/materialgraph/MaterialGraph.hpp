@@ -9,12 +9,6 @@
 namespace aether::editor
 {
 	// A node graph that generates a material's fragment shader.
-	//
-	// Every value in the graph is a float4, and nodes swizzle what they need out of it. A real
-	// type system (float/float2/float3/float4 with promotion rules) is the right end state, but
-	// it is also most of the complexity of a shader graph - carrying one width first keeps the
-	// generator small enough to be tested exhaustively, and the widening rules can be added
-	// underneath it without changing any node.
 	enum class MaterialNodeType : std::uint8_t
 	{
 		Output,
@@ -57,6 +51,24 @@ namespace aether::editor
 		Math,
 		Output,
 	};
+
+	// How wide a value is.
+	//
+	// `Any` is not a value: it marks a pin that takes whatever it is given, and a node whose
+	// output width follows its inputs - Multiply of two float3s is a float3, of two floats is
+	// a float. Resolving those is what MaterialNodeOutputType does.
+	enum class MaterialValueType : std::uint8_t
+	{
+		Any,
+		Float,
+		Float2,
+		Float3,
+		Float4,
+	};
+
+	[[nodiscard]] int MaterialValueComponents(MaterialValueType type);
+	// "float3" - the name used in the generated shader, and in the UI.
+	[[nodiscard]] const char* MaterialValueTypeName(MaterialValueType type);
 
 	// Which of the material's texture slots a TextureSample node reads. Reusing the slots the
 	// material already carries means a graph needs no texture binding path of its own.
@@ -108,6 +120,26 @@ namespace aether::editor
 	[[nodiscard]] const char* MaterialNodeCategoryName(MaterialNodeCategory category);
 	[[nodiscard]] int MaterialNodeInputCount(MaterialNodeType type);
 	[[nodiscard]] const char* MaterialNodeInputName(MaterialNodeType type, int pin);
+
+	// The width a pin declares. `Any` means the node adapts to whatever arrives.
+	[[nodiscard]] MaterialValueType MaterialNodeInputType(MaterialNodeType type, int pin);
+
+	// The width a node actually produces, which for the arithmetic nodes depends on what is
+	// plugged into them. Never returns Any: an unconnected adaptive node settles on Float.
+	[[nodiscard]] MaterialValueType MaterialNodeOutputType(const MaterialGraph& graph, int nodeId);
+
+	// Whether one pin can drive another, and what happens to the value if it does.
+	enum class MaterialConnection : std::uint8_t
+	{
+		Exact,     // same width
+		Broadcast, // a single float filling every component
+		Truncate,  // a wider value with its extra components dropped
+		Refused,   // no sensible conversion exists
+	};
+
+	[[nodiscard]] MaterialConnection MaterialCanConnect(MaterialValueType from, MaterialValueType to);
+	// Why a connection was refused, for the editor to show. Empty when it was not.
+	[[nodiscard]] std::string MaterialConnectionRefusal(MaterialValueType from, MaterialValueType to);
 
 	// Every type the add menu offers, in menu order. Derived from the enum rather than
 	// hand-listed at the call site, so a new node cannot be added and left unreachable.

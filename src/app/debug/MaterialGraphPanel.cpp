@@ -48,6 +48,102 @@ namespace aether::editor
 		bool IsOutputPin(int pinId) { return (pinId % kPinStride) == kOutputPinSlot; }
 		int PinIndex(int pinId) { return pinId % kPinStride; }
 
+		// ImNodes ships a blue-and-grey palette of its own, which sits in the middle of the
+		// editor looking like a different application. Every colour is rebuilt from the
+		// editor's theme tokens instead - and rebuilt every frame, cheaply, so switching the
+		// editor theme takes the graph with it rather than leaving it on the old one.
+		void ApplyGraphTheme()
+		{
+			ImNodesStyle& style = ImNodes::GetStyle();
+			const auto set = [&](ImNodesCol slot, const ImVec4& colour) { style.Colors[slot] = ImGui::ColorConvertFloat4ToU32(colour); };
+
+			set(ImNodesCol_GridBackground, chrome::kBg);
+			set(ImNodesCol_GridLine, chrome::WithAlpha(chrome::kStroke, 0.35f));
+			set(ImNodesCol_GridLinePrimary, chrome::WithAlpha(chrome::kStroke, 0.65f));
+
+			set(ImNodesCol_NodeBackground, chrome::kPanel);
+			set(ImNodesCol_NodeBackgroundHovered, chrome::kPanelHi);
+			set(ImNodesCol_NodeBackgroundSelected, chrome::kPanelHi);
+			set(ImNodesCol_NodeOutline, chrome::kStroke);
+
+			// The title bar is where the accent belongs: it marks which node is selected
+			// without repainting the whole node.
+			set(ImNodesCol_TitleBar, chrome::kPanelHi);
+			set(ImNodesCol_TitleBarHovered, chrome::kAccentDim);
+			set(ImNodesCol_TitleBarSelected, chrome::kAccent);
+
+			// Links and pins are pushed per item, coloured by the width they carry; these are
+			// only the fallbacks and the interaction states.
+			set(ImNodesCol_Link, chrome::kMuted);
+			set(ImNodesCol_LinkHovered, chrome::kAccentHi);
+			set(ImNodesCol_LinkSelected, chrome::kAccent);
+			set(ImNodesCol_Pin, chrome::kMuted);
+			set(ImNodesCol_PinHovered, chrome::kAccentHi);
+
+			set(ImNodesCol_BoxSelector, chrome::WithAlpha(chrome::kAccent, 0.20f));
+			set(ImNodesCol_BoxSelectorOutline, chrome::kAccent);
+
+			set(ImNodesCol_MiniMapBackground, chrome::WithAlpha(chrome::kBg, 0.75f));
+			set(ImNodesCol_MiniMapBackgroundHovered, chrome::WithAlpha(chrome::kBg, 0.90f));
+			set(ImNodesCol_MiniMapOutline, chrome::kStroke);
+			set(ImNodesCol_MiniMapOutlineHovered, chrome::kAccent);
+			set(ImNodesCol_MiniMapNodeBackground, chrome::kPanelHi);
+			set(ImNodesCol_MiniMapNodeBackgroundHovered, chrome::kAccentDim);
+			set(ImNodesCol_MiniMapNodeBackgroundSelected, chrome::kAccent);
+			set(ImNodesCol_MiniMapNodeOutline, chrome::kStroke);
+			set(ImNodesCol_MiniMapLink, chrome::kMuted);
+			set(ImNodesCol_MiniMapLinkSelected, chrome::kAccent);
+			set(ImNodesCol_MiniMapCanvas, chrome::WithAlpha(chrome::kAccent, 0.08f));
+			set(ImNodesCol_MiniMapCanvasOutline, chrome::WithAlpha(chrome::kAccent, 0.45f));
+
+			// Geometry taken from the editor's own style, so nodes are rounded and padded
+			// like every other surface rather than to ImNodes' defaults.
+			const ImGuiStyle& imgui = ImGui::GetStyle();
+			style.NodeCornerRounding = imgui.FrameRounding + 2.0f;
+			style.NodeBorderThickness = 1.0f;
+			style.NodePadding = ImVec2(10.0f, 8.0f);
+			style.LinkThickness = 2.6f;
+			style.PinCircleRadius = 4.5f;
+		}
+
+		// One colour per width, so what a pin carries is readable without hovering it. Sized
+		// to be distinguishable at a glance rather than to be pretty: grey scalars, and warmer
+		// colours as the value gets wider.
+		ImU32 TypeColour(MaterialValueType type)
+		{
+			switch (type)
+			{
+				case MaterialValueType::Float2:
+					return IM_COL32(120, 205, 130, 255);
+				case MaterialValueType::Float3:
+					return IM_COL32(235, 190, 95, 255);
+				case MaterialValueType::Float4:
+					return IM_COL32(225, 120, 180, 255);
+				case MaterialValueType::Float:
+				case MaterialValueType::Any:
+				default:
+					return IM_COL32(175, 180, 190, 255);
+			}
+		}
+
+		// The width shown beside a pin name. An adaptive pin has no width of its own, so it
+		// shows what it will actually become rather than "any", which tells nobody anything.
+		const char* TypeSuffix(MaterialValueType type)
+		{
+			switch (type)
+			{
+				case MaterialValueType::Float2:
+					return "2";
+				case MaterialValueType::Float3:
+					return "3";
+				case MaterialValueType::Float4:
+					return "4";
+				case MaterialValueType::Float:
+				default:
+					return "1";
+			}
+		}
+
 		// Compiling runs slangc as a subprocess, so it waits for a pause rather than firing on
 		// every mouse-move of a slider.
 		constexpr float kAutoCompileIdleSeconds = 0.35f;
@@ -254,12 +350,32 @@ namespace aether::editor
 			}
 			if (IsOutputPin(startPin) && !IsOutputPin(endPin))
 			{
+				const int fromNode = NodeOfPin(startPin);
 				const int toNode = NodeOfPin(endPin);
 				const int toPin = PinIndex(endPin);
+				const MaterialNode* target = m_graph->Find(toNode);
+				if (target == nullptr)
+				{
+					return;
+				}
+
+				// Widths are checked here rather than at compile time, because a connection
+				// that cannot work should never be made in the first place.
+				const MaterialValueType from = MaterialNodeOutputType(*m_graph, fromNode);
+				const MaterialValueType to = MaterialNodeInputType(target->type, toPin);
+				if (const std::string refusal = MaterialConnectionRefusal(from, to); !refusal.empty())
+				{
+					m_status = refusal;
+					m_statusIsError = true;
+					return;
+				}
+
 				// An input takes one link; connecting again replaces rather than stacks.
 				std::erase_if(m_graph->links, [&](const MaterialLink& l) { return l.toNode == toNode && l.toPin == toPin; });
 				m_graph->links.push_back(MaterialLink{
-				        .id = m_graph->nextId++, .fromNode = NodeOfPin(startPin), .fromPin = 0, .toNode = toNode, .toPin = toPin});
+				        .id = m_graph->nextId++, .fromNode = fromNode, .fromPin = 0, .toNode = toNode, .toPin = toPin});
+				m_status.clear();
+				m_statusIsError = false;
 			}
 		}
 
@@ -313,6 +429,14 @@ namespace aether::editor
 		m_canvasOriginX = canvasMin.x + 60.0f;
 		m_canvasOriginY = canvasMin.y + 60.0f;
 
+		ApplyGraphTheme();
+		if (!m_positionsApplied)
+		{
+			// The canvas pan is ImNodes' own state and survives switching material, so
+			// opening a second graph showed wherever the first one had been scrolled to -
+			// usually empty space, which reads exactly like a material with no graph.
+			ImNodes::EditorContextResetPanning(ImVec2(40.0f, 40.0f));
+		}
 		ImNodes::BeginNodeEditor();
 
 		for (MaterialNode& node: m_graph->nodes)
@@ -332,9 +456,18 @@ namespace aether::editor
 
 			for (int pin = 0; pin < MaterialNodeInputCount(node.type); ++pin)
 			{
+				// An adaptive pin is drawn as the width it will actually resolve to, which is
+				// the node's own output width - a Multiply of two float3s has float3 inputs.
+				const MaterialValueType declared = MaterialNodeInputType(node.type, pin);
+				const MaterialValueType shown = declared == MaterialValueType::Any ? MaterialNodeOutputType(m_graph.value(), node.id) : declared;
+				ImNodes::PushColorStyle(ImNodesCol_Pin, TypeColour(shown));
 				ImNodes::BeginInputAttribute(InputPinId(node.id, pin));
 				ImGui::TextUnformatted(MaterialNodeInputName(node.type, pin));
+				ImGui::SameLine();
+				ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(TypeColour(shown)), "%s", TypeSuffix(shown));
+				ImGui::SetItemTooltip("%s", MaterialValueTypeName(shown));
 				ImNodes::EndInputAttribute();
+				ImNodes::PopColorStyle();
 			}
 
 			if (node.type != MaterialNodeType::Output)
@@ -393,16 +526,31 @@ namespace aether::editor
 				ImGui::PopID();
 				ImGui::PopItemWidth();
 
+				const MaterialValueType outType = MaterialNodeOutputType(m_graph.value(), node.id);
+				ImNodes::PushColorStyle(ImNodesCol_Pin, TypeColour(outType));
 				ImNodes::BeginOutputAttribute(OutputPinId(node.id));
 				ImGui::TextUnformatted("Out");
+				ImGui::SameLine();
+				ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(TypeColour(outType)), "%s", TypeSuffix(outType));
+				ImGui::SetItemTooltip("%s", MaterialValueTypeName(outType));
 				ImNodes::EndOutputAttribute();
+				ImNodes::PopColorStyle();
 			}
 			ImNodes::EndNode();
 		}
 
 		for (const MaterialLink& link: m_graph->links)
 		{
+			const MaterialValueType from = MaterialNodeOutputType(*m_graph, link.fromNode);
+			const MaterialValueType to = MaterialNodeInputType(m_graph->Find(link.toNode)->type, link.toPin);
+			const MaterialConnection conversion = MaterialCanConnect(from, to);
+			// A link that silently drops components is the one worth seeing: it is legal and
+			// usually intended - a float4 colour into a float3 base colour - but it is also
+			// how someone loses an alpha channel without noticing.
+			const ImU32 colour = conversion == MaterialConnection::Truncate ? IM_COL32(200, 140, 90, 255) : TypeColour(from);
+			ImNodes::PushColorStyle(ImNodesCol_Link, colour);
 			ImNodes::Link(link.id, OutputPinId(link.fromNode), InputPinId(link.toNode, link.toPin));
+			ImNodes::PopColorStyle();
 		}
 
 		ImNodes::MiniMap(0.18f, ImNodesMiniMapLocation_BottomRight);
@@ -1057,12 +1205,36 @@ namespace aether::editor
 			RefreshPreview(context);
 		}
 
-		const float sidebarWidth = std::min(280.0f, ImGui::GetContentRegionAvail().x * 0.35f);
-		DrawSidebar(context, sidebarWidth);
+		// Clamped rather than fixed: the window can be docked narrow, and a sidebar wider than
+		// the window would push the canvas out of it entirely - which is exactly what a
+		// hard-coded width did once already.
+		const float available = ImGui::GetContentRegionAvail().x;
+		m_sidebarWidth = std::clamp(m_sidebarWidth, 220.0f, std::max(220.0f, available - 220.0f));
+		DrawSidebar(context, m_sidebarWidth);
 
 		if (m_graph)
 		{
 			ImGui::SameLine();
+			// The splitter. An invisible button is the standard idiom - ImGui has no splitter
+			// widget - drawn over so it is visible, and only highlighted while it is in play.
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+			const ImVec2 gripMin = ImGui::GetCursorScreenPos();
+			ImGui::InvisibleButton("##split", ImVec2(6.0f, ImGui::GetContentRegionAvail().y));
+			const bool gripActive = ImGui::IsItemActive();
+			if (gripActive)
+			{
+				m_sidebarWidth += ImGui::GetIO().MouseDelta.x;
+			}
+			if (gripActive || ImGui::IsItemHovered())
+			{
+				ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+			}
+			const ImVec2 gripMax = ImGui::GetItemRectMax();
+			ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(gripMin.x + 2.0f, gripMin.y), ImVec2(gripMax.x - 2.0f, gripMax.y),
+			        ImGui::GetColorU32(gripActive ? ImGuiCol_SeparatorActive : (ImGui::IsItemHovered() ? ImGuiCol_SeparatorHovered : ImGuiCol_Separator)));
+			ImGui::PopStyleVar();
+			ImGui::SameLine();
+
 			ImGui::BeginChild("##canvas", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
 			DrawCanvas();
 			ImGui::EndChild();

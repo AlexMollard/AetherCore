@@ -14,44 +14,53 @@ namespace aether::editor
 {
 	namespace
 	{
+		constexpr MaterialValueType kAny = MaterialValueType::Any;
+		constexpr MaterialValueType kF1 = MaterialValueType::Float;
+		constexpr MaterialValueType kF2 = MaterialValueType::Float2;
+		constexpr MaterialValueType kF3 = MaterialValueType::Float3;
+		constexpr MaterialValueType kF4 = MaterialValueType::Float4;
+
 		struct NodeSpec
 		{
 			const char* name;
 			MaterialNodeCategory category;
 			int inputs;
 			const char* inputNames[3];
+			MaterialValueType inputTypes[3];
+			// Any means "as wide as whatever is plugged in", resolved by MaterialNodeOutputType.
+			MaterialValueType output;
 			const char* description;
 		};
 
 		// Indexed by MaterialNodeType, so the order here follows the enum exactly.
 		constexpr NodeSpec kSpecs[] = {
-		        {"Output", MaterialNodeCategory::Output, 5, {"", "", ""}, "What the surface is made of."},
-		        {"Colour", MaterialNodeCategory::Input, 0, {"", "", ""}, "A constant colour."},
-		        {"Float", MaterialNodeCategory::Input, 0, {"", "", ""}, "A constant number, on every channel."},
-		        {"Texture", MaterialNodeCategory::Texture, 1, {"UV", "", ""}, "Samples one of the material's texture slots."},
-		        {"UV", MaterialNodeCategory::Input, 0, {"", "", ""}, "The mesh's texture coordinates."},
-		        {"Time", MaterialNodeCategory::Input, 0, {"", "", ""}, "Seconds since the engine started."},
-		        {"Fresnel", MaterialNodeCategory::Input, 0, {"", "", ""}, "Rim term: bright where the surface faces away from the camera."},
-		        {"Multiply", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "A * B."},
-		        {"Add", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "A + B."},
-		        {"Lerp", MaterialNodeCategory::Math, 3, {"A", "B", "T"}, "Blends from A to B by T."},
-		        {"Normal map", MaterialNodeCategory::Texture, 1, {"UV", "", ""}, "Unpacks a tangent-space normal map into world space."},
-		        {"Panner", MaterialNodeCategory::Math, 1, {"UV", "", ""}, "Scrolls a UV over time."},
-		        {"Noise", MaterialNodeCategory::Math, 1, {"UV", "", ""}, "Value noise over a UV."},
-		        {"Step", MaterialNodeCategory::Math, 2, {"Edge", "X", ""}, "0 below the edge, 1 above it. A hard cut."},
-		        {"Subtract", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "A - B."},
-		        {"Divide", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "A / B, guarded against dividing by zero."},
-		        {"One minus", MaterialNodeCategory::Math, 1, {"X", "", ""}, "1 - X. Inverts a mask."},
-		        {"Power", MaterialNodeCategory::Math, 2, {"X", "Exp", ""}, "X raised to Exp. Sharpens a gradient."},
-		        {"Saturate", MaterialNodeCategory::Math, 1, {"X", "", ""}, "Clamps to 0..1."},
-		        {"Dot", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "Dot product of the xyz parts, on every channel."},
-		        {"Smoothstep", MaterialNodeCategory::Math, 3, {"Edge 0", "Edge 1", "X"}, "A soft Step: eased from 0 to 1 between the edges."},
-		        {"Sine", MaterialNodeCategory::Math, 1, {"X", "", ""}, "sin(X * frequency), for anything that pulses."},
-		        {"Remap", MaterialNodeCategory::Math, 1, {"X", "", ""}, "Rescales X from one range to another."},
-		        {"Channel", MaterialNodeCategory::Math, 1, {"X", "", ""}, "Picks one channel and broadcasts it."},
-		        {"World position", MaterialNodeCategory::Input, 0, {"", "", ""}, "The shaded point, in world space."},
-		        {"Vertex colour", MaterialNodeCategory::Input, 0, {"", "", ""}, "The mesh's per-vertex colour."},
-		        {"View direction", MaterialNodeCategory::Input, 0, {"", "", ""}, "Unit vector from the surface towards the camera."},
+		        {"Output", MaterialNodeCategory::Output, 5, {"", "", ""}, {kAny, kAny, kAny}, kF4, "What the surface is made of."},
+		        {"Colour", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF4, "A constant colour."},
+		        {"Float", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF1, "A constant number."},
+		        {"Texture", MaterialNodeCategory::Texture, 1, {"UV", "", ""}, {kF2, kAny, kAny}, kF4, "Samples one of the material's texture slots."},
+		        {"UV", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF2, "The mesh's texture coordinates."},
+		        {"Time", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF1, "Seconds since the engine started."},
+		        {"Fresnel", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF1, "Rim term: bright where the surface faces away from the camera."},
+		        {"Multiply", MaterialNodeCategory::Math, 2, {"A", "B", ""}, {kAny, kAny, kAny}, kAny, "A * B."},
+		        {"Add", MaterialNodeCategory::Math, 2, {"A", "B", ""}, {kAny, kAny, kAny}, kAny, "A + B."},
+		        {"Lerp", MaterialNodeCategory::Math, 3, {"A", "B", "T"}, {kAny, kAny, kF1}, kAny, "Blends from A to B by T."},
+		        {"Normal map", MaterialNodeCategory::Texture, 1, {"UV", "", ""}, {kF2, kAny, kAny}, kF3, "Unpacks a tangent-space normal map into world space."},
+		        {"Panner", MaterialNodeCategory::Math, 1, {"UV", "", ""}, {kF2, kAny, kAny}, kF2, "Scrolls a UV over time."},
+		        {"Noise", MaterialNodeCategory::Math, 1, {"UV", "", ""}, {kF2, kAny, kAny}, kF1, "Value noise over a UV."},
+		        {"Step", MaterialNodeCategory::Math, 2, {"Edge", "X", ""}, {kAny, kAny, kAny}, kAny, "0 below the edge, 1 above it. A hard cut."},
+		        {"Subtract", MaterialNodeCategory::Math, 2, {"A", "B", ""}, {kAny, kAny, kAny}, kAny, "A - B."},
+		        {"Divide", MaterialNodeCategory::Math, 2, {"A", "B", ""}, {kAny, kAny, kAny}, kAny, "A / B, guarded against dividing by zero."},
+		        {"One minus", MaterialNodeCategory::Math, 1, {"X", "", ""}, {kAny, kAny, kAny}, kAny, "1 - X. Inverts a mask."},
+		        {"Power", MaterialNodeCategory::Math, 2, {"X", "Exp", ""}, {kAny, kF1, kAny}, kAny, "X raised to Exp. Sharpens a gradient."},
+		        {"Saturate", MaterialNodeCategory::Math, 1, {"X", "", ""}, {kAny, kAny, kAny}, kAny, "Clamps to 0..1."},
+		        {"Dot", MaterialNodeCategory::Math, 2, {"A", "B", ""}, {kF3, kF3, kAny}, kF1, "Dot product of two directions."},
+		        {"Smoothstep", MaterialNodeCategory::Math, 3, {"Edge 0", "Edge 1", "X"}, {kAny, kAny, kAny}, kAny, "A soft Step: eased from 0 to 1 between the edges."},
+		        {"Sine", MaterialNodeCategory::Math, 1, {"X", "", ""}, {kAny, kAny, kAny}, kAny, "sin(X * frequency), for anything that pulses."},
+		        {"Remap", MaterialNodeCategory::Math, 1, {"X", "", ""}, {kAny, kAny, kAny}, kAny, "Rescales X from one range to another."},
+		        {"Channel", MaterialNodeCategory::Math, 1, {"X", "", ""}, {kAny, kAny, kAny}, kF1, "Picks one channel out of a colour or vector."},
+		        {"World position", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF3, "The shaded point, in world space."},
+		        {"Vertex colour", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF3, "The mesh's per-vertex colour."},
+		        {"View direction", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF3, "Unit vector from the surface towards the camera."},
 		};
 		static_assert(std::size(kSpecs) == static_cast<std::size_t>(MaterialNodeType::ViewDirection) + 1,
 		        "Every MaterialNodeType needs a spec; the table is indexed by the enum.");
@@ -62,6 +71,9 @@ namespace aether::editor
 		}
 
 		const char* kOutputPinNames[5] = {"Base colour", "Metallic", "Roughness", "Emissive", "Normal"};
+		// What the lighting model needs from each Output pin: colours are float3, the scalar
+		// factors are floats, and the normal is a direction.
+		constexpr MaterialValueType kOutputPinTypes[5] = {kF3, kF1, kF1, kF3, kF3};
 
 		const char* SlotExpression(MaterialTextureSlot slot)
 		{
@@ -80,7 +92,93 @@ namespace aether::editor
 					return "mat.albedoSlot";
 			}
 		}
+
+		// A literal of the given width, so a fallback for an unconnected pin is typed like
+		// everything else rather than always being a float4.
+		std::string Literal(MaterialValueType type, float v)
+		{
+			switch (type)
+			{
+				case MaterialValueType::Float2:
+					return std::format("float2({}, {})", v, v);
+				case MaterialValueType::Float3:
+					return std::format("float3({}, {}, {})", v, v, v);
+				case MaterialValueType::Float4:
+					return std::format("float4({}, {}, {}, {})", v, v, v, v);
+				case MaterialValueType::Float:
+				case MaterialValueType::Any:
+				default:
+					return std::format("{}", v);
+			}
+		}
+
+		// Rewrites an expression of one width into another. Only the conversions
+		// MaterialCanConnect allows ever reach this.
+		std::string Adapt(const std::string& expr, MaterialValueType from, MaterialValueType to)
+		{
+			if (from == to || to == MaterialValueType::Any)
+			{
+				return expr;
+			}
+			const int fromN = MaterialValueComponents(from);
+			const int toN = MaterialValueComponents(to);
+			if (fromN == 1)
+			{
+				// A single float fills every component, which is what everyone means by
+				// plugging a mask into a colour.
+				return std::format("{}({})", MaterialValueTypeName(to), expr);
+			}
+			if (fromN > toN)
+			{
+				constexpr const char* kSwizzle[5] = {"", "x", "xy", "xyz", "xyzw"};
+				return std::format("({}).{}", expr, kSwizzle[toN]);
+			}
+			// Widening a vector is refused at connect time; padding here only keeps the
+			// generator total for a graph written by hand.
+			std::string out = std::format("{}({}", MaterialValueTypeName(to), expr);
+			for (int i = fromN; i < toN; ++i)
+			{
+				out += ", 0";
+			}
+			out += ")";
+			return out;
+		}
 	} // namespace
+
+	int MaterialValueComponents(MaterialValueType type)
+	{
+		switch (type)
+		{
+			case MaterialValueType::Float2:
+				return 2;
+			case MaterialValueType::Float3:
+				return 3;
+			case MaterialValueType::Float4:
+				return 4;
+			case MaterialValueType::Float:
+			case MaterialValueType::Any:
+			default:
+				return 1;
+		}
+	}
+
+	const char* MaterialValueTypeName(MaterialValueType type)
+	{
+		switch (type)
+		{
+			case MaterialValueType::Float2:
+				return "float2";
+			case MaterialValueType::Float3:
+				return "float3";
+			case MaterialValueType::Float4:
+				return "float4";
+			case MaterialValueType::Float:
+				return "float";
+			case MaterialValueType::Any:
+			default:
+				return "any";
+		}
+	}
 
 	const char* MaterialNodeTypeName(MaterialNodeType type)
 	{
@@ -177,6 +275,91 @@ namespace aether::editor
 		}
 		const NodeSpec& spec = SpecOf(type);
 		return (pin >= 0 && pin < spec.inputs) ? spec.inputNames[pin] : "";
+	}
+
+	MaterialValueType MaterialNodeInputType(MaterialNodeType type, int pin)
+	{
+		if (type == MaterialNodeType::Output)
+		{
+			return (pin >= 0 && pin < 5) ? kOutputPinTypes[pin] : MaterialValueType::Any;
+		}
+		const NodeSpec& spec = SpecOf(type);
+		return (pin >= 0 && pin < spec.inputs) ? spec.inputTypes[pin] : MaterialValueType::Any;
+	}
+
+	namespace
+	{
+		// Depth-limited rather than visited-set based: an adaptive node's width depends on its
+		// inputs, so a cycle would recurse forever. GenerateMaterialShader reports the cycle
+		// properly; this only has to terminate.
+		MaterialValueType ResolveOutputType(const MaterialGraph& graph, int nodeId, int depth)
+		{
+			const MaterialNode* node = graph.Find(nodeId);
+			if (node == nullptr || depth > 64)
+			{
+				return MaterialValueType::Float;
+			}
+			const NodeSpec& spec = SpecOf(node->type);
+			if (spec.output != MaterialValueType::Any)
+			{
+				return spec.output;
+			}
+			// As wide as the widest thing plugged in. An adaptive node with nothing connected
+			// is a float, which is what its unconnected-input fallbacks are.
+			MaterialValueType widest = MaterialValueType::Float;
+			for (int pin = 0; pin < spec.inputs; ++pin)
+			{
+				// A pin that declares a width does not widen the node: Lerp's T is always a
+				// float, and Power's exponent likewise.
+				if (spec.inputTypes[pin] != MaterialValueType::Any)
+				{
+					continue;
+				}
+				if (const MaterialLink* link = graph.LinkInto(nodeId, pin); link != nullptr)
+				{
+					const MaterialValueType incoming = ResolveOutputType(graph, link->fromNode, depth + 1);
+					if (MaterialValueComponents(incoming) > MaterialValueComponents(widest))
+					{
+						widest = incoming;
+					}
+				}
+			}
+			return widest;
+		}
+	} // namespace
+
+	MaterialValueType MaterialNodeOutputType(const MaterialGraph& graph, int nodeId)
+	{
+		return ResolveOutputType(graph, nodeId, 0);
+	}
+
+	MaterialConnection MaterialCanConnect(MaterialValueType from, MaterialValueType to)
+	{
+		if (to == MaterialValueType::Any || from == to)
+		{
+			return MaterialConnection::Exact;
+		}
+		if (from == MaterialValueType::Float)
+		{
+			return MaterialConnection::Broadcast;
+		}
+		if (MaterialValueComponents(from) > MaterialValueComponents(to))
+		{
+			return MaterialConnection::Truncate;
+		}
+		return MaterialConnection::Refused;
+	}
+
+	std::string MaterialConnectionRefusal(MaterialValueType from, MaterialValueType to)
+	{
+		if (MaterialCanConnect(from, to) != MaterialConnection::Refused)
+		{
+			return {};
+		}
+		// The only refused case is a narrow vector driving a wider input. There is no one
+		// right way to invent the missing components, so the graph does not guess.
+		return std::format("A {} cannot fill a {} input - there is no obvious value for the missing components. A single float would broadcast.",
+		        MaterialValueTypeName(from), MaterialValueTypeName(to));
 	}
 
 	const MaterialNode* MaterialGraph::Find(int nodeId) const
@@ -335,8 +518,9 @@ namespace aether::editor
 
 	namespace
 	{
-		// Emits one float4 temporary per node, memoised, so a node feeding three inputs is
-		// evaluated once. Returns the variable name holding that node's value.
+		// Emits one temporary per node, memoised, so a node feeding three inputs is evaluated
+		// once. Every temporary carries the node's real width, and every use of it is adapted
+		// to the width the consuming pin declares.
 		struct Emitter
 		{
 			const MaterialGraph& graph;
@@ -345,13 +529,16 @@ namespace aether::editor
 			std::unordered_set<int> onStack;
 			std::string error;
 
-			std::string Input(int nodeId, int pin, const char* fallback)
+			// The value feeding `pin`, already converted to `want`.
+			std::string Input(int nodeId, int pin, MaterialValueType want, float fallback)
 			{
-				if (const MaterialLink* link = graph.LinkInto(nodeId, pin); link != nullptr)
+				const MaterialLink* link = graph.LinkInto(nodeId, pin);
+				if (link == nullptr)
 				{
-					return Visit(link->fromNode);
+					return Literal(want, fallback);
 				}
-				return fallback;
+				const std::string var = Visit(link->fromNode);
+				return Adapt(var, MaterialNodeOutputType(graph, link->fromNode), want);
 			}
 
 			std::string Visit(int nodeId)
@@ -364,40 +551,43 @@ namespace aether::editor
 				{
 					// A cycle would otherwise recurse until the stack ran out.
 					error = "This graph feeds a node back into itself.";
-					return "float4(0, 0, 0, 1)";
+					return "0";
 				}
 
 				const MaterialNode* node = graph.Find(nodeId);
 				if (node == nullptr)
 				{
 					onStack.erase(nodeId);
-					return "float4(0, 0, 0, 1)";
+					return "0";
 				}
 
+				const MaterialValueType outType = MaterialNodeOutputType(graph, nodeId);
 				const std::string var = std::format("n{}", nodeId);
 				std::string expr;
 				switch (node->type)
 				{
 					case MaterialNodeType::ConstantColor:
-					case MaterialNodeType::ConstantFloat:
 						expr = std::format("float4({}, {}, {}, {})", node->value[0], node->value[1], node->value[2], node->value[3]);
 						break;
+					case MaterialNodeType::ConstantFloat:
+						expr = std::format("{}", node->value[0]);
+						break;
 					case MaterialNodeType::Uv:
-						expr = "float4(input.uv, 0.0f, 1.0f)";
+						expr = "input.uv";
 						break;
 					case MaterialNodeType::Time:
-						expr = "float4(fc->elapsedTime, fc->elapsedTime, fc->elapsedTime, 1.0f)";
+						expr = "fc->elapsedTime";
 						break;
 					case MaterialNodeType::Fresnel:
 						// Schlick with a fixed power: the rim term everyone reaches for first.
-						expr = "float4(pow(1.0f - saturate(dot(normalize(input.worldNormal), normalize(fc->cameraWorldPos.xyz - input.worldPos))), 5.0f).xxx, 1.0f)";
+						expr = "pow(1.0f - saturate(dot(normalize(input.worldNormal), normalize(fc->cameraWorldPos.xyz - input.worldPos))), 5.0f)";
 						break;
 					case MaterialNodeType::TextureSample:
 					{
 						// Sampling at the node's own UV rather than the interpolated one is
 						// the whole point of having a Panner or any other UV maths upstream.
-						const std::string uv = Input(nodeId, 0, "float4(input.uv, 0.0f, 1.0f)");
-						expr = std::format("(({} != kNoTexture) ? g_textures[{}].Sample(g_linearSampler, {}.xy) : float4(1, 1, 1, 1))",
+						const std::string uv = Input(nodeId, 0, kF2, 0.0f);
+						expr = std::format("(({} != kNoTexture) ? g_textures[{}].Sample(g_linearSampler, {}) : float4(1, 1, 1, 1))",
 						        SlotExpression(node->slot), SlotExpression(node->slot), uv);
 						break;
 					}
@@ -405,90 +595,94 @@ namespace aether::editor
 					{
 						// Unpacked from [0,1] and rotated into world space by the same TBN the
 						// standard shader builds, so a normal map reads identically in both.
-						const std::string uv = Input(nodeId, 0, "float4(input.uv, 0.0f, 1.0f)");
+						const std::string uv = Input(nodeId, 0, kF2, 0.0f);
 						expr = std::format(
-						        "(({} != kNoTexture) ? float4(normalize(mul(g_textures[{}].Sample(g_linearSampler, {}.xy).xyz * 2.0f - 1.0f, graphTBN)), 1.0f) : float4(graphGeometricNormal, 1.0f))",
+						        "(({} != kNoTexture) ? normalize(mul(g_textures[{}].Sample(g_linearSampler, {}).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal)",
 						        SlotExpression(node->slot), SlotExpression(node->slot), uv);
 						break;
 					}
 					case MaterialNodeType::Panner:
-					{
-						const std::string uv = Input(nodeId, 0, "float4(input.uv, 0.0f, 1.0f)");
-						expr = std::format("float4({}.xy + fc->elapsedTime * float2({}, {}), 0.0f, 1.0f)", uv, node->value[0], node->value[1]);
+						expr = std::format("({} + fc->elapsedTime * float2({}, {}))", Input(nodeId, 0, kF2, 0.0f), node->value[0], node->value[1]);
 						break;
-					}
 					case MaterialNodeType::Noise:
-					{
-						const std::string uv = Input(nodeId, 0, "float4(input.uv, 0.0f, 1.0f)");
-						expr = std::format("GraphValueNoise({}.xy * {}).xxxx", uv, node->value[0]);
+						expr = std::format("GraphValueNoise({} * {})", Input(nodeId, 0, kF2, 0.0f), node->value[0]);
 						break;
-					}
 					case MaterialNodeType::Step:
-						expr = std::format("step({}, {})", Input(nodeId, 0, "float4(0.5f, 0.5f, 0.5f, 0.5f)"), Input(nodeId, 1, "float4(0, 0, 0, 0)"));
+						expr = std::format("step({}, {})", Input(nodeId, 0, outType, 0.5f), Input(nodeId, 1, outType, 0.0f));
+						break;
+					case MaterialNodeType::Multiply:
+						expr = std::format("({} * {})", Input(nodeId, 0, outType, 1.0f), Input(nodeId, 1, outType, 1.0f));
+						break;
+					case MaterialNodeType::Add:
+						expr = std::format("({} + {})", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 0.0f));
 						break;
 					case MaterialNodeType::Subtract:
-						expr = std::format("({} - {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(0, 0, 0, 0)"));
+						expr = std::format("({} - {})", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 0.0f));
 						break;
 					case MaterialNodeType::Divide:
-						expr = std::format("GraphSafeDivide({}, {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(1, 1, 1, 1)"));
+						expr = std::format("GraphSafeDivide({}, {})", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 1.0f));
+						break;
+					case MaterialNodeType::Lerp:
+						expr = std::format("lerp({}, {}, saturate({}))", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 1.0f),
+						        Input(nodeId, 2, kF1, 0.5f));
 						break;
 					case MaterialNodeType::OneMinus:
-						expr = std::format("(float4(1, 1, 1, 1) - {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"));
+						expr = std::format("(1.0f - {})", Input(nodeId, 0, outType, 0.0f));
 						break;
 					case MaterialNodeType::Power:
 						// pow() of a negative base is undefined, and a mask arriving slightly
 						// below zero is common enough that it would show up as NaN speckle.
-						expr = std::format("pow(max({}, 0.0f), {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(1, 1, 1, 1)"));
+						expr = std::format("pow(max({}, 0.0f), {})", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, kF1, 1.0f));
 						break;
 					case MaterialNodeType::Saturate:
-						expr = std::format("saturate({})", Input(nodeId, 0, "float4(0, 0, 0, 0)"));
+						expr = std::format("saturate({})", Input(nodeId, 0, outType, 0.0f));
 						break;
 					case MaterialNodeType::Dot:
-						expr = std::format("float4(dot({}.xyz, {}.xyz).xxx, 1.0f)", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(0, 0, 0, 0)"));
+						expr = std::format("dot({}, {})", Input(nodeId, 0, kF3, 0.0f), Input(nodeId, 1, kF3, 0.0f));
 						break;
 					case MaterialNodeType::Smoothstep:
-						expr = std::format("smoothstep({}, {}, {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"),
-						        Input(nodeId, 1, "float4(1, 1, 1, 1)"), Input(nodeId, 2, "float4(0.5f, 0.5f, 0.5f, 0.5f)"));
+						expr = std::format("smoothstep({}, {}, {})", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 1.0f),
+						        Input(nodeId, 2, outType, 0.5f));
 						break;
 					case MaterialNodeType::Sine:
-						expr = std::format("sin({} * {})", Input(nodeId, 0, "float4(fc->elapsedTime, fc->elapsedTime, fc->elapsedTime, fc->elapsedTime)"), node->value[0]);
+						expr = std::format("sin({} * {})", Input(nodeId, 0, outType, 0.0f), node->value[0]);
 						break;
 					case MaterialNodeType::Remap:
-						expr = std::format("GraphRemap({}, {}, {}, {}, {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"),
-						        node->value[0], node->value[1], node->value[2], node->value[3]);
+						expr = std::format("GraphRemap({}, {}, {}, {}, {})", Input(nodeId, 0, outType, 0.0f), node->value[0], node->value[1],
+						        node->value[2], node->value[3]);
 						break;
 					case MaterialNodeType::Channel:
 					{
-						constexpr const char* kSwizzles[4] = {"xxxx", "yyyy", "zzzz", "wwww"};
-						expr = std::format("({}).{}", Input(nodeId, 0, "float4(0, 0, 0, 0)"), kSwizzles[std::clamp(node->channel, 0, 3)]);
+						// Clamped to what the incoming value actually has: asking for .w of a
+						// float3 is a compile error, not a black pixel.
+						const MaterialLink* link = graph.LinkInto(nodeId, 0);
+						const MaterialValueType inType = link != nullptr ? MaterialNodeOutputType(graph, link->fromNode) : kF1;
+						const int available = MaterialValueComponents(inType);
+						const int channel = std::clamp(node->channel, 0, available - 1);
+						constexpr const char* kComponent[4] = {"x", "y", "z", "w"};
+						expr = std::format("({}).{}", Input(nodeId, 0, inType, 0.0f), kComponent[channel]);
+						if (inType == kF1)
+						{
+							expr = Input(nodeId, 0, kF1, 0.0f);
+						}
 						break;
 					}
 					case MaterialNodeType::WorldPosition:
-						expr = "float4(input.worldPos, 1.0f)";
+						expr = "input.worldPos";
 						break;
 					case MaterialNodeType::VertexColor:
-						expr = "float4(input.vertexColor, 1.0f)";
+						expr = "input.vertexColor";
 						break;
 					case MaterialNodeType::ViewDirection:
-						expr = "float4(normalize(fc->cameraWorldPos.xyz - input.worldPos), 1.0f)";
-						break;
-					case MaterialNodeType::Multiply:
-						expr = std::format("({} * {})", Input(nodeId, 0, "float4(1, 1, 1, 1)"), Input(nodeId, 1, "float4(1, 1, 1, 1)"));
-						break;
-					case MaterialNodeType::Add:
-						expr = std::format("({} + {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(0, 0, 0, 0)"));
-						break;
-					case MaterialNodeType::Lerp:
-						expr = std::format("lerp({}, {}, saturate({}.x))", Input(nodeId, 0, "float4(0, 0, 0, 1)"),
-						        Input(nodeId, 1, "float4(1, 1, 1, 1)"), Input(nodeId, 2, "float4(0.5f, 0, 0, 1)"));
+						expr = "normalize(fc->cameraWorldPos.xyz - input.worldPos)";
 						break;
 					case MaterialNodeType::Output:
 					default:
-						expr = "float4(0, 0, 0, 1)";
+						expr = Literal(outType, 0.0f);
 						break;
 				}
 
-				body += std::format("    const float4 {} = {};\n", var, expr);
+				body += std::format("    const {} {} = {};\n", MaterialValueTypeName(outType), var, expr);
 				onStack.erase(nodeId);
 				done.emplace(nodeId, var);
 				return var;
@@ -508,11 +702,12 @@ namespace aether::editor
 
 		std::string body;
 		Emitter emitter{.graph = graph, .body = body};
-		const std::string baseColor = emitter.Input(outputIt->id, 0, "float4(0.6f, 0.6f, 0.6f, 1)");
-		const std::string metallic = emitter.Input(outputIt->id, 1, "float4(0, 0, 0, 1)");
-		const std::string roughness = emitter.Input(outputIt->id, 2, "float4(0.5f, 0, 0, 1)");
-		const std::string emissive = emitter.Input(outputIt->id, 3, "float4(0, 0, 0, 1)");
-		const std::string normal = emitter.Input(outputIt->id, 4, "float4(graphGeometricNormal, 1)");
+		const std::string baseColor = emitter.Input(outputIt->id, 0, MaterialValueType::Float3, 0.6f);
+		const std::string metallic = emitter.Input(outputIt->id, 1, MaterialValueType::Float, 0.0f);
+		const std::string roughness = emitter.Input(outputIt->id, 2, MaterialValueType::Float, 0.5f);
+		const std::string emissive = emitter.Input(outputIt->id, 3, MaterialValueType::Float3, 0.0f);
+		const MaterialLink* normalLink = graph.LinkInto(outputIt->id, 4);
+		const std::string normal = normalLink != nullptr ? emitter.Input(outputIt->id, 4, MaterialValueType::Float3, 0.0f) : std::string("graphGeometricNormal");
 		if (!emitter.error.empty())
 		{
 			error = emitter.error;
@@ -562,18 +757,17 @@ float GraphValueNoise(float2 p)
 
 // Dividing by zero produces an inf that spreads through everything downstream, so the
 // divisor is pushed off zero while keeping its sign. sign() returns 0 exactly at zero, which
-// is why the 1 is added back in there.
-float4 GraphSafeDivide(float4 a, float4 b)
-{{
-    const float4 s = sign(b);
-    return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f));
-}}
+// is why the 1 is added back in there. One overload per width, because the graph now emits
+// values of the width the nodes actually carry.
+float  GraphSafeDivide(float  a, float  b) {{ const float  s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }}
+float2 GraphSafeDivide(float2 a, float2 b) {{ const float2 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }}
+float3 GraphSafeDivide(float3 a, float3 b) {{ const float3 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }}
+float4 GraphSafeDivide(float4 a, float4 b) {{ const float4 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }}
 
-float4 GraphRemap(float4 x, float inMin, float inMax, float outMin, float outMax)
-{{
-    const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin);
-    return outMin + (x - inMin) * ((outMax - outMin) / span);
-}}
+float  GraphRemap(float  x, float inMin, float inMax, float outMin, float outMax) {{ const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }}
+float2 GraphRemap(float2 x, float inMin, float inMax, float outMin, float outMax) {{ const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }}
+float3 GraphRemap(float3 x, float inMin, float inMax, float outMin, float outMax) {{ const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }}
+float4 GraphRemap(float4 x, float inMin, float inMax, float outMin, float outMax) {{ const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }}
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
@@ -606,12 +800,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float3x3 graphTBN = float3x3(graphT, graphB, graphGeometricNormal);
 
 {}
-    const float3 albedo    = {}.rgb;
-    const float  metallic  = saturate({}.x);
-    const float  roughness = clamp({}.x, 0.04f, 1.0f);
-    const float3 emissive  = {}.rgb;
+    const float3 albedo    = {};
+    const float  metallic  = saturate({});
+    const float  roughness = clamp({}, 0.04f, 1.0f);
+    const float3 emissive  = {};
 
-    const float3 N = normalize({}.xyz);
+    const float3 N = normalize({});
     const float3 V = normalize(fc->cameraWorldPos.xyz - input.worldPos);
     const float3 L = normalize(-fc->sunDirectionIntensity.xyz);
     const float3 H = normalize(V + L);

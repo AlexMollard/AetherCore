@@ -1,10 +1,12 @@
 #include "debug/MaterialAssetEditor.hpp"
 
+#include <cfloat>
 #include <filesystem>
 #include <utility>
 #include <vector>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include "assets/AssetManager.hpp"
 #include "debug/EditorChrome.hpp"
@@ -149,63 +151,173 @@ namespace aether::editor
 
 		MaterialAsset& m = state.spec.material;
 		bool changed = false;
-		changed |= ImGui::ColorEdit4("Base color", &m.baseColorFactor.x);
-		changed |= ImGui::SliderFloat("Metallic", &m.metallicFactor, 0.0f, 1.0f, "%.2f");
-		changed |= ImGui::SliderFloat("Roughness", &m.roughnessFactor, 0.0f, 1.0f, "%.2f");
-		changed |= ImGui::SliderFloat("Occlusion", &m.occlusionStrength, 0.0f, 1.0f, "%.2f");
-		changed |= ImGui::ColorEdit3("Emissive", &m.emissiveFactor.x, ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
-		changed |= ImGui::Checkbox("Two-sided", &m.doubleSided);
-		ImGui::SameLine();
-		changed |= ImGui::Checkbox("Blend", &m.alphaBlend);
-		ImGui::SameLine();
-		changed |= ImGui::Checkbox("Mask", &m.alphaMask);
-		changed |= ImGui::Checkbox("Vertex colour", &m.modulateVertexColor);
-		ImGui::SameLine();
-		changed |= ImGui::Checkbox("Receives shadows", &m.receiveShadows);
-		if (m.alphaMask)
+
+		// ImGui puts a widget's label to its RIGHT, which in an inspector column this narrow
+		// truncates every one of them to "Roughness..." or "Receives s". A two-column table
+		// puts the labels on the left where they fit and gives every control the same width,
+		// which is also what makes the column read as a list rather than as a pile.
+		const auto row = [](const char* label, const char* tip = nullptr)
 		{
-			changed |= ImGui::SliderFloat("Cutoff", &m.alphaCutoff, 0.0f, 1.0f, "%.2f");
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted(label);
+			if (tip != nullptr)
+			{
+				ImGui::SetItemTooltip("%s", tip);
+			}
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+		};
+
+		// A colour that fills its column instead of a stamp-sized square stranded beside a
+		// lot of empty space. ColorEdit with NoInputs ignores the item width and always draws
+		// one frame-height square, so the swatch and its picker are built here instead.
+		const auto colourRow = [&](const char* id, float* rgba, bool hasAlpha, bool hdr)
+		{
+			const ImVec4 shown(rgba[0], rgba[1], rgba[2], hasAlpha ? rgba[3] : 1.0f);
+			ImGuiColorEditFlags flags = ImGuiColorEditFlags_AlphaPreviewHalf;
+			if (hdr)
+			{
+				flags |= ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float;
+			}
+			if (!hasAlpha)
+			{
+				flags |= ImGuiColorEditFlags_NoAlpha;
+			}
+			const ImVec2 swatch(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight());
+			if (ImGui::ColorButton(id, shown, flags, swatch))
+			{
+				ImGui::OpenPopup(id);
+			}
+			ImGui::SetItemTooltip("Click to pick");
+			bool edited = false;
+			if (ImGui::BeginPopup(id))
+			{
+				edited = hasAlpha ? ImGui::ColorPicker4("##pick", rgba, flags | ImGuiColorEditFlags_AlphaBar)
+				                  : ImGui::ColorPicker3("##pick", rgba, flags);
+				ImGui::EndPopup();
+			}
+			return edited;
+		};
+
+		constexpr ImGuiTableFlags kFieldTable = ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX;
+		ImGui::SeparatorText("Surface");
+		if (ImGui::BeginTable("##surface", 2, kFieldTable))
+		{
+			// A fixed label column: proportional sizing shrank the labels away again as soon
+			// as the panel narrowed, which is the whole problem.
+			ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+			ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
+
+			row("Base colour");
+			changed |= colourRow("##base", &m.baseColorFactor.x, /*hasAlpha*/ true, /*hdr*/ false);
+
+			row("Metallic", "0 for everything except bare metal.");
+			changed |= ImGui::SliderFloat("##metallic", &m.metallicFactor, 0.0f, 1.0f, "%.2f");
+
+			row("Roughness", "0 is a mirror, 1 is chalk.");
+			changed |= ImGui::SliderFloat("##roughness", &m.roughnessFactor, 0.0f, 1.0f, "%.2f");
+
+			row("Occlusion", "How strongly the occlusion texture darkens ambient light.");
+			changed |= ImGui::SliderFloat("##occlusion", &m.occlusionStrength, 0.0f, 1.0f, "%.2f");
+
+			row("Emissive", "Light this surface gives off. Not affected by lighting.");
+			changed |= colourRow("##emissive", &m.emissiveFactor.x, /*hasAlpha*/ false, /*hdr*/ true);
+
+			if (m.alphaMask)
+			{
+				row("Cutoff", "Pixels below this alpha are discarded.");
+				changed |= ImGui::SliderFloat("##cutoff", &m.alphaCutoff, 0.0f, 1.0f, "%.2f");
+			}
+			ImGui::EndTable();
 		}
+
+		ImGui::SeparatorText("Options");
+		if (ImGui::BeginTable("##options", 2, ImGuiTableFlags_SizingStretchSame))
+		{
+			const auto toggle = [&](const char* label, bool* value, const char* tip)
+			{
+				ImGui::TableNextColumn();
+				changed |= ImGui::Checkbox(label, value);
+				ImGui::SetItemTooltip("%s", tip);
+			};
+			toggle("Two-sided", &m.doubleSided, "Draw back faces as well as front faces.");
+			toggle("Blend", &m.alphaBlend, "Blend with what is behind, using the base colour's alpha.");
+			toggle("Alpha mask", &m.alphaMask, "Discard pixels below the cutoff instead of blending.");
+			toggle("Shadows", &m.receiveShadows, "Receive shadows cast by other objects.");
+			ImGui::EndTable();
+		}
+		// The longest label, so it gets the full width rather than being clipped to
+		// "Vertex colou" in a half-width cell.
+		changed |= ImGui::Checkbox("Vertex colour", &m.modulateVertexColor);
+		ImGui::SetItemTooltip("Multiply the base colour by the mesh's own vertex colours.");
 
 		ImGui::SeparatorText("Textures");
 		const std::pair<const char*, std::string*> slots[] = {
 		        {"Albedo", &state.spec.albedoPath},
 		        {"Normal", &state.spec.normalPath},
-		        {"Metallic/Rough", &state.spec.metallicRoughnessPath},
+		        {"Metal/Rough", &state.spec.metallicRoughnessPath},
 		        {"Occlusion", &state.spec.occlusionPath},
 		        {"Emissive", &state.spec.emissivePath},
 		};
-		for (const auto& [label, path]: slots)
+		if (ImGui::BeginTable("##textures", 3, ImGuiTableFlags_SizingFixedFit))
 		{
-			ImGui::PushID(label);
-			ImGui::TextDisabled("%s", label);
-			ImGui::SameLine(140.0f);
-			ImGui::TextUnformatted(path->empty() ? "(none)  drop a texture here" : path->c_str());
-			if (ImGui::BeginDragDropTarget())
+			ImGui::TableSetupColumn("##slot", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+			ImGui::TableSetupColumn("##path", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("##clear", ImGuiTableColumnFlags_WidthFixed);
+			for (const auto& [label, path]: slots)
 			{
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload);
-				        payload != nullptr && payload->DataSize == sizeof(dragdrop::FilePayload))
+				ImGui::PushID(label);
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::AlignTextToFramePadding();
+				ImGui::TextUnformatted(label);
+
+				ImGui::TableSetColumnIndex(1);
+				const bool assigned = !path->empty();
+				const std::string name = assigned ? std::filesystem::path(*path).filename().generic_string() : std::string("Empty");
+				// A framed slot the width of the cell, so an empty one still looks like
+				// somewhere a texture goes and the whole row is the drop target - not just
+				// the few pixels the filename happens to cover.
+				const ImVec2 slotSize(-FLT_MIN, 0.0f);
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+				ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(assigned ? ImGuiCol_Text : ImGuiCol_TextDisabled));
+				ImGui::ButtonEx(name.c_str(), slotSize, ImGuiButtonFlags_AlignTextBaseLine);
+				ImGui::PopStyleColor(2);
+				ImGui::SetItemTooltip("%s", assigned ? path->c_str() : "Drag a texture from the File Explorer onto this slot.");
+				if (ImGui::BeginDragDropTarget())
 				{
-					const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
-					if (file->kind == dragdrop::FileKind::Texture)
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload);
+					        payload != nullptr && payload->DataSize == sizeof(dragdrop::FilePayload))
 					{
-						*path = file->path;
-						changed = true;
+						const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
+						if (file->kind == dragdrop::FileKind::Texture)
+						{
+							*path = file->path;
+							changed = true;
+						}
 					}
+					ImGui::EndDragDropTarget();
 				}
-				ImGui::EndDragDropTarget();
-			}
-			if (!path->empty())
-			{
-				ImGui::SameLine();
+
+				ImGui::TableSetColumnIndex(2);
+				ImGui::BeginDisabled(!assigned);
 				if (ImGui::SmallButton(ICON_FA_XMARK))
 				{
 					path->clear();
 					changed = true;
 				}
+				ImGui::EndDisabled();
+				if (assigned)
+				{
+					ImGui::SetItemTooltip("Clear this slot");
+				}
+				ImGui::PopID();
 			}
-			ImGui::PopID();
+			ImGui::EndTable();
 		}
+		ImGui::Spacing();
 
 		// `changed` only tells us a widget reported an edit; whether anything actually moved
 		// is a comparison against what is on disk. That is also what drives the preview, so a

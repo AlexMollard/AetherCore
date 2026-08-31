@@ -110,5 +110,8 @@ namespace aether::editor
 		MaterialPresetSpec m_previewSpec;
 		bool m_previewValid = false;
 		PrimitiveMesh m_previewMesh = PrimitiveMesh::Sphere;
+		// Draggable, because how much room the properties want and how much the canvas wants
+		// depends entirely on what you are doing to the material.
+		float m_sidebarWidth = 300.0f;
 	};
 } // namespace aether::editor

@@ -69,6 +69,27 @@ namespace aether::app
 		}
 	}
 
+	void UiInputScript::QueueDrag(float fromX, float fromY, float toX, float toY, int button)
+	{
+		// Enough intermediate frames that ImGui's drag threshold is crossed well before the
+		// release, and that a target under the cursor gets a frame to notice it is hovered.
+		constexpr int kMoveFrames = 8;
+
+		PushFrame({SynEvent{SynKind::MousePos, fromX, fromY}});
+		PushFrame({SynEvent{SynKind::MousePos, fromX, fromY}, SynEvent{SynKind::MouseButton, fromX, fromY, button, true}});
+		for (int i = 1; i <= kMoveFrames; ++i)
+		{
+			const float t = static_cast<float>(i) / static_cast<float>(kMoveFrames);
+			const float x = fromX + (toX - fromX) * t;
+			const float y = fromY + (toY - fromY) * t;
+			// The button is re-asserted every frame for the same reason QueueClick re-asserts
+			// the position: the backend re-posts real input each frame otherwise.
+			PushFrame({SynEvent{SynKind::MousePos, x, y}, SynEvent{SynKind::MouseButton, x, y, button, true}});
+		}
+		PushFrame({SynEvent{SynKind::MousePos, toX, toY}, SynEvent{SynKind::MouseButton, toX, toY, button, false}});
+		PushFrame({SynEvent{SynKind::MousePos, toX, toY}});
+	}
+
 	void UiInputScript::QueueKey(int imguiKey)
 	{
 		PushFrame({SynEvent{SynKind::Key, 0.0f, 0.0f, 0, true, imguiKey}});

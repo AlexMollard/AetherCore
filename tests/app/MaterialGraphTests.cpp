@@ -214,15 +214,26 @@ TEST_CASE("Every addable node type generates an expression")
 		graph.nodes.push_back(MaterialNode{.id = 1, .type = MaterialNodeType::Output});
 		graph.nodes.push_back(MakeMaterialNode(2, type));
 		graph.links.push_back(MaterialLink{.id = 3, .fromNode = 2, .fromPin = 0, .toNode = 1, .toPin = 0});
+		// Fed something, so a node whose expression is legitimately its unconnected fallback -
+		// Channel of nothing is the number zero - is not mistaken for an unhandled type.
+		if (MaterialNodeInputCount(type) > 0)
+		{
+			graph.nodes.push_back(MakeMaterialNode(4, MaterialNodeType::ConstantColor));
+			graph.links.push_back(MaterialLink{.id = 5, .fromNode = 4, .fromPin = 0, .toNode = 2, .toPin = 0});
+		}
 
 		std::string error;
 		const std::string shader = GenerateMaterialShader(graph, error);
 		CAPTURE(MaterialNodeTypeName(type));
 		REQUIRE(error.empty());
-		const std::size_t at = shader.find("const float4 n2 = ");
+		// Declared at the node's OWN width now, so the declaration is looked up by that
+		// rather than assuming everything is a float4.
+		const std::string decl = std::string("const ") + MaterialValueTypeName(MaterialNodeOutputType(graph, 2)) + " n2 = ";
+		const std::size_t at = shader.find(decl);
 		REQUIRE(at != std::string::npos);
-		// The all-zero placeholder is what an unhandled type falls through to.
-		CHECK(shader.compare(at, std::strlen("const float4 n2 = float4(0, 0, 0, 1);"), "const float4 n2 = float4(0, 0, 0, 1);") != 0);
+		// A bare zero literal is what an unhandled type falls through to.
+		const std::string placeholder = decl + "0;";
+		CHECK(shader.compare(at, placeholder.size(), placeholder) != 0);
 	}
 }
 
@@ -286,4 +297,125 @@ TEST_CASE("A material with no graph reports no graph")
 TEST_CASE("A section that merely starts with graph is not a graph")
 {
 	CHECK(!ParseMaterialGraph("[graphics]\nquality = 2\n").has_value());
+}
+
+// ---------------------------------------------------------------------------------------
+// Pin widths. The point of these is that connecting a float2 into a float3 is refused before
+// it becomes a shader that either fails to compile or silently reads garbage.
+// ---------------------------------------------------------------------------------------
+
+TEST_CASE("A single float broadcasts into any input")
+{
+	CHECK(MaterialCanConnect(MaterialValueType::Float, MaterialValueType::Float3) == MaterialConnection::Broadcast);
+	CHECK(MaterialCanConnect(MaterialValueType::Float, MaterialValueType::Float4) == MaterialConnection::Broadcast);
+	CHECK(MaterialCanConnect(MaterialValueType::Float, MaterialValueType::Float) == MaterialConnection::Exact);
+}
+
+TEST_CASE("A wider value may drive a narrower input, losing its extra components")
+{
+	// A float4 colour into a float3 base colour is the everyday case, and every existing
+	// graph relies on it.
+	CHECK(MaterialCanConnect(MaterialValueType::Float4, MaterialValueType::Float3) == MaterialConnection::Truncate);
+	CHECK(MaterialCanConnect(MaterialValueType::Float3, MaterialValueType::Float) == MaterialConnection::Truncate);
+}
+
+TEST_CASE("A narrower vector cannot fill a wider input")
+{
+	CHECK(MaterialCanConnect(MaterialValueType::Float2, MaterialValueType::Float3) == MaterialConnection::Refused);
+	CHECK(MaterialCanConnect(MaterialValueType::Float3, MaterialValueType::Float4) == MaterialConnection::Refused);
+	// And says so, because a link that just fails to appear is indistinguishable from a bug.
+	CHECK(!MaterialConnectionRefusal(MaterialValueType::Float2, MaterialValueType::Float3).empty());
+	CHECK(MaterialConnectionRefusal(MaterialValueType::Float, MaterialValueType::Float3).empty());
+}
+
+TEST_CASE("An input pin that adapts accepts anything")
+{
+	CHECK(MaterialCanConnect(MaterialValueType::Float2, MaterialValueType::Any) == MaterialConnection::Exact);
+}
+
+TEST_CASE("Fixed node widths are what the shader needs")
+{
+	MaterialGraph graph;
+	graph.nodes.push_back(MakeMaterialNode(1, MaterialNodeType::Uv));
+	graph.nodes.push_back(MakeMaterialNode(2, MaterialNodeType::ConstantColor));
+	graph.nodes.push_back(MakeMaterialNode(3, MaterialNodeType::ConstantFloat));
+	graph.nodes.push_back(MakeMaterialNode(4, MaterialNodeType::WorldPosition));
+	graph.nodes.push_back(MakeMaterialNode(5, MaterialNodeType::Channel));
+	CHECK(MaterialNodeOutputType(graph, 1) == MaterialValueType::Float2);
+	CHECK(MaterialNodeOutputType(graph, 2) == MaterialValueType::Float4);
+	CHECK(MaterialNodeOutputType(graph, 3) == MaterialValueType::Float);
+	CHECK(MaterialNodeOutputType(graph, 4) == MaterialValueType::Float3);
+	// Channel picks ONE component out, so it is always a float whatever it is fed.
+	CHECK(MaterialNodeOutputType(graph, 5) == MaterialValueType::Float);
+}
+
+// Multiply of two float3s is a float3; of two floats, a float. Getting this wrong is what
+// makes a generated shader fail to compile.
+TEST_CASE("An arithmetic node is as wide as the widest thing plugged into it")
+{
+	MaterialGraph graph;
+	graph.nodes.push_back(MakeMaterialNode(1, MaterialNodeType::Multiply));
+	CHECK(MaterialNodeOutputType(graph, 1) == MaterialValueType::Float);
+
+	graph.nodes.push_back(MakeMaterialNode(2, MaterialNodeType::ConstantFloat));
+	graph.links.push_back(MaterialLink{.id = 10, .fromNode = 2, .fromPin = 0, .toNode = 1, .toPin = 0});
+	CHECK(MaterialNodeOutputType(graph, 1) == MaterialValueType::Float);
+
+	graph.nodes.push_back(MakeMaterialNode(3, MaterialNodeType::WorldPosition));
+	graph.links.push_back(MaterialLink{.id = 11, .fromNode = 3, .fromPin = 0, .toNode = 1, .toPin = 1});
+	CHECK(MaterialNodeOutputType(graph, 1) == MaterialValueType::Float3);
+}
+
+// Lerp's T is a float whatever A and B are, so a float3 blend factor must not widen it.
+TEST_CASE("A pin that declares its own width does not widen the node")
+{
+	MaterialGraph graph;
+	graph.nodes.push_back(MakeMaterialNode(1, MaterialNodeType::Lerp));
+	graph.nodes.push_back(MakeMaterialNode(2, MaterialNodeType::WorldPosition));
+	graph.links.push_back(MaterialLink{.id = 10, .fromNode = 2, .fromPin = 0, .toNode = 1, .toPin = 2});
+	CHECK(MaterialNodeInputType(MaterialNodeType::Lerp, 2) == MaterialValueType::Float);
+	CHECK(MaterialNodeOutputType(graph, 1) == MaterialValueType::Float);
+}
+
+TEST_CASE("A cycle in the widths terminates instead of recursing forever")
+{
+	MaterialGraph graph;
+	graph.nodes.push_back(MakeMaterialNode(1, MaterialNodeType::Multiply));
+	graph.nodes.push_back(MakeMaterialNode(2, MaterialNodeType::Add));
+	graph.links.push_back(MaterialLink{.id = 10, .fromNode = 2, .fromPin = 0, .toNode = 1, .toPin = 0});
+	graph.links.push_back(MaterialLink{.id = 11, .fromNode = 1, .fromPin = 0, .toNode = 2, .toPin = 0});
+	CHECK(MaterialNodeOutputType(graph, 1) == MaterialValueType::Float);
+}
+
+// The generated code has to declare each temporary at the node's real width, or the whole
+// point of the widths is lost the moment it reaches slangc.
+TEST_CASE("Generated temporaries carry the node's own width")
+{
+	MaterialGraph graph;
+	graph.nodes.push_back(MaterialNode{.id = 1, .type = MaterialNodeType::Output});
+	graph.nodes.push_back(MakeMaterialNode(2, MaterialNodeType::Uv));
+	graph.nodes.push_back(MakeMaterialNode(3, MaterialNodeType::WorldPosition));
+	graph.links.push_back(MaterialLink{.id = 10, .fromNode = 3, .fromPin = 0, .toNode = 1, .toPin = 0});
+	graph.links.push_back(MaterialLink{.id = 11, .fromNode = 2, .fromPin = 0, .toNode = 1, .toPin = 1});
+
+	std::string error;
+	const std::string shader = GenerateMaterialShader(graph, error);
+	REQUIRE(error.empty());
+	CHECK(shader.find("const float2 n2 =") != std::string::npos);
+	CHECK(shader.find("const float3 n3 =") != std::string::npos);
+	// A float2 driving the float metallic pin is narrowed, not passed through whole.
+	CHECK(shader.find("(n2).x") != std::string::npos);
+}
+
+TEST_CASE("A float feeding a colour is broadcast rather than truncated")
+{
+	MaterialGraph graph;
+	graph.nodes.push_back(MaterialNode{.id = 1, .type = MaterialNodeType::Output});
+	graph.nodes.push_back(MakeMaterialNode(2, MaterialNodeType::Fresnel));
+	graph.links.push_back(MaterialLink{.id = 10, .fromNode = 2, .fromPin = 0, .toNode = 1, .toPin = 0});
+
+	std::string error;
+	const std::string shader = GenerateMaterialShader(graph, error);
+	REQUIRE(error.empty());
+	CHECK(shader.find("float3(n2)") != std::string::npos);
 }

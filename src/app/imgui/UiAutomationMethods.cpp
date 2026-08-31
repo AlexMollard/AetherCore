@@ -112,6 +112,45 @@ namespace aether::editor
 			        return json{{"status", "queued"}, {"target", json{{"x", cx}, {"y", cy}}}};
 		        }});
 
+		methods.push_back({"ui.drag",
+		        "ui_drag",
+		        "Press at one widget or point and release at another: {from_window,from_label} or {from_x,from_y} to {to_window,to_label} or {to_x,to_y}. This is how a node-graph link or any drag-and-drop is made. Async: query or screenshot afterwards.",
+		        true,
+		        Obj({{"from_x", NumProp()}, {"from_y", NumProp()}, {"from_window", StrProp()}, {"from_label", StrProp()},
+		                {"to_x", NumProp()}, {"to_y", NumProp()}, {"to_window", StrProp()}, {"to_label", StrProp()}, {"button", StrProp()}}),
+		        [](const json& params, MethodContext&) -> json
+		        {
+			        // Both ends go through the same resolver as ui_click, by renaming the
+			        // prefixed keys onto the ones it expects.
+			        const auto endpoint = [&](const char* prefix, float& x, float& y, std::string& err)
+			        {
+				        json one;
+				        const std::string p(prefix);
+				        if (params.contains(p + "x")) { one["x"] = params[p + "x"]; }
+				        if (params.contains(p + "y")) { one["y"] = params[p + "y"]; }
+				        if (params.contains(p + "window")) { one["window"] = params[p + "window"]; }
+				        if (params.contains(p + "label")) { one["label"] = params[p + "label"]; }
+				        return ResolveTarget(one, x, y, err);
+			        };
+
+			        float fromX = 0.0f;
+			        float fromY = 0.0f;
+			        float toX = 0.0f;
+			        float toY = 0.0f;
+			        std::string err;
+			        if (!endpoint("from_", fromX, fromY, err))
+			        {
+				        return json{{"error", "drag start: " + err}};
+			        }
+			        if (!endpoint("to_", toX, toY, err))
+			        {
+				        return json{{"error", "drag end: " + err}};
+			        }
+			        const int button = params.value("button", std::string{"left"}) == "right" ? 1 : 0;
+			        app::UiAutomation::Get().Input().QueueDrag(fromX, fromY, toX, toY, button);
+			        return json{{"status", "queued"}, {"from", json{{"x", fromX}, {"y", fromY}}}, {"to", json{{"x", toX}, {"y", toY}}}};
+		        }});
+
 		methods.push_back({"ui.hover",
 		        "ui_hover",
 		        "Hold the mouse over a widget ({window,label}) or {x,y}. Reveals hover-only UI (tooltips, hover buttons) and sets up a subsequent ui_click on a context-menu item. Held until the next action.",

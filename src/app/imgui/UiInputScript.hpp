@@ -34,6 +34,12 @@ namespace aether::app
 	{
 	public:
 		void QueueClick(float x, float y, int button, bool doubleClick);
+		// Press at one point, move to another over several frames, release there.
+		//
+		// A drag cannot be built out of two clicks: ImGui only reports one once the mouse has
+		// MOVED while held, so the intermediate positions are the whole mechanism. This is
+		// what makes a node editor's links, and any drag-and-drop, reachable from a test.
+		void QueueDrag(float fromX, float fromY, float toX, float toY, int button);
 		void QueueHover(float x, float y);
 		void QueueKey(int imguiKey);
 		void QueueText(std::string utf8);
