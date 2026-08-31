@@ -575,6 +575,99 @@ namespace aether::editor
 		m_renameFocusPending = true;
 	}
 
+	namespace
+	{
+		// Whole quoted paths only, so a reference to "Rock_Wet" is not counted as one to
+		// "Rock" - the same rule the rewrite uses, kept here so the two cannot disagree.
+		int CountQuotedRefs(const std::string& text, const std::string& vfs)
+		{
+			if (vfs.empty())
+			{
+				return 0;
+			}
+			int found = 0;
+			for (std::size_t at = text.find(vfs); at != std::string::npos; at = text.find(vfs, at + vfs.size()))
+			{
+				const std::size_t after = at + vfs.size();
+				if (after < text.size() && (text[after] == '\'' || text[after] == '"'))
+				{
+					++found;
+				}
+			}
+			return found;
+		}
+	} // namespace
+
+	std::string FileExplorerPanel::VfsPathFor(const std::filesystem::path& path) const
+	{
+		std::error_code ec;
+		const std::filesystem::path rel = std::filesystem::relative(path, m_root, ec);
+		if (ec || rel.empty() || rel.generic_string().starts_with(".."))
+		{
+			return {};
+		}
+		return "project://" + rel.generic_string();
+	}
+
+	int FileExplorerPanel::CountAssetReferences(const std::filesystem::path& target, const bool isDirectory) const
+	{
+		std::vector<std::string> paths;
+		std::error_code ec;
+		if (isDirectory)
+		{
+			for (const auto& entry: std::filesystem::recursive_directory_iterator(target, ec))
+			{
+				if (ec)
+				{
+					break;
+				}
+				if (entry.is_regular_file(ec))
+				{
+					if (std::string vfs = VfsPathFor(entry.path()); !vfs.empty())
+					{
+						paths.push_back(std::move(vfs));
+					}
+				}
+			}
+		}
+		else if (std::string vfs = VfsPathFor(target); !vfs.empty())
+		{
+			paths.push_back(std::move(vfs));
+		}
+		if (paths.empty())
+		{
+			return 0;
+		}
+
+		int references = 0;
+		for (const auto& entry: std::filesystem::recursive_directory_iterator(m_root, ec))
+		{
+			if (ec)
+			{
+				break;
+			}
+			if (!entry.is_regular_file(ec) || entry.path().extension() != ".toml")
+			{
+				continue;
+			}
+			// A file inside the doomed directory referring to a sibling is going away too.
+			if (isDirectory && entry.path().generic_string().starts_with(target.generic_string()))
+			{
+				continue;
+			}
+			const auto text = io::file_util::ReadText(entry.path());
+			if (!text)
+			{
+				continue;
+			}
+			for (const std::string& vfs: paths)
+			{
+				references += CountQuotedRefs(*text, vfs);
+			}
+		}
+		return references;
+	}
+
 	int FileExplorerPanel::RetargetAssetReferences(const std::filesystem::path& oldPath, const std::filesystem::path& newPath)
 	{
 		// Scenes, prefabs and materials refer to assets by "project://" string. Renaming only
@@ -1247,6 +1340,7 @@ namespace aether::editor
 			{
 				m_deleteTarget = entry.path;
 				m_deleteIsDirectory = entry.isDirectory;
+				m_deleteReferenceCount = CountAssetReferences(entry.path, entry.isDirectory);
 				m_openDeletePopup = true;
 			}
 			ImGui::PopStyleColor();
@@ -1277,6 +1371,15 @@ namespace aether::editor
 			const std::string name = m_deleteTarget.filename().generic_string();
 			ImGui::Text("Delete '%s'%s?", name.c_str(), m_deleteIsDirectory ? " and everything in it" : "");
 			ImGui::TextDisabled("This cannot be undone.");
+			if (m_deleteReferenceCount > 0)
+			{
+				// Unlike a rename, a delete has nowhere to repoint these: whatever used the
+				// asset silently falls back to defaults, with only a log line to say why.
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Text, chrome::C(colors::Orange));
+				ImGui::TextWrapped("%s  %d reference%s to this still exist and will break.", ICON_FA_TRIANGLE_EXCLAMATION, m_deleteReferenceCount, m_deleteReferenceCount == 1 ? "" : "s");
+				ImGui::PopStyleColor();
+			}
 			ImGui::Spacing();
 			ImGui::PushStyleColor(ImGuiCol_Button, chrome::WithAlpha(chrome::C(colors::Error), 0.22f));
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, chrome::WithAlpha(chrome::C(colors::Error), 0.65f));

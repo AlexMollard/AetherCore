@@ -65,6 +65,13 @@ namespace aether::editor
 		// Point every scene / prefab / material that referenced a renamed asset at its new
 		// path. Returns how many files were rewritten.
 		int RetargetAssetReferences(const std::filesystem::path& oldPath, const std::filesystem::path& newPath);
+
+		// "project://..." for a path inside the project, or empty for one outside it.
+		[[nodiscard]] std::string VfsPathFor(const std::filesystem::path& path) const;
+		// How many project files reference the asset (or, for a directory, anything inside
+		// it). Deleting cannot repoint those references, so the count is what the confirm
+		// dialog warns with.
+		[[nodiscard]] int CountAssetReferences(const std::filesystem::path& target, bool isDirectory) const;
 		bool DuplicateEntry(const std::filesystem::path& target);
 		bool DeleteEntry(const std::filesystem::path& target, bool isDirectory);
 
@@ -104,6 +111,8 @@ namespace aether::editor
 		std::filesystem::path m_deleteTarget;
 		bool m_deleteIsDirectory = false;
 		bool m_openDeletePopup = false;
+		// Counted once when the dialog opens, not per frame: it walks every project file.
+		int m_deleteReferenceCount = 0;
 
 		bool m_openNewPopup = false;
 		char m_newScriptNameBuf[64] = {};
