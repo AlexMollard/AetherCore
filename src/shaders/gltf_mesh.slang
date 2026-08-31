@@ -20,6 +20,7 @@
 #include "include/GpuMaterial.slangh"
 #include "include/Sky.slangh"
 #include "include/EnvBrdf.slangh"
+#include "include/AmbientOcclusion.slangh"
 #include "include/HeightFog.slangh"
 #include "include/ShadowSampling.slangh"
 #include "include/DirectionalShadowCSM.slangh"
@@ -184,31 +185,9 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     }
 
     // ── Occlusion ─────────────────────────────────────────────────────────
-    float materialAo = 1.0;
-    if (mat.occlusionSlot != kNoTexture)
-    {
-        float aoSample = g_textures[mat.occlusionSlot].Sample(g_linearSampler, uv).r;
-        materialAo = lerp(1.0, aoSample, mat.occlusionStrength);
-    }
-    float gtaoVisibility = 1.0;
-
-    // Sample GTAO from the resource table.
-    ResourceEntry aoEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_Gtao);
-    if (aoEntry.type == kResourceTypeBindlessTexture && aoEntry.address != 0xFFFFFFFFu && aoEntry.width > 0u && aoEntry.height > 0u)
-    {
-        uint aoSlot = uint(aoEntry.address);
-        // Map full-res pixel coords to [0,1] using the actual scene extent.
-        // The AO image is half-res with rounded-up dimensions, so aoEntry*2 can
-        // overshoot the true extent by a pixel when the scene extent is odd.
-        ResourceEntry sceneDepthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
-        float2 fullExtent = (sceneDepthEntry.type == kResourceTypeBindlessTexture && sceneDepthEntry.width > 0u && sceneDepthEntry.height > 0u)
-            ? float2(sceneDepthEntry.width, sceneDepthEntry.height)
-            : float2(aoEntry.width, aoEntry.height) * 2.0f;
-        float2 aoUv = saturate(input.svPosition.xy / fullExtent);
-        gtaoVisibility = saturate(g_textures[aoSlot].Sample(g_linearSampler, aoUv).r);
-    }
+    const float materialAo = MaterialOcclusion(mat, uv);
+    const float gtaoVisibility = GtaoVisibility(fc, input.svPosition.xy);
     float ao = saturate(materialAo * gtaoVisibility);
-    ao = saturate(ao);
 
     // ── Emissive ──────────────────────────────────────────────────────────
     float3 emissive = mat.emissiveFactor.xyz;
@@ -365,7 +344,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // Lagarde's approximation ("Moving Frostbite to Physically Based Rendering")
     // reconstructs the cone's occlusion from the hemisphere's. At roughness 1 it
     // returns the plain AO, because then the lobe IS the hemisphere.
-    const float specularAo = saturate(pow(NdotV + ambientAo, exp2(-16.0 * roughness - 1.0)) - 1.0 + ambientAo);
+    const float specularAo = SpecularOcclusion(ambientAo, NdotV, roughness);
     float3 ambient = ambientDiffuse * ambientAo + ambientSpecular * specularAo;
 
     float3 finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));

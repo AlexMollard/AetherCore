@@ -1,0 +1,61 @@
+#ifndef AETHER_AMBIENT_OCCLUSION_SLANGH
+#define AETHER_AMBIENT_OCCLUSION_SLANGH
+
+// How much of the ambient hemisphere reaches this pixel.
+//
+// Two sources multiplied: the material's own baked occlusion texture, and the screen-space
+// GTAO buffer this frame. Kept here rather than at the call site because the material graph
+// generates a second shader that needs the identical answer - a surface lit by a different
+// amount of ambient than the one beside it does not read as the same scene.
+//
+// Requires the including shader to declare the bindless heap (g_textures, g_linearSampler)
+// and to have included RenderContracts.slangh and GpuMaterial.slangh.
+
+// The material's baked occlusion, scaled by its strength. 1 when it has no occlusion map.
+float MaterialOcclusion(in GpuMaterial mat, in float2 uv)
+{
+    if (mat.occlusionSlot == kNoTexture)
+    {
+        return 1.0f;
+    }
+    const float aoSample = g_textures[mat.occlusionSlot].Sample(g_linearSampler, uv).r;
+    return lerp(1.0f, aoSample, mat.occlusionStrength);
+}
+
+// This frame's screen-space GTAO, or 1 when the pass did not run.
+float GtaoVisibility(in FrameConstantsData* fc, in float2 pixelCoord)
+{
+    const ResourceEntry aoEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_Gtao);
+    if (aoEntry.type != kResourceTypeBindlessTexture || aoEntry.address == 0xFFFFFFFFu || aoEntry.width == 0u || aoEntry.height == 0u)
+    {
+        return 1.0f;
+    }
+    const uint aoSlot = aoEntry.address;
+    // The AO target is half resolution, so its own extent cannot be scaled up directly - that
+    // would overshoot the true extent by a pixel when the scene extent is odd. The depth
+    // target carries the full extent.
+    const ResourceEntry sceneDepthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
+    const float2 fullExtent = (sceneDepthEntry.type == kResourceTypeBindlessTexture && sceneDepthEntry.width > 0u && sceneDepthEntry.height > 0u)
+        ? float2(sceneDepthEntry.width, sceneDepthEntry.height)
+        : float2(aoEntry.width, aoEntry.height) * 2.0f;
+    const float2 aoUv = saturate(pixelCoord / fullExtent);
+    return saturate(g_textures[aoSlot].Sample(g_linearSampler, aoUv).r);
+}
+
+// Diffuse and specular are not occluded by the same amount. Diffuse gathers the whole
+// hemisphere, so ambient occlusion describes it directly. A specular lobe gathers a cone
+// whose width is set by roughness: the smoother the surface, the narrower that cone, and the
+// less likely the geometry that occludes the hemisphere also occludes the one direction the
+// reflection comes from. Applying the diffuse term to both over-darkens reflections on smooth
+// surfaces inside any crease or contact, so polished materials go dull exactly where they
+// should still catch light.
+//
+// Lagarde's approximation ("Moving Frostbite to Physically Based Rendering") reconstructs the
+// cone's occlusion from the hemisphere's. At roughness 1 it returns the plain AO, because
+// then the lobe IS the hemisphere.
+float SpecularOcclusion(in float ambientAo, in float NdotV, in float roughness)
+{
+    return saturate(pow(NdotV + ambientAo, exp2(-16.0f * roughness - 1.0f)) - 1.0f + ambientAo);
+}
+
+#endif
