@@ -138,7 +138,7 @@ PrepassVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_
 }
 
 [shader("fragment")]
-PrepassOutput fragmentMain(PrepassVSOutput input)
+PrepassOutput fragmentMain(PrepassVSOutput input, bool isFrontFace : SV_IsFrontFace)
 {
 	FrameConstantsData* fc = pc.frame.Ptr();
 	GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);
@@ -184,7 +184,12 @@ PrepassOutput fragmentMain(PrepassVSOutput input)
 	}
 	baseColor *= vertexColor;
 
-	const float3 N = normalize(input.worldNormal);
+	// Flipped for a back face, exactly as the forward shader does. This buffer is what GTAO
+	// reads, and a normal pointing away from the camera makes the occlusion integral decide
+	// the surface is facing into the geometry behind it - so a two-sided surface seen from
+	// behind came out almost fully occluded and lost its ambient entirely. The two have to
+	// agree: shading one normal while occluding another is not a subtle disagreement.
+	const float3 N = normalize(input.worldNormal) * (isFrontFace ? 1.0f : -1.0f);
 
 	// The forward shader does not shade with the roughness the material declares - it
 	// floors it, then widens it by however much the normal varies across the pixel

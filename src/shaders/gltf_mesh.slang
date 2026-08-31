@@ -35,7 +35,7 @@
 // ── Fragment shader ───────────────────────────────────────────────────────
 
 [shader("fragment")]
-float4 fragmentMain(VSOutput input) : SV_Target0
+float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
 {
     FrameConstantsData* fc        = pc.frame.Ptr();
     GpuMaterial*        materials = (GpuMaterial*)(fc->materialBufferAddr);
@@ -93,6 +93,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 Nraw = input.worldNormal;
     const float nRawLen2 = dot(Nraw, Nraw);
     float3 N;
+    const float faceSign = isFrontFace ? 1.0f : -1.0f;
+    Nraw *= faceSign;
     if (nRawLen2 > 1e-12)
     {
         N = normalize(Nraw);
