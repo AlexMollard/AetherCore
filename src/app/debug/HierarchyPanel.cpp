@@ -807,6 +807,10 @@ namespace aether::editor
 			}
 			if (ImGui::MenuItem(ICON_FA_SITEMAP "  Unpack Instance"))
 			{
+				// Snapshot the linkage before stripping it so undo can re-link in place - the
+				// control endpoint already did this, and severing a prefab link is not
+				// something a mis-click should make permanent.
+				auto unpackCommand = UnpackPrefabCommand::Capture(world, e);
 				std::vector<Entity> subtree{e};
 				for (std::size_t i = 0; i < subtree.size(); ++i)
 				{
@@ -821,6 +825,13 @@ namespace aether::editor
 					world.Remove<SceneTransientComponent>(se);
 				}
 				world.Remove<PrefabInstanceComponent>(e);
+				if (unpackCommand)
+				{
+					if (auto* undo = context.services.TryGet<UndoStack>())
+					{
+						undo->Record(std::move(unpackCommand));
+					}
+				}
 				m_dirty = true;
 			}
 		}
