@@ -2686,9 +2686,10 @@ namespace aether::editor
 
 		methods.push_back({"scene.select",
 		        "select_entity",
-		        "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.",
+		        "Select entities in the editor. Pass 'id' for a single entity (0 clears the selection), or 'ids' for a multi-selection - the same state a ctrl-click builds, which is what the bulk-edit paths and the Inspector's multi-entity mode "
+		        "act on. The last id given becomes the primary (what the Inspector shows). Ids that name no live entity come back under 'unknown' rather than being dropped silently.",
 		        true,
-		        Obj({{"id", IntProp()}}, {"id"}),
+		        Obj({{"id", IntProp()}, {"ids", json{{"type", "array"}, {"items", IntProp()}}}}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
 			        auto* selection = ctx.services.TryGet<SceneSelection>();
@@ -2700,6 +2701,51 @@ namespace aether::editor
 			        if (scenes == nullptr)
 			        {
 				        return ErrNoScene();
+			        }
+			        // Multi-selection: Replace() already dedupes and drops invalid entries, so the
+			        // result is the same shape a ctrl-click selection has.
+			        if (p.contains("ids") && p["ids"].is_array())
+			        {
+				        World& world = scenes->GetWorld();
+				        std::vector<Entity> picked;
+				        json unknown = json::array();
+				        for (const auto& v: p["ids"])
+				        {
+					        if (!v.is_number_integer())
+					        {
+						        continue;
+					        }
+					        const auto raw = static_cast<std::uint32_t>(v.get<std::int64_t>());
+					        const Entity e{raw};
+					        if (raw != 0 && world.GetRegistry().valid(World::ToEntt(e)))
+					        {
+						        picked.push_back(e);
+					        }
+					        else
+					        {
+						        unknown.push_back(raw);
+					        }
+				        }
+				        if (picked.empty())
+				        {
+					        selection->Clear();
+				        }
+				        else
+				        {
+					        const Entity primary = picked.back();
+					        selection->Replace(picked, primary);
+				        }
+				        json ids = json::array();
+				        for (const Entity e: selection->All())
+				        {
+					        ids.push_back(e.id);
+				        }
+				        json j{{"selected", ids}, {"primary", selection->Primary().IsValid() ? selection->Primary().id : 0u}};
+				        if (!unknown.empty())
+				        {
+					        j["unknown"] = unknown;
+				        }
+				        return j;
 			        }
 			        const std::uint32_t id = IdOf(p);
 			        if (id == 0)
