@@ -25,6 +25,10 @@ namespace aether::editor
 		Multiply,
 		Add,
 		Lerp,
+		NormalMap,
+		Panner,
+		Noise,
+		Step,
 	};
 
 	// Which of the material's texture slots a TextureSample node reads. Reusing the slots the

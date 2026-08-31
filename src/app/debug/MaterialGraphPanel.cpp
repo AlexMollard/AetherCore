@@ -80,7 +80,7 @@ namespace aether::editor
 			ImGui::TextUnformatted(MaterialNodeTypeName(node.type));
 			ImNodes::EndNodeTitleBar();
 
-			const int inputs = (node.type == MaterialNodeType::Output) ? 4 : MaterialNodeInputCount(node.type);
+			const int inputs = MaterialNodeInputCount(node.type);
 			for (int pin = 0; pin < inputs; ++pin)
 			{
 				ImNodes::BeginInputAttribute(InputPinId(node.id, pin));
@@ -104,7 +104,7 @@ namespace aether::editor
 						node.value[2] = node.value[0];
 					}
 				}
-				else if (node.type == MaterialNodeType::TextureSample)
+				else if (node.type == MaterialNodeType::TextureSample || node.type == MaterialNodeType::NormalMap)
 				{
 					const char* slots[] = {"Albedo", "Normal", "Metal/Rough", "Occlusion", "Emissive"};
 					int slot = static_cast<int>(node.slot);
@@ -112,6 +112,16 @@ namespace aether::editor
 					{
 						node.slot = static_cast<MaterialTextureSlot>(slot);
 					}
+				}
+				else if (node.type == MaterialNodeType::Panner)
+				{
+					ImGui::DragFloat2("##speed", node.value, 0.01f);
+					ImGui::SetItemTooltip("UV units per second");
+				}
+				else if (node.type == MaterialNodeType::Noise)
+				{
+					ImGui::DragFloat("##scale", &node.value[0], 0.1f, 0.0f, 256.0f);
+					ImGui::SetItemTooltip("Cells across the UV range");
 				}
 				ImGui::PopID();
 				ImGui::PopItemWidth();
@@ -254,12 +264,29 @@ namespace aether::editor
 			const MaterialNodeType addable[] = {
 			        MaterialNodeType::ConstantColor, MaterialNodeType::ConstantFloat, MaterialNodeType::TextureSample,
 			        MaterialNodeType::Uv, MaterialNodeType::Time, MaterialNodeType::Fresnel,
-			        MaterialNodeType::Multiply, MaterialNodeType::Add, MaterialNodeType::Lerp};
+			        MaterialNodeType::Multiply, MaterialNodeType::Add, MaterialNodeType::Lerp,
+			        MaterialNodeType::NormalMap, MaterialNodeType::Panner, MaterialNodeType::Noise,
+			        MaterialNodeType::Step};
 			for (const MaterialNodeType type: addable)
 			{
 				if (ImGui::MenuItem(MaterialNodeTypeName(type)))
 				{
 					MaterialNode node{.id = m_graph.nextId++, .type = type, .x = 60.0f, .y = 60.0f};
+					// The all-ones default reads as a 1 cell/second panner and a 1-cell
+					// noise, neither of which shows anything useful on first drop.
+					if (type == MaterialNodeType::Panner)
+					{
+						node.value[0] = 0.1f;
+						node.value[1] = 0.0f;
+					}
+					else if (type == MaterialNodeType::Noise)
+					{
+						node.value[0] = 8.0f;
+					}
+					else if (type == MaterialNodeType::NormalMap)
+					{
+						node.slot = MaterialTextureSlot::Normal;
+					}
 					ImNodes::SetNodeGridSpacePos(node.id, ImVec2(node.x, node.y));
 					m_graph.nodes.push_back(node);
 				}

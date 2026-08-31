@@ -103,6 +103,22 @@ TEST_CASE("Generated shader is written for compilation check")
 	graph.links.push_back(MaterialLink{.id = 24, .fromNode = 11, .fromPin = 0, .toNode = 12, .toPin = 2});
 	graph.links.push_back(MaterialLink{.id = 25, .fromNode = 12, .fromPin = 0, .toNode = 1, .toPin = 3});
 
+	// The later nodes, including the ones that need the TBN and the noise helper, plus a
+	// Panner driving a texture's UV - which is the reason TextureSample has a UV pin at all.
+	graph.nodes.push_back(MaterialNode{.id = 13, .type = MaterialNodeType::Panner});
+	graph.nodes.back().value[0] = 0.1f;
+	graph.nodes.back().value[1] = -0.05f;
+	graph.nodes.push_back(MaterialNode{.id = 14, .type = MaterialNodeType::Noise});
+	graph.nodes.back().value[0] = 8.0f;
+	graph.nodes.push_back(MaterialNode{.id = 15, .type = MaterialNodeType::Step});
+	graph.nodes.push_back(MaterialNode{.id = 16, .type = MaterialNodeType::NormalMap});
+	graph.nodes.back().slot = MaterialTextureSlot::Normal;
+	graph.links.push_back(MaterialLink{.id = 26, .fromNode = 13, .fromPin = 0, .toNode = 7, .toPin = 0});
+	graph.links.push_back(MaterialLink{.id = 27, .fromNode = 13, .fromPin = 0, .toNode = 14, .toPin = 0});
+	graph.links.push_back(MaterialLink{.id = 28, .fromNode = 14, .fromPin = 0, .toNode = 15, .toPin = 1});
+	graph.links.push_back(MaterialLink{.id = 29, .fromNode = 15, .fromPin = 0, .toNode = 1, .toPin = 2});
+	graph.links.push_back(MaterialLink{.id = 30, .fromNode = 16, .fromPin = 0, .toNode = 1, .toPin = 4});
+
 	const std::string shader = GenerateMaterialShader(graph, error);
 	REQUIRE(error.empty());
 	if (const char* out = std::getenv("AETHER_DUMP_GENERATED_SHADER"); out != nullptr)
@@ -110,4 +126,6 @@ TEST_CASE("Generated shader is written for compilation check")
 		std::ofstream(out) << shader;
 	}
 	CHECK(shader.find("n12") != std::string::npos);
+	CHECK(shader.find("GraphValueNoise") != std::string::npos);
+	CHECK(shader.find("graphTBN") != std::string::npos);
 }

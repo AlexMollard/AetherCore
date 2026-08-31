@@ -21,21 +21,25 @@ namespace aether::editor
 		const NodeSpec& SpecOf(MaterialNodeType type)
 		{
 			static const NodeSpec kSpecs[] = {
-			        {"Output", 4, {"", "", ""}},
+			        {"Output", 5, {"", "", ""}},
 			        {"Colour", 0, {"", "", ""}},
 			        {"Float", 0, {"", "", ""}},
-			        {"Texture", 0, {"", "", ""}},
+			        {"Texture", 1, {"UV", "", ""}},
 			        {"UV", 0, {"", "", ""}},
 			        {"Time", 0, {"", "", ""}},
 			        {"Fresnel", 0, {"", "", ""}},
 			        {"Multiply", 2, {"A", "B", ""}},
 			        {"Add", 2, {"A", "B", ""}},
 			        {"Lerp", 3, {"A", "B", "T"}},
+			        {"Normal map", 1, {"UV", "", ""}},
+			        {"Panner", 1, {"UV", "", ""}},
+			        {"Noise", 1, {"UV", "", ""}},
+			        {"Step", 2, {"Edge", "X", ""}},
 			};
 			return kSpecs[static_cast<std::size_t>(type)];
 		}
 
-		const char* kOutputPinNames[4] = {"Base colour", "Metallic", "Roughness", "Emissive"};
+		const char* kOutputPinNames[5] = {"Base colour", "Metallic", "Roughness", "Emissive", "Normal"};
 
 		const char* SlotExpression(MaterialTextureSlot slot)
 		{
@@ -70,7 +74,7 @@ namespace aether::editor
 	{
 		if (type == MaterialNodeType::Output)
 		{
-			return (pin >= 0 && pin < 4) ? kOutputPinNames[pin] : "";
+			return (pin >= 0 && pin < 5) ? kOutputPinNames[pin] : "";
 		}
 		const NodeSpec& spec = SpecOf(type);
 		return (pin >= 0 && pin < spec.inputs) ? spec.inputNames[pin] : "";
@@ -282,8 +286,38 @@ namespace aether::editor
 						expr = "float4(pow(1.0f - saturate(dot(normalize(input.worldNormal), normalize(fc->cameraWorldPos.xyz - input.worldPos))), 5.0f).xxx, 1.0f)";
 						break;
 					case MaterialNodeType::TextureSample:
-						expr = std::format("(({} != kNoTexture) ? g_textures[{}].Sample(g_linearSampler, input.uv) : float4(1, 1, 1, 1))",
-						        SlotExpression(node->slot), SlotExpression(node->slot));
+					{
+						// Sampling at the node's own UV rather than the interpolated one is
+						// the whole point of having a Panner or any other UV maths upstream.
+						const std::string uv = Input(nodeId, 0, "float4(input.uv, 0.0f, 1.0f)");
+						expr = std::format("(({} != kNoTexture) ? g_textures[{}].Sample(g_linearSampler, {}.xy) : float4(1, 1, 1, 1))",
+						        SlotExpression(node->slot), SlotExpression(node->slot), uv);
+						break;
+					}
+					case MaterialNodeType::NormalMap:
+					{
+						// Unpacked from [0,1] and rotated into world space by the same TBN the
+						// standard shader builds, so a normal map reads identically in both.
+						const std::string uv = Input(nodeId, 0, "float4(input.uv, 0.0f, 1.0f)");
+						expr = std::format(
+						        "(({} != kNoTexture) ? float4(normalize(mul(g_textures[{}].Sample(g_linearSampler, {}.xy).xyz * 2.0f - 1.0f, graphTBN)), 1.0f) : float4(graphGeometricNormal, 1.0f))",
+						        SlotExpression(node->slot), SlotExpression(node->slot), uv);
+						break;
+					}
+					case MaterialNodeType::Panner:
+					{
+						const std::string uv = Input(nodeId, 0, "float4(input.uv, 0.0f, 1.0f)");
+						expr = std::format("float4({}.xy + fc->elapsedTime * float2({}, {}), 0.0f, 1.0f)", uv, node->value[0], node->value[1]);
+						break;
+					}
+					case MaterialNodeType::Noise:
+					{
+						const std::string uv = Input(nodeId, 0, "float4(input.uv, 0.0f, 1.0f)");
+						expr = std::format("GraphValueNoise({}.xy * {}).xxxx", uv, node->value[0]);
+						break;
+					}
+					case MaterialNodeType::Step:
+						expr = std::format("step({}, {})", Input(nodeId, 0, "float4(0.5f, 0.5f, 0.5f, 0.5f)"), Input(nodeId, 1, "float4(0, 0, 0, 0)"));
 						break;
 					case MaterialNodeType::Multiply:
 						expr = std::format("({} * {})", Input(nodeId, 0, "float4(1, 1, 1, 1)"), Input(nodeId, 1, "float4(1, 1, 1, 1)"));
@@ -325,6 +359,7 @@ namespace aether::editor
 		const std::string metallic = emitter.Input(outputIt->id, 1, "float4(0, 0, 0, 1)");
 		const std::string roughness = emitter.Input(outputIt->id, 2, "float4(0.5f, 0, 0, 1)");
 		const std::string emissive = emitter.Input(outputIt->id, 3, "float4(0, 0, 0, 1)");
+		const std::string normal = emitter.Input(outputIt->id, 4, "float4(graphGeometricNormal, 1)");
 		if (!emitter.error.empty())
 		{
 			error = emitter.error;
@@ -353,6 +388,25 @@ namespace aether::editor
 
 [[vk::push_constant]] DrawPushConstants pc;
 
+// Value noise: a hashed lattice with a smoothstep between cells. Cheap, deterministic and
+// tileable enough for a material, and it needs no texture to be shipped alongside.
+float GraphHash21(float2 p)
+{{
+    return frac(sin(dot(p, float2(127.1f, 311.7f))) * 43758.5453123f);
+}}
+
+float GraphValueNoise(float2 p)
+{{
+    const float2 cell = floor(p);
+    const float2 f = p - cell;
+    const float2 w = f * f * (3.0f - 2.0f * f);
+    const float a = GraphHash21(cell);
+    const float b = GraphHash21(cell + float2(1.0f, 0.0f));
+    const float c = GraphHash21(cell + float2(0.0f, 1.0f));
+    const float d = GraphHash21(cell + float2(1.0f, 1.0f));
+    return lerp(lerp(a, b, w.x), lerp(c, d, w.x), w.y);
+}}
+
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {{
@@ -370,13 +424,26 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         mat = materials[input.materialIndex];
     }}
 
+    // Built before the graph body because a Normal map node rotates through it. Same
+    // construction as the standard shader, so a normal map reads the same in both.
+    const float3 graphGeometricNormal = normalize(input.worldNormal);
+    float3 graphT = input.worldTangent;
+    if (dot(graphT, graphT) < 1e-8f)
+    {{
+        graphT = abs(graphGeometricNormal.y) < 0.99f ? cross(float3(0, 1, 0), graphGeometricNormal)
+                                                     : cross(float3(1, 0, 0), graphGeometricNormal);
+    }}
+    graphT = normalize(graphT - graphGeometricNormal * dot(graphGeometricNormal, graphT));
+    const float3 graphB = cross(graphGeometricNormal, graphT) * input.tangentSign;
+    const float3x3 graphTBN = float3x3(graphT, graphB, graphGeometricNormal);
+
 {}
     const float3 albedo    = {}.rgb;
     const float  metallic  = saturate({}.x);
     const float  roughness = clamp({}.x, 0.04f, 1.0f);
     const float3 emissive  = {}.rgb;
 
-    const float3 N = normalize(input.worldNormal);
+    const float3 N = normalize({}.xyz);
     const float3 V = normalize(fc->cameraWorldPos.xyz - input.worldPos);
     const float3 L = normalize(-fc->sunDirectionIntensity.xyz);
     const float3 H = normalize(V + L);
@@ -401,6 +468,6 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     return float4(direct + ambient + emissive, 1.0f);
 }}
 )SHADER",
-		        body, baseColor, metallic, roughness, emissive);
+		        body, baseColor, metallic, roughness, emissive, normal);
 	}
 } // namespace aether::editor
