@@ -1,0 +1,14 @@
+# Drives its surface from a PROJECT shader rather than the engine's standard one.
+[material]
+basecolorfactor = [ 1, 1, 1, 1 ]
+emissivefactor = [ 0, 0, 0 ]
+metallicfactor = 0
+roughnessfactor = 0.5
+occlusionstrength = 1
+alphacutoff = 0.5
+doublesided = false
+alphablend = false
+alphamask = false
+modulatevertexcolor = false
+receiveshadows = true
+shader = 'shaders://graphtest.spv'

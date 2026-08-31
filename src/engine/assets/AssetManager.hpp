@@ -59,6 +59,12 @@ namespace aether
 
 		[[nodiscard]] Expected<MaterialAsset> LoadMaterialPreset(std::string_view path);
 
+		// MaterialTemplate holds its shader path as a string_view that the pipeline cache
+		// outlives, so anyone building a material in memory - the material preview, and
+		// anything that generates a shader - needs the same interning LoadMaterialPreset uses
+		// rather than a second copy of that storage.
+		[[nodiscard]] std::string_view InternShaderVfsPath(std::string path);
+
 		void ReleaseModelTextures(LoadedModel& model);
 
 		[[nodiscard]] Expected<LoadedModel> LoadModel(std::string_view path);
@@ -136,7 +142,5 @@ namespace aether
 
 		// Deduplicated, AssetManager-lifetime storage for per-material shader VFS
 		std::unordered_set<std::string> m_internedShaderVfsPaths;
-
-		[[nodiscard]] std::string_view InternShaderVfsPath(std::string path);
 	};
 } // namespace aether

@@ -37,6 +37,15 @@ namespace aether::editor
 		// is to show the values you are dragging right now, and those are not on disk until
 		// you press Save.
 		MaterialAsset material = m_edit.spec.material;
+
+		// A material may name its own shader, and the preview has to honour it or it shows
+		// the standard lighting for a surface that will not render with it. Interned because
+		// MaterialTemplate holds the path as a view the pipeline cache outlives.
+		if (!m_edit.spec.shaderVfsPath.empty())
+		{
+			material.templateDesc.shaderVfsPath = assets->InternShaderVfsPath(m_edit.spec.shaderVfsPath);
+		}
+
 		auto& textures = assets->GetTextureRegistry();
 		const auto acquire = [&textures](const std::string& path, TextureHandle& out, TextureColorSpace colorSpace)
 		{
