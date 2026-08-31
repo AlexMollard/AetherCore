@@ -162,12 +162,12 @@ namespace aether
 		return m_postProcessStack ? m_postProcessStack->IsFxaaEnabled() : false;
 	}
 
-	void Renderer::SetCullMode(gpu::CullMode mode)
+	void Renderer::SetCullMode(std::optional<gpu::CullMode> mode)
 	{
 		m_cullMode = mode;
 	}
 
-	gpu::CullMode Renderer::GetCullMode() const
+	std::optional<gpu::CullMode> Renderer::GetCullMode() const
 	{
 		return m_cullMode;
 	}

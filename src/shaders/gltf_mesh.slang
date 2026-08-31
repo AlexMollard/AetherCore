@@ -412,6 +412,6 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // blended material instead reports how much it actually covers, which is the same
     // number the blend hardware needs, so the two uses agree rather than competing: a
     // half-transparent surface half-covers the background and half-blends with it.
-    const float coverage = ((mat.flags & kMaterialAlphaBlend) != 0u) ? saturate(baseColor.a) : 1.0f;
+    const float coverage = ((mat.flags & kFlagAlphaBlend) != 0u) ? saturate(baseColor.a) : 1.0f;
     return float4(finalColor, coverage);
 }

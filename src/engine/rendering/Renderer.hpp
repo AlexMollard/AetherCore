@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <algorithm>
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -65,8 +66,8 @@ namespace aether
 		void SetFxaaEnabled(bool enabled);
 		[[nodiscard]] bool IsFxaaEnabled() const;
 
-		void SetCullMode(gpu::CullMode mode);
-		[[nodiscard]] gpu::CullMode GetCullMode() const;
+		void SetCullMode(std::optional<gpu::CullMode> mode);
+		[[nodiscard]] std::optional<gpu::CullMode> GetCullMode() const;
 
 		void SetDirectionalLight(glm::vec3 direction, float intensity);
 		[[nodiscard]] glm::vec3 GetDirectionalLightDirection() const;
@@ -276,7 +277,12 @@ namespace aether
 		PostProcessStack* m_postProcessStack = nullptr;
 		class GTAOPass* m_gtaoPass = nullptr;
 
-		gpu::CullMode m_cullMode = gpu::CullMode::Back;
+		// A DEBUG override that forces one cull mode on every draw. Empty by default, and it
+		// has to be: a material carries its own cull mode - that is what double_sided sets -
+		// and this is applied after the pipeline is bound, so any value here silently replaces
+		// every material's choice. It defaulted to Back, which is indistinguishable from "no
+		// override" until you author a two-sided material and find it still culled.
+		std::optional<gpu::CullMode> m_cullMode;
 		glm::vec4 m_sunDirectionIntensity{std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f};
 		glm::vec4 m_sunColor{1.0f, 0.96f, 0.90f, 1.0f};
 		glm::vec4 m_ambientColor{0.03f, 0.04f, 0.06f, 1.0f};
