@@ -91,6 +91,19 @@ namespace aether::editor
 		auto* physics = context.TryGet<PhysicsSystem>();
 		bool rebuild = false;
 
+		// A body needs a shape. PhysicsSystem builds bodies by walking colliders and
+		// RebuildBody returns early without one, so a lone Rigid Body simulates nothing - and
+		// the scene serialiser captures physics off the collider too, so it is not written to
+		// the file either. Every field below would be authored, saved into nothing, and gone
+		// on the next load, which is worth saying out loud rather than leaving to be found.
+		if (rb != nullptr && collider == nullptr)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, iw::WithAlpha(colors::Orange, 0.95f));
+			ImGui::TextWrapped("%s  Add a Collider: without one this body does not simulate and is not saved with the scene.", ICON_FA_TRIANGLE_EXCLAMATION);
+			ImGui::PopStyleColor();
+			ImGui::Spacing();
+		}
+
 		if (collider != nullptr)
 		{
 			bool removed = false;
