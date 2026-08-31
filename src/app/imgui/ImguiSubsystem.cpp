@@ -1,5 +1,6 @@
 #include "imgui/ImguiSubsystem.hpp"
 #include <imgui.h>
+#include <implot.h>
 #include <imgui_internal.h>
 #include "imgui/UiAutomation.hpp"
 #include <backends/imgui_impl_glfw.h>
@@ -82,6 +83,7 @@ namespace aether
 		if (m_initialized)
 		{
 			ShutdownBackends();
+			ImPlot::DestroyContext();
 			ImGui::DestroyContext();
 		}
 	}
@@ -95,6 +97,9 @@ namespace aether
 
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
+		// ImPlot keeps its own context alongside ImGui's and must be created after it and
+		// destroyed before it - it holds ImGui handles.
+		ImPlot::CreateContext();
 		// Route item-info hooks (IMGUI_ENABLE_TEST_ENGINE) to the UI-automation registry.
 		if (ImGuiContext* g = ImGui::GetCurrentContext())
 		{
@@ -182,6 +187,7 @@ namespace aether
 
 		m_gameThreadFrameLock.reset();
 		ShutdownBackends();
+		ImPlot::DestroyContext();
 		ImGui::DestroyContext();
 		m_initialized = false;
 		m_frameIndex = 0;

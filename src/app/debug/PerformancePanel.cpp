@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <imgui.h>
+#include <implot.h>
 
 #include "layers/AppLayer.hpp"
 #include "utils/FrameStats.hpp"
@@ -92,16 +93,63 @@ namespace aether::editor
 		{
 			return;
 		}
-		ImGui::SeparatorText("Pacing");
-		std::vector<float> wall;
-		wall.reserve(m_frames.size());
-		for (const FrameTiming& frame: m_frames)
+		ImGui::SeparatorText("Frame timeline");
+
+		// Stacked bands rather than one bar per frame. A single wall-time histogram tells you
+		// THAT a frame was long; the stack tells you which phase made it long, which is the
+		// only question worth asking of a profiler. ImGui's built-in PlotHistogram can draw
+		// exactly one unlabelled series with no axes, so this is ImPlot's job.
+		const int count = static_cast<int>(m_frames.size());
+		std::vector<float> x(count);
+		std::vector<float> wall(count);
+		std::vector<float> zero(count, 0.0f);
+		std::vector<float> cGame(count);
+		std::vector<float> cRender(count);
+		std::vector<float> cInFlight(count);
+		std::vector<float> cPacer(count);
+		std::vector<float> cPresent(count);
+		for (int i = 0; i < count; ++i)
 		{
-			wall.push_back(frame.wallMs);
+			const FrameTiming& frame = m_frames[static_cast<std::size_t>(i)];
+			x[i] = static_cast<float>(i);
+			wall[i] = frame.wallMs;
+			cGame[i] = frame.gameWorkMs;
+			cRender[i] = cGame[i] + frame.renderExecMs;
+			cInFlight[i] = cRender[i] + frame.inFlightWaitMs;
+			cPacer[i] = cInFlight[i] + frame.pacerWaitMs;
+			cPresent[i] = cPacer[i] + frame.presentWaitMs;
 		}
-		const float scale = std::max(*std::ranges::max_element(wall), 1.0f);
-		ImGui::PlotHistogram("##pacing", wall.data(), static_cast<int>(wall.size()), 0, nullptr, 0.0f, scale, ImVec2(-FLT_MIN, 72.0f));
-		ImGui::TextDisabled("each column is one frame; even heights mean even delivery");
+
+		if (ImPlot::BeginPlot("##frames", ImVec2(-1.0f, 190.0f), ImPlotFlags_NoTitle | ImPlotFlags_Crosshairs))
+		{
+			ImPlot::SetupAxes("frame", "ms", ImPlotAxisFlags_NoGridLines, ImPlotAxisFlags_AutoFit);
+			ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, static_cast<double>(count), ImPlotCond_Always);
+			ImPlot::SetupLegend(ImPlotLocation_NorthWest, ImPlotLegendFlags_Horizontal);
+
+			ImPlotSpec band;
+			band.FillAlpha = 0.55f;
+			ImPlot::PlotShaded("Game work", x.data(), zero.data(), cGame.data(), count, band);
+			ImPlot::PlotShaded("Render exec", x.data(), cGame.data(), cRender.data(), count, band);
+			ImPlot::PlotShaded("In-flight wait", x.data(), cRender.data(), cInFlight.data(), count, band);
+			ImPlot::PlotShaded("Pacer wait", x.data(), cInFlight.data(), cPacer.data(), count, band);
+			ImPlot::PlotShaded("Present wait", x.data(), cPacer.data(), cPresent.data(), count, band);
+
+			ImPlotSpec wallLine;
+			wallLine.LineWeight = 1.6f;
+			wallLine.LineColor = ImVec4(0.95f, 0.95f, 0.95f, 0.9f);
+			ImPlot::PlotLine("Wall", x.data(), wall.data(), count, wallLine);
+
+			// The line a frame has to stay under to hold 60 Hz. Having it drawn is the
+			// difference between reading numbers and seeing whether you are inside budget.
+			const double budgetMs = 1000.0 / 60.0;
+			ImPlotSpec budget;
+			budget.LineColor = ImVec4(0.90f, 0.35f, 0.25f, 0.8f);
+			budget.Flags = ImPlotInfLinesFlags_Horizontal;
+			ImPlot::PlotInfLines("60 Hz budget", &budgetMs, 1, budget);
+
+			ImPlot::EndPlot();
+		}
+		ImGui::TextDisabled("hover to read a frame; bands stack to the wall time above them");
 	}
 
 	void PerformancePanel::DrawPhaseBreakdown() const

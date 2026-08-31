@@ -255,6 +255,25 @@ if(imguizmo_ADDED AND TARGET imgui)
     target_include_directories(imgui PUBLIC "${imguizmo_SOURCE_DIR}/src")
 endif()
 
+# ImPlot (profiler charts), compiled into the imgui target for the same reason as the
+# gizmo above. Pinned to a master commit rather than the v0.16 release: v0.16 predates
+# imgui 1.92, which changed ImDrawList::AddRect and moved textures to ImTextureRef, and
+# does not compile against it.
+CPMAddPackage(
+    NAME implot
+    GIT_REPOSITORY https://github.com/epezent/implot.git
+    GIT_TAG        7eeb9168d2e5e6b14e266d8782ecf7e649dfc3a4
+    DOWNLOAD_ONLY  YES
+)
+
+if(implot_ADDED AND TARGET imgui)
+    target_sources(imgui PRIVATE
+        "${implot_SOURCE_DIR}/implot.cpp"
+        "${implot_SOURCE_DIR}/implot_items.cpp"
+    )
+    target_include_directories(imgui PUBLIC "${implot_SOURCE_DIR}")
+endif()
+
 # ── Physics ───────────────────────────────────────────────────────────────────
 # Cross-platform determinism is required for future lockstep / rollback networking.
 # Jolt sets /MP on itself and compiles through a precompiled header. Both make a compiler
