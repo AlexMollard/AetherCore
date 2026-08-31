@@ -78,7 +78,8 @@ namespace aether::editor
 		void DrawNode(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle);
 		void FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask);
 		void DrawRowBackdrop(const SceneSelection& selection, Entity e, int rowIndex);
-		void DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, bool continuePreviousItem = true);
+		// `undo` may be null; the inline rename still applies, it just leaves no history.
+		void DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, UndoStack* undo, bool continuePreviousItem = true);
 		void HandleRowClick(SceneSelection& selection, Entity e);
 		void HandleRowDragDrop(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX);
 		// Returns true if the menu destroyed `e` (callers must not touch it after).

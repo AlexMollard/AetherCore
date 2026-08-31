@@ -904,7 +904,7 @@ namespace aether::editor
 		return destroyed;
 	}
 
-	void HierarchyPanel::DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, bool continuePreviousItem)
+	void HierarchyPanel::DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, UndoStack* undo, bool continuePreviousItem)
 	{
 		const KindBadge badge = EntityKindBadge(world, e);
 		ImGui::AlignTextToFramePadding();
@@ -940,8 +940,20 @@ namespace aether::editor
 			{
 				if ((entered || !ImGui::IsKeyPressed(ImGuiKey_Escape)) && m_renameBuf[0] != '\0')
 				{
-					world.EmplaceOrReplace<NameComponent>(e, NameComponent{.name = m_renameBuf});
-					m_dirty = true;
+					// Recorded like the control endpoint's rename: a name is scene data, so
+					// renaming and pressing Ctrl+Z should put the old name back rather than
+					// undo whatever came before.
+					const auto* existing = world.TryGet<NameComponent>(e);
+					const std::string previousName = existing != nullptr ? existing->name : std::string{};
+					if (previousName != m_renameBuf)
+					{
+						if (undo != nullptr)
+						{
+							undo->Record(std::make_unique<RenameCommand>(e.id, previousName, m_renameBuf));
+						}
+						world.EmplaceOrReplace<NameComponent>(e, NameComponent{.name = m_renameBuf});
+						m_dirty = true;
+					}
 				}
 				m_renaming = {};
 			}
@@ -1229,7 +1241,7 @@ namespace aether::editor
 		ImGui::SetCursorScreenPos(contentStart);
 		if (!destroyed)
 		{
-			DrawRowContent(world, e, searching, needle, false);
+			DrawRowContent(world, e, searching, needle, context.services.TryGet<UndoStack>(), false);
 		}
 
 		if (!m_flatTree.empty())
@@ -1919,7 +1931,7 @@ namespace aether::editor
 						HandleRowDragDrop(context, world, selection, e, rowMin.y, rowMax.y, rowMax.x);
 						if (!DrawRowContextMenu(context, world, selection, e))
 						{
-							DrawRowContent(world, e, searching, needle);
+							DrawRowContent(world, e, searching, needle, context.services.TryGet<UndoStack>());
 						}
 						ImGui::PopID();
 					}
