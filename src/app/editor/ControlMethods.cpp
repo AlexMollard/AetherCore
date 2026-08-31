@@ -603,7 +603,7 @@ namespace aether::editor
 
 		methods.push_back({"scene.entities",
 		        "list_entities",
-		        "List every entity in the live scene with id, name, and world position.",
+		        "List every entity in the live scene with id, name, world position, and parent id (0 when it sits at the root). The parent is what makes the list a tree rather than a flat set - without it nothing outside the editor can tell how the scene is nested.",
 		        false,
 		        Obj(),
 		        [](const json&, MethodContext& ctx) -> json
@@ -621,6 +621,11 @@ namespace aether::editor
 					        {
 						        e["position"] = Vec3ToJson(glm::vec3(t->localToWorld[3]));
 					        }
+					        // 0 rather than absent for a root, so a caller can read the field
+					        // unconditionally instead of having to know the difference between
+					        // "no parent" and "this build does not report parents".
+					        const auto* h = world.TryGet<HierarchyComponent>(entity);
+					        e["parent"] = (h != nullptr) ? h->parent.id : 0u;
 					        arr.push_back(std::move(e));
 				        }
 			        }
