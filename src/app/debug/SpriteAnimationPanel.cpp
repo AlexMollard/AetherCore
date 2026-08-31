@@ -1,4 +1,5 @@
 #include "debug/SpriteAnimationPanel.hpp"
+#include "debug/EditorCommand.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -407,14 +408,37 @@ namespace aether::editor
 			if (chrome::OutlineButton("Assign To Last Selected Entity", ImVec2(-1.0f, 0.0f)))
 			{
 				World& world = context.Get<World>();
+				// Assigning adds up to three components and rewrites the sprite renderer's
+				// fields. All of it is scene data, so it belongs in history as ONE entry -
+				// otherwise Ctrl+Z after an accidental assign undoes an unrelated edit.
+				auto* assignUndo = context.services.TryGet<UndoStack>();
+				UndoStack::ScopedGroup assignGroup(assignUndo, "Assign Animation");
+				const auto recordAdd = [&](bool alreadyPresent, const char* componentName)
+				{
+					if (!alreadyPresent && assignUndo != nullptr)
+					{
+						assignUndo->Record(std::make_unique<AddComponentCommand>(target.id, componentName));
+					}
+				};
+				nlohmann::json rendererBefore;
+				bool rendererReflected = false;
+				const bool hadRenderer = world.Has<SpriteRendererComponent>(target);
+				if (hadRenderer && assignUndo != nullptr)
+				{
+					CaptureComponentFields(world, target, "Sprite Renderer", context.services, rendererBefore, rendererReflected);
+				}
+
+				recordAdd(world.Has<TransformComponent>(target), "Transform");
 				if (!world.Has<TransformComponent>(target))
 				{
 					world.Emplace<TransformComponent>(target);
 				}
-				if (!world.Has<SpriteRendererComponent>(target))
+				recordAdd(hadRenderer, "Sprite Renderer");
+				if (!hadRenderer)
 				{
 					world.Emplace<SpriteRendererComponent>(target);
 				}
+				recordAdd(world.Has<SpriteAnimatorComponent>(target), "Sprite Animator");
 				auto& renderer = world.Get<SpriteRendererComponent>(target);
 				if (!m_animation.frames.empty())
 				{
@@ -431,6 +455,17 @@ namespace aether::editor
 					}
 				}
 				world.EmplaceOrReplace<SpriteAnimatorComponent>(target, SpriteAnimatorComponent{.animationPath = m_animationPath});
+				// A renderer that already existed had its fields overwritten rather than added,
+				// so the add command above does not cover it - the before/after pair does.
+				if (hadRenderer && assignUndo != nullptr)
+				{
+					nlohmann::json rendererAfter;
+					bool afterReflected = false;
+					if (CaptureComponentFields(world, target, "Sprite Renderer", context.services, rendererAfter, afterReflected) && rendererAfter != rendererBefore)
+					{
+						assignUndo->Record(std::make_unique<SetComponentCommand>(target.id, "Sprite Renderer", std::move(rendererBefore), std::move(rendererAfter), afterReflected));
+					}
+				}
 				m_status = "Animation assigned and the first frame is visible in the viewport.";
 				m_statusError = false;
 			}
