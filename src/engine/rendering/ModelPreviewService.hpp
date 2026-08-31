@@ -53,6 +53,19 @@ namespace aether
 		{
 			return m_sceneEnvironment.load(std::memory_order_relaxed);
 		}
+		// Whether the turntable keeps rotating. A moving preview shows a material from every
+		// angle, which is what you want while wiring one; it is also the one thing that makes
+		// a small detail impossible to look at, which is what you want once it is nearly right.
+		void SetTurntableEnabled(bool enabled) noexcept
+		{
+			m_turntable.store(enabled, std::memory_order_relaxed);
+		}
+
+		[[nodiscard]] bool IsTurntableEnabled() const noexcept
+		{
+			return m_turntable.load(std::memory_order_relaxed);
+		}
+
 		void ClearModel(AssetManager& assets);
 
 		[[nodiscard]] bool HasModel() const
@@ -119,6 +132,7 @@ namespace aether
 		LoadedModel m_model;
 		glm::vec4 m_bounds{0.0f, 0.0f, 0.0f, 1.0f};
 		float m_turntableAngle = 0.0f;
+		std::atomic<bool> m_turntable{true};
 		std::atomic<bool> m_sceneEnvironment{true};
 		std::atomic<bool> m_hasModel{false};
 

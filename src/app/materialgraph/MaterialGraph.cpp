@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <format>
+#include <iterator>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "utils/TextIni.hpp"
 
@@ -14,28 +17,47 @@ namespace aether::editor
 		struct NodeSpec
 		{
 			const char* name;
+			MaterialNodeCategory category;
 			int inputs;
 			const char* inputNames[3];
+			const char* description;
 		};
+
+		// Indexed by MaterialNodeType, so the order here follows the enum exactly.
+		constexpr NodeSpec kSpecs[] = {
+		        {"Output", MaterialNodeCategory::Output, 5, {"", "", ""}, "What the surface is made of."},
+		        {"Colour", MaterialNodeCategory::Input, 0, {"", "", ""}, "A constant colour."},
+		        {"Float", MaterialNodeCategory::Input, 0, {"", "", ""}, "A constant number, on every channel."},
+		        {"Texture", MaterialNodeCategory::Texture, 1, {"UV", "", ""}, "Samples one of the material's texture slots."},
+		        {"UV", MaterialNodeCategory::Input, 0, {"", "", ""}, "The mesh's texture coordinates."},
+		        {"Time", MaterialNodeCategory::Input, 0, {"", "", ""}, "Seconds since the engine started."},
+		        {"Fresnel", MaterialNodeCategory::Input, 0, {"", "", ""}, "Rim term: bright where the surface faces away from the camera."},
+		        {"Multiply", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "A * B."},
+		        {"Add", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "A + B."},
+		        {"Lerp", MaterialNodeCategory::Math, 3, {"A", "B", "T"}, "Blends from A to B by T."},
+		        {"Normal map", MaterialNodeCategory::Texture, 1, {"UV", "", ""}, "Unpacks a tangent-space normal map into world space."},
+		        {"Panner", MaterialNodeCategory::Math, 1, {"UV", "", ""}, "Scrolls a UV over time."},
+		        {"Noise", MaterialNodeCategory::Math, 1, {"UV", "", ""}, "Value noise over a UV."},
+		        {"Step", MaterialNodeCategory::Math, 2, {"Edge", "X", ""}, "0 below the edge, 1 above it. A hard cut."},
+		        {"Subtract", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "A - B."},
+		        {"Divide", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "A / B, guarded against dividing by zero."},
+		        {"One minus", MaterialNodeCategory::Math, 1, {"X", "", ""}, "1 - X. Inverts a mask."},
+		        {"Power", MaterialNodeCategory::Math, 2, {"X", "Exp", ""}, "X raised to Exp. Sharpens a gradient."},
+		        {"Saturate", MaterialNodeCategory::Math, 1, {"X", "", ""}, "Clamps to 0..1."},
+		        {"Dot", MaterialNodeCategory::Math, 2, {"A", "B", ""}, "Dot product of the xyz parts, on every channel."},
+		        {"Smoothstep", MaterialNodeCategory::Math, 3, {"Edge 0", "Edge 1", "X"}, "A soft Step: eased from 0 to 1 between the edges."},
+		        {"Sine", MaterialNodeCategory::Math, 1, {"X", "", ""}, "sin(X * frequency), for anything that pulses."},
+		        {"Remap", MaterialNodeCategory::Math, 1, {"X", "", ""}, "Rescales X from one range to another."},
+		        {"Channel", MaterialNodeCategory::Math, 1, {"X", "", ""}, "Picks one channel and broadcasts it."},
+		        {"World position", MaterialNodeCategory::Input, 0, {"", "", ""}, "The shaded point, in world space."},
+		        {"Vertex colour", MaterialNodeCategory::Input, 0, {"", "", ""}, "The mesh's per-vertex colour."},
+		        {"View direction", MaterialNodeCategory::Input, 0, {"", "", ""}, "Unit vector from the surface towards the camera."},
+		};
+		static_assert(std::size(kSpecs) == static_cast<std::size_t>(MaterialNodeType::ViewDirection) + 1,
+		        "Every MaterialNodeType needs a spec; the table is indexed by the enum.");
 
 		const NodeSpec& SpecOf(MaterialNodeType type)
 		{
-			static const NodeSpec kSpecs[] = {
-			        {"Output", 5, {"", "", ""}},
-			        {"Colour", 0, {"", "", ""}},
-			        {"Float", 0, {"", "", ""}},
-			        {"Texture", 1, {"UV", "", ""}},
-			        {"UV", 0, {"", "", ""}},
-			        {"Time", 0, {"", "", ""}},
-			        {"Fresnel", 0, {"", "", ""}},
-			        {"Multiply", 2, {"A", "B", ""}},
-			        {"Add", 2, {"A", "B", ""}},
-			        {"Lerp", 3, {"A", "B", "T"}},
-			        {"Normal map", 1, {"UV", "", ""}},
-			        {"Panner", 1, {"UV", "", ""}},
-			        {"Noise", 1, {"UV", "", ""}},
-			        {"Step", 2, {"Edge", "X", ""}},
-			};
 			return kSpecs[static_cast<std::size_t>(type)];
 		}
 
@@ -63,6 +85,83 @@ namespace aether::editor
 	const char* MaterialNodeTypeName(MaterialNodeType type)
 	{
 		return SpecOf(type).name;
+	}
+
+	const char* MaterialNodeDescription(MaterialNodeType type)
+	{
+		return SpecOf(type).description;
+	}
+
+	MaterialNodeCategory MaterialNodeCategoryOf(MaterialNodeType type)
+	{
+		return SpecOf(type).category;
+	}
+
+	const char* MaterialNodeCategoryName(MaterialNodeCategory category)
+	{
+		switch (category)
+		{
+			case MaterialNodeCategory::Input:
+				return "Input";
+			case MaterialNodeCategory::Texture:
+				return "Texture";
+			case MaterialNodeCategory::Math:
+				return "Math";
+			case MaterialNodeCategory::Output:
+			default:
+				return "Output";
+		}
+	}
+
+	std::span<const MaterialNodeType> MaterialAddableNodeTypes()
+	{
+		// Built once from the enum and ordered by category, so adding a type to the enum puts
+		// it in the menu without a second list to remember.
+		static const std::vector<MaterialNodeType> kAddable = []
+		{
+			std::vector<MaterialNodeType> out;
+			for (const MaterialNodeCategory category: {MaterialNodeCategory::Input, MaterialNodeCategory::Texture, MaterialNodeCategory::Math})
+			{
+				for (std::size_t i = 0; i < std::size(kSpecs); ++i)
+				{
+					const auto type = static_cast<MaterialNodeType>(i);
+					if (MaterialNodeCategoryOf(type) == category)
+					{
+						out.push_back(type);
+					}
+				}
+			}
+			return out;
+		}();
+		return kAddable;
+	}
+
+	MaterialNode MakeMaterialNode(int id, MaterialNodeType type)
+	{
+		MaterialNode node{.id = id, .type = type};
+		switch (type)
+		{
+			case MaterialNodeType::Panner:
+				node.value[0] = 0.1f;
+				node.value[1] = 0.0f;
+				break;
+			case MaterialNodeType::Noise:
+				node.value[0] = 8.0f;
+				break;
+			case MaterialNodeType::NormalMap:
+				node.slot = MaterialTextureSlot::Normal;
+				break;
+			case MaterialNodeType::Remap:
+				// Identity, so dropping one changes nothing until it is dialled in.
+				node.value[0] = 0.0f;
+				node.value[1] = 1.0f;
+				node.value[2] = 0.0f;
+				node.value[3] = 1.0f;
+				break;
+			default:
+				break;
+		}
+		return node;
 	}
 
 	int MaterialNodeInputCount(MaterialNodeType type)
@@ -115,26 +214,28 @@ namespace aether::editor
 
 	std::string SerializeMaterialGraph(const MaterialGraph& graph)
 	{
-		std::string out = "# AetherCore material graph.\n";
+		std::string out = "# Node graph for this material's shader. Edited in the editor's Material window.\n";
+		out += "[graph]\n";
 		out += std::format("next_id = {}\n", graph.nextId);
-		// Indexed sub-tables rather than [[node]] arrays of tables: text::ParseToml descends
-		// into child TABLES but reports an array as one value, so an array of tables reads
-		// back as nothing at all.
+		// Indexed sub-tables rather than [[graph.node]] arrays of tables: text::ParseToml
+		// descends into child TABLES but reports an array as one value, so an array of tables
+		// reads back as nothing at all.
 		int index = 0;
 		for (const MaterialNode& node: graph.nodes)
 		{
-			out += std::format("\n[node.{}]\n", index++);
+			out += std::format("\n[graph.node.{}]\n", index++);
 			out += std::format("id = {}\n", node.id);
 			out += std::format("type = {}\n", static_cast<int>(node.type));
 			out += std::format("x = {}\n", node.x);
 			out += std::format("y = {}\n", node.y);
 			out += std::format("value = [ {}, {}, {}, {} ]\n", node.value[0], node.value[1], node.value[2], node.value[3]);
 			out += std::format("slot = {}\n", static_cast<int>(node.slot));
+			out += std::format("channel = {}\n", node.channel);
 		}
 		index = 0;
 		for (const MaterialLink& link: graph.links)
 		{
-			out += std::format("\n[link.{}]\n", index++);
+			out += std::format("\n[graph.link.{}]\n", index++);
 			out += std::format("id = {}\n", link.id);
 			out += std::format("from_node = {}\n", link.fromNode);
 			out += std::format("from_pin = {}\n", link.fromPin);
@@ -144,7 +245,7 @@ namespace aether::editor
 		return out;
 	}
 
-	MaterialGraph ParseMaterialGraph(const std::string& text)
+	std::optional<MaterialGraph> ParseMaterialGraph(const std::string& materialToml)
 	{
 		MaterialGraph graph;
 		MaterialNode node;
@@ -152,6 +253,7 @@ namespace aether::editor
 		std::string current;
 		bool inNode = false;
 		bool inLink = false;
+		bool sawGraph = false;
 		const auto flush = [&]()
 		{
 			if (inNode)
@@ -166,31 +268,34 @@ namespace aether::editor
 			inLink = false;
 		};
 
-		text::ParseToml(text,
+		text::ParseToml(materialToml,
 		        [&](const text::IniEntry& entry)
 		        {
-			        // Each element has its own section - "node.0", "link.3" - so a change of
-			        // section is exactly the boundary between two of them.
+			        // Each element has its own section - "graph.node.0", "graph.link.3" - so a
+			        // change of section is exactly the boundary between two of them.
 			        if (entry.section != current)
 			        {
 				        flush();
 				        current = entry.section;
-				        if (current.starts_with("node."))
+				        if (current.starts_with("graph.node."))
 				        {
 					        node = MaterialNode{};
 					        inNode = true;
+					        sawGraph = true;
 				        }
-				        else if (current.starts_with("link."))
+				        else if (current.starts_with("graph.link."))
 				        {
 					        link = MaterialLink{};
 					        inLink = true;
+					        sawGraph = true;
 				        }
 			        }
 
 			        const auto asInt = [&](int fallback) { return static_cast<int>(text::ParseFloat(entry.value).value_or(static_cast<float>(fallback))); };
-			        if (entry.fullKey == "next_id")
+			        if (entry.fullKey == "graph.next_id")
 			        {
 				        graph.nextId = asInt(1);
+				        sawGraph = true;
 			        }
 			        else if (inNode)
 			        {
@@ -199,6 +304,7 @@ namespace aether::editor
 				        else if (entry.key == "x") { node.x = text::ParseFloat(entry.value).value_or(0.0f); }
 				        else if (entry.key == "y") { node.y = text::ParseFloat(entry.value).value_or(0.0f); }
 				        else if (entry.key == "slot") { node.slot = static_cast<MaterialTextureSlot>(asInt(0)); }
+				        else if (entry.key == "channel") { node.channel = std::clamp(asInt(0), 0, 3); }
 				        else if (entry.key == "value")
 				        {
 					        if (const auto parsed = text::ParseFloatArray<4>(entry.value))
@@ -220,12 +326,13 @@ namespace aether::editor
 			        }
 		        });
 		flush();
-		if (graph.nodes.empty())
+		if (!sawGraph || graph.nodes.empty())
 		{
-			return MakeDefaultMaterialGraph();
+			return std::nullopt;
 		}
 		return graph;
 	}
+
 	namespace
 	{
 		// Emits one float4 temporary per node, memoised, so a node feeding three inputs is
@@ -319,6 +426,52 @@ namespace aether::editor
 					case MaterialNodeType::Step:
 						expr = std::format("step({}, {})", Input(nodeId, 0, "float4(0.5f, 0.5f, 0.5f, 0.5f)"), Input(nodeId, 1, "float4(0, 0, 0, 0)"));
 						break;
+					case MaterialNodeType::Subtract:
+						expr = std::format("({} - {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(0, 0, 0, 0)"));
+						break;
+					case MaterialNodeType::Divide:
+						expr = std::format("GraphSafeDivide({}, {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(1, 1, 1, 1)"));
+						break;
+					case MaterialNodeType::OneMinus:
+						expr = std::format("(float4(1, 1, 1, 1) - {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"));
+						break;
+					case MaterialNodeType::Power:
+						// pow() of a negative base is undefined, and a mask arriving slightly
+						// below zero is common enough that it would show up as NaN speckle.
+						expr = std::format("pow(max({}, 0.0f), {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(1, 1, 1, 1)"));
+						break;
+					case MaterialNodeType::Saturate:
+						expr = std::format("saturate({})", Input(nodeId, 0, "float4(0, 0, 0, 0)"));
+						break;
+					case MaterialNodeType::Dot:
+						expr = std::format("float4(dot({}.xyz, {}.xyz).xxx, 1.0f)", Input(nodeId, 0, "float4(0, 0, 0, 0)"), Input(nodeId, 1, "float4(0, 0, 0, 0)"));
+						break;
+					case MaterialNodeType::Smoothstep:
+						expr = std::format("smoothstep({}, {}, {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"),
+						        Input(nodeId, 1, "float4(1, 1, 1, 1)"), Input(nodeId, 2, "float4(0.5f, 0.5f, 0.5f, 0.5f)"));
+						break;
+					case MaterialNodeType::Sine:
+						expr = std::format("sin({} * {})", Input(nodeId, 0, "float4(fc->elapsedTime, fc->elapsedTime, fc->elapsedTime, fc->elapsedTime)"), node->value[0]);
+						break;
+					case MaterialNodeType::Remap:
+						expr = std::format("GraphRemap({}, {}, {}, {}, {})", Input(nodeId, 0, "float4(0, 0, 0, 0)"),
+						        node->value[0], node->value[1], node->value[2], node->value[3]);
+						break;
+					case MaterialNodeType::Channel:
+					{
+						constexpr const char* kSwizzles[4] = {"xxxx", "yyyy", "zzzz", "wwww"};
+						expr = std::format("({}).{}", Input(nodeId, 0, "float4(0, 0, 0, 0)"), kSwizzles[std::clamp(node->channel, 0, 3)]);
+						break;
+					}
+					case MaterialNodeType::WorldPosition:
+						expr = "float4(input.worldPos, 1.0f)";
+						break;
+					case MaterialNodeType::VertexColor:
+						expr = "float4(input.vertexColor, 1.0f)";
+						break;
+					case MaterialNodeType::ViewDirection:
+						expr = "float4(normalize(fc->cameraWorldPos.xyz - input.worldPos), 1.0f)";
+						break;
 					case MaterialNodeType::Multiply:
 						expr = std::format("({} * {})", Input(nodeId, 0, "float4(1, 1, 1, 1)"), Input(nodeId, 1, "float4(1, 1, 1, 1)"));
 						break;
@@ -405,6 +558,21 @@ float GraphValueNoise(float2 p)
     const float c = GraphHash21(cell + float2(0.0f, 1.0f));
     const float d = GraphHash21(cell + float2(1.0f, 1.0f));
     return lerp(lerp(a, b, w.x), lerp(c, d, w.x), w.y);
+}}
+
+// Dividing by zero produces an inf that spreads through everything downstream, so the
+// divisor is pushed off zero while keeping its sign. sign() returns 0 exactly at zero, which
+// is why the 1 is added back in there.
+float4 GraphSafeDivide(float4 a, float4 b)
+{{
+    const float4 s = sign(b);
+    return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f));
+}}
+
+float4 GraphRemap(float4 x, float inMin, float inMax, float outMin, float outMax)
+{{
+    const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin);
+    return outMin + (x - inMin) * ((outMax - outMin) / span);
 }}
 
 [shader("fragment")]

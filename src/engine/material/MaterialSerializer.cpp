@@ -10,9 +10,63 @@ namespace aether
 {
 	namespace MaterialSerializer
 	{
+	namespace
+	{
+		// True for "[graph]" and "[graph.node.0]" but not "[graphics]".
+		bool IsGraphHeader(std::string_view trimmed)
+		{
+			return trimmed.starts_with("[graph]") || trimmed.starts_with("[graph.");
+		}
+
+		std::string_view TrimLeft(std::string_view line)
+		{
+			const std::size_t at = line.find_first_not_of(" \t");
+			return at == std::string_view::npos ? std::string_view{} : line.substr(at);
+		}
+
+		// Lifts the graph tables out of a material file as raw text, so writing the material
+		// back preserves a graph this code does not understand. Reconstructing it from parsed
+		// key-value pairs would silently drop anything a newer editor wrote.
+		std::string ExtractGraphSection(const std::string& text)
+		{
+			std::string out;
+			bool inGraph = false;
+			std::size_t at = 0;
+			while (at <= text.size())
+			{
+				const std::size_t eol = text.find('\n', at);
+				const std::size_t end = (eol == std::string::npos) ? text.size() : eol;
+				const std::string_view line(text.data() + at, end - at);
+				const std::string_view trimmed = TrimLeft(line);
+
+				if (trimmed.starts_with('['))
+				{
+					inGraph = IsGraphHeader(trimmed);
+				}
+				if (inGraph)
+				{
+					out.append(line);
+					out.push_back('\n');
+				}
+				if (eol == std::string::npos)
+				{
+					break;
+				}
+				at = eol + 1;
+			}
+			// A trailing blank line would grow by one on every round trip.
+			while (!out.empty() && (out.back() == '\n' || out.back() == '\r'))
+			{
+				out.pop_back();
+			}
+			return out;
+		}
+	} // namespace
+
 	MaterialPresetSpec Parse(std::string_view path, const std::string& text)
 	{
 		MaterialPresetSpec spec;
+		spec.graphSection = ExtractGraphSection(text);
 
 		text::ParseToml(text,
 		        [&spec, path](const text::IniEntry& entry)
@@ -189,6 +243,14 @@ namespace aether
 						out += std::format("{} = '{}'\n", key, *value);
 					}
 				}
+			}
+
+			// Last, and verbatim: the editor owns this block's contents.
+			if (!spec.graphSection.empty())
+			{
+				out += '\n';
+				out += spec.graphSection;
+				out += '\n';
 			}
 			return out;
 		}

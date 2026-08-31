@@ -71,29 +71,6 @@ namespace aether::editor
 			return dragdrop::ClassifyFile(path);
 		}
 
-		SceneSelection::AssetKind ToSelectionKind(dragdrop::FileKind kind)
-		{
-			switch (kind)
-			{
-				case dragdrop::FileKind::Model:
-					return SceneSelection::AssetKind::Model;
-				case dragdrop::FileKind::Material:
-					return SceneSelection::AssetKind::Material;
-				case dragdrop::FileKind::Texture:
-					return SceneSelection::AssetKind::Texture;
-				case dragdrop::FileKind::Script:
-					return SceneSelection::AssetKind::Script;
-				case dragdrop::FileKind::Prefab:
-					return SceneSelection::AssetKind::Prefab;
-				case dragdrop::FileKind::Scene:
-					return SceneSelection::AssetKind::Scene;
-				case dragdrop::FileKind::Shader:
-				case dragdrop::FileKind::Unknown:
-				default:
-					return SceneSelection::AssetKind::File;
-			}
-		}
-
 		dragdrop::FileKind FromSelectionKind(SceneSelection::AssetKind kind)
 		{
 			switch (kind)

@@ -244,7 +244,10 @@ namespace aether
 			return;
 		}
 
-		m_turntableAngle += glm::radians(0.55f);
+		if (m_turntable.load(std::memory_order_relaxed))
+		{
+			m_turntableAngle += glm::radians(0.55f);
+		}
 		const glm::vec3 center = glm::vec3(m_bounds);
 		const float radius = m_bounds.w;
 		// Distance at which a sphere of this radius exactly fills the vertical FOV, plus a

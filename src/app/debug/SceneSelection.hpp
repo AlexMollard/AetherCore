@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "debug/EditorDragDrop.hpp"
 #include "scene/Entity.hpp"
 #include "scene/World.hpp"
 
@@ -203,4 +204,32 @@ namespace aether::editor
 		Asset m_asset{};
 		std::uint64_t m_lastChangeSerial = 0;
 	};
+
+	// What SELECTING a file of this kind means. Beside SceneSelection rather than in the file
+	// explorer, because the control server selects assets too and the two must agree on what
+	// a material is - they did not, and a material selected by anything but a click showed up
+	// as a plain File.
+	[[nodiscard]] inline SceneSelection::AssetKind ToSelectionKind(dragdrop::FileKind kind)
+	{
+		switch (kind)
+		{
+			case dragdrop::FileKind::Model:
+				return SceneSelection::AssetKind::Model;
+			case dragdrop::FileKind::Material:
+				return SceneSelection::AssetKind::Material;
+			case dragdrop::FileKind::Texture:
+				return SceneSelection::AssetKind::Texture;
+			case dragdrop::FileKind::Script:
+				return SceneSelection::AssetKind::Script;
+			case dragdrop::FileKind::Prefab:
+				return SceneSelection::AssetKind::Prefab;
+			case dragdrop::FileKind::Scene:
+				return SceneSelection::AssetKind::Scene;
+			case dragdrop::FileKind::MaterialGraph:
+			case dragdrop::FileKind::Shader:
+			case dragdrop::FileKind::Unknown:
+			default:
+				return SceneSelection::AssetKind::File;
+		}
+	}
 } // namespace aether::editor

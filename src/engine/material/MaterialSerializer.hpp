@@ -23,6 +23,15 @@ namespace aether
 		std::string occlusionPath;
 		std::string emissivePath;
 		std::string shaderVfsPath;
+		// The node graph that generated this material's shader, as raw TOML, or empty when
+		// the material was authored by hand.
+		//
+		// Carried as TEXT because the graph belongs to the editor and the engine has no
+		// business knowing what a node is: it round-trips the block untouched, so a graph can
+		// grow new node types without the engine changing at all. It lives in the material
+		// file rather than beside it so that a material is ONE file - a sidecar meant every
+		// material had a second file to keep in step, rename with it, and remember to delete.
+		std::string graphSection;
 	};
 
 	// Read and write the authored TOML form of a material.

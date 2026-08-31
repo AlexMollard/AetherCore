@@ -30,6 +30,7 @@
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "debug/EditorDragDrop.hpp"
+#include "io/FileSystem.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorCommand.hpp"
 #include "debug/EditorWindowActions.hpp"
@@ -2614,6 +2615,42 @@ namespace aether::editor
 				        j["name"] = n->name;
 			        }
 			        return j;
+		        }});
+
+		methods.push_back({"editor.select_asset",
+		        "select_asset",
+		        "Select a file as the current ASSET selection, exactly as clicking it in the File Explorer does: the Material, Texture and Inspector windows all follow it. Path is a project-relative or VFS path.",
+		        true,
+		        Obj({{"path", StrProp()}}, {"path"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* selection = ctx.services.TryGet<SceneSelection>();
+			        if (selection == nullptr)
+			        {
+				        return json{{"error", "no selection service (editor only)"}};
+			        }
+			        const std::string path = p.value("path", std::string{});
+			        if (path.empty())
+			        {
+				        return json{{"error", "path is required"}};
+			        }
+			        // Checked before Exists, which ASSERTS on a path with no scheme and takes
+			        // the editor down with it - a control method must answer bad input, not
+			        // die of it.
+			        if (path.find("://") == std::string::npos)
+			        {
+				        return json{{"error", "path must be a virtual path, e.g. project://assets/materials/Rock.material.toml"}};
+			        }
+			        if (!io::FileSystem::Exists(path))
+			        {
+				        return json{{"error", "file not found: " + path}};
+			        }
+			        // The same classification a click goes through, so what the control server
+			        // selects and what the explorer selects are the same thing.
+			        const dragdrop::FileKind kind = dragdrop::ClassifyFile(std::filesystem::path(path));
+			        const SceneSelection::AssetKind assetKind = ToSelectionKind(kind);
+			        selection->SelectAsset(assetKind, path, std::filesystem::path(path).filename().generic_string());
+			        return json{{"selected", path}, {"kind", static_cast<int>(assetKind)}};
 		        }});
 
 		methods.push_back({"scene.selection",

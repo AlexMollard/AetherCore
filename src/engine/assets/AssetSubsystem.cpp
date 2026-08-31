@@ -81,6 +81,7 @@ namespace aether
 	{
 		m_materialBuffer.AdvanceFrame(frameIndex);
 		m_effectParamBuffer.AdvanceFrame(frameIndex);
+		m_pipelineCache.AdvanceFrame(frameIndex);
 	}
 
 
