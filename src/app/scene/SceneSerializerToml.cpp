@@ -960,6 +960,13 @@ namespace aether::app::scene
 				p.insert("sensor", rec.physics->isSensor);
 				p.insert("ccd", rec.physics->continuousCollision);
 				p.insert("allow_sleeping", rec.physics->allowSleeping);
+				// Only when it differs from the default. A key written unconditionally would
+				// rewrite every shipped scene the first time it was re-saved, which is what
+				// the round-trip test guards against.
+				if (!rec.physics->startActive)
+				{
+					p.insert("start_active", rec.physics->startActive);
+				}
 				p.insert("lock_position", Vec3ToToml(glm::vec3(rec.physics->lockPosition.x ? 1.0f : 0.0f, rec.physics->lockPosition.y ? 1.0f : 0.0f, rec.physics->lockPosition.z ? 1.0f : 0.0f)));
 				p.insert("lock_rotation", Vec3ToToml(glm::vec3(rec.physics->lockRotation.x ? 1.0f : 0.0f, rec.physics->lockRotation.y ? 1.0f : 0.0f, rec.physics->lockRotation.z ? 1.0f : 0.0f)));
 				t.insert("physics", std::move(p));
@@ -1410,6 +1417,7 @@ namespace aether::app::scene
 				        .isSensor = pv["sensor"].value_or(false),
 				        .continuousCollision = pv["ccd"].value_or(false),
 				        .allowSleeping = pv["allow_sleeping"].value_or(true),
+				        .startActive = pv["start_active"].value_or(true),
 				        .lockPosition = glm::bvec3(lockPos.x > 0.5f, lockPos.y > 0.5f, lockPos.z > 0.5f),
 				        .lockRotation = glm::bvec3(lockRot.x > 0.5f, lockRot.y > 0.5f, lockRot.z > 0.5f)};
 			}

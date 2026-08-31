@@ -95,6 +95,8 @@ namespace aether::app::scene
 		bool isSensor = false;
 		bool continuousCollision = false;
 		bool allowSleeping = true;
+		// Whether the body starts awake. Authored in the Inspector, so it has to survive a save.
+		bool startActive = true;
 		glm::bvec3 lockPosition{false};
 		glm::bvec3 lockRotation{false};
 	};

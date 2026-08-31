@@ -37,6 +37,7 @@ namespace aether::app::scene
 				pr.maxAngularVelocity = rb->maxAngularVelocity;
 				pr.continuousCollision = rb->continuousCollision;
 				pr.allowSleeping = rb->allowSleeping;
+				pr.startActive = rb->startActive;
 				pr.lockPosition = rb->lockPosition;
 				pr.lockRotation = rb->lockRotation;
 			}
@@ -79,6 +80,7 @@ namespace aether::app::scene
 			                .allowSleeping = phys.allowSleeping,
 			                .lockPosition = phys.lockPosition,
 			                .lockRotation = phys.lockRotation,
+			                .startActive = phys.startActive,
 			        });
 		}
 
