@@ -42,6 +42,30 @@ float GtaoVisibility(in FrameConstantsData* fc, in float2 pixelCoord)
     return saturate(g_textures[aoSlot].Sample(g_linearSampler, aoUv).r);
 }
 
+// Ambient occlusion says how much of the hemisphere is blocked, and multiplying the ambient
+// by it assumes the blocked directions deliver nothing at all. That is only true if the
+// blockers are black. They are not: light that would have arrived from a blocked direction
+// hits the nearby surface instead, bounces, and some of it still reaches the point - carrying
+// that surface's colour with it. A corner in a white room is not black, and a corner in a red
+// one goes red rather than grey. Straight multiplication has neither behaviour, which is what
+// makes plain AO read as a dirty smudge painted onto the geometry rather than as light.
+//
+// Jimenez et al., "Practical Real-Time Strategies for Accurate Indirect Occlusion", fit a
+// cubic to the ground-truth interreflection response as a function of albedo. Evaluated per
+// channel it gives back occlusion that is both albedo-dependent and coloured, for a handful
+// of ALU and no extra buffer. The max() keeps it from ever darkening more than the raw AO
+// would, so it can only add back light that a bounce really would have delivered.
+//
+// Diffuse only. This is an interreflection model for a hemisphere gather; a specular lobe
+// gathers one narrow direction, and SpecularOcclusion below is what describes that.
+float3 MultiBounceAo(in float ao, in float3 albedo)
+{
+    const float3 a =  2.0404f * albedo - 0.3324f;
+    const float3 b = -4.7951f * albedo + 0.6417f;
+    const float3 c =  2.7552f * albedo + 0.6903f;
+    return max(float3(ao, ao, ao), ((ao * a + b) * ao + c) * ao);
+}
+
 // Diffuse and specular are not occluded by the same amount. Diffuse gathers the whole
 // hemisphere, so ambient occlusion describes it directly. A specular lobe gathers a cone
 // whose width is set by roughness: the smoother the surface, the narrower that cone, and the

@@ -885,7 +885,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float ambientAo = saturate(MaterialOcclusion(mat, input.uv) * GtaoVisibility(fc, input.svPosition.xy));
     const float specularAo = SpecularOcclusion(ambientAo, NdotV, roughness);
 
-    float3 finalColor = direct + ambientDiffuse * ambientAo + ambientSpecular * specularAo + emissive;
+    float3 finalColor = direct + ambientDiffuse * MultiBounceAo(ambientAo, albedo) + ambientSpecular * specularAo + emissive;
 
     // Height fog, exactly as gltf_mesh applies it. Fog is resolved per fragment rather than
     // as a fullscreen pass, so a shader that skips it renders a material that stays sharp

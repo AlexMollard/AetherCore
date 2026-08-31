@@ -371,7 +371,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // reconstructs the cone's occlusion from the hemisphere's. At roughness 1 it
     // returns the plain AO, because then the lobe IS the hemisphere.
     const float specularAo = SpecularOcclusion(ambientAo, NdotV, roughness);
-    float3 ambient = ambientDiffuse * ambientAo + ambientSpecular * specularAo;
+    float3 ambient = ambientDiffuse * MultiBounceAo(ambientAo, baseColor.rgb) + ambientSpecular * specularAo;
 
     float3 finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
 
