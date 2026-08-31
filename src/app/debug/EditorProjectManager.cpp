@@ -423,7 +423,9 @@ namespace aether::editor
 		auto projectResult = ReadProjectDescriptor(root);
 		if (!projectResult)
 		{
-			m_launcherState.error = "No ProjectSettings.toml found there.";
+			// The real reason: missing is only one of them - unreadable TOML is another, and
+			// "not found" sends the author looking for the wrong problem.
+			m_launcherState.error = projectResult.error().message;
 			return;
 		}
 		m_currentProject = *std::move(projectResult);

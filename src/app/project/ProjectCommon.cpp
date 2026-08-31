@@ -307,9 +307,10 @@ namespace aether::app::project
 		std::string scenesPath;
 		std::string prefabsPath;
 		std::string scriptsPath;
+		bool parsed = false;
 		try
 		{
-			text::ParseToml(*descriptorText,
+			parsed = text::ParseToml(*descriptorText,
 			        [&](const text::IniEntry& entry)
 			        {
 				        if (entry.fullKey == "project.name")
@@ -341,6 +342,14 @@ namespace aether::app::project
 		catch (...)
 		{
 			return project;
+		}
+
+		// A descriptor that does not parse emits NO entries, so every path and the project
+		// name would silently fall back to defaults - the scenes folder would come up empty
+		// and the project would look mysteriously broken rather than saying why.
+		if (!parsed)
+		{
+			AE_UNEXPECTED(AetherError::Engine("ProjectSettings.toml is not readable TOML: " + ProjectFilePath(root).generic_string()));
 		}
 
 		if (project.name.empty())
