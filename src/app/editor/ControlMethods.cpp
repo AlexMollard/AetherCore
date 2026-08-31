@@ -2448,6 +2448,25 @@ namespace aether::editor
 			        return json{{"windows", arr}};
 		        }});
 
+		methods.push_back({"editor.undo_status",
+		        "undo_status",
+		        "How deep the editor's undo and redo stacks are, and whether the scene has unsaved edits. Undo and redo themselves are keyboard actions (ui_key z/y with ctrl); this is how you tell what they will do, and whether one actually consumed an entry.",
+		        false,
+		        Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* undo = ctx.services.TryGet<UndoStack>();
+			        if (undo == nullptr)
+			        {
+				        return json{{"error", "no undo stack (editor only)"}};
+			        }
+			        return json{{"undoDepth", undo->UndoDepth()},
+			                {"redoDepth", undo->RedoDepth()},
+			                {"canUndo", undo->UndoDepth() > 0},
+			                {"canRedo", undo->RedoDepth() > 0},
+			                {"unsavedChanges", undo->HasUnsavedChanges()}};
+		        }});
+
 		methods.push_back({"editor.window_set",
 		        "set_window",
 		        "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it. Pass focus to also bring it to the front of its dock node - a panel sharing a node with others is visible while its tab is behind theirs, which reads as a panel that draws nothing.",
