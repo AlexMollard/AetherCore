@@ -61,7 +61,25 @@ namespace aether::editor
 			static const std::unordered_map<std::string, int> kMap{
 			        {"enter", ImGuiKey_Enter}, {"escape", ImGuiKey_Escape}, {"tab", ImGuiKey_Tab}, {"backspace", ImGuiKey_Backspace}, {"delete", ImGuiKey_Delete}, {"space", ImGuiKey_Space}, {"left", ImGuiKey_LeftArrow}, {"right", ImGuiKey_RightArrow}, {"up", ImGuiKey_UpArrow}, {"down", ImGuiKey_DownArrow}, {"home", ImGuiKey_Home}, {"end", ImGuiKey_End}};
 			const auto it = kMap.find(name);
-			return it != kMap.end() ? it->second : 0;
+			if (it != kMap.end())
+			{
+				return it->second;
+			}
+			// Single letters and digits, so an editor shortcut can be named the way it is
+			// written down: ctrl+z, ctrl+shift+s, and so on.
+			if (name.size() == 1)
+			{
+				const char c = static_cast<char>(std::tolower(static_cast<unsigned char>(name[0])));
+				if (c >= 'a' && c <= 'z')
+				{
+					return ImGuiKey_A + (c - 'a');
+				}
+				if (c >= '0' && c <= '9')
+				{
+					return ImGuiKey_0 + (c - '0');
+				}
+			}
+			return 0;
 		}
 	} // namespace
 
@@ -191,9 +209,9 @@ namespace aether::editor
 
 		methods.push_back({"ui.key",
 		        "ui_key",
-		        "Press a named key: enter, escape, tab, backspace, delete, space, left, right, up, down, home, end.",
+		        "Press a key, optionally with modifiers: enter, escape, tab, backspace, delete, space, left, right, up, down, home, end, or any single letter or digit. Set ctrl/shift/alt to send an editor shortcut such as ctrl+z.",
 		        true,
-		        Obj({{"key", StrProp()}}, {"key"}),
+		        Obj({{"key", StrProp()}, {"ctrl", json{{"type", "boolean"}}}, {"shift", json{{"type", "boolean"}}}, {"alt", json{{"type", "boolean"}}}}, {"key"}),
 		        [](const json& params, MethodContext&) -> json
 		        {
 			        const std::string name = params.value("key", std::string{});
@@ -202,8 +220,11 @@ namespace aether::editor
 			        {
 				        return json{{"error", "unknown key '" + name + "'"}};
 			        }
-			        app::UiAutomation::Get().Input().QueueKey(key);
-			        return json{{"status", "queued"}, {"key", name}};
+			        const bool ctrl = params.value("ctrl", false);
+			        const bool shift = params.value("shift", false);
+			        const bool alt = params.value("alt", false);
+			        app::UiAutomation::Get().Input().QueueKeyChord(key, ctrl, shift, alt);
+			        return json{{"status", "queued"}, {"key", name}, {"ctrl", ctrl}, {"shift", shift}, {"alt", alt}};
 		        }});
 	}
 } // namespace aether::editor

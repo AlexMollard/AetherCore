@@ -42,6 +42,10 @@ namespace aether::app
 		void QueueDrag(float fromX, float fromY, float toX, float toY, int button);
 		void QueueHover(float x, float y);
 		void QueueKey(int imguiKey);
+		// A key pressed WITH modifiers held, which is what an editor shortcut actually is.
+		// The modifiers go down a frame early and come up a frame late, because ImGui only
+		// sees a chord when they are already held on the frame the key itself goes down.
+		void QueueKeyChord(int imguiKey, bool ctrl, bool shift, bool alt);
 		void QueueText(std::string utf8);
 		void ClearHover();
 

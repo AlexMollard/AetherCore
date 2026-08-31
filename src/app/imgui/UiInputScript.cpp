@@ -31,6 +31,8 @@ namespace aether::app
 		}
 
 		const int kModCtrl = ImGuiMod_Ctrl; // documented modifier path (1.92)
+		const int kModShift = ImGuiMod_Shift;
+		const int kModAlt = ImGuiMod_Alt;
 		const int kKeyA = ImGuiKey_A;
 	} // namespace
 
@@ -108,6 +110,41 @@ namespace aether::app
 	{
 		PushFrame({SynEvent{SynKind::Key, 0.0f, 0.0f, 0, true, imguiKey}});
 		PushFrame({SynEvent{SynKind::Key, 0.0f, 0.0f, 0, false, imguiKey}});
+	}
+
+	void UiInputScript::QueueKeyChord(int imguiKey, bool ctrl, bool shift, bool alt)
+	{
+		if (!ctrl && !shift && !alt)
+		{
+			QueueKey(imguiKey);
+			return;
+		}
+		std::vector<SynEvent> down;
+		const auto mod = [&](bool on, int key, bool pressed)
+		{
+			if (on)
+			{
+				down.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, pressed, key});
+			}
+		};
+		// Frame 1: modifiers only. Frame 2: modifiers still held, key goes down - a chord is
+		// only a chord if the modifier is already down when the key arrives. Frame 3 releases
+		// the key first, then the modifiers, in the order a real keyboard would.
+		mod(ctrl, kModCtrl, true);
+		mod(shift, kModShift, true);
+		mod(alt, kModAlt, true);
+		PushFrame(down);
+
+		std::vector<SynEvent> withKey = down;
+		withKey.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, true, imguiKey});
+		PushFrame(withKey);
+
+		std::vector<SynEvent> up;
+		up.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, false, imguiKey});
+		if (alt) { up.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, false, kModAlt}); }
+		if (shift) { up.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, false, kModShift}); }
+		if (ctrl) { up.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, false, kModCtrl}); }
+		PushFrame(up);
 	}
 
 	void UiInputScript::QueueText(std::string utf8)
