@@ -759,9 +759,9 @@ namespace aether::editor
 			{
 				if (auto* assetMgr = context.services.TryGet<AssetManager>())
 				{
-					const std::string prefabName = world.Get<PrefabInstanceComponent>(e).prefabPath;
-					const auto captured = app::scene::CapturePrefab(world, e, assetMgr->GetMaterialRegistry(), assetMgr->GetTextureRegistry());
-					app::scene::SavePrefabFile(prefabName, captured);
+					// Rebuilds this prefab's other instances too, so the edit shows at once
+					// rather than only after a scene reload.
+					app::scene::ApplyPrefabInstanceToPrefab(world, e, app::scene::MakeApplySceneDeps(context.services), assetMgr->GetMaterialRegistry(), assetMgr->GetTextureRegistry());
 					m_dirty = true;
 				}
 			}

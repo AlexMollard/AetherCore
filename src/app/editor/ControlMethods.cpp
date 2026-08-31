@@ -880,7 +880,7 @@ namespace aether::editor
 
 		methods.push_back({"scene.apply_prefab_instance",
 		        "apply_prefab_instance",
-		        "Apply a prefab instance's current state (its overrides included) back to the prefab file, so every instance of that prefab picks up the change on reload. 'id' is the instance root.",
+		        "Apply a prefab instance's current state (its overrides included) back to the prefab file. Every other live instance is rebuilt immediately so the change shows at once, each keeping its own overrides; 'refreshed' returns their new ids (rebuilding changes them). 'id' is the instance root.",
 		        true,
 		        Obj({{"id", IntProp()}}, {"id"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -899,12 +899,17 @@ namespace aether::editor
 				        return json{{"error", "not a prefab instance root"}};
 			        }
 			        const std::string prefabName = inst->prefabPath;
-			        const app::scene::SceneDescription captured = app::scene::CapturePrefab(world, root, assets->GetMaterialRegistry(), assets->GetTextureRegistry());
-			        if (!app::scene::SavePrefabFile(prefabName, captured))
+			        std::vector<Entity> rebuilt;
+			        if (!app::scene::ApplyPrefabInstanceToPrefab(world, root, app::scene::MakeApplySceneDeps(ctx.services), assets->GetMaterialRegistry(), assets->GetTextureRegistry(), &rebuilt))
 			        {
 				        return json{{"error", "failed to save prefab"}};
 			        }
-			        return json{{"id", root.id}, {"prefab", prefabName}, {"applied", true}};
+			        json refreshed = json::array();
+			        for (const Entity e: rebuilt)
+			        {
+				        refreshed.push_back(e.id);
+			        }
+			        return json{{"id", root.id}, {"prefab", prefabName}, {"applied", true}, {"refreshed", refreshed}};
 		        }});
 
 		methods.push_back({"scene.revert_prefab_instance",

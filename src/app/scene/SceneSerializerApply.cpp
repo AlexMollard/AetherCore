@@ -231,77 +231,7 @@ namespace aether::app::scene
 		{
 			for (const PrefabInstanceRecord& rec: scene.prefabInstances)
 			{
-				if (rec.prefabPath.empty())
-				{
-					continue;
-				}
-				std::optional<SceneDescription> prefab = ReadPrefabFile(rec.prefabPath);
-				if (!prefab)
-				{
-					AE_WARN(LogCategory::App, "Prefab instance references missing prefab '{}'", rec.prefabPath);
-					continue;
-				}
-				const glm::mat4 xform = ComposeTransform(rec.position, rec.eulerDeg, rec.scale);
-				std::vector<Entity> created;
-				const Entity root = InstantiatePrefab(*prefab, world, deps, xform, &created);
-				if (!root.IsValid())
-				{
-					continue;
-				}
-				world.Emplace<PrefabInstanceComponent>(root, PrefabInstanceComponent{.prefabPath = rec.prefabPath});
-				world.Emplace<SceneTransientComponent>(root);
-				if (!rec.name.empty())
-				{
-					if (auto* nc = world.TryGet<NameComponent>(root))
-					{
-						nc->name = rec.name;
-					}
-				}
-				const auto byGuid = LinkPrefabSubtree(world, created, root, *prefab);
-
-				// Remove prefab entities that were deleted in this instance. Never remove
-				// the instance root itself: it maps to the prefab's root entity, and an
-				// earlier capture bug could write the root's guid into `removed`; deleting
-				// it would wipe the whole instance.
-				for (const std::uint64_t g: rec.removedGuids)
-				{
-					const auto it = byGuid.find(g);
-					if (it != byGuid.end() && it->second != root && world.GetRegistry().valid(World::ToEntt(it->second)))
-					{
-						ecs::DestroyHierarchy(world, it->second);
-					}
-				}
-
-				// Map prefab records by stable guid so overrides merge onto the current
-				// prefab (field-level: only overridden keys come from the instance).
-				std::unordered_map<std::uint64_t, const EntityRecord*> prefabByGuid;
-				for (std::size_t i = 0; i < prefab->entities.size(); ++i)
-				{
-					prefabByGuid[EffectiveGuid(prefab->entities[i], i)] = &prefab->entities[i];
-				}
-				ApplyPrefabOverrides(world, deps, byGuid, prefabByGuid, rec.overrides);
-
-				// Re-create instance-local added entities; their roots attach to the
-				// instance root (which is SceneTransient, so they capture as added again).
-				if (!rec.addedEntities.empty())
-				{
-					SceneDescription addScene;
-					addScene.entities = rec.addedEntities;
-					std::vector<Entity> addCreated;
-					addCreated.reserve(addScene.entities.size());
-					for (std::size_t i = 0; i < addScene.entities.size(); ++i)
-					{
-						addCreated.push_back(world.Create());
-					}
-					ApplySceneToEntities(addScene, world, deps, addCreated, false);
-					for (std::size_t i = 0; i < addScene.entities.size() && i < addCreated.size(); ++i)
-					{
-						if (addScene.entities[i].parentIndex < 0)
-						{
-							ecs::SetParent(world, addCreated[i], root);
-						}
-					}
-				}
+				ExpandPrefabInstance(rec, world, deps);
 			}
 		}
 
@@ -524,6 +454,135 @@ namespace aether::app::scene
 			return created;
 		}
 	} // namespace
+
+	Entity ExpandPrefabInstance(const PrefabInstanceRecord& rec, World& world, const ApplySceneDeps& deps)
+	{
+		if (rec.prefabPath.empty())
+		{
+			return Entity{};
+		}
+		std::optional<SceneDescription> prefab = ReadPrefabFile(rec.prefabPath);
+		if (!prefab)
+		{
+			AE_WARN(LogCategory::App, "Prefab instance references missing prefab '{}'", rec.prefabPath);
+			return Entity{};
+		}
+		const glm::mat4 xform = ComposeTransform(rec.position, rec.eulerDeg, rec.scale);
+		std::vector<Entity> created;
+		const Entity root = InstantiatePrefab(*prefab, world, deps, xform, &created);
+		if (!root.IsValid())
+		{
+			return Entity{};
+		}
+		world.Emplace<PrefabInstanceComponent>(root, PrefabInstanceComponent{.prefabPath = rec.prefabPath});
+		world.Emplace<SceneTransientComponent>(root);
+		if (!rec.name.empty())
+		{
+			if (auto* nc = world.TryGet<NameComponent>(root))
+			{
+				nc->name = rec.name;
+			}
+		}
+		const auto byGuid = LinkPrefabSubtree(world, created, root, *prefab);
+
+		// Remove prefab entities that were deleted in this instance. Never remove
+		// the instance root itself: it maps to the prefab's root entity, and an
+		// earlier capture bug could write the root's guid into `removed`; deleting
+		// it would wipe the whole instance.
+		for (const std::uint64_t g: rec.removedGuids)
+		{
+			const auto it = byGuid.find(g);
+			if (it != byGuid.end() && it->second != root && world.GetRegistry().valid(World::ToEntt(it->second)))
+			{
+				ecs::DestroyHierarchy(world, it->second);
+			}
+		}
+
+		// Map prefab records by stable guid so overrides merge onto the current
+		// prefab (field-level: only overridden keys come from the instance).
+		std::unordered_map<std::uint64_t, const EntityRecord*> prefabByGuid;
+		for (std::size_t i = 0; i < prefab->entities.size(); ++i)
+		{
+			prefabByGuid[EffectiveGuid(prefab->entities[i], i)] = &prefab->entities[i];
+		}
+		ApplyPrefabOverrides(world, deps, byGuid, prefabByGuid, rec.overrides);
+
+		// Re-create instance-local added entities; their roots attach to the
+		// instance root (which is SceneTransient, so they capture as added again).
+		if (!rec.addedEntities.empty())
+		{
+			SceneDescription addScene;
+			addScene.entities = rec.addedEntities;
+			std::vector<Entity> addCreated;
+			addCreated.reserve(addScene.entities.size());
+			for (std::size_t i = 0; i < addScene.entities.size(); ++i)
+			{
+				addCreated.push_back(world.Create());
+			}
+			ApplySceneToEntities(addScene, world, deps, addCreated, false);
+			for (std::size_t i = 0; i < addScene.entities.size() && i < addCreated.size(); ++i)
+			{
+				if (addScene.entities[i].parentIndex < 0)
+				{
+					ecs::SetParent(world, addCreated[i], root);
+				}
+			}
+		}
+	
+		return root;
+	}
+
+	bool ApplyPrefabInstanceToPrefab(World& world, Entity root, const ApplySceneDeps& deps, const MaterialRegistry& materials, const TextureRegistry& textures, std::vector<Entity>* outRebuilt)
+	{
+		const auto* inst = world.TryGet<PrefabInstanceComponent>(root);
+		if (inst == nullptr)
+		{
+			return false;
+		}
+		const std::string prefabName = inst->prefabPath;
+
+		// Snapshot every OTHER instance of this prefab while the OLD prefab is still the one
+		// on disk, so each delta records only what that instance genuinely overrides.
+		std::vector<PrefabInstanceRecord> siblings;
+		std::vector<Entity> siblingRoots;
+		auto& reg = world.GetRegistry();
+		for (const auto handle: reg.storage<entt::entity>())
+		{
+			if (!reg.valid(handle))
+			{
+				continue;
+			}
+			const Entity e = World::FromEntt(handle);
+			if (e == root)
+			{
+				continue;
+			}
+			const auto* other = world.TryGet<PrefabInstanceComponent>(e);
+			if (other == nullptr || other->prefabPath != prefabName)
+			{
+				continue;
+			}
+			siblings.push_back(CapturePrefabInstance(world, e, materials, textures));
+			siblingRoots.push_back(e);
+		}
+
+		if (!SavePrefabFile(prefabName, CapturePrefab(world, root, materials, textures)))
+		{
+			return false;
+		}
+
+		// Rebuild the siblings from the new prefab, re-applying the deltas captured above.
+		for (std::size_t i = 0; i < siblingRoots.size(); ++i)
+		{
+			ecs::DestroyHierarchy(world, siblingRoots[i]);
+			const Entity rebuilt = ExpandPrefabInstance(siblings[i], world, deps);
+			if (outRebuilt != nullptr && rebuilt.IsValid())
+			{
+				outRebuilt->push_back(rebuilt);
+			}
+		}
+		return true;
+	}
 
 	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{

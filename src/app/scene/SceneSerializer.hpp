@@ -416,4 +416,24 @@ namespace aether::app::scene
 	// scene re-serializes it as a reference and edits to the prefab propagate to
 	// every instance. `prefabName` is the prefab's save name (what a scene stores).
 	Entity InstantiatePrefabInstance(const std::string& prefabName, const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld);
+
+	// Capture one live prefab-instance root as the reference record a scene stores: its
+	// transform, name, and per-entity delta against the prefab currently on disk.
+	PrefabInstanceRecord CapturePrefabInstance(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures);
+
+	// Expand one instance record into live entities (prefab + overrides + added/removed
+	// entities). Returns the new instance root, or an invalid entity if the prefab is missing.
+	Entity ExpandPrefabInstance(const PrefabInstanceRecord& rec, World& world, const ApplySceneDeps& deps);
+
+	// Write a live instance's current state back to its prefab file, then rebuild every
+	// OTHER live instance of that prefab so the edit shows immediately instead of only on
+	// the next scene load - each sibling keeping its own overrides.
+	//
+	// Sibling deltas are captured BEFORE the file is written, and that ordering is load-
+	// bearing: diffed against the NEW prefab, a sibling that merely matched the OLD prefab
+	// would read as overriding every changed field and freeze there instead of following.
+	//
+	// outRebuilt (optional) receives the siblings' new roots - rebuilding replaces entities,
+	// so their ids change and callers holding ids (selection) must remap.
+	bool ApplyPrefabInstanceToPrefab(World& world, Entity root, const ApplySceneDeps& deps, const MaterialRegistry& materials, const TextureRegistry& textures, std::vector<Entity>* outRebuilt = nullptr);
 } // namespace aether::app::scene

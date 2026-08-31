@@ -70,6 +70,14 @@ namespace aether::app::scene
 			{
 				EntityRecord rec;
 				rec.entityId = e.id;
+				// A prefab-linked entity keeps the guid of the prefab entity it came from, so
+				// re-saving a prefab (Apply to Prefab) preserves entity identity. Without this
+				// every apply re-keys the prefab's guids from scratch and every OTHER instance's
+				// overrides - which route by guid - are silently orphaned.
+				if (const auto* prefabLink = world.TryGet<PrefabLinkComponent>(e))
+				{
+					rec.guid = prefabLink->prefabGuid;
+				}
 				if (const auto* nc = world.TryGet<NameComponent>(e))
 				{
 					rec.name = nc->name;
@@ -408,18 +416,7 @@ namespace aether::app::scene
 			{
 				continue;
 			}
-			PrefabInstanceRecord rec;
-			rec.prefabPath = inst->prefabPath;
-			ComputePrefabDelta(world, e, inst->prefabPath, materials, textures, rec.overrides, rec.removedGuids, rec.addedEntities);
-			if (const auto* nc = world.TryGet<NameComponent>(e))
-			{
-				rec.name = nc->name;
-			}
-			if (const auto* tc = world.TryGet<TransformComponent>(e))
-			{
-				DecomposeTRS(tc->localToWorld, rec.position, rec.eulerDeg, rec.scale);
-			}
-			scene.prefabInstances.push_back(std::move(rec));
+			scene.prefabInstances.push_back(CapturePrefabInstance(world, e, materials, textures));
 		}
 		return scene;
 	}
@@ -447,6 +444,27 @@ namespace aether::app::scene
 		}
 		AppendEntityRecords(desc, world, order, indexOf, materials, textures);
 		return desc;
+	}
+
+	PrefabInstanceRecord CapturePrefabInstance(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures)
+	{
+		PrefabInstanceRecord rec;
+		const auto* inst = world.TryGet<PrefabInstanceComponent>(root);
+		if (inst == nullptr)
+		{
+			return rec;
+		}
+		rec.prefabPath = inst->prefabPath;
+		ComputePrefabDelta(world, root, inst->prefabPath, materials, textures, rec.overrides, rec.removedGuids, rec.addedEntities);
+		if (const auto* nc = world.TryGet<NameComponent>(root))
+		{
+			rec.name = nc->name;
+		}
+		if (const auto* tc = world.TryGet<TransformComponent>(root))
+		{
+			DecomposeTRS(tc->localToWorld, rec.position, rec.eulerDeg, rec.scale);
+		}
+		return rec;
 	}
 
 	SceneDescription CapturePrefab(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures)
