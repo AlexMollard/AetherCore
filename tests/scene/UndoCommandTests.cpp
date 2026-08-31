@@ -314,10 +314,12 @@ TEST_CASE("UndoStack keeps separate components pending until the interaction end
 	CHECK(stack.UndoDepth() == 0); // still in flight
 
 	stack.FlushFieldEdit();
-	CHECK(stack.UndoDepth() == 2); // one command per touched component
+	// Everything the one interaction touched lands as a single composite entry, so
+	// undoing it cannot leave half of the edit applied.
+	CHECK(stack.UndoDepth() == 1);
 }
 
-TEST_CASE("UndoStack coalesces a multi-selection drag per entity, not per frame")
+TEST_CASE("UndoStack turns one multi-selection drag into one undo entry")
 {
 	UndoStack stack;
 	// One transform drag across a 3-entity selection: every frame touches all three.
@@ -332,7 +334,37 @@ TEST_CASE("UndoStack coalesces a multi-selection drag per entity, not per frame"
 	CHECK(stack.UndoDepth() == 0); // nothing lands mid-drag
 
 	stack.FlushFieldEdit();
-	CHECK(stack.UndoDepth() == 3); // one command per entity, not one per frame
+	// Not one per frame (that was the point of coalescing) and not one per entity
+	// either: the drag was a single gesture, so it costs a single Ctrl+Z. Recording
+	// it per entity left the selection visibly half-reverted between presses.
+	CHECK(stack.UndoDepth() == 1);
+}
+
+TEST_CASE("UndoStack undoes a whole multi-selection edit in one step")
+{
+	World world;
+	ServiceContainer services;
+	const Entity a = world.Create();
+	const Entity b = world.Create();
+	world.Emplace<NameComponent>(a, NameComponent{"A"});
+	world.Emplace<NameComponent>(b, NameComponent{"B"});
+	world.Emplace<PointLightComponent>(a, PointLightComponent{});
+	world.Emplace<PointLightComponent>(b, PointLightComponent{});
+	world.Get<PointLightComponent>(a).intensity = 5.0f;
+	world.Get<PointLightComponent>(b).intensity = 5.0f;
+
+	UndoStack stack;
+	stack.RecordFieldEdit(a.id, "Point Light", "intensity", 1.0, 5.0, true);
+	stack.RecordFieldEdit(b.id, "Point Light", "intensity", 1.0, 5.0, true);
+	stack.FlushFieldEdit();
+	REQUIRE(stack.UndoDepth() == 1);
+
+	REQUIRE(stack.Undo(world, services) != nullptr);
+	// Both entities revert together - the failure this guards against is one of them
+	// staying at the edited value until a second undo.
+	CHECK(world.Get<PointLightComponent>(a).intensity == doctest::Approx(1.0f));
+	CHECK(world.Get<PointLightComponent>(b).intensity == doctest::Approx(1.0f));
+	CHECK(stack.UndoDepth() == 0);
 }
 
 TEST_CASE("UnpackPrefabCommand re-links the prefab instance in place on undo")

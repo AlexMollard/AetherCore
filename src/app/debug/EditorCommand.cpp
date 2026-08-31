@@ -111,6 +111,38 @@ namespace aether::editor
 		Apply(services, /*forward=*/true);
 	}
 
+	CompositeCommand::CompositeCommand(std::vector<std::unique_ptr<IEditorCommand>> commands, std::string label)
+	    : m_commands(std::move(commands)), m_label(std::move(label))
+	{
+	}
+
+	void CompositeCommand::Undo(World& world, ServiceContainer& services)
+	{
+		// Reverse order: the parts were applied front-to-back, so unwinding back-to-front
+		// is what makes a composite behave like the single step it represents.
+		for (auto it = m_commands.rbegin(); it != m_commands.rend(); ++it)
+		{
+			(*it)->Undo(world, services);
+		}
+	}
+
+	void CompositeCommand::Redo(World& world, ServiceContainer& services)
+	{
+		for (const auto& command: m_commands)
+		{
+			command->Redo(world, services);
+		}
+	}
+
+	Entity CompositeCommand::Remap(Entity entity) const
+	{
+		for (const auto& command: m_commands)
+		{
+			entity = command->Remap(entity);
+		}
+		return entity;
+	}
+
 	std::unique_ptr<SubtreeLifetimeCommand> SubtreeLifetimeCommand::Capture(World& world, ServiceContainer& services, const std::vector<Entity>& roots, bool createdByThisEdit, const char* label)
 	{
 		auto* assets = services.TryGet<AssetManager>();

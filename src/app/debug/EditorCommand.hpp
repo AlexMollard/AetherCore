@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -253,6 +255,30 @@ namespace aether::editor
 	// before/after JSON snapshots of the fields that changed. Undo/Redo
 	// applies the stored field values through the reflection or
 	// hand-authored path.
+	// Several commands produced by ONE user gesture, undone and redone as a single step.
+	// An inspector drag over a multi-selection edits every selected entity; recorded
+	// separately those cost the user one Ctrl+Z per entity and leave the scene visibly
+	// half-reverted in between.
+	class CompositeCommand final : public IEditorCommand
+	{
+	public:
+		CompositeCommand(std::vector<std::unique_ptr<IEditorCommand>> commands, std::string label);
+
+		void Undo(World& world, ServiceContainer& services) override;
+		void Redo(World& world, ServiceContainer& services) override;
+
+		[[nodiscard]] std::string_view Label() const override
+		{
+			return m_label;
+		}
+
+		[[nodiscard]] Entity Remap(Entity entity) const override;
+
+	private:
+		std::vector<std::unique_ptr<IEditorCommand>> m_commands;
+		std::string m_label;
+	};
+
 	class SetComponentCommand final : public IEditorCommand
 	{
 	public:

@@ -56,15 +56,29 @@ namespace aether::editor
 		}
 		std::vector<PendingFieldEdit> edits;
 		edits.swap(m_pendingFields);
+		std::vector<std::unique_ptr<IEditorCommand>> commands;
 		for (PendingFieldEdit& edit: edits)
 		{
 			if (edit.before == edit.after)
 			{
 				continue; // dragged back to where it started - not an edit
 			}
-			// RecordCommand, not Record: Record() flushes first and would recurse.
-			RecordCommand(std::make_unique<SetComponentCommand>(edit.entityId, edit.componentName, std::move(edit.before), std::move(edit.after), edit.isReflected));
+			commands.push_back(std::make_unique<SetComponentCommand>(edit.entityId, edit.componentName, std::move(edit.before), std::move(edit.after), edit.isReflected));
 		}
+		if (commands.empty())
+		{
+			return;
+		}
+		// One gesture, one history entry. A drag over a multi-selection lands here with a
+		// command per (entity, component); recorded singly the user would undo the same
+		// drag once per target, seeing the selection half-reverted along the way.
+		// RecordCommand, not Record: Record() flushes first and would recurse.
+		if (commands.size() == 1)
+		{
+			RecordCommand(std::move(commands.front()));
+			return;
+		}
+		RecordCommand(std::make_unique<CompositeCommand>(std::move(commands), "Set components"));
 	}
 
 	void UndoStack::MarkSaved()
