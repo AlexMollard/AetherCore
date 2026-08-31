@@ -700,10 +700,10 @@ namespace aether::editor
 		};
 		windowActions.openSceneDialog = [this]()
 		{
-			if (m_hierarchyPanel != nullptr)
-			{
-				m_hierarchyPanel->RequestOpenPopup();
-			}
+			// Deferred rather than opening the dialog here: picking a scene in it replaces
+			// the world, so it has to pass the same unsaved-work check the File menu does,
+			// and that needs the frame's context.
+			m_pendingOpenSceneDialog = true;
 		};
 		windowActions.listLayouts = []()
 		{
@@ -1717,6 +1717,7 @@ namespace aether::editor
 			// whatever scene is loaded once editing resumes.
 			m_pendingUndoSteps = 0;
 			m_pendingRedoSteps = 0;
+			m_pendingOpenSceneDialog = false;
 		}
 		if (undoEditable)
 		{
@@ -1730,6 +1731,11 @@ namespace aether::editor
 				{
 					ApplyHistoryStep(context, redoCombo);
 				}
+			}
+			if (m_pendingOpenSceneDialog)
+			{
+				m_pendingOpenSceneDialog = false;
+				ConfirmDiscard(context, PendingNav::OpenScene);
 			}
 			for (; m_pendingUndoSteps > 0; --m_pendingUndoSteps)
 			{

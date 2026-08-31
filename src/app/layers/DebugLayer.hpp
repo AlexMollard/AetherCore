@@ -166,6 +166,9 @@ namespace aether::editor
 		// alongside the keyboard shortcut.
 		int m_pendingUndoSteps = 0;
 		int m_pendingRedoSteps = 0;
+		// Open-scene dialog asked for through the control endpoint, routed through the same
+		// unsaved-work check the File menu uses.
+		bool m_pendingOpenSceneDialog = false;
 		// Borrowed from m_panels, which owns it. Held typed so the edit camera can be
 		// written once on shutdown rather than from the per-frame settings path.
 		ViewportPanel* m_viewportPanel = nullptr;
