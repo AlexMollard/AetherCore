@@ -839,6 +839,10 @@ namespace aether::editor
 		const bool selfDisabled = world.Has<DisabledComponent>(e);
 		if (ImGui::MenuItem(selfDisabled ? ICON_FA_POWER_OFF "  Enable" : ICON_FA_POWER_OFF "  Disable"))
 		{
+			if (auto* undo = context.services.TryGet<UndoStack>())
+			{
+				undo->Record(std::make_unique<SetEnabledCommand>(e.id, selfDisabled));
+			}
 			if (selfDisabled)
 			{
 				world.Remove<DisabledComponent>(e);
@@ -1064,7 +1068,7 @@ namespace aether::editor
 		return m_keyboardFocusScope == KeyboardFocusScope::SceneList;
 	}
 
-	void HierarchyPanel::DrawRowUtilityToggles(World& world, Entity e)
+	void HierarchyPanel::DrawRowUtilityToggles(World& world, Entity e, UndoStack* undo)
 	{
 		const float rowEndX = ImGui::GetContentRegionMax().x + ImGui::GetCursorPosX() - ImGui::GetContentRegionAvail().x;
 		const ImGuiStyle& style = ImGui::GetStyle();
@@ -1119,6 +1123,12 @@ namespace aether::editor
 			switch (toggles[i].kind)
 			{
 				case 0:
+					// Same edit as the context menu's Enable/Disable, so it belongs in history
+					// for the same reason.
+					if (undo != nullptr)
+					{
+						undo->Record(std::make_unique<SetEnabledCommand>(e.id, selfDisabled));
+					}
 					if (selfDisabled)
 					{
 						world.Remove<DisabledComponent>(e);
@@ -1255,7 +1265,7 @@ namespace aether::editor
 
 		if (!destroyed)
 		{
-			DrawRowUtilityToggles(world, e);
+			DrawRowUtilityToggles(world, e, context.services.TryGet<UndoStack>());
 		}
 
 		ImGui::SetCursorScreenPos(afterSelectable);

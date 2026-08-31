@@ -436,8 +436,22 @@ namespace aether::editor
 			if (ImGui::Checkbox("##active", &active))
 			{
 				const bool disable = !active;
+				// Recorded, and as one entry across the selection: without it the toggle left
+				// no history and the next Ctrl+Z reached past it - disabling an entity and
+				// undoing could delete the entity instead of re-enabling it.
+				auto* activeUndo = context.services.TryGet<UndoStack>();
+				UndoStack::ScopedGroup activeGroup(activeUndo, disable ? "Disable" : "Enable");
 				auto applyActive = [&](Entity target)
 				{
+					const bool wasDisabled = world.Has<DisabledComponent>(target);
+					if (wasDisabled == disable)
+					{
+						return; // already in the requested state - not an edit
+					}
+					if (activeUndo != nullptr)
+					{
+						activeUndo->Record(std::make_unique<SetEnabledCommand>(target.id, wasDisabled));
+					}
 					if (disable)
 					{
 						world.EmplaceOrReplace<DisabledComponent>(target);

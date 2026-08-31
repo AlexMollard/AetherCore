@@ -20,6 +20,8 @@ namespace aether
 
 namespace aether::editor
 {
+	class UndoStack;
+
 	class HierarchyPanel final : public DebugPanel
 	{
 	public:
@@ -82,7 +84,8 @@ namespace aether::editor
 		// Returns true if the menu destroyed `e` (callers must not touch it after).
 		bool DrawRowContextMenu(app::LayerContext& context, World& world, SceneSelection& selection, Entity e);
 		void BeginRename(const World& world, Entity e);
-		void DrawRowUtilityToggles(World& world, Entity e);
+		// `undo` may be null (no editor undo stack); the toggles still apply.
+		void DrawRowUtilityToggles(World& world, Entity e, UndoStack* undo);
 		void DrawBreadcrumbTrail(const World& world, SceneSelection& selection);
 		void DrawTreeGuideLines(ImDrawList* drawList, const FlatTreeEntry& entry, const ImVec2& rowMin, const ImVec2& rowMax) const;
 		void UpdateKeyboardFocusScopeFromMouse(const ImVec2& sceneListMin, const ImVec2& sceneListMax);

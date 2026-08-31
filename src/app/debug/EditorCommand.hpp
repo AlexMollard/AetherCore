@@ -189,6 +189,27 @@ namespace aether::editor
 
 	// Typed reparent command for a single entity. Stores the entity id and
 	// old/new parent ids; undo/redo calls ecs::SetParent.
+	// Enabling or disabling an entity. Disabled is a tag with no fields, so neither the
+	// reflected-field path nor add/remove-component modelled it, and the toggle recorded
+	// nothing at all: the next Ctrl+Z reached straight past it into whatever came before.
+	class SetEnabledCommand final : public IEditorCommand
+	{
+	public:
+		SetEnabledCommand(std::uint32_t entityId, bool disabledBefore);
+
+		void Undo(World& world, ServiceContainer& services) override;
+		void Redo(World& world, ServiceContainer& services) override;
+
+		[[nodiscard]] std::string_view Label() const override
+		{
+			return m_disabledBefore ? "Enable" : "Disable";
+		}
+
+	private:
+		std::uint32_t m_entityId;
+		bool m_disabledBefore;
+	};
+
 	class ReparentCommand final : public IEditorCommand
 	{
 	public:

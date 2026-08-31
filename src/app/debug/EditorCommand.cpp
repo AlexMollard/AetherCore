@@ -268,6 +268,42 @@ namespace aether::editor
 		world.EmplaceOrReplace<NameComponent>(entity, NameComponent{.name = m_newName});
 	}
 
+	// ── SetEnabledCommand ────────────────────────────────────────────
+
+	SetEnabledCommand::SetEnabledCommand(std::uint32_t entityId, bool disabledBefore)
+	    : m_entityId(entityId), m_disabledBefore(disabledBefore)
+	{
+	}
+
+	namespace
+	{
+		void ApplyDisabled(World& world, Entity entity, bool disabled)
+		{
+			if (!world.GetRegistry().valid(World::ToEntt(entity)))
+			{
+				return;
+			}
+			if (disabled)
+			{
+				world.EmplaceOrReplace<DisabledComponent>(entity);
+			}
+			else if (world.Has<DisabledComponent>(entity))
+			{
+				world.Remove<DisabledComponent>(entity);
+			}
+		}
+	} // namespace
+
+	void SetEnabledCommand::Undo(World& world, ServiceContainer& /*services*/)
+	{
+		ApplyDisabled(world, Entity{m_entityId}, m_disabledBefore);
+	}
+
+	void SetEnabledCommand::Redo(World& world, ServiceContainer& /*services*/)
+	{
+		ApplyDisabled(world, Entity{m_entityId}, !m_disabledBefore);
+	}
+
 	// ── ReparentCommand ──────────────────────────────────────────────
 
 	ReparentCommand::ReparentCommand(std::uint32_t entityId, std::uint32_t oldParentId, std::uint32_t newParentId)
