@@ -18,7 +18,22 @@
 
 namespace aether::editor::iw
 {
-	inline constexpr float kLabelWidth = 128.0f;
+	// Floor and ceiling for the label column. A fixed width was the reason "Linear damping",
+	// "Max angular velocity" and "Sensor (trigger)" all truncated: 128px is too narrow for the
+	// longer reflected field names, while a wide inspector had space going spare.
+	inline constexpr float kLabelWidthMin = 140.0f;
+	inline constexpr float kLabelWidthMax = 260.0f;
+
+	// Measured from the window rather than the cursor so every call inside one row agrees,
+	// including the drawers that position a second widget with SameLine.
+	[[nodiscard]] inline float LabelWidth()
+	{
+		const float content = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
+		// The floor stands down rather than starve the value field: in a panel narrow enough
+		// that 140px of label would leave nothing to edit, half the width is the limit.
+		const float floorWidth = std::min(kLabelWidthMin, content * 0.5f);
+		return std::clamp(content * 0.42f, floorWidth, kLabelWidthMax);
+	}
 
 	// Identifies the component a section header belongs to, so the header can carry a
 	// right-click menu. Held as an id and raw pointers rather than engine types: this header
@@ -153,20 +168,36 @@ namespace aether::editor::iw
 		return open;
 	}
 
-	// column can never bleed over the field to its right. Truncated labels get a
+	// Draws the label in its column so it can never bleed over the field to its right. A label
+	// too long for the column is cut on a character boundary with an ellipsis and gets the full
+	// text on hover - a hard mid-glyph cut ("Linear dampin") reads as a broken panel, where
+	// "Linear damp..." reads as deliberate.
 	inline void LabelColumn(const char* label)
 	{
 		ImGui::AlignTextToFramePadding();
 		const float startX = ImGui::GetCursorPosX();
 		const ImVec2 screenPos = ImGui::GetCursorScreenPos();
-		const float columnWidth = kLabelWidth - ImGui::GetStyle().ItemInnerSpacing.x;
+		const float column = LabelWidth();
+		const float columnWidth = column - ImGui::GetStyle().ItemInnerSpacing.x;
 		const bool truncated = ImGui::CalcTextSize(label).x > columnWidth;
+
+		std::string shown;
+		if (truncated)
+		{
+			// Only walks the string in the rare case it does not fit.
+			shown = label;
+			while (!shown.empty() && ImGui::CalcTextSize((shown + "...").c_str()).x > columnWidth)
+			{
+				shown.pop_back();
+			}
+			shown += "...";
+		}
 
 		const ImVec2 clipMin = screenPos;
 		const ImVec2 clipMax(screenPos.x + columnWidth, screenPos.y + ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f);
 		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));
 		ImGui::PushClipRect(clipMin, clipMax, true);
-		ImGui::TextUnformatted(label);
+		ImGui::TextUnformatted(truncated ? shown.c_str() : label);
 		ImGui::PopClipRect();
 		ImGui::PopStyleColor();
 		if (truncated && ImGui::IsMouseHoveringRect(clipMin, clipMax))
@@ -175,7 +206,7 @@ namespace aether::editor::iw
 		}
 
 		ImGui::SameLine(0.0f, 0.0f);
-		ImGui::SetCursorPosX(startX + kLabelWidth);
+		ImGui::SetCursorPosX(startX + column);
 	}
 
 	inline void PropLabel(const char* label)
@@ -309,12 +340,9 @@ namespace aether::editor::iw
 
 	inline void PropText(const char* label, const char* fmt, ...)
 	{
-		const float startX = ImGui::GetCursorPosX();
-		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));
-		ImGui::TextUnformatted(label);
-		ImGui::PopStyleColor();
-		ImGui::SameLine();
-		ImGui::SetCursorPosX(startX + kLabelWidth);
+		// Shares LabelColumn so a long label ellipsises here too instead of shoving the value
+		// out of alignment with every other row.
+		LabelColumn(label);
 		va_list args = nullptr;
 		va_start(args, fmt);
 		ImGui::TextV(fmt, args);

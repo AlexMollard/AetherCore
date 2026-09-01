@@ -309,7 +309,7 @@ namespace aether::editor
 					const std::string buttonId = label + "##entityField" + info.name;
 					ImGui::AlignTextToFramePadding();
 					ImGui::TextUnformatted(info.name.c_str());
-					ImGui::SameLine(iw::kLabelWidth);
+					ImGui::SameLine(iw::LabelWidth());
 					const ImGuiStyle& style = ImGui::GetStyle();
 					const float clearButtonWidth = ImGui::CalcTextSize(ICON_FA_XMARK).x + style.FramePadding.x * 2.0f;
 					const float selfButtonWidth = ImGui::CalcTextSize(ICON_FA_LINK).x + style.FramePadding.x * 2.0f;
@@ -367,7 +367,7 @@ namespace aether::editor
 					{
 						ImGui::SetItemTooltip("Link an entity that has a '%s' component", componentName.c_str());
 					}
-					ImGui::SameLine(iw::kLabelWidth);
+					ImGui::SameLine(iw::LabelWidth());
 					const ImGuiStyle& style = ImGui::GetStyle();
 					const float clearButtonWidth = ImGui::CalcTextSize(ICON_FA_XMARK).x + style.FramePadding.x * 2.0f;
 					const float trailingButtonWidth = clearButtonWidth + style.ItemSpacing.x;

@@ -270,7 +270,7 @@ namespace aether::editor
 		{
 			ImGui::PushID(mapId);
 			ImGui::TextDisabled("%s", label);
-			ImGui::SameLine(iw::kLabelWidth);
+			ImGui::SameLine(iw::LabelWidth());
 			if (h.index == TextureHandle::kBrokenIndex)
 			{
 				ImGui::TextColored(iw::ToImVec4(colors::Mauve), ICON_FA_IMAGE "  missing (magenta fallback)");
