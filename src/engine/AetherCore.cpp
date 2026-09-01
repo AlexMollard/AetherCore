@@ -631,10 +631,15 @@ namespace aether
 							total += value;
 						}
 						AE_INFO(LogCategory::Engine,
-						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} | flipPeriod={:.3f} flips={} reserve={:.2f} paced={} missed={} | clamped={} unthrottled={}{}",
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} | flipPeriod={:.3f} flips={} reserve={:.2f} paced={} missed={} est={} vrr={} warm={} | clamped={} unthrottled={}{}",
 						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
 						        gameWork / n, inFlight / n, present / n, inputStale / n,
-					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), latencyPacer.ReserveMs(), pacedFrames, missedFlips, clamped, unthrottled,
+					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), latencyPacer.ReserveMs(), pacedFrames, missedFlips,
+					        // paced=0 has three quite different causes and the number alone cannot tell
+					        // them apart: no timebase, a display judged variable, or a pacer that has
+					        // not warmed up. Print which.
+					        m_gpu->GetPresentTiming().HasEstimate() ? 1 : 0, m_gpu->GetPresentTiming().IsVariableRate() ? 1 : 0, latencyPacer.IsWarm() ? 1 : 0,
+					        clamped, unthrottled,
 					        unthrottled > count / 20 ? "  <-- SAMPLE UNRELIABLE, window was occluded" : "");
 					}
 				}

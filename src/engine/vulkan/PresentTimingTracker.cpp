@@ -216,9 +216,18 @@ namespace aether
 					recentCount = std::min(recentCount + 1, kSpreadWindow);
 					if (recentCount == kSpreadWindow)
 					{
-						const auto [lo, hi] = std::minmax_element(recentMs.begin(), recentMs.end());
-						const double mean = static_cast<double>(updatedNs) / 1'000'000.0;
-						m_variableRate.store(mean > 0.0 && (*hi - *lo) / mean > kVariableRateSpread, std::memory_order_release);
+						// Judged on the 10th-90th percentile band, NOT min-max: one hitch in the
+						// window (a shader compile, a hostile compositor, the window being
+						// occluded for a moment) is enough to make min-max declare a fixed panel
+						// variable, which stands the pacer down permanently. A display that is
+						// genuinely variable is variable across the whole distribution, not in
+						// one sample out of thirty-two.
+						std::array<double, kSpreadWindow> sorted = recentMs;
+						std::ranges::sort(sorted);
+						const double lo = sorted[kSpreadWindow / 10];
+						const double hi = sorted[(kSpreadWindow * 9) / 10];
+						const double median = sorted[kSpreadWindow / 2];
+						m_variableRate.store(median > 0.0 && (hi - lo) / median > kVariableRateSpread, std::memory_order_release);
 					}
 				}
 			}

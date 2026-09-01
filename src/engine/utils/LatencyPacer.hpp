@@ -36,6 +36,14 @@ namespace aether
 		// of heavy frames keeps protecting later ones.
 		static constexpr float kDecay = 0.99f;
 
+		// The reserve may never claim the whole interval. Allowing it to reach the interval
+		// LATCHES THE PACER OFF: the latch point becomes the previous flip, which is always in
+		// the past, so no frame is ever paced - and an unpaced frame is more likely to miss,
+		// which ratchets the reserve straight back up. Measured latched up at 16.30 ms against
+		// a 16.44 ms period, with paced=1 in 2400 frames. Capping it leaves the controller its
+		// full range of useful values and keeps the loop from closing on itself.
+		static constexpr float kMaxReserveFraction = 0.5f;
+
 		// workMs is everything between latching input and handing the frame off. missed says
 		// the frame did not make the flip it was aimed at.
 		void Observe(const float intervalMs, const float workMs, const bool missed)
@@ -66,7 +74,8 @@ namespace aether
 			// before the flip estimate exists (the caller passes the loop period then), and
 			// std::clamp with hi < lo is a debug assert - which wedged a Debug editor behind a
 			// modal dialog on frame 0 - and undefined behaviour in release.
-			m_reserveMs = std::clamp(m_reserveMs, std::min(kFloorMs, intervalMs), intervalMs);
+		const float ceilingMs = intervalMs * kMaxReserveFraction;
+			m_reserveMs = std::clamp(m_reserveMs, std::min(kFloorMs, ceilingMs), ceilingMs);
 			m_observations += 1;
 		}
 
