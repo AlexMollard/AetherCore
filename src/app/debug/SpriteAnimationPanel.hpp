@@ -28,6 +28,10 @@ namespace aether::editor
 		void OnDetach(app::LayerContext& context) override;
 		void OnImGui(app::LayerContext& context) override;
 
+	public:
+		[[nodiscard]] bool HasUnsavedWork(app::LayerContext& context) const override;
+		bool SaveUnsavedWork(app::LayerContext& context) override;
+
 	private:
 		// Compared structurally rather than flagged at each mutation: frames are added,
 		// reordered, retimed and deleted, and a flag that misses one of those reports "saved"

@@ -34,6 +34,7 @@
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorCommand.hpp"
 #include "debug/EditorWindowActions.hpp"
+#include "platform/PlatformSubsystem.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/UndoStack.hpp"
 #include "editor/ComponentCatalog.hpp"
@@ -2541,6 +2542,26 @@ namespace aether::editor
 			                {"canUndo", undo->UndoDepth() > 0},
 			                {"canRedo", undo->RedoDepth() > 0},
 			                {"unsavedChanges", undo->HasUnsavedChanges()}};
+		        }});
+
+		// Shutting the editor down was reachable only by killing the process, which skips
+		// every save and teardown and leaves staged build outputs locked. This is the
+		// title-bar X: the unsaved-changes prompt still gets its say, so an automated
+		// session answers it the same way a person would.
+		methods.push_back({"app.quit",
+		        "quit_app",
+		        "Ask the application to close, exactly as the title-bar X does. Unsaved work still raises the confirmation prompt rather than being discarded, so check the response's `unsaved` flag and answer the dialog (Save/Discard/Cancel) before expecting the process to exit.",
+		        true,
+		        Obj({}),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* platform = ctx.services.TryGet<PlatformSubsystem>();
+			        if (platform == nullptr)
+			        {
+				        return json{{"error", "no platform subsystem"}};
+			        }
+			        platform->GetWindow().RequestClose();
+			        return json{{"requested", true}};
 		        }});
 
 		methods.push_back({"editor.window_set",

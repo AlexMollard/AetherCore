@@ -139,6 +139,21 @@ namespace aether::editor
 
 		[[nodiscard]] virtual std::string_view GetName() const = 0;
 
+		// Whether this panel is holding an edited document that is not on disk. The scene's
+		// undo stack cannot see these - a material, atlas, clip or canvas is a separate file -
+		// so closing the editor asks every panel rather than only the scene.
+		[[nodiscard]] virtual bool HasUnsavedWork(app::LayerContext& /*context*/) const
+		{
+			return false;
+		}
+
+		// Writes that document out. Returns whether the panel is actually clean afterwards,
+		// so a failed write cannot be mistaken for a saved one and close anyway.
+		virtual bool SaveUnsavedWork(app::LayerContext& /*context*/)
+		{
+			return true;
+		}
+
 		// Whether the panel's window is open on a fresh layout, before any persisted
 		// Off unless a panel says otherwise.
 		//

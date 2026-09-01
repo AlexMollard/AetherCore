@@ -648,4 +648,15 @@ namespace aether::editor
 			m_atlas.importPreset = "custom";
 		}
 	}
+
+	bool SpriteSlicerPanel::HasUnsavedWork(app::LayerContext& /*context*/) const
+	{
+		return AtlasDirty();
+	}
+
+	bool SpriteSlicerPanel::SaveUnsavedWork(app::LayerContext& context)
+	{
+		SaveAtlas(context);
+		return !AtlasDirty();
+	}
 } // namespace aether::editor

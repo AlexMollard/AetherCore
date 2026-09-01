@@ -28,6 +28,10 @@ namespace aether::editor
 
 		void OnImGui(app::LayerContext& context) override;
 
+	public:
+		[[nodiscard]] bool HasUnsavedWork(app::LayerContext& context) const override;
+		bool SaveUnsavedWork(app::LayerContext& context) override;
+
 	private:
 		// A canvas waiting to be opened over unsaved artwork. The document has always known
 		// it was dirty; the Open button simply never asked.

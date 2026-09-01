@@ -85,6 +85,9 @@ namespace aether::editor
 		// cells too: those live in their own .tiles asset, so a scene can be "clean" by
 		// history and still have unsaved paint.
 		[[nodiscard]] bool HasUnsavedWork() const;
+
+		// Names of the panels holding an edited document that is not on disk.
+		[[nodiscard]] std::vector<std::string_view> UnsavedDocuments(app::LayerContext& context) const;
 		// Run nav now if there is nothing to lose, otherwise raise the prompt and run it
 		// once the user has answered.
 		void ConfirmDiscard(app::LayerContext& context, PendingNav nav);

@@ -43,6 +43,10 @@ namespace aether::editor
 		// Returns true when it handled the save.
 		bool SaveIfFocusedAndDirty(app::LayerContext& context);
 
+	public:
+		[[nodiscard]] bool HasUnsavedWork(app::LayerContext& context) const override;
+		bool SaveUnsavedWork(app::LayerContext& context) override;
+
 	private:
 		void FollowSelection(app::LayerContext& context);
 		void Open(app::LayerContext& context, const std::string& materialPath);

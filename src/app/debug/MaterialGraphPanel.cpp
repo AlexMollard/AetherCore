@@ -1321,4 +1321,14 @@ namespace aether::editor
 		}
 		ImGui::End();
 	}
+
+	bool MaterialGraphPanel::HasUnsavedWork(app::LayerContext& /*context*/) const
+	{
+		return m_edit.loaded && m_edit.dirty && !m_path.empty();
+	}
+
+	bool MaterialGraphPanel::SaveUnsavedWork(app::LayerContext& context)
+	{
+		return WriteMaterial(context) && !m_edit.dirty;
+	}
 } // namespace aether::editor

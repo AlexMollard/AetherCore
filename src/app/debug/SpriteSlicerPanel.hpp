@@ -26,6 +26,10 @@ namespace aether::editor
 		void OnDetach(app::LayerContext& context) override;
 		void OnImGui(app::LayerContext& context) override;
 
+	public:
+		[[nodiscard]] bool HasUnsavedWork(app::LayerContext& context) const override;
+		bool SaveUnsavedWork(app::LayerContext& context) override;
+
 	private:
 		// What the atlas looked like when it was last loaded or saved. Compared structurally
 		// rather than by a flag set at each mutation site: regions are added, duplicated,

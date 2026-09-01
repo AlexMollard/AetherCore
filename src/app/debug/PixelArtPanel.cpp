@@ -407,4 +407,23 @@ namespace aether::editor
 			}
 		}
 	}
+
+	bool PixelArtPanel::HasUnsavedWork(app::LayerContext& context) const
+	{
+		// The canvas is a service, not panel state, so it stays dirty even while this window
+		// is closed - which is exactly when it would otherwise be lost without a word.
+		const auto* doc = context.TryGet<PixelArtDocument>();
+		return doc != nullptr && doc->Dirty();
+	}
+
+	bool PixelArtPanel::SaveUnsavedWork(app::LayerContext& context)
+	{
+		auto* doc = context.TryGet<PixelArtDocument>();
+		if (doc == nullptr)
+		{
+			return true;
+		}
+		const std::filesystem::path disk = app::ResolveProjectPath(context.TryGet<app::EditorProjectContext>(), m_savePath);
+		return doc->Save(disk) && !doc->Dirty();
+	}
 } // namespace aether::editor

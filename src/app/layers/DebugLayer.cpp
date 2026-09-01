@@ -1346,10 +1346,26 @@ namespace aether::editor
 		return m_undoStack.HasUnsavedChanges() || m_tilePainting.mapDirty;
 	}
 
+	std::vector<std::string_view> DebugLayer::UnsavedDocuments(app::LayerContext& context) const
+	{
+		// Deliberately separate from HasUnsavedWork: a half-edited material is not the scene,
+		// and folding it in would make the status bar claim the scene needs saving.
+		std::vector<std::string_view> names;
+		for (const std::unique_ptr<DebugPanel>& panel: m_panels)
+		{
+			if (panel != nullptr && panel->HasUnsavedWork(context))
+			{
+				names.push_back(panel->GetName());
+			}
+		}
+		return names;
+	}
+
 	void DebugLayer::ConfirmDiscard(app::LayerContext& context, const PendingNav nav)
 	{
 		m_pendingNav = nav;
-		if (!HasUnsavedWork())
+		const bool documentsDirty = (nav == PendingNav::CloseEditor) && !UnsavedDocuments(context).empty();
+		if (!HasUnsavedWork() && !documentsDirty)
 		{
 			RunPendingNav(context);
 			return;
@@ -1403,9 +1419,13 @@ namespace aether::editor
 	void DebugLayer::PollCloseRequest(app::LayerContext& context)
 	{
 		auto* window = context.services.TryGet<Window>();
-		if (window == nullptr || !window->ShouldClose() || !HasUnsavedWork())
+		if (window == nullptr || !window->ShouldClose())
 		{
-			return; // nothing pending, or nothing to lose - let the loop exit
+			return; // nothing pending - let the loop exit
+		}
+		if (!HasUnsavedWork() && UnsavedDocuments(context).empty())
+		{
+			return; // nothing to lose
 		}
 		// Withdraw the OS request and ask instead. Events are pumped before layers update
 		// and the loop only re-reads the flag next iteration, so clearing it here keeps the
@@ -1440,8 +1460,23 @@ namespace aether::editor
 		{
 			verb = "Starting a new scene";
 		}
-		ImGui::Text(ICON_FA_TRIANGLE_EXCLAMATION "  %s has unsaved changes.", sceneName.empty() ? "This scene" : sceneName.c_str());
+		const std::vector<std::string_view> documents = UnsavedDocuments(context);
+		const bool sceneDirty = HasUnsavedWork();
+		if (sceneDirty)
+		{
+			ImGui::Text(ICON_FA_TRIANGLE_EXCLAMATION "  %s has unsaved changes.", sceneName.empty() ? "This scene" : sceneName.c_str());
+		}
+		else
+		{
+			ImGui::TextUnformatted(ICON_FA_TRIANGLE_EXCLAMATION "  You have unsaved changes.");
+		}
 		ImGui::PushStyleColor(ImGuiCol_Text, chrome::kMuted);
+		// Naming the editors matters: their windows may be closed, so "unsaved changes" alone
+		// gives no clue what is about to go.
+		for (const std::string_view document: documents)
+		{
+			ImGui::Text("    %s has unsaved edits.", std::string(document).c_str());
+		}
 		ImGui::Text("%s will discard them.", verb);
 		ImGui::PopStyleColor();
 		ImGui::Spacing();
@@ -1451,7 +1486,29 @@ namespace aether::editor
 		// discards without a deliberate click.
 		if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK "  Save", ImVec2(120.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Enter))
 		{
-			if (SaveCurrentScene(context))
+			// Every dirty document too, or Save would close the editor having written only
+			// the scene and dropped the rest.
+			bool documentsSaved = true;
+			for (const std::unique_ptr<DebugPanel>& panel: m_panels)
+			{
+				if (panel != nullptr && panel->HasUnsavedWork(context))
+				{
+					documentsSaved = panel->SaveUnsavedWork(context) && documentsSaved;
+				}
+			}
+			if (!documentsSaved)
+			{
+				// A write failed. Stay open rather than close over work that is still only
+				// in memory; the panel's own status line says which one.
+				m_pendingNav = PendingNav::None;
+				ImGui::CloseCurrentPopup();
+			}
+			else if (!sceneDirty)
+			{
+				ImGui::CloseCurrentPopup();
+				RunPendingNav(context);
+			}
+			else if (SaveCurrentScene(context))
 			{
 				ImGui::CloseCurrentPopup();
 				RunPendingNav(context);

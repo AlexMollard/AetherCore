@@ -766,4 +766,15 @@ namespace aether::editor
 		}
 		m_previewFrameTime = 0.0f;
 	}
+
+	bool SpriteAnimationPanel::HasUnsavedWork(app::LayerContext& /*context*/) const
+	{
+		return AnimationDirty();
+	}
+
+	bool SpriteAnimationPanel::SaveUnsavedWork(app::LayerContext& context)
+	{
+		SaveAnimation(context);
+		return !AnimationDirty();
+	}
 } // namespace aether::editor
