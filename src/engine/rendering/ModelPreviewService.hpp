@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -155,9 +156,13 @@ namespace aether
 		// is the whole atlas, and tiles sample sub-rectangles of it.
 		gpu::TextureHandle m_colorLdrHandle{};
 		gpu::ImageView m_colorLdrView = nullptr;
-		// Which atlas slot the next render writes into. Written on the game thread and read on
-		// the render thread inside the pass, which is why it is atomic.
+		// Which atlas slot the next render writes into, as requested on the game thread.
 		std::atomic<int> m_bakeSlot{-1};
+		// ...and that request LATCHED PER FRAME. The render thread records a frame well after
+		// the game thread has moved on, so reading the live request in the pass drew most bakes
+		// into whatever slot was current by then - usually -1, which skipped the draw and left
+		// the slot undefined. Every other piece of per-frame state here travels the same way.
+		std::array<std::atomic<int>, kMaxFramesInFlight> m_bakeSlotForFrame{};
 		std::uint32_t m_atlasCols = 1;
 		std::uint32_t m_size = kSize;
 		std::string m_passPrefix = "$ModelPreview";

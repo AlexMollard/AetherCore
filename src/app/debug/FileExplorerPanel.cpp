@@ -1473,7 +1473,10 @@ namespace aether::editor
 		// frame, so its image is only readable once that frame has gone through the graph.
 		if (!m_bakeInFlight.empty())
 		{
-			if (ImGui::GetFrameCount() <= m_bakeStartedFrame)
+			// A frame is assembled, recorded and submitted across several frames of latency, so
+			// a slot is only safe to show once the frame that drew it has certainly gone
+			// through - not on the very next one.
+			if (ImGui::GetFrameCount() < m_bakeStartedFrame + static_cast<int>(aether::kMaxFramesInFlight) + 1)
 			{
 				return;
 			}

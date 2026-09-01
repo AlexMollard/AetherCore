@@ -50,6 +50,8 @@ struct TonemapPush
     uint64_t frameConstantsAddr;    // BDA -> FrameConstantsData (0 = motion blur off)
     float chromaticAberration;      // pixels of channel separation at the corner; 0 = off
     float filmGrain;                // grain strength in display space; 0 = off
+    int   sampleOriginX;            // viewport origin in the target; 0 for a full-target pass
+    int   sampleOriginY;
 };
 [[vk::push_constant]] TonemapPush pc;
 
@@ -456,7 +458,9 @@ float3 ApplyFilmGrain(float3 color, int2 coord)
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
-    const int2 coord = int2(svPos.xy);
+    // Relative to this pass's viewport, not the framebuffer: a pass rendering into a
+    // sub-rectangle of its target still samples its source from the source's own origin.
+    const int2 coord = int2(svPos.xy) - int2(pc.sampleOriginX, pc.sampleOriginY);
     float3 scene = SampleSceneWithAberration(coord);
 
     // Before bloom and the grade: a streak should carry its real energy into both.

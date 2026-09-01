@@ -252,6 +252,12 @@ namespace aether
 		{
 			return;
 		}
+		// Latch this frame's bake slot alongside its draws, so the pass reads what was true
+		// when the frame was assembled rather than whatever is current when it is recorded.
+		if (drawSlot < m_bakeSlotForFrame.size())
+		{
+			m_bakeSlotForFrame[drawSlot].store(m_bakeSlot.load(std::memory_order_relaxed), std::memory_order_relaxed);
+		}
 		m_queue.SetWriteSlot(drawSlot);
 		m_queue.Clear(drawSlot);
 		if (!m_hasModel.load(std::memory_order_acquire))
@@ -410,23 +416,31 @@ namespace aether
 			                // Previews render their own small view with no lens of their own.
 			                push.dofSlot = 0xFFFFFFFFu;
 			                push.backgroundParamsAddr = 0u;
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
-			                // A single-slot instance draws the whole target. A baker draws one
-			                // slot, so the viewport is moved onto it and the scissor keeps the
-			                // fullscreen triangle from touching its neighbours.
+			                // A single-slot instance draws its whole target. A baker draws ONE
+			                // slot: the viewport moves onto it, the scissor keeps the fullscreen
+			                // triangle off its neighbours, and the sample origin tells the shader
+			                // where that viewport starts - without it the shader would read its
+			                // source at the slot's screen position, which is correct only for the
+			                // slot at (0, 0) and black for every other one.
 			                if (m_atlasCols > 1u)
 			                {
-				                const int slot = m_bakeSlot.load(std::memory_order_relaxed);
+				                const int slot = ctx.frameSlot < m_bakeSlotForFrame.size() ? m_bakeSlotForFrame[ctx.frameSlot].load(std::memory_order_relaxed) : -1;
 				                if (slot < 0 || static_cast<std::uint32_t>(slot) >= GetSlotCount())
 				                {
 					                return;
 				                }
-				                const float edge = static_cast<float>(m_size);
-				                const float originX = static_cast<float>(static_cast<std::uint32_t>(slot) % m_atlasCols) * edge;
-				                const float originY = static_cast<float>(static_cast<std::uint32_t>(slot) / m_atlasCols) * edge;
-				                cmd.SetViewport(gpu::Viewport{.x = originX, .y = originY, .width = edge, .height = edge});
+				                const std::uint32_t originX = (static_cast<std::uint32_t>(slot) % m_atlasCols) * m_size;
+				                const std::uint32_t originY = (static_cast<std::uint32_t>(slot) / m_atlasCols) * m_size;
+				                push.sampleOriginX = static_cast<std::int32_t>(originX);
+				                push.sampleOriginY = static_cast<std::int32_t>(originY);
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.SetViewport(gpu::Viewport{.x = static_cast<float>(originX), .y = static_cast<float>(originY), .width = static_cast<float>(m_size), .height = static_cast<float>(m_size)});
 				                cmd.SetScissor(gpu::Rect2D{.x = static_cast<std::int32_t>(originX), .y = static_cast<std::int32_t>(originY), .width = m_size, .height = m_size});
+			                }
+			                else
+			                {
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 			                }
 			                cmd.Draw(3, 1, 0, 0);
 		                });

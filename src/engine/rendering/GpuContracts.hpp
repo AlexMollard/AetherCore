@@ -109,6 +109,14 @@ namespace TonemapContracts
 		float chromaticAberration = 0.0f;
 		// Film grain, applied after the tonemap curve in display space. 0 is off.
 		float filmGrain = 0.0f;
+		// Where this pass's viewport starts inside its target. The shader derives everything
+		// from SV_Position, which is FRAMEBUFFER-absolute, so a pass that renders into a
+		// sub-rectangle would otherwise sample its source at the rectangle's screen position
+		// instead of from the source's own origin - correct only for the rectangle at (0,0).
+		// 0 for every full-target pass; the thumbnail baker, which renders one atlas slot at a
+		// time, is the only thing that sets it. Appended, so no offset below moves.
+		std::int32_t sampleOriginX = 0;
+		std::int32_t sampleOriginY = 0;
 	};
 
 	static_assert(offsetof(PushConstants, hdrSlot) == 0);
@@ -122,9 +130,10 @@ namespace TonemapContracts
 	static_assert(offsetof(PushConstants, frameConstantsAddr) == 96);
 	static_assert(offsetof(PushConstants, chromaticAberration) == 104);
 	static_assert(offsetof(PushConstants, filmGrain) == 108);
+	static_assert(offsetof(PushConstants, sampleOriginX) == 112);
 	// Vulkan only guarantees 128 bytes of push constants.
 	static_assert(sizeof(PushConstants) <= 128);
-	static_assert(sizeof(PushConstants) == 112, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
+	static_assert(sizeof(PushConstants) == 120, "Keep in lockstep with TonemapPush in shaders/tonemap.slang.");
 } // namespace TonemapContracts
 
 namespace CullContracts
