@@ -41,11 +41,11 @@ namespace aether
 			// [1, Swapchain::kMaxFramesInFlight].
 			int framesInFlight = 2;
 
-			// Share of the display interval the latency pacer holds back for the frame's work.
-			// Lower latches input closer to the flip (more responsive) and leaves less room for
-			// a frame that runs long. Measured on the editor at 60 Hz: 0.5 gives inflight
-			// 9.1 ms with p99 33 ms; 0.25 gives 4.4 ms with p99 49 ms.
-			float latencyReserve = 0.5f;
+			// Milliseconds before the predicted flip to latch input, matching Unreal's
+			// rhi.SyncSlackMS (same default). Lower is more responsive and leaves less room
+			// for a frame that runs long. The editor measured 0.92 ms of producer work and
+			// 1.18 ms of GPU, so it has room to go well below the default.
+			float syncSlackMs = 10.0f;
 			// With vsync on, prefer MAILBOX over FIFO. Both are tear-free; FIFO makes each
 			// present queue behind the last, while MAILBOX replaces the pending image, so a
 			// frame reaches the screen without waiting its turn. Costs GPU work on frames
@@ -181,7 +181,7 @@ namespace aether
 		f("window.mode", settings.window.mode);
 		f("graphics.vsync", settings.graphics.vsync);
 		f("graphics.framesInFlight", settings.graphics.framesInFlight);
-		f("graphics.latencyReserve", settings.graphics.latencyReserve);
+		f("graphics.syncSlackMs", settings.graphics.syncSlackMs);
 		f("graphics.lowLatencyPresent", settings.graphics.lowLatencyPresent);
 		f("graphics.renderScale", settings.graphics.renderScale);
 		f("graphics.latencyPacing", settings.graphics.latencyPacing);
@@ -398,7 +398,7 @@ namespace aether
 		// machine sitting in front of the project, not the project.
 		if (key == "window.width" || key == "window.height" || key == "window.mode"
 		        || key == "graphics.vsync" || key == "graphics.framesInFlight" || key == "graphics.lowLatencyPresent"
-		        || key == "graphics.renderScale" || key == "graphics.latencyPacing" || key == "graphics.asyncCompute"
+		        || key == "graphics.renderScale" || key == "graphics.latencyPacing" || key == "graphics.syncSlackMs" || key == "graphics.asyncCompute"
 		        || key == "graphics.anisotropy" || key == "graphics.imguiViewports" || key == "graphics.uiScale"
 		        || key == "app.targetFps" || key == "app.autosaveSeconds")
 		{

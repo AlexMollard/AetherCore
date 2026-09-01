@@ -1,143 +1,72 @@
 #include <doctest/doctest.h>
 
-#include <cstddef>
-
 #include "utils/LatencyPacer.hpp"
 
-using namespace aether;
+using aether::LatencyPacer;
 
 namespace
 {
 	constexpr float kInterval = 16.67f; // 60 Hz
-
-	void Settle(LatencyPacer& pacer, const float workMs, const std::size_t frames)
-	{
-		for (std::size_t i = 0; i < frames; ++i)
-		{
-			pacer.Observe(kInterval, workMs, false);
-		}
-	}
-} // namespace
-
-// Latency is only worth taking if it is never paid for with a dropped frame, so the pacer
-// must not act on measurements it does not have yet.
-TEST_CASE("The pacer reserves nothing before it has warmed up") {
-    LatencyPacer pacer;
-
-    CHECK(pacer.ReserveMs() == doctest::Approx(0.0f));
-    CHECK_FALSE(pacer.IsWarm());
-
-    pacer.Observe(kInterval, 0.2f, false);
-    CHECK(pacer.ReserveMs() == doctest::Approx(0.0f));
 }
 
-// The point of the whole exercise: a loop doing 0.2 ms of work should reserve a small slice
-// of a 16.67 ms interval, leaving the rest to idle before latching input.
-TEST_CASE("A near-idle loop reserves only a small part of the interval") {
+// The slack is a constant, as it is in Unreal (rhi.SyncSlackMS). It does not learn, decay or
+// ratchet - all three of which the previous adaptive version did, and which let it saturate
+// at the whole interval and switch pacing off permanently.
+TEST_CASE("The slack is whatever it was set to") {
     LatencyPacer pacer;
-    Settle(pacer, 0.2f, 200);
+    pacer.SetSlackMs(3.0f);
 
-    CHECK(pacer.IsWarm());
-    CHECK(pacer.ReserveMs() < 3.0f);
-    // Never surrender the whole interval - the OS needs slack to wake us.
-    CHECK(pacer.ReserveMs() >= LatencyPacer::kFloorMs);
+    CHECK(pacer.ReserveMs(kInterval) == doctest::Approx(3.0f));
 }
 
-TEST_CASE("Heavier work immediately reserves more of the interval") {
+TEST_CASE("The default matches Unreal's rhi.SyncSlackMS") {
     LatencyPacer pacer;
-    Settle(pacer, 0.2f, 200);
-    const float idle = pacer.ReserveMs();
 
-    pacer.Observe(kInterval, 6.0f, false);
-
-    CHECK(pacer.ReserveMs() > idle);
-    CHECK(pacer.ReserveMs() >= 6.0f); // must cover the work it just saw
+    CHECK(pacer.ReserveMs(100.0f) == doctest::Approx(LatencyPacer::kDefaultSlackMs));
 }
 
-// Rising late is what drops a frame, so the response to growth is instant.
-TEST_CASE("The reserve rises in a single frame but gives ground slowly") {
+// Zero slack is legitimate - it is what practitioners run with r.GTSyncType 2 - and must
+// latch as late as the pacer allows rather than being treated as "off".
+TEST_CASE("Zero slack is honoured rather than ignored") {
     LatencyPacer pacer;
-    Settle(pacer, 0.2f, 200);
+    pacer.SetSlackMs(0.0f);
 
-    pacer.Observe(kInterval, 8.0f, false);
-    const float raised = pacer.ReserveMs();
-    CHECK(raised >= 8.0f);
-
-    pacer.Observe(kInterval, 0.2f, false); // one quiet frame must not undo it
-    CHECK(pacer.ReserveMs() > raised * 0.9f);
-
-    Settle(pacer, 0.2f, 500); // sustained quiet eventually does
-    CHECK(pacer.ReserveMs() < raised * 0.5f);
+    CHECK(pacer.ReserveMs(kInterval) == doctest::Approx(0.0f));
 }
 
-TEST_CASE("A missed flip surrenders a large part of the interval at once") {
+TEST_CASE("A negative slack is floored at zero") {
     LatencyPacer pacer;
-    Settle(pacer, 0.2f, 200);
-    const float before = pacer.ReserveMs();
+    pacer.SetSlackMs(-5.0f);
 
-    pacer.Observe(kInterval, 0.2f, true);
-
-    CHECK(pacer.ReserveMs() > before * 2.0f);
+    CHECK(pacer.ReserveMs(kInterval) == doctest::Approx(0.0f));
 }
 
-// A pathological frame must never make the pacer ask for more than exists, which would
-// produce a negative idle and a busy loop - and it must stop short of the whole interval.
-// A reserve equal to the interval puts the latch point on the PREVIOUS flip, which is always
-// in the past, so no frame is ever paced; unpaced frames then miss more often and ratchet the
-// reserve straight back up. Measured latched up at 16.30 ms against a 16.44 ms period with
-// paced=1 in 2400 frames before the ceiling existed.
-TEST_CASE("Work larger than the interval clamps below the interval, not to it") {
+// A slack of a whole interval puts the latch point on the PREVIOUS flip, which is always in
+// the past, so no frame would ever be paced. This is the failure the adaptive version fell
+// into; a constant must not be able to reach it either.
+TEST_CASE("Slack is held short of the interval so the latch point stays in the future") {
     LatencyPacer pacer;
-    Settle(pacer, 0.2f, 200);
+    pacer.SetSlackMs(1000.0f);
 
-    pacer.Observe(kInterval, 500.0f, true);
+    const float reserve = pacer.ReserveMs(kInterval);
 
-    CHECK(pacer.ReserveMs() == doctest::Approx(kInterval * LatencyPacer::kDefaultMaxReserveFraction));
-    CHECK(pacer.ReserveMs() < kInterval);
+    CHECK(reserve < kInterval);
+    CHECK(reserve == doctest::Approx(kInterval * 0.9f));
 }
 
-// The ceiling is the user's trade between responsiveness and tail length, so it has to
-// actually move the reserve.
-TEST_CASE("The reserve ceiling is configurable and always leaves room to pace") {
+// A shorter interval means less room, and the cap has to follow it rather than a constant.
+TEST_CASE("The cap scales with the display period") {
     LatencyPacer pacer;
-    pacer.SetMaxReserveFraction(0.25f);
-    Settle(pacer, 0.2f, 200);
+    pacer.SetSlackMs(1000.0f);
 
-    pacer.Observe(kInterval, 500.0f, true);
-
-    CHECK(pacer.ReserveMs() == doctest::Approx(kInterval * 0.25f));
-    CHECK(pacer.ReserveMs() < kInterval);
+    CHECK(pacer.ReserveMs(8.33f) == doctest::Approx(8.33f * 0.9f)); // 120 Hz
+    CHECK(pacer.ReserveMs(33.33f) == doctest::Approx(33.33f * 0.9f)); // 30 Hz
 }
 
-TEST_CASE("A zero or negative interval is ignored rather than poisoning the reserve") {
+TEST_CASE("A zero or negative interval reserves nothing rather than going negative") {
     LatencyPacer pacer;
-    Settle(pacer, 0.2f, 200);
-    const float before = pacer.ReserveMs();
+    pacer.SetSlackMs(5.0f);
 
-    pacer.Observe(0.0f, 5.0f, false);
-    pacer.Observe(-1.0f, 5.0f, true);
-
-    CHECK(pacer.ReserveMs() == doctest::Approx(before));
-}
-
-// Before a flip estimate exists the caller feeds the loop period, which can be shorter than
-// the reserve floor. std::clamp asserts when hi < lo: that wedged a Debug editor behind a
-// modal dialog on frame 0, while release quietly ran on undefined behaviour.
-TEST_CASE("An interval shorter than the reserve floor is handled, not asserted") {
-    LatencyPacer pacer;
-
-    pacer.Observe(0.4f, 0.05f, false);
-    pacer.Observe(1.0f, 0.10f, false);
-    pacer.Observe(0.2f, 0.01f, true);
-
-    CHECK(pacer.ReserveMs() >= 0.0f);
-
-    // And it must still behave once real intervals arrive.
-    for (std::size_t i = 0; i < 200; ++i)
-    {
-        pacer.Observe(kInterval, 0.2f, false);
-    }
-    CHECK(pacer.IsWarm());
-    CHECK(pacer.ReserveMs() <= kInterval);
-    CHECK(pacer.ReserveMs() >= LatencyPacer::kFloorMs);
+    CHECK(pacer.ReserveMs(0.0f) == doctest::Approx(0.0f));
+    CHECK(pacer.ReserveMs(-1.0f) == doctest::Approx(0.0f));
 }

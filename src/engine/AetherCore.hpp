@@ -151,6 +151,18 @@ namespace aether
 			return m_realElapsedSeconds;
 		}
 
+		// The frame loop reads these straight off m_settings, which is a snapshot taken at
+		// construction - so without a setter a live change never reaches the loop at all.
+		void SetSyncSlackMs(float slackMs)
+		{
+			m_settings.graphics.syncSlackMs = slackMs;
+		}
+
+		void SetLatencyPacing(bool enabled)
+		{
+			m_settings.graphics.latencyPacing = enabled;
+		}
+
 		void SetTargetFps(float fps)
 		{
 			m_framePacer.SetTargetFps(fps);

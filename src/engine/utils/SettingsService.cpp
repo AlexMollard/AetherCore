@@ -189,6 +189,20 @@ namespace aether
 				renderer->SetGtaoStrength(m_values.graphics.gtaoStrength);
 			}
 		}
+		else if (key == "graphics.syncSlackMs")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetSyncSlackMs(m_values.graphics.syncSlackMs);
+			}
+		}
+		else if (key == "graphics.latencyPacing")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetLatencyPacing(m_values.graphics.latencyPacing);
+			}
+		}
 		else if (key == "app.targetFps")
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())
