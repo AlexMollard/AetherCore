@@ -1817,7 +1817,14 @@ namespace aether::editor
 			const ImGuiIO& io = ImGui::GetIO();
 			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_S, false))
 			{
-				SaveCurrentScene(context);
+				// Save what is being edited. With the Material window focused over a
+				// half-edited material, saving the scene instead is both surprising and
+				// leaves the thing you were working on unsaved.
+				auto* material = dynamic_cast<MaterialGraphPanel*>(FindPanelByName("Material"));
+				if (material == nullptr || !material->SaveIfFocusedAndDirty(context))
+				{
+					SaveCurrentScene(context);
+				}
 			}
 		}
 

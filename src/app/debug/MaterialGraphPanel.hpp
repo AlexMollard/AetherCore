@@ -38,11 +38,15 @@ namespace aether::editor
 
 		void OnImGui(app::LayerContext& context) override;
 
+		// Ctrl+S saves the scene. With this window focused and a material half-edited, that
+		// saved the wrong document and left the edits unsaved - so it gets asked first.
+		// Returns true when it handled the save.
+		bool SaveIfFocusedAndDirty(app::LayerContext& context);
+
 	private:
 		void FollowSelection(app::LayerContext& context);
 		void Open(app::LayerContext& context, const std::string& materialPath);
 
-	private:
 		// A material waiting to be opened because the one on screen has unsaved edits. There
 		// is no undo for a file, so switching must not throw work away silently.
 		std::string m_pendingOpenPath;
@@ -71,6 +75,9 @@ namespace aether::editor
 		// The material being edited, and its properties/textures.
 		std::string m_path;
 		MaterialAssetEditState m_edit;
+		// Whether this window had the keyboard last frame; focus can only be read while
+		// drawing, and the shortcut is handled elsewhere.
+		bool m_focused = false;
 
 		// Present only when this material's shader comes from a graph.
 		std::optional<MaterialGraph> m_graph;

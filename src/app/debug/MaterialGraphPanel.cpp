@@ -1022,6 +1022,15 @@ namespace aether::editor
 		RefreshPreview(context);
 	}
 
+	bool MaterialGraphPanel::SaveIfFocusedAndDirty(app::LayerContext& context)
+	{
+		if (!m_focused || !m_edit.loaded || !m_edit.dirty || m_path.empty())
+		{
+			return false;
+		}
+		return WriteMaterial(context);
+	}
+
 	void MaterialGraphPanel::DrawUnsavedSwitchPrompt(app::LayerContext& context)
 	{
 		if (m_pendingOpenPath.empty())
@@ -1206,6 +1215,7 @@ namespace aether::editor
 	void MaterialGraphPanel::OnImGui(app::LayerContext& context)
 	{
 		ImGui::Begin("Material", VisiblePtr());
+		m_focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 		PollCompile(context);
 		FollowSelection(context);
 		// Drawn before the early return below, or a pending switch would be unanswerable
