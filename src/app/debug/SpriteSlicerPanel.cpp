@@ -69,7 +69,7 @@ namespace aether::editor
 			return;
 		}
 		ImGui::SetNextWindowSize(ImVec2(1120.0f, 760.0f), ImGuiCond_FirstUseEver);
-		if (!ImGui::Begin("Sprite Slicer", &m_visible))
+		if (!ImGui::Begin(editor::DocumentTitle("Sprite Slicer", AtlasDirty()).c_str(), &m_visible))
 		{
 			ImGui::End();
 			return;
@@ -314,27 +314,27 @@ namespace aether::editor
 		m_statusError = false;
 	}
 
-	std::string SpriteSlicerPanel::AtlasSignature() const
+	std::uint64_t SpriteSlicerPanel::AtlasSignature() const
 	{
-		// Everything an author can change and would hate to lose. Cheap enough to build only
-		// when a switch is requested.
-		std::string signature = m_atlas.texturePath;
-		signature += '|';
-		signature += std::to_string(m_atlas.sprites.size());
+		// Everything an author can change and would hate to lose.
+		editor::DocumentHash hash;
+		hash.Add(m_atlas.texturePath);
+		hash.Add(static_cast<std::int64_t>(m_atlas.sprites.size()));
 		for (const SpriteRegion& region: m_atlas.sprites)
 		{
-			signature += '|';
-			signature += region.name;
-			signature += ':';
-			signature += std::to_string(region.pixelRect.x) + ',' + std::to_string(region.pixelRect.y) + ','
-			        + std::to_string(region.pixelRect.width) + ',' + std::to_string(region.pixelRect.height);
-			signature += ':';
-			signature += std::to_string(region.pivot.x) + ',' + std::to_string(region.pivot.y);
-			signature += ':';
-			signature += std::to_string(region.border.x) + ',' + std::to_string(region.border.y) + ','
-			        + std::to_string(region.border.z) + ',' + std::to_string(region.border.w);
+			hash.Add(region.name);
+			hash.Add(static_cast<std::int64_t>(region.pixelRect.x));
+			hash.Add(static_cast<std::int64_t>(region.pixelRect.y));
+			hash.Add(static_cast<std::int64_t>(region.pixelRect.width));
+			hash.Add(static_cast<std::int64_t>(region.pixelRect.height));
+			hash.Add(region.pivot.x);
+			hash.Add(region.pivot.y);
+			hash.Add(region.border.x);
+			hash.Add(region.border.y);
+			hash.Add(region.border.z);
+			hash.Add(region.border.w);
 		}
-		return signature;
+		return hash.Value();
 	}
 
 	bool SpriteSlicerPanel::AtlasDirty() const

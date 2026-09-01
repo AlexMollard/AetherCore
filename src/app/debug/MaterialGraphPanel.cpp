@@ -1214,7 +1214,7 @@ namespace aether::editor
 
 	void MaterialGraphPanel::OnImGui(app::LayerContext& context)
 	{
-		ImGui::Begin("Material", VisiblePtr());
+		ImGui::Begin(editor::DocumentTitle("Material", m_edit.loaded && m_edit.dirty && !m_path.empty()).c_str(), VisiblePtr());
 		m_focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 		PollCompile(context);
 		FollowSelection(context);

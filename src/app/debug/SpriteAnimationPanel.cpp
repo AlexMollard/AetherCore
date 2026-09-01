@@ -81,7 +81,7 @@ namespace aether::editor
 			return;
 		}
 		ImGui::SetNextWindowSize(ImVec2(1080.0f, 760.0f), ImGuiCond_FirstUseEver);
-		if (!ImGui::Begin("Sprite Animation", &m_visible))
+		if (!ImGui::Begin(editor::DocumentTitle("Sprite Animation", AnimationDirty()).c_str(), &m_visible))
 		{
 			ImGui::End();
 			return;
@@ -481,23 +481,19 @@ namespace aether::editor
 		ImGui::End();
 	}
 
-	std::string SpriteAnimationPanel::AnimationSignature() const
+	std::uint64_t SpriteAnimationPanel::AnimationSignature() const
 	{
-		std::string signature = m_animation.name;
-		signature += '|';
-		signature += m_animation.atlasPath;
-		signature += '|';
-		signature += std::to_string(static_cast<int>(m_animation.loopMode));
-		signature += '|';
-		signature += std::to_string(m_animation.frames.size());
+		editor::DocumentHash hash;
+		hash.Add(m_animation.name);
+		hash.Add(m_animation.atlasPath);
+		hash.Add(static_cast<std::int64_t>(m_animation.loopMode));
+		hash.Add(static_cast<std::int64_t>(m_animation.frames.size()));
 		for (const SpriteAnimationFrame& frame: m_animation.frames)
 		{
-			signature += '|';
-			signature += std::to_string(frame.spriteId.value);
-			signature += ':';
-			signature += std::to_string(frame.durationSeconds);
+			hash.Add(static_cast<std::int64_t>(frame.spriteId.value));
+			hash.Add(frame.durationSeconds);
 		}
-		return signature;
+		return hash.Value();
 	}
 
 	bool SpriteAnimationPanel::AnimationDirty() const

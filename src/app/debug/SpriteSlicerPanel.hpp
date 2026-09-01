@@ -31,10 +31,10 @@ namespace aether::editor
 		// rather than by a flag set at each mutation site: regions are added, duplicated,
 		// deleted, re-sliced and edited field by field, and a flag that misses one of those
 		// reports "saved" over work that is not.
-		[[nodiscard]] std::string AtlasSignature() const;
+		[[nodiscard]] std::uint64_t AtlasSignature() const;
 		[[nodiscard]] bool AtlasDirty() const;
 		void DrawUnsavedAtlasPrompt(app::LayerContext& context);
-		std::string m_savedAtlasSignature;
+		std::uint64_t m_savedAtlasSignature = 0;
 		std::string m_pendingAtlasPath;
 
 		void SetSource(app::LayerContext& context, std::string path, bool deriveAtlasPath = true);

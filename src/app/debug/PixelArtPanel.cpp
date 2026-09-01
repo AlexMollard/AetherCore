@@ -81,9 +81,10 @@ namespace aether::editor
 
 	void PixelArtPanel::OnImGui(app::LayerContext& context)
 	{
-		ImGui::Begin(GetName().data(), VisiblePtr());
-
+		// Fetched before Begin so the title can carry the unsaved marker.
 		auto* doc = context.TryGet<PixelArtDocument>();
+		ImGui::Begin(editor::DocumentTitle(GetName(), doc != nullptr && doc->Dirty()).c_str(), VisiblePtr());
+
 		if (doc == nullptr)
 		{
 			ImGui::TextDisabled("Pixel-art document unavailable.");

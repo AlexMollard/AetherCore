@@ -1,5 +1,7 @@
 #pragma once
 
+#include <bit>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -68,6 +70,67 @@ namespace aether::editor
 		}
 		return std::string(name);
 	}
+
+	// Window title carrying an unsaved-work marker. Everything after ### is the ImGui ID, so
+	// the visible label can change while the docking layout and every SetWindowFocus lookup
+	// (which hashes the same trailing name) keep resolving to the same window.
+	inline std::string DocumentTitle(std::string_view name, bool dirty)
+	{
+		std::string title(name);
+		if (dirty)
+		{
+			title += " *";
+		}
+		title += "###";
+		title += name;
+		return title;
+	}
+
+	// Folds a document's authored state into one 64-bit value (FNV-1a). Panels compare this
+	// instead of rebuilding a signature string because the title bar asks "is this unsaved?"
+	// every frame: a thousand-region atlas would otherwise churn tens of kilobytes per frame
+	// to draw one asterisk. Allocation-free by construction.
+	class DocumentHash
+	{
+	public:
+		void Add(std::string_view text) noexcept
+		{
+			for (const char c: text)
+			{
+				Mix(static_cast<std::uint8_t>(c));
+			}
+			// Separator, so "ab" + "c" cannot collide with "a" + "bc".
+			Mix(0xFFu);
+		}
+
+		void Add(std::int64_t value) noexcept
+		{
+			const auto bits = static_cast<std::uint64_t>(value);
+			for (int shift = 0; shift < 64; shift += 8)
+			{
+				Mix(static_cast<std::uint8_t>((bits >> shift) & 0xFFu));
+			}
+		}
+
+		void Add(float value) noexcept
+		{
+			Add(static_cast<std::int64_t>(std::bit_cast<std::uint32_t>(value)));
+		}
+
+		[[nodiscard]] std::uint64_t Value() const noexcept
+		{
+			return m_hash;
+		}
+
+	private:
+		void Mix(std::uint8_t byte) noexcept
+		{
+			m_hash ^= byte;
+			m_hash *= 1099511628211ull;
+		}
+
+		std::uint64_t m_hash = 14695981039346656037ull;
+	};
 
 	class DebugPanel
 	{
