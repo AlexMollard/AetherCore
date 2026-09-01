@@ -143,6 +143,11 @@ namespace aether
 		AE_INFO(LogCategory::Engine, "Swapchain recreated.");
 	}
 
+	void GpuDevice::SetFrameLatchTime(const std::int64_t latchTimeNs)
+	{
+		m_gfx->GetSwapchain().SetFrameLatchTime(latchTimeNs);
+	}
+
 	void GpuDevice::SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle, std::uint64_t asyncComputeTimelineValue)
 	{
 		AE_PROFILE_ZONE();

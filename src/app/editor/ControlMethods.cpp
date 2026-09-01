@@ -567,6 +567,8 @@ namespace aether::editor
 			                {"idleThrottled", engineForIdle != nullptr && engineForIdle->IsIdleThrottled()},
 			                {"idleAllowed", engineForIdle != nullptr && engineForIdle->IsIdleThrottleAllowed()},
 			                {"sinceActivity", engineForIdle != nullptr ? engineForIdle->SecondsSinceActivity() : 0.0f},
+			                // Measured input-to-photon: latch to the flip that actually showed it.
+			                {"latchToFlipMs", engineForIdle != nullptr ? engineForIdle->LatchToFlipMs() : 0.0f},
 			                {"scene", scenes != nullptr ? scenes->GetCurrentScene() : ""},
 			                {"sceneKind", scenes != nullptr ? SceneKindName(scenes->GetWorld().GetSceneKind()) : "unknown"},
 			                {"entities", count},

@@ -78,6 +78,9 @@ namespace aether
 		void AdvanceResourceRegistryFrame();
 
 		[[nodiscard]] Swapchain& GetSwapchain();
+
+		// Forwarded to the swapchain, which hands it to the present-wait thread.
+		void SetFrameLatchTime(std::int64_t latchTimeNs);
 		[[nodiscard]] VulkanContext& GetVulkanContext();
 		[[nodiscard]] BindlessManager& GetBindlessManager();
 		[[nodiscard]] ResourceRegistry& GetResourceRegistry();

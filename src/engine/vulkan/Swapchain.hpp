@@ -51,6 +51,12 @@ namespace aether
 		// Engine-side end-of-frame submission. Transitions to present layout,
 		// The transfer wait orders TransferManager uploads (mesh/buffer copies on the
 		// transfer queue) before anything this frame renders, and publishes their memory.
+		// Set before SubmitAndPresent by whoever knows the frame; consumed by the present.
+		void SetFrameLatchTime(std::int64_t latchTimeNs) noexcept
+		{
+			m_frameLatchTimeNs = latchTimeNs;
+		}
+
 		void SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore = nullptr, std::uint64_t extraWaitValue = 0, void* transferWaitSemaphore = nullptr,
 		        std::uint64_t transferWaitValue = 0);
 
@@ -96,6 +102,7 @@ namespace aether
 		FrameSync m_frames[kMaxFramesInFlight]{};
 		class PresentTimingTracker* m_presentTiming = nullptr;
 		std::uint64_t m_presentId = 0;
+		std::int64_t m_frameLatchTimeNs = 0;
 		std::uint32_t m_currentFrame = 0;
 		std::uint32_t m_imageIndex = 0;
 		std::uint32_t m_graphicsQueueFamily = 0;

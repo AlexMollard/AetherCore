@@ -173,6 +173,10 @@ namespace aether
 
 		// Whether the loop is currently running at the reduced idle rate.
 		// Diagnostics for why the editor is or is not idling.
+		// Measured input-to-photon latency: from the frame sampling input to that frame
+		// being on screen. See PresentTimingTracker.
+		[[nodiscard]] float LatchToFlipMs() const;
+
 		[[nodiscard]] float SecondsSinceActivity() const noexcept
 		{
 			return std::chrono::duration<float>(std::chrono::steady_clock::now() - m_lastActivity).count();

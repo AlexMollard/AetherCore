@@ -523,7 +523,7 @@ namespace aether
 		}
 		if (presentResult == VK_SUCCESS && presentId != 0)
 		{
-			m_presentTiming->OnPresented(m_swapchain.swapchain, presentId);
+			m_presentTiming->OnPresented(m_swapchain.swapchain, presentId, m_frameLatchTimeNs);
 		}
 		if (presentResult == VK_ERROR_DEVICE_LOST)
 		{

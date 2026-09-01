@@ -120,6 +120,10 @@ namespace aether
 		glm::mat4 proj{1.0f};
 		glm::vec4 cameraWorldPos{0.0f};
 		float cameraNearPlane = 0.1f;
+		// When this frame sampled input, as a steady_clock epoch count. Carried all the way to
+		// the present so the present-wait thread can report true input-to-photon latency; it
+		// is the only place both ends of that journey are known.
+		std::int64_t latchTimeNs = 0;
 		// The extent the SCENE is rendered at. Scaled by graphics.renderScale, so clustered
 		// light binning and the post-process chain agree with the actual target size.
 		gpu::Extent2D renderExtent;

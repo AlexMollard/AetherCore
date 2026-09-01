@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -45,7 +46,11 @@ namespace aether
 		// Called from the present path with the id just handed to vkQueuePresentKHR. A
 		// swapchain handle is taken per frame because it changes on every recreate, and
 		// waiting on a retired swapchain is undefined.
-		void OnPresented(VkSwapchainKHR swapchain, std::uint64_t presentId);
+		// latchTimeNs is when the frame being presented sampled its input, as a
+		// steady_clock epoch count. Passing it here is what lets the waiter - which is the
+		// only thing that knows when a frame actually reached the screen - close the loop and
+		// report true input-to-photon latency. 0 means unknown and is simply not measured.
+		void OnPresented(VkSwapchainKHR swapchain, std::uint64_t presentId, std::int64_t latchTimeNs = 0);
 
 		// Retire the current swapchain. BLOCKS until the waiter is out of any wait on it, so
 		// the handle can be destroyed the moment this returns. Callers must retire BEFORE
@@ -60,6 +65,22 @@ namespace aether
 		[[nodiscard]] bool HasEstimate() const
 		{
 			return m_periodNs.load(std::memory_order_acquire) > 0 && !m_variableRate.load(std::memory_order_acquire);
+		}
+
+		// Measured latch-to-flip: from the moment a frame sampled input to the moment it was
+		// actually on screen. This is the number every other latency signal in the engine only
+		// approximates - the in-flight wait, the present call and the reserve are all guesses
+		// at it - and it is the one worth tuning graphics.syncSlackMs against.
+		[[nodiscard]] float LatchToFlipMs() const
+		{
+			return static_cast<float>(static_cast<double>(m_latchToFlipNs.load(std::memory_order_acquire)) / 1'000'000.0);
+		}
+
+		// Worst case seen since the last call, then reset. A mean hides exactly the frames a
+		// user notices.
+		[[nodiscard]] float TakeWorstLatchToFlipMs() const
+		{
+			return static_cast<float>(static_cast<double>(m_worstLatchToFlipNs.exchange(0, std::memory_order_acq_rel)) / 1'000'000.0);
 		}
 
 		[[nodiscard]] bool IsVariableRate() const
@@ -120,5 +141,14 @@ namespace aether
 		std::atomic<std::int64_t> m_lastFlipNs{0};
 		std::atomic<std::uint64_t> m_observedFlips{0};
 		std::atomic<bool> m_variableRate{false};
+		// Smoothed latch-to-flip, and the worst since it was last read.
+		std::atomic<std::int64_t> m_latchToFlipNs{0};
+		// Mutable: reading the worst-since-last-read resets it, which does not change what
+		// the tracker IS, and every accessor here is reached through a const reference.
+		mutable std::atomic<std::int64_t> m_worstLatchToFlipNs{0};
+		// Latch times keyed by present id. Ids are consecutive and the waiter trails the
+		// presenter by only a frame or two, so a small power-of-two ring cannot be lapped.
+		static constexpr std::size_t kLatchRing = 64;
+		std::array<std::atomic<std::int64_t>, kLatchRing> m_latchNs{};
 	};
 } // namespace aether

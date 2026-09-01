@@ -66,8 +66,11 @@ namespace aether
 		}
 	}
 
-	void PresentTimingTracker::OnPresented(VkSwapchainKHR swapchain, const std::uint64_t presentId)
+	void PresentTimingTracker::OnPresented(VkSwapchainKHR swapchain, const std::uint64_t presentId, const std::int64_t latchTimeNs)
 	{
+		// Keyed by id so the waiter can pair a flip with the frame that produced it.
+		m_latchNs[presentId % kLatchRing].store(latchTimeNs, std::memory_order_release);
+
 		{
 			const std::lock_guard lock(m_mutex);
 			if (m_stop)
@@ -198,6 +201,24 @@ namespace aether
 			++nextId;
 
 			const std::int64_t nowNs = now.time_since_epoch().count();
+
+			// The frame this flip belongs to sampled its input at latchNs. This is the only
+			// place in the engine where both ends of that journey are known.
+			if (const std::int64_t latchNs = m_latchNs[nextId % kLatchRing].exchange(0, std::memory_order_acq_rel); latchNs > 0 && nowNs > latchNs)
+			{
+				const std::int64_t latencyNs = nowNs - latchNs;
+				// Implausible values mean the pairing is wrong, not that a frame took a second:
+				// a swapchain recreate restarts ids and can hand a flip somebody else's latch.
+				if (latencyNs < 500'000'000)
+				{
+					const std::int64_t previous = m_latchToFlipNs.load(std::memory_order_acquire);
+					m_latchToFlipNs.store(previous <= 0 ? latencyNs : (previous * 7 + latencyNs) / 8, std::memory_order_release);
+					std::int64_t worst = m_worstLatchToFlipNs.load(std::memory_order_relaxed);
+					while (latencyNs > worst && !m_worstLatchToFlipNs.compare_exchange_weak(worst, latencyNs, std::memory_order_acq_rel))
+					{
+					}
+				}
+			}
 			if (previousFlipNs > 0)
 			{
 				const double deltaMs = static_cast<double>(nowNs - previousFlipNs) / 1'000'000.0;

@@ -538,6 +538,9 @@ namespace aether
 
 			RenderFramePacket packet = PrepareFrame(drawSlot, m_producerFrameIndex);
 			packet.elapsedTime = static_cast<float>(m_gameElapsedSeconds);
+			// The instant this frame's input was sampled. Travels with the frame to the
+			// present, where the flip time is finally known.
+			packet.latchTimeNs = latchStart.time_since_epoch().count();
 			packet.uiOverlay = std::move(overlayFrame);
 
 			// Resolve the scene UI (canvases -> draw commands) HERE, on the producer,
@@ -676,9 +679,9 @@ namespace aether
 							total += value;
 						}
 						AE_INFO(LogCategory::Engine,
-						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} cap={:.3f} pacer={:.3f} tail={:.3f} | flipPeriod={:.3f} flips={} slack={:.2f} paced={} missed={} est={} vrr={} | clamped={} unthrottled={}{}",
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} latch2flip={:.2f}/{:.2f} cap={:.3f} pacer={:.3f} tail={:.3f} | flipPeriod={:.3f} flips={} slack={:.2f} paced={} missed={} est={} vrr={} | clamped={} unthrottled={}{}",
 						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
-						        gameWork / n, inFlight / n, present / n, inputStale / n, capWait / n, pacerIdle / n, tail / n,
+						        gameWork / n, inFlight / n, present / n, inputStale / n, m_gpu->GetPresentTiming().LatchToFlipMs(), m_gpu->GetPresentTiming().TakeWorstLatchToFlipMs(), capWait / n, pacerIdle / n, tail / n,
 					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), latencyPacer.ReserveMs(static_cast<float>(m_gpu->GetPresentTiming().PeriodMs())), pacedFrames, missedFlips,
 					        // paced=0 has three quite different causes and the number alone cannot tell
 					        // them apart: no timebase, a display judged variable, or a pacer that has
@@ -700,6 +703,11 @@ namespace aether
 	bool AetherCore::ShouldClose()
 	{
 		return m_services.Get<PlatformSubsystem>().GetWindow().ShouldClose();
+	}
+
+	float AetherCore::LatchToFlipMs() const
+	{
+		return m_gpu != nullptr ? m_gpu->GetPresentTiming().LatchToFlipMs() : 0.0f;
 	}
 
 	float AetherCore::MedianFrameMs() const
@@ -1298,6 +1306,10 @@ namespace aether
 		AE_PROFILE_ZONE();
 		const auto execStart = std::chrono::steady_clock::now();
 		m_frameIndex = packet.frameIndex;
+		// Rides along to the present so the present-wait thread can pair the flip with the
+		// input that produced it. Set once here, where the packet enters the render thread,
+		// rather than at each of the present call sites.
+		m_gpu->SetFrameLatchTime(packet.latchTimeNs);
 		const auto acquireStart = std::chrono::steady_clock::now();
 		BeginFrame();
 		const auto acquireEnd = std::chrono::steady_clock::now();
