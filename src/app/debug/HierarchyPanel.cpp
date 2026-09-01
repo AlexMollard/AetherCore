@@ -1084,7 +1084,7 @@ namespace aether::editor
 		return destroyed;
 	}
 
-	void HierarchyPanel::DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, UndoStack* undo, bool continuePreviousItem)
+	void HierarchyPanel::DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, UndoStack* undo, bool continuePreviousItem, int runLength)
 	{
 		const KindBadge badge = EntityKindBadge(world, e);
 		ImGui::AlignTextToFramePadding();
@@ -1183,6 +1183,17 @@ namespace aether::editor
 				ImGui::PopStyleColor();
 			}
 		}
+		if (runLength > 1)
+		{
+			// Stands for a run of identically named siblings. The arrow lists them; the row
+			// itself is still the first entity, so selecting, dragging and renaming it behave
+			// exactly as they always did.
+			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kAccentHi);
+			ImGui::Text("×%d", runLength);
+			ImGui::PopStyleColor();
+			ImGui::SetItemTooltip("%d more entities named the same - use the arrow to list them", runLength - 1);
+		}
 		ImGui::SameLine();
 		ImGui::TextDisabled("#%u", e.id);
 
@@ -1192,6 +1203,41 @@ namespace aether::editor
 		}
 	}
 
+	std::size_t HierarchyPanel::IdenticalRunAt(World& world, const std::vector<Entity>& siblings, const std::size_t start) const
+	{
+		const auto nameOf = [&world](const Entity entity)
+		{
+			const auto* name = world.TryGet<NameComponent>(entity);
+			return name != nullptr ? name->name : std::string{};
+		};
+		const auto isLeaf = [&world](const Entity entity)
+		{
+			const auto* hierarchy = world.TryGet<HierarchyComponent>(entity);
+			return hierarchy == nullptr || hierarchy->children.empty();
+		};
+
+		const std::string first = nameOf(siblings[start]);
+		if (first.empty() || !isLeaf(siblings[start]))
+		{
+			return 1;
+		}
+		std::size_t run = 1;
+		// Only leaves fold together: a run of identical SUBTREES may differ inside, and
+		// hiding that would hide real structure rather than noise.
+		while (start + run < siblings.size() && nameOf(siblings[start + run]) == first && isLeaf(siblings[start + run]))
+		{
+			++run;
+		}
+		return run;
+	}
+
+	bool HierarchyPanel::ShouldCollapseRun(const std::vector<Entity>& siblings, const std::size_t start, const std::size_t run) const
+	{
+		// Shorter runs are left alone: folding two or three rows hides more than it saves.
+		constexpr std::size_t kMinRunToCollapse = 5;
+		return run >= kMinRunToCollapse && !m_expandedRuns.contains(siblings[start].id);
+	}
+
 	void HierarchyPanel::FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask)
 	{
 		m_flatTree.push_back({e, depth, openMask});
@@ -1199,22 +1245,35 @@ namespace aether::editor
 		{
 			if (const auto* h = world.TryGet<HierarchyComponent>(e))
 			{
-				for (std::size_t i = 0; i < h->children.size(); ++i)
+				for (std::size_t i = 0; i < h->children.size();)
 				{
-					std::uint64_t childOpenMask = openMask;
-					if (depth < 63)
+					const std::size_t run = IdenticalRunAt(world, h->children, i);
+					const bool collapse = ShouldCollapseRun(h->children, i, run);
+					const std::size_t emitted = collapse ? 1u : run;
+					for (std::size_t k = 0; k < emitted; ++k)
 					{
-						const std::uint64_t siblingBit = 1ull << static_cast<unsigned>(depth);
-						if (i + 1 < h->children.size())
+						const std::size_t index = i + k;
+						std::uint64_t childOpenMask = openMask;
+						if (depth < 63)
 						{
-							childOpenMask |= siblingBit;
+							const std::uint64_t siblingBit = 1ull << static_cast<unsigned>(depth);
+							if (index + 1 < h->children.size())
+							{
+								childOpenMask |= siblingBit;
+							}
+							else
+							{
+								childOpenMask &= ~siblingBit;
+							}
 						}
-						else
+						const std::size_t before = m_flatTree.size();
+						FlattenNode(world, h->children[index], depth + 1, childOpenMask);
+						if (collapse && before < m_flatTree.size())
 						{
-							childOpenMask &= ~siblingBit;
+							m_flatTree[before].runLength = static_cast<int>(run);
 						}
 					}
-					FlattenNode(world, h->children[i], depth + 1, childOpenMask);
+					i += run;
 				}
 			}
 		}
@@ -1359,6 +1418,14 @@ namespace aether::editor
 	{
 		const auto* h = world.TryGet<HierarchyComponent>(e);
 		const bool hasKids = (h != nullptr) && !h->children.empty();
+		// A folded run of identical siblings gets the same arrow a parent does. The arrow is
+		// hit-tested by hand rather than being an ImGui item, which is why it works where a
+		// button drawn over the row does not: the row's drag source claims the press first.
+		const int runLength = (flatTreeIndex >= 0 && flatTreeIndex < static_cast<int>(m_flatTree.size()))
+		        ? m_flatTree[static_cast<std::size_t>(flatTreeIndex)].runLength
+		        : 1;
+		const bool isRunHead = runLength > 1;
+		const bool hasArrow = hasKids || isRunHead;
 		const bool isExpanded = hasKids && m_expandedNodes.contains(e.id);
 		const int rowIndex = flatTreeIndex;
 
@@ -1396,10 +1463,14 @@ namespace aether::editor
 
 		const ImVec2 arrowMin(rowStart.x + depthOffset, rowMin.y);
 		const ImVec2 arrowMax(arrowMin.x + arrowSlot, rowMax.y);
-		const bool arrowHovered = hasKids && ImGui::IsMouseHoveringRect(arrowMin, arrowMax);
+		const bool arrowHovered = hasArrow && ImGui::IsMouseHoveringRect(arrowMin, arrowMax);
 		if (arrowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsDragDropActive())
 		{
-			if (isExpanded)
+			if (isRunHead)
+			{
+				m_expandedRuns.insert(e.id);
+			}
+			else if (isExpanded)
 			{
 				m_expandedNodes.erase(e.id);
 			}
@@ -1421,7 +1492,7 @@ namespace aether::editor
 		ImGui::SetCursorScreenPos(contentStart);
 		if (!destroyed)
 		{
-			DrawRowContent(world, e, searching, needle, context.services.TryGet<UndoStack>(), false);
+			DrawRowContent(world, e, searching, needle, context.services.TryGet<UndoStack>(), false, runLength);
 		}
 
 		if (!m_flatTree.empty())
@@ -1437,7 +1508,7 @@ namespace aether::editor
 			}
 		}
 
-		if (hasKids)
+		if (hasArrow)
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const ImU32 arrowColor = arrowHovered ? ImGui::GetColorU32(ImGuiCol_Text) : chrome::U32(chrome::WithAlpha(chrome::kText, 0.82f));
@@ -2135,14 +2206,30 @@ namespace aether::editor
 			{
 				m_flatTree.clear();
 				const auto& roots = world.Roots();
-				for (std::size_t i = 0; i < roots.size(); ++i)
+				for (std::size_t i = 0; i < roots.size();)
 				{
-					const Entity e = roots[i];
-					if (e.IsValid() && reg.valid(World::ToEntt(e)))
+					if (!roots[i].IsValid() || !reg.valid(World::ToEntt(roots[i])))
 					{
-						const std::uint64_t openMask = (i + 1 < roots.size()) ? 1ull : 0ull;
-						FlattenNode(world, e, 0, openMask);
+						++i;
+						continue;
 					}
+					// Spawned entities usually land at the root, so this is the list that fills
+					// with forty rows saying the same word.
+					const std::size_t run = IdenticalRunAt(world, roots, i);
+					const bool collapse = ShouldCollapseRun(roots, i, run);
+					const std::size_t emitted = collapse ? 1u : run;
+					for (std::size_t k = 0; k < emitted; ++k)
+					{
+						const std::size_t index = i + k;
+						const std::uint64_t openMask = (index + 1 < roots.size()) ? 1ull : 0ull;
+						const std::size_t before = m_flatTree.size();
+						FlattenNode(world, roots[index], 0, openMask);
+						if (collapse && before < m_flatTree.size())
+						{
+							m_flatTree[before].runLength = static_cast<int>(run);
+						}
+					}
+					i += run;
 				}
 
 				m_rowsCur.reserve(m_flatTree.size());

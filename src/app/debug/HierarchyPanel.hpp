@@ -50,6 +50,10 @@ namespace aether::editor
 			Entity entity;
 			int depth;
 			std::uint64_t openMask;
+			// How many identically named siblings this row stands for. 1 is an ordinary row.
+			// A spawner that makes 40 "Orb" entities turns the hierarchy into 40 rows saying
+			// the same word, which buries everything you actually authored.
+			int runLength = 1;
 		};
 
 		enum class DropZone : std::uint8_t
@@ -71,11 +75,17 @@ namespace aether::editor
 			DropZone zone;
 		};
 
+		// How many consecutive siblings starting at `start` share a name and are leaves, and
+		// whether that run is long enough to fold into one row. Shared by the root list and by
+		// every child list, so both collapse by the same rule.
+		[[nodiscard]] std::size_t IdenticalRunAt(World& world, const std::vector<Entity>& siblings, std::size_t start) const;
+		[[nodiscard]] bool ShouldCollapseRun(const std::vector<Entity>& siblings, std::size_t start, std::size_t run) const;
+
 		void DrawNode(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle);
 		void FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask);
 		void DrawRowBackdrop(const SceneSelection& selection, Entity e, int rowIndex);
 		// `undo` may be null; the inline rename still applies, it just leaves no history.
-		void DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, UndoStack* undo, bool continuePreviousItem = true);
+		void DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, UndoStack* undo, bool continuePreviousItem = true, int runLength = 1);
 		void HandleRowClick(SceneSelection& selection, Entity e);
 		void HandleRowDragDrop(app::LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX);
 		// Returns true if the menu destroyed `e` (callers must not touch it after).
@@ -130,6 +140,8 @@ namespace aether::editor
 		std::vector<Entity> m_filteredRowsScratch;
 		std::vector<FlatTreeEntry> m_flatTree;
 		std::unordered_set<std::uint32_t> m_expandedNodes;
+		// Runs the user has opened up, keyed by the first entity in the run.
+		std::unordered_set<std::uint32_t> m_expandedRuns;
 		// Drag-hover spring-loading: hovering a collapsed row mid-drag opens it, so a subtree
 		// can be dropped into without breaking the drag to expand it first.
 		std::uint32_t m_dragHoverEntity = 0;
