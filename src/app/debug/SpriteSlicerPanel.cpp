@@ -75,6 +75,8 @@ namespace aether::editor
 			return;
 		}
 
+		DrawUnsavedAtlasPrompt(context);
+
 		char stat[96]{};
 		if (m_texturePath.empty())
 		{
@@ -312,10 +314,89 @@ namespace aether::editor
 		m_statusError = false;
 	}
 
+	std::string SpriteSlicerPanel::AtlasSignature() const
+	{
+		// Everything an author can change and would hate to lose. Cheap enough to build only
+		// when a switch is requested.
+		std::string signature = m_atlas.texturePath;
+		signature += '|';
+		signature += std::to_string(m_atlas.sprites.size());
+		for (const SpriteRegion& region: m_atlas.sprites)
+		{
+			signature += '|';
+			signature += region.name;
+			signature += ':';
+			signature += std::to_string(region.pixelRect.x) + ',' + std::to_string(region.pixelRect.y) + ','
+			        + std::to_string(region.pixelRect.width) + ',' + std::to_string(region.pixelRect.height);
+			signature += ':';
+			signature += std::to_string(region.pivot.x) + ',' + std::to_string(region.pivot.y);
+			signature += ':';
+			signature += std::to_string(region.border.x) + ',' + std::to_string(region.border.y) + ','
+			        + std::to_string(region.border.z) + ',' + std::to_string(region.border.w);
+		}
+		return signature;
+	}
+
+	bool SpriteSlicerPanel::AtlasDirty() const
+	{
+		return !m_atlasPath.empty() && AtlasSignature() != m_savedAtlasSignature;
+	}
+
+	void SpriteSlicerPanel::DrawUnsavedAtlasPrompt(app::LayerContext& context)
+	{
+		if (m_pendingAtlasPath.empty())
+		{
+			return;
+		}
+		ImGui::OpenPopup("Unsaved atlas##sliceSwitch");
+		if (ImGui::BeginPopupModal("Unsaved atlas##sliceSwitch", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::Text("%s has unsaved regions.", spriteui::DisplayName(m_atlasPath).c_str());
+			ImGui::TextDisabled("Opening another atlas will lose them.");
+			ImGui::Spacing();
+			if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK "  Save and open", ImVec2(150.0f, 0.0f)))
+			{
+				const std::string next = m_pendingAtlasPath;
+				m_pendingAtlasPath.clear();
+				SaveAtlas(context);
+				ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+				LoadAtlas(context, next);
+				return;
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Discard", ImVec2(110.0f, 0.0f)))
+			{
+				const std::string next = m_pendingAtlasPath;
+				m_pendingAtlasPath.clear();
+				// Match the signature so the load is not challenged again.
+				m_savedAtlasSignature = AtlasSignature();
+				ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+				LoadAtlas(context, next);
+				return;
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Keep editing", ImVec2(130.0f, 0.0f)))
+			{
+				m_pendingAtlasPath.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+	}
+
 	void SpriteSlicerPanel::LoadAtlas(app::LayerContext& context, std::string path)
 	{
 		if (path.empty())
 		{
+			return;
+		}
+		// Slicing an atlas is a lot of manual work and there is no undo for the file, so a
+		// switch never discards it silently.
+		if (AtlasDirty() && path != m_atlasPath)
+		{
+			m_pendingAtlasPath = path;
 			return;
 		}
 		const auto loaded = context.Get<SpriteAssetStore>().LoadAtlas(path);
@@ -332,6 +413,7 @@ namespace aether::editor
 		m_selectedRegion = m_atlas.sprites.empty() ? -1 : 0;
 		SetSource(context, m_atlas.texturePath, false);
 		context.Get<AssetDatabase>().Register(MakeSpriteAtlasSource(m_atlasPath), spriteui::DisplayName(m_atlasPath));
+		m_savedAtlasSignature = AtlasSignature();
 		m_status = std::format("Atlas loaded with {} regions.", m_atlas.sprites.size());
 		m_statusError = false;
 	}
@@ -382,6 +464,7 @@ namespace aether::editor
 		{
 			m_diagnostics = *saved;
 			context.Get<AssetDatabase>().Register(MakeSpriteAtlasSource(m_atlasPath), spriteui::DisplayName(m_atlasPath));
+			m_savedAtlasSignature = AtlasSignature();
 			m_status = std::format("Saved {} regions; {} IDs preserved, {} removed.", m_atlas.sprites.size(), m_diagnostics.preserved, m_diagnostics.removed);
 			m_statusError = false;
 		}

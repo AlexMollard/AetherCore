@@ -27,6 +27,16 @@ namespace aether::editor
 		void OnImGui(app::LayerContext& context) override;
 
 	private:
+		// What the atlas looked like when it was last loaded or saved. Compared structurally
+		// rather than by a flag set at each mutation site: regions are added, duplicated,
+		// deleted, re-sliced and edited field by field, and a flag that misses one of those
+		// reports "saved" over work that is not.
+		[[nodiscard]] std::string AtlasSignature() const;
+		[[nodiscard]] bool AtlasDirty() const;
+		void DrawUnsavedAtlasPrompt(app::LayerContext& context);
+		std::string m_savedAtlasSignature;
+		std::string m_pendingAtlasPath;
+
 		void SetSource(app::LayerContext& context, std::string path, bool deriveAtlasPath = true);
 		void LoadAtlas(app::LayerContext& context, std::string path);
 		void ImportAseprite(app::LayerContext& context, std::string path);
