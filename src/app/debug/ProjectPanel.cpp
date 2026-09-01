@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <exception>
 #include <filesystem>
+#include <iterator>
 #include <future>
 #include <mutex>
 #include <sstream>
@@ -372,8 +373,66 @@ namespace aether::editor
 			ImGui::SetItemTooltip("The scene a published game boots. Also settable with the star in the Scenes list.");
 		}
 
-		ImGui::SeparatorText("Folders");
-		if (ImGui::BeginTable("##projectFolders", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
+		// Nine rows of folder plumbing sat permanently above everything else in this panel,
+		// and eight or nine of them say the same thing every time. Collapsed to a one-line
+		// summary when the project is healthy, and opened for you when it is not - which is
+		// the only time the list has something to tell you.
+		const std::filesystem::path folderPaths[] = {
+		        project->assetsDir,
+		        project->assetsDir / "models",
+		        project->assetsDir / "materials",
+		        project->assetsDir / "textures",
+		        project->assetsDir / "animations",
+		        project->scenesDir,
+		        project->prefabsDir,
+		        project->root / "data",
+		        project->scriptsDir,
+		};
+		const bool requiredFolder[] = {true, false, false, false, false, true, false, false, true};
+		int missing = 0;
+		for (std::size_t i = 0; i < std::size(folderPaths); ++i)
+		{
+			if (requiredFolder[i] && !FolderExists(folderPaths[i]))
+			{
+				++missing;
+			}
+		}
+
+		char foldersLabel[64];
+		if (missing > 0)
+		{
+			std::snprintf(foldersLabel, sizeof(foldersLabel), "Folders  -  %d missing###projectFolders", missing);
+		}
+		else
+		{
+			std::snprintf(foldersLabel, sizeof(foldersLabel), "Folders###projectFolders");
+		}
+		// Opened only for a problem: a healthy project should not have to be re-collapsed
+		// every session, and a broken one should not have to be hunted for.
+		if (missing > 0)
+		{
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		}
+		if (missing > 0)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kWarning);
+		}
+		const bool foldersOpen = ImGui::CollapsingHeader(foldersLabel);
+		if (missing > 0)
+		{
+			ImGui::PopStyleColor();
+		}
+		if (!foldersOpen)
+		{
+			if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Repair Folders"))
+			{
+				EnsureStandardFolders(*project);
+			}
+			ImGui::End();
+			return;
+		}
+
+		if (ImGui::BeginTable("##projectFolderTable", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
 		{
 			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 82.0f);
 			ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 64.0f);
