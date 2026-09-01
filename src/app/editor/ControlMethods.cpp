@@ -1,3 +1,4 @@
+#include "AetherCore.hpp"
 #include "editor/ControlMethods.hpp"
 #include "editor/ControlSchema.hpp"
 
@@ -476,6 +477,16 @@ namespace aether::editor
 
 	} // namespace
 
+	namespace
+	{
+		// The producer loop's measured period, or 0 when the engine is not reachable.
+		float LoopFrameMs(ServiceContainer& services)
+		{
+			auto* engine = services.TryGet<AetherCore>();
+			return engine != nullptr ? engine->MedianFrameMs() : 0.0f;
+		}
+	}
+
 	std::vector<ControlMethod> BuildControlMethods()
 	{
 		std::vector<ControlMethod> methods;
@@ -544,8 +555,18 @@ namespace aether::editor
 				        playFrame = playState->PlayFrameCount();
 				        speed = playState->TimeScale();
 			        }
+			        // The loop's own rate. ctx.fps comes from the simulation delta, which is snapped
+			        // to the display cadence and therefore reads ~60 however fast the producer is
+			        // actually running - the exact case worth being able to see.
+			        const float loopFrameMs = LoopFrameMs(ctx.services);
+			        auto* engineForIdle = ctx.services.TryGet<AetherCore>();
 			        return json{{"frame", ctx.frameIndex},
 			                {"fps", ctx.fps},
+			                {"frameMs", loopFrameMs},
+			                {"loopFps", loopFrameMs > 0.0f ? 1000.0f / loopFrameMs : 0.0f},
+			                {"idleThrottled", engineForIdle != nullptr && engineForIdle->IsIdleThrottled()},
+			                {"idleAllowed", engineForIdle != nullptr && engineForIdle->IsIdleThrottleAllowed()},
+			                {"sinceActivity", engineForIdle != nullptr ? engineForIdle->SecondsSinceActivity() : 0.0f},
 			                {"scene", scenes != nullptr ? scenes->GetCurrentScene() : ""},
 			                {"sceneKind", scenes != nullptr ? SceneKindName(scenes->GetWorld().GetSceneKind()) : "unknown"},
 			                {"entities", count},
@@ -2127,7 +2148,8 @@ namespace aether::editor
 			                {"transientLogicalBytes", s.transientLogicalBytes},
 			                {"transientPhysicalBytes", s.transientPhysicalBytes},
 			                {"frame", ctx.frameIndex},
-			                {"fps", ctx.fps}};
+			                {"fps", ctx.fps},
+			                {"frameMs", LoopFrameMs(ctx.services)}};
 		        }});
 
 		methods.push_back({"render.benchmark",

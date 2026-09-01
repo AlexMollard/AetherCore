@@ -68,6 +68,12 @@ namespace aether
 
 		[[nodiscard]] GLFWwindow* GetHandle() const;
 		[[nodiscard]] bool ShouldClose() const;
+
+		// Whether this window has OS keyboard focus. The cursor position reported by GLFW
+		// tracks the mouse across the whole desktop, so without this an editor sitting in the
+		// background wakes up and renders flat out because the mouse moved over some other
+		// application.
+		[[nodiscard]] bool IsFocused() const;
 		// Requests a clean application-loop exit on the next close check. Main thread only.
 		void RequestClose();
 		// Withdraws a close request the OS has already recorded (the title-bar X, Alt+F4).
@@ -76,6 +82,17 @@ namespace aether
 		// what lets the editor ask about unsaved work instead of exiting under the question.
 		void CancelClose();
 		static void PollEvents();
+
+		// Sleeps on the OS event queue for at most `seconds`, returning the moment anything
+		// arrives. This is how an idle editor gives the CPU back without going unresponsive:
+		// a plain sleep would hold the first mouse movement for the whole interval, which at
+		// a low idle rate is exactly the lag the throttle is supposed to avoid paying for.
+		static void WaitEventsTimeout(double seconds);
+
+		// Wakes a thread parked in WaitEventsTimeout. Safe to call from any thread, and the
+		// only way a non-input event - a control command, a finished background job - can get
+		// an idle editor to run a frame promptly.
+		static void PostEmptyEvent();
 
 		[[nodiscard]] FramebufferSize GetFramebufferSize() const;
 

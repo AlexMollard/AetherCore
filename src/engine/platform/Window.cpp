@@ -152,6 +152,11 @@ namespace aether
 		return glfwWindowShouldClose(m_window) != 0;
 	}
 
+	bool Window::IsFocused() const
+	{
+		return m_window != nullptr && glfwGetWindowAttrib(m_window, GLFW_FOCUSED) != 0;
+	}
+
 	void Window::FitToPrimaryWorkArea()
 	{
 		if (m_window == nullptr || m_mode != Mode::Windowed)
@@ -338,6 +343,17 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		glfwPollEvents();
+	}
+
+	void Window::WaitEventsTimeout(const double seconds)
+	{
+		AE_PROFILE_ZONE();
+		glfwWaitEventsTimeout(seconds);
+	}
+
+	void Window::PostEmptyEvent()
+	{
+		glfwPostEmptyEvent();
 	}
 
 	FramebufferSize Window::GetFramebufferSize() const

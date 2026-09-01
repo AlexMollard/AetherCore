@@ -349,6 +349,10 @@ namespace aether
 		std::vector<float> reportWall;
 		reportWall.reserve(FrameTimeline::kCapacity);
 
+		// The cap is only ever pushed in when the SETTING CHANGES, so without this the pacer
+		// starts at 0 - uncapped - however the settings were configured.
+		m_framePacer.SetTargetFps(m_settings.app.targetFps);
+
 		std::chrono::steady_clock::time_point previousFrameEnd{};
 		LatencyPacer latencyPacer;
 		std::uint64_t pacedFrames = 0;
@@ -376,6 +380,27 @@ namespace aether
 			const float loopTailMs = previousFrameEnd.time_since_epoch().count() == 0
 			        ? 0.0f
 			        : static_cast<float>(std::chrono::duration<double, std::milli>(frameStart - previousFrameEnd).count());
+
+			// An untouched editor redraws a screen nobody is looking at. Drop to a low rate
+			// until something happens - the same bargain Unity's Interaction Mode makes.
+			//
+			// The wait is on the OS EVENT QUEUE, not a timer, so a mouse movement returns from
+			// it immediately. A timed sleep would hold that first movement for the whole idle
+			// interval (100 ms at 10 fps), which is precisely the lag this is meant to save.
+			{
+				const float idleFps = m_settings.app.idleFps;
+				const auto sinceActivity = std::chrono::duration<float>(frameStart - m_lastActivity).count();
+				// An unfocused window idles at once. The linger exists to cover the gap between
+				// two keystrokes, and there is no such gap to cover when the user has gone to
+				// another application entirely.
+				const bool unfocused = !m_services.Get<PlatformSubsystem>().GetWindow().IsFocused();
+				m_idleThrottled = m_idleAllowed && idleFps > 0.0f
+				        && (unfocused || sinceActivity > m_settings.app.idleAfterSeconds);
+				if (m_idleThrottled)
+				{
+					Window::WaitEventsTimeout(1.0 / static_cast<double>(idleFps));
+				}
+			}
 
 			m_framePacer.Wait();
 			const auto afterPacer = std::chrono::steady_clock::now();
@@ -677,6 +702,24 @@ namespace aether
 		return m_services.Get<PlatformSubsystem>().GetWindow().ShouldClose();
 	}
 
+	float AetherCore::MedianFrameMs() const
+	{
+		std::array<FrameTiming, 120> frames{};
+		const std::size_t count = m_frameTimeline.Snapshot(frames);
+		if (count == 0)
+		{
+			return 0.0f;
+		}
+		std::array<float, 120> wall{};
+		for (std::size_t i = 0; i < count; ++i)
+		{
+			wall[i] = frames[i].wallMs;
+		}
+		const auto mid = wall.begin() + static_cast<std::ptrdiff_t>(count / 2);
+		std::nth_element(wall.begin(), mid, wall.begin() + static_cast<std::ptrdiff_t>(count));
+		return *mid;
+	}
+
 	void AetherCore::PumpEvents()
 	{
 		aether::Window::PollEvents();
@@ -688,6 +731,17 @@ namespace aether
 		auto& platform = m_services.Get<PlatformSubsystem>();
 		auto& input = platform.GetInput();
 		input.Update();
+
+		// The engine's own activity source. Anything that must keep the editor awake for a
+		// reason other than input calls RequestActivity itself.
+		//
+		// Gated on FOCUS: GLFW reports the cursor position across the whole desktop, so an
+		// unfocused editor would otherwise see every mouse movement made in another
+		// application as interaction and run flat out in the background.
+		if (platform.GetWindow().IsFocused() && input.HadActivityThisFrame())
+		{
+			RequestActivity();
+		}
 
 		// Feed the engine cursor and keep the OS pointer in step with it. Done here, once, off the same
 		// Input the game reads, so a project never has to remember to hide the real cursor when it turns

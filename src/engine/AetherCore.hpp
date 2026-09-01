@@ -41,7 +41,12 @@ namespace aether
 		{
 			return gpu::PresentMode::Immediate;
 		}
-		return settings.graphics.lowLatencyPresent ? gpu::PresentMode::Mailbox : gpu::PresentMode::Fifo;
+		// MAILBOX never blocks the producer, so with no frame cap the loop renders as fast as
+		// it possibly can and discards nearly all of it - measured at 515 fps to present 60,
+		// which is most of a GPU spent on frames nobody sees. Uncapped is a legitimate thing
+		// to ask for, so the mode stands down instead of the cap being silently rewritten.
+		const bool capped = settings.app.targetFps > 0.0f;
+		return settings.graphics.lowLatencyPresent && capped ? gpu::PresentMode::Mailbox : gpu::PresentMode::Fifo;
 	}
 
 	// Unknown text falls back to Windowed. A typo must not silently hand someone an
@@ -153,6 +158,55 @@ namespace aether
 
 		// The frame loop reads these straight off m_settings, which is a snapshot taken at
 		// construction - so without a setter a live change never reaches the loop at all.
+		// The producer loop's real period. Distinct from the simulation delta a layer sees,
+		// which is snapped to the display cadence and so cannot report a loop running faster
+		// than the display - the exact case worth measuring.
+		[[nodiscard]] float MedianFrameMs() const;
+
+		// Keeps the editor at its full frame rate for idleAfterSeconds. The engine already
+		// counts input as activity; call this for anything else that must keep drawing - play
+		// mode, a running animation, a preview that spins - or it will throttle underneath it.
+		void RequestActivity() noexcept
+		{
+			m_lastActivity = std::chrono::steady_clock::now();
+		}
+
+		// Whether the loop is currently running at the reduced idle rate.
+		// Diagnostics for why the editor is or is not idling.
+		[[nodiscard]] float SecondsSinceActivity() const noexcept
+		{
+			return std::chrono::duration<float>(std::chrono::steady_clock::now() - m_lastActivity).count();
+		}
+
+		[[nodiscard]] bool IsIdleThrottleAllowed() const noexcept
+		{
+			return m_idleAllowed;
+		}
+
+		[[nodiscard]] bool IsIdleThrottled() const noexcept
+		{
+			return m_idleThrottled;
+		}
+
+		// Opt-in, and off unless a host turns it on. A published game must never throttle
+		// itself: it has animation, physics and audio that continue whether or not anyone is
+		// touching the keyboard, and "no input" says nothing about whether it should be
+		// drawing. Only an editor knows it is safe.
+		void SetIdleThrottleAllowed(bool allowed) noexcept
+		{
+			m_idleAllowed = allowed;
+		}
+
+		void SetIdleFps(float fps) noexcept
+		{
+			m_settings.app.idleFps = fps;
+		}
+
+		void SetIdleAfterSeconds(float seconds) noexcept
+		{
+			m_settings.app.idleAfterSeconds = seconds;
+		}
+
 		void SetSyncSlackMs(float slackMs)
 		{
 			m_settings.graphics.syncSlackMs = slackMs;
@@ -284,6 +338,9 @@ namespace aether
 		// Per-frame timings for the Performance panel. Always present, in every build
 		// config - the Tracy plots beside it compile out in Release.
 		FrameTimeline m_frameTimeline;
+		std::chrono::steady_clock::time_point m_lastActivity{std::chrono::steady_clock::now()};
+		bool m_idleThrottled = false;
+		bool m_idleAllowed = false;
 		std::uint64_t m_producerFrameIndex = 0;
 		double m_gameElapsedSeconds = 0.0;
 		double m_realElapsedSeconds = 0.0; // wall-clock elapsed, ignores time scale (for pause-menu UI)

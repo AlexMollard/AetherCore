@@ -2,7 +2,6 @@
 
 [app]
 startupscene = "HumanDemo"
-targetfps = 0
 
 [graphics]
 asynccompute = true

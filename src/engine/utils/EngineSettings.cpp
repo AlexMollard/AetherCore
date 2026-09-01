@@ -34,6 +34,8 @@ namespace aether
 		        {"graphics.vsync", {.description = "Wait for the display to refresh. Turning it off tears, but removes a frame of latency."}},
 		        {"graphics.framesInFlight", {.description = "How far the game thread may run ahead of the screen. Every frame of run-ahead is one display interval of input lag (~17 ms at 60 Hz).", .minValue = 1.0, .maxValue = 3.0}},
 		        {"graphics.syncSlackMs", {.description = "Milliseconds before the predicted display flip to latch input, matching Unreal's rhi.SyncSlackMS. Lower is more responsive; higher gives a frame that runs long more room before it misses the flip.", .minValue = 0.0, .maxValue = 33.0}},
+		        {"app.idleFps", {.description = "Frame rate the editor drops to when nothing is being interacted with, so an untouched window costs almost nothing. It returns to the full rate on the next input. 0 disables the throttle.", .minValue = 0.0, .maxValue = 120.0}},
+		        {"app.idleAfterSeconds", {.description = "How long after the last interaction the editor keeps running at the full rate before it idles.", .minValue = 0.0, .maxValue = 10.0}},
 		        {"graphics.lowLatencyPresent", {.description = "Prefer MAILBOX over FIFO while vsync is on: a finished frame replaces the pending one instead of queueing behind it."}},
 		        {"graphics.latencyPacing", {.description = "Idle out most of the display interval and latch input just before the flip. Needs a measured flip phase; does nothing without one."}},
 		        {"graphics.renderScale", {.description = "Scene resolution as a multiple of the output. Below 1 renders small and upscales, for performance. Above 1 renders large and downsamples - supersampling, the bluntest and best antialiasing, at 4x the pixels for 2x. UI always draws at native resolution.", .minValue = 0.25, .maxValue = 2.0}},
@@ -186,19 +188,18 @@ namespace aether
 		// latch point short of the flip itself. The upper bound is a whole 30 Hz interval,
 		// past which this stops being slack and becomes a frame of lag.
 		settings.graphics.syncSlackMs = std::clamp(settings.graphics.syncSlackMs, 0.0f, 33.0f);
+		settings.app.idleFps = std::clamp(settings.app.idleFps, 0.0f, 120.0f);
+		settings.app.idleAfterSeconds = std::clamp(settings.app.idleAfterSeconds, 0.0f, 10.0f);
 		settings.graphics.uiScale = std::clamp(settings.graphics.uiScale, 0.5f, 3.0f);
 		// Below a quarter the scene is unrecognisable, and above 1 it would be supersampling
 		// rather than the cost saving this exists for.
 		settings.graphics.renderScale = std::clamp(settings.graphics.renderScale, 0.25f, 2.0f);
 
-		// MAILBOX never blocks the producer, so with no frame cap the loop runs as fast as it
-		// possibly can - a 2D game measured 3700 fps to put 60 on the screen, discarding 98%
-		// of them. That is a melted GPU for no visible benefit, and it is the state a user
-		// lands in by flipping one setting, so it cannot be left to documentation.
-		if (settings.graphics.vsync && settings.graphics.lowLatencyPresent && settings.app.targetFps <= 0.0f)
-		{
-			settings.app.targetFps = kUncappedMailboxFallbackFps;
-		}
+		// The uncapped-MAILBOX footgun is handled by targetFps DEFAULTING to a cap rather than
+		// by rewriting a 0 the user asked for. Rewriting it meant the advertised minimum of 0
+		// did not survive Sanitize, which is a contract every other setting keeps - and a
+		// setting that silently ignores what you typed is worse than one that lets you have
+		// it. An untouched editor is covered by app.idleFps regardless.
 	}
 
 	std::string EngineSettingsIO::Serialize(const EngineSettings& settings)

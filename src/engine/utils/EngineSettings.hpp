@@ -14,7 +14,9 @@ namespace aether
 	// Applied when MAILBOX is requested with no frame cap, which would otherwise run the loop
 	// flat out. Deliberately above 60 so the extra headroom still buys latency, and low
 	// enough that it is not a thermal event.
-	inline constexpr float kUncappedMailboxFallbackFps = 120.0f;
+	// Default frame cap. MAILBOX discards whatever it renders past the display rate, so
+	// shipping uncapped would burn a GPU to show the same 60 frames.
+	inline constexpr float kDefaultTargetFps = 120.0f;
 
 	struct EngineSettings
 	{
@@ -51,12 +53,21 @@ namespace aether
 			// frame reaches the screen without waiting its turn. Costs GPU work on frames
 			// that get replaced, and does nothing when vsync is off (that is already
 			// IMMEDIATE). Falls back to FIFO wherever the driver lacks MAILBOX.
-			bool lowLatencyPresent = false;
+			// On by default: MAILBOX still presents on the flip, so it does not tear, but a
+			// finished frame replaces the pending one instead of queueing behind it. Measured
+			// on the editor: present wait 16.6 ms -> 1.3 ms. The frames it can discard are
+			// paid for by app.idleFps, which stops the loop running at all when untouched.
+			bool lowLatencyPresent = true;
 			// Idle out most of the display interval and latch input just before the flip that
 			// will show the frame. Requires a MEASURED flip phase (VK_KHR_present_wait); where
 			// that is unavailable this does nothing, because pacing against a guessed phase was
 			// measured to be strictly worse than not pacing.
-			bool latencyPacing = true;
+			// Off by default. Pacing deliberately locks the loop to the display cadence so it
+			// can latch input late, which is the right trade for a display-locked game - it is
+			// Unreal's r.GTSyncType 2, and Unreal does not use it for the editor either. With
+			// MAILBOX the present no longer blocks, so the pacing buys latency back only to
+			// spend it again on the slack.
+			bool latencyPacing = false;
 
 			// Render the SCENE at this fraction of the output and let the existing final
 			// fullscreen pass upscale it; UI still draws at native resolution on top, so text
@@ -140,7 +151,19 @@ namespace aether
 
 		struct App
 		{
-			float targetFps = 0.0f;
+			// Capped by default because MAILBOX is: without a cap the loop renders as fast as
+			// it can and throws away most of it (a 2D game measured 3700 fps to put 60 on the
+			// screen). 0 still means uncapped for anyone who explicitly asks for it.
+			float targetFps = kDefaultTargetFps;
+
+			// An editor nobody is touching has no reason to redraw at full rate. Unity's
+			// Interaction Mode does the same thing: idle between frames, and stop idling the
+			// moment the user interacts. 0 disables the throttle entirely.
+			float idleFps = 10.0f;
+			// How long after the last interaction to keep running at full rate. Covers the gap
+			// between two keystrokes and animations that outlive the input that started them.
+			float idleAfterSeconds = 0.75f;
+
 			std::string startupScene;
 			bool autoplay = false;
 			// Editor autosave cadence, in seconds. Writes a recovery copy beside the project
@@ -219,6 +242,8 @@ namespace aether
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);
 		f("graphics.uiScale", settings.graphics.uiScale);
 		f("app.targetFps", settings.app.targetFps);
+		f("app.idleFps", settings.app.idleFps);
+		f("app.idleAfterSeconds", settings.app.idleAfterSeconds);
 		f("app.startupScene", settings.app.startupScene);
 		f("app.autoplay", settings.app.autoplay);
 		f("app.autosaveSeconds", settings.app.autosaveSeconds);
@@ -400,7 +425,7 @@ namespace aether
 		        || key == "graphics.vsync" || key == "graphics.framesInFlight" || key == "graphics.lowLatencyPresent"
 		        || key == "graphics.renderScale" || key == "graphics.latencyPacing" || key == "graphics.syncSlackMs" || key == "graphics.asyncCompute"
 		        || key == "graphics.anisotropy" || key == "graphics.imguiViewports" || key == "graphics.uiScale"
-		        || key == "app.targetFps" || key == "app.autosaveSeconds")
+		        || key == "app.targetFps" || key == "app.idleFps" || key == "app.idleAfterSeconds" || key == "app.autosaveSeconds")
 		{
 			return SettingsHome::User;
 		}

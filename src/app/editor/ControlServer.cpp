@@ -1,5 +1,7 @@
 #include "editor/ControlServer.hpp"
 
+#include "platform/Window.hpp"
+
 #include <exception>
 #include <mutex>
 #include <queue>
@@ -173,6 +175,10 @@ namespace aether::editor
 						in.params = parsed.contains("params") ? parsed["params"].dump() : std::string("{}");
 						const std::lock_guard<std::mutex> lock(m_impl->inMutex);
 						m_impl->inQueue.push(std::move(in));
+						// Commands are drained on the main loop thread, which may be parked in
+						// the idle event wait. Without this an automated session would sit
+						// behind the idle interval for every single call.
+						aether::Window::PostEmptyEvent();
 					}
 					enet_packet_destroy(event.packet);
 				}

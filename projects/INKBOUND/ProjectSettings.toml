@@ -2,7 +2,6 @@
 
 [app]
 startupscene = "Menu"
-targetfps = 0
 
 # The engine draws our pointer; the OS one is switched off for us. CursorController swaps this for a
 # quill while ink can be drawn, and hides it entirely in gameplay - the anchor guide already marks the

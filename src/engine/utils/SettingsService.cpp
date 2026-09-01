@@ -203,6 +203,20 @@ namespace aether
 				engine->SetLatencyPacing(m_values.graphics.latencyPacing);
 			}
 		}
+		else if (key == "app.idleFps")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetIdleFps(m_values.app.idleFps);
+			}
+		}
+		else if (key == "app.idleAfterSeconds")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetIdleAfterSeconds(m_values.app.idleAfterSeconds);
+			}
+		}
 		else if (key == "app.targetFps")
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())

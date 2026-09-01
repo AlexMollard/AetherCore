@@ -268,6 +268,11 @@ namespace aether
 
 		[[nodiscard]] glm::vec2 GetScrollDelta() const;
 
+		// Whether the user did anything at all this frame. Used to decide if the editor may
+		// idle: an editor sitting untouched has no reason to redraw at full rate, but it must
+		// come back the instant a mouse moves, so this errs towards reporting activity.
+		[[nodiscard]] bool HadActivityThisFrame() const;
+
 		// layout, dead keys, and IME - far more reliable than manual key->char mapping.
 		[[nodiscard]] const std::string& GetTypedChars() const;
 

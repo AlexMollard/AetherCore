@@ -753,6 +753,23 @@ namespace aether::editor
 		AE_PROFILE_ZONE();
 		const Input& input = context.Get<Input>();
 
+		if (auto* engine = context.TryGet<AetherCore>())
+		{
+			// Only the editor is allowed to idle; a game must keep running whether or not
+			// anyone is touching the keyboard.
+			engine->SetIdleThrottleAllowed(true);
+
+			// ...and not while it is hosting one. A scene in play mode animates, simulates and
+			// plays audio with no input at all, so "nothing was pressed" is not idle.
+			// Compiling counts too: the reload finishes on a frame, and a throttled editor
+			// would sit on the result.
+			const auto* playState = context.TryGet<app::PlayState>();
+			if (playState != nullptr && (playState->IsPlaying() || playState->IsCompiling()))
+			{
+				engine->RequestActivity();
+			}
+		}
+
 		if (input.IsKeyPressed(aether::Key::F5))
 		{
 			if (auto* scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>())

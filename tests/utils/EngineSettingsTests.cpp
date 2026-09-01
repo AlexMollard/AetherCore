@@ -40,6 +40,7 @@ TEST_CASE("Sanitize resets invalid dimensions to defaults and clamps targetFps")
 
     CHECK(s.window.width == 2560);
     CHECK(s.window.height == 1440);
+    // Negative is meaningless, and clamps to uncapped rather than to the default.
     CHECK(s.app.targetFps == doctest::Approx(0.0f));
 }
 
@@ -225,9 +226,17 @@ TEST_CASE("LoadLayered applies the project file as a layer and includes it in ba
 }
 
 // MAILBOX does not block the producer, so an uncapped loop renders as fast as the hardware
-// allows - measured at 3700 fps on a 2D game presenting 60. Flipping one setting must not
-// put a user there, so Sanitize supplies a cap.
-TEST_CASE("Requesting the low-latency present mode without a frame cap gets one") {
+// allows - measured at 3700 fps on a 2D game presenting 60. That is handled by the DEFAULT
+// cap rather than by rewriting the value: an explicit 0 means uncapped and is honoured, which
+// is the contract every other setting keeps and what the advertised minimum promises.
+TEST_CASE("The default frame cap keeps the low-latency present mode off a melted GPU") {
+    const EngineSettings settings;
+
+    CHECK(settings.graphics.lowLatencyPresent);
+    CHECK(settings.app.targetFps == doctest::Approx(kDefaultTargetFps));
+}
+
+TEST_CASE("An explicit uncapped frame rate is honoured, not rewritten") {
     EngineSettings settings;
     settings.graphics.vsync = true;
     settings.graphics.lowLatencyPresent = true;
@@ -235,7 +244,7 @@ TEST_CASE("Requesting the low-latency present mode without a frame cap gets one"
 
     EngineSettingsIO::Sanitize(settings);
 
-    CHECK(settings.app.targetFps == doctest::Approx(kUncappedMailboxFallbackFps));
+    CHECK(settings.app.targetFps == doctest::Approx(0.0f));
 }
 
 TEST_CASE("An explicit frame cap survives the low-latency present mode") {

@@ -17,7 +17,8 @@ fxaa = true
 asyncCompute = true
 
 [app]
-# 0 = auto policy (swapchain-paced when VSync on, uncapped when off)
-targetFps = 0
+# Frame cap. 0 = uncapped, which also stands the low-latency present mode down: MAILBOX with
+# no cap renders hundreds of frames a second to show sixty of them.
+targetFps = 120
 # Project scene file loaded at boot; empty disables.
 startupScene = ""

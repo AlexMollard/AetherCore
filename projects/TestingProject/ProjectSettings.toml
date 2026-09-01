@@ -2,7 +2,6 @@
 
 [app]
 startupscene = "Testing"
-targetfps = 0
 
 [graphics]
 asynccompute = true

@@ -2,7 +2,6 @@
 
 [app]
 startupscene = "Title"
-targetfps = 0
 
 [graphics]
 asynccompute = true

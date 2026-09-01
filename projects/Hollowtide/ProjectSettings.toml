@@ -2,7 +2,6 @@
 
 [app]
 startupscene = "Threshold"
-targetfps = 0
 autosaveSeconds = 120
 
 [graphics]

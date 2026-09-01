@@ -293,6 +293,31 @@ namespace aether
 		return current - previous;
 	}
 
+	bool Input::HadActivityThisFrame() const
+	{
+		if (m_mousePos != m_prevMousePos || m_scrollDelta != glm::vec2{} || !m_typedChars.empty())
+		{
+			return true;
+		}
+		// Held counts as well as pressed: dragging a slider or holding a camera key produces
+		// no edge after the first frame, and going idle mid-drag would be worse than useless.
+		for (std::size_t i = 0; i < kMaxMouseButtons; ++i)
+		{
+			if (m_currMouseButtons[i] || m_prevMouseButtons[i])
+			{
+				return true;
+			}
+		}
+		for (std::size_t i = 0; i < kMaxKeys; ++i)
+		{
+			if (m_currKeys[i] || m_prevKeys[i])
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	glm::vec2 Input::GetScrollDelta() const
 	{
 		return m_scrollDelta;
