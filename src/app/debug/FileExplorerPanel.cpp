@@ -1087,6 +1087,25 @@ namespace aether::editor
 			}
 		}
 
+		// Another panel asking us to show a folder. Consuming it here (rather than each panel
+		// opening the OS file manager) is what keeps this the only asset browser.
+		if (auto* selection = context.TryGet<SceneSelection>(); selection != nullptr)
+		{
+			if (std::string reveal = selection->ConsumeRevealRequest(); !reveal.empty())
+			{
+				const std::filesystem::path revealPath(reveal);
+				std::error_code revealEc;
+				if (std::filesystem::is_directory(revealPath, revealEc))
+				{
+					m_treeDirty = true;
+					RescanTree();
+					OpenDirectory(context, revealPath);
+					SetVisible(true);
+					ImGui::SetWindowFocus("File Explorer");
+				}
+			}
+		}
+
 		if (!m_treeDirty && ImGui::GetTime() - m_lastScanTime > kAutoRescanSeconds)
 		{
 			m_treeDirty = true;

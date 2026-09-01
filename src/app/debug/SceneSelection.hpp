@@ -140,6 +140,21 @@ namespace aether::editor
 			}
 		}
 
+		// Ask the asset browser to show a folder. Panels that merely want to POINT AT a
+		// folder should not each grow their own browser - the Project panel's folder list
+		// used to open the OS file manager, which is a second, worse browser sitting next to
+		// the editor's own.
+		void RequestReveal(std::string path)
+		{
+			m_revealRequest = std::move(path);
+		}
+
+		// One-shot: the browser takes it, so a request cannot re-trigger every frame.
+		[[nodiscard]] std::string ConsumeRevealRequest()
+		{
+			return std::exchange(m_revealRequest, std::string{});
+		}
+
 		[[nodiscard]] bool HasAsset() const
 		{
 			return m_asset.kind != AssetKind::None && !m_asset.path.empty();
@@ -202,6 +217,7 @@ namespace aether::editor
 		Entity m_primary{};
 		Entity m_lastEntityPrimary{};
 		Asset m_asset{};
+		std::string m_revealRequest;
 		std::uint64_t m_lastChangeSerial = 0;
 	};
 

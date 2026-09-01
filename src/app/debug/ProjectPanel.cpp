@@ -1,5 +1,8 @@
 #include "debug/ProjectPanel.hpp"
 #include "debug/EditorChrome.hpp"
+#include "debug/SceneSelection.hpp"
+#include "utils/LogCategory.hpp"
+#include "utils/Logger.hpp"
 #include "debug/InspectorWidgets.hpp"
 
 #include <algorithm>
@@ -50,6 +53,22 @@ namespace aether::editor
 		std::string DisplayPath(const std::filesystem::path& path)
 		{
 			return path.empty() ? std::string{} : path.lexically_normal().string();
+		}
+
+		// The part of a project folder's path that actually differs between rows.
+		std::string ProjectRelative(const std::filesystem::path& path, const std::filesystem::path& root)
+		{
+			if (path.empty() || root.empty())
+			{
+				return DisplayPath(path);
+			}
+			std::error_code ec;
+			const std::filesystem::path rel = std::filesystem::relative(path, root, ec);
+			if (ec || rel.empty() || rel.generic_string().starts_with(".."))
+			{
+				return DisplayPath(path);
+			}
+			return rel.generic_string();
 		}
 
 		std::filesystem::path SettingsPath(const app::EditorProjectContext& project)
@@ -172,7 +191,7 @@ namespace aether::editor
 		m_startupScene = app::ReadProjectStartupScene(SettingsPath(project));
 	}
 
-	void ProjectPanel::DrawFolderRow(const char* label, const std::filesystem::path& path, const bool required)
+	void ProjectPanel::DrawFolderRow(app::LayerContext& context, const std::filesystem::path& root, const char* label, const std::filesystem::path& path, const bool required)
 	{
 		const bool exists = FolderExists(path);
 		ImGui::TableNextRow();
@@ -186,7 +205,9 @@ namespace aether::editor
 		// at it just teaches you to stop reading the column.
 		if (exists)
 		{
-			ImGui::TextColored(chrome::kSuccess, "Ready");
+			// Healthy folders say nothing. Nine rows all reading "Ready" is nine rows of
+			// noise that bury the one row that is not.
+			ImGui::TextDisabled("-");
 		}
 		else if (required)
 		{
@@ -201,14 +222,29 @@ namespace aether::editor
 			}
 		}
 		ImGui::TableSetColumnIndex(2);
-		ImGui::TextDisabled("%s", DisplayPath(path).c_str());
+		// Relative to the project. Every one of these lives under the project root, which is
+		// already printed above, so the absolute path spent the column repeating the same
+		// prefix nine times and clipping the part that differs.
+		ImGui::TextDisabled("%s", ProjectRelative(path, root).c_str());
+		ImGui::SetItemTooltip("%s", DisplayPath(path).c_str());
 		ImGui::TableSetColumnIndex(3);
 		ImGui::PushID(label);
 		ImGui::BeginDisabled(!exists);
-		if (chrome::GhostIconButton(ICON_FA_FOLDER_OPEN, "##open", ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight())))
+		// Distinct per row: nine buttons sharing one id string are indistinguishable to
+		// anything addressing the UI by name, even though PushID keeps ImGui itself happy.
+		char openId[48];
+		std::snprintf(openId, sizeof(openId), "##open_%s", label);
+		if (chrome::GhostIconButton(ICON_FA_FOLDER_OPEN, openId, ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight())))
 		{
-			OpenFolderInShell(path);
+			// Shows the folder in the editor's own browser rather than launching the OS file
+			// manager. Two browsers side by side was the duplication; this makes the folder
+			// list a way INTO the one that can actually do something with an asset.
+			if (auto* selection = context.TryGet<SceneSelection>())
+			{
+				selection->RequestReveal(DisplayPath(path));
+			}
 		}
+		ImGui::SetItemTooltip("Show in the File Explorer");
 		ImGui::EndDisabled();
 		ImGui::PopID();
 	}
@@ -343,15 +379,15 @@ namespace aether::editor
 			ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 64.0f);
 			ImGui::TableSetupColumn("Path");
 			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight() + 4.0f);
-			DrawFolderRow("Assets", project->assetsDir, true);
-			DrawFolderRow("Models", project->assetsDir / "models", false);
-			DrawFolderRow("Materials", project->assetsDir / "materials", false);
-			DrawFolderRow("Textures", project->assetsDir / "textures", false);
-			DrawFolderRow("Animations", project->assetsDir / "animations", false);
-			DrawFolderRow("Scenes", project->scenesDir, true);
-			DrawFolderRow("Prefabs", project->prefabsDir, false);
-			DrawFolderRow("Data", project->root / "data", false);
-			DrawFolderRow("Scripts", project->scriptsDir, true);
+			DrawFolderRow(context, project->root, "Assets", project->assetsDir, true);
+			DrawFolderRow(context, project->root, "Models", project->assetsDir / "models", false);
+			DrawFolderRow(context, project->root, "Materials", project->assetsDir / "materials", false);
+			DrawFolderRow(context, project->root, "Textures", project->assetsDir / "textures", false);
+			DrawFolderRow(context, project->root, "Animations", project->assetsDir / "animations", false);
+			DrawFolderRow(context, project->root, "Scenes", project->scenesDir, true);
+			DrawFolderRow(context, project->root, "Prefabs", project->prefabsDir, false);
+			DrawFolderRow(context, project->root, "Data", project->root / "data", false);
+			DrawFolderRow(context, project->root, "Scripts", project->scriptsDir, true);
 			ImGui::EndTable();
 		}
 		ImGui::Dummy(ImVec2(0.0f, 4.0f));

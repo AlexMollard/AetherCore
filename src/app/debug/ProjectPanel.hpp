@@ -31,7 +31,7 @@ namespace aether::editor
 		void Refresh(const app::EditorProjectContext& project);
 		void EnsureStandardFolders(const app::EditorProjectContext& project);
 		void LoadProjectSettings(const app::EditorProjectContext& project);
-		void DrawFolderRow(const char* label, const std::filesystem::path& path, bool required);
+		void DrawFolderRow(app::LayerContext& context, const std::filesystem::path& root, const char* label, const std::filesystem::path& path, bool required);
 
 		std::filesystem::path m_lastRoot;
 		std::vector<std::string> m_sceneNames;
