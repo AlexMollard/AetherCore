@@ -451,6 +451,7 @@ namespace aether::editor
 
 	void FileExplorerPanel::OnAttach(app::LayerContext& context)
 	{
+		m_kindVisible.fill(true);
 		RefreshRoot(context);
 	}
 
@@ -1227,6 +1228,8 @@ namespace aether::editor
 			ImGui::SetItemTooltip(m_viewMode == ViewMode::Grid ? "Switch to list view" : "Switch to grid view");
 			ImGui::SameLine();
 			DrawSortMenu();
+			ImGui::SameLine();
+			DrawFilterMenu();
 			if (m_viewMode == ViewMode::Grid)
 			{
 				ImGui::SameLine();
@@ -2343,6 +2346,12 @@ namespace aether::editor
 		ordered.reserve(dir.children.size());
 		for (const Entry& child: dir.children)
 		{
+			// Folders are never filtered out - hiding the way back out of a folder is not a
+			// filter, it is a trap.
+			if (!child.isDirectory && !KindVisible(child.kind))
+			{
+				continue;
+			}
 			ordered.push_back(&child);
 		}
 
@@ -2401,6 +2410,68 @@ namespace aether::editor
 			        return m_sortDescending ? !less : less;
 		        });
 		return ordered;
+	}
+
+	bool FileExplorerPanel::KindVisible(const dragdrop::FileKind kind) const
+	{
+		const auto index = static_cast<std::size_t>(kind);
+		// Default-constructed flags are false, so an untouched panel would show nothing at
+		// all. Treat "never configured" as "show everything".
+		if (index >= m_kindVisible.size())
+		{
+			return true;
+		}
+		return m_kindVisible[index];
+	}
+
+	bool FileExplorerPanel::AnyKindHidden() const
+	{
+		return std::any_of(m_kindVisible.begin(), m_kindVisible.end(), [](const bool shown) { return !shown; });
+	}
+
+	void FileExplorerPanel::DrawFilterMenu()
+	{
+		// Tinted while filtering, and the count of what it is hiding is printed in the pane.
+		// A filter you cannot see is indistinguishable from a browser that has lost your files.
+		const bool filtering = AnyKindHidden();
+		if (chrome::GhostButton(ICON_FA_FILTER "##feFilter", ImVec2(0.0f, 0.0f), filtering ? chrome::kAccentHi : chrome::kMuted))
+		{
+			ImGui::OpenPopup("##feFilterMenu");
+		}
+		ImGui::SetItemTooltip(filtering ? "Filtering by type" : "Filter by type");
+		if (ImGui::BeginPopup("##feFilterMenu"))
+		{
+			chrome::SectionTag("SHOW");
+			const struct
+			{
+				dragdrop::FileKind kind;
+				const char* label;
+			} kinds[] = {
+			        {dragdrop::FileKind::Model, "Models"},
+			        {dragdrop::FileKind::Material, "Materials"},
+			        {dragdrop::FileKind::MaterialGraph, "Material graphs"},
+			        {dragdrop::FileKind::Texture, "Textures"},
+			        {dragdrop::FileKind::Script, "Scripts"},
+			        {dragdrop::FileKind::Prefab, "Prefabs"},
+			        {dragdrop::FileKind::Scene, "Scenes"},
+			        {dragdrop::FileKind::Shader, "Shaders"},
+			        {dragdrop::FileKind::Unknown, "Other files"},
+			};
+			for (const auto& entry: kinds)
+			{
+				const auto index = static_cast<std::size_t>(entry.kind);
+				if (index < m_kindVisible.size())
+				{
+					ImGui::Checkbox(entry.label, &m_kindVisible[index]);
+				}
+			}
+			ImGui::Separator();
+			if (ImGui::Selectable("Show all"))
+			{
+				m_kindVisible.fill(true);
+			}
+			ImGui::EndPopup();
+		}
 	}
 
 	void FileExplorerPanel::DrawSortMenu()
@@ -2487,9 +2558,23 @@ namespace aether::editor
 			}
 		}
 
-		if (shown == 0)
+		m_hiddenByFilter = 0;
+		for (const Entry& child: dir->children)
+		{
+			if (!child.isDirectory && !KindVisible(child.kind))
+			{
+				++m_hiddenByFilter;
+			}
+		}
+		if (shown == 0 && m_hiddenByFilter == 0)
 		{
 			ImGui::TextDisabled("This folder is empty.  Right-click to create something.");
+		}
+		else if (m_hiddenByFilter > 0)
+		{
+			// Stated where the files are missing from, not only on the toolbar button.
+			ImGui::Spacing();
+			ImGui::TextColored(chrome::C(colors::Orange), "%s  %d hidden by the type filter", ICON_FA_FILTER, m_hiddenByFilter);
 		}
 
 		// Right-click anywhere the tiles are not: create in the folder being looked at, which

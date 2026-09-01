@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -123,6 +124,11 @@ namespace aether::editor
 		// this, so they cannot disagree about what order the folder is in.
 		[[nodiscard]] std::vector<const Entry*> SortedChildren(const Entry& dir) const;
 		void DrawSortMenu();
+		void DrawFilterMenu();
+		// Whether a file of this kind is currently shown. Folders ignore it: they are how you
+		// move around, and a type filter that hides them strands you in a folder.
+		[[nodiscard]] bool KindVisible(dragdrop::FileKind kind) const;
+		[[nodiscard]] bool AnyKindHidden() const;
 		// Click-off to clear, and drag a band over the tiles to select them. Runs after the
 		// tiles are drawn, when their rectangles are known.
 		void HandleContentsSelectionGestures(app::LayerContext& context);
@@ -214,6 +220,11 @@ namespace aether::editor
 		bool m_marqueeActive = false;
 		ImVec2 m_marqueeAnchor{};
 		std::vector<std::pair<std::string, ImRect>> m_frameTiles;
+
+		// One flag per FileKind, indexed by its value. Deliberately NOT persisted: a filter
+		// that survives a restart is a file that has silently gone missing since yesterday.
+		std::array<bool, 9> m_kindVisible{};
+		int m_hiddenByFilter = 0;
 
 		SortMode m_sortMode = SortMode::Name;
 		bool m_sortDescending = false;
