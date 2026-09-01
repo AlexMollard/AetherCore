@@ -115,6 +115,9 @@ namespace aether::editor
 		// The ImGui texture for an asset's thumbnail, or 0 when it has none (or when this
 		// frame's load budget is spent, in which case the icon is drawn and it loads later).
 		[[nodiscard]] const Thumbnail* ThumbnailFor(app::LayerContext& context, const Entry& entry);
+		// The baked mesh a model tile can be rendered from, or empty. A raw glTF is only
+		// usable once it has been baked, and opening a folder must not trigger that.
+		[[nodiscard]] std::string BakedMeshFor(const Entry& entry) const;
 		void ReleaseThumbnails(app::LayerContext& context);
 		// Drop what was built for an asset while KEEPING its atlas slot, so re-baking an
 		// edited material reuses its square instead of consuming a new one every save.

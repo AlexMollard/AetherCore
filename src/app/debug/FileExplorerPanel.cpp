@@ -1501,9 +1501,24 @@ namespace aether::editor
 	{
 		const bool isTexture = entry.kind == dragdrop::FileKind::Texture;
 		const bool isMaterial = entry.kind == dragdrop::FileKind::Material;
-		if (!isTexture && !isMaterial)
+		const bool isModel = entry.kind == dragdrop::FileKind::Model;
+		if (!isTexture && !isMaterial && !isModel)
 		{
 			return nullptr;
+		}
+		if (isModel)
+		{
+			// A model has nothing to resolve here - it is rendered by the baker, not sampled
+			// from a file. The entry exists so the bake pump has somewhere to record its slot.
+			const std::string modelKey = ToUtf8Path(entry.path);
+			Thumbnail& modelThumb = m_thumbnails[modelKey];
+			if (modelThumb.stamp != entry.writeTime)
+			{
+				InvalidateThumbnail(context, modelThumb);
+				modelThumb.stamp = entry.writeTime;
+				modelThumb.resolved = true;
+			}
+			return &modelThumb;
 		}
 		const std::string key = ToUtf8Path(entry.path);
 		if (const auto it = m_thumbnails.find(key); it != m_thumbnails.end())
@@ -1673,7 +1688,8 @@ namespace aether::editor
 		int deferred = 0;
 		for (const Entry& child: dir->children)
 		{
-			if (child.isDirectory || child.kind != dragdrop::FileKind::Material)
+			const bool bakeableModel = child.kind == dragdrop::FileKind::Model && !BakedMeshFor(child).empty();
+			if (child.isDirectory || (child.kind != dragdrop::FileKind::Material && !bakeableModel))
 			{
 				continue;
 			}
@@ -1693,6 +1709,37 @@ namespace aether::editor
 			{
 				return;
 			}
+			if (bakeableModel)
+			{
+				// Shown first, then captured once its textures are up - the same rule the
+				// materials follow, for the same reason.
+				std::string modelError;
+				if (!baker.ShowModel(*assets, BakedMeshFor(child), modelError))
+				{
+					m_opError = modelError;
+					continue;
+				}
+				if (!baker.TexturesResident(assets->GetTextureRegistry()) && thumb.retries < kMaxThumbnailRetries)
+				{
+					++thumb.retries;
+					thumb.bakeAttempted = false;
+					if (++deferred >= kMaxDeferredPerFrame)
+					{
+						return;
+					}
+					continue;
+				}
+				thumb.retries = 0;
+				if (thumb.atlasSlot < 0)
+				{
+					thumb.atlasSlot = m_nextAtlasSlot++;
+				}
+				baker.SetBakeSlot(thumb.atlasSlot);
+				m_bakeInFlight = key;
+				m_bakeStartedFrame = ImGui::GetFrameCount();
+				return;
+			}
+
 			const std::string vfs = child.payloadPath.empty() ? VfsPathFor(child.path) : child.payloadPath;
 			if (vfs.empty())
 			{
@@ -1787,6 +1834,29 @@ namespace aether::editor
 		// atlasSlot survives on purpose: the re-bake draws over the same square.
 		thumb.bakeAttempted = false;
 		thumb.bakeReady = false;
+	}
+
+	std::string FileExplorerPanel::BakedMeshFor(const Entry& entry) const
+	{
+		if (entry.kind != dragdrop::FileKind::Model)
+		{
+			return {};
+		}
+		const std::string ext = entry.path.extension().generic_string();
+		if (ext == ".mesh")
+		{
+			return entry.payloadPath.empty() ? VfsPathFor(entry.path) : entry.payloadPath;
+		}
+		// A raw glTF is only renderable once baked. Use the sibling .mesh when the importer has
+		// already produced one, and otherwise leave the tile with its icon: opening a folder
+		// must never kick off a model bake.
+		const std::filesystem::path baked = entry.path.parent_path() / (entry.path.stem().generic_string() + ".mesh");
+		std::error_code ec;
+		if (!std::filesystem::exists(baked, ec))
+		{
+			return {};
+		}
+		return VfsPathFor(baked);
 	}
 
 	void FileExplorerPanel::ReleaseThumbnails(app::LayerContext& context)

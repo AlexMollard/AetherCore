@@ -21,6 +21,7 @@
 namespace aether
 {
 	class AssetManager;
+	class TextureRegistry;
 	class BindlessManager;
 	class CullPass;
 	class PostProcessStack;
@@ -113,6 +114,11 @@ namespace aether
 		}
 
 		void ClearModel(AssetManager& assets);
+
+		// Whether every texture the shown model needs has finished uploading. Baking a
+		// thumbnail before that gives an untextured model, and a one-shot bake would keep it
+		// forever - the same trap the material thumbnails fell into.
+		[[nodiscard]] bool TexturesResident(const TextureRegistry& textures) const;
 
 		[[nodiscard]] bool HasModel() const
 		{

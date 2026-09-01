@@ -238,6 +238,23 @@ namespace aether
 		return true;
 	}
 
+	bool ModelPreviewService::TexturesResident(const TextureRegistry& textures) const
+	{
+		const std::uint32_t fallback = textures.ResolveSlot(textures.DefaultHandle());
+		for (const LoadedModelPrimitive& primitive: m_model.primitives)
+		{
+			const MaterialAsset& material = primitive.material;
+			for (const TextureHandle handle: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
+			{
+				if (handle.IsValid() && textures.ResolveSlot(handle) == fallback)
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
 	void ModelPreviewService::ClearModel(AssetManager& assets)
 	{
 		m_hasModel.store(false, std::memory_order_release);
