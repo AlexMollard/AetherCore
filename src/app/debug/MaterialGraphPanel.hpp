@@ -41,6 +41,14 @@ namespace aether::editor
 	private:
 		void FollowSelection(app::LayerContext& context);
 		void Open(app::LayerContext& context, const std::string& materialPath);
+
+	private:
+		// A material waiting to be opened because the one on screen has unsaved edits. There
+		// is no undo for a file, so switching must not throw work away silently.
+		std::string m_pendingOpenPath;
+		void DrawUnsavedSwitchPrompt(app::LayerContext& context);
+
+	public:
 		void DrawToolbar(app::LayerContext& context);
 		void DrawSidebar(app::LayerContext& context, float width);
 		void DrawCanvas();

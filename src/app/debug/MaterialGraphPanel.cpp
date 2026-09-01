@@ -957,6 +957,15 @@ namespace aether::editor
 
 	void MaterialGraphPanel::Open(app::LayerContext& context, const std::string& materialPath)
 	{
+		// Switching away from unsaved edits would discard them with no undo and no warning,
+		// which is what clicking another material in the browser used to do. Hold the request
+		// and ask instead.
+		if (m_edit.dirty && m_edit.loaded && !m_path.empty() && m_path != materialPath)
+		{
+			m_pendingOpenPath = materialPath;
+			return;
+		}
+		m_pendingOpenPath.clear();
 		m_path = materialPath;
 		m_edit = MaterialAssetEditState{};
 		m_edit.path = materialPath;
@@ -1011,6 +1020,58 @@ namespace aether::editor
 		m_compiledSignature = GraphSignature();
 		m_submittedSignature = m_compiledSignature;
 		RefreshPreview(context);
+	}
+
+	void MaterialGraphPanel::DrawUnsavedSwitchPrompt(app::LayerContext& context)
+	{
+		if (m_pendingOpenPath.empty())
+		{
+			return;
+		}
+		ImGui::OpenPopup("Unsaved material##matSwitch");
+		if (ImGui::BeginPopupModal("Unsaved material##matSwitch", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			const std::string current = std::filesystem::path(m_path).filename().generic_string();
+			const std::string next = std::filesystem::path(m_pendingOpenPath).filename().generic_string();
+			ImGui::Text("%s has unsaved changes.", current.c_str());
+			ImGui::TextDisabled("Opening %s will lose them - a material file has no undo.", next.c_str());
+			ImGui::Spacing();
+
+			if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK "  Save and open", ImVec2(150.0f, 0.0f)))
+			{
+				const std::string next2 = m_pendingOpenPath;
+				if (WriteMaterial(context))
+				{
+					m_pendingOpenPath.clear();
+					m_edit.dirty = false;
+					ImGui::CloseCurrentPopup();
+					ImGui::EndPopup();
+					Open(context, next2);
+					return;
+				}
+				// Writing failed: stay put rather than lose the edits.
+				m_pendingOpenPath.clear();
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Discard", ImVec2(110.0f, 0.0f)))
+			{
+				const std::string next2 = m_pendingOpenPath;
+				m_pendingOpenPath.clear();
+				m_edit.dirty = false;
+				ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+				Open(context, next2);
+				return;
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Keep editing", ImVec2(130.0f, 0.0f)))
+			{
+				// The selection has moved on, but the edits are what matter.
+				m_pendingOpenPath.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
 	}
 
 	void MaterialGraphPanel::FollowSelection(app::LayerContext& context)
@@ -1147,6 +1208,9 @@ namespace aether::editor
 		ImGui::Begin("Material", VisiblePtr());
 		PollCompile(context);
 		FollowSelection(context);
+		// Drawn before the early return below, or a pending switch would be unanswerable
+		// whenever the window is showing its empty state.
+		DrawUnsavedSwitchPrompt(context);
 
 		if (m_path.empty())
 		{
