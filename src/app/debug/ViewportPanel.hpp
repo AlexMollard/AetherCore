@@ -88,6 +88,12 @@ namespace aether::editor
 		// tracks the transition so focus is only stolen on the frame it turns on.
 		bool m_maximizeOnPlay = false;
 		bool m_wasMaximized = false;
+		// The dock node the viewport was sitting in before it went fullscreen. Held as a plain
+		// id (ImGuiID) so this header needs no imgui include. Restoring it is not optional:
+		// fullscreening applies NoDocking, which UNDOCKS the window, and simply dropping that
+		// flag again leaves it floating at the size it was given - a viewport still covering
+		// the whole editor after Stop.
+		unsigned int m_dockIdBeforeMaximize = 0;
 		// The play-state overlay (state / elapsed / FPS) sits over the top-left of the game view,
 		// which is exactly where a lot of games put their own HUD. Toggleable so it can be moved out
 		// of the way while looking at the game rather than at the session. Off by default: the game's

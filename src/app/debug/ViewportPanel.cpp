@@ -1845,7 +1845,7 @@ namespace aether::editor
 
 		// Maximize on Play: while a session is live and the toggle is on, the
 		// viewport floats fullscreen over the editor (covering every other panel),
-		// then re-docks to its saved node on Stop. Contained here - the editor shell
+		// then re-docks to the node it came from on Stop. Contained here - the editor shell
 		// needs no changes because a focused fullscreen window occludes the rest.
 		const auto* maximizePlayState = context.TryGet<app::PlayState>();
 		const bool maximized = m_maximizeOnPlay && maximizePlayState != nullptr && maximizePlayState->IsPlaying();
@@ -1864,9 +1864,26 @@ namespace aether::editor
 				ImGui::SetNextWindowFocus();
 			}
 		}
+		else if (m_wasMaximized && m_dockIdBeforeMaximize != 0)
+		{
+			// Stop: put it back in the node it came from. Without this it stays floating at
+			// the fullscreen size, because NoDocking undocked it and removing the flag does
+			// not undo that.
+			ImGui::SetNextWindowDockID(m_dockIdBeforeMaximize, ImGuiCond_Always);
+		}
 		m_wasMaximized = maximized;
 
 		ImGui::Begin(GetName().data(), VisiblePtr(), windowFlags);
+
+		if (!maximized)
+		{
+			// Remembered every ordinary frame, so that whenever play starts there is a node to
+			// come back to - including after the user has re-docked the viewport somewhere new.
+			if (const ImGuiID dockId = ImGui::GetWindowDockID(); dockId != 0)
+			{
+				m_dockIdBeforeMaximize = dockId;
+			}
+		}
 
 		auto& rendering = context.Get<aether::RenderingSubsystem>();
 		auto& post = rendering.GetPostProcessStack();
