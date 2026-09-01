@@ -52,6 +52,8 @@ namespace aether::editor
 	// it can get. Generous: a cold texture can take a while, and the cost of waiting is
 	// an icon, while the cost of giving up early is a permanently wrong thumbnail.
 	constexpr int kMaxThumbnailRetries = 600;
+	// How long to wait for the bake pass to report it drew a slot before giving up on it.
+	constexpr int kBakeTimeoutFrames = 240;
 	constexpr double kAutoRescanSeconds = 4.0;
 		constexpr int kMaxScanDepth = 24;
 
@@ -1685,20 +1687,29 @@ namespace aether::editor
 		// frame, so its image is only readable once that frame has gone through the graph.
 		if (!m_bakeInFlight.empty())
 		{
-			// A frame is assembled, recorded and submitted across several frames of latency, so
-			// a slot is only safe to show once the frame that drew it has certainly gone
-			// through - not on the very next one.
-			if (ImGui::GetFrameCount() < m_bakeStartedFrame + static_cast<int>(aether::kMaxFramesInFlight) + 1)
+			const auto it = m_thumbnails.find(m_bakeInFlight);
+			const int slot = it != m_thumbnails.end() ? it->second.atlasSlot : -1;
+			// Wait for the PASS to say it drew this slot. Counting frames is not enough: a
+			// frame where the preview had nothing to submit draws nothing, and showing the
+			// slot anyway displays undefined memory as a black square.
+			if (slot >= 0 && baker.LastDrawnSlot() == slot)
+			{
+				it->second.bakeReady = true;
+				// Idle until the next material is picked, so nothing is drawn over it.
+				baker.SetBakeSlot(-1);
+				m_bakeInFlight.clear();
+			}
+			else if (ImGui::GetFrameCount() > m_bakeStartedFrame + kBakeTimeoutFrames)
+			{
+				// It never drew. Leave bakeReady false so the tile keeps its icon or colour
+				// rather than showing whatever happens to be in that square.
+				baker.SetBakeSlot(-1);
+				m_bakeInFlight.clear();
+			}
+			else
 			{
 				return;
 			}
-			if (const auto it = m_thumbnails.find(m_bakeInFlight); it != m_thumbnails.end())
-			{
-				it->second.bakeReady = true;
-			}
-			// Idle until the next material is picked, so nothing is drawn over a finished slot.
-			baker.SetBakeSlot(-1);
-			m_bakeInFlight.clear();
 		}
 
 		const Entry* dir = FindDirectory(m_tree, m_currentDir);

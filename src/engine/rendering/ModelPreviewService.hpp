@@ -59,6 +59,15 @@ namespace aether
 			m_bakeSlot.store(slot, std::memory_order_relaxed);
 		}
 
+		// The last atlas slot actually DRAWN, as reported by the pass itself. A caller cannot
+		// infer this from elapsed frames: if the preview had nothing to submit, the pass draws
+		// nothing and the slot keeps whatever undefined contents it had. Showing a slot on a
+		// frame count alone is how an unrendered thumbnail appears as a black square.
+		[[nodiscard]] int LastDrawnSlot() const noexcept
+		{
+			return m_drawnSlot.load(std::memory_order_relaxed);
+		}
+
 		[[nodiscard]] std::uint32_t GetAtlasColumns() const noexcept
 		{
 			return m_atlasCols;
@@ -158,6 +167,8 @@ namespace aether
 		gpu::ImageView m_colorLdrView = nullptr;
 		// Which atlas slot the next render writes into, as requested on the game thread.
 		std::atomic<int> m_bakeSlot{-1};
+		// Written by the pass on the render thread once it has issued the draw.
+		std::atomic<int> m_drawnSlot{-1};
 		// ...and that request LATCHED PER FRAME. The render thread records a frame well after
 		// the game thread has moved on, so reading the live request in the pass drew most bakes
 		// into whatever slot was current by then - usually -1, which skipped the draw and left

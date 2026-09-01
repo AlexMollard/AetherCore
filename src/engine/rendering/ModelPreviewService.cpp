@@ -437,6 +437,9 @@ namespace aether
 				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 				                cmd.SetViewport(gpu::Viewport{.x = static_cast<float>(originX), .y = static_cast<float>(originY), .width = static_cast<float>(m_size), .height = static_cast<float>(m_size)});
 				                cmd.SetScissor(gpu::Rect2D{.x = static_cast<std::int32_t>(originX), .y = static_cast<std::int32_t>(originY), .width = m_size, .height = m_size});
+				                // Recorded only once the draw is actually issued, which is what lets
+				                // a caller tell a baked slot from an untouched one.
+				                m_drawnSlot.store(slot, std::memory_order_relaxed);
 			                }
 			                else
 			                {
