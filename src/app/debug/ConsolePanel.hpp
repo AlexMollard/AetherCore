@@ -24,6 +24,12 @@ namespace aether::editor
 
 		void OnImGui(app::LayerContext& context) override;
 
+		// Filter the Console down to the C# script errors and jump to the newest one.
+		// Focusing the Console alone was not enough: with auto-scroll on it shows its newest
+		// lines, so the failure sat far above the view and clicking the badge appeared to do
+		// nothing at all.
+		void ShowScriptErrors();
+
 	private:
 		char m_filter[128] = {};
 		bool m_showVerbose = false;
@@ -31,6 +37,9 @@ namespace aether::editor
 		bool m_showWarn = true;
 		bool m_showError = true;
 		bool m_autoScroll = true;
+		// Set by RevealLatestProblem, consumed by the next draw, which is the only place that
+		// knows where each row ended up on screen.
+		bool m_revealProblem = false;
 		bool m_collapse = false;
 		bool m_showTime = true;
 		std::unordered_map<std::string, bool> m_categoryHidden;

@@ -120,6 +120,14 @@ namespace aether::app::scripting
 		}
 
 		void ReportScriptError(const std::string& error);
+
+		// The script errors that currently STAND, as opposed to PollPendingErrors, which
+		// drains its queue for the toast overlay and so can only ever be read once. Anything
+		// that wants to display "what is broken right now" needs this instead.
+		[[nodiscard]] const std::vector<std::string>& ScriptErrors() const noexcept
+		{
+			return m_scriptErrors;
+		}
 		[[nodiscard]] std::vector<std::string> PollPendingErrors();
 		void ClearErrors();
 		[[nodiscard]] bool ConsumeErrorsCleared();
@@ -142,6 +150,7 @@ namespace aether::app::scripting
 		bool m_reloadRequested = false;
 		bool m_reloadInProgress = false;
 		std::vector<std::string> m_pendingErrors;
+		std::vector<std::string> m_scriptErrors;
 		bool m_errorsCleared = false;
 	};
 } // namespace aether::app::scripting

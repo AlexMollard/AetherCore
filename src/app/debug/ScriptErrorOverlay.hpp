@@ -10,11 +10,17 @@ namespace aether::app
 
 namespace aether::editor
 {
+	// "Foo.cs(10,17)" or the older "Foo.cs:10" out of a compiler message. Shared so that
+	// anything offering to open the offending file agrees on where it is.
+	void ParseScriptErrorLocation(const std::string& error, std::string& outPath, int& outLine);
+
 	class ScriptErrorOverlay final
 	{
 	public:
 		void Poll(app::LayerContext& context);
-		void Draw();
+		// Returns true when the user asked to see the full list. The overlay does not know
+		// what the Console is, so the caller - which does - opens it.
+		[[nodiscard]] bool Draw();
 		void Clear();
 
 	private:
@@ -26,7 +32,6 @@ namespace aether::editor
 			int line = 0;
 		};
 
-		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 
 		std::deque<Toast> m_toasts;
 	};

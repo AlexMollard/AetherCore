@@ -104,6 +104,21 @@ namespace aether::editor
 		}
 	} // namespace
 
+	void ConsolePanel::ShowScriptErrors()
+	{
+		// The prefix every script failure is logged with, so the Console shows those and
+		// nothing else - a build error is not easier to find among a hundred info lines.
+		std::snprintf(m_filter, sizeof(m_filter), "C# script error");
+		// Anything that could hide the entry we are about to jump to has to come off, or the
+		// jump silently lands on nothing - which is exactly how "clicking the badge does
+		// nothing" looked. The text filter is cleared for the same reason.
+		m_showError = true;
+		m_showWarn = true;
+		// Following the tail would immediately undo the jump.
+		m_autoScroll = false;
+		m_revealProblem = true;
+	}
+
 	void ConsolePanel::OnImGui(app::LayerContext& /*context*/)
 	{
 		ImGui::Begin(GetName().data(), VisiblePtr());
@@ -310,6 +325,34 @@ namespace aether::editor
 
 		// ── Log rows ──
 		ImGui::BeginChild("##loglines", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
+		if (m_revealProblem)
+		{
+			m_revealProblem = false;
+			// The newest error, or the newest warning when there is no error.
+			int target = -1;
+			for (int i = static_cast<int>(display.size()) - 1; i >= 0 && target < 0; --i)
+			{
+				if (display[static_cast<std::size_t>(i)].record.level == LogLevel::Error)
+				{
+					target = i;
+				}
+			}
+			for (int i = static_cast<int>(display.size()) - 1; i >= 0 && target < 0; --i)
+			{
+				if (display[static_cast<std::size_t>(i)].record.level == LogLevel::Warn)
+				{
+					target = i;
+				}
+			}
+			if (target >= 0)
+			{
+				// Rows are deliberately single-line and uniform, which is what makes this
+				// arithmetic valid even though the clipper never builds the skipped ones.
+				const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
+				const float centred = static_cast<float>(target) * rowHeight - ImGui::GetContentRegionAvail().y * 0.5f;
+				ImGui::SetScrollY(std::max(0.0f, centred));
+			}
+		}
 		ImGuiListClipper clipper;
 		clipper.Begin(static_cast<int>(display.size()));
 		while (clipper.Step())

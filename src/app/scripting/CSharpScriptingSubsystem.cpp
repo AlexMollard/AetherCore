@@ -717,6 +717,7 @@ namespace aether::app::scripting
 	{
 		AE_ERROR(LogCategory::App, "C# script error: {}", error);
 		m_pendingErrors.push_back(error);
+		m_scriptErrors.push_back(error);
 	}
 
 	std::vector<std::string> CSharpScriptingSubsystem::PollPendingErrors()
@@ -729,6 +730,7 @@ namespace aether::app::scripting
 	void CSharpScriptingSubsystem::ClearErrors()
 	{
 		m_pendingErrors.clear();
+		m_scriptErrors.clear();
 		m_errorsCleared = true;
 	}
 

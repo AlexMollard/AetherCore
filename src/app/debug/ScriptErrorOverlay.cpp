@@ -1,8 +1,12 @@
 #include "debug/ScriptErrorOverlay.hpp"
 
+#include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <regex>
 #include <vector>
+
+#include "debug/EditorChrome.hpp"
 
 #include <imgui.h>
 
@@ -13,7 +17,7 @@
 
 namespace aether::editor
 {
-	void ScriptErrorOverlay::ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine)
+	void ParseScriptErrorLocation(const std::string& error, std::string& outPath, int& outLine)
 	{
 		outPath.clear();
 		outLine = 0;
@@ -173,42 +177,140 @@ namespace aether::editor
 					pos = lineEnd + 1;
 				}
 
-				ParseErrorLocation(singleErr, toast.filePath, toast.line);
+				ParseScriptErrorLocation(singleErr, toast.filePath, toast.line);
 				m_toasts.push_back(std::move(toast));
 			}
 		}
 	}
 
-	void ScriptErrorOverlay::Draw()
+	namespace
+	{
+		// "D:\...\Foo.cs(31,1): error CS1031: Type expected" -> "error CS1031: Type expected".
+		// The card already says which file and line, so repeating the absolute path in the
+		// message pushed the part that matters off the end of it.
+		std::string MessageWithoutLocation(const std::string& summary)
+		{
+			if (const std::size_t paren = summary.find(".cs("); paren != std::string::npos)
+			{
+				if (const std::size_t close = summary.find("): ", paren); close != std::string::npos)
+				{
+					return summary.substr(close + 3);
+				}
+			}
+			if (const std::size_t colon = summary.find(".cs:"); colon != std::string::npos)
+			{
+				if (const std::size_t sep = summary.find(": ", colon + 4); sep != std::string::npos)
+				{
+					return summary.substr(sep + 2);
+				}
+			}
+			return summary;
+		}
+	} // namespace
+
+	bool ScriptErrorOverlay::Draw()
 	{
 		if (m_toasts.empty())
 		{
-			return;
+			return false;
 		}
 
+		// A card in the corner, sized to what it says. This used to be a full-width band
+		// pinned across the bottom of the screen for a single line of text, sitting on top of
+		// the Console - the one panel you would be reading to fix the error.
+		//
+		// The width is FIXED rather than auto-sized: wrapped text inside an auto-resizing
+		// window is circular (the wrap width comes from the window, the window from the
+		// wrapped text) and collapses to one character per line.
+		constexpr float kMargin = 16.0f;
+		constexpr float kCardWidth = 460.0f;
+		constexpr std::size_t kMaxRows = 3;
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 16.0f, viewport->WorkPos.y + viewport->WorkSize.y - 88.0f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x - 32.0f, 68.0f), ImGuiCond_Always);
-		ImGui::Begin("Script Errors", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-		const Toast& toast = m_toasts.front();
-		const auto& scriptErr = colors::Error;
-		ImGui::TextColored(ImVec4(scriptErr.r, scriptErr.g, scriptErr.b, scriptErr.a), "Script Error%s", m_toasts.size() > 1 ? "s" : "");
-		ImGui::SameLine();
-		ImGui::TextUnformatted(toast.summary.c_str());
-		if (!toast.filePath.empty())
+		const ImVec2 corner(viewport->WorkPos.x + viewport->WorkSize.x - kMargin, viewport->WorkPos.y + viewport->WorkSize.y - kMargin);
+		ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+		ImGui::SetNextWindowSize(ImVec2(kCardWidth, 0.0f), ImGuiCond_Always);
+		ImGui::Begin("Script Errors",
+		        nullptr,
+		        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
+
+		char heading[64];
+		std::snprintf(heading, sizeof(heading), "%zu SCRIPT ERROR%s", m_toasts.size(), m_toasts.size() == 1 ? "" : "S");
+		chrome::SectionTag(heading);
+
+		bool showAll = false;
+		const std::size_t shown = std::min(m_toasts.size(), kMaxRows);
+		std::size_t dismiss = m_toasts.size();
+		std::string previousFile;
+		for (std::size_t i = 0; i < shown; ++i)
 		{
-			ImGui::SameLine();
-			if (ImGui::SmallButton("Open"))
+			const Toast& toast = m_toasts[i];
+			ImGui::PushID(static_cast<int>(i));
+
+			// Where it broke. One broken file produces a cascade, so the name is printed once
+			// and the errors after it show only their line - the filename repeated down the
+			// card said the same thing four times and crowded out the messages.
+			if (!toast.filePath.empty())
 			{
-				OpenInEditor(toast.filePath, toast.line);
+				const bool sameFile = toast.filePath == previousFile;
+				const std::string name = std::filesystem::path(toast.filePath).filename().generic_string();
+				const std::string where = sameFile ? "line " + std::to_string(toast.line) : name + ":" + std::to_string(toast.line);
+				ImGui::TextColored(chrome::C(colors::Orange), "%s", where.c_str());
+				ImGui::SetItemTooltip("%s", toast.filePath.c_str());
+				previousFile = toast.filePath;
+			}
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::C(colors::Error));
+			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
+			ImGui::TextWrapped("%s", MessageWithoutLocation(toast.summary).c_str());
+			ImGui::PopTextWrapPos();
+			ImGui::PopStyleColor();
+
+			// Per-error actions. "Dismiss All" used to be the only one, so clearing a message
+			// you had dealt with also threw away the ones you had not read.
+			if (!toast.filePath.empty())
+			{
+				if (chrome::GhostButton("Open"))
+				{
+					OpenInEditor(toast.filePath, toast.line);
+				}
+				ImGui::SameLine();
+			}
+			if (chrome::GhostButton("Dismiss"))
+			{
+				dismiss = i;
+			}
+			ImGui::PopID();
+			if (i + 1 < shown)
+			{
+				ImGui::Separator();
 			}
 		}
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Dismiss All"))
+
+		// The rest are reachable rather than merely counted: this opens the Console filtered
+		// to the script errors.
+		if (m_toasts.size() > shown)
 		{
-			m_toasts.clear();
+			char more[64];
+			std::snprintf(more, sizeof(more), "Show all %zu in the Console", m_toasts.size());
+			if (chrome::GhostButton(more))
+			{
+				showAll = true;
+			}
+			ImGui::SameLine();
+		}
+		if (m_toasts.size() > 1)
+		{
+			if (chrome::GhostButton("Dismiss all"))
+			{
+				m_toasts.clear();
+			}
 		}
 		ImGui::End();
+
+		if (dismiss < m_toasts.size())
+		{
+			m_toasts.erase(m_toasts.begin() + static_cast<std::ptrdiff_t>(dismiss));
+		}
+		return showAll;
 	}
 
 	void ScriptErrorOverlay::Clear()

@@ -33,6 +33,8 @@ using namespace std::string_view_literals;
 #include <imgui_internal.h>
 
 #include "debug/ConsolePanel.hpp"
+#include "debug/OpenInEditor.hpp"
+#include "debug/ScriptErrorOverlay.hpp"
 #include "debug/ControlServerPanel.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/DevToolsPanel.hpp"
@@ -911,30 +913,37 @@ namespace aether::editor
 				ImGui::SetTooltip("Unsaved changes  -  Ctrl+S to save");
 			}
 
-			// Errors and warnings otherwise live only in the Console's own badges, which say
-			// nothing while that panel sits behind another tab. A project whose shaders fail
-			// to compile on open looked completely healthy from here.
-			const LogRingBuffer::LevelCounts logCounts = LogRingBuffer::Get().Counts();
-			if (logCounts.error > 0 || logCounts.warn > 0)
+			// SCRIPT errors specifically, not every log line. A count of everything the engine
+			// has ever warned about is noise you learn to ignore; a broken script is the thing
+			// you are about to go and fix, and it is the reason play mode will not behave.
+			if (const auto* scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>(); scripting != nullptr && !scripting->ScriptErrors().empty())
 			{
 				divider();
-				const bool hasErrors = logCounts.error > 0;
+				const std::vector<std::string>& scriptErrors = scripting->ScriptErrors();
 				char logLabel[64];
-				std::snprintf(logLabel, sizeof(logLabel), "%s  %zu##logCounts", hasErrors ? ICON_FA_CIRCLE_EXCLAMATION : ICON_FA_TRIANGLE_EXCLAMATION, hasErrors ? logCounts.error : logCounts.warn);
-				// A real item rather than text plus IsItemClicked: this is meant to be clicked,
-				// so it should hover and respond like anything else that is.
-				ImGui::PushStyleColor(ImGuiCol_Text, hasErrors ? C(colors::Error) : C(colors::Orange));
-				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(hasErrors ? C(colors::Error) : C(colors::Orange), 0.18f));
-				const float logWidth = ImGui::CalcTextSize(logLabel).x;
+				std::snprintf(logLabel, sizeof(logLabel), ICON_FA_CIRCLE_EXCLAMATION "  %zu##scriptErrors", scriptErrors.size());
+				ImGui::PushStyleColor(ImGuiCol_Text, C(colors::Error));
+				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(C(colors::Error), 0.18f));
+				// Measured with the ID suffix HIDDEN. CalcTextSize keeps everything after "##"
+				// by default, so the clickable band stretched far past the badge - a wide strip
+				// of the status bar lit up and answered a click meant for the icon.
+				const float logWidth = ImGui::CalcTextSize(logLabel, nullptr, true).x;
 				if (ImGui::Selectable(logLabel, false, ImGuiSelectableFlags_None, ImVec2(logWidth, 0.0f)))
 				{
+					// Show the errors themselves. Focusing the Console alone was not enough: it
+					// follows its newest lines, so the failure sat above the view.
 					m_pendingFocusWindow = "Console";
+					if (auto* console = dynamic_cast<ConsolePanel*>(FindPanelByName("Console")))
+					{
+						console->SetVisible(true);
+						console->ShowScriptErrors();
+					}
 				}
 				ImGui::PopStyleColor(2);
 				if (ImGui::IsItemHovered())
 				{
 					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-					ImGui::SetTooltip("%zu error(s), %zu warning(s)  -  click to open the Console", logCounts.error, logCounts.warn);
+					ImGui::SetTooltip("%zu script error(s)  -  click to see them", scriptErrors.size());
 				}
 			}
 
@@ -1800,7 +1809,15 @@ namespace aether::editor
 			}
 		}
 
-		m_scriptErrors.Draw();
+		if (m_scriptErrors.Draw())
+		{
+			m_pendingFocusWindow = "Console";
+			if (auto* console = dynamic_cast<ConsolePanel*>(FindPanelByName("Console")))
+			{
+				console->SetVisible(true);
+				console->ShowScriptErrors();
+			}
+		}
 
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->WorkPos);
