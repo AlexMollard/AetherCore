@@ -34,6 +34,7 @@
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ModelBake.hpp"
 #include "gpu/ResourceRegistry.hpp"
+#include "utils/TomlConfig.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/FileUtil.hpp"
 #include "material/MaterialSerializer.hpp"
@@ -1069,6 +1070,27 @@ namespace aether::editor
 		}
 		m_treeDirty = true;
 		return true;
+	}
+
+	void FileExplorerPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
+	{
+		(void) context;
+		// The open FOLDER is deliberately not restored: it is a project path, and these
+		// settings outlive the project they were written in.
+		m_viewMode = config.GetFloat("fileexplorer.viewmode", 0.0f) >= 0.5f ? ViewMode::List : ViewMode::Grid;
+		m_tileSize = std::clamp(config.GetFloat("fileexplorer.tilesize", m_tileSize), 56.0f, 160.0f);
+		const int sort = std::clamp(static_cast<int>(config.GetFloat("fileexplorer.sortmode", 0.0f)), 0, static_cast<int>(SortMode::Modified));
+		m_sortMode = static_cast<SortMode>(sort);
+		m_sortDescending = config.GetBool("fileexplorer.sortdescending", m_sortDescending);
+	}
+
+	void FileExplorerPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
+	{
+		(void) context;
+		config.Set("fileexplorer.viewmode", m_viewMode == ViewMode::List ? 1.0f : 0.0f);
+		config.Set("fileexplorer.tilesize", m_tileSize);
+		config.Set("fileexplorer.sortmode", static_cast<float>(static_cast<int>(m_sortMode)));
+		config.Set("fileexplorer.sortdescending", m_sortDescending);
 	}
 
 	void FileExplorerPanel::OnImGui(app::LayerContext& context)
@@ -2241,6 +2263,37 @@ namespace aether::editor
 					SelectOnly(context, *entry);
 				}
 			}
+		}
+
+		const ImGuiIO& shortcutIo = ImGui::GetIO();
+		if (shortcutIo.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A))
+		{
+			// Everything the folder is showing, in the order it is shown.
+			m_selectedPaths = order;
+			if (!m_selectedPaths.empty())
+			{
+				m_selectedPath = m_selectedPaths.back();
+			}
+			return;
+		}
+		if (shortcutIo.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D))
+		{
+			// Every selected file, matching what delete and drag already do. Folders are
+			// skipped: DuplicateEntry copies a file, and silently doing nothing for a folder
+			// is better than half-copying one.
+			bool duplicated = false;
+			for (const std::string& path: m_selectedPaths)
+			{
+				if (const Entry* found = FindEntryByPath(path); found != nullptr && !found->isDirectory)
+				{
+					duplicated = DuplicateEntry(found->path) || duplicated;
+				}
+			}
+			if (duplicated)
+			{
+				m_treeDirty = true;
+			}
+			return;
 		}
 
 		if (m_selectedPath.empty())
