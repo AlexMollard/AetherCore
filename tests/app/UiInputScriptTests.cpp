@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <vector>
+
 #include "imgui/UiInputScript.hpp"
 
 using namespace aether::app;
@@ -14,24 +16,34 @@ static int CountKind(const std::vector<SynEvent>& evs, SynKind k)
     return n;
 }
 
-TEST_CASE("UiInputScript click plays pos, pos+down, up over three frames")
+TEST_CASE("UiInputScript click settles the cursor, then presses and releases")
 {
     UiInputScript s;
     s.QueueClick(100.0f, 50.0f, 0, false);
     CHECK(s.Busy());
 
-    const auto f1 = s.Step(); // hover/pos established
-    CHECK(CountKind(f1, SynKind::MousePos) == 1);
-    CHECK(CountKind(f1, SynKind::MouseButton) == 0);
+    // Several position-only frames first. ImGui resolves hover at the start of a frame, so a
+    // press on the first frame the cursor appears somewhere new lands before the target knows
+    // it is hovered; one settling frame was enough only when the cursor was already there.
+    int settleFrames = 0;
+    std::vector<SynEvent> frame = s.Step();
+    while (CountKind(frame, SynKind::MouseButton) == 0)
+    {
+        CHECK(CountKind(frame, SynKind::MousePos) == 1);
+        ++settleFrames;
+        REQUIRE(settleFrames < 8); // a runaway would hang the loop rather than fail
+        frame = s.Step();
+    }
+    CHECK(settleFrames >= 2);
 
-    const auto f2 = s.Step(); // button down
-    REQUIRE(CountKind(f2, SynKind::MouseButton) == 1);
-    CHECK(f2.back().down == true);
-    CHECK(f2.back().button == 0);
+    // The press, on the frame after the cursor has settled.
+    REQUIRE(CountKind(frame, SynKind::MouseButton) == 1);
+    CHECK(frame.back().down == true);
+    CHECK(frame.back().button == 0);
 
-    const auto f3 = s.Step(); // button up
-    REQUIRE(CountKind(f3, SynKind::MouseButton) == 1);
-    CHECK(f3.back().down == false);
+    const auto release = s.Step();
+    REQUIRE(CountKind(release, SynKind::MouseButton) == 1);
+    CHECK(release.back().down == false);
 
     CHECK_FALSE(s.Busy());
     CHECK(s.Step().empty()); // idle, no hover held
