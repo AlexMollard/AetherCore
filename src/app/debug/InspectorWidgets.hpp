@@ -371,7 +371,20 @@ namespace aether::editor::iw
 
 		const float chipWidth = ImGui::GetFrameHeight();
 		const float spacing = 4.0f;
-		const float fieldWidth = std::max(38.0f, (ImGui::GetContentRegionAvail().x - 3.0f * chipWidth - 2.0f * spacing) / 3.0f);
+		const float avail = ImGui::GetContentRegionAvail().x;
+		const float spacingTotal = 2.0f * spacing;
+
+		// A minimum field width used to be forced here, which meant three axes plus their
+		// chips could add up to more than the row had - and the Z axis simply rendered off
+		// the right-hand edge, so a narrow inspector showed one number out of three. Nothing
+		// below may exceed `avail`.
+		const float widthWithChips = (avail - 3.0f * chipWidth - spacingTotal) / 3.0f;
+		// The chips are the first thing to go: an unreadable field is worse than a missing
+		// reset button, and the axis stays identifiable by the tint below.
+		const bool showChips = widthWithChips >= 34.0f;
+		// No floor at all: any minimum large enough to matter is a minimum large enough to
+		// push the last axis off the edge, which is the bug this replaced.
+		const float fieldWidth = std::max(1.0f, showChips ? widthWithChips : (avail - spacingTotal) / 3.0f);
 
 		for (int i = 0; i < 3; ++i)
 		{
@@ -379,21 +392,38 @@ namespace aether::editor::iw
 			{
 				ImGui::SameLine(0.0f, spacing);
 			}
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.22f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.45f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.65f));
-			ImGui::PushStyleColor(ImGuiCol_Text, axes[i].color);
-			if (ImGui::Button(axes[i].tag, ImVec2(chipWidth, 0.0f)))
+			if (showChips)
 			{
-				*axes[i].component = resetValue;
-				changed = true;
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.22f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.45f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.65f));
+				ImGui::PushStyleColor(ImGuiCol_Text, axes[i].color);
+				if (ImGui::Button(axes[i].tag, ImVec2(chipWidth, 0.0f)))
+				{
+					*axes[i].component = resetValue;
+					changed = true;
+				}
+				ImGui::PopStyleColor(4);
+				ImGui::SameLine(0.0f, 0.0f);
 			}
-			ImGui::PopStyleColor(4);
-			ImGui::SameLine(0.0f, 0.0f);
+			else
+			{
+				// Without its chip a field would be an anonymous box, so the frame carries
+				// the axis colour instead.
+				ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(axes[i].color.x, axes[i].color.y, axes[i].color.z, 0.18f));
+			}
 			ImGui::SetNextItemWidth(fieldWidth);
 			char dragId[8];
 			std::snprintf(dragId, sizeof(dragId), "##d%d", i);
 			changed |= ImGui::DragFloat(dragId, axes[i].component, speed);
+			if (!showChips)
+			{
+				ImGui::PopStyleColor();
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("%s", axes[i].tag);
+				}
+			}
 		}
 
 		ImGui::PopID();
