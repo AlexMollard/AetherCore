@@ -162,6 +162,9 @@ namespace aether::editor
 		// The paths of the current folder's entries, in the order they are drawn.
 		[[nodiscard]] std::vector<std::string> VisibleOrder() const;
 		bool DeleteEntry(const std::filesystem::path& target, bool isDirectory);
+		// Fill m_deleteTargets from `entry` plus the selection it belongs to, and count what
+		// still references them.
+		void BeginDelete(const Entry& entry);
 
 		std::filesystem::path m_root;
 		std::filesystem::path m_scriptRoot;
@@ -212,8 +215,16 @@ namespace aether::editor
 		char m_renameBuf[128] = {};
 		bool m_renameFocusPending = false;
 
-		std::filesystem::path m_deleteTarget;
-		bool m_deleteIsDirectory = false;
+		// Everything the pending delete will remove. A multi-selection deletes together, the
+		// way it already moves together - deleting only the row you pressed Delete on, while
+		// several are highlighted, is the kind of surprise you cannot undo here.
+		struct DeleteTarget
+		{
+			std::filesystem::path path;
+			bool isDirectory = false;
+		};
+
+		std::vector<DeleteTarget> m_deleteTargets;
 		bool m_openDeletePopup = false;
 		// Counted once when the dialog opens, not per frame: it walks every project file.
 		int m_deleteReferenceCount = 0;

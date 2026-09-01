@@ -1021,6 +1021,37 @@ namespace aether::editor
 		return true;
 	}
 
+	void FileExplorerPanel::BeginDelete(const Entry& entry)
+	{
+		m_deleteTargets.clear();
+		const std::string path = ToUtf8Path(entry.path);
+
+		// Deleting one of several selected removes all of them, matching what a drag does.
+		// Deleting an unselected one removes just it.
+		if (IsSelected(path) && m_selectedPaths.size() > 1)
+		{
+			for (const std::string& selected: m_selectedPaths)
+			{
+				if (const Entry* found = FindEntryByPath(selected))
+				{
+					m_deleteTargets.push_back({found->path, found->isDirectory});
+				}
+			}
+		}
+		if (m_deleteTargets.empty())
+		{
+			m_deleteTargets.push_back({entry.path, entry.isDirectory});
+		}
+
+		// Counted once, when the dialog opens: each of these walks every project file.
+		m_deleteReferenceCount = 0;
+		for (const DeleteTarget& target: m_deleteTargets)
+		{
+			m_deleteReferenceCount += CountAssetReferences(target.path, target.isDirectory);
+		}
+		m_openDeletePopup = true;
+	}
+
 	bool FileExplorerPanel::DeleteEntry(const std::filesystem::path& target, const bool isDirectory)
 	{
 		std::error_code ec;
@@ -2129,10 +2160,7 @@ namespace aether::editor
 		{
 			// Straight to the same confirmation the menu opens, reference count and all -
 			// never a silent delete on a keypress.
-			m_deleteTarget = selected->path;
-			m_deleteIsDirectory = selected->isDirectory;
-			m_deleteReferenceCount = CountAssetReferences(selected->path, selected->isDirectory);
-			m_openDeletePopup = true;
+			BeginDelete(*selected);
 		}
 		else if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))
 		{
@@ -2334,10 +2362,7 @@ namespace aether::editor
 			ImGui::PushStyleColor(ImGuiCol_Text, chrome::C(colors::Error));
 			if (ImGui::MenuItem(ICON_FA_TRASH "  Delete..."))
 			{
-				m_deleteTarget = entry.path;
-				m_deleteIsDirectory = entry.isDirectory;
-				m_deleteReferenceCount = CountAssetReferences(entry.path, entry.isDirectory);
-				m_openDeletePopup = true;
+				BeginDelete(entry);
 			}
 			ImGui::PopStyleColor();
 			if (entry.isDirectory)
@@ -2479,8 +2504,34 @@ namespace aether::editor
 		}
 		if (ImGui::BeginPopupModal("Delete?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
-			const std::string name = m_deleteTarget.filename().generic_string();
-			ImGui::Text("Delete '%s'%s?", name.c_str(), m_deleteIsDirectory ? " and everything in it" : "");
+		if (m_deleteTargets.empty())
+			{
+				ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+				return;
+			}
+			if (m_deleteTargets.size() == 1)
+			{
+				const DeleteTarget& only = m_deleteTargets.front();
+				ImGui::Text("Delete '%s'%s?", only.path.filename().generic_string().c_str(), only.isDirectory ? " and everything in it" : "");
+			}
+			else
+			{
+				ImGui::Text("Delete these %zu items?", m_deleteTargets.size());
+				// Named, not just counted: a number is not enough to check before something
+				// that cannot be undone.
+				ImGui::Spacing();
+				for (std::size_t i = 0; i < m_deleteTargets.size() && i < 8; ++i)
+				{
+					const DeleteTarget& target = m_deleteTargets[i];
+					ImGui::BulletText("%s%s", target.path.filename().generic_string().c_str(), target.isDirectory ? "/" : "");
+				}
+				if (m_deleteTargets.size() > 8)
+				{
+					ImGui::TextDisabled("   and %zu more", m_deleteTargets.size() - 8);
+				}
+				ImGui::Spacing();
+			}
 			ImGui::TextDisabled("This cannot be undone.");
 			if (m_deleteReferenceCount > 0)
 			{
@@ -2498,15 +2549,20 @@ namespace aether::editor
 			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kText);
 			if (ImGui::Button(ICON_FA_TRASH " Delete", ImVec2(120.0f, 0.0f)))
 			{
-				DeleteEntry(m_deleteTarget, m_deleteIsDirectory);
-				m_deleteTarget.clear();
+				for (const DeleteTarget& target: m_deleteTargets)
+				{
+					DeleteEntry(target.path, target.isDirectory);
+				}
+				m_deleteTargets.clear();
+				m_selectedPaths.clear();
+				m_selectedPath.clear();
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::PopStyleColor(4);
 			ImGui::SameLine();
 			if (chrome::GhostButton("Cancel", ImVec2(120.0f, 0.0f)))
 			{
-				m_deleteTarget.clear();
+				m_deleteTargets.clear();
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::EndPopup();
