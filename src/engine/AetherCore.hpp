@@ -177,6 +177,21 @@ namespace aether
 		// being on screen. See PresentTimingTracker.
 		[[nodiscard]] float LatchToFlipMs() const;
 
+		// Whether the window had OS focus. Any latency or frame-rate sample is meaningless
+		// without it: an unfocused composited window is not throttled by DWM and free-runs to
+		// the frame cap, which reads as a large latency win that vanishes the moment anyone
+		// actually looks at the window. Two contradictory A/B results came from not recording
+		// this.
+		[[nodiscard]] bool IsWindowFocused();
+
+		// Monotonic count of focus transitions. A benchmark reads it either side of a
+		// measurement window: if it moved, the sample spans two different throttling regimes
+		// and has to be thrown away rather than compared.
+		[[nodiscard]] std::uint32_t FocusChangeCount() const noexcept
+		{
+			return m_focusChanges;
+		}
+
 		[[nodiscard]] float SecondsSinceActivity() const noexcept
 		{
 			return std::chrono::duration<float>(std::chrono::steady_clock::now() - m_lastActivity).count();
@@ -345,6 +360,12 @@ namespace aether
 		std::chrono::steady_clock::time_point m_lastActivity{std::chrono::steady_clock::now()};
 		bool m_idleThrottled = false;
 		bool m_idleAllowed = false;
+		// Focus transitions since the last frame report. A sample that spans one is comparing
+		// two different machines: focused, DWM throttles a composited window to the display
+		// rate; unfocused, it free-runs to the frame cap. A latency A/B that changes focus
+		// halfway measures the focus change, not the thing under test.
+		bool m_lastFocused = false;
+		std::uint32_t m_focusChanges = 0;
 		std::uint64_t m_producerFrameIndex = 0;
 		double m_gameElapsedSeconds = 0.0;
 		double m_realElapsedSeconds = 0.0; // wall-clock elapsed, ignores time scale (for pause-menu UI)

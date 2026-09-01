@@ -569,6 +569,11 @@ namespace aether::editor
 			                {"sinceActivity", engineForIdle != nullptr ? engineForIdle->SecondsSinceActivity() : 0.0f},
 			                // Measured input-to-photon: latch to the flip that actually showed it.
 			                {"latchToFlipMs", engineForIdle != nullptr ? engineForIdle->LatchToFlipMs() : 0.0f},
+			                // Latency and frame-rate samples mean different things focused and not.
+			                {"focused", engineForIdle != nullptr && engineForIdle->IsWindowFocused()},
+			                // Monotonic: bracket a benchmark with two reads and discard the sample
+			                // if this moved.
+			                {"focusChanges", engineForIdle != nullptr ? engineForIdle->FocusChangeCount() : 0u},
 			                {"scene", scenes != nullptr ? scenes->GetCurrentScene() : ""},
 			                {"sceneKind", scenes != nullptr ? SceneKindName(scenes->GetWorld().GetSceneKind()) : "unknown"},
 			                {"entities", count},

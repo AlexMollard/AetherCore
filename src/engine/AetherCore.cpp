@@ -353,6 +353,7 @@ namespace aether
 		// starts at 0 - uncapped - however the settings were configured.
 		m_framePacer.SetTargetFps(m_settings.app.targetFps);
 
+		std::uint32_t reportedFocusChanges = 0;
 		std::chrono::steady_clock::time_point previousFrameEnd{};
 		LatencyPacer latencyPacer;
 		std::uint64_t pacedFrames = 0;
@@ -393,7 +394,13 @@ namespace aether
 				// An unfocused window idles at once. The linger exists to cover the gap between
 				// two keystrokes, and there is no such gap to cover when the user has gone to
 				// another application entirely.
-				const bool unfocused = !m_services.Get<PlatformSubsystem>().GetWindow().IsFocused();
+				const bool focusedNow = m_services.Get<PlatformSubsystem>().GetWindow().IsFocused();
+				if (focusedNow != m_lastFocused)
+				{
+					m_lastFocused = focusedNow;
+					++m_focusChanges;
+				}
+				const bool unfocused = !focusedNow;
 				m_idleThrottled = m_idleAllowed && idleFps > 0.0f
 				        && (unfocused || sinceActivity > m_settings.app.idleAfterSeconds);
 				if (m_idleThrottled)
@@ -679,7 +686,7 @@ namespace aether
 							total += value;
 						}
 						AE_INFO(LogCategory::Engine,
-						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} latch2flip={:.2f}/{:.2f} cap={:.3f} pacer={:.3f} tail={:.3f} | flipPeriod={:.3f} flips={} slack={:.2f} paced={} missed={} est={} vrr={} | clamped={} unthrottled={}{}",
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} latch2flip={:.2f}/{:.2f} cap={:.3f} pacer={:.3f} tail={:.3f} | flipPeriod={:.3f} flips={} slack={:.2f} paced={} missed={} est={} vrr={} | clamped={} unthrottled={} focused={} focusflips={}{}{}",
 						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
 						        gameWork / n, inFlight / n, present / n, inputStale / n, m_gpu->GetPresentTiming().LatchToFlipMs(), m_gpu->GetPresentTiming().TakeWorstLatchToFlipMs(), capWait / n, pacerIdle / n, tail / n,
 					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), latencyPacer.ReserveMs(static_cast<float>(m_gpu->GetPresentTiming().PeriodMs())), pacedFrames, missedFlips,
@@ -687,8 +694,12 @@ namespace aether
 					        // them apart: no timebase, a display judged variable, or a pacer that has
 					        // not warmed up. Print which.
 					        m_gpu->GetPresentTiming().HasEstimate() ? 1 : 0, m_gpu->GetPresentTiming().IsVariableRate() ? 1 : 0,
-					        clamped, unthrottled,
-					        unthrottled > count / 20 ? "  <-- SAMPLE UNRELIABLE, window was occluded" : "");
+					        clamped, unthrottled, m_lastFocused ? 1 : 0, m_focusChanges - reportedFocusChanges,
+					        unthrottled > count / 20 ? "  <-- SAMPLE UNRELIABLE, window was occluded" : "",
+					        // Focus decides whether DWM throttles this window at all, so a sample
+					        // that spans a change is two different measurements averaged together.
+					        m_focusChanges > reportedFocusChanges ? "  <-- SAMPLE UNRELIABLE, focus changed mid-sample" : "");
+					        reportedFocusChanges = m_focusChanges;
 					}
 				}
 			}
@@ -703,6 +714,12 @@ namespace aether
 	bool AetherCore::ShouldClose()
 	{
 		return m_services.Get<PlatformSubsystem>().GetWindow().ShouldClose();
+	}
+
+	bool AetherCore::IsWindowFocused()
+	{
+		auto* platform = m_services.TryGet<PlatformSubsystem>();
+		return platform != nullptr && platform->GetWindow().IsFocused();
 	}
 
 	float AetherCore::LatchToFlipMs() const
