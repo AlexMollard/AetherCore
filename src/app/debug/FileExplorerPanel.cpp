@@ -1237,12 +1237,16 @@ namespace aether::editor
 				ImGui::SliderFloat("##feTileSize", &m_tileSize, 56.0f, 160.0f, "%.0f px");
 				ImGui::SetItemTooltip("Thumbnail size");
 			}
-			const float used = ImGui::GetCursorPosY() - contentsTop + ImGui::GetTextLineHeightWithSpacing();
+			// The status line gets a row of its own reserved here, or the contents child would
+			// take the height and push it out of the cell.
+			const float statusH = ImGui::GetTextLineHeightWithSpacing();
+			const float used = ImGui::GetCursorPosY() - contentsTop + ImGui::GetTextLineHeightWithSpacing() + statusH;
 			ImGui::BeginChild("##feContents", ImVec2(0.0f, std::max(40.0f, paneH - used)));
 			DrawFolderContents(context);
 			HandleContentsSelectionGestures(context);
 			HandleContentsShortcuts(context);
 			ImGui::EndChild();
+			DrawContentsStatus();
 
 			ImGui::EndTable();
 		}
@@ -2452,6 +2456,43 @@ namespace aether::editor
 		return std::any_of(m_kindVisible.begin(), m_kindVisible.end(), [](const bool shown) { return !shown; });
 	}
 
+	void FileExplorerPanel::DrawContentsStatus()
+	{
+		std::string status = std::to_string(m_shownCount) + (m_shownCount == 1 ? " item" : " items");
+
+		// The selection is counted from what is actually on screen. A count that includes
+		// entries hidden by the filter would explain nothing and worry everyone.
+		std::size_t selectedVisible = 0;
+		for (const std::string& path: m_selectedPaths)
+		{
+			if (std::any_of(m_frameTiles.begin(), m_frameTiles.end(), [&](const auto& tile) { return tile.first == path; }))
+			{
+				++selectedVisible;
+			}
+		}
+		if (m_viewMode == ViewMode::List)
+		{
+			// The list does not record tile rectangles, so fall back to the whole selection.
+			selectedVisible = m_selectedPaths.size();
+		}
+		if (selectedVisible > 0)
+		{
+			status += "   \xc2\xb7   " + std::to_string(selectedVisible) + " selected";
+			if (m_selectedBytes > 0)
+			{
+				status += " (" + FormatSize(m_selectedBytes) + ")";
+			}
+		}
+		if (m_hiddenByFilter > 0)
+		{
+			status += "   \xc2\xb7   " + std::to_string(m_hiddenByFilter) + " hidden";
+		}
+
+		ImGui::PushStyleColor(ImGuiCol_Text, chrome::kFaint);
+		ImGui::TextUnformatted(status.c_str());
+		ImGui::PopStyleColor();
+	}
+
 	void FileExplorerPanel::DrawFilterMenu()
 	{
 		// Tinted while filtering, and the count of what it is hiding is printed in the pane.
@@ -2581,6 +2622,15 @@ namespace aether::editor
 			}
 		}
 
+		m_shownCount = shown;
+		m_selectedBytes = 0;
+		for (const std::string& path: m_selectedPaths)
+		{
+			if (const Entry* found = FindEntryByPath(path); found != nullptr && !found->isDirectory)
+			{
+				m_selectedBytes += found->sizeBytes;
+			}
+		}
 		m_hiddenByFilter = 0;
 		for (const Entry& child: dir->children)
 		{

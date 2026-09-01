@@ -125,6 +125,9 @@ namespace aether::editor
 		[[nodiscard]] std::vector<const Entry*> SortedChildren(const Entry& dir) const;
 		void DrawSortMenu();
 		void DrawFilterMenu();
+		// One line under the contents: how much is here, how much is selected, and how much
+		// the filter is holding back.
+		void DrawContentsStatus();
 		// Whether a file of this kind is currently shown. Folders ignore it: they are how you
 		// move around, and a type filter that hides them strands you in a folder.
 		[[nodiscard]] bool KindVisible(dragdrop::FileKind kind) const;
@@ -227,6 +230,9 @@ namespace aether::editor
 		// that survives a restart is a file that has silently gone missing since yesterday.
 		std::array<bool, 9> m_kindVisible{};
 		int m_hiddenByFilter = 0;
+		// What the contents pane is currently showing, for the line under it.
+		int m_shownCount = 0;
+		std::uint64_t m_selectedBytes = 0;
 
 		SortMode m_sortMode = SortMode::Name;
 		bool m_sortDescending = false;
