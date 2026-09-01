@@ -1,5 +1,6 @@
 #include "debug/ConsolePanel.hpp"
 #include "debug/EditorChrome.hpp"
+#include "debug/Icons.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -171,12 +172,24 @@ namespace aether::editor
 		ImGui::SameLine();
 		LevelBadge("VRB", nVerbose, &m_showVerbose, LevelColor(LogLevel::Verbose));
 
-		// ── Row 2: options + category filter + actions ──
-		ImGui::Checkbox("Collapse", &m_collapse);
+		// Everything else shares the badges' row. Three rows of chrome above six visible log
+		// lines is a panel that spends more height describing itself than showing the log.
 		ImGui::SameLine();
-		ImGui::Checkbox("Time", &m_showTime);
-		ImGui::SameLine();
-		ImGui::Checkbox("Autoscroll", &m_autoScroll);
+		if (chrome::GhostButton(ICON_FA_SLIDERS "##consoleView"))
+		{
+			ImGui::OpenPopup("##consoleView");
+		}
+		ImGui::SetItemTooltip("View options");
+		if (ImGui::BeginPopup("##consoleView"))
+		{
+			// Set once and then left alone, which is what makes them menu items rather than
+			// something occupying the toolbar permanently.
+			ImGui::Checkbox("Collapse repeats", &m_collapse);
+			ImGui::Checkbox("Timestamps", &m_showTime);
+			ImGui::Checkbox("Autoscroll", &m_autoScroll);
+			ImGui::EndPopup();
+		}
+
 		ImGui::SameLine();
 		if (chrome::GhostButton("Categories"))
 		{
@@ -294,7 +307,14 @@ namespace aether::editor
 		};
 
 		ImGui::SameLine();
-		if (chrome::GhostButton("Copy"))
+		if (chrome::GhostButton(ICON_FA_ELLIPSIS "##consoleActions"))
+		{
+			ImGui::OpenPopup("##consoleActions");
+		}
+		ImGui::SetItemTooltip("Copy or save the log");
+		if (ImGui::BeginPopup("##consoleActions"))
+		{
+		if (ImGui::MenuItem("Copy to clipboard"))
 		{
 			std::string all;
 			for (const auto& cr: display)
@@ -304,8 +324,7 @@ namespace aether::editor
 			}
 			ImGui::SetClipboardText(all.c_str());
 		}
-		ImGui::SameLine();
-		if (chrome::GhostButton("Save"))
+		if (ImGui::MenuItem("Save to a file"))
 		{
 			const auto dir = io::PlatformPaths::GetUserConfigDir();
 			if (!dir.empty())
@@ -322,13 +341,20 @@ namespace aether::editor
 				}
 			}
 		}
+			ImGui::EndPopup();
+		}
+
+		// Clear stays on the toolbar: it is the one action reached often enough to be worth
+		// the width.
 		ImGui::SameLine();
-		if (chrome::GhostButton("Clear"))
+		if (chrome::GhostButton(ICON_FA_TRASH "##consoleClear"))
 		{
 			LogRingBuffer::Get().Clear();
 		}
+		ImGui::SetItemTooltip("Clear the log");
 
-		// ── Filter box ──
+		// The filter takes what is left of the same row rather than a row of its own.
+		ImGui::SameLine();
 		ImGui::SetNextItemWidth(-1.0f);
 		ImGui::InputTextWithHint("##logfilter", "Filter (message / category)...", m_filter, sizeof(m_filter));
 		chrome::AccentHairline(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), ImGui::GetContentRegionAvail().x, 0.22f);
