@@ -1192,11 +1192,12 @@ namespace aether::editor
 			ImGui::TableSetColumnIndex(1);
 			const float contentsTop = ImGui::GetCursorPosY();
 			DrawBreadcrumb(context);
-			// Right-aligned from what is left in this cell. GetContentRegionMax is relative to
-			// the window, not the table cell, so using it here put the controls off-screen.
-			const float controlsW = m_viewMode == ViewMode::Grid ? 210.0f : 78.0f;
-			const float slack = ImGui::GetContentRegionAvail().x - controlsW;
-			ImGui::SameLine(0.0f, std::max(4.0f, slack));
+			// Straight after the breadcrumb, NOT right-aligned. Both attempts at right-aligning
+			// pushed the controls out of the table cell and ImGui clipped them away entirely -
+			// there is no reliable cell-relative width here, since GetContentRegionAvail and
+			// GetContentRegionMax are both window-relative inside a cell. A visible control
+			// beats a tidily placed one that disappears when the pane is narrow.
+			ImGui::SameLine(0.0f, 16.0f);
 			if (chrome::GhostButton(m_viewMode == ViewMode::Grid ? ICON_FA_LIST : ICON_FA_TABLE_CELLS_LARGE))
 			{
 				m_viewMode = m_viewMode == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
@@ -1318,15 +1319,41 @@ namespace aether::editor
 			const float textY = rowMin.y + (rowMax.y - rowMin.y - ImGui::GetFontSize()) * 0.5f;
 			const float iconX = rowMin.x + 4.0f;
 			const float nameX = iconX + ImGui::GetFontSize() * 1.5f;
-			drawList->AddText(ImVec2(iconX, textY), chrome::U32(KindTint(entry.kind, isScript)), KindIcon(entry.kind, isScript));
+			const char* icon = entry.isDirectory ? ICON_FA_FOLDER : KindIcon(entry.kind, isScript);
+			const ImVec4 tint = entry.isDirectory ? chrome::WithAlpha(chrome::kAccent, 0.9f) : KindTint(entry.kind, isScript);
+			drawList->AddText(ImVec2(iconX, textY), chrome::U32(tint), icon);
 			drawList->AddText(ImVec2(nameX, textY), chrome::U32(chrome::kText), entry.name.c_str());
-			const std::string sizeText = FormatSize(entry.sizeBytes);
-			const float sizeW = chrome::MeasureSized(12.0f, sizeText.c_str()).x;
-			chrome::TextSized(drawList, 12.0f, ImVec2(rowMax.x - sizeW - 8.0f, textY + 2.0f), chrome::kFaint, sizeText.c_str());
+			if (!entry.isDirectory)
+			{
+				const std::string sizeText = FormatSize(entry.sizeBytes);
+				const float sizeW = chrome::MeasureSized(12.0f, sizeText.c_str()).x;
+				chrome::TextSized(drawList, 12.0f, ImVec2(rowMax.x - sizeW - 8.0f, textY + 2.0f), chrome::kFaint, sizeText.c_str());
+			}
 			if (selected)
 			{
 				drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
 			}
+		}
+
+		if (entry.isDirectory)
+		{
+			// Same gestures the grid gives a folder, so the two views behave alike.
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+			{
+				const ImGuiIO& io = ImGui::GetIO();
+				ClickSelect(entry, io.KeyCtrl, io.KeyShift);
+				m_selectedPath = ToUtf8Path(entry.path);
+				m_selectedIsDirectory = true;
+				m_createDir = entry.path;
+			}
+			if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			{
+				m_pendingOpenDir = entry.path;
+			}
+			AcceptFileDropIntoFolder(context, entry.path);
+			DrawRowContextMenu(context, entry);
+			ImGui::PopID();
+			return;
 		}
 
 		ApplyEntryInteractions(context, entry);
@@ -2398,13 +2425,12 @@ namespace aether::editor
 		}
 		else
 		{
+			// Folders included. The list used to draw files only, so switching view made every
+			// folder vanish and read as though the browser had jumped somewhere else.
 			for (const Entry* child: SortedChildren(*dir))
 			{
-				if (!child->isDirectory)
-				{
-					DrawFileRow(context, *child);
-					++shown;
-				}
+				DrawFileRow(context, *child);
+				++shown;
 			}
 		}
 

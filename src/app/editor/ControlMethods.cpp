@@ -2858,6 +2858,15 @@ namespace aether::editor
 				        ids.push_back(e.id);
 			        }
 			        json j{{"primary", primary.IsValid() ? primary.id : 0u}, {"selected", ids}};
+			        // The selected ASSET as well, which editor.select_asset could set but
+			        // nothing could read back - so a test could drive the asset browser and
+			        // never check what it had actually selected.
+			        if (selection->HasAsset())
+			        {
+				        const SceneSelection::Asset& asset = selection->SelectedAsset();
+				        j["asset"] = asset.path;
+				        j["assetName"] = asset.displayName;
+			        }
 			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
 			        if (scenes != nullptr && primary.IsValid())
 			        {
