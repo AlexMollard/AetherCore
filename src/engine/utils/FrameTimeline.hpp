@@ -25,6 +25,10 @@ namespace aether
 		// one is throttling to a target rate, the other is waiting for the right moment, and
 		// a frame pinned to the wrong rate looks the same as real work without separating them.
 		float pacerIdleMs = 0.0f;
+		// From the end of the previous loop body to the top of this one. Nothing is supposed
+		// to live here, so a non-zero value means time is going somewhere the per-phase
+		// timings cannot see.
+		float tailMs = 0.0f;
 		float gameWorkMs = 0.0f;
 		float renderExecMs = 0.0f;
 		float presentWaitMs = 0.0f;
@@ -85,12 +89,12 @@ namespace aether
 
 		struct Slot
 		{
-			std::uint64_t frameIndex = 0;
-			float wallMs = 0.0f;
-			float simDtMs = 0.0f;
-			float pacerWaitMs = 0.0f;
-			float inFlightWaitMs = 0.0f;
-			float gameWorkMs = 0.0f;
+			// The game thread's half held WHOLE rather than field by field. It was previously
+			// unpacked into individual members and repacked in Snapshot, so every field added
+			// to FrameTiming had to be copied in two more places - and four of them never
+			// were, leaving readers a hard zero that looked like a measurement. inputStaleMs
+			// was one of them, and it was being cited as evidence that input latches late.
+			FrameTiming game{};
 			// Written by the render thread after the record is published, so these are the
 			// only fields two threads touch.
 			std::atomic<float> renderExecMs{0.0f};

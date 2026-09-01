@@ -17,12 +17,7 @@ namespace aether
 		slot.renderExecMs.store(0.0f, std::memory_order_relaxed);
 		slot.presentWaitMs.store(0.0f, std::memory_order_relaxed);
 
-		slot.frameIndex = timing.frameIndex;
-		slot.wallMs = timing.wallMs;
-		slot.simDtMs = timing.simDtMs;
-		slot.pacerWaitMs = timing.pacerWaitMs;
-		slot.inFlightWaitMs = timing.inFlightWaitMs;
-		slot.gameWorkMs = timing.gameWorkMs;
+		slot.game = timing;
 
 		// Release: everything above is visible to any reader that acquires m_recorded.
 		m_recorded.store(seq + 1, std::memory_order_release);
@@ -36,7 +31,7 @@ namespace aether
 		{
 			const std::uint64_t seq = recorded - 1 - i;
 			Slot& slot = m_slots[seq % kCapacity];
-			if (slot.frameIndex != frameIndex)
+			if (slot.game.frameIndex != frameIndex)
 			{
 				continue;
 			}
@@ -66,12 +61,7 @@ namespace aether
 		{
 			const Slot& slot = m_slots[(firstSeq + i) % kCapacity];
 			FrameTiming& dst = out[static_cast<std::size_t>(i)];
-			dst.frameIndex = slot.frameIndex;
-			dst.wallMs = slot.wallMs;
-			dst.simDtMs = slot.simDtMs;
-			dst.pacerWaitMs = slot.pacerWaitMs;
-			dst.inFlightWaitMs = slot.inFlightWaitMs;
-			dst.gameWorkMs = slot.gameWorkMs;
+			dst = slot.game;
 			dst.renderExecMs = slot.renderExecMs.load(std::memory_order_relaxed);
 			dst.presentWaitMs = slot.presentWaitMs.load(std::memory_order_relaxed);
 			dst.renderComplete = slot.renderComplete.load(std::memory_order_acquire);

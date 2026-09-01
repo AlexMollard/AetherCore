@@ -349,6 +349,7 @@ namespace aether
 		std::vector<float> reportWall;
 		reportWall.reserve(FrameTimeline::kCapacity);
 
+		std::chrono::steady_clock::time_point previousFrameEnd{};
 		LatencyPacer latencyPacer;
 		std::uint64_t pacedFrames = 0;
 		std::uint64_t missedFlips = 0;
@@ -372,6 +373,9 @@ namespace aether
 			AE_PROFILE_ZONE_N("Frame");
 
 			const auto frameStart = std::chrono::steady_clock::now();
+			const float loopTailMs = previousFrameEnd.time_since_epoch().count() == 0
+			        ? 0.0f
+			        : static_cast<float>(std::chrono::duration<double, std::milli>(frameStart - previousFrameEnd).count());
 
 			m_framePacer.Wait();
 			const auto afterPacer = std::chrono::steady_clock::now();
@@ -561,6 +565,8 @@ namespace aether
 				// doing 0.1 ms of work as 10 ms. (The pacer is fed latchToSubmitMs, which starts
 				// after the idle, so it never sees its own sleep.)
 				timing.pacerIdleMs = pacerIdleMs;
+				timing.tailMs = loopTailMs;
+				previousFrameEnd = frameEnd;
 				timing.gameWorkMs = std::max(0.0f, ms(frameStart, frameEnd) - timing.pacerWaitMs - timing.inFlightWaitMs - pacerIdleMs);
 				m_frameTimeline.RecordGameFrame(timing);
 
@@ -598,6 +604,7 @@ namespace aether
 					// looks identical to one doing real work.
 					float capWait = 0.0f;
 					float pacerIdle = 0.0f;
+					float tail = 0.0f;
 					std::size_t clamped = 0;
 					std::size_t unthrottled = 0;
 					const auto flipPeriodMs = static_cast<float>(presentTiming.PeriodMs());
@@ -611,6 +618,7 @@ namespace aether
 						inputStale += frame.inputStaleMs;
 						capWait += frame.pacerWaitMs;
 						pacerIdle += frame.pacerIdleMs;
+						tail += frame.tailMs;
 						if (frame.wallMs > frame.simDtMs + 0.01f)
 						{
 							++clamped;
@@ -640,9 +648,9 @@ namespace aether
 							total += value;
 						}
 						AE_INFO(LogCategory::Engine,
-						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} cap={:.3f} pacer={:.3f} | flipPeriod={:.3f} flips={} reserve={:.2f} paced={} missed={} est={} vrr={} warm={} | clamped={} unthrottled={}{}",
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} cap={:.3f} pacer={:.3f} tail={:.3f} | flipPeriod={:.3f} flips={} reserve={:.2f} paced={} missed={} est={} vrr={} warm={} | clamped={} unthrottled={}{}",
 						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
-						        gameWork / n, inFlight / n, present / n, inputStale / n, capWait / n, pacerIdle / n,
+						        gameWork / n, inFlight / n, present / n, inputStale / n, capWait / n, pacerIdle / n, tail / n,
 					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), latencyPacer.ReserveMs(), pacedFrames, missedFlips,
 					        // paced=0 has three quite different causes and the number alone cannot tell
 					        // them apart: no timebase, a display judged variable, or a pacer that has
