@@ -83,20 +83,19 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float3 graphB = cross(graphGeometricNormal, graphT) * input.tangentSign;
     const float3x3 graphTBN = float3x3(graphT, graphB, graphGeometricNormal);
 
-    const float2 n30 = input.uv;
-    const float2 n5 = (n30 + fc->elapsedTime * float2(0.08, -0.03));
-    const float n6 = GraphValueNoise(n5 * 10);
-    const float4 n2 = float4(0.9, 0.35, 0.2, 1);
-    const float4 n8 = (n2 * float4(n6));
-    const float n7 = step(0.5, n6);
-    const float3 n9 = ((mat.albedoSlot != kNoTexture) ? normalize(mul(g_textures[mat.albedoSlot].Sample(g_linearSampler, float2(0, 0)).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal);
+    const float2 n12 = input.uv;
+    const float4 n3 = ((mat.albedoSlot != kNoTexture) ? g_textures[mat.albedoSlot].Sample(g_linearSampler, n12) : float4(1, 1, 1, 1));
+    const float4 n2 = float4(1, 1, 1, 1);
+    const float4 n4 = (n2 * n3);
+    const float n8 = 0;
+    const float n9 = 0.9;
 
-    const float3 albedo    = (n8).xyz;
-    const float  metallic  = saturate(0);
-    float        roughness = clamp(n7, 0.04f, 1.0f);
+    const float3 albedo    = (n4).xyz;
+    const float  metallic  = saturate(n8);
+    float        roughness = clamp(n9, 0.04f, 1.0f);
     const float3 emissive  = float3(0, 0, 0);
 
-    const float3 N = normalize(n9);
+    const float3 N = normalize(graphGeometricNormal);
 
     // Geometric specular anti-aliasing, the same filter gltf_mesh applies. A normal that
     // swings hard across one pixel - a normal map, or curvature at distance - concentrates

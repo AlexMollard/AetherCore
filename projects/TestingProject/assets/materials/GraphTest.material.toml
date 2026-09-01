@@ -1,4 +1,4 @@
-# Drives its surface from a PROJECT shader rather than the engine's standard one.
+# AetherCore material. Edit here or in the editor's material inspector.
 [material]
 basecolorfactor = [ 1, 1, 1, 1 ]
 emissivefactor = [ 0, 0, 0 ]
@@ -11,4 +11,66 @@ alphablend = false
 alphamask = false
 modulatevertexcolor = false
 receiveshadows = true
-shader = 'shaders://graphtest.spv'
+shader = 'shaders://GraphTest.spv'
+
+# Node graph for this material's shader. Edited in the editor's Material window.
+[graph]
+next_id = 8
+
+[graph.node.0]
+id = 1
+type = 0
+x = 700
+y = 200
+value = [ 1, 1, 1, 1 ]
+slot = 0
+channel = 0
+
+[graph.node.1]
+id = 2
+type = 1
+x = 60
+y = 60
+value = [ 1, 1, 1, 1 ]
+slot = 0
+channel = 0
+
+[graph.node.2]
+id = 4
+type = 2
+x = 60
+y = 300
+value = [ 0, 0, 0, 1 ]
+slot = 0
+channel = 0
+
+[graph.node.3]
+id = 5
+type = 2
+x = 60
+y = 400
+value = [ 0.5, 0.5, 0.5, 1 ]
+slot = 0
+channel = 0
+
+[graph.link.0]
+id = 3
+from_node = 2
+from_pin = 0
+to_node = 1
+to_pin = 0
+
+[graph.link.1]
+id = 6
+from_node = 4
+from_pin = 0
+to_node = 1
+to_pin = 1
+
+[graph.link.2]
+id = 7
+from_node = 5
+from_pin = 0
+to_node = 1
+to_pin = 2
+
