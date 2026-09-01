@@ -90,6 +90,7 @@ namespace aether::editor
 		char stat[96]{};
 		std::snprintf(stat, sizeof(stat), "%zu FRAMES  \xC2\xB7  %zu EVENTS", m_animation.frames.size(), m_animation.events.size());
 		chrome::PanelHeader("SPRITE ANIMATION", stat);
+		DrawUnsavedAnimationPrompt(context);
 
 		// Snapshot the clip when an interaction starts in this window; the matching
 		// commit runs at the end of the frame (records onto the global undo stack).
@@ -480,10 +481,83 @@ namespace aether::editor
 		ImGui::End();
 	}
 
+	std::string SpriteAnimationPanel::AnimationSignature() const
+	{
+		std::string signature = m_animation.name;
+		signature += '|';
+		signature += m_animation.atlasPath;
+		signature += '|';
+		signature += std::to_string(static_cast<int>(m_animation.loopMode));
+		signature += '|';
+		signature += std::to_string(m_animation.frames.size());
+		for (const SpriteAnimationFrame& frame: m_animation.frames)
+		{
+			signature += '|';
+			signature += std::to_string(frame.spriteId.value);
+			signature += ':';
+			signature += std::to_string(frame.durationSeconds);
+		}
+		return signature;
+	}
+
+	bool SpriteAnimationPanel::AnimationDirty() const
+	{
+		return !m_animationPath.empty() && AnimationSignature() != m_savedAnimationSignature;
+	}
+
+	void SpriteAnimationPanel::DrawUnsavedAnimationPrompt(app::LayerContext& context)
+	{
+		if (m_pendingAnimationPath.empty())
+		{
+			return;
+		}
+		ImGui::OpenPopup("Unsaved animation##animSwitch");
+		if (ImGui::BeginPopupModal("Unsaved animation##animSwitch", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::Text("%s has unsaved changes.", spriteui::DisplayName(m_animationPath).c_str());
+			ImGui::TextDisabled("Opening another clip will lose them.");
+			ImGui::Spacing();
+			if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK "  Save and open", ImVec2(150.0f, 0.0f)))
+			{
+				const std::string next = m_pendingAnimationPath;
+				m_pendingAnimationPath.clear();
+				SaveAnimation(context);
+				ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+				LoadAnimation(context, next);
+				return;
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Discard", ImVec2(110.0f, 0.0f)))
+			{
+				const std::string next = m_pendingAnimationPath;
+				m_pendingAnimationPath.clear();
+				m_savedAnimationSignature = AnimationSignature();
+				ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+				LoadAnimation(context, next);
+				return;
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Keep editing", ImVec2(130.0f, 0.0f)))
+			{
+				m_pendingAnimationPath.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+	}
+
 	void SpriteAnimationPanel::LoadAnimation(app::LayerContext& context, std::string path)
 	{
 		if (path.empty())
 		{
+			return;
+		}
+		// Timing a clip frame by frame is slow work with no undo for the file.
+		if (AnimationDirty() && path != m_animationPath)
+		{
+			m_pendingAnimationPath = path;
 			return;
 		}
 		const auto loaded = context.Get<SpriteAssetStore>().LoadAnimation(path);
@@ -495,6 +569,7 @@ namespace aether::editor
 		}
 		m_animationPath = std::move(path);
 		m_animation = **loaded;
+		m_savedAnimationSignature = AnimationSignature();
 		m_selectedFrame = m_animation.frames.empty() ? -1 : 0;
 		m_previewFrame = 0;
 		m_previewFrameTime = 0.0f;
@@ -586,6 +661,7 @@ namespace aether::editor
 		if (saved.has_value())
 		{
 			context.Get<AssetDatabase>().Register(MakeSpriteAnimationSource(m_animationPath), spriteui::DisplayName(m_animationPath));
+			m_savedAnimationSignature = AnimationSignature();
 			m_status = std::format("Saved {} frames and {} events.", m_animation.frames.size(), m_animation.events.size());
 			m_statusError = false;
 		}

@@ -29,6 +29,15 @@ namespace aether::editor
 		void OnImGui(app::LayerContext& context) override;
 
 	private:
+		// Compared structurally rather than flagged at each mutation: frames are added,
+		// reordered, retimed and deleted, and a flag that misses one of those reports "saved"
+		// over work that is not. Built only when a switch is requested.
+		[[nodiscard]] std::string AnimationSignature() const;
+		[[nodiscard]] bool AnimationDirty() const;
+		void DrawUnsavedAnimationPrompt(app::LayerContext& context);
+		std::string m_savedAnimationSignature;
+		std::string m_pendingAnimationPath;
+
 		void LoadAnimation(app::LayerContext& context, std::string path);
 		void LoadAtlas(app::LayerContext& context, std::string path);
 		void LoadPreviewTexture(app::LayerContext& context);

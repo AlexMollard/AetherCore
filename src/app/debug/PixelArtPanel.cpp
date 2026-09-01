@@ -30,6 +30,55 @@ namespace aether::editor
 
 	} // namespace
 
+	void PixelArtPanel::DrawUnsavedCanvasPrompt(app::LayerContext& context, PixelArtDocument& doc)
+	{
+		if (m_pendingOpenPath.empty())
+		{
+			return;
+		}
+		ImGui::OpenPopup("Unsaved canvas##pixelOpen");
+		if (ImGui::BeginPopupModal("Unsaved canvas##pixelOpen", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::TextUnformatted("This canvas has unsaved changes.");
+			ImGui::TextDisabled("Opening %s will paint over them.", m_pendingOpenPath.c_str());
+			ImGui::Spacing();
+			const auto openPending = [&]()
+			{
+				const std::filesystem::path disk = app::ResolveProjectPath(context.TryGet<app::EditorProjectContext>(), m_pendingOpenPath);
+				m_status = doc.Load(disk) ? "Opened " + m_pendingOpenPath : "Open failed: " + m_pendingOpenPath;
+				m_pendingOpenPath.clear();
+			};
+			if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK "  Save and open", ImVec2(150.0f, 0.0f)))
+			{
+				const std::filesystem::path disk = app::ResolveProjectPath(context.TryGet<app::EditorProjectContext>(), m_savePath);
+				if (doc.Save(disk))
+				{
+					openPending();
+				}
+				else
+				{
+					// Failing to write is not a reason to lose the pixels.
+					m_status = "Save failed: " + m_savePath;
+					m_pendingOpenPath.clear();
+				}
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Discard", ImVec2(110.0f, 0.0f)))
+			{
+				openPending();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (chrome::GhostButton("Keep editing", ImVec2(130.0f, 0.0f)))
+			{
+				m_pendingOpenPath.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
+	}
+
 	void PixelArtPanel::OnImGui(app::LayerContext& context)
 	{
 		ImGui::Begin(GetName().data(), VisiblePtr());
@@ -43,6 +92,7 @@ namespace aether::editor
 		}
 
 		DrawToolbar(context, *doc);
+		DrawUnsavedCanvasPrompt(context, *doc);
 		ImGui::Separator();
 
 		// Left: colour + palette + file. Right: the canvas.
@@ -130,8 +180,16 @@ namespace aether::editor
 		ImGui::SameLine();
 		if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Open"))
 		{
-			const std::filesystem::path disk = app::ResolveProjectPath(context.TryGet<app::EditorProjectContext>(), m_savePath);
-			m_status = doc.Load(disk) ? "Opened " + m_savePath : "Open failed: " + m_savePath;
+			// Freehand pixels are not recoverable once loaded over.
+			if (doc.Dirty())
+			{
+				m_pendingOpenPath = m_savePath;
+			}
+			else
+			{
+				const std::filesystem::path disk = app::ResolveProjectPath(context.TryGet<app::EditorProjectContext>(), m_savePath);
+				m_status = doc.Load(disk) ? "Opened " + m_savePath : "Open failed: " + m_savePath;
+			}
 		}
 		ImGui::SameLine();
 		if (chrome::PrimaryButton(ICON_FA_FLOPPY_DISK " Save"))
