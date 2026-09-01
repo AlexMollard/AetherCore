@@ -5,7 +5,11 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+#include <imgui.h>
+#include <imgui_internal.h>
 
 #include "debug/DebugPanel.hpp"
 #include "debug/EditorDragDrop.hpp"
@@ -58,6 +62,16 @@ namespace aether::editor
 		// How the contents of the current folder are shown. A tree of filenames is a poor way
 		// to browse textures and materials, which is most of what a project holds, so the grid
 		// is the default and the list stays for when names and sizes matter more than looks.
+		// How the contents pane is ordered. Folders always come first regardless: they are
+		// navigation, not content, and mixing them into a size or date order buries them.
+		enum class SortMode
+		{
+			Name,
+			Type,
+			Size,
+			Modified
+		};
+
 		enum class ViewMode
 		{
 			Grid,
@@ -101,6 +115,13 @@ namespace aether::editor
 		void DrawFolderTree(app::LayerContext& context, Entry& entry);
 		void DrawBreadcrumb(app::LayerContext& context);
 		void DrawFolderContents(app::LayerContext& context);
+		// The one ordering. The grid, the list and the keyboard's idea of "next" all read
+		// this, so they cannot disagree about what order the folder is in.
+		[[nodiscard]] std::vector<const Entry*> SortedChildren(const Entry& dir) const;
+		void DrawSortMenu();
+		// Click-off to clear, and drag a band over the tiles to select them. Runs after the
+		// tiles are drawn, when their rectangles are known.
+		void HandleContentsSelectionGestures(app::LayerContext& context);
 		// Delete / F2 / Enter / arrows over the contents pane. Everything here already had a
 		// menu item; none of it had a key, so the browser could only be driven by mouse.
 		void HandleContentsShortcuts(app::LayerContext& context);
@@ -184,6 +205,14 @@ namespace aether::editor
 		std::filesystem::path m_pendingOpenDir;
 		ViewMode m_viewMode = ViewMode::Grid;
 		float m_tileSize = 104.0f;
+		// Rubber-band selection. Anchor is where the drag started, in screen space; the tiles
+		// drawn this frame are collected so the band can test what it covers.
+		bool m_marqueeActive = false;
+		ImVec2 m_marqueeAnchor{};
+		std::vector<std::pair<std::string, ImRect>> m_frameTiles;
+
+		SortMode m_sortMode = SortMode::Name;
+		bool m_sortDescending = false;
 		// Columns the grid last drew with, so Up/Down move a row rather than an item.
 		int m_gridColumns = 1;
 		std::unordered_map<std::string, Thumbnail> m_thumbnails;

@@ -829,17 +829,11 @@ namespace aether::editor
 		{
 			return order;
 		}
-		// Folders first, then files: the same order the grid draws, so a shift-range covers
-		// what the eye sees between the two clicks.
-		for (const bool wantDirectories: {true, false})
+		// The same ordering the grid draws with, so a shift-range covers what the eye sees
+		// between the two clicks and the arrow keys move the way the tiles are laid out.
+		for (const Entry* child: SortedChildren(*dir))
 		{
-			for (const Entry& child: dir->children)
-			{
-				if (child.isDirectory == wantDirectories)
-				{
-					order.push_back(ToUtf8Path(child.path));
-				}
-			}
+			order.push_back(ToUtf8Path(child->path));
 		}
 		return order;
 	}
@@ -1200,7 +1194,7 @@ namespace aether::editor
 			DrawBreadcrumb(context);
 			// Right-aligned from what is left in this cell. GetContentRegionMax is relative to
 			// the window, not the table cell, so using it here put the controls off-screen.
-			const float controlsW = m_viewMode == ViewMode::Grid ? 172.0f : 40.0f;
+			const float controlsW = m_viewMode == ViewMode::Grid ? 210.0f : 78.0f;
 			const float slack = ImGui::GetContentRegionAvail().x - controlsW;
 			ImGui::SameLine(0.0f, std::max(4.0f, slack));
 			if (chrome::GhostButton(m_viewMode == ViewMode::Grid ? ICON_FA_LIST : ICON_FA_TABLE_CELLS_LARGE))
@@ -1208,6 +1202,8 @@ namespace aether::editor
 				m_viewMode = m_viewMode == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
 			}
 			ImGui::SetItemTooltip(m_viewMode == ViewMode::Grid ? "Switch to list view" : "Switch to grid view");
+			ImGui::SameLine();
+			DrawSortMenu();
 			if (m_viewMode == ViewMode::Grid)
 			{
 				ImGui::SameLine();
@@ -1218,6 +1214,7 @@ namespace aether::editor
 			const float used = ImGui::GetCursorPosY() - contentsTop + ImGui::GetTextLineHeightWithSpacing();
 			ImGui::BeginChild("##feContents", ImVec2(0.0f, std::max(40.0f, paneH - used)));
 			DrawFolderContents(context);
+			HandleContentsSelectionGestures(context);
 			HandleContentsShortcuts(context);
 			ImGui::EndChild();
 
@@ -1944,6 +1941,7 @@ namespace aether::editor
 
 		const ImVec2 origin = ImGui::GetCursorScreenPos();
 		ImGui::InvisibleButton("##tile", tile);
+		m_frameTiles.emplace_back(ToUtf8Path(entry.path), ImRect(origin, ImVec2(origin.x + tile.x, origin.y + tile.y)));
 
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		const ImVec2 tileMax(origin.x + tile.x, origin.y + tile.y);
@@ -2037,6 +2035,11 @@ namespace aether::editor
 			ImGui::SetItemTooltip("%s", entry.name.c_str());
 			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			{
+				// Through the same selection rules as a file. Setting m_selectedPath alone left
+				// the folder out of m_selectedPaths, which is what the highlight reads - so a
+				// clicked folder looked unselected.
+				const ImGuiIO& io = ImGui::GetIO();
+				ClickSelect(entry, io.KeyCtrl, io.KeyShift);
 				m_selectedPath = ToUtf8Path(entry.path);
 				m_selectedIsDirectory = true;
 				m_createDir = entry.path;
@@ -2050,7 +2053,7 @@ namespace aether::editor
 		}
 		else
 		{
-			ImGui::SetItemTooltip("%s\n%s", entry.name.c_str(), FormatSize(entry.sizeBytes).c_str());
+				ImGui::SetItemTooltip("%s\n%s", entry.name.c_str(), FormatSize(entry.sizeBytes).c_str());
 			ApplyEntryInteractions(context, entry);
 		}
 		ImGui::PopID();
@@ -2093,6 +2096,77 @@ namespace aether::editor
 				const bool isScript = entry.kind == dragdrop::FileKind::Script;
 				selection->SelectAsset(ToSelectionKind(entry.kind), isScript ? m_selectedPath : entry.payloadPath, entry.name);
 			}
+		}
+	}
+
+	void FileExplorerPanel::HandleContentsSelectionGestures(app::LayerContext& context)
+	{
+		(void) context;
+		if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
+		{
+			// Still finish a band that started here even if the cursor has left the pane.
+			if (!m_marqueeActive)
+			{
+				return;
+			}
+		}
+
+		const ImGuiIO& io = ImGui::GetIO();
+		const bool overTile = ImGui::IsAnyItemHovered();
+
+		// Press on empty space: start a band, and drop the previous selection unless the user
+		// is adding to it. Clicking off a selection used to leave everything highlighted, so
+		// there was no way to select nothing.
+		if (!m_marqueeActive && !overTile && ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			m_marqueeActive = true;
+			m_marqueeAnchor = io.MousePos;
+			if (!io.KeyCtrl && !io.KeyShift)
+			{
+				m_selectedPaths.clear();
+				m_selectedPath.clear();
+			}
+		}
+
+		if (!m_marqueeActive)
+		{
+			return;
+		}
+
+		const ImVec2 cursor = io.MousePos;
+		const ImRect band(std::min(m_marqueeAnchor.x, cursor.x),
+		        std::min(m_marqueeAnchor.y, cursor.y),
+		        std::max(m_marqueeAnchor.x, cursor.x),
+		        std::max(m_marqueeAnchor.y, cursor.y));
+
+		// Only once it is a drag rather than a click, so a plain click on empty space just
+		// clears the selection without flashing a band.
+		const bool dragging = ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3.0f);
+		if (dragging)
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			drawList->AddRectFilled(band.Min, band.Max, chrome::U32(chrome::WithAlpha(chrome::kAccent, 0.16f)));
+			drawList->AddRect(band.Min, band.Max, chrome::U32(chrome::kAccent));
+
+			// Rebuilt every frame from the band, so shrinking it deselects again.
+			std::vector<std::string> covered;
+			for (const auto& [path, rect]: m_frameTiles)
+			{
+				if (rect.Overlaps(band))
+				{
+					covered.push_back(path);
+				}
+			}
+			m_selectedPaths = covered;
+			if (!covered.empty())
+			{
+				m_selectedPath = covered.back();
+			}
+		}
+
+		if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+		{
+			m_marqueeActive = false;
 		}
 	}
 
@@ -2183,6 +2257,107 @@ namespace aether::editor
 		}
 	}
 
+	std::vector<const FileExplorerPanel::Entry*> FileExplorerPanel::SortedChildren(const Entry& dir) const
+	{
+		std::vector<const Entry*> ordered;
+		ordered.reserve(dir.children.size());
+		for (const Entry& child: dir.children)
+		{
+			ordered.push_back(&child);
+		}
+
+		const auto lowerName = [](const Entry& e)
+		{
+			std::string out = e.name;
+			std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return out;
+		};
+
+		std::stable_sort(ordered.begin(),
+		        ordered.end(),
+		        [&](const Entry* a, const Entry* b)
+		        {
+			        // Folders first, always, and never reversed: they are how you move around,
+			        // and burying them at the bottom of a descending size order helps nobody.
+			        if (a->isDirectory != b->isDirectory)
+			        {
+				        return a->isDirectory;
+			        }
+
+			        bool less = false;
+			        switch (m_sortMode)
+			        {
+				        case SortMode::Type:
+					        // Kind first, then name inside a kind - a type sort that leaves each
+					        // group in arbitrary order is barely a sort.
+					        if (a->kind != b->kind)
+					        {
+						        less = static_cast<int>(a->kind) < static_cast<int>(b->kind);
+						        break;
+					        }
+					        less = lowerName(*a) < lowerName(*b);
+					        break;
+				        case SortMode::Size:
+					        if (a->sizeBytes != b->sizeBytes)
+					        {
+						        less = a->sizeBytes < b->sizeBytes;
+						        break;
+					        }
+					        less = lowerName(*a) < lowerName(*b);
+					        break;
+				        case SortMode::Modified:
+					        if (a->writeTime != b->writeTime)
+					        {
+						        less = a->writeTime < b->writeTime;
+						        break;
+					        }
+					        less = lowerName(*a) < lowerName(*b);
+					        break;
+				        case SortMode::Name:
+				        default:
+					        less = lowerName(*a) < lowerName(*b);
+					        break;
+			        }
+			        return m_sortDescending ? !less : less;
+		        });
+		return ordered;
+	}
+
+	void FileExplorerPanel::DrawSortMenu()
+	{
+		if (chrome::GhostButton(ICON_FA_ARROW_DOWN_SHORT_WIDE "##feSort"))
+		{
+			ImGui::OpenPopup("##feSortMenu");
+		}
+		ImGui::SetItemTooltip("Sort the folder");
+		if (ImGui::BeginPopup("##feSortMenu"))
+		{
+			chrome::SectionTag("SORT BY");
+			const struct
+			{
+				SortMode mode;
+				const char* label;
+			} modes[] = {
+			        {SortMode::Name, "Name"},
+			        {SortMode::Type, "Type"},
+			        {SortMode::Size, "Size"},
+			        {SortMode::Modified, "Date modified"},
+			};
+			for (const auto& mode: modes)
+			{
+				// Selectable rather than MenuItem, which does not activate under injected
+				// input and so cannot be driven or tested.
+				if (ImGui::Selectable(mode.label, m_sortMode == mode.mode))
+				{
+					m_sortMode = mode.mode;
+				}
+			}
+			ImGui::Separator();
+			ImGui::Checkbox("Descending", &m_sortDescending);
+			ImGui::EndPopup();
+		}
+	}
+
 	void FileExplorerPanel::DrawFolderContents(app::LayerContext& context)
 	{
 		Entry* dir = FindDirectory(m_tree, m_currentDir);
@@ -2201,6 +2376,7 @@ namespace aether::editor
 		// NOT cleared here. A request can also come from the keyboard, which is handled after
 		// this function has run, and clearing on entry wiped it before it could ever apply.
 		// The apply below is the only place that should clear it.
+		m_frameTiles.clear();
 		int shown = 0;
 		if (m_viewMode == ViewMode::Grid)
 		{
@@ -2209,33 +2385,24 @@ namespace aether::editor
 			const int columns = std::max(1, static_cast<int>(avail / std::max(1.0f, stride)));
 			m_gridColumns = columns;
 			int column = 0;
-			// Folders first, so entering one is possible from the grid itself rather than only
-			// from the tree on the left.
-			for (const bool wantDirectories: {true, false})
+			for (const Entry* child: SortedChildren(*dir))
 			{
-				for (const Entry& child: dir->children)
+				if (column > 0)
 				{
-					if (child.isDirectory != wantDirectories)
-					{
-						continue;
-					}
-					if (column > 0)
-					{
-						ImGui::SameLine();
-					}
-					DrawFileTile(context, child, m_tileSize);
-					++shown;
-					column = (column + 1) % columns;
+					ImGui::SameLine();
 				}
+				DrawFileTile(context, *child, m_tileSize);
+				++shown;
+				column = (column + 1) % columns;
 			}
 		}
 		else
 		{
-			for (const Entry& child: dir->children)
+			for (const Entry* child: SortedChildren(*dir))
 			{
-				if (!child.isDirectory)
+				if (!child->isDirectory)
 				{
-					DrawFileRow(context, child);
+					DrawFileRow(context, *child);
 					++shown;
 				}
 			}
