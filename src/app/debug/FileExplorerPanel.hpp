@@ -34,6 +34,14 @@ namespace aether::editor
 		void OnImGui(app::LayerContext& context) override;
 
 	private:
+		// What the create menu makes. Kept above the declarations that name it.
+		enum class NewAssetKind
+		{
+			Script,
+			Material,
+			Folder
+		};
+
 		struct Entry
 		{
 			std::filesystem::path path;
@@ -119,6 +127,9 @@ namespace aether::editor
 		void DrawSearchResults(app::LayerContext& context, const Entry& entry);
 		bool DrawRowContextMenu(app::LayerContext& context, const Entry& entry);
 		void DrawPendingPopups(app::LayerContext& context);
+		// The one place assets are created. Menu items call this; there is no second path.
+		void DrawCreateMenuItems(const std::filesystem::path& dir);
+		bool CreateAsset(NewAssetKind kind, const std::filesystem::path& dir);
 
 		void BeginRename(const Entry& entry);
 		bool ApplyRename(const std::filesystem::path& target, std::string_view newName);
@@ -204,10 +215,13 @@ namespace aether::editor
 		// Counted once when the dialog opens, not per frame: it walks every project file.
 		int m_deleteReferenceCount = 0;
 
+		// What "New" makes. Picking the KIND first and then naming it, rather than three name
+		// fields where the field you typed into decided the kind - which meant reading all
+		// three rows to find out what the dialog even did.
 		bool m_openNewPopup = false;
-		char m_newScriptNameBuf[64] = {};
-		char m_newFolderNameBuf[64] = {};
-		char m_newMaterialNameBuf[64] = {};
+		// The asset just created, waiting for the tree to be rescanned so its row exists and
+		// can be put straight into rename. Naming happens in place, where the file is.
+		std::filesystem::path m_renameAfterScan;
 		std::filesystem::path m_createDir;
 		std::string m_opError;
 	};

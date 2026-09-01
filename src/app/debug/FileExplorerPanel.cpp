@@ -1113,6 +1113,17 @@ namespace aether::editor
 		if (m_treeDirty)
 		{
 			RescanTree();
+			if (!m_renameAfterScan.empty())
+			{
+				if (const Entry* fresh = FindEntryByPath(ToUtf8Path(m_renameAfterScan)))
+				{
+					BeginRename(*fresh);
+					OpenDirectory(context, m_renameAfterScan.parent_path());
+					m_selectedPath = ToUtf8Path(m_renameAfterScan);
+					m_selectedPaths.assign(1, m_selectedPath);
+				}
+				m_renameAfterScan.clear();
+			}
 		}
 
 		m_thumbnailLoadsThisFrame = 0;
@@ -1206,94 +1217,15 @@ namespace aether::editor
 			}
 			ImGui::OpenPopup("##feNew");
 		}
-		ImGui::SetItemTooltip("Create a script, material or folder (in the selected folder)");
-
+		ImGui::SetItemTooltip("Create a script, material or folder in the open folder");
+		// Anchored under the button that opened it, left edges aligned, so it reads as that
+		// button's menu rather than a window that appeared next to the toolbar.
+		const ImVec2 newButtonMin = ImGui::GetItemRectMin();
+		const ImVec2 newButtonMax = ImGui::GetItemRectMax();
+		ImGui::SetNextWindowPos(ImVec2(newButtonMin.x, newButtonMax.y + 4.0f), ImGuiCond_Always);
 		if (ImGui::BeginPopup("##feNew"))
 		{
-			chrome::SectionTag("CREATE");
-			std::error_code relEc;
-			const std::filesystem::path rel = std::filesystem::relative(m_createDir, m_root, relEc);
-			ImGui::TextDisabled("in %s", (!relEc && IsSubpath(rel)) ? rel.generic_string().c_str() : m_projectName.c_str());
-			ImGui::Spacing();
-
-			ImGui::SetNextItemWidth(220.0f);
-			const bool scriptEntered = ImGui::InputTextWithHint("##feScript", "Script class name...", m_newScriptNameBuf, sizeof(m_newScriptNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
-			ImGui::SameLine();
-			const std::string typeName = TrimCopy(m_newScriptNameBuf);
-			const bool validName = IsValidCSharpIdentifier(typeName);
-			ImGui::BeginDisabled(!validName);
-			if (chrome::GhostButton(ICON_FA_CODE " Script", ImVec2(0.0f, 0.0f), chrome::kAccentHi) || (scriptEntered && validName))
-			{
-				std::string error;
-				const std::filesystem::path dir = m_scriptRoot.empty() ? m_root / "scripts" : m_scriptRoot;
-				if (CreateGameScriptFile(dir, typeName, error))
-				{
-					m_newScriptNameBuf[0] = '\0';
-					m_opError.clear();
-					m_treeDirty = true;
-					ImGui::CloseCurrentPopup();
-				}
-				else
-				{
-					m_opError = error;
-				}
-			}
-			ImGui::EndDisabled();
-			if (!validName && !typeName.empty())
-			{
-				ImGui::TextDisabled("Use a C# class name, e.g. PlayerMotor");
-			}
-
-			ImGui::SetNextItemWidth(220.0f);
-			const bool materialEntered = ImGui::InputTextWithHint("##feMaterial", "Material name...", m_newMaterialNameBuf, sizeof(m_newMaterialNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
-			ImGui::SameLine();
-			const std::string materialName = TrimCopy(m_newMaterialNameBuf);
-			const bool validMaterial = !materialName.empty() && !materialName.contains('/') && !materialName.contains('\\');
-			ImGui::BeginDisabled(!validMaterial);
-			if (chrome::GhostButton(ICON_FA_PALETTE " Material") || (materialEntered && validMaterial))
-			{
-				// A default MaterialAsset, written through the same serializer the inspector
-				// saves with, so a new material and an edited one are the same file shape.
-				const std::filesystem::path file = m_createDir / (materialName + ".material.toml");
-				if (io::file_util::Exists(file))
-				{
-					m_opError = "A material of that name is already here.";
-				}
-				else if (io::file_util::WriteText(file, MaterialSerializer::ToToml(MaterialPresetSpec{})))
-				{
-					m_newMaterialNameBuf[0] = '\0';
-					m_opError.clear();
-					m_treeDirty = true;
-					ImGui::CloseCurrentPopup();
-				}
-				else
-				{
-					m_opError = "Could not create the material.";
-				}
-			}
-			ImGui::EndDisabled();
-
-			ImGui::SetNextItemWidth(220.0f);
-			const bool folderEntered = ImGui::InputTextWithHint("##feFolder", "Folder name...", m_newFolderNameBuf, sizeof(m_newFolderNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
-			ImGui::SameLine();
-			const std::string folderName = TrimCopy(m_newFolderNameBuf);
-			const bool validFolder = !folderName.empty() && !folderName.contains('/') && !folderName.contains('\\');
-			ImGui::BeginDisabled(!validFolder);
-			if (chrome::GhostButton(ICON_FA_FOLDER " Folder") || (folderEntered && validFolder))
-			{
-				if (io::file_util::CreateDirectories(m_createDir / folderName))
-				{
-					m_newFolderNameBuf[0] = '\0';
-					m_opError.clear();
-					m_treeDirty = true;
-					ImGui::CloseCurrentPopup();
-				}
-				else
-				{
-					m_opError = "Could not create the folder.";
-				}
-			}
-			ImGui::EndDisabled();
+			DrawCreateMenuItems(m_createDir.empty() ? m_root : m_createDir);
 			ImGui::EndPopup();
 		}
 
@@ -2213,7 +2145,16 @@ namespace aether::editor
 
 		if (shown == 0)
 		{
-			ImGui::TextDisabled("This folder is empty.");
+			ImGui::TextDisabled("This folder is empty.  Right-click to create something.");
+		}
+
+		// Right-click anywhere the tiles are not: create in the folder being looked at, which
+		// is where you already are rather than a toolbar at the other end of the panel.
+		if (ImGui::BeginPopupContextWindow("##feCreateHere", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+		{
+			chrome::SectionTag("CREATE");
+			DrawCreateMenuItems(m_currentDir);
+			ImGui::EndPopup();
 		}
 		if (!m_pendingOpenDir.empty())
 		{
@@ -2341,6 +2282,121 @@ namespace aether::editor
 			ImGui::EndPopup();
 		}
 		return mutated;
+	}
+
+	void FileExplorerPanel::DrawCreateMenuItems(const std::filesystem::path& dir)
+	{
+		// A script always goes to the project's scripts directory, wherever you right-clicked,
+		// so the menu says where rather than quietly putting it somewhere else.
+		const std::filesystem::path scriptDir = m_scriptRoot.empty() ? m_root / "scripts" : m_scriptRoot;
+		// Selectable rather than MenuItem: MenuItem carries menu-navigation handling that does
+		// not activate under injected input, so these items could not be driven or tested.
+		// Closing the popup is the only thing MenuItem was doing for us here.
+		const auto item = [](const char* label)
+		{
+			const bool clicked = ImGui::Selectable(label);
+			if (clicked)
+			{
+				ImGui::CloseCurrentPopup();
+			}
+			return clicked;
+		};
+
+		if (item(ICON_FA_CODE "  C# Script"))
+		{
+			CreateAsset(NewAssetKind::Script, scriptDir);
+		}
+		if (!m_scriptRoot.empty())
+		{
+			std::error_code ec;
+			const std::filesystem::path rel = std::filesystem::relative(scriptDir, m_root, ec);
+			if (!ec && IsSubpath(rel))
+			{
+				ImGui::SetItemTooltip("Created in %s", rel.generic_string().c_str());
+			}
+		}
+		if (item(ICON_FA_PALETTE "  Material"))
+		{
+			CreateAsset(NewAssetKind::Material, dir);
+		}
+		ImGui::Separator();
+		if (item(ICON_FA_FOLDER "  Folder"))
+		{
+			CreateAsset(NewAssetKind::Folder, dir);
+		}
+	}
+
+	bool FileExplorerPanel::CreateAsset(const NewAssetKind kind, const std::filesystem::path& dir)
+	{
+		m_opError.clear();
+		if (dir.empty())
+		{
+			return false;
+		}
+
+		// A default name, then the row goes straight into rename so it is named in place -
+		// the same gesture as renaming anything else, instead of a dialog that has to be
+		// filled in before anything exists.
+		const auto uniquePath = [&](const std::string& stem, const std::string& extension)
+		{
+			for (int suffix = 0; suffix < 1000; ++suffix)
+			{
+				const std::string name = suffix == 0 ? stem : stem + std::to_string(suffix);
+				const std::filesystem::path candidate = dir / (name + extension);
+				std::error_code ec;
+				if (!std::filesystem::exists(candidate, ec))
+				{
+					return candidate;
+				}
+			}
+			return dir / (stem + extension);
+		};
+
+		std::filesystem::path created;
+		switch (kind)
+		{
+			case NewAssetKind::Script:
+			{
+				const std::filesystem::path path = uniquePath("NewScript", ".cs");
+				std::string error;
+				if (!CreateGameScriptFile(dir, path.stem().generic_string(), error))
+				{
+					m_opError = error;
+					return false;
+				}
+				created = path;
+				break;
+			}
+			case NewAssetKind::Material:
+			{
+				const std::filesystem::path path = uniquePath("NewMaterial", ".material.toml");
+				// Written through the same serializer the inspector saves with, so a new
+				// material and an edited one are the same file shape.
+				if (!io::file_util::WriteText(path, MaterialSerializer::ToToml(MaterialPresetSpec{})))
+				{
+					m_opError = "Could not create the material.";
+					return false;
+				}
+				created = path;
+				break;
+			}
+			case NewAssetKind::Folder:
+			{
+				const std::filesystem::path path = uniquePath("NewFolder", "");
+				if (!io::file_util::CreateDirectories(path))
+				{
+					m_opError = "Could not create the folder.";
+					return false;
+				}
+				created = path;
+				break;
+			}
+		}
+
+		m_treeDirty = true;
+		// Renaming has to wait for the rescan: the row does not exist yet.
+		m_renameAfterScan = created;
+		return true;
 	}
 
 	void FileExplorerPanel::DrawPendingPopups(app::LayerContext& context)
