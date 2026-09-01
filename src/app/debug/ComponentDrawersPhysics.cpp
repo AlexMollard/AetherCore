@@ -107,7 +107,7 @@ namespace aether::editor
 		if (collider != nullptr)
 		{
 			bool removed = false;
-			const bool open = RemovableSection(ICON_FA_DRAW_POLYGON "  Collider", ICON_FA_XMARK "##removeCollider", removed, ImGuiTreeNodeFlags_DefaultOpen);
+			const bool open = RemovableSection(ICON_FA_DRAW_POLYGON "  Collider", ICON_FA_XMARK "##removeCollider", removed, ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "Collider"));
 			if (removed)
 			{
 				if (physics != nullptr)
@@ -170,7 +170,7 @@ namespace aether::editor
 		if (rb != nullptr)
 		{
 			bool removed = false;
-			const bool open = RemovableSection(ICON_FA_WEIGHT_HANGING "  Rigid Body", ICON_FA_XMARK "##removeRigidBody", removed, ImGuiTreeNodeFlags_DefaultOpen);
+			const bool open = RemovableSection(ICON_FA_WEIGHT_HANGING "  Rigid Body", ICON_FA_XMARK "##removeRigidBody", removed, ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "Rigid Body"));
 			if (removed)
 			{
 				world.Remove<RigidBodyComponent>(entity);
@@ -353,7 +353,7 @@ namespace aether::editor
 			return;
 		}
 		bool removed = false;
-		const bool open = RemovableSection(ICON_FA_LINK "  Joint", ICON_FA_XMARK "##removeJoint", removed);
+		const bool open = RemovableSection(ICON_FA_LINK "  Joint", ICON_FA_XMARK "##removeJoint", removed, 0, MenuFor(context, world, entity, "Joint"));
 		if (removed)
 		{
 			world.Remove<JointComponent>(entity);

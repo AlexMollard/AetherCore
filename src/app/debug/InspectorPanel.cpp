@@ -586,6 +586,19 @@ namespace aether::editor
 				add2D("Joint 2D", ICON_FA_LINK "  Joint 2D");
 			}
 
+			// A component copied from another entity. Without this the clipboard could only
+			// be pasted over a component the target already had, which is the case that
+			// needs it least.
+			if (const std::string_view copied = editor::CopiedComponentName(); !copied.empty())
+			{
+				ImGui::SeparatorText("Clipboard");
+				const std::string label = std::string(ICON_FA_PASTE "  Paste ") + std::string(copied);
+				if (PaletteEntry(label.c_str(), m_addFilter, false))
+				{
+					editor::PasteComponentInto(context.services, world, entity);
+				}
+			}
+
 			// Catalog components without a hand-authored entry above (reflected
 			// registrations like Day Night or future 2D physics additions) list
 			// here automatically, honoring the same feature/conflict visibility.
@@ -700,10 +713,10 @@ namespace aether::editor
 		DrawSkinnedMesh(world, entity);
 		DrawMaterial(context, world, entity);
 		DrawEffectParams(context, world, entity);
-		DrawUiCanvas(world, entity);
-		DrawUiRect(world, entity);
+		DrawUiCanvas(context, world, entity);
+		DrawUiRect(context, world, entity);
 		DrawUiImage(context, world, entity);
-		DrawUiText(world, entity);
+		DrawUiText(context, world, entity);
 		DrawCamera(context, world, entity);
 		DrawScript(context, world, entity);
 		// UI Canvas/Rect/Image/Text have richer bespoke drawers above; exclude them here so the

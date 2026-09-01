@@ -148,7 +148,7 @@ namespace aether::editor
 	void DrawMaterial(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* mc = world.TryGet<MaterialComponent>(entity);
-		if (!mc || !SectionHeader(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_DefaultOpen))
+		if (!mc || !SectionHeader(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "Material")))
 		{
 			return;
 		}
@@ -700,7 +700,7 @@ namespace aether::editor
 			return;
 		}
 		bool removed = false;
-		const bool open = RemovableSection(ICON_FA_IMAGE "  Sprite Renderer", ICON_FA_XMARK "##removeSprite", removed, ImGuiTreeNodeFlags_DefaultOpen);
+		const bool open = RemovableSection(ICON_FA_IMAGE "  Sprite Renderer", ICON_FA_XMARK "##removeSprite", removed, ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "Sprite Renderer"));
 		if (removed)
 		{
 			RecordComponentRemoval(context, world, entity, "Sprite Renderer");
@@ -825,7 +825,7 @@ namespace aether::editor
 			return;
 		}
 		bool removed = false;
-		const bool open = RemovableSection(ICON_FA_FILM "  Sprite Animator", ICON_FA_XMARK "##removeSpriteAnimator", removed, ImGuiTreeNodeFlags_DefaultOpen);
+		const bool open = RemovableSection(ICON_FA_FILM "  Sprite Animator", ICON_FA_XMARK "##removeSpriteAnimator", removed, ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "Sprite Animator"));
 		if (removed)
 		{
 			RecordComponentRemoval(context, world, entity, "Sprite Animator");

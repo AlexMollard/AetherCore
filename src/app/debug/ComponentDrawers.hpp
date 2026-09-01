@@ -2,9 +2,12 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 
 #include <glm/glm.hpp>
 #include <imgui.h>
+
+#include "debug/InspectorWidgets.hpp"
 
 namespace aether
 {
@@ -20,6 +23,17 @@ namespace aether::app
 
 namespace aether::editor
 {
+	// Component copy/paste. The clipboard is editor-global on purpose: copying values onto a
+	// different entity is the whole point of it.
+	void PasteComponentInto(ServiceContainer& services, World& world, Entity entity);
+	[[nodiscard]] std::string_view CopiedComponentName();
+
+	// Builds the right-click target for a component's section header. Two overloads so the
+	// bespoke drawers (which hold a LayerContext) and the reflected one (which holds only the
+	// service container) can both use it.
+	[[nodiscard]] iw::ComponentMenuTarget MenuFor(ServiceContainer& services, World& world, Entity entity, const char* component);
+	[[nodiscard]] iw::ComponentMenuTarget MenuFor(app::LayerContext& context, World& world, Entity entity, const char* component);
+
 	class SceneSelection;
 
 	const char* EntityDisplayName(const World& world, Entity entity);
@@ -41,10 +55,10 @@ namespace aether::editor
 	void DrawSkinnedMesh(World& world, Entity entity);
 	void DrawMaterial(app::LayerContext& context, World& world, Entity entity);
 	void DrawEffectParams(app::LayerContext& context, World& world, Entity entity);
-	void DrawUiCanvas(World& world, Entity entity);
-	void DrawUiRect(World& world, Entity entity);
+	void DrawUiCanvas(app::LayerContext& context, World& world, Entity entity);
+	void DrawUiRect(app::LayerContext& context, World& world, Entity entity);
 	void DrawUiImage(app::LayerContext& context, World& world, Entity entity);
-	void DrawUiText(World& world, Entity entity);
+	void DrawUiText(app::LayerContext& context, World& world, Entity entity);
 	void DrawCamera(app::LayerContext& context, World& world, Entity entity);
 
 	// Snapshot a component into history before a bespoke drawer's X removes it.

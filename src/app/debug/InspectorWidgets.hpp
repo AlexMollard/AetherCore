@@ -5,6 +5,7 @@
 #include <cfloat>
 #include <cstdarg>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <string_view>
@@ -18,6 +19,24 @@
 namespace aether::editor::iw
 {
 	inline constexpr float kLabelWidth = 128.0f;
+
+	// Identifies the component a section header belongs to, so the header can carry a
+	// right-click menu. Held as an id and raw pointers rather than engine types: this header
+	// is pure ImGui and every inspector drawer includes it.
+	struct ComponentMenuTarget
+	{
+		void* services = nullptr;
+		void* world = nullptr;
+		std::uint32_t entityId = 0;
+		// Null means "no menu" - sections that are not components (Tags, Hierarchy, the
+		// particle editor's groupings) pass nothing and behave exactly as before.
+		const char* component = nullptr;
+	};
+
+	// Defined in ComponentDrawers.cpp, which has the world and the undo stack. Declared here
+	// so the shared header widgets can raise the menu on the header itself rather than on
+	// whatever widget happened to be drawn last.
+	void DrawComponentContextMenu(const ComponentMenuTarget& target);
 
 	[[nodiscard]] inline ImVec4 ToImVec4(const glm::vec4& c)
 	{
@@ -110,14 +129,19 @@ namespace aether::editor::iw
 		return open;
 	}
 
-	inline bool SectionHeader(const char* label, ImGuiTreeNodeFlags flags = 0)
-	{
-		return BeginSection(label, flags);
-	}
-
-	inline bool RemovableSection(const char* label, const char* removeId, bool& removed, ImGuiTreeNodeFlags flags = 0)
+	inline bool SectionHeader(const char* label, ImGuiTreeNodeFlags flags = 0, const ComponentMenuTarget& menu = {})
 	{
 		const bool open = BeginSection(label, flags);
+		DrawComponentContextMenu(menu);
+		return open;
+	}
+
+	inline bool RemovableSection(const char* label, const char* removeId, bool& removed, ImGuiTreeNodeFlags flags = 0, const ComponentMenuTarget& menu = {})
+	{
+		const bool open = BeginSection(label, flags);
+		// Raised before the remove button is drawn, or BeginPopupContextItem would bind to
+		// the X instead of the header.
+		DrawComponentContextMenu(menu);
 		ImGui::SameLine();
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 22.0f);
 		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));

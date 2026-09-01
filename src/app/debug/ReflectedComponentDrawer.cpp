@@ -301,7 +301,7 @@ namespace aether::editor
 			bool removed = false;
 			const std::string label = rt.icon + "  " + rt.name;
 			const std::string removeId = std::string(ICON_FA_XMARK) + "##reflremove_" + rt.name;
-			const bool open = iw::RemovableSection(label.c_str(), removeId.c_str(), removed);
+			const bool open = iw::RemovableSection(label.c_str(), removeId.c_str(), removed, 0, MenuFor(services, world, entity, rt.name.c_str()));
 			if (removed)
 			{
 				// Snapshot the fields first so undo restores the component's values,

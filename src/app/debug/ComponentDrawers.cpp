@@ -249,7 +249,7 @@ namespace aether::editor
 		{
 			return;
 		}
-		if (!SectionHeader(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform", ImGuiTreeNodeFlags_DefaultOpen))
+		if (!SectionHeader(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform", ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "Transform")))
 		{
 			return;
 		}
@@ -303,6 +303,127 @@ namespace aether::editor
 			}
 		}
 	}
+	namespace
+	{
+		// One clipboard for the whole editor, like the system one: copying in the inspector
+		// and pasting into a different entity is the entire point, so it cannot live on a
+		// panel or a selection.
+		struct ComponentClipboard
+		{
+			std::string component;
+			nlohmann::json fields;
+			bool isReflected = false;
+		};
+
+		ComponentClipboard& Clipboard()
+		{
+			static ComponentClipboard clipboard;
+			return clipboard;
+		}
+
+		// Adds the component to an entity that does not have it, so a copy can be pasted
+		// onto a fresh entity rather than only over an existing one. Uses the catalog so
+		// this knows nothing about individual component types.
+		bool AddComponentByName(World& world, Entity entity, const std::string& name, ServiceContainer& services)
+		{
+			for (const editor::ComponentCatalogEntry& entry: editor::ComponentCatalog())
+			{
+				if (entry.name != name || entry.add == nullptr)
+				{
+					continue;
+				}
+				entry.add(world, entity, services);
+				return true;
+			}
+			return false;
+		}
+	}
+
+	iw::ComponentMenuTarget MenuFor(ServiceContainer& services, World& world, Entity entity, const char* component)
+	{
+		return iw::ComponentMenuTarget{&services, &world, entity.id, component};
+	}
+
+	iw::ComponentMenuTarget MenuFor(app::LayerContext& context, World& world, Entity entity, const char* component)
+	{
+		return MenuFor(context.services, world, entity, component);
+	}
+
+	void PasteComponentInto(ServiceContainer& services, World& world, Entity entity)
+	{
+		const ComponentClipboard& clipboard = Clipboard();
+		if (clipboard.component.empty())
+		{
+			return;
+		}
+		auto* undo = services.TryGet<UndoStack>();
+		nlohmann::json before;
+		bool isReflected = clipboard.isReflected;
+		const bool existed = CaptureComponentFields(world, entity, clipboard.component, services, before, isReflected);
+		if (!existed && !AddComponentByName(world, entity, clipboard.component, services))
+		{
+			return;
+		}
+		if (!existed && undo != nullptr)
+		{
+			// Recorded separately so one Ctrl+Z takes the values back and the next takes the
+			// component itself, rather than leaving a component the user never added.
+			undo->Record(std::make_unique<AddComponentCommand>(entity.id, clipboard.component));
+		}
+		ApplyComponentFields(world, entity, clipboard.component, clipboard.fields, isReflected, services);
+		if (existed && undo != nullptr)
+		{
+			undo->Record(std::make_unique<SetComponentCommand>(entity.id, clipboard.component, std::move(before), clipboard.fields, isReflected));
+		}
+	}
+
+	std::string_view CopiedComponentName()
+	{
+		return Clipboard().component;
+	}
+
+	namespace iw
+	{
+	void DrawComponentContextMenu(const ComponentMenuTarget& target)
+	{
+		if (target.component == nullptr || target.services == nullptr || target.world == nullptr)
+		{
+			return;
+		}
+		if (!ImGui::BeginPopupContextItem())
+		{
+			return;
+		}
+		auto& services = *static_cast<ServiceContainer*>(target.services);
+		auto& world = *static_cast<World*>(target.world);
+		const Entity entity{target.entityId};
+		const std::string component = target.component;
+
+		if (ImGui::Selectable("Copy"))
+		{
+			nlohmann::json fields;
+			bool isReflected = false;
+			if (CaptureComponentFields(world, entity, component, services, fields, isReflected))
+			{
+				Clipboard() = {component, std::move(fields), isReflected};
+			}
+		}
+		const bool sameType = Clipboard().component == component;
+		ImGui::BeginDisabled(!sameType);
+		if (ImGui::Selectable("Paste Values"))
+		{
+			PasteComponentInto(services, world, entity);
+		}
+		ImGui::EndDisabled();
+		if (!sameType && !Clipboard().component.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		{
+			// Otherwise a greyed-out Paste looks broken rather than type-checked.
+			ImGui::SetTooltip("Clipboard holds a %s", Clipboard().component.c_str());
+		}
+		ImGui::EndPopup();
+	}
+	} // namespace iw
+
 	// The reflected drawer records a RemoveComponentCommand when its X is pressed, and the
 	// inspector's field-edit net deliberately skips a component that vanished mid-frame
 	// ("recorded elsewhere"). For the bespoke drawers that elsewhere did not exist: their X
@@ -329,7 +450,7 @@ namespace aether::editor
 			return;
 		}
 		bool removed = false;
-		const bool open = RemovableSection(ICON_FA_VIDEO "  Camera", ICON_FA_XMARK "##removeCamera", removed, ImGuiTreeNodeFlags_DefaultOpen);
+		const bool open = RemovableSection(ICON_FA_VIDEO "  Camera", ICON_FA_XMARK "##removeCamera", removed, ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "Camera"));
 		if (removed)
 		{
 			RecordComponentRemoval(context, world, entity, "Camera");

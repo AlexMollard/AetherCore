@@ -98,10 +98,10 @@ namespace aether::editor
 			rect.offsetMax = (glm::vec2(1.f) - rect.pivot) * size;
 		}
 	} // namespace
-	void DrawUiCanvas(World& world, Entity entity)
+	void DrawUiCanvas(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* canvas = world.TryGet<ui::UICanvas>(entity);
-		if (canvas == nullptr || !SectionHeader(ICON_FA_WINDOW_MAXIMIZE "  UI Canvas", ImGuiTreeNodeFlags_DefaultOpen))
+		if (canvas == nullptr || !SectionHeader(ICON_FA_WINDOW_MAXIMIZE "  UI Canvas", ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "UI Canvas")))
 		{
 			return;
 		}
@@ -116,10 +116,10 @@ namespace aether::editor
 		PropInt("Sort bias", &canvas->sortBias, 1.f, -100000, 100000);
 	}
 
-	void DrawUiRect(World& world, Entity entity)
+	void DrawUiRect(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* rect = world.TryGet<ui::UIRect>(entity);
-		if (rect == nullptr || !SectionHeader(ICON_FA_VECTOR_SQUARE "  UI Rect", ImGuiTreeNodeFlags_DefaultOpen))
+		if (rect == nullptr || !SectionHeader(ICON_FA_VECTOR_SQUARE "  UI Rect", ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "UI Rect")))
 		{
 			return;
 		}
@@ -163,7 +163,7 @@ namespace aether::editor
 	void DrawUiImage(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* image = world.TryGet<ui::UIImage>(entity);
-		if (image == nullptr || !SectionHeader(ICON_FA_IMAGE "  UI Image", ImGuiTreeNodeFlags_DefaultOpen))
+		if (image == nullptr || !SectionHeader(ICON_FA_IMAGE "  UI Image", ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "UI Image")))
 		{
 			return;
 		}
@@ -198,10 +198,10 @@ namespace aether::editor
 		}
 	}
 
-	void DrawUiText(World& world, Entity entity)
+	void DrawUiText(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* text = world.TryGet<ui::UIText>(entity);
-		if (text == nullptr || !SectionHeader(ICON_FA_FONT "  UI Text", ImGuiTreeNodeFlags_DefaultOpen))
+		if (text == nullptr || !SectionHeader(ICON_FA_FONT "  UI Text", ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "UI Text")))
 		{
 			return;
 		}
