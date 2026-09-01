@@ -44,7 +44,6 @@ using namespace std::string_view_literals;
 #include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
 #include "debug/MaterialGraphPanel.hpp"
-#include "debug/LightingPanel.hpp"
 #include "debug/PerformancePanel.hpp"
 #include "debug/BuildPanel.hpp"
 #include "debug/ProjectPanel.hpp"
@@ -184,9 +183,9 @@ namespace aether::editor
 				case WorkflowLayout::TwoD:
 					return {"Scene", "Project", "File Explorer", "Viewport", "Inspector", "Tile Palette", "Sprite Slicer", "Sprite Animation", "Pixel Art", "UI Canvas", "Console"};
 				case WorkflowLayout::ThreeD:
-					return {"Scene", "Project", "File Explorer", "Viewport", "Inspector", "Lighting", "Console", "Performance"};
+					return {"Scene", "Project", "File Explorer", "Viewport", "Inspector", "Console", "Performance"};
 				case WorkflowLayout::Rendering:
-					return {"Scene", "Viewport", "Inspector", "Render Graph", "Post Processing", "Lighting", "Textures", "Performance", "Console"};
+					return {"Scene", "Viewport", "Inspector", "Render Graph", "Post Processing", "Textures", "Performance", "Console"};
 				case WorkflowLayout::Materials:
 					return {"File Explorer", "Project", "Material", "Viewport", "Inspector", "Scene", "Console"};
 				case WorkflowLayout::Assets:
@@ -272,7 +271,6 @@ namespace aether::editor
 					ImGui::DockBuilderDockWindow("Build", leftBottom);
 					ImGui::DockBuilderDockWindow("File Explorer", leftBottom);
 					ImGui::DockBuilderDockWindow("Inspector", right);
-					ImGui::DockBuilderDockWindow("Lighting", rightBottom);
 					ImGui::DockBuilderDockWindow("Performance", bottom);
 					ImGui::DockBuilderDockWindow("Console", bottom);
 					ImGui::DockBuilderDockWindow("Viewport", root);
@@ -288,7 +286,6 @@ namespace aether::editor
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Render Graph", right);
 					ImGui::DockBuilderDockWindow("Post Processing", right);
-					ImGui::DockBuilderDockWindow("Lighting", rightBottom);
 					ImGui::DockBuilderDockWindow("Inspector", rightBottom);
 					ImGui::DockBuilderDockWindow("Build", rightBottom);
 					ImGui::DockBuilderDockWindow("Performance", bottom);
@@ -383,7 +380,6 @@ namespace aether::editor
 					ImGui::DockBuilderDockWindow("Control Server", rightTools);
 					ImGui::DockBuilderDockWindow("Performance", bottom);
 					ImGui::DockBuilderDockWindow("Console", bottom);
-					ImGui::DockBuilderDockWindow("Lighting", bottom);
 					ImGui::DockBuilderDockWindow("Textures", bottom);
 					break;
 				}
@@ -440,10 +436,6 @@ namespace aether::editor
 			if (panelName == "Post Processing")
 			{
 				return ICON_FA_WAND_MAGIC_SPARKLES;
-			}
-			if (panelName == "Lighting")
-			{
-				return ICON_FA_LIGHTBULB;
 			}
 			if (panelName == "Textures")
 			{
@@ -592,7 +584,6 @@ namespace aether::editor
 		m_panels.push_back(std::make_unique<ThemePanel>());
 		m_panels.push_back(std::make_unique<DevToolsPanel>());
 		m_panels.push_back(std::make_unique<ConsolePanel>());
-		m_panels.push_back(std::make_unique<LightingPanel>());
 		m_panels.push_back(std::make_unique<ControlServerPanel>());
 		for (auto& panel: m_panels)
 		{
@@ -1968,7 +1959,7 @@ namespace aether::editor
 				static const std::vector<MenuGroup> kGroups = {
 				        {ICON_FA_CUBE, "Scene", {"Scene", "Project", "Build", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
 				        {ICON_FA_BRUSH, "Authoring", {"Material", "Textures", "Sprite Slicer", "Sprite Animation", "Tile Palette", "Pixel Art"}},
-				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Lighting", "Particles"}},
+				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Particles"}},
 				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "Dev Tools", "Control Server"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings", "Theme"}},
 				};

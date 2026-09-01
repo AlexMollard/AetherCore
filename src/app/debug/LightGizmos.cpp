@@ -1,4 +1,4 @@
-#include "LightingPanel.hpp"
+#include "debug/LightGizmos.hpp"
 #include "debug/EditorChrome.hpp"
 
 #include <algorithm>
@@ -162,80 +162,42 @@ namespace aether::editor
 		}
 	} // namespace
 
-	void LightingPanel::OnUpdate(app::LayerContext& context)
+	void DrawLightGizmos(app::LayerContext& context, const LightGizmoSettings& settings)
 	{
 		AE_PROFILE_ZONE();
+
+		if (!settings.enabled || !aether::IsDebugRenderingEnabled())
+		{
+			return;
+		}
 
 		// Editor gizmos step aside while the game is playing, unless explicitly asked to
 		// stay. A light volume drawn over every light is a scene-authoring aid; during play
 		// it is just a wall of circles between you and the thing you pressed Play to look at.
 		const auto* play = context.TryGet<app::PlayState>();
-		const bool suppressForPlay = play != nullptr && play->IsPlaying() && !aether::AreEditorGizmosInPlayEnabled();
-
-		if (m_lightGizmos && aether::IsDebugRenderingEnabled() && !suppressForPlay)
+		if (play != nullptr && play->IsPlaying() && !aether::AreEditorGizmosInPlayEnabled())
 		{
-			if (auto* engine = context.TryGet<aether::AetherCore>())
-			{
-				const World& world = context.Get<World>();
-				// The sun gizmo is meaningless in 2D scenes and when no directional
-				// source exists - never draw it from the renderer's default sun.
-				const bool sceneHasSun = world.GetSceneKind() != SceneKind::Scene2D && SceneHasDirectionalSource(world);
-				AddLightGizmos(engine->GetPendingDebugVertices(),
-				        context.Get<Renderer>(),
-				        context.Get<CameraManager>(),
-				        LightGizmoOptions{
-				                .pointVolumes = m_lightGizmoPointVolumes,
-				                .spotCones = m_lightGizmoSpotCones,
-				                .sunDirection = m_lightGizmoSunDirection && sceneHasSun,
-				                .shadowMarkers = m_lightGizmoShadowMarkers,
-				                .scale = m_lightGizmoScale,
-				        });
-			}
+			return;
 		}
-	}
 
-	void LightingPanel::OnImGui(app::LayerContext& context)
-	{
-		AE_PROFILE_ZONE();
-
-		ImGui::Begin("Lighting", VisiblePtr());
-		chrome::PanelHeader("LIGHTING");
+		auto* engine = context.TryGet<aether::AetherCore>();
+		if (engine == nullptr)
 		{
-			const Renderer& renderer = context.Get<Renderer>();
-			ImGui::Text("Point lights: %zu", renderer.GetPointLights().size());
-			ImGui::Text("Spot lights: %zu", renderer.GetSpotLights().size());
-			ImGui::Text("Sun intensity: %.2f", renderer.GetDirectionalLightIntensity());
-
-			ImGui::SeparatorText("Gizmos");
-			ImGui::Checkbox("Light gizmos", &m_lightGizmos);
-			ImGui::Checkbox("Point light volumes", &m_lightGizmoPointVolumes);
-			ImGui::Checkbox("Spot cones", &m_lightGizmoSpotCones);
-			ImGui::Checkbox("Sun direction", &m_lightGizmoSunDirection);
-			ImGui::Checkbox("Shadow markers", &m_lightGizmoShadowMarkers);
-			ImGui::SliderFloat("Gizmo scale", &m_lightGizmoScale, 0.25f, 2.0f, "%.2f");
+			return;
 		}
-		ImGui::End();
-	}
-
-	void LightingPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
-	{
-		(void) context;
-		m_lightGizmos = config.GetBool("debug.lightgizmos", m_lightGizmos);
-		m_lightGizmoPointVolumes = config.GetBool("debug.lightgizmopointvolumes", m_lightGizmoPointVolumes);
-		m_lightGizmoSpotCones = config.GetBool("debug.lightgizmospotcones", m_lightGizmoSpotCones);
-		m_lightGizmoSunDirection = config.GetBool("debug.lightgizmosundirection", m_lightGizmoSunDirection);
-		m_lightGizmoShadowMarkers = config.GetBool("debug.lightgizmoshadowmarkers", m_lightGizmoShadowMarkers);
-		m_lightGizmoScale = config.GetFloat("debug.lightgizmoscale", m_lightGizmoScale);
-	}
-
-	void LightingPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
-	{
-		(void) context;
-		config.Set("debug.lightgizmos", m_lightGizmos);
-		config.Set("debug.lightgizmopointvolumes", m_lightGizmoPointVolumes);
-		config.Set("debug.lightgizmospotcones", m_lightGizmoSpotCones);
-		config.Set("debug.lightgizmosundirection", m_lightGizmoSunDirection);
-		config.Set("debug.lightgizmoshadowmarkers", m_lightGizmoShadowMarkers);
-		config.Set("debug.lightgizmoscale", m_lightGizmoScale);
+		const World& world = context.Get<World>();
+		// The sun gizmo is meaningless in 2D scenes and when no directional source exists -
+		// never draw it from the renderer's default sun.
+		const bool sceneHasSun = world.GetSceneKind() != SceneKind::Scene2D && SceneHasDirectionalSource(world);
+		AddLightGizmos(engine->GetPendingDebugVertices(),
+		        context.Get<Renderer>(),
+		        context.Get<CameraManager>(),
+		        LightGizmoOptions{
+		                .pointVolumes = settings.pointVolumes,
+		                .spotCones = settings.spotCones,
+		                .sunDirection = settings.sunDirection && sceneHasSun,
+		                .shadowMarkers = settings.shadowMarkers,
+		                .scale = settings.scale,
+		        });
 	}
 } // namespace aether::editor

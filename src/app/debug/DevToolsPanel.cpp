@@ -27,6 +27,10 @@ namespace aether::editor
 		const auto* play = context.TryGet<app::PlayState>();
 		const bool suppressForPlay = play != nullptr && play->IsPlaying() && !aether::AreEditorGizmosInPlayEnabled();
 		aether::SetPhysicsDebugShapesEnabled(m_physicsShapesWanted && !suppressForPlay);
+
+		// Queued here rather than from a window of its own: it is one more debug overlay,
+		// and it already depended on the master switch above.
+		DrawLightGizmos(context, m_lightGizmos);
 	}
 
 	void DevToolsPanel::OnImGui(app::LayerContext& context)
@@ -66,6 +70,18 @@ namespace aether::editor
 			if (ImGui::Checkbox("Physics debug rendering", &m_physicsShapesWanted))
 			{
 				aether::SetPhysicsDebugShapesEnabled(m_physicsShapesWanted);
+			}
+
+			ImGui::Checkbox("Light gizmos", &m_lightGizmos.enabled);
+			if (m_lightGizmos.enabled)
+			{
+				ImGui::Indent();
+				ImGui::Checkbox("Point light volumes", &m_lightGizmos.pointVolumes);
+				ImGui::Checkbox("Spot cones", &m_lightGizmos.spotCones);
+				ImGui::Checkbox("Sun direction", &m_lightGizmos.sunDirection);
+				ImGui::Checkbox("Shadow markers", &m_lightGizmos.shadowMarkers);
+				ImGui::SliderFloat("Gizmo scale", &m_lightGizmos.scale, 0.25f, 2.0f, "%.2f");
+				ImGui::Unindent();
 			}
 
 			bool gizmosInPlay = aether::AreEditorGizmosInPlayEnabled();
@@ -120,6 +136,13 @@ namespace aether::editor
 		m_physicsShapesWanted = config.GetBool("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
 		aether::SetPhysicsDebugShapesEnabled(m_physicsShapesWanted);
 		aether::SetEditorGizmosInPlayEnabled(config.GetBool("debug.editorgizmosinplay", aether::AreEditorGizmosInPlayEnabled()));
+		// Same keys the Lighting panel used, so toggles set before the merge still apply.
+		m_lightGizmos.enabled = config.GetBool("debug.lightgizmos", m_lightGizmos.enabled);
+		m_lightGizmos.pointVolumes = config.GetBool("debug.lightgizmopointvolumes", m_lightGizmos.pointVolumes);
+		m_lightGizmos.spotCones = config.GetBool("debug.lightgizmospotcones", m_lightGizmos.spotCones);
+		m_lightGizmos.sunDirection = config.GetBool("debug.lightgizmosundirection", m_lightGizmos.sunDirection);
+		m_lightGizmos.shadowMarkers = config.GetBool("debug.lightgizmoshadowmarkers", m_lightGizmos.shadowMarkers);
+		m_lightGizmos.scale = config.GetFloat("debug.lightgizmoscale", m_lightGizmos.scale);
 	}
 
 	void DevToolsPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
@@ -130,5 +153,11 @@ namespace aether::editor
 		// The wish, not the live flag - see the member's declaration.
 		config.Set("debug.physicsdebugrendering", m_physicsShapesWanted);
 		config.Set("debug.editorgizmosinplay", aether::AreEditorGizmosInPlayEnabled());
+		config.Set("debug.lightgizmos", m_lightGizmos.enabled);
+		config.Set("debug.lightgizmopointvolumes", m_lightGizmos.pointVolumes);
+		config.Set("debug.lightgizmospotcones", m_lightGizmos.spotCones);
+		config.Set("debug.lightgizmosundirection", m_lightGizmos.sunDirection);
+		config.Set("debug.lightgizmoshadowmarkers", m_lightGizmos.shadowMarkers);
+		config.Set("debug.lightgizmoscale", m_lightGizmos.scale);
 	}
 } // namespace aether::editor
