@@ -177,15 +177,6 @@ namespace aether::editor
 			return entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity));
 		}
 
-		std::string EntityTargetLabel(const World& world, Entity entity)
-		{
-			if (const auto* name = world.TryGet<NameComponent>(entity); name != nullptr && !name->name.empty())
-			{
-				return name->name;
-			}
-			return "Entity #" + std::to_string(entity.id);
-		}
-
 		// Drop a .slang onto a UI Effect entity to set its shader (by stem, e.g. "ui_ink").
 		bool AssignShaderToEntity(World& world, Entity entity, const std::string& path)
 		{
@@ -233,152 +224,6 @@ namespace aether::editor
 			}
 		}
 
-		const char* AssetKindLabel(SceneSelection::AssetKind kind)
-		{
-			switch (kind)
-			{
-				case SceneSelection::AssetKind::Model:
-					return "Model";
-				case SceneSelection::AssetKind::Material:
-					return "Material";
-				case SceneSelection::AssetKind::Texture:
-					return "Texture";
-				case SceneSelection::AssetKind::Script:
-					return "Script";
-				case SceneSelection::AssetKind::Prefab:
-					return "Prefab";
-				case SceneSelection::AssetKind::Scene:
-					return "Scene";
-				case SceneSelection::AssetKind::File:
-					return "File";
-				case SceneSelection::AssetKind::None:
-				default:
-					return "Asset";
-			}
-		}
-
-		const char* AssetKindIcon(SceneSelection::AssetKind kind)
-		{
-			switch (kind)
-			{
-				case SceneSelection::AssetKind::Model:
-					return ICON_FA_PERSON_RUNNING;
-				case SceneSelection::AssetKind::Material:
-					return ICON_FA_PALETTE;
-				case SceneSelection::AssetKind::Texture:
-					return ICON_FA_IMAGE;
-				case SceneSelection::AssetKind::Script:
-					return ICON_FA_CODE;
-				case SceneSelection::AssetKind::Prefab:
-					return ICON_FA_BOX_OPEN;
-				case SceneSelection::AssetKind::Scene:
-					return ICON_FA_FOLDER_OPEN;
-				case SceneSelection::AssetKind::File:
-				case SceneSelection::AssetKind::None:
-				default:
-					return ICON_FA_IMAGE;
-			}
-		}
-
-		void DrawAssetInspector(app::LayerContext& context, World& world, SceneSelection& selection)
-		{
-			const SceneSelection::Asset& asset = selection.SelectedAsset();
-			const Entity target = selection.LastEntityPrimary();
-			const bool hasTarget = IsEntityAlive(world, target);
-			ImGui::Text("%s  %s", AssetKindIcon(asset.kind), asset.displayName.c_str());
-			ImGui::TextDisabled("%s", AssetKindLabel(asset.kind));
-			ImGui::Separator();
-			ImGui::TextWrapped("%s", asset.path.c_str());
-			ImGui::Separator();
-			if (hasTarget)
-			{
-				const std::string targetLabel = EntityTargetLabel(world, target);
-				ImGui::TextDisabled("Target  %s", targetLabel.c_str());
-				ImGui::Separator();
-			}
-
-			if (asset.kind == SceneSelection::AssetKind::Model)
-			{
-				ImGui::BeginDisabled(!hasTarget);
-				if (ImGui::Button(ICON_FA_PERSON_RUNNING "  Apply to Target"))
-				{
-					if (AssignModelAsset(context, world, target, asset.path))
-					{
-						selection.Select(target);
-					}
-				}
-				ImGui::EndDisabled();
-				if (!hasTarget)
-				{
-					ImGui::TextDisabled("Select an entity to assign this model.");
-				}
-			}
-			else if (asset.kind == SceneSelection::AssetKind::Prefab)
-			{
-				if (ImGui::Button(ICON_FA_PLUS "  Instantiate"))
-				{
-					if (const Entity root = InstantiatePrefabAsset(context, world, asset.path); root.IsValid())
-					{
-						selection.Select(root);
-					}
-				}
-				if (hasTarget)
-				{
-					ImGui::SameLine();
-					if (ImGui::Button(ICON_FA_SITEMAP "  Instantiate Under Target"))
-					{
-						if (const Entity root = InstantiatePrefabAsset(context, world, asset.path, target); root.IsValid())
-						{
-							selection.Select(root);
-						}
-					}
-				}
-			}
-			else if (asset.kind == SceneSelection::AssetKind::Material)
-			{
-				ImGui::BeginDisabled(!hasTarget);
-				if (ImGui::Button(ICON_FA_PALETTE "  Apply Material"))
-				{
-					if (AssignMaterialPreset(context, world, target, asset.path))
-					{
-						selection.Select(target);
-					}
-				}
-				ImGui::EndDisabled();
-				if (!hasTarget)
-				{
-					ImGui::SetItemTooltip("Select an entity to apply this material to it");
-				}
-				// Editing lives in the Material window and nowhere else. Two surfaces that
-				// both edited a material meant which one you happened to be looking at decided
-				// what you saw, and a graph opened as a property list about half the time.
-				ImGui::TextDisabled("Edit this in the Material window.");
-			}
-			else if (asset.kind == SceneSelection::AssetKind::Texture)
-			{
-				ImGui::BeginDisabled(!hasTarget);
-				if (ImGui::Button(ICON_FA_IMAGE "  Apply Albedo"))
-				{
-					if (AssignTextureToEntity(context, world, target, asset.path))
-					{
-						selection.Select(target);
-					}
-				}
-				ImGui::EndDisabled();
-			}
-			else if (asset.kind == SceneSelection::AssetKind::Script)
-			{
-				const std::string typeName = std::filesystem::path(asset.path).stem().generic_string();
-				ImGui::TextDisabled("Type  %s", typeName.c_str());
-				ImGui::BeginDisabled(!hasTarget);
-				if (ImGui::Button(ICON_FA_CODE "  Add Script"))
-				{
-					AddScriptToEntity(world, target, typeName);
-					selection.Select(target);
-				}
-				ImGui::EndDisabled();
-			}
-		}
 	} // namespace
 
 	bool InspectorPanel::IsAlive(const World& world, Entity entity)
@@ -394,17 +239,10 @@ namespace aether::editor
 		World& world = context.Get<World>();
 		auto& selection = context.Get<SceneSelection>();
 
-		// An asset selection gets the asset's own inspector. It carries the last selected
-		// entity as an apply target itself, which is why the entity fallback that used to
-		// stand here is gone - it showed the previous entity's components while you had a
-		// material selected, and was the reason a material looked like it had no UI at all.
-		if (selection.HasAsset())
-		{
-			DrawAssetInspector(context, world, selection);
-			ImGui::End();
-			return;
-		}
-
+		// Selecting a file does NOT take the Inspector over. The Material and Texture windows
+		// still follow the asset selection, so the asset is not unreachable - but clicking
+		// around the content browser no longer throws away the entity you were working on,
+		// which is the thing you are usually still editing.
 		const Entity entity = selection.Primary();
 
 		if (!IsAlive(world, entity))
