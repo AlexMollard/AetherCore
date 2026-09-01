@@ -56,15 +56,30 @@ namespace aether
 		}
 	} // namespace
 
-	void ModelPreviewService::Initialize(VulkanContext& context, BindlessManager& bindless, const RenderQueueSharedPipelines& pipelines, const gpu::Format colorFormat, const gpu::Format depthFormat)
+	void ModelPreviewService::Initialize(VulkanContext& context,
+	        BindlessManager& bindless,
+	        const RenderQueueSharedPipelines& pipelines,
+	        const gpu::Format colorFormat,
+	        const gpu::Format depthFormat,
+	        const std::uint32_t size,
+	        const std::string_view passPrefix,
+	        const std::uint32_t atlasCols)
 	{
 		AE_PROFILE_ZONE();
 		(void) context;
 		(void) bindless;
 		m_colorFormat = colorFormat;
 		m_depthFormat = depthFormat;
+		m_size = size;
+		m_atlasCols = atlasCols < 1u ? 1u : atlasCols;
+		m_passPrefix = std::string(passPrefix);
+		m_cullPassName = m_passPrefix + "Cull";
+		m_forwardPassName = m_passPrefix + "Forward";
+		m_tonemapPassName = m_passPrefix + "Tonemap";
+		m_readyPassName = m_passPrefix + "Ready";
+		m_drawsProductName = m_passPrefix.substr(1) + "Draws";
 
-		m_queue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 2048u, .debugName = "ModelPreview"});
+		m_queue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 2048u, .debugName = m_passPrefix.c_str()});
 		m_constants.Initialize();
 
 		// The HDR colour and the depth are graph transients, declared in RegisterImages on
@@ -72,7 +87,7 @@ namespace aether
 		// ImGui as a texture id and that descriptor names one specific image.
 		m_colorLdrHandle = gpu::ResourceRegistry::CreateTexture({
 		        .format = gpu::Format::R8G8B8A8Unorm,
-		        .extent = {kSize, kSize},
+		        .extent = {m_size * m_atlasCols, m_size * m_atlasCols},
 		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = "ModelPreview.ColorLdr",
@@ -311,9 +326,9 @@ namespace aether
 		{
 			return;
 		}
-		m_color = graph.CreateTransientColor(m_colorFormat, gpu::Extent2D{kSize, kSize}, gpu::ImageUsage::Sampled);
+		m_color = graph.CreateTransientColor(m_colorFormat, gpu::Extent2D{m_size, m_size}, gpu::ImageUsage::Sampled);
 		m_colorBindlessSlot = graph.EnsureBindlessSampled(m_color);
-		m_depth = graph.CreateTransientDepth(m_depthFormat, gpu::Extent2D{kSize, kSize});
+		m_depth = graph.CreateTransientDepth(m_depthFormat, gpu::Extent2D{m_size, m_size});
 		m_colorLdr = graph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_colorLdrHandle), m_colorLdrView, gpu::ImageAspect::Color);
 	}
 
@@ -324,10 +339,12 @@ namespace aether
 			return;
 		}
 		RegisterImages(graph);
-		m_draws = graph.CreatePreparedDrawList("ModelPreviewDraws");
+		// Named per instance: two instances publishing the same frame product overwrite
+		// each other's cull output, so the baker would eat the interactive preview's draws.
+		m_draws = graph.CreatePreparedDrawList(m_drawsProductName.c_str());
 
 		graph.AddQueuePreparePass({
-		                                  .name = "$ModelPreviewCull",
+		                                  .name = m_cullPassName,
 		                                  .produces = m_draws,
 		                                  .sideEffectReason = "prepares model-preview draw queue",
 		                          })
@@ -342,11 +359,11 @@ namespace aether
 			return;
 		}
 		auto pass = graph.AddDrawQueuePass({
-		        .name = "$ModelPreviewForward",
+		        .name = m_forwardPassName,
 		        .color = m_color,
 		        .depth = m_depth,
 		        .draws = m_draws,
-		        .extent = {kSize, kSize},
+		        .extent = {m_size, m_size},
 		        .colorLoadOp = gpu::LoadOp::Clear,
 		        .depthLoadOp = gpu::LoadOp::Clear,
 		});
@@ -363,10 +380,13 @@ namespace aether
 		        });
 
 		graph.AddFullscreenPass({
-		                                .name = "$ModelPreviewTonemap",
+		                                .name = m_tonemapPassName,
 		                                .color = m_colorLdr,
-		                                .extent = {kSize, kSize},
-		                                .loadOp = gpu::LoadOp::DontCare,
+		                                .extent = {m_size * m_atlasCols, m_size * m_atlasCols},
+		                                // Load, not DontCare: an atlas keeps the slots it is not
+		                                // drawing this frame, which is what makes a baked
+		                                // thumbnail persist after its bake frame.
+		                                .loadOp = m_atlasCols > 1u ? gpu::LoadOp::Load : gpu::LoadOp::DontCare,
 		                        })
 		        .ReadTexture(m_color)
 		        .Execute(
@@ -383,17 +403,34 @@ namespace aether
 			                push.debugModeCount = 0u;
 			                push.inspectX = -1;
 			                push.inspectY = -1;
-			                push.screenWidth = kSize;
-			                push.screenHeight = kSize;
+			                push.screenWidth = m_size;
+			                push.screenHeight = m_size;
 			                // Push the full 48-byte TonemapPush; the shader reads the background
 			                // BDA and must never see an uninitialised device address.
 			                // Previews render their own small view with no lens of their own.
 			                push.dofSlot = 0xFFFFFFFFu;
 			                push.backgroundParamsAddr = 0u;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+
+			                // A single-slot instance draws the whole target. A baker draws one
+			                // slot, so the viewport is moved onto it and the scissor keeps the
+			                // fullscreen triangle from touching its neighbours.
+			                if (m_atlasCols > 1u)
+			                {
+				                const int slot = m_bakeSlot.load(std::memory_order_relaxed);
+				                if (slot < 0 || static_cast<std::uint32_t>(slot) >= GetSlotCount())
+				                {
+					                return;
+				                }
+				                const float edge = static_cast<float>(m_size);
+				                const float originX = static_cast<float>(static_cast<std::uint32_t>(slot) % m_atlasCols) * edge;
+				                const float originY = static_cast<float>(static_cast<std::uint32_t>(slot) / m_atlasCols) * edge;
+				                cmd.SetViewport(gpu::Viewport{.x = originX, .y = originY, .width = edge, .height = edge});
+				                cmd.SetScissor(gpu::Rect2D{.x = static_cast<std::int32_t>(originX), .y = static_cast<std::int32_t>(originY), .width = m_size, .height = m_size});
+			                }
 			                cmd.Draw(3, 1, 0, 0);
 		                });
 
-		graph.AddPass("$ModelPreviewReady").ReadTexture(m_colorLdr).Execute([](PassContext&) {});
+		graph.AddPass(m_readyPassName).ReadTexture(m_colorLdr).Execute([](PassContext&) {});
 	}
 } // namespace aether

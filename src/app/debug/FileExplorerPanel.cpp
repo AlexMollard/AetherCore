@@ -39,6 +39,8 @@
 #include "material/MaterialSerializer.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/TextureRegistry.hpp"
+#include "mesh/PrimitiveMeshes.hpp"
+#include "rendering/ModelPreviewService.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "utils/Profiler.hpp"
 
@@ -964,6 +966,8 @@ namespace aether::editor
 		ImGui::EndChild();
 		ImGui::PopStyleColor(3);
 
+		PumpMaterialThumbnailBakes(context);
+
 		DrawPendingPopups(context);
 		ImGui::End();
 	}
@@ -1444,6 +1448,104 @@ namespace aether::editor
 		m_thumbnails.emplace(key, thumb);
 		return &m_thumbnails.at(key);
 	}
+	void FileExplorerPanel::PumpMaterialThumbnailBakes(app::LayerContext& context)
+	{
+		auto* rendering = context.TryGet<aether::RenderingSubsystem>();
+		auto* assets = context.TryGet<AssetManager>();
+		auto* imgui = context.TryGet<aether::ImguiSubsystem>();
+		auto* primitives = context.TryGet<PrimitiveMeshes>();
+		if (rendering == nullptr || assets == nullptr || imgui == nullptr || primitives == nullptr)
+		{
+			return;
+		}
+		ModelPreviewService& baker = rendering->GetMaterialThumbnailBaker();
+		if (m_atlasImGuiId == 0 && baker.GetColorView() != nullptr)
+		{
+			const ImTextureID id = imgui->RegisterTexture(baker.GetColorView(), gpu::ImageLayout::ShaderReadOnly);
+			if (id != ImTextureID_Invalid)
+			{
+				m_atlasImGuiId = static_cast<std::uint64_t>(id);
+				m_atlasColumns = static_cast<int>(baker.GetAtlasColumns());
+			}
+		}
+
+		// A bake takes one frame: the sphere is submitted here and drawn later in the same
+		// frame, so its image is only readable once that frame has gone through the graph.
+		if (!m_bakeInFlight.empty())
+		{
+			if (ImGui::GetFrameCount() <= m_bakeStartedFrame)
+			{
+				return;
+			}
+			if (const auto it = m_thumbnails.find(m_bakeInFlight); it != m_thumbnails.end())
+			{
+				it->second.bakeReady = true;
+			}
+			// Idle until the next material is picked, so nothing is drawn over a finished slot.
+			baker.SetBakeSlot(-1);
+			m_bakeInFlight.clear();
+		}
+
+		const Entry* dir = FindDirectory(m_tree, m_currentDir);
+		if (dir == nullptr)
+		{
+			return;
+		}
+		for (const Entry& child: dir->children)
+		{
+			if (child.isDirectory || child.kind != dragdrop::FileKind::Material)
+			{
+				continue;
+			}
+			const std::string key = ToUtf8Path(child.path);
+			const auto it = m_thumbnails.find(key);
+			if (it == m_thumbnails.end() || it->second.bakeAttempted)
+			{
+				continue;
+			}
+			Thumbnail& thumb = it->second;
+			thumb.bakeAttempted = true;
+
+			// The atlas is finite. Past the last slot the remaining materials keep their
+			// albedo or colour, which is a graceful stop rather than recycling a slot out
+			// from under a tile that is on screen.
+			if (m_nextAtlasSlot >= static_cast<int>(baker.GetSlotCount()))
+			{
+				return;
+			}
+			const std::string vfs = child.payloadPath.empty() ? VfsPathFor(child.path) : child.payloadPath;
+			if (vfs.empty())
+			{
+				return;
+			}
+			const auto material = assets->LoadMaterialPreset(vfs);
+			if (!material)
+			{
+				return;
+			}
+			std::string error;
+			if (!baker.ShowMaterialOnMesh(*assets, primitives->Get(PrimitiveMesh::Sphere), *material, error))
+			{
+				return;
+			}
+			thumb.atlasSlot = m_nextAtlasSlot++;
+			baker.SetBakeSlot(thumb.atlasSlot);
+			m_bakeInFlight = key;
+			m_bakeStartedFrame = ImGui::GetFrameCount();
+
+			// ShowMaterialOnMesh takes its own references; these are this function's.
+			auto& textures = assets->GetTextureRegistry();
+			for (const TextureHandle h: {material->albedoTex, material->normalTex, material->metallicRoughnessTex, material->occlusionTex, material->emissiveTex})
+			{
+				if (h.IsValid())
+				{
+					textures.Release(h);
+				}
+			}
+			return;
+		}
+	}
+
 	void FileExplorerPanel::ReleaseThumbnails(app::LayerContext& context)
 	{
 		auto* assets = context.TryGet<AssetManager>();
@@ -1461,6 +1563,13 @@ namespace aether::editor
 			}
 		}
 		m_thumbnails.clear();
+		// Every slot is free again once the thumbnails referencing them are gone.
+		m_nextAtlasSlot = 0;
+		if (auto* rendering = context.TryGet<aether::RenderingSubsystem>())
+		{
+			rendering->GetMaterialThumbnailBaker().SetBakeSlot(-1);
+		}
+		m_bakeInFlight.clear();
 	}
 
 	void FileExplorerPanel::DrawFileTile(app::LayerContext& context, const Entry& entry, const float tileSize)
@@ -1502,6 +1611,15 @@ namespace aether::editor
 		{
 			drawKindIcon(ICON_FA_FOLDER, chrome::WithAlpha(chrome::kAccent, 0.9f), 0.44f);
 		}
+		else if (thumb != nullptr && thumb->bakeReady && thumb->atlasSlot >= 0 && m_atlasImGuiId != 0)
+		{
+			const float cols = static_cast<float>(m_atlasColumns);
+			const float col = static_cast<float>(thumb->atlasSlot % m_atlasColumns);
+			const float row = static_cast<float>(thumb->atlasSlot / m_atlasColumns);
+			const ImVec2 uv0(col / cols, row / cols);
+			const ImVec2 uv1((col + 1.0f) / cols, (row + 1.0f) / cols);
+			drawList->AddImageRounded(static_cast<ImTextureID>(m_atlasImGuiId), artMin, artMax, uv0, uv1, IM_COL32_WHITE, 4.0f);
+		}
 		else if (thumb != nullptr && thumb->imguiId != 0)
 		{
 			drawList->AddImageRounded(static_cast<ImTextureID>(thumb->imguiId), artMin, artMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32_WHITE, 4.0f);
@@ -1527,6 +1645,13 @@ namespace aether::editor
 		const float nameSize = ImGui::GetFontSize() * 0.85f;
 		const float nameRoom = tile.x - 6.0f;
 		std::string label = entry.name;
+		// ".toml" is on every material and every graph, so it is the first thing to go: it
+		// costs five characters and distinguishes nothing. What is left ("...material" vs
+		// "...materialgraph") is exactly what tells two neighbouring files apart.
+		if (label.size() > 5 && label.compare(label.size() - 5, 5, ".toml") == 0)
+		{
+			label.erase(label.size() - 5);
+		}
 		if (chrome::MeasureSized(nameSize, label.c_str()).x > nameRoom && label.size() > 4)
 		{
 			std::size_t head = label.size();

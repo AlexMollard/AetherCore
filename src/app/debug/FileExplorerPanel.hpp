@@ -9,6 +9,7 @@
 
 #include "debug/DebugPanel.hpp"
 #include "debug/EditorDragDrop.hpp"
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "material/TextureHandle.hpp"
 
@@ -59,6 +60,12 @@ namespace aether::editor
 		{
 			TextureHandle texture{};
 			std::uint64_t imguiId = 0;
+			// Where this material's sphere lives in the baker's atlas, or -1 for none.
+			// Preferred over the albedo map and the swatch, both of which remain the fallback
+			// while it bakes and for materials that cannot be rendered.
+			int atlasSlot = -1;
+			bool bakeAttempted = false;
+			bool bakeReady = false;
 			// A material with no albedo map still has a colour, which says far more about it
 			// than a generic icon does.
 			std::uint32_t swatch = 0;
@@ -86,6 +93,9 @@ namespace aether::editor
 		// frame's load budget is spent, in which case the icon is drawn and it loads later).
 		[[nodiscard]] const Thumbnail* ThumbnailFor(app::LayerContext& context, const Entry& entry);
 		void ReleaseThumbnails(app::LayerContext& context);
+		// Bakes at most one material sphere per frame, on a preview instance of its own so
+		// that baking never disturbs what the Material window is showing.
+		void PumpMaterialThumbnailBakes(app::LayerContext& context);
 		void DrawFileRow(app::LayerContext& context, const Entry& entry);
 		bool DrawActiveRename(const Entry& entry);
 		void DrawSearchResults(app::LayerContext& context, const Entry& entry);
@@ -129,6 +139,14 @@ namespace aether::editor
 		// Opening a folder of hundreds of textures must not stall the frame it is opened on,
 		// so only a few thumbnails are decoded per frame and the rest arrive over the next few.
 		int m_thumbnailLoadsThisFrame = 0;
+		// The material currently on the baker, and the frame its render was requested. The
+		// result is only readable once that frame has been through the graph.
+		std::string m_bakeInFlight;
+		int m_bakeStartedFrame = 0;
+		int m_nextAtlasSlot = 0;
+		// The baker's atlas, registered with ImGui once and shared by every tile.
+		std::uint64_t m_atlasImGuiId = 0;
+		int m_atlasColumns = 1;
 
 		char m_search[96] = {};
 		std::string m_selectedPath;

@@ -1027,6 +1027,7 @@ namespace aether
 		const bool localShadowCasters = localShadowService.PrepareQueues(drawSlot, world);
 		m_rendering->GetCameraPreview().PrepareQueue(drawSlot, world);
 		m_rendering->GetModelPreview().PrepareQueue(drawSlot);
+		m_rendering->GetMaterialThumbnailBaker().PrepareQueue(drawSlot);
 
 		RenderFramePacket packet;
 		packet.frameIndex = frameIndex;
@@ -1415,6 +1416,7 @@ namespace aether
 		{
 			m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx, &m_cameras->GetLightingManager());
 			m_rendering->GetModelPreview().BuildFrameConstants(fc, frameIdx);
+			m_rendering->GetMaterialThumbnailBaker().BuildFrameConstants(fc, frameIdx);
 		}
 		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameContext);

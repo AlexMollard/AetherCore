@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 #include <glm/glm.hpp>
 
@@ -30,7 +31,42 @@ namespace aether
 	public:
 		static constexpr std::uint32_t kSize = 384u;
 
-		void Initialize(VulkanContext& context, BindlessManager& bindless, const RenderQueueSharedPipelines& pipelines, gpu::Format colorFormat, gpu::Format depthFormat);
+		// `size` is the square edge this instance renders at, and `passPrefix` names its graph
+		// passes. Both exist so a second instance can bake small material thumbnails without
+		// colliding with the interactive preview's pass names or borrowing its resolution.
+		void Initialize(VulkanContext& context,
+		        BindlessManager& bindless,
+		        const RenderQueueSharedPipelines& pipelines,
+		        gpu::Format colorFormat,
+		        gpu::Format depthFormat,
+		        std::uint32_t size = kSize,
+		        std::string_view passPrefix = "$ModelPreview",
+		        std::uint32_t atlasCols = 1);
+
+		// Bake slots. This instance's image is an atlas of `atlasCols x atlasCols` squares of
+		// `size`, and one thumbnail is rendered into one of those squares.
+		//
+		// An atlas rather than an image per material because the render graph is STATIC: passes
+		// are registered once at startup, so the image a pass draws into is fixed for the life
+		// of the graph. A per-material target is therefore impossible - but a per-material
+		// RECTANGLE of one fixed target is not, and it costs a single allocation rather than one
+		// per material. The tonemap loads rather than clears, so finished slots survive.
+		//
+		// -1 renders nothing, which is what an idle baker does between bakes.
+		void SetBakeSlot(const int slot) noexcept
+		{
+			m_bakeSlot.store(slot, std::memory_order_relaxed);
+		}
+
+		[[nodiscard]] std::uint32_t GetAtlasColumns() const noexcept
+		{
+			return m_atlasCols;
+		}
+
+		[[nodiscard]] std::uint32_t GetSlotCount() const noexcept
+		{
+			return m_atlasCols * m_atlasCols;
+		}
 		void Shutdown(AssetManager* assets);
 
 		// Game thread: load `path` (VFS-aware; the caller bakes raw glTF first)
@@ -115,9 +151,23 @@ namespace aether
 		FrameConstantsBuffer m_constants;
 		PreparedDrawList m_draws{};
 
-		// Only the LDR image is service-owned: its view is an ImGui texture id.
+		// Only the LDR image is service-owned: its view is an ImGui texture id. For a baker it
+		// is the whole atlas, and tiles sample sub-rectangles of it.
 		gpu::TextureHandle m_colorLdrHandle{};
 		gpu::ImageView m_colorLdrView = nullptr;
+		// Which atlas slot the next render writes into. Written on the game thread and read on
+		// the render thread inside the pass, which is why it is atomic.
+		std::atomic<int> m_bakeSlot{-1};
+		std::uint32_t m_atlasCols = 1;
+		std::uint32_t m_size = kSize;
+		std::string m_passPrefix = "$ModelPreview";
+		// Held as members because the graph keeps the pointer, and two instances must not
+		// register passes under the same name.
+		std::string m_cullPassName = "$ModelPreviewCull";
+		std::string m_forwardPassName = "$ModelPreviewForward";
+		std::string m_tonemapPassName = "$ModelPreviewTonemap";
+		std::string m_readyPassName = "$ModelPreviewReady";
+		std::string m_drawsProductName = "ModelPreviewDraws";
 		RGImage m_color{};
 		RGImage m_colorLdr{};
 		RGImage m_depth{};

@@ -315,6 +315,14 @@ namespace aether
 			return m_modelPreview;
 		}
 
+		// A second preview instance, dedicated to baking small material thumbnails. It is
+		// separate so that baking one never disturbs whatever the Material window is showing:
+		// the two would otherwise fight over a single preview scene.
+		[[nodiscard]] ModelPreviewService& GetMaterialThumbnailBaker()
+		{
+			return m_materialThumbnailBaker;
+		}
+
 		[[nodiscard]] ui::UiRenderer& GetUiRenderer()
 		{
 			return m_uiRenderer;
@@ -369,6 +377,7 @@ namespace aether
 		LocalShadowService m_localShadowService;
 		CameraPreviewService m_cameraPreview;
 		ModelPreviewService m_modelPreview;
+		ModelPreviewService m_materialThumbnailBaker;
 		RenderTargetService m_renderTargetService;
 		CullPass m_cullPass;
 		GraphicsPipeline m_preDepthPipeline;

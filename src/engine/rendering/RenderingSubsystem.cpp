@@ -196,6 +196,7 @@ namespace aether
 		fn(m_localShadowService.GetShadowQueue());
 		fn(m_cameraPreview.GetRenderQueue());
 		fn(m_modelPreview.GetRenderQueue());
+		fn(m_materialThumbnailBaker.GetRenderQueue());
 		m_renderTargetService.ForEachRenderQueue(fn);
 	}
 
@@ -420,6 +421,14 @@ namespace aether
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
 		m_cameraPreview.Initialize(vk, bindless, m_renderQueuePipelines, PostProcessStack::GetForwardColorFormat(), swapchain.GetDepthFormat());
 		m_modelPreview.Initialize(vk, bindless, m_renderQueuePipelines, PostProcessStack::GetForwardColorFormat(), swapchain.GetDepthFormat());
+		// 128px: a content-browser tile is around a hundred pixels, and a thumbnail per
+		// material adds up, so it is baked at the size it is shown rather than the
+		// interactive preview's 384.
+		m_materialThumbnailBaker.Initialize(vk, bindless, m_renderQueuePipelines, PostProcessStack::GetForwardColorFormat(), swapchain.GetDepthFormat(), 128u, "$MaterialThumb", 8u);
+		// A thumbnail is a still, and it is compared against its neighbours: no turntable,
+		// and neutral studio light rather than whatever the open level looks like.
+		m_materialThumbnailBaker.SetTurntableEnabled(false);
+		m_materialThumbnailBaker.SetSceneEnvironmentEnabled(false);
 		m_renderTargetService.Initialize(vk, m_renderQueuePipelines);
 		m_cullPass.Initialize(vk.GetDevice().device);
 
@@ -608,6 +617,7 @@ namespace aether
 			m_cullPass.Shutdown();
 			m_cameraPreview.Shutdown();
 			m_modelPreview.Shutdown(nullptr);
+			m_materialThumbnailBaker.Shutdown(nullptr);
 			m_shadowService.Shutdown();
 			m_localShadowService.Shutdown();
 			m_renderTargetService.Shutdown();
@@ -791,6 +801,7 @@ namespace aether
 		m_renderTargetService.DiscardPendingQueues(slot);
 		m_cameraPreview.DiscardPendingQueue(slot);
 		m_modelPreview.DiscardPendingQueue(slot);
+		m_materialThumbnailBaker.DiscardPendingQueue(slot);
 	}
 
 	void RenderingSubsystem::RegisterPasses(ServiceContainer& services)
@@ -1381,7 +1392,9 @@ namespace aether
 		m_cameraPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cameraPreview.RegisterGraphicsPasses(m_renderGraph, frame.lighting, bindless, m_postProcessStack, m_skyboxPipeline.GetPipeline(), m_renderer2D);
 		m_modelPreview.RegisterComputePasses(m_renderGraph, m_cullPass);
+		m_materialThumbnailBaker.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_modelPreview.RegisterGraphicsPasses(m_renderGraph, bindless, m_postProcessStack);
+		m_materialThumbnailBaker.RegisterGraphicsPasses(m_renderGraph, bindless, m_postProcessStack);
 
 		m_renderTargetService.RegisterPasses();
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
