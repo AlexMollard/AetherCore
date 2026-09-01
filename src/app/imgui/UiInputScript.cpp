@@ -78,9 +78,17 @@ namespace aether::app
 			PushFrame(all);
 		};
 
-		// The click's own MousePos frames establish hover; no persistent hold.
+		// Several position-only frames before the press, for the same reason QueueDrag needs
+		// them: ImGui resolves which window and item are hovered at the START of a frame, so a
+		// press arriving on the first frame the cursor appears somewhere new lands before the
+		// target knows it is hovered. One frame was enough only when the cursor happened to be
+		// there already, which made clicks reliable in some panels and silently inert in others.
+		constexpr int kSettleFrames = 3;
 		const int cycles = doubleClick ? 2 : 1;
-		frame({SynEvent{SynKind::MousePos, x, y}});
+		for (int i = 0; i < kSettleFrames; ++i)
+		{
+			frame({SynEvent{SynKind::MousePos, x, y}});
+		}
 		for (int c = 0; c < cycles; ++c)
 		{
 			// Re-assert the position on EVERY frame (down and up). Without it the
