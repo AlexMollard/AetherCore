@@ -48,7 +48,11 @@ namespace aether::editor
 {
 	namespace
 	{
-		constexpr double kAutoRescanSeconds = 4.0;
+		// Frames an asset is given to become resident before its thumbnail settles for what
+	// it can get. Generous: a cold texture can take a while, and the cost of waiting is
+	// an icon, while the cost of giving up early is a permanently wrong thumbnail.
+	constexpr int kMaxThumbnailRetries = 600;
+	constexpr double kAutoRescanSeconds = 4.0;
 		constexpr int kMaxScanDepth = 24;
 
 		std::string ToUtf8Path(const std::filesystem::path& path)
@@ -790,6 +794,87 @@ namespace aether::editor
 		return true;
 	}
 
+	bool FileExplorerPanel::IsSelected(const std::string& path) const
+	{
+		return std::find(m_selectedPaths.begin(), m_selectedPaths.end(), path) != m_selectedPaths.end();
+	}
+
+	std::vector<std::string> FileExplorerPanel::VisibleOrder() const
+	{
+		std::vector<std::string> order;
+		const Entry* dir = nullptr;
+		const auto find = [&](const auto& self, const Entry& node) -> const Entry*
+		{
+			if (node.isDirectory && node.path == m_currentDir)
+			{
+				return &node;
+			}
+			for (const Entry& child: node.children)
+			{
+				if (!child.isDirectory)
+				{
+					continue;
+				}
+				if (const Entry* hit = self(self, child))
+				{
+					return hit;
+				}
+			}
+			return nullptr;
+		};
+		dir = find(find, m_tree);
+		if (dir == nullptr)
+		{
+			return order;
+		}
+		// Folders first, then files: the same order the grid draws, so a shift-range covers
+		// what the eye sees between the two clicks.
+		for (const bool wantDirectories: {true, false})
+		{
+			for (const Entry& child: dir->children)
+			{
+				if (child.isDirectory == wantDirectories)
+				{
+					order.push_back(ToUtf8Path(child.path));
+				}
+			}
+		}
+		return order;
+	}
+
+	void FileExplorerPanel::ClickSelect(const Entry& entry, const bool ctrl, const bool shift)
+	{
+		const std::string path = ToUtf8Path(entry.path);
+		if (shift && !m_selectedPath.empty())
+		{
+			const std::vector<std::string> order = VisibleOrder();
+			const auto from = std::find(order.begin(), order.end(), m_selectedPath);
+			const auto to = std::find(order.begin(), order.end(), path);
+			if (from != order.end() && to != order.end())
+			{
+				auto first = from;
+				auto last = to;
+				if (first > last)
+				{
+					std::swap(first, last);
+				}
+				m_selectedPaths.assign(first, last + 1);
+				return;
+			}
+		}
+		if (ctrl)
+		{
+			if (const auto it = std::find(m_selectedPaths.begin(), m_selectedPaths.end(), path); it != m_selectedPaths.end())
+			{
+				m_selectedPaths.erase(it);
+				return;
+			}
+			m_selectedPaths.push_back(path);
+			return;
+		}
+		m_selectedPaths.assign(1, path);
+	}
+
 	std::filesystem::path FileExplorerPanel::PhysicalPathFor(const std::string_view vfsPath) const
 	{
 		constexpr std::string_view kPrefix = "project://";
@@ -864,7 +949,21 @@ namespace aether::editor
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload); payload != nullptr && payload->DataSize == sizeof(dragdrop::FilePayload))
 		{
 			const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
-			moved = MoveEntry(PhysicalPathFor(file->path), destDir);
+			const std::filesystem::path dragged = PhysicalPathFor(file->path);
+			// Dragging one of several selected assets moves all of them, which is what the
+			// highlight promises. Dragging an unselected one moves just that one.
+			if (!dragged.empty() && IsSelected(ToUtf8Path(dragged)) && m_selectedPaths.size() > 1)
+			{
+				for (const std::string& path: m_selectedPaths)
+				{
+					moved = MoveEntry(std::filesystem::path(path), destDir) || moved;
+				}
+				m_selectedPaths.clear();
+			}
+			else
+			{
+				moved = MoveEntry(dragged, destDir);
+			}
 		}
 		else if (const ImGuiPayload* scriptPayload = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload); scriptPayload != nullptr && scriptPayload->DataSize == sizeof(dragdrop::ScriptPayload))
 		{
@@ -1227,7 +1326,7 @@ namespace aether::editor
 		}
 
 		const bool isScript = entry.kind == dragdrop::FileKind::Script;
-		const bool selected = m_selectedPath == ToUtf8Path(entry.path);
+		const bool selected = IsSelected(ToUtf8Path(entry.path));
 		ImGui::Selectable("##feRow", selected, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_AllowOverlap);
 
 		{
@@ -1258,6 +1357,8 @@ namespace aether::editor
 
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 		{
+			const ImGuiIO& io = ImGui::GetIO();
+			ClickSelect(entry, io.KeyCtrl, io.KeyShift);
 			m_selectedPath = ToUtf8Path(entry.path);
 			m_selectedPayloadPath = entry.payloadPath;
 			m_selectedKind = entry.kind;
@@ -1336,6 +1437,7 @@ namespace aether::editor
 		ReleaseThumbnails(context);
 		m_currentDir = dir;
 		m_createDir = dir;
+		m_selectedPaths.clear();
 	}
 
 	void FileExplorerPanel::DrawFolderTree(app::LayerContext& context, Entry& entry)
@@ -1523,15 +1625,22 @@ namespace aether::editor
 		const std::uint32_t fallbackSlot = textures.ResolveSlot(textures.DefaultHandle());
 		if (!thumb.texture.IsValid() || slot == 0xFFFFFFFFu || slot == fallbackSlot)
 		{
-			// A texture that will not resolve is remembered as such, so the walk below is not
-			// repeated for it every time the folder is drawn.
 			if (thumb.texture.IsValid())
 			{
 				textures.Release(thumb.texture);
 				thumb.texture = {};
 			}
+			if (thumb.retries < kMaxThumbnailRetries)
+			{
+				// Not resident yet. Clearing the stamp is what makes the next frame try again
+				// instead of treating this empty entry as the answer.
+				++thumb.retries;
+				thumb.stamp = 0;
+				thumb.resolved = false;
+			}
 			return &thumb;
 		}
+		thumb.retries = 0;
 		for (const gpu::DebugTextureInfo& info: gpu::ResourceRegistry::ListDebugTextures())
 		{
 			if (info.hasBindlessSampled && info.bindlessSampledSlot == slot && info.view != nullptr)
@@ -1597,6 +1706,8 @@ namespace aether::editor
 		{
 			return;
 		}
+		constexpr int kMaxDeferredPerFrame = 2;
+		int deferred = 0;
 		for (const Entry& child: dir->children)
 		{
 			if (child.isDirectory || child.kind != dragdrop::FileKind::Material)
@@ -1629,6 +1740,40 @@ namespace aether::editor
 			{
 				return;
 			}
+			// Baking before the material's albedo is resident produces a plain default-looking
+			// sphere, and a one-shot bake would keep that forever - which is why editing and
+			// saving the material was the only way to get a correct thumbnail.
+			auto& bakeTextures = assets->GetTextureRegistry();
+			const std::uint32_t fallbackSlot = bakeTextures.ResolveSlot(bakeTextures.DefaultHandle());
+			const auto pending = [&](const TextureHandle h) { return h.IsValid() && bakeTextures.ResolveSlot(h) == fallbackSlot; };
+			const bool texturesPending = pending(material->albedoTex) || pending(material->normalTex) || pending(material->metallicRoughnessTex)
+			        || pending(material->occlusionTex) || pending(material->emissiveTex);
+			if (texturesPending && thumb.retries < kMaxThumbnailRetries)
+			{
+				// Leave bakeAttempted false so a later frame tries again. Acquiring here is
+				// what keeps the upload moving, so retrying is also what makes it finish.
+				//
+				// `continue`, NOT return: one material waiting on a slow texture must not hold
+				// up every other thumbnail in the folder behind it.
+				++thumb.retries;
+				thumb.bakeAttempted = false;
+				for (const TextureHandle h: {material->albedoTex, material->normalTex, material->metallicRoughnessTex, material->occlusionTex, material->emissiveTex})
+				{
+					if (h.IsValid())
+					{
+						bakeTextures.Release(h);
+					}
+				}
+				if (++deferred >= kMaxDeferredPerFrame)
+				{
+					// Each deferral re-reads and re-parses the material, so only a couple are
+					// worth doing per frame while the uploads catch up.
+					return;
+				}
+				continue;
+			}
+			thumb.retries = 0;
+
 			std::string error;
 			if (!baker.ShowMaterialOnMesh(*assets, primitives->Get(PrimitiveMesh::Sphere), *material, error))
 			{
@@ -1712,7 +1857,7 @@ namespace aether::editor
 		ImGui::PushID(entry.path.generic_string().c_str());
 
 		const bool isScript = entry.kind == dragdrop::FileKind::Script;
-		const bool selected = m_selectedPath == ToUtf8Path(entry.path);
+		const bool selected = IsSelected(ToUtf8Path(entry.path));
 		const float labelH = ImGui::GetFontSize() * 1.9f;
 		const ImVec2 tile(tileSize, tileSize + labelH);
 

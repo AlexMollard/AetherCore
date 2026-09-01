@@ -71,6 +71,11 @@ namespace aether::editor
 			// The file's write time when this was built. Editing a material has to re-bake it,
 			// or the tile keeps showing the material as it used to look.
 			std::int64_t stamp = 0;
+			// Textures upload asynchronously, so an asset seen the instant its folder opens is
+			// usually not resident yet. That is a REASON TO WAIT, not a failure - baking then
+			// gives a default-looking sphere that never corrects itself. Bounded so a texture
+			// that genuinely will not load stops being retried.
+			int retries = 0;
 			// A material with no albedo map still has a colour, which says far more about it
 			// than a generic icon does.
 			std::uint32_t swatch = 0;
@@ -131,6 +136,12 @@ namespace aether::editor
 		bool AcceptFileDropIntoFolder(app::LayerContext& context, const std::filesystem::path& destDir);
 		// The physical path behind a "project://..." payload, or empty when it is outside.
 		[[nodiscard]] std::filesystem::path PhysicalPathFor(std::string_view vfsPath) const;
+		[[nodiscard]] bool IsSelected(const std::string& path) const;
+		// Apply a click to the selection: plain replaces, ctrl toggles, shift extends from the
+		// primary through the folder's draw order.
+		void ClickSelect(const Entry& entry, bool ctrl, bool shift);
+		// The paths of the current folder's entries, in the order they are drawn.
+		[[nodiscard]] std::vector<std::string> VisibleOrder() const;
 		bool DeleteEntry(const std::filesystem::path& target, bool isDirectory);
 
 		std::filesystem::path m_root;
@@ -166,6 +177,11 @@ namespace aether::editor
 
 		char m_search[96] = {};
 		std::string m_selectedPath;
+		// Every selected asset, in the order they are drawn. m_selectedPath stays the primary -
+		// the one the Material and Texture windows follow - and this is what a bulk operation
+		// acts on. Cleared whenever the folder changes, since a selection you cannot see is a
+		// selection you will delete by accident.
+		std::vector<std::string> m_selectedPaths;
 		std::string m_selectedPayloadPath;
 		dragdrop::FileKind m_selectedKind = dragdrop::FileKind::Unknown;
 		std::string m_lastAdoptedAsset;

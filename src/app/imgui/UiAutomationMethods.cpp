@@ -113,9 +113,10 @@ namespace aether::editor
 
 		methods.push_back({"ui.click",
 		        "ui_click",
-		        "Click a widget by {window,label} or a raw {x,y} screen point. Optional 'button' ('left'|'right') and 'double'. Async: the click plays over a few frames; query/screenshot afterwards to see the effect.",
+		        "Click a widget by {window,label} or a raw {x,y} screen point. Optional 'button' ('left'|'right'), 'double', and 'ctrl'/'shift'/'alt' held for the click (multi-select and range-select). Async: the click plays over a few frames; query/screenshot afterwards to see the effect.",
 		        true,
-		        Obj({{"x", NumProp()}, {"y", NumProp()}, {"window", StrProp()}, {"label", StrProp()}, {"button", StrProp()}, {"double", BoolProp()}}),
+		        Obj({{"x", NumProp()}, {"y", NumProp()}, {"window", StrProp()}, {"label", StrProp()}, {"button", StrProp()}, {"double", BoolProp()},
+		                {"ctrl", BoolProp()}, {"shift", BoolProp()}, {"alt", BoolProp()}}),
 		        [](const json& params, MethodContext&) -> json
 		        {
 			        float cx = 0.0f;
@@ -126,7 +127,7 @@ namespace aether::editor
 				        return json{{"error", err}};
 			        }
 			        const int button = params.value("button", std::string{"left"}) == "right" ? 1 : 0;
-			        app::UiAutomation::Get().Input().QueueClick(cx, cy, button, params.value("double", false));
+			        app::UiAutomation::Get().Input().QueueClick(cx, cy, button, params.value("double", false), params.value("ctrl", false), params.value("shift", false), params.value("alt", false));
 			        return json{{"status", "queued"}, {"target", json{{"x", cx}, {"y", cy}}}};
 		        }});
 

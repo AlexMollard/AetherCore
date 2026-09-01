@@ -58,18 +58,40 @@ namespace aether::app
 		m_hover.reset();
 	}
 
-	void UiInputScript::QueueClick(float x, float y, int button, bool doubleClick)
+	void UiInputScript::QueueClick(float x, float y, int button, bool doubleClick, bool ctrl, bool shift, bool alt)
 	{
+		// Modifiers are re-asserted on every frame of the click, for the same reason the
+		// position is: the backend re-posts real input each frame, and a modifier that lapses
+		// before the button goes down turns a ctrl-click into a plain click.
+		const auto mods = [&](bool pressed)
+		{
+			std::vector<SynEvent> events;
+			if (ctrl) { events.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, pressed, kModCtrl}); }
+			if (shift) { events.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, pressed, kModShift}); }
+			if (alt) { events.push_back(SynEvent{SynKind::Key, 0.0f, 0.0f, 0, pressed, kModAlt}); }
+			return events;
+		};
+		const auto frame = [&](std::vector<SynEvent> events)
+		{
+			std::vector<SynEvent> all = mods(true);
+			all.insert(all.end(), events.begin(), events.end());
+			PushFrame(all);
+		};
+
 		// The click's own MousePos frames establish hover; no persistent hold.
 		const int cycles = doubleClick ? 2 : 1;
-		PushFrame({SynEvent{SynKind::MousePos, x, y}});
+		frame({SynEvent{SynKind::MousePos, x, y}});
 		for (int c = 0; c < cycles; ++c)
 		{
 			// Re-assert the position on EVERY frame (down and up). Without it the
 			// GLFW backend re-posts the real cursor that frame and the release
 			// lands off-target, so release-triggered widgets never fire.
-			PushFrame({SynEvent{SynKind::MousePos, x, y}, SynEvent{SynKind::MouseButton, x, y, button, true}});
-			PushFrame({SynEvent{SynKind::MousePos, x, y}, SynEvent{SynKind::MouseButton, x, y, button, false}});
+			frame({SynEvent{SynKind::MousePos, x, y}, SynEvent{SynKind::MouseButton, x, y, button, true}});
+			frame({SynEvent{SynKind::MousePos, x, y}, SynEvent{SynKind::MouseButton, x, y, button, false}});
+		}
+		if (std::vector<SynEvent> release = mods(false); !release.empty())
+		{
+			PushFrame(release);
 		}
 	}
 

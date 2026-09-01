@@ -33,7 +33,10 @@ namespace aether::app
 	class UiInputScript
 	{
 	public:
-		void QueueClick(float x, float y, int button, bool doubleClick);
+		// `ctrl`/`shift`/`alt` are held for the whole click, which is how a multi-select or a
+		// range-select is actually performed - without them those interactions cannot be
+		// driven at all, in this panel or any other.
+		void QueueClick(float x, float y, int button, bool doubleClick, bool ctrl = false, bool shift = false, bool alt = false);
 		// Press at one point, move to another over several frames, release there.
 		//
 		// A drag cannot be built out of two clicks: ImGui only reports one once the mouse has
