@@ -142,6 +142,11 @@ namespace aether::editor
 		std::unordered_set<std::uint32_t> m_expandedNodes;
 		// Runs the user has opened up, keyed by the first entity in the run.
 		std::unordered_set<std::uint32_t> m_expandedRuns;
+		// Selected ids, captured before the tree is flattened. A run holding the selection is
+		// never folded: nothing else expands ancestors on selection, so a spawned entity
+		// picked in the viewport would otherwise be invisible here with the user having
+		// hidden nothing.
+		std::unordered_set<std::uint32_t> m_selectedForFlatten;
 		// Drag-hover spring-loading: hovering a collapsed row mid-drag opens it, so a subtree
 		// can be dropped into without breaking the drag to expand it first.
 		std::uint32_t m_dragHoverEntity = 0;

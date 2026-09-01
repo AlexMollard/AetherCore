@@ -1235,7 +1235,19 @@ namespace aether::editor
 	{
 		// Shorter runs are left alone: folding two or three rows hides more than it saves.
 		constexpr std::size_t kMinRunToCollapse = 5;
-		return run >= kMinRunToCollapse && !m_expandedRuns.contains(siblings[start].id);
+		if (run < kMinRunToCollapse || m_expandedRuns.contains(siblings[start].id))
+		{
+			return false;
+		}
+		// Never fold away the selection.
+		for (std::size_t i = 0; i < run; ++i)
+		{
+			if (m_selectedForFlatten.contains(siblings[start + i].id))
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 
 	void HierarchyPanel::FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask)
@@ -2205,6 +2217,17 @@ namespace aether::editor
 			else
 			{
 				m_flatTree.clear();
+				m_selectedForFlatten.clear();
+				for (const Entity selected: selection.All())
+				{
+					m_selectedForFlatten.insert(selected.id);
+				}
+				if (m_scrollToEntity.IsValid())
+				{
+					// Also whatever is being scrolled to, or the scroll lands on a row that
+					// was folded away.
+					m_selectedForFlatten.insert(m_scrollToEntity.id);
+				}
 				const auto& roots = world.Roots();
 				for (std::size_t i = 0; i < roots.size();)
 				{
