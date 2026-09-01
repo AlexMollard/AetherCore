@@ -1,6 +1,9 @@
 #include "DevToolsPanel.hpp"
 #include "debug/EditorChrome.hpp"
 
+#include <algorithm>
+#include <optional>
+#include "rendering/Renderer.hpp"
 #include <imgui.h>
 
 #include "PlayState.hpp"
@@ -30,8 +33,27 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 
-		ImGui::Begin("Debug", VisiblePtr());
+		// NOT "Debug": ImGui creates its own fallback window with that title, so this panel
+		// shared a name with it - two tabs both reading "Debug", and anything looking the
+		// window up by name found ImGui's rather than this one.
+		ImGui::Begin("Dev Tools", VisiblePtr());
 		chrome::PanelHeader("DEV TOOLS");
+		{
+			Renderer& cullRenderer = context.Get<Renderer>();
+
+			// Entry 0 is no override at all, which is the default: a two-sided material has to
+			// be able to turn its own culling off, and it cannot if this forces one on
+			// everything. Lived in a panel called "Post Processing", which is neither where
+			// anyone would look for it nor what post-processing means.
+			const std::optional<gpu::CullMode> currentCull = cullRenderer.GetCullMode();
+			int cullMode = currentCull ? static_cast<int>(*currentCull) + 1 : 0;
+			const char* const cullModeNames[] = {"Per material", "None", "Front", "Back", "Front + Back"};
+			if (ImGui::Combo("Cull mode", &cullMode, cullModeNames, static_cast<int>(std::size(cullModeNames))))
+			{
+				cullRenderer.SetCullMode(cullMode == 0 ? std::nullopt : std::optional<gpu::CullMode>(static_cast<aether::gpu::CullMode>(cullMode - 1)));
+			}
+			ImGui::Separator();
+		}
 		{
 			bool debugRenderer = aether::IsDebugRenderingEnabled();
 			if (ImGui::Checkbox("Debug overlay", &debugRenderer))
@@ -87,7 +109,12 @@ namespace aether::editor
 
 	void DevToolsPanel::LoadSettings(TomlConfig& config, app::LayerContext& context)
 	{
-		(void) context;
+		// Same key the old Post Processing panel used, so an override already saved by a
+		// previous build still applies after the control moved here.
+		constexpr int kMaxCullIndex = static_cast<int>(aether::gpu::CullMode::FrontAndBack) + 1;
+		int cullMode = static_cast<int>(config.GetFloat("debug.scene_cull_override_index", 0.0f));
+		cullMode = std::clamp(cullMode, 0, kMaxCullIndex);
+		context.Get<Renderer>().SetCullMode(cullMode == 0 ? std::nullopt : std::optional<gpu::CullMode>(static_cast<aether::gpu::CullMode>(cullMode - 1)));
 		const bool overlay = config.GetBool("debug.debugoverlay", aether::IsDebugRenderingEnabled());
 		aether::SetDebugRenderingEnabled(overlay);
 		m_physicsShapesWanted = config.GetBool("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
@@ -97,7 +124,8 @@ namespace aether::editor
 
 	void DevToolsPanel::SaveSettings(TomlConfig& config, app::LayerContext& context) const
 	{
-		(void) context;
+		const std::optional<gpu::CullMode> cull = context.Get<Renderer>().GetCullMode();
+		config.Set("debug.scene_cull_override_index", static_cast<float>(cull ? static_cast<int>(*cull) + 1 : 0));
 		config.Set("debug.debugoverlay", aether::IsDebugRenderingEnabled());
 		// The wish, not the live flag - see the member's declaration.
 		config.Set("debug.physicsdebugrendering", m_physicsShapesWanted);

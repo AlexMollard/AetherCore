@@ -46,13 +46,12 @@ using namespace std::string_view_literals;
 #include "debug/MaterialGraphPanel.hpp"
 #include "debug/LightingPanel.hpp"
 #include "debug/PerformancePanel.hpp"
-#include "debug/PostProcessingPanel.hpp"
 #include "debug/BuildPanel.hpp"
 #include "debug/ProjectPanel.hpp"
 #include "debug/RenderGraphPanel.hpp"
 #include "debug/SettingsPanel.hpp"
 #include "debug/ThemePanel.hpp"
-#include "debug/TonemapPanel.hpp"
+#include "debug/PostProcessingPanel.hpp"
 #include "debug/TextureInspectorPanel.hpp"
 #include "debug/SpriteAnimationPanel.hpp"
 #include "debug/SpriteSlicerPanel.hpp"
@@ -173,28 +172,29 @@ namespace aether::editor
 		        {WorkflowLayout::Minimal, "Minimal", "Just hierarchy, viewport and inspector."},
 		};
 
-		// Panels shown for a workflow (others are hidden), keyed by panel GetName()
-		// (which differs from the dock window title for a few: "Scene Outliner" vs the
-		// "Scene" window, "DevTools" vs "Debug", "TextureInspector" vs "Textures").
+		// Panels shown for a workflow (others are hidden), keyed by panel GetName() - which is
+		// also the dock window's title. Three panels used to disagree with their own window
+		// (Scene Outliner/Scene, DevTools/Debug, TextureInspector/Textures), so a workflow
+		// naming one of them, or anything else looking a panel up by name, silently missed it.
 		// Empty => show everything.
 		std::vector<std::string> WorkflowVisiblePanels(WorkflowLayout kind)
 		{
 			switch (kind)
 			{
 				case WorkflowLayout::TwoD:
-					return {"Scene Outliner", "Project", "File Explorer", "Viewport", "Inspector", "Tile Palette", "Sprite Slicer", "Sprite Animation", "Pixel Art", "UI Canvas", "Console"};
+					return {"Scene", "Project", "File Explorer", "Viewport", "Inspector", "Tile Palette", "Sprite Slicer", "Sprite Animation", "Pixel Art", "UI Canvas", "Console"};
 				case WorkflowLayout::ThreeD:
-					return {"Scene Outliner", "Project", "File Explorer", "Viewport", "Inspector", "Lighting", "Console", "Performance"};
+					return {"Scene", "Project", "File Explorer", "Viewport", "Inspector", "Lighting", "Console", "Performance"};
 				case WorkflowLayout::Rendering:
-					return {"Scene Outliner", "Viewport", "Inspector", "Render Graph", "Tonemap", "Post Processing", "Lighting", "TextureInspector", "Performance", "Console"};
+					return {"Scene", "Viewport", "Inspector", "Render Graph", "Post Processing", "Lighting", "Textures", "Performance", "Console"};
 				case WorkflowLayout::Materials:
-					return {"File Explorer", "Project", "Material", "Viewport", "Inspector", "Scene Outliner", "Console"};
+					return {"File Explorer", "Project", "Material", "Viewport", "Inspector", "Scene", "Console"};
 				case WorkflowLayout::Assets:
-					return {"File Explorer", "Project", "Build", "Material", "TextureInspector", "Inspector", "Viewport", "Console"};
+					return {"File Explorer", "Project", "Build", "Material", "Textures", "Inspector", "Viewport", "Console"};
 				case WorkflowLayout::Scripting:
-					return {"Scene Outliner", "Project", "Build", "File Explorer", "Viewport", "Inspector", "Console", "Control Server", "Performance", "DevTools"};
+					return {"Scene", "Project", "Build", "File Explorer", "Viewport", "Inspector", "Console", "Control Server", "Performance", "Dev Tools"};
 				case WorkflowLayout::Minimal:
-					return {"Scene Outliner", "Viewport", "Inspector"};
+					return {"Scene", "Viewport", "Inspector"};
 				case WorkflowLayout::Default:
 				case WorkflowLayout::Count:
 					break;
@@ -287,7 +287,6 @@ namespace aether::editor
 					dockRemainingTo(rightBottom);
 					ImGui::DockBuilderDockWindow("Scene", left);
 					ImGui::DockBuilderDockWindow("Render Graph", right);
-					ImGui::DockBuilderDockWindow("Tonemap", right);
 					ImGui::DockBuilderDockWindow("Post Processing", right);
 					ImGui::DockBuilderDockWindow("Lighting", rightBottom);
 					ImGui::DockBuilderDockWindow("Inspector", rightBottom);
@@ -351,7 +350,7 @@ namespace aether::editor
 					ImGui::DockBuilderDockWindow("Console", bottom);
 					ImGui::DockBuilderDockWindow("Control Server", bottom);
 					ImGui::DockBuilderDockWindow("Performance", bottom);
-					ImGui::DockBuilderDockWindow("Debug", bottom);
+					ImGui::DockBuilderDockWindow("Dev Tools", bottom);
 					ImGui::DockBuilderDockWindow("Viewport", root);
 					break;
 				}
@@ -377,8 +376,7 @@ namespace aether::editor
 					ImGui::DockBuilderDockWindow("Particles", root);
 					ImGui::DockBuilderDockWindow("Inspector", right);
 					ImGui::DockBuilderDockWindow("Render Graph", rightTools);
-					ImGui::DockBuilderDockWindow("Debug", rightTools);
-					ImGui::DockBuilderDockWindow("Tonemap", rightTools);
+					ImGui::DockBuilderDockWindow("Dev Tools", rightTools);
 					ImGui::DockBuilderDockWindow("Post Processing", rightTools);
 					ImGui::DockBuilderDockWindow("Settings", rightTools);
 					ImGui::DockBuilderDockWindow("Theme", rightTools);
@@ -411,7 +409,7 @@ namespace aether::editor
 
 		const char* WindowMenuIcon(std::string_view panelName)
 		{
-			if (panelName == "Scene Outliner")
+			if (panelName == "Scene")
 			{
 				return ICON_FA_SITEMAP;
 			}
@@ -443,15 +441,11 @@ namespace aether::editor
 			{
 				return ICON_FA_WAND_MAGIC_SPARKLES;
 			}
-			if (panelName == "Tonemap")
-			{
-				return ICON_FA_PALETTE;
-			}
 			if (panelName == "Lighting")
 			{
 				return ICON_FA_LIGHTBULB;
 			}
-			if (panelName == "TextureInspector")
+			if (panelName == "Textures")
 			{
 				return ICON_FA_IMAGE;
 			}
@@ -471,7 +465,7 @@ namespace aether::editor
 			{
 				return ICON_FA_GAUGE_HIGH;
 			}
-			if (panelName == "DevTools")
+			if (panelName == "Dev Tools")
 			{
 				return ICON_FA_BUG;
 			}
@@ -593,7 +587,6 @@ namespace aether::editor
 			m_viewportPanel = viewportPanel.get();
 			m_panels.push_back(std::move(viewportPanel));
 		}
-		m_panels.push_back(std::make_unique<TonemapPanel>());
 		m_panels.push_back(std::make_unique<PostProcessingPanel>());
 		m_panels.push_back(std::make_unique<SettingsPanel>());
 		m_panels.push_back(std::make_unique<ThemePanel>());
@@ -1973,10 +1966,10 @@ namespace aether::editor
 				};
 
 				static const std::vector<MenuGroup> kGroups = {
-				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Project", "Build", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
-				        {ICON_FA_BRUSH, "Authoring", {"Material", "TextureInspector", "Sprite Slicer", "Sprite Animation", "Tile Palette", "Pixel Art"}},
-				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Particles"}},
-				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools", "Control Server"}},
+				        {ICON_FA_CUBE, "Scene", {"Scene", "Project", "Build", "File Explorer", "Inspector", "Viewport", "UI Canvas"}},
+				        {ICON_FA_BRUSH, "Authoring", {"Material", "Textures", "Sprite Slicer", "Sprite Animation", "Tile Palette", "Pixel Art"}},
+				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Lighting", "Particles"}},
+				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "Dev Tools", "Control Server"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings", "Theme"}},
 				};
 

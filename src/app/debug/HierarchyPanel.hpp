@@ -27,13 +27,9 @@ namespace aether::editor
 	public:
 		std::string_view GetName() const override
 		{
-			return "Scene Outliner";
-		}
-
-		[[nodiscard]] std::string_view GetWindowTitle() const override
-		{
 			return "Scene";
 		}
+
 
 		// Part of the default layout: what is in the scene.
 		[[nodiscard]] bool DefaultVisible() const override

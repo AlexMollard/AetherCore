@@ -4,6 +4,7 @@
 
 namespace aether::editor
 {
+
 	class PostProcessingPanel final : public DebugPanel
 	{
 	public:
@@ -13,7 +14,6 @@ namespace aether::editor
 		}
 
 		void OnImGui(app::LayerContext& context) override;
-		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
-		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 	};
+
 } // namespace aether::editor

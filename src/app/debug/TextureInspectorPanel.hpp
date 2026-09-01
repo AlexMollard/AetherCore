@@ -20,13 +20,9 @@ namespace aether::editor
 
 		std::string_view GetName() const override
 		{
-			return "TextureInspector";
-		}
-
-		[[nodiscard]] std::string_view GetWindowTitle() const override
-		{
 			return "Textures";
 		}
+
 
 		void OnDetach(app::LayerContext& context) override;
 		void OnUpdate(app::LayerContext& context) override;
