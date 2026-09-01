@@ -29,6 +29,15 @@ namespace aether::editor
 		// lines, so the failure sat far above the view and clicking the badge appeared to do
 		// nothing at all.
 		void ShowScriptErrors();
+		// The same jump, but unfiltered: for engine problems, which have no shared prefix to
+		// filter on and could be anything from a failed shader to a missing asset.
+		void ShowLatestProblem();
+
+	private:
+		// Shared tail of both: make sure nothing hides the entry, then jump to it.
+		void RevealProblem();
+
+	public:
 
 	private:
 		char m_filter[128] = {};

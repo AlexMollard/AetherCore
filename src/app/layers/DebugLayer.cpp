@@ -947,6 +947,51 @@ namespace aether::editor
 				}
 			}
 
+			// Engine problems, counted apart from the script ones. A shader that fails to
+			// compile on open, an asset that will not load - none of it is a script error, and
+			// without this the status bar says the project is healthy while it is not. Kept
+			// visually quieter than the script badge, which is the one you usually act on.
+			{
+				const LogRingBuffer::LevelCounts logCounts = LogRingBuffer::Get().Counts();
+				std::size_t scriptErrorCount = 0;
+				if (const auto* scripting = context.TryGet<app::scripting::CSharpScriptingSubsystem>(); scripting != nullptr)
+				{
+					scriptErrorCount = scripting->ScriptErrors().size();
+				}
+				// Every script error is also logged once, so subtracting leaves what the engine
+				// itself reported and stops the two badges counting the same failure twice.
+				const std::size_t engineErrors = logCounts.error > scriptErrorCount ? logCounts.error - scriptErrorCount : 0u;
+				if (engineErrors > 0 || logCounts.warn > 0)
+				{
+					divider();
+					const bool hasErrors = engineErrors > 0;
+					char engineLabel[64];
+					std::snprintf(engineLabel,
+					        sizeof(engineLabel),
+					        "%s  %zu##engineLog",
+					        hasErrors ? ICON_FA_CIRCLE_EXCLAMATION : ICON_FA_TRIANGLE_EXCLAMATION,
+					        hasErrors ? engineErrors : logCounts.warn);
+					ImGui::PushStyleColor(ImGuiCol_Text, hasErrors ? C(colors::Error) : C(colors::Orange));
+					ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(hasErrors ? C(colors::Error) : C(colors::Orange), 0.18f));
+					const float engineWidth = ImGui::CalcTextSize(engineLabel, nullptr, true).x;
+					if (ImGui::Selectable(engineLabel, false, ImGuiSelectableFlags_None, ImVec2(engineWidth, 0.0f)))
+					{
+						m_pendingFocusWindow = "Console";
+						if (auto* console = dynamic_cast<ConsolePanel*>(FindPanelByName("Console")))
+						{
+							console->SetVisible(true);
+							console->ShowLatestProblem();
+						}
+					}
+					ImGui::PopStyleColor(2);
+					if (ImGui::IsItemHovered())
+					{
+						ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+						ImGui::SetTooltip("%zu engine error(s), %zu warning(s)  -  click to see them", engineErrors, logCounts.warn);
+					}
+				}
+			}
+
 			{
 				const char* label = playing ? ICON_FA_PLAY "  PLAYING" : (compiling ? ICON_FA_GEAR "  COMPILING" : ICON_FA_STOP "  EDITING");
 				const ImVec2 textSize = ImGui::CalcTextSize(label);

@@ -104,11 +104,22 @@ namespace aether::editor
 		}
 	} // namespace
 
+	void ConsolePanel::ShowLatestProblem()
+	{
+		m_filter[0] = 0;
+		RevealProblem();
+	}
+
 	void ConsolePanel::ShowScriptErrors()
 	{
 		// The prefix every script failure is logged with, so the Console shows those and
 		// nothing else - a build error is not easier to find among a hundred info lines.
 		std::snprintf(m_filter, sizeof(m_filter), "C# script error");
+		RevealProblem();
+	}
+
+	void ConsolePanel::RevealProblem()
+	{
 		// Anything that could hide the entry we are about to jump to has to come off, or the
 		// jump silently lands on nothing - which is exactly how "clicking the badge does
 		// nothing" looked. The text filter is cleared for the same reason.
