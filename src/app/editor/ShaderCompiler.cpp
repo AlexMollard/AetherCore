@@ -1,5 +1,6 @@
 #include "editor/ShaderCompiler.hpp"
 
+#include <unordered_map>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -133,6 +134,71 @@ namespace aether::editor
 		// Rewrite every graph-derived shader whose generated text no longer matches its graph.
 		// Written only when the text actually differs, so an up-to-date project does not churn
 		// mtimes and force a full recompile on every open.
+		// The shader a material file declares, e.g. "shaders://Rock.spv", or empty.
+		std::string DeclaredShaderPath(const fs::path& materialFile)
+		{
+			const auto text = io::file_util::ReadText(materialFile);
+			if (!text)
+			{
+				return {};
+			}
+			std::size_t at = text->find("shader");
+			while (at != std::string::npos)
+			{
+				const bool atLineStart = at == 0 || (*text)[at - 1] == '\n' || (*text)[at - 1] == '\r';
+				if (atLineStart)
+				{
+					const std::size_t eol = text->find('\n', at);
+					const std::string line = text->substr(at, eol == std::string::npos ? std::string::npos : eol - at);
+					const std::size_t open = line.find_first_of("'\"");
+					const std::size_t close = open == std::string::npos ? std::string::npos : line.find(line[open], open + 1);
+					if (open != std::string::npos && close != std::string::npos)
+					{
+						return line.substr(open + 1, close - open - 1);
+					}
+				}
+				at = text->find("shader", at + 1);
+			}
+			return {};
+		}
+
+		// Two materials naming the same generated shader is silent corruption: the last one
+		// regenerated wins and the other renders a graph that is not its own. Recompiling from
+		// the Material window appears to fix it, right up until the next startup regenerates
+		// and clobbers it again - which is exactly the kind of bug nobody can reproduce.
+		//
+		// Legacy ".toml" materials are checked too, precisely BECAUSE regeneration skips them:
+		// one can silently lose its shader to a ".material.toml" of the same name.
+		void WarnOnSharedShaders(const fs::path& materialsDir)
+		{
+			std::error_code ec;
+			std::unordered_map<std::string, fs::path> claimedBy;
+			for (const auto& entry: fs::recursive_directory_iterator(materialsDir, ec))
+			{
+				if (ec)
+				{
+					break;
+				}
+				if (!entry.is_regular_file(ec) || !entry.path().generic_string().ends_with(".toml"))
+				{
+					continue;
+				}
+				const std::string declared = DeclaredShaderPath(entry.path());
+				if (declared.empty())
+				{
+					continue;
+				}
+				if (const auto [it, inserted] = claimedBy.try_emplace(declared, entry.path()); !inserted)
+				{
+					AE_ERROR(LogCategory::App,
+					        "Materials '{}' and '{}' both use '{}'. Only one of them can generate it, so the other renders the wrong graph - rename or remove one.",
+					        it->second.filename().generic_string(),
+					        entry.path().filename().generic_string(),
+					        declared);
+				}
+			}
+		}
+
 		void RegenerateGraphShaders(const fs::path& projectRoot, const fs::path& shaderDir)
 		{
 			const fs::path materialsDir = projectRoot / "assets" / "materials";
@@ -141,6 +207,12 @@ namespace aether::editor
 			{
 				return;
 			}
+			WarnOnSharedShaders(materialsDir);
+			// Which material generated which shader. Two materials writing the same shader is
+			// silent corruption otherwise: the last one to run wins, the other renders someone
+			// else's graph, and recompiling from the Material window appears to "fix" it until
+			// the next startup regenerates and clobbers it again.
+			std::unordered_map<std::string, fs::path> generatedBy;
 			for (const auto& entry: fs::recursive_directory_iterator(materialsDir, ec))
 			{
 				if (ec)
@@ -164,6 +236,15 @@ namespace aether::editor
 					continue;
 				}
 				const fs::path slangPath = shaderDir / (entry.path().stem().stem().generic_string() + ".slang");
+				if (const auto [it, inserted] = generatedBy.try_emplace(slangPath.generic_string(), entry.path()); !inserted)
+				{
+					AE_ERROR(LogCategory::App,
+					        "Materials '{}' and '{}' both generate '{}'. Only one of them can win, so the other renders the wrong graph. Rename or remove one.",
+					        it->second.filename().generic_string(),
+					        entry.path().filename().generic_string(),
+					        slangPath.filename().generic_string());
+					continue;
+				}
 				if (const auto existing = io::file_util::ReadText(slangPath); existing && *existing == shader)
 				{
 					continue;
