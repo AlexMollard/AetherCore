@@ -209,6 +209,29 @@ namespace aether::editor::iw
 		ImGui::SetCursorPosX(startX + column);
 	}
 
+	// Width a checkbox will occupy, label included. The `true` hides anything after "##", so
+	// an id suffix does not inflate the measurement.
+	[[nodiscard]] inline float CheckboxWidth(const char* label)
+	{
+		return ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(label, nullptr, true).x;
+	}
+
+	// Places the next control beside the last one if it fits, and otherwise starts a fresh
+	// line indented to the value column. Call this instead of ImGui::SameLine() in a run of
+	// small controls: an unconditional SameLine walks a row of flags straight off the right
+	// edge of a narrow panel, which is how "Two-sided" came to render as "Two-s".
+	inline void SameLineOrWrap(const float nextItemWidth, const float columnX)
+	{
+		const float spacing = ImGui::GetStyle().ItemSpacing.x;
+		const float cursorAfterLast = (ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x) + ImGui::GetScrollX() + spacing;
+		if (cursorAfterLast + nextItemWidth <= ImGui::GetWindowContentRegionMax().x)
+		{
+			ImGui::SameLine();
+			return;
+		}
+		ImGui::SetCursorPosX(columnX);
+	}
+
 	inline void PropLabel(const char* label)
 	{
 		LabelColumn(label);

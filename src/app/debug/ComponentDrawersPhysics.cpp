@@ -207,16 +207,18 @@ namespace aether::editor
 				rebuild |= PropCheckbox("Can sleep", &rb->allowSleeping, "Let the solver deactivate this body when it comes to rest");
 
 				iw::PropLabel("Freeze pos");
+				const float freezePosColumn = ImGui::GetCursorPosX();
 				rebuild |= ImGui::Checkbox("X##lockPosX", &rb->lockPosition.x);
-				ImGui::SameLine();
+				iw::SameLineOrWrap(iw::CheckboxWidth("Y"), freezePosColumn);
 				rebuild |= ImGui::Checkbox("Y##lockPosY", &rb->lockPosition.y);
-				ImGui::SameLine();
+				iw::SameLineOrWrap(iw::CheckboxWidth("Z"), freezePosColumn);
 				rebuild |= ImGui::Checkbox("Z##lockPosZ", &rb->lockPosition.z);
 				iw::PropLabel("Freeze rot");
+				const float freezeRotColumn = ImGui::GetCursorPosX();
 				rebuild |= ImGui::Checkbox("X##lockRotX", &rb->lockRotation.x);
-				ImGui::SameLine();
+				iw::SameLineOrWrap(iw::CheckboxWidth("Y"), freezeRotColumn);
 				rebuild |= ImGui::Checkbox("Y##lockRotY", &rb->lockRotation.y);
-				ImGui::SameLine();
+				iw::SameLineOrWrap(iw::CheckboxWidth("Z"), freezeRotColumn);
 				rebuild |= ImGui::Checkbox("Z##lockRotZ", &rb->lockRotation.z);
 
 				if (live && physics != nullptr && rb->body.IsValid())

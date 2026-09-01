@@ -253,12 +253,14 @@ namespace aether::editor
 		edited(PropColor3("Emissive", &asset.emissiveFactor.x), "emissive");
 
 		iw::PropLabel("Flags");
+		// Wraps onto a second line rather than running off the edge when the panel is narrow.
+		const float flagsColumn = ImGui::GetCursorPosX();
 		edited(ImGui::Checkbox("Two-sided", &asset.doubleSided), "double_sided");
-		ImGui::SameLine();
+		iw::SameLineOrWrap(iw::CheckboxWidth("Blend"), flagsColumn);
 		edited(ImGui::Checkbox("Blend", &asset.alphaBlend), "alpha_blend");
-		ImGui::SameLine();
+		iw::SameLineOrWrap(iw::CheckboxWidth("Mask"), flagsColumn);
 		edited(ImGui::Checkbox("Mask", &asset.alphaMask), "alpha_mask");
-		ImGui::SameLine();
+		iw::SameLineOrWrap(iw::CheckboxWidth("Vtx color"), flagsColumn);
 		edited(ImGui::Checkbox("Vtx color", &asset.modulateVertexColor), "vertex_color");
 		edited(PropCheckbox("Receives shadows", &asset.receiveShadows, "When off, the sun never shadows this surface"), "receive_shadows");
 		if (asset.alphaMask)
