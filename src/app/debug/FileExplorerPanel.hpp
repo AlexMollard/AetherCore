@@ -149,6 +149,8 @@ namespace aether::editor
 		// The baked mesh a model tile can be rendered from, or empty. A raw glTF is only
 		// usable once it has been baked, and opening a folder must not trigger that.
 		[[nodiscard]] std::string BakedMeshFor(const Entry& entry) const;
+		// "12 items" / "empty" - what a folder shows where a file shows its size.
+		[[nodiscard]] static std::string FolderCountText(const Entry& entry);
 		void ReleaseThumbnails(app::LayerContext& context);
 		// Drop what was built for an asset while KEEPING its atlas slot, so re-baking an
 		// edited material reuses its square instead of consuming a new one every save.

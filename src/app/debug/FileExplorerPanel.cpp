@@ -1348,12 +1348,9 @@ namespace aether::editor
 			const ImVec4 tint = entry.isDirectory ? chrome::WithAlpha(chrome::kAccent, 0.9f) : KindTint(entry.kind, isScript);
 			drawList->AddText(ImVec2(iconX, textY), chrome::U32(tint), icon);
 			drawList->AddText(ImVec2(nameX, textY), chrome::U32(chrome::kText), entry.name.c_str());
-			if (!entry.isDirectory)
-			{
-				const std::string sizeText = FormatSize(entry.sizeBytes);
-				const float sizeW = chrome::MeasureSized(12.0f, sizeText.c_str()).x;
-				chrome::TextSized(drawList, 12.0f, ImVec2(rowMax.x - sizeW - 8.0f, textY + 2.0f), chrome::kFaint, sizeText.c_str());
-			}
+			const std::string trailing = entry.isDirectory ? FolderCountText(entry) : FormatSize(entry.sizeBytes);
+			const float trailingW = chrome::MeasureSized(12.0f, trailing.c_str()).x;
+			chrome::TextSized(drawList, 12.0f, ImVec2(rowMax.x - trailingW - 8.0f, textY + 2.0f), chrome::kFaint, trailing.c_str());
 			if (selected)
 			{
 				drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
@@ -1514,6 +1511,10 @@ namespace aether::editor
 			const float nameX = iconX + ImGui::GetFontSize() * 1.5f;
 			drawList->AddText(ImVec2(iconX, textY), chrome::U32(chrome::WithAlpha(chrome::kAccent, 0.85f)), open ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER);
 			drawList->AddText(ImVec2(nameX, textY), chrome::U32(chrome::kText), entry.name.c_str());
+			// The same count the contents pane shows, so the tree agrees with the grid.
+			const std::string countText = FolderCountText(entry);
+			const float countW = chrome::MeasureSized(12.0f, countText.c_str()).x;
+			chrome::TextSized(drawList, 12.0f, ImVec2(rowMax.x - countW - 6.0f, textY + 2.0f), chrome::kFaint, countText.c_str());
 			if (m_currentDir == entry.path)
 			{
 				drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), chrome::U32(chrome::kSelectionBar));
@@ -1916,6 +1917,18 @@ namespace aether::editor
 		thumb.bakeReady = false;
 	}
 
+	std::string FileExplorerPanel::FolderCountText(const Entry& entry)
+	{
+		// A folder has no size, so its item count takes that column instead. Empty says so in
+		// words: a blank where a number belongs reads as missing information.
+		const std::size_t count = entry.children.size();
+		if (count == 0)
+		{
+			return "empty";
+		}
+		return std::to_string(count) + (count == 1 ? " item" : " items");
+	}
+
 	std::string FileExplorerPanel::BakedMeshFor(const Entry& entry) const
 	{
 		if (entry.kind != dragdrop::FileKind::Model)
@@ -2021,6 +2034,16 @@ namespace aether::editor
 		if (entry.isDirectory)
 		{
 			drawKindIcon(ICON_FA_FOLDER, chrome::WithAlpha(chrome::kAccent, 0.9f), 0.44f);
+			// Under the icon: how much is in there, which is the one thing a folder tile can
+			// say about itself that its name does not.
+			const std::string countText = FolderCountText(entry);
+			const float countSize = ImGui::GetFontSize() * 0.8f;
+			const ImVec2 countExtent = chrome::MeasureSized(countSize, countText.c_str());
+			chrome::TextSized(drawList,
+			        countSize,
+			        ImVec2((artMin.x + artMax.x) * 0.5f - countExtent.x * 0.5f, artMax.y - countExtent.y - 2.0f),
+			        chrome::kFaint,
+			        countText.c_str());
 		}
 		else if (thumb != nullptr && thumb->bakeReady && thumb->atlasSlot >= 0 && m_atlasImGuiId != 0)
 		{
@@ -2084,7 +2107,7 @@ namespace aether::editor
 
 		if (entry.isDirectory)
 		{
-			ImGui::SetItemTooltip("%s", entry.name.c_str());
+			ImGui::SetItemTooltip("%s\n%s", entry.name.c_str(), FolderCountText(entry).c_str());
 			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			{
 				// Through the same selection rules as a file. Setting m_selectedPath alone left
