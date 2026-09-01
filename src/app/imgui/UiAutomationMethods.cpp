@@ -2,6 +2,9 @@
 
 #include <optional>
 #include <string>
+#include <algorithm>
+#include <cstdlib>
+#include <cctype>
 #include <unordered_map>
 
 #include <imgui.h>
@@ -65,6 +68,21 @@ namespace aether::editor
 			{
 				return it->second;
 			}
+			// Function keys, which several editor shortcuts use (F2 to rename, F5 to play) and
+			// which no test could reach while the table held only the named editing keys.
+			if (name.size() >= 2 && (name[0] == 'f' || name[0] == 'F'))
+			{
+				const std::string digits = name.substr(1);
+				if (std::all_of(digits.begin(), digits.end(), [](unsigned char c) { return std::isdigit(c) != 0; }))
+				{
+					const int index = std::atoi(digits.c_str());
+					if (index >= 1 && index <= 12)
+					{
+						return ImGuiKey_F1 + (index - 1);
+					}
+				}
+			}
+
 			// Single letters and digits, so an editor shortcut can be named the way it is
 			// written down: ctrl+z, ctrl+shift+s, and so on.
 			if (name.size() == 1)

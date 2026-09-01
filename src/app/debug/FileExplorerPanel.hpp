@@ -93,6 +93,11 @@ namespace aether::editor
 		void DrawFolderTree(app::LayerContext& context, Entry& entry);
 		void DrawBreadcrumb(app::LayerContext& context);
 		void DrawFolderContents(app::LayerContext& context);
+		// Delete / F2 / Enter / arrows over the contents pane. Everything here already had a
+		// menu item; none of it had a key, so the browser could only be driven by mouse.
+		void HandleContentsShortcuts(app::LayerContext& context);
+		[[nodiscard]] const Entry* FindEntryByPath(const std::string& path) const;
+		void SelectOnly(app::LayerContext& context, const Entry& entry);
 		void DrawFileTile(app::LayerContext& context, const Entry& entry, float tileSize);
 		// Selecting, opening, dragging and the context menu, shared by the list row and the
 		// grid tile so the two views cannot drift apart in what an asset does.
@@ -162,6 +167,8 @@ namespace aether::editor
 		std::filesystem::path m_pendingOpenDir;
 		ViewMode m_viewMode = ViewMode::Grid;
 		float m_tileSize = 104.0f;
+		// Columns the grid last drew with, so Up/Down move a row rather than an item.
+		int m_gridColumns = 1;
 		std::unordered_map<std::string, Thumbnail> m_thumbnails;
 		// Opening a folder of hundreds of textures must not stall the frame it is opened on,
 		// so only a few thumbnails are decoded per frame and the rest arrive over the next few.

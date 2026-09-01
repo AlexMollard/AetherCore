@@ -1176,6 +1176,7 @@ namespace aether::editor
 			const float used = ImGui::GetCursorPosY() - contentsTop + ImGui::GetTextLineHeightWithSpacing();
 			ImGui::BeginChild("##feContents", ImVec2(0.0f, std::max(40.0f, paneH - used)));
 			DrawFolderContents(context);
+			HandleContentsShortcuts(context);
 			ImGui::EndChild();
 
 			ImGui::EndTable();
@@ -1886,6 +1887,23 @@ namespace aether::editor
 	{
 		ImGui::PushID(entry.path.generic_string().c_str());
 
+		// The grid needs the rename field too. Only the list row drew it, so renaming from
+		// the context menu (or F2) in the default view set a target that nothing rendered -
+		// the rename simply never appeared.
+		if (m_renameTarget == entry.path)
+		{
+			ImGui::BeginGroup();
+			ImGui::PushItemWidth(tileSize);
+			const bool handled = DrawActiveRename(entry);
+			ImGui::PopItemWidth();
+			ImGui::EndGroup();
+			if (handled)
+			{
+				ImGui::PopID();
+				return;
+			}
+		}
+
 		const bool isScript = entry.kind == dragdrop::FileKind::Script;
 		const bool selected = IsSelected(ToUtf8Path(entry.path));
 		const float labelH = ImGui::GetFontSize() * 1.9f;
@@ -2004,6 +2022,137 @@ namespace aether::editor
 		}
 		ImGui::PopID();
 	}
+	const FileExplorerPanel::Entry* FileExplorerPanel::FindEntryByPath(const std::string& path) const
+	{
+		const auto walk = [&](const auto& self, const Entry& node) -> const Entry*
+		{
+			for (const Entry& child: node.children)
+			{
+				if (ToUtf8Path(child.path) == path)
+				{
+					return &child;
+				}
+				if (child.isDirectory)
+				{
+					if (const Entry* hit = self(self, child))
+					{
+						return hit;
+					}
+				}
+			}
+			return nullptr;
+		};
+		return walk(walk, m_tree);
+	}
+
+	void FileExplorerPanel::SelectOnly(app::LayerContext& context, const Entry& entry)
+	{
+		m_selectedPath = ToUtf8Path(entry.path);
+		m_selectedPaths.assign(1, m_selectedPath);
+		m_selectedPayloadPath = entry.payloadPath;
+		m_selectedKind = entry.kind;
+		m_selectedIsDirectory = entry.isDirectory;
+		m_createDir = entry.isDirectory ? entry.path : entry.path.parent_path();
+		if (!entry.isDirectory)
+		{
+			if (auto* selection = context.TryGet<SceneSelection>())
+			{
+				const bool isScript = entry.kind == dragdrop::FileKind::Script;
+				selection->SelectAsset(ToSelectionKind(entry.kind), isScript ? m_selectedPath : entry.payloadPath, entry.name);
+			}
+		}
+	}
+
+	void FileExplorerPanel::HandleContentsShortcuts(app::LayerContext& context)
+	{
+		// Only while this panel has the keyboard and nothing is being typed into - a rename
+		// field or the search box must keep its own Delete and Enter.
+		if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || ImGui::GetIO().WantTextInput || !m_renameTarget.empty())
+		{
+			return;
+		}
+
+		const std::vector<std::string> order = VisibleOrder();
+		if (!order.empty())
+		{
+			const auto at = std::find(order.begin(), order.end(), m_selectedPath);
+			int index = at == order.end() ? -1 : static_cast<int>(at - order.begin());
+			const int columns = m_viewMode == ViewMode::Grid ? std::max(1, m_gridColumns) : 1;
+			int moved = index;
+			if (ImGui::IsKeyPressed(ImGuiKey_RightArrow) && m_viewMode == ViewMode::Grid)
+			{
+				moved = index + 1;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow) && m_viewMode == ViewMode::Grid)
+			{
+				moved = index - 1;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+			{
+				moved = index + columns;
+			}
+			else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+			{
+				moved = index - columns;
+			}
+			// From nothing selected, any arrow starts at the first entry.
+			if (index < 0 && moved != index)
+			{
+				moved = 0;
+			}
+			if (moved != index && moved >= 0 && moved < static_cast<int>(order.size()))
+			{
+				if (const Entry* entry = FindEntryByPath(order[static_cast<std::size_t>(moved)]))
+				{
+					SelectOnly(context, *entry);
+				}
+			}
+		}
+
+		if (m_selectedPath.empty())
+		{
+			return;
+		}
+		const Entry* selected = FindEntryByPath(m_selectedPath);
+		if (selected == nullptr)
+		{
+			return;
+		}
+
+		if (ImGui::IsKeyPressed(ImGuiKey_F2))
+		{
+			BeginRename(*selected);
+		}
+		else if (ImGui::IsKeyPressed(ImGuiKey_Delete))
+		{
+			// Straight to the same confirmation the menu opens, reference count and all -
+			// never a silent delete on a keypress.
+			m_deleteTarget = selected->path;
+			m_deleteIsDirectory = selected->isDirectory;
+			m_deleteReferenceCount = CountAssetReferences(selected->path, selected->isDirectory);
+			m_openDeletePopup = true;
+		}
+		else if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))
+		{
+			if (selected->isDirectory)
+			{
+				m_pendingOpenDir = selected->path;
+			}
+			else if (selected->kind == dragdrop::FileKind::Script)
+			{
+				OpenInEditor(ToUtf8Path(selected->path), 0);
+			}
+			else
+			{
+				OpenInOS(selected->path);
+			}
+		}
+		else if (ImGui::IsKeyPressed(ImGuiKey_Backspace) && m_currentDir != m_root)
+		{
+			m_pendingOpenDir = m_currentDir.parent_path();
+		}
+	}
+
 	void FileExplorerPanel::DrawFolderContents(app::LayerContext& context)
 	{
 		Entry* dir = FindDirectory(m_tree, m_currentDir);
@@ -2019,13 +2168,16 @@ namespace aether::editor
 			return;
 		}
 
-		m_pendingOpenDir.clear();
+		// NOT cleared here. A request can also come from the keyboard, which is handled after
+		// this function has run, and clearing on entry wiped it before it could ever apply.
+		// The apply below is the only place that should clear it.
 		int shown = 0;
 		if (m_viewMode == ViewMode::Grid)
 		{
 			const float avail = ImGui::GetContentRegionAvail().x;
 			const float stride = m_tileSize + ImGui::GetStyle().ItemSpacing.x;
 			const int columns = std::max(1, static_cast<int>(avail / std::max(1.0f, stride)));
+			m_gridColumns = columns;
 			int column = 0;
 			// Folders first, so entering one is possible from the grid itself rather than only
 			// from the tree on the left.
