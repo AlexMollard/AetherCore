@@ -33,6 +33,7 @@ namespace aether
 		        {"window.mode", {.description = "Borderless is the only mode besides fullscreen that can win DWM independent flip; composition costs about a frame of latency.", .choices = kWindowModes}},
 		        {"graphics.vsync", {.description = "Wait for the display to refresh. Turning it off tears, but removes a frame of latency."}},
 		        {"graphics.framesInFlight", {.description = "How far the game thread may run ahead of the screen. Every frame of run-ahead is one display interval of input lag (~17 ms at 60 Hz).", .minValue = 1.0, .maxValue = 3.0}},
+		        {"graphics.latencyReserve", {.description = "Share of the display interval the latency pacer holds back for the frame's work. Lower latches input closer to the flip and feels more responsive, at the cost of a longer tail when a frame runs over.", .minValue = 0.1, .maxValue = 0.9}},
 		        {"graphics.lowLatencyPresent", {.description = "Prefer MAILBOX over FIFO while vsync is on: a finished frame replaces the pending one instead of queueing behind it."}},
 		        {"graphics.latencyPacing", {.description = "Idle out most of the display interval and latch input just before the flip. Needs a measured flip phase; does nothing without one."}},
 		        {"graphics.renderScale", {.description = "Scene resolution as a multiple of the output. Below 1 renders small and upscales, for performance. Above 1 renders large and downsamples - supersampling, the bluntest and best antialiasing, at 4x the pixels for 2x. UI always draws at native resolution.", .minValue = 0.25, .maxValue = 2.0}},
@@ -181,6 +182,10 @@ namespace aether
 		}
 		settings.app.targetFps = std::max(0.0f, settings.app.targetFps);
 		settings.graphics.framesInFlight = std::clamp(settings.graphics.framesInFlight, 1, 3);
+		// Never 0 (the pacer would latch at the flip itself and every frame would miss) and
+		// never the whole interval (the latch point lands on the previous flip and pacing
+		// switches itself off - the bug this ceiling exists to prevent).
+		settings.graphics.latencyReserve = std::clamp(settings.graphics.latencyReserve, 0.1f, 0.9f);
 		settings.graphics.uiScale = std::clamp(settings.graphics.uiScale, 0.5f, 3.0f);
 		// Below a quarter the scene is unrecognisable, and above 1 it would be supersampling
 		// rather than the cost saving this exists for.

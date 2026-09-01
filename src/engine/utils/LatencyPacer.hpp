@@ -42,7 +42,7 @@ namespace aether
 		// which ratchets the reserve straight back up. Measured latched up at 16.30 ms against
 		// a 16.44 ms period, with paced=1 in 2400 frames. Capping it leaves the controller its
 		// full range of useful values and keeps the loop from closing on itself.
-		static constexpr float kMaxReserveFraction = 0.5f;
+		static constexpr float kDefaultMaxReserveFraction = 0.5f;
 
 		// workMs is everything between latching input and handing the frame off. missed says
 		// the frame did not make the flip it was aimed at.
@@ -74,7 +74,7 @@ namespace aether
 			// before the flip estimate exists (the caller passes the loop period then), and
 			// std::clamp with hi < lo is a debug assert - which wedged a Debug editor behind a
 			// modal dialog on frame 0 - and undefined behaviour in release.
-		const float ceilingMs = intervalMs * kMaxReserveFraction;
+		const float ceilingMs = intervalMs * m_maxReserveFraction;
 			m_reserveMs = std::clamp(m_reserveMs, std::min(kFloorMs, ceilingMs), ceilingMs);
 			m_observations += 1;
 		}
@@ -84,6 +84,13 @@ namespace aether
 		[[nodiscard]] float ReserveMs() const
 		{
 			return m_observations < kWarmupFrames ? 0.0f : m_reserveMs;
+		}
+
+		// Set from graphics.latencyReserve so the trade between responsiveness and tail
+		// length is the user's to make, not a constant baked in here.
+		void SetMaxReserveFraction(float fraction)
+		{
+			m_maxReserveFraction = std::clamp(fraction, 0.1f, 0.9f);
 		}
 
 		[[nodiscard]] bool IsWarm() const
@@ -96,6 +103,7 @@ namespace aether
 		static constexpr std::size_t kWarmupFrames = 30;
 
 		float m_reserveMs = kFloorMs;
+		float m_maxReserveFraction = kDefaultMaxReserveFraction;
 		std::size_t m_observations = 0;
 	};
 } // namespace aether

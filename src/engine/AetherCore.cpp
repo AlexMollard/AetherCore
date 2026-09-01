@@ -422,6 +422,7 @@ namespace aether
 			// MEASURED phase: with no present-timing estimate the engine keeps its previous
 			// behaviour rather than pacing against an inferred one.
 			const PresentTimingTracker& presentTiming = m_gpu->GetPresentTiming();
+			latencyPacer.SetMaxReserveFraction(m_settings.graphics.latencyReserve);
 			if (m_settings.graphics.latencyPacing && presentTiming.HasEstimate() && latencyPacer.IsWarm())
 			{
 				const auto flip = presentTiming.PredictNextFlip(afterInFlightWait);
@@ -559,6 +560,7 @@ namespace aether
 				// The latency pacer's idle is a wait like any other; leaving it in reported a loop
 				// doing 0.1 ms of work as 10 ms. (The pacer is fed latchToSubmitMs, which starts
 				// after the idle, so it never sees its own sleep.)
+				timing.pacerIdleMs = pacerIdleMs;
 				timing.gameWorkMs = std::max(0.0f, ms(frameStart, frameEnd) - timing.pacerWaitMs - timing.inFlightWaitMs - pacerIdleMs);
 				m_frameTimeline.RecordGameFrame(timing);
 
@@ -591,6 +593,11 @@ namespace aether
 					float inFlight = 0.0f;
 					float present = 0.0f;
 					float inputStale = 0.0f;
+					// Where a frame's wall time actually goes: the frame cap's sleep and the latency
+					// pacer's idle are both invisible otherwise, so a loop pinned to the wrong rate
+					// looks identical to one doing real work.
+					float capWait = 0.0f;
+					float pacerIdle = 0.0f;
 					std::size_t clamped = 0;
 					std::size_t unthrottled = 0;
 					const auto flipPeriodMs = static_cast<float>(presentTiming.PeriodMs());
@@ -602,6 +609,8 @@ namespace aether
 						inFlight += frame.inFlightWaitMs;
 						present += frame.presentWaitMs;
 						inputStale += frame.inputStaleMs;
+						capWait += frame.pacerWaitMs;
+						pacerIdle += frame.pacerIdleMs;
 						if (frame.wallMs > frame.simDtMs + 0.01f)
 						{
 							++clamped;
@@ -631,9 +640,9 @@ namespace aether
 							total += value;
 						}
 						AE_INFO(LogCategory::Engine,
-						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} | flipPeriod={:.3f} flips={} reserve={:.2f} paced={} missed={} est={} vrr={} warm={} | clamped={} unthrottled={}{}",
+						        "FrameReport n={} avg={:.2f} median={:.2f} p95={:.2f} p99={:.2f} max={:.2f} | game={:.3f} inflight={:.3f} present={:.3f} inputstale={:.3f} cap={:.3f} pacer={:.3f} | flipPeriod={:.3f} flips={} reserve={:.2f} paced={} missed={} est={} vrr={} warm={} | clamped={} unthrottled={}{}",
 						        count, total / n, at(0.5), at(0.95), at(0.99), reportWall.back(),
-						        gameWork / n, inFlight / n, present / n, inputStale / n,
+						        gameWork / n, inFlight / n, present / n, inputStale / n, capWait / n, pacerIdle / n,
 					        m_gpu->GetPresentTiming().PeriodMs(), m_gpu->GetPresentTiming().ObservedFlips(), latencyPacer.ReserveMs(), pacedFrames, missedFlips,
 					        // paced=0 has three quite different causes and the number alone cannot tell
 					        // them apart: no timebase, a display judged variable, or a pacer that has

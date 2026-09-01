@@ -18,8 +18,13 @@ namespace aether
 		std::uint64_t frameIndex = 0;
 		float wallMs = 0.0f;
 		float simDtMs = 0.0f;
+		// The frame cap's sleep.
 		float pacerWaitMs = 0.0f;
 		float inFlightWaitMs = 0.0f;
+		// The latency pacer's deliberate idle before latching input. Distinct from the cap:
+		// one is throttling to a target rate, the other is waiting for the right moment, and
+		// a frame pinned to the wrong rate looks the same as real work without separating them.
+		float pacerIdleMs = 0.0f;
 		float gameWorkMs = 0.0f;
 		float renderExecMs = 0.0f;
 		float presentWaitMs = 0.0f;

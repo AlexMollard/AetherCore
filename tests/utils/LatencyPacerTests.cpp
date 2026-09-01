@@ -81,14 +81,32 @@ TEST_CASE("A missed flip surrenders a large part of the interval at once") {
 }
 
 // A pathological frame must never make the pacer ask for more than exists, which would
-// produce a negative idle and a busy loop.
-TEST_CASE("Work larger than the interval clamps to the interval") {
+// produce a negative idle and a busy loop - and it must stop short of the whole interval.
+// A reserve equal to the interval puts the latch point on the PREVIOUS flip, which is always
+// in the past, so no frame is ever paced; unpaced frames then miss more often and ratchet the
+// reserve straight back up. Measured latched up at 16.30 ms against a 16.44 ms period with
+// paced=1 in 2400 frames before the ceiling existed.
+TEST_CASE("Work larger than the interval clamps below the interval, not to it") {
     LatencyPacer pacer;
     Settle(pacer, 0.2f, 200);
 
     pacer.Observe(kInterval, 500.0f, true);
 
-    CHECK(pacer.ReserveMs() == doctest::Approx(kInterval));
+    CHECK(pacer.ReserveMs() == doctest::Approx(kInterval * LatencyPacer::kDefaultMaxReserveFraction));
+    CHECK(pacer.ReserveMs() < kInterval);
+}
+
+// The ceiling is the user's trade between responsiveness and tail length, so it has to
+// actually move the reserve.
+TEST_CASE("The reserve ceiling is configurable and always leaves room to pace") {
+    LatencyPacer pacer;
+    pacer.SetMaxReserveFraction(0.25f);
+    Settle(pacer, 0.2f, 200);
+
+    pacer.Observe(kInterval, 500.0f, true);
+
+    CHECK(pacer.ReserveMs() == doctest::Approx(kInterval * 0.25f));
+    CHECK(pacer.ReserveMs() < kInterval);
 }
 
 TEST_CASE("A zero or negative interval is ignored rather than poisoning the reserve") {
