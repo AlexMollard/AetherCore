@@ -558,6 +558,11 @@ namespace aether::editor
 			e.kind = InferFileKind(e.path);
 			std::error_code sizeEc;
 			e.sizeBytes = file.file_size(sizeEc);
+			std::error_code timeEc;
+			if (const auto written = file.last_write_time(timeEc); !timeEc)
+			{
+				e.writeTime = written.time_since_epoch().count();
+			}
 
 			e.payloadPath = ToUtf8Path(e.path);
 			if (e.kind != dragdrop::FileKind::Script && !m_root.empty())
@@ -783,6 +788,98 @@ namespace aether::editor
 		m_selectedPath = ToUtf8Path(newPath);
 		m_treeDirty = true;
 		return true;
+	}
+
+	std::filesystem::path FileExplorerPanel::PhysicalPathFor(const std::string_view vfsPath) const
+	{
+		constexpr std::string_view kPrefix = "project://";
+		if (!vfsPath.starts_with(kPrefix) || m_root.empty())
+		{
+			return {};
+		}
+		return m_root / std::filesystem::path(std::string(vfsPath.substr(kPrefix.size())));
+	}
+
+	bool FileExplorerPanel::MoveEntry(const std::filesystem::path& source, const std::filesystem::path& destDir)
+	{
+		m_opError.clear();
+		if (source.empty() || destDir.empty())
+		{
+			return false;
+		}
+		std::error_code ec;
+		if (!std::filesystem::exists(source, ec))
+		{
+			m_opError = "That file is no longer there.";
+			return false;
+		}
+		if (source.parent_path() == destDir)
+		{
+			// Already where it was dropped: not an error, just nothing to do.
+			return false;
+		}
+		// A folder cannot be moved inside itself, which would otherwise detach the whole
+		// subtree from the project.
+		if (std::filesystem::is_directory(source, ec))
+		{
+			const std::filesystem::path rel = std::filesystem::relative(destDir, source, ec);
+			if (!ec && IsSubpath(rel))
+			{
+				m_opError = "A folder cannot be moved into itself.";
+				return false;
+			}
+		}
+		const std::filesystem::path target = destDir / source.filename();
+		if (std::filesystem::exists(target, ec))
+		{
+			m_opError = target.filename().generic_string() + " already exists there.";
+			return false;
+		}
+		std::filesystem::rename(source, target, ec);
+		if (ec)
+		{
+			m_opError = "Could not move " + source.filename().generic_string() + ": " + ec.message();
+			return false;
+		}
+		// Everything that referred to the old "project://" path has to follow it, exactly as
+		// it does for a rename - otherwise the move silently unhooks the asset from every
+		// scene, prefab and material that used it.
+		RetargetAssetReferences(source, target);
+		if (m_selectedPath == ToUtf8Path(source))
+		{
+			m_selectedPath = ToUtf8Path(target);
+			m_createDir = target.parent_path();
+		}
+		m_treeDirty = true;
+		return true;
+	}
+
+	bool FileExplorerPanel::AcceptFileDropIntoFolder(app::LayerContext& context, const std::filesystem::path& destDir)
+	{
+		if (!ImGui::BeginDragDropTarget())
+		{
+			return false;
+		}
+		bool moved = false;
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload); payload != nullptr && payload->DataSize == sizeof(dragdrop::FilePayload))
+		{
+			const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
+			moved = MoveEntry(PhysicalPathFor(file->path), destDir);
+		}
+		else if (const ImGuiPayload* scriptPayload = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload); scriptPayload != nullptr && scriptPayload->DataSize == sizeof(dragdrop::ScriptPayload))
+		{
+			// A script's payload already carries its physical path, because a script is
+			// dragged to be attached rather than to be resolved through the VFS.
+			const auto* script = static_cast<const dragdrop::ScriptPayload*>(scriptPayload->Data);
+			moved = MoveEntry(std::filesystem::path(script->sourcePath), destDir);
+		}
+		ImGui::EndDragDropTarget();
+		if (moved)
+		{
+			// Thumbnails are keyed by path, so the moved asset's entry is now stale.
+			ReleaseThumbnails(context);
+		}
+		return moved;
 	}
 
 	bool FileExplorerPanel::DuplicateEntry(const std::filesystem::path& target)
@@ -1293,6 +1390,7 @@ namespace aether::editor
 			m_selectedPath = ToUtf8Path(entry.path);
 			m_selectedIsDirectory = true;
 		}
+		AcceptFileDropIntoFolder(context, entry.path);
 		DrawRowContextMenu(context, entry);
 
 		if (open)
@@ -1354,7 +1452,13 @@ namespace aether::editor
 		const std::string key = ToUtf8Path(entry.path);
 		if (const auto it = m_thumbnails.find(key); it != m_thumbnails.end())
 		{
-			return &it->second;
+			if (it->second.stamp == entry.writeTime)
+			{
+				return &it->second;
+			}
+			// The asset changed on disk - saving a material, recompiling its graph - so what
+			// was built from the old contents is stale.
+			InvalidateThumbnail(context, it->second);
 		}
 
 		// Budgeted: a folder of hundreds of assets fills in over several frames rather than
@@ -1373,8 +1477,10 @@ namespace aether::editor
 		}
 		++m_thumbnailLoadsThisFrame;
 
-		Thumbnail thumb{};
+		Thumbnail& thumb = m_thumbnails[key];
+		InvalidateThumbnail(context, thumb);
 		thumb.resolved = true;
+		thumb.stamp = entry.writeTime;
 		std::string texturePath = entry.payloadPath.empty() ? key : entry.payloadPath;
 
 		if (isMaterial)
@@ -1407,8 +1513,7 @@ namespace aether::editor
 			}
 			if (texturePath.empty() || texturePath.find("://") == std::string::npos)
 			{
-				m_thumbnails.emplace(key, thumb);
-				return &m_thumbnails.at(key);
+				return &thumb;
 			}
 		}
 
@@ -1425,8 +1530,7 @@ namespace aether::editor
 				textures.Release(thumb.texture);
 				thumb.texture = {};
 			}
-			m_thumbnails.emplace(key, thumb);
-			return &m_thumbnails.at(key);
+			return &thumb;
 		}
 		for (const gpu::DebugTextureInfo& info: gpu::ResourceRegistry::ListDebugTextures())
 		{
@@ -1445,8 +1549,7 @@ namespace aether::editor
 			textures.Release(thumb.texture);
 			thumb.texture = {};
 		}
-		m_thumbnails.emplace(key, thumb);
-		return &m_thumbnails.at(key);
+		return &thumb;
 	}
 	void FileExplorerPanel::PumpMaterialThumbnailBakes(app::LayerContext& context)
 	{
@@ -1512,7 +1615,7 @@ namespace aether::editor
 			// The atlas is finite. Past the last slot the remaining materials keep their
 			// albedo or colour, which is a graceful stop rather than recycling a slot out
 			// from under a tile that is on screen.
-			if (m_nextAtlasSlot >= static_cast<int>(baker.GetSlotCount()))
+			if (thumb.atlasSlot < 0 && m_nextAtlasSlot >= static_cast<int>(baker.GetSlotCount()))
 			{
 				return;
 			}
@@ -1531,7 +1634,10 @@ namespace aether::editor
 			{
 				return;
 			}
-			thumb.atlasSlot = m_nextAtlasSlot++;
+			if (thumb.atlasSlot < 0)
+			{
+				thumb.atlasSlot = m_nextAtlasSlot++;
+			}
 			baker.SetBakeSlot(thumb.atlasSlot);
 			m_bakeInFlight = key;
 			m_bakeStartedFrame = ImGui::GetFrameCount();
@@ -1547,6 +1653,32 @@ namespace aether::editor
 			}
 			return;
 		}
+	}
+
+	void FileExplorerPanel::InvalidateThumbnail(app::LayerContext& context, Thumbnail& thumb)
+	{
+		if (thumb.imguiId != 0)
+		{
+			if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(thumb.imguiId));
+			}
+			thumb.imguiId = 0;
+		}
+		if (thumb.texture.IsValid())
+		{
+			if (auto* assets = context.TryGet<AssetManager>())
+			{
+				assets->GetTextureRegistry().Release(thumb.texture);
+			}
+			thumb.texture = {};
+		}
+		thumb.hasSwatch = false;
+		thumb.swatch = 0;
+		thumb.resolved = false;
+		// atlasSlot survives on purpose: the re-bake draws over the same square.
+		thumb.bakeAttempted = false;
+		thumb.bakeReady = false;
 	}
 
 	void FileExplorerPanel::ReleaseThumbnails(app::LayerContext& context)
@@ -1687,6 +1819,7 @@ namespace aether::editor
 			{
 				m_pendingOpenDir = entry.path;
 			}
+			AcceptFileDropIntoFolder(context, entry.path);
 			DrawRowContextMenu(context, entry);
 		}
 		else

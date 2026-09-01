@@ -40,6 +40,8 @@ namespace aether::editor
 			std::string name;
 			std::string payloadPath;
 			std::uint64_t sizeBytes = 0;
+			// Last write time, so a thumbnail can tell that the asset behind it has changed.
+			std::int64_t writeTime = 0;
 			dragdrop::FileKind kind = dragdrop::FileKind::Unknown;
 			bool isDirectory = false;
 			std::vector<Entry> children;
@@ -66,6 +68,9 @@ namespace aether::editor
 			int atlasSlot = -1;
 			bool bakeAttempted = false;
 			bool bakeReady = false;
+			// The file's write time when this was built. Editing a material has to re-bake it,
+			// or the tile keeps showing the material as it used to look.
+			std::int64_t stamp = 0;
 			// A material with no albedo map still has a colour, which says far more about it
 			// than a generic icon does.
 			std::uint32_t swatch = 0;
@@ -93,6 +98,9 @@ namespace aether::editor
 		// frame's load budget is spent, in which case the icon is drawn and it loads later).
 		[[nodiscard]] const Thumbnail* ThumbnailFor(app::LayerContext& context, const Entry& entry);
 		void ReleaseThumbnails(app::LayerContext& context);
+		// Drop what was built for an asset while KEEPING its atlas slot, so re-baking an
+		// edited material reuses its square instead of consuming a new one every save.
+		void InvalidateThumbnail(app::LayerContext& context, Thumbnail& thumb);
 		// Bakes at most one material sphere per frame, on a preview instance of its own so
 		// that baking never disturbs what the Material window is showing.
 		void PumpMaterialThumbnailBakes(app::LayerContext& context);
@@ -115,6 +123,14 @@ namespace aether::editor
 		// dialog warns with.
 		[[nodiscard]] int CountAssetReferences(const std::filesystem::path& target, bool isDirectory) const;
 		bool DuplicateEntry(const std::filesystem::path& target);
+		// Move an asset into another folder, repointing everything that referenced it. This is
+		// the same problem rename solves, so it shares rename's retargeting rather than
+		// growing a second answer to it.
+		bool MoveEntry(const std::filesystem::path& source, const std::filesystem::path& destDir);
+		// A folder row or tile as a drop target. Returns true when something was moved.
+		bool AcceptFileDropIntoFolder(app::LayerContext& context, const std::filesystem::path& destDir);
+		// The physical path behind a "project://..." payload, or empty when it is outside.
+		[[nodiscard]] std::filesystem::path PhysicalPathFor(std::string_view vfsPath) const;
 		bool DeleteEntry(const std::filesystem::path& target, bool isDirectory);
 
 		std::filesystem::path m_root;
