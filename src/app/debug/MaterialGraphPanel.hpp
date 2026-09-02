@@ -76,6 +76,17 @@ namespace aether::editor
 		void DrawPreview(float side) const;
 		[[nodiscard]] std::string GraphSignature() const;
 
+		// Whether the node graph on screen differs from the one in the file. Compared against
+		// the saved spec directly rather than tracked with a flag: nothing in the graph editor
+		// set a dirty flag at all, so a graph-only edit showed no unsaved marker and the
+		// switch guard let it be discarded without asking.
+		[[nodiscard]] bool GraphDiffersFromDisk() const;
+		// The graph's signature as of the last load or save. NOT the spec's graphSection: the
+		// load path re-serialises and re-parses, so the text from the file and the text this
+		// graph produces are not byte-identical, and comparing them marks every freshly
+		// opened material as unsaved.
+		std::string m_savedGraphSignature;
+
 		// The material being edited, and its properties/textures.
 		std::string m_path;
 		MaterialAssetEditState m_edit;

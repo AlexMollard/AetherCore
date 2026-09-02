@@ -309,6 +309,11 @@ namespace aether::editor
 		return m_graph ? SerializeMaterialGraph(*m_graph) : std::string{};
 	}
 
+	bool MaterialGraphPanel::GraphDiffersFromDisk() const
+	{
+		return m_graph.has_value() && m_edit.loaded && GraphSignature() != m_savedGraphSignature;
+	}
+
 	void MaterialGraphPanel::SyncLinks()
 	{
 		int startPin = 0;
@@ -666,6 +671,7 @@ namespace aether::editor
 			return false;
 		}
 		m_edit.spec.graphSection = GraphSignature();
+		m_savedGraphSignature = m_edit.spec.graphSection;
 		if (auto written = io::FileSystem::WriteFileText(m_path, MaterialSerializer::ToToml(m_edit.spec)); !written)
 		{
 			m_status = "Could not write the material.";
@@ -967,7 +973,7 @@ namespace aether::editor
 		// Switching away from unsaved edits would discard them with no undo and no warning,
 		// which is what clicking another material in the browser used to do. Hold the request
 		// and ask instead.
-		if (m_edit.dirty && m_edit.loaded && !m_path.empty() && m_path != materialPath)
+		if ((m_edit.dirty || GraphDiffersFromDisk()) && m_edit.loaded && !m_path.empty() && m_path != materialPath)
 		{
 			m_pendingOpenPath = materialPath;
 			return;
@@ -1026,6 +1032,7 @@ namespace aether::editor
 		m_graph = ParseMaterialGraph(MaterialSerializer::ToToml(m_edit.spec));
 		m_compiledSignature = GraphSignature();
 		m_submittedSignature = m_compiledSignature;
+		m_savedGraphSignature = m_compiledSignature;
 		RefreshPreview(context);
 	}
 
@@ -1221,7 +1228,7 @@ namespace aether::editor
 
 	void MaterialGraphPanel::OnImGui(app::LayerContext& context)
 	{
-		ImGui::Begin(editor::DocumentTitle("Material", m_edit.loaded && m_edit.dirty && !m_path.empty()).c_str(), VisiblePtr());
+		ImGui::Begin(editor::DocumentTitle("Material", !m_path.empty() && m_edit.loaded && (m_edit.dirty || GraphDiffersFromDisk())).c_str(), VisiblePtr());
 		m_focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 		PollCompile(context);
 		FollowSelection(context);
@@ -1331,7 +1338,7 @@ namespace aether::editor
 
 	bool MaterialGraphPanel::HasUnsavedWork(app::LayerContext& /*context*/) const
 	{
-		return m_edit.loaded && m_edit.dirty && !m_path.empty();
+		return m_edit.loaded && !m_path.empty() && (m_edit.dirty || GraphDiffersFromDisk());
 	}
 
 	bool MaterialGraphPanel::SaveUnsavedWork(app::LayerContext& context)
