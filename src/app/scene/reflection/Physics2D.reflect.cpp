@@ -59,6 +59,8 @@ AE_FIELD_N("fixed_rotation", fixedRotation, Bool)
 AE_FIELD_N("continuous_collision", continuousCollision, Bool)
 AE_FIELD_N("allow_sleeping", allowSleeping, Bool)
 AE_FIELD_N("start_awake", startAwake, Bool)
+AE_FIELD_NT("initial_velocity", initialVelocity, Vec2, "Speed the body is given the moment it comes into being, in units per second. It is a starting push, not a constant force - drag and collisions take over from there.")
+AE_FIELD_NT("initial_angular_velocity", initialAngularVelocity, Float, "Spin it starts with, in radians per second, counter-clockwise. Ignored while fixed_rotation is on.")
 b.PostSet(&RebuildBody2D);
 b.RequiresFeature(SceneFeatureFlags::Physics2D);
 b.ConflictsWith({"Rigid Body", "Box Collider", "Joint"});
