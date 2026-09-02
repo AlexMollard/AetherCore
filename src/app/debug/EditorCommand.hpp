@@ -130,6 +130,30 @@ namespace aether::editor
 		TileMapLayer m_layer;
 	};
 
+	// Removing an entity's effect drops EffectRefComponent, EffectParamsComponent and the
+	// pipeline it assigned. Captured as the effect NAME plus its parameter values, not as the
+	// components verbatim: paramSlot is a runtime allocation into the effect param buffer, and
+	// putting a stale index back would point at whatever now owns that slot. Undo re-applies
+	// the effect properly and lets the slot be assigned again.
+	class RemoveEffectCommand final : public IEditorCommand
+	{
+	public:
+		RemoveEffectCommand(std::uint32_t entityId, std::string effectName, EffectParams params);
+
+		void Undo(World& world, ServiceContainer& services) override;
+		void Redo(World& world, ServiceContainer& services) override;
+
+		[[nodiscard]] std::string_view Label() const override
+		{
+			return "Remove effect";
+		}
+
+	private:
+		std::uint32_t m_entityId;
+		std::string m_effectName;
+		EffectParams m_params;
+	};
+
 	// A Sprite Animation panel edit (frames, durations, events, loop mode) as a
 	// main-history command. Stores the before/after clip and applies it back
 	// through a callback the panel supplies, so the global Ctrl+Z drives it with

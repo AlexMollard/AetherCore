@@ -1,4 +1,6 @@
 #include "debug/ComponentDrawers.hpp"
+#include "debug/EditorCommand.hpp"
+#include "debug/UndoStack.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -384,6 +386,17 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_BOLT "  Effect Params", ICON_FA_XMARK "##removeEffect", removeEffect, ImGuiTreeNodeFlags_DefaultOpen);
 		if (removeEffect)
 		{
+			// Capture the effect and its parameters before they go. Nothing recorded this, so
+			// Ctrl+Z skipped past it into an unrelated edit and the tuning was gone for good.
+			if (auto* undo = context.services.TryGet<UndoStack>())
+			{
+				const auto* ref = world.TryGet<EffectRefComponent>(entity);
+				const auto* params = world.TryGet<EffectParamsComponent>(entity);
+				if (ref != nullptr)
+				{
+					undo->Record(std::make_unique<RemoveEffectCommand>(entity.id, ref->name, params != nullptr ? params->params : EffectParams{}));
+				}
+			}
 			world.Remove<EffectParamsComponent>(entity);
 			world.Remove<EffectRefComponent>(entity);
 			auto* assets = context.TryGet<AssetManager>();

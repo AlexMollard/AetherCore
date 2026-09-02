@@ -1,4 +1,8 @@
 #include "debug/EditorCommand.hpp"
+#include "material/EffectManager.hpp"
+#include "material/MaterialRegistry.hpp"
+#include "scripting/SceneContext.hpp"
+#include "material/MaterialSystem.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -81,6 +85,52 @@ namespace aether::editor
 	TileStrokeCommand::TileStrokeCommand(std::string tilemapPath, std::vector<TilePaintEdit> edits)
 	      : m_tilemapPath(std::move(tilemapPath)), m_edits(std::move(edits))
 	{
+	}
+
+	RemoveEffectCommand::RemoveEffectCommand(const std::uint32_t entityId, std::string effectName, EffectParams params)
+	      : m_entityId(entityId), m_effectName(std::move(effectName)), m_params(params)
+	{
+	}
+
+	void RemoveEffectCommand::Undo(World& world, ServiceContainer& services)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		auto* sceneCtx = services.TryGet<app::scripting::SceneContext>();
+		auto* assets = services.TryGet<AssetManager>();
+		if (sceneCtx == nullptr || sceneCtx->effects == nullptr || assets == nullptr)
+		{
+			return;
+		}
+		// Goes through the same entry point the inspector uses, so the parameter slot and the
+		// pipeline are assigned the way they would be for a fresh apply.
+		(void) effects::ApplyEntityEffect(world, entity, m_effectName, *sceneCtx->effects, assets->GetPipelineCache(), assets->GetEffectParamBuffer(), &m_params);
+	}
+
+	void RemoveEffectCommand::Redo(World& world, ServiceContainer& services)
+	{
+		const Entity entity{m_entityId};
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return;
+		}
+		world.Remove<EffectParamsComponent>(entity);
+		world.Remove<EffectRefComponent>(entity);
+		// Put the plain material back if there is one, matching what the panel's X does.
+		auto* assets = services.TryGet<AssetManager>();
+		const auto* mc = world.TryGet<MaterialComponent>(entity);
+		MaterialAsset asset{};
+		if (assets != nullptr && mc != nullptr && assets->GetMaterialRegistry().TryDescribe(mc->handle, asset))
+		{
+			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
+		}
+		else
+		{
+			world.Remove<PipelineComponent>(entity);
+		}
 	}
 
 	void TileStrokeCommand::Apply(ServiceContainer& services, bool forward)

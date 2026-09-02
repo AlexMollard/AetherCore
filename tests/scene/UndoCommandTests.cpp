@@ -608,6 +608,43 @@ TEST_CASE("RemoveTileLayerCommand restores the layer and its tiles")
 	std::filesystem::remove(mapPath);
 }
 
+// Removing an entity's effect used to record nothing, so Ctrl+Z skipped past it and the
+// tuning was gone. Only the destructive half is exercised here: restoring goes through
+// ApplyEntityEffect, which needs a live EffectManager, PipelineCache and param buffer.
+TEST_CASE("RemoveEffectCommand strips the effect components on redo")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	world.Emplace<EffectRefComponent>(entity, EffectRefComponent{.name = "molten"});
+	world.Emplace<EffectParamsComponent>(entity);
+	world.Emplace<PipelineComponent>(entity);
+
+	RemoveEffectCommand command(entity.id, "molten", EffectParams{});
+	command.Redo(world, services);
+
+	CHECK_FALSE(world.Has<EffectRefComponent>(entity));
+	CHECK_FALSE(world.Has<EffectParamsComponent>(entity));
+	// With no AssetManager there is no material to fall back to, so the pipeline goes too
+	// rather than being left pointing at the effect's.
+	CHECK_FALSE(world.Has<PipelineComponent>(entity));
+}
+
+// Undo with no services must decline rather than half-restore: a component put back without
+// its parameter slot or pipeline is worse than leaving the removal in place.
+TEST_CASE("RemoveEffectCommand undo declines when the effect services are absent")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+
+	RemoveEffectCommand command(entity.id, "molten", EffectParams{});
+	command.Undo(world, services);
+
+	CHECK_FALSE(world.Has<EffectRefComponent>(entity));
+	CHECK_FALSE(world.Has<EffectParamsComponent>(entity));
+}
+
 TEST_CASE("UndoStack group of one records the command itself")
 {
 	UndoStack stack;
