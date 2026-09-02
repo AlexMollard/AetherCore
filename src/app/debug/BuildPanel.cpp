@@ -1,3 +1,4 @@
+#include "AetherCore.hpp"
 #include "debug/BuildPanel.hpp"
 #include "debug/EditorChrome.hpp"
 #include "debug/InspectorWidgets.hpp"
@@ -269,9 +270,20 @@ namespace aether::editor
 		ImGui::ProgressBar(m_publishTask->completion.load(std::memory_order_acquire), ImVec2(-FLT_MIN, 0.0f));
 	}
 
-	void BuildPanel::PollPublish()
+	void BuildPanel::PollPublish(app::LayerContext& context)
 	{
-		if (!m_publishFuture.valid() || m_publishFuture.wait_for(std::chrono::seconds{0}) != std::future_status::ready)
+		if (!m_publishFuture.valid())
+		{
+			return;
+		}
+		// The publish itself runs on a worker, but this poll is what notices it finished and
+		// what keeps the progress readable. An idle editor would check once every idle
+		// interval and show a frozen panel until then.
+		if (auto* engine = context.TryGet<AetherCore>())
+		{
+			engine->RequestActivity();
+		}
+		if (m_publishFuture.wait_for(std::chrono::seconds{0}) != std::future_status::ready)
 		{
 			return;
 		}
@@ -354,7 +366,7 @@ namespace aether::editor
 		DrawConfigBanner(*project);
 		DrawScriptDebuggerRow(context);
 		DrawActionRow(context, *project);
-		PollPublish();
+		PollPublish(context);
 		DrawPublishProgress();
 		DrawStatus();
 

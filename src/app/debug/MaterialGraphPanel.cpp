@@ -1,3 +1,4 @@
+#include "AetherCore.hpp"
 #include "debug/MaterialGraphPanel.hpp"
 
 #include <algorithm>
@@ -768,6 +769,12 @@ namespace aether::editor
 		if (!m_compiling)
 		{
 			return;
+		}
+		// The compile runs on a worker; this poll is what applies the result. Idling would
+		// leave a finished shader unapplied until the next idle tick.
+		if (auto* engine = context.TryGet<AetherCore>())
+		{
+			engine->RequestActivity();
 		}
 		if (m_compiling->result.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
 		{

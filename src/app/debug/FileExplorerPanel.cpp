@@ -1,3 +1,4 @@
+#include "AetherCore.hpp"
 #include "debug/FileExplorerPanel.hpp"
 #include "debug/EditorChrome.hpp"
 
@@ -1724,6 +1725,22 @@ namespace aether::editor
 		{
 			return;
 		}
+		// A thumbnail bake advances one frame at a time and finishes only when the render pass
+		// reports it drew the slot, so an idle-throttled editor starves it: at 10 fps each
+		// thumbnail takes ten times as long, and the 240-frame give-up becomes 24 seconds
+		// instead of 2. Hold the editor awake for as long as one is outstanding.
+		const auto keepAwake = [&context]()
+		{
+			if (auto* engine = context.TryGet<AetherCore>())
+			{
+				engine->RequestActivity();
+			}
+		};
+		if (!m_bakeInFlight.empty())
+		{
+			keepAwake();
+		}
+
 		ModelPreviewService& baker = rendering->GetMaterialThumbnailBaker();
 		if (m_atlasImGuiId == 0 && baker.GetColorView() != nullptr)
 		{
@@ -1881,6 +1898,8 @@ namespace aether::editor
 			baker.SetBakeSlot(thumb.atlasSlot);
 			m_bakeInFlight = key;
 			m_bakeStartedFrame = ImGui::GetFrameCount();
+			// This frame started it; without this the editor could idle before the next one.
+			keepAwake();
 
 			// ShowMaterialOnMesh takes its own references; these are this function's.
 			auto& textures = assets->GetTextureRegistry();

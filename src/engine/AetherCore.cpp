@@ -400,9 +400,15 @@ namespace aether
 					m_lastFocused = focusedNow;
 					++m_focusChanges;
 				}
-				const bool unfocused = !focusedNow;
-				m_idleThrottled = m_idleAllowed && idleFps > 0.0f
-				        && (unfocused || sinceActivity > m_settings.app.idleAfterSeconds);
+				const float sinceInput = std::chrono::duration<float>(frameStart - m_lastInputActivity).count();
+				const float linger = m_settings.app.idleAfterSeconds;
+				// Work keeps the editor awake regardless of focus. Input keeps it awake only
+				// while focused - an unfocused window sees mouse movement made in other
+				// applications, and waking for that is what made the editor run flat out in
+				// the background.
+				const bool working = sinceActivity <= linger;
+				const bool interacting = focusedNow && sinceInput <= linger;
+				m_idleThrottled = m_idleAllowed && idleFps > 0.0f && !working && !interacting;
 				if (m_idleThrottled)
 				{
 					Window::WaitEventsTimeout(1.0 / static_cast<double>(idleFps));
@@ -765,7 +771,7 @@ namespace aether
 		// application as interaction and run flat out in the background.
 		if (platform.GetWindow().IsFocused() && input.HadActivityThisFrame())
 		{
-			RequestActivity();
+			NoteInputActivity();
 		}
 
 		// Feed the engine cursor and keep the OS pointer in step with it. Done here, once, off the same

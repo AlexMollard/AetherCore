@@ -61,7 +61,7 @@ namespace aether::editor
 		void DrawScriptDebuggerRow(app::LayerContext& context);
 		void DrawPublishProgress();
 		void DrawStatus();
-		void PollPublish();
+		void PollPublish(app::LayerContext& context);
 		void SetStatus(const EditorProjectActionResult& result);
 
 		ActionStatus m_status;

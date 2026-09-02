@@ -171,6 +171,16 @@ namespace aether
 			m_lastActivity = std::chrono::steady_clock::now();
 		}
 
+		// Input-driven wakefulness, kept separate from RequestActivity on purpose. Input only
+		// counts while the window has focus, but WORK has to hold the editor awake whether or
+		// not anyone is looking at it: a running game, a publish and a thumbnail bake all keep
+		// going after you alt-tab, and throttling them because the window lost focus starves
+		// the very thing the user stepped away to wait for.
+		void NoteInputActivity() noexcept
+		{
+			m_lastInputActivity = std::chrono::steady_clock::now();
+		}
+
 		// Whether the loop is currently running at the reduced idle rate.
 		// Diagnostics for why the editor is or is not idling.
 		// Measured input-to-photon latency: from the frame sampling input to that frame
@@ -358,6 +368,7 @@ namespace aether
 		// config - the Tracy plots beside it compile out in Release.
 		FrameTimeline m_frameTimeline;
 		std::chrono::steady_clock::time_point m_lastActivity{std::chrono::steady_clock::now()};
+		std::chrono::steady_clock::time_point m_lastInputActivity{std::chrono::steady_clock::now()};
 		bool m_idleThrottled = false;
 		bool m_idleAllowed = false;
 		// Focus transitions since the last frame report. A sample that spans one is comparing
