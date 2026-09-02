@@ -793,7 +793,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"animation.create",
 		        "create_sprite_animation",
-		        "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration and must be greater than 0. Assign the result to a Sprite Animator component to play "
+		        "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration and must be greater than 0. 'loop' is one of loop (restart, the default), once (stop on the last frame), pingpong (forwards then backwards) or hold (stop, keeping the last frame shown). Assign the result to a Sprite Animator component to play "
 		        "it.",
 		        true,
 		        Obj({{"atlas", StrProp()},
