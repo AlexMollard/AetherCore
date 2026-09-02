@@ -151,6 +151,9 @@ namespace aether
 			gpu::DeviceAddress address = 0;
 		};
 
+		// How many shadow casters the atlas could not fit last frame, so the warning fires on
+		// a change rather than every frame.
+		std::uint32_t m_lastDroppedShadowCasters = 0;
 		std::array<PerFrameMapping, kMaxFramesInFlight> m_shadowDataBuffer;
 
 		std::array<PerFrameMapping, kMaxFramesInFlight> m_lightConstantsBuffer;

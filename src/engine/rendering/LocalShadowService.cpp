@@ -1,6 +1,8 @@
 #include "rendering/LocalShadowService.hpp"
+#include "utils/Logger.hpp"
 
 #include <algorithm>
+#include <ranges>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -413,6 +415,22 @@ namespace aether
 		}
 
 		const auto shadowCount = static_cast<std::uint32_t>(m_perLightShadows.size());
+
+		// Running out of atlas room only breaks the loop above, so a light that asked for a
+		// shadow quietly renders without one and nothing says why. A point light needs six
+		// faces, so the atlas holds twelve of them and the thirteenth is where this starts.
+		// Logged only when the number changes - this runs every frame.
+		const auto served = static_cast<std::uint32_t>(std::ranges::count_if(m_lightShadowIndices, [](const glm::vec2& v) { return v.x >= 0.0f; }));
+		const std::uint32_t dropped = budget > served ? budget - served : 0u;
+		if (dropped != m_lastDroppedShadowCasters)
+		{
+			m_lastDroppedShadowCasters = dropped;
+			if (dropped > 0)
+			{
+				AE_WARN(LogCategory::Render, "Local shadow atlas is full: {} of {} shadow-casting lights got no shadow. They still light the scene, they just stop casting.", dropped, budget);
+			}
+		}
+
 		const std::uint32_t bufSlot = frameIdx % kMaxFramesInFlight;
 		auto* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
