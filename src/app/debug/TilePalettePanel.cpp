@@ -13,7 +13,9 @@
 #include "assets/TileAssetStore.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
+#include "debug/EditorCommand.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/UndoStack.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
 #include "debug/TilePaintingState.hpp"
 #include "gpu/ResourceRegistry.hpp"
@@ -398,6 +400,12 @@ namespace aether::editor
 			ImGui::SetItemTooltip("Delete this layer");
 			if (removeLayer)
 			{
+				// Capture the layer before erasing it - it owns its chunks, so this is every
+				// tile painted on it. Without this the delete was permanent.
+				if (auto* undo = context.TryGet<UndoStack>())
+				{
+					undo->Record(std::make_unique<editor::RemoveTileLayerCommand>(component->tilemapPath, i, map->layers[i]));
+				}
 				map->layers.erase(map->layers.begin() + static_cast<std::ptrdiff_t>(i));
 				state->activeLayer = std::min(state->activeLayer, map->layers.size() - 1);
 				state->mapDirty = true;

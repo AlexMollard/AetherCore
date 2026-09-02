@@ -11,6 +11,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -18,6 +19,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "debug/EditorCommand.hpp"
+#include "assets/TileAssetStore.hpp"
 #include "debug/UndoStack.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
@@ -568,6 +570,42 @@ TEST_CASE("UndoStack groups a batch into one history entry")
 	CHECK(world.Get<NameComponent>(a).name == "A");
 	CHECK(world.Get<NameComponent>(b).name == "B");
 	CHECK(stack.UndoDepth() == 0);
+}
+
+// Deleting a tilemap layer takes every tile painted on it. It recorded nothing at all, so
+// the delete was permanent - Ctrl+Z reached past it into an unrelated edit.
+TEST_CASE("RemoveTileLayerCommand restores the layer and its tiles")
+{
+	const std::string mapPath = (std::filesystem::temp_directory_path() / "aether_undo_tilelayer.atlm").generic_string();
+	TileMapAsset seed;
+	seed.layers.emplace_back();
+	seed.layers.emplace_back();
+	seed.layers[1].name = "Painted";
+	seed.SetCell(1, {4, 7}, tilecell::Make(3));
+
+	TileAssetStore store;
+	REQUIRE(store.SaveTileMap(mapPath, seed).has_value());
+
+	ServiceContainer services;
+	services.Register<TileAssetStore>(store);
+	World world;
+
+	TileMapAsset* live = store.MutableTileMap(mapPath);
+	REQUIRE(live != nullptr);
+	REQUIRE(live->layers.size() == 2);
+
+	RemoveTileLayerCommand command(mapPath, 1, live->layers[1]);
+	command.Redo(world, services);
+	CHECK(store.MutableTileMap(mapPath)->layers.size() == 1);
+
+	command.Undo(world, services);
+	TileMapAsset* restored = store.MutableTileMap(mapPath);
+	REQUIRE(restored->layers.size() == 2);
+	CHECK(restored->layers[1].name == "Painted");
+	// The tiles have to come back with it, not just an empty layer.
+	CHECK(restored->GetCell(1, {4, 7}) == tilecell::Make(3));
+
+	std::filesystem::remove(mapPath);
 }
 
 TEST_CASE("UndoStack group of one records the command itself")

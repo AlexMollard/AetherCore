@@ -101,6 +101,46 @@ namespace aether::editor
 		}
 	}
 
+	RemoveTileLayerCommand::RemoveTileLayerCommand(std::string tilemapPath, const std::size_t index, TileMapLayer layer)
+	      : m_tilemapPath(std::move(tilemapPath)), m_index(index), m_layer(std::move(layer))
+	{
+	}
+
+	void RemoveTileLayerCommand::Undo(World&, ServiceContainer& services)
+	{
+		auto* tiles = services.TryGet<TileAssetStore>();
+		if (tiles == nullptr)
+		{
+			return;
+		}
+		TileMapAsset* map = tiles->MutableTileMap(m_tilemapPath);
+		if (map == nullptr)
+		{
+			return;
+		}
+		// Clamped rather than asserted: layers may have been added or removed since, and
+		// putting this one back at the end beats dropping it on the floor.
+		const std::size_t at = std::min(m_index, map->layers.size());
+		map->layers.insert(map->layers.begin() + static_cast<std::ptrdiff_t>(at), m_layer);
+		map->dirty = true;
+	}
+
+	void RemoveTileLayerCommand::Redo(World&, ServiceContainer& services)
+	{
+		auto* tiles = services.TryGet<TileAssetStore>();
+		if (tiles == nullptr)
+		{
+			return;
+		}
+		TileMapAsset* map = tiles->MutableTileMap(m_tilemapPath);
+		if (map == nullptr || m_index >= map->layers.size())
+		{
+			return;
+		}
+		map->layers.erase(map->layers.begin() + static_cast<std::ptrdiff_t>(m_index));
+		map->dirty = true;
+	}
+
 	void TileStrokeCommand::Undo(World&, ServiceContainer& services)
 	{
 		Apply(services, /*forward=*/false);

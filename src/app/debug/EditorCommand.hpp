@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "assets/SpriteAnimationAsset.hpp"
+#include "assets/TileMapAsset.hpp"
 #include "debug/TilePaintingState.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
@@ -105,6 +106,28 @@ namespace aether::editor
 
 		std::string m_tilemapPath;
 		std::vector<TilePaintEdit> m_edits;
+	};
+
+	// Deleting a tilemap layer takes every tile painted on it with it, so the whole layer is
+	// captured by value. A TileMapLayer owns its chunks outright, which makes the copy a
+	// complete record rather than a reference into something that is about to be erased.
+	class RemoveTileLayerCommand final : public IEditorCommand
+	{
+	public:
+		RemoveTileLayerCommand(std::string tilemapPath, std::size_t index, TileMapLayer layer);
+
+		void Undo(World& world, ServiceContainer& services) override;
+		void Redo(World& world, ServiceContainer& services) override;
+
+		[[nodiscard]] std::string_view Label() const override
+		{
+			return "Delete tile layer";
+		}
+
+	private:
+		std::string m_tilemapPath;
+		std::size_t m_index;
+		TileMapLayer m_layer;
 	};
 
 	// A Sprite Animation panel edit (frames, durations, events, loop mode) as a
