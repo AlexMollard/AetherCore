@@ -246,8 +246,8 @@ AE_FIELD_N("pixel_art", pixelArt, Bool)
 AE_COMPONENT_END()
 
 AE_COMPONENT(UiSelectableComponent, "UI Selectable", "UI", ICON_FA_HAND_POINTER)
-AE_FIELD_N("group", group, String)
-AE_FIELD_N("interactable", interactable, Bool)
+AE_FIELD_NT("group", group, String, "Reserved for scoping navigation to a subset of selectables. Nothing reads it yet, so a value here has no effect - scenes that already set one are not getting grouped navigation from it.")
+AE_FIELD_NT("interactable", interactable, Bool, "Off takes this out of keyboard and gamepad navigation entirely, which is how a locked or unavailable entry is skipped rather than focused and refused.")
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
