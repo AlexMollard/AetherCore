@@ -442,3 +442,63 @@ TEST_CASE("An activation does not survive the frame its screen disappears")
 	// Focus is persistent state and should survive, so the screen comes back where it was.
 	CHECK(Sel(w, button).focused);
 }
+
+TEST_CASE("Arrow keys stay inside a selectable's group")
+{
+	// Two stacked pairs. Without groups, Down from the top of the left pair would find
+	// whichever centre is nearest below it; with groups it must stay in its own column.
+	World w;
+	Input input;
+
+	const Entity leftTop = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity leftBottom = MakeSelectable(w, {0, 200, 100, 20});
+	const Entity rightNear = MakeSelectable(w, {0, 50, 100, 20});
+
+	Sel(w, leftTop).group = "left";
+	Sel(w, leftBottom).group = "left";
+	Sel(w, rightNear).group = "right";
+	Sel(w, leftTop).focused = true;
+
+	input.SetSyntheticKey(static_cast<int>(Key::Down), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	// rightNear is much closer, so picking leftBottom is only explicable by the group.
+	CHECK(Sel(w, leftBottom).focused);
+	CHECK_FALSE(Sel(w, rightNear).focused);
+}
+
+TEST_CASE("A selectable with no group still reaches everything")
+{
+	// The compatibility case: content that never set a group must navigate as it always did,
+	// including onto selectables that DO carry one.
+	World w;
+	Input input;
+
+	const Entity top = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity below = MakeSelectable(w, {0, 100, 100, 20});
+	Sel(w, below).group = "somewhere";
+	Sel(w, top).focused = true;
+
+	input.SetSyntheticKey(static_cast<int>(Key::Down), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, below).focused);
+}
+
+TEST_CASE("A group with nowhere to go leaves focus alone")
+{
+	World w;
+	Input input;
+
+	const Entity only = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity elsewhere = MakeSelectable(w, {0, 100, 100, 20});
+	Sel(w, only).group = "alone";
+	Sel(w, elsewhere).group = "other";
+	Sel(w, only).focused = true;
+
+	input.SetSyntheticKey(static_cast<int>(Key::Down), true);
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, only).focused);
+	CHECK_FALSE(Sel(w, elsewhere).focused);
+}

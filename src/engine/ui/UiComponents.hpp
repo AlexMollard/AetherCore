@@ -52,7 +52,7 @@ namespace aether::ui
 	// `activated` for scripts. `group`/`interactable` are authored; the rest is runtime.
 	struct UISelectable
 	{
-		std::string group;         // optional grouping; reserved for scoping navigation
+		std::string group;         // optional: arrow-key navigation stays within a group (empty = whole screen)
 		bool interactable = true;  // false = skipped by navigation (locked/redacted items)
 		bool focused = false;      // runtime: the currently focused selectable
 		bool activated = false;    // runtime: true for the one frame it is activated

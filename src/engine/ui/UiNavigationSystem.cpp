@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <string_view>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -23,6 +24,7 @@ namespace aether::ui
 			Entity entity;
 			glm::vec4 rect;
 			bool interactable;
+			std::string_view group;
 		};
 
 		glm::vec2 Center(const glm::vec4& r)
@@ -37,7 +39,13 @@ namespace aether::ui
 
 		// Nearest interactable candidate whose centre lies in direction `dir` from `fromRect`.
 		// Cost favours small distance along the axis and small perpendicular offset (alignment).
-		Entity NearestInDirection(const std::vector<Candidate>& cands, Entity from, const glm::vec4& fromRect, glm::vec2 dir)
+		//
+		// `fromGroup` scopes the search: a selectable carrying a group only reaches others in
+		// the same one, which is how two clusters of controls on one screen keep their own
+		// arrow-key navigation. An empty group considers everything, so a screen that never
+		// sets one behaves exactly as before. Tab is deliberately left unscoped - it cycles the
+		// whole screen in reading order, and that is the way out of a group.
+		Entity NearestInDirection(const std::vector<Candidate>& cands, Entity from, const glm::vec4& fromRect, glm::vec2 dir, std::string_view fromGroup)
 		{
 			const glm::vec2 fromCenter = Center(fromRect);
 			Entity best{};
@@ -45,6 +53,10 @@ namespace aether::ui
 			for (const Candidate& c: cands)
 			{
 				if (c.entity == from || !c.interactable)
+				{
+					continue;
+				}
+				if (!fromGroup.empty() && c.group != fromGroup)
 				{
 					continue;
 				}
@@ -84,6 +96,18 @@ namespace aether::ui
 
 		// The element the keyboard enters a screen on: first in reading order, so it is
 		// also the first element Tab would reach.
+		std::string_view GroupOf(const std::vector<Candidate>& cands, Entity e)
+		{
+			for (const Candidate& c: cands)
+			{
+				if (c.entity == e)
+				{
+					return c.group;
+				}
+			}
+			return {};
+		}
+
 		Entity FirstInReadingOrder(const std::vector<Candidate>& cands)
 		{
 			const Candidate* best = nullptr;
@@ -114,7 +138,7 @@ namespace aether::ui
 			        {
 				        return; // only the active screen's selectables participate
 			        }
-			        cands.push_back({e, rect.resolvedRect, sel.interactable});
+			        cands.push_back({e, rect.resolvedRect, sel.interactable, sel.group});
 			        if (sel.focused)
 			        {
 				        prevFocused = e;
@@ -251,9 +275,13 @@ namespace aether::ui
 					// the game until the player actually reaches for the UI.
 					focused = FirstInReadingOrder(cands);
 				}
-				else if (const Entity target = NearestInDirection(cands, focused, focusedRect, dir); target.IsValid())
+				else
 				{
-					focused = target;
+					const std::string_view focusedGroup = GroupOf(cands, focused);
+					if (const Entity target = NearestInDirection(cands, focused, focusedRect, dir, focusedGroup); target.IsValid())
+					{
+						focused = target;
+					}
 				}
 			}
 		}
