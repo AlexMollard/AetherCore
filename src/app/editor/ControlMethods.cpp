@@ -1659,6 +1659,14 @@ namespace aether::editor
 					        AE_WARN(LogCategory::App, "save_scene: failed to flush edited tilemap(s): {}", flushed.error().message);
 				        }
 			        }
+			        if (!ok)
+			        {
+				        // A save that quietly does nothing is the one failure in this surface
+				        // that loses work, so it says which file it could not write. The
+				        // specific cause - unwritable directory, failed write - is in the log.
+				        const std::string path = (std::filesystem::path{app::scene::ScenesDirectory()} / (name + ".scene.toml")).string();
+				        return json{{"saved", false}, {"scene", name}, {"error", "could not write '" + path + "' - see the log for the reason"}};
+			        }
 			        return json{{"saved", ok}, {"scene", name}};
 		        }});
 

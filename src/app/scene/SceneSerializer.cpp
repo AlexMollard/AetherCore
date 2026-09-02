@@ -379,8 +379,35 @@ namespace aether::app::scene
 		return names;
 	}
 
+	bool IsValidSceneName(std::string_view sceneName)
+	{
+		if (sceneName.empty())
+		{
+			return false;
+		}
+		// A name is pasted into a filename, so anything the filesystem treats specially has to
+		// go. A colon was the one that mattered: "bad:name" wrote the scene into an NTFS
+		// alternate data stream, left a 0-byte file called "bad", and reported success - the
+		// scene simply was not where the user was told it was.
+		constexpr std::string_view kForbidden = "<>:\"/\\|?*";
+		for (const char c: sceneName)
+		{
+			if (kForbidden.find(c) != std::string_view::npos || static_cast<unsigned char>(c) < 0x20)
+			{
+				return false;
+			}
+		}
+		// "." and ".." name a directory, not a scene.
+		return sceneName.find_first_not_of('.') != std::string_view::npos;
+	}
+
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene)
 	{
+		if (!IsValidSceneName(sceneName))
+		{
+			AE_WARN(LogCategory::App, "SaveSceneFile: '{}' is not a usable scene name", sceneName);
+			return false;
+		}
 		const std::filesystem::path dir{ScenesDirectory()};
 		if (!io::file_util::CreateDirectories(dir))
 		{

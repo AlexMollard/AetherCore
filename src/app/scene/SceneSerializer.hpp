@@ -355,7 +355,12 @@ namespace aether::app::scene
 	std::size_t CookProjectBinaries();
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene);
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName);
-	std::vector<std::string> ListSceneFiles();
+	// Whether a scene name can be written to disk as-is. A name becomes a filename, so a
+// separator or a Windows-reserved character in it does not fail loudly - it writes somewhere
+// else and reports success.
+[[nodiscard]] bool IsValidSceneName(std::string_view sceneName);
+
+std::vector<std::string> ListSceneFiles();
 
 	std::string PrefabsDirectory();
 	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefab);
