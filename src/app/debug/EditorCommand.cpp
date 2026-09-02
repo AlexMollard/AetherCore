@@ -536,8 +536,14 @@ namespace aether::editor
 		{
 			return;
 		}
-		auto& sc = world.EmplaceOrReplace<ScriptComponent>(entity);
-		sc.scripts.push_back(m_entry);
+		// Append to whatever is there. EmplaceOrReplace default-constructs, so re-adding one
+		// script used to wipe every OTHER script on the entity.
+		auto* sc = world.TryGet<ScriptComponent>(entity);
+		if (sc == nullptr)
+		{
+			sc = &world.Emplace<ScriptComponent>(entity);
+		}
+		sc->scripts.push_back(m_entry);
 	}
 
 	// ── RemoveScriptCommand ────────────────────────────────────────────
@@ -554,8 +560,15 @@ namespace aether::editor
 		{
 			return;
 		}
-		auto& sc = world.EmplaceOrReplace<ScriptComponent>(entity);
-		sc.scripts.push_back(m_entry);
+		// Same as the add path: restoring one script must not discard the others. Redo below
+		// erases only the matching entry, so an Undo that replaced the whole component was
+		// asymmetric with it and lost work.
+		auto* sc = world.TryGet<ScriptComponent>(entity);
+		if (sc == nullptr)
+		{
+			sc = &world.Emplace<ScriptComponent>(entity);
+		}
+		sc->scripts.push_back(m_entry);
 	}
 
 	void RemoveScriptCommand::Redo(World& world, ServiceContainer& /*services*/)

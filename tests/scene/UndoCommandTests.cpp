@@ -177,6 +177,51 @@ TEST_CASE("AddScriptCommand removes the script on undo and re-adds it on redo")
 	CHECK(world.TryGet<ScriptComponent>(entity)->scripts[0].path == "Player");
 }
 
+// Both script commands used EmplaceOrReplace, which default-constructs: restoring one
+// script threw away every other script on the entity. The existing cases above only ever
+// had a single script, so neither of them could see it.
+TEST_CASE("RemoveScriptCommand undo keeps the entity's other scripts")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	auto& sc = world.Emplace<ScriptComponent>(entity);
+	ScriptEntry keep;
+	keep.path = "Keep";
+	sc.scripts.push_back(keep);
+
+	ScriptEntry removed;
+	removed.path = "Removed";
+	RemoveScriptCommand command(entity.id, "Removed", removed);
+	command.Undo(world, services);
+
+	const auto& scripts = world.TryGet<ScriptComponent>(entity)->scripts;
+	REQUIRE(scripts.size() == 2);
+	CHECK(std::ranges::any_of(scripts, [](const ScriptEntry& e) { return e.path == "Keep"; }));
+	CHECK(std::ranges::any_of(scripts, [](const ScriptEntry& e) { return e.path == "Removed"; }));
+}
+
+TEST_CASE("AddScriptCommand redo keeps the entity's other scripts")
+{
+	World world;
+	ServiceContainer services;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	auto& sc = world.Emplace<ScriptComponent>(entity);
+	ScriptEntry keep;
+	keep.path = "Keep";
+	sc.scripts.push_back(keep);
+
+	ScriptEntry added;
+	added.path = "Added";
+	AddScriptCommand command(entity.id, "Added", added);
+	command.Redo(world, services);
+
+	const auto& scripts = world.TryGet<ScriptComponent>(entity)->scripts;
+	REQUIRE(scripts.size() == 2);
+	CHECK(std::ranges::any_of(scripts, [](const ScriptEntry& e) { return e.path == "Keep"; }));
+	CHECK(std::ranges::any_of(scripts, [](const ScriptEntry& e) { return e.path == "Added"; }));
+}
+
 TEST_CASE("RemoveScriptCommand re-adds the script on undo and erases it on redo")
 {
 	World world;
