@@ -368,6 +368,13 @@ namespace aether::editor
 
 	void MaterialGraphPanel::DeleteSelection()
 	{
+		// Only while this panel holds the keyboard. Node selection survives losing focus, so
+		// without this a Delete pressed in the hierarchy erased a node here as well - and the
+		// auto-compile then wrote the shortened graph to the material file.
+		if (!m_focused || ImGui::GetIO().WantTextInput)
+		{
+			return;
+		}
 		if (!ImGui::IsKeyPressed(shortcuts::kGraphDelete.key) && !ImGui::IsKeyPressed(ImGuiKey_X))
 		{
 			return;
