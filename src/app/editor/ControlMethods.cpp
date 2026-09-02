@@ -1847,7 +1847,7 @@ namespace aether::editor
 		        playHandler("step")});
 		methods.push_back({"engine.set_speed",
 		        "set_speed",
-		        "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions.",
+		        "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions, and 'info' reports the current value as 'speed'.",
 		        true,
 		        Obj({{"speed", json{{"type", "number"}, {"minimum", 0.05}, {"maximum", 16.0}}}}, {"speed"}),
 		        [](const json& params, MethodContext& ctx) -> json

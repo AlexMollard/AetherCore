@@ -872,7 +872,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"editor.camera",
 		        "set_editor_camera",
-		        "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Edit mode only - the play camera belongs to the game.",
+		        "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Call it with no arguments to read the camera without moving it - it returns the current position and orthographic height either way. 'height' only lands in a 2D scene; a 3D edit camera is perspective and keeps the value it had. Edit mode only - the play camera belongs to the game.",
 		        true,
 		        Obj({{"position", json{{"type", "array"}, {"items", NumProp()}, {"minItems", 2}, {"maxItems", 3}}}, {"height", NumProp()}, {"frame", json{{"type", "integer"}, {"description", "entity id to centre on"}}}}),
 		        [](const json& p, MethodContext& ctx) -> json
