@@ -44,6 +44,10 @@ namespace aether::editor
 		constexpr std::size_t kMaxPaintCells = 10'000;
 		constexpr std::size_t kMaxReadCells = 10'000;
 		constexpr std::size_t kMaxListedAssets = 2'000;
+// Slicing a 1536x1024 texture at 4x4 makes 98,304 sprites, which echoed back as a single
+// 7.5 MB response - enough to swallow an agent's whole context. The atlas on disk still gets
+// every sprite; only what is echoed is capped, the way read_tiles and list_assets already do.
+constexpr std::size_t kMaxListedSprites = 2'000;
 
 		// Everything the tile methods need, resolved from an entity id. `error`
 		// is non-null when resolution failed.
@@ -721,7 +725,11 @@ namespace aether::editor
 				        atlas.pixelsPerUnit = pixelsPerUnit;
 			        }
 			        json spriteList = json::array();
-			        for (std::size_t i = 0; i < atlas.sprites.size(); ++i)
+			        // Captured before SaveAtlas below moves the atlas out - reading it afterwards
+			        // reports 0 sprites from the moved-from object.
+			        const std::size_t spriteCount = atlas.sprites.size();
+			        const std::size_t listed = std::min(spriteCount, kMaxListedSprites);
+			        for (std::size_t i = 0; i < listed; ++i)
 			        {
 				        const SpriteRegion& region = atlas.sprites[i];
 				        spriteList.push_back(json{{"index", i}, {"name", region.name}, {"x", region.pixelRect.x}, {"y", region.pixelRect.y}, {"width", region.pixelRect.width}, {"height", region.pixelRect.height}});
@@ -730,7 +738,12 @@ namespace aether::editor
 			        {
 				        return json{{"error", "failed to save atlas '" + out + "': " + saved.error().ToString()}};
 			        }
-			        return json{{"atlas", out}, {"textureWidth", image->width}, {"textureHeight", image->height}, {"sprites", std::move(spriteList)}};
+			        return json{{"atlas", out},
+			                {"textureWidth", image->width},
+			                {"textureHeight", image->height},
+			                {"spriteCount", spriteCount},
+			                {"truncated", spriteCount > listed},
+			                {"sprites", std::move(spriteList)}};
 		        }});
 
 		methods.push_back({"atlas.info",
@@ -752,13 +765,15 @@ namespace aether::editor
 				        return json{{"error", "failed to load atlas '" + path + "': " + atlas.error().ToString()}};
 			        }
 			        json spriteList = json::array();
-			        for (std::size_t i = 0; i < (*atlas)->sprites.size(); ++i)
+			        const std::size_t spriteCount = (*atlas)->sprites.size();
+			        const std::size_t listed = std::min(spriteCount, kMaxListedSprites);
+			        for (std::size_t i = 0; i < listed; ++i)
 			        {
 				        const SpriteRegion& region = (*atlas)->sprites[i];
 				        spriteList.push_back(json{{"index", i}, {"name", region.name}, {"x", region.pixelRect.x}, {"y", region.pixelRect.y}, {"width", region.pixelRect.width}, {"height", region.pixelRect.height}});
 			        }
 			        return json{
-			                {"atlas", path}, {"texture", (*atlas)->texturePath}, {"textureWidth", (*atlas)->textureWidth}, {"textureHeight", (*atlas)->textureHeight}, {"pixelsPerUnit", (*atlas)->pixelsPerUnit}, {"sprites", std::move(spriteList)}};
+			                {"atlas", path}, {"texture", (*atlas)->texturePath}, {"textureWidth", (*atlas)->textureWidth}, {"textureHeight", (*atlas)->textureHeight}, {"pixelsPerUnit", (*atlas)->pixelsPerUnit}, {"spriteCount", spriteCount}, {"truncated", spriteCount > listed}, {"sprites", std::move(spriteList)}};
 		        }});
 
 		methods.push_back({"animation.create",
