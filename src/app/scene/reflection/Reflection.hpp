@@ -467,6 +467,15 @@ namespace aether::reflect
 #define AE_FIELD_R(member, TypeTag, lo, hi) \
 	b.Field(#member, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.min = (lo), .max = (hi)});
 
+// Tooltip-carrying counterparts. The Inspector shows `tooltip` on hover, so a field whose
+// name does not give away what it does can explain itself where it is edited rather than in
+// a document nobody has open.
+#define AE_FIELD_T(member, TypeTag, tip) b.Field(#member, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.tooltip = (tip)});
+
+#define AE_FIELD_NT(name, member, TypeTag, tip) b.Field(name, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.tooltip = (tip)});
+
+#define AE_FIELD_RT(member, TypeTag, lo, hi, tip) 	b.Field(#member, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.min = (lo), .max = (hi), .tooltip = (tip)});
+
 // Named counterpart of AE_FIELD_R, for when the on-disk key differs from the member.
 #define AE_FIELD_NR(name, member, TypeTag, lo, hi) \
 	b.Field(name, ::aether::reflect::FieldType::TypeTag, &C::member, ::aether::reflect::FieldMeta{.min = (lo), .max = (hi)});
