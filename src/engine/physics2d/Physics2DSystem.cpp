@@ -936,6 +936,26 @@ namespace aether
 					entry.builtTransform = transform.localToWorld;
 
 					const glm::ivec2 chunkCellOrigin{chunkKey.x * kTileChunkSize, chunkKey.y * kTileChunkSize};
+
+					// Box2D validates every vertex against B2_HUGE - 100000 length units, see
+					// box2d src/constants.h - and ASSERTS past it, which takes the editor down
+					// with a debug break and no message. A single cell painted at an absurd
+					// coordinate is enough, and paint_tiles accepts any coordinate. Skip the
+					// chunk's collision instead of dying; the tiles still draw.
+					constexpr float kBox2DMaxExtent = 100000.0f;
+					const float chunkFarCell = static_cast<float>(std::max(std::abs(chunkCellOrigin.x), std::abs(chunkCellOrigin.y)) + kTileChunkSize);
+					if (chunkFarCell * map.cellSize >= kBox2DMaxExtent)
+					{
+						static bool warnedFarChunk = false;
+						if (!warnedFarChunk)
+						{
+							warnedFarChunk = true;
+							AE_WARN(LogCategory::Engine,
+							        "Tile chunk at cell ({}, {}) is beyond Box2D's {} unit limit, so its collision is skipped. Tiles that far out are almost always a mistaken paint coordinate.",
+							        chunkCellOrigin.x, chunkCellOrigin.y, kBox2DMaxExtent);
+						}
+						continue;
+					}
 					const std::vector<TileChainPath> outlines = TraceSolidOutlines([&](glm::ivec2 local) { return solidGlobal(chunkCellOrigin + local); });
 
 					// Rect-collision runs: contiguous same-palette Rect cells in a
