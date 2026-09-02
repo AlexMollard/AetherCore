@@ -382,9 +382,11 @@ namespace aether::editor
 			return json{{"error", "no scene subsystem"}};
 		}
 
-		json ErrNoEntity()
+		// Naming the id matters when a call carries several: a bare "no such entity"
+		// on a reparent left the caller guessing which of child/parent was stale.
+		json ErrNoEntity(Entity entity)
 		{
-			return json{{"error", "no such entity"}};
+			return json{{"error", "no such entity #" + std::to_string(entity.id) + " (call scene.entities to list the live ones)"}};
 		}
 
 		const char* SceneKindName(SceneKind kind)
@@ -766,7 +768,7 @@ namespace aether::editor
 			        const entt::entity enttEntity = World::ToEntt(entity);
 			        if (!world.GetRegistry().valid(enttEntity))
 			        {
-				        return ErrNoEntity();
+				        return ErrNoEntity(entity);
 			        }
 			        json j{{"id", entity.id}};
 			        if (const auto* n = world.TryGet<NameComponent>(entity))
@@ -1102,7 +1104,7 @@ namespace aether::editor
 			        const Entity entity{IdOf(p)};
 			        if (!world.GetRegistry().valid(World::ToEntt(entity)))
 			        {
-				        return ErrNoEntity();
+				        return ErrNoEntity(entity);
 			        }
 			        const std::string name = p.value("name", std::string{});
 			        if (name.empty())
@@ -1136,7 +1138,7 @@ namespace aether::editor
 			        const Entity parent{IdOf(p, "parent")};
 			        if (!world.GetRegistry().valid(World::ToEntt(child)))
 			        {
-				        return ErrNoEntity();
+				        return ErrNoEntity(child);
 			        }
 			        if (parent.id != 0 && !world.GetRegistry().valid(World::ToEntt(parent)))
 			        {
@@ -1178,7 +1180,7 @@ namespace aether::editor
 			const Entity entity{IdOf(p)};
 			if (!world.GetRegistry().valid(World::ToEntt(entity)))
 			{
-				return ErrNoEntity();
+				return ErrNoEntity(entity);
 			}
 			// Partial update: anything not supplied keeps its current value. The merge itself
 			// lives in ComposeTransformOver so it can be tested; doing it here with identity
@@ -1230,7 +1232,7 @@ namespace aether::editor
 			const Entity entity{IdOf(p)};
 			if (!world.GetRegistry().valid(World::ToEntt(entity)))
 			{
-				return ErrNoEntity();
+				return ErrNoEntity(entity);
 			}
 			if (auto* undo = ctx.services.TryGet<UndoStack>())
 			{
@@ -1256,7 +1258,7 @@ namespace aether::editor
 				const Entity entity{IdOf(p)};
 				if (!world.GetRegistry().valid(World::ToEntt(entity)))
 				{
-					return ErrNoEntity();
+					return ErrNoEntity(entity);
 				}
 				const std::string type = p.value("type", std::string{});
 				// The catalog is the palette menu, so it knows colliders only under their
@@ -1347,7 +1349,7 @@ namespace aether::editor
 			        const Entity entity{IdOf(p)};
 			        if (!world.GetRegistry().valid(World::ToEntt(entity)))
 			        {
-				        return ErrNoEntity();
+				        return ErrNoEntity(entity);
 			        }
 			        const std::string type = p.value("type", std::string{});
 			        if (const auto* rt = reflect::FindComponentType(type))
@@ -1396,7 +1398,7 @@ namespace aether::editor
 			const Entity entity{IdOf(p)};
 			if (!world.GetRegistry().valid(World::ToEntt(entity)))
 			{
-				return ErrNoEntity();
+				return ErrNoEntity(entity);
 			}
 			const std::string type = p.value("type", std::string{});
 			// get_component hands the object back under "fields", so accept that spelling too.
@@ -2717,7 +2719,7 @@ namespace aether::editor
 			        std::string text;
 			        if (!GetSettingValueAsString(settings->Get(), key, text))
 			        {
-				        return json{{"error", "no setting named '" + key + "'"}};
+				        return json{{"error", "no setting named '" + key + "' (call settings.get with no 'key' to list every setting)"}};
 			        }
 			        return json{{"key", key}, {"value", text}, {"restartRequired", SettingMetadata(key).restartRequired}};
 		        }});
@@ -2738,7 +2740,16 @@ namespace aether::editor
 			        const std::string value = p.value("value", std::string{});
 			        if (!SetSettingValueFromString(settings->Values(), key, value))
 			        {
-				        return json{{"error", "no setting named '" + key + "', or '" + value + "' is not valid for its type"}};
+				        // The two causes were reported as one either/or, which states a
+				        // falsehood about whichever half is not to blame. Reading the
+				        // setting back separates them, and its current value shows the
+				        // shape the new one has to parse as.
+				        std::string current;
+				        if (GetSettingValueAsString(settings->Get(), key, current))
+				        {
+					        return json{{"error", "'" + value + "' is not a valid value for '" + key + "' (it currently reads '" + current + "')"}};
+				        }
+				        return json{{"error", "no setting named '" + key + "' (call settings.get with no 'key' to list every setting)"}};
 			        }
 			        settings->ApplyField(key);
 			        settings->MarkDirty();
@@ -2905,7 +2916,7 @@ namespace aether::editor
 			        const Entity entity{id};
 			        if (!scenes->GetWorld().GetRegistry().valid(World::ToEntt(entity)))
 			        {
-				        return ErrNoEntity();
+				        return ErrNoEntity(entity);
 			        }
 			        selection->Select(entity);
 			        json j{{"selected", entity.id}};

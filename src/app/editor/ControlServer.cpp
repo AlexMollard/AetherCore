@@ -42,6 +42,33 @@ namespace aether::editor
 			return dot == std::string_view::npos ? name : name.substr(dot + 1);
 		}
 
+		std::string_view JsonTypeName(const json& value)
+		{
+			if (value.is_string()) { return "string"; }
+			if (value.is_boolean()) { return "boolean"; }
+			if (value.is_number_integer()) { return "integer"; }
+			if (value.is_number()) { return "number"; }
+			if (value.is_array()) { return "array"; }
+			if (value.is_object()) { return "object"; }
+			if (value.is_null()) { return "null"; }
+			return "unknown";
+		}
+
+		// Handlers read declared fields with p["key"].get<T>(), which throws when the
+		// caller passed the wrong type - and the raw nlohmann message names neither the
+		// method nor the parameter, so a caller saw "type must be number, but is string"
+		// with no way to tell which argument it meant.
+		bool JsonMatchesDeclaredType(const json& value, std::string_view declared)
+		{
+			if (declared == "number") { return value.is_number(); }
+			if (declared == "integer") { return value.is_number_integer(); }
+			if (declared == "string") { return value.is_string(); }
+			if (declared == "boolean") { return value.is_boolean(); }
+			if (declared == "array") { return value.is_array(); }
+			if (declared == "object") { return value.is_object(); }
+			return true; // no declared type, or one we do not model - leave it to the handler
+		}
+
 		// A bare "unknown method" hands back nothing the caller can act on, even though
 		// the server knows every name it would have accepted. Callers reach for a
 		// plausible-but-wrong name far more often than they misspell one, so the useful
@@ -397,10 +424,19 @@ namespace aether::editor
 				if (const auto props = m.paramsSchema.find("properties");
 				    props != m.paramsSchema.end() && props->is_object() && !props->empty() && params.is_object())
 				{
-					for (const auto& [key, unused]: params.items())
+					for (const auto& [key, value]: params.items())
 					{
-						if (key.starts_with('_') || props->contains(key))
+						if (key.starts_with('_'))
 						{
+							continue;
+						}
+						if (const auto declared = props->find(key); declared != props->end())
+						{
+							const auto type = declared->find("type");
+							if (type != declared->end() && type->is_string() && !JsonMatchesDeclaredType(value, type->get<std::string>()))
+							{
+								return json{{"error", "parameter '" + key + "' of " + m.name + " must be " + type->get<std::string>() + ", got " + std::string(JsonTypeName(value))}}.dump();
+							}
 							continue;
 						}
 						std::string accepted;
