@@ -145,6 +145,40 @@ namespace aether::editor
 		TileMapLayer m_layer;
 	};
 
+	// Moving, resizing or nudging a UI element edits UIRect offsets directly, and none of it
+	// joined history - so Ctrl+Z after dragging an element undid whatever came before instead.
+	// Batched like TransformCommand because a canvas drag can carry a whole multi-selection.
+	class UiRectCommand final : public IEditorCommand
+	{
+	public:
+		struct Item
+		{
+			std::uint32_t id = 0;
+			glm::vec2 beforeMin{0.0f};
+			glm::vec2 beforeMax{0.0f};
+			glm::vec2 afterMin{0.0f};
+			glm::vec2 afterMax{0.0f};
+		};
+
+		explicit UiRectCommand(std::vector<Item> items);
+
+		void Undo(World& world, ServiceContainer& services) override;
+		void Redo(World& world, ServiceContainer& services) override;
+
+		[[nodiscard]] bool Empty() const
+		{
+			return m_items.empty();
+		}
+
+		[[nodiscard]] std::string_view Label() const override
+		{
+			return "Move UI element";
+		}
+
+	private:
+		std::vector<Item> m_items;
+	};
+
 	// The mirror of RemoveTileLayerCommand. Adding a layer was the one tilemap edit that did
 	// not join history, so Ctrl+Z after it silently undid whatever came before instead - and
 	// deleting a layer, right next to it, has always been undoable.

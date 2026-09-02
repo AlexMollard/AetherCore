@@ -22,6 +22,7 @@
 #include "editor/ReflectionJson.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/Components.hpp"
+#include "ui/UiComponents.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
 #include "scene/TransformEdit.hpp"
@@ -189,6 +190,43 @@ namespace aether::editor
 		}
 		map->layers.erase(map->layers.begin() + static_cast<std::ptrdiff_t>(m_index));
 		map->dirty = true;
+	}
+
+	UiRectCommand::UiRectCommand(std::vector<Item> items) : m_items(std::move(items))
+	{
+	}
+
+	namespace
+	{
+		void ApplyUiRect(World& world, std::uint32_t id, glm::vec2 offsetMin, glm::vec2 offsetMax)
+		{
+			const Entity entity{id};
+			if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+			{
+				return;
+			}
+			if (auto* rect = world.TryGet<ui::UIRect>(entity))
+			{
+				rect->offsetMin = offsetMin;
+				rect->offsetMax = offsetMax;
+			}
+		}
+	} // namespace
+
+	void UiRectCommand::Undo(World& world, ServiceContainer&)
+	{
+		for (const Item& item: m_items)
+		{
+			ApplyUiRect(world, item.id, item.beforeMin, item.beforeMax);
+		}
+	}
+
+	void UiRectCommand::Redo(World& world, ServiceContainer&)
+	{
+		for (const Item& item: m_items)
+		{
+			ApplyUiRect(world, item.id, item.afterMin, item.afterMax);
+		}
 	}
 
 	AddTileLayerCommand::AddTileLayerCommand(std::string tilemapPath, const std::size_t index, TileMapLayer layer)

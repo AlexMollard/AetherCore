@@ -1286,6 +1286,13 @@ namespace aether::editor
 
 			if (nudgeDelta.x != 0.f || nudgeDelta.y != 0.f)
 			{
+				// One command per keypress. Holding an arrow repeats, and each repeat is its own
+				// step - the same granularity the key gives the user.
+				if (auto* undo = context.services.TryGet<UndoStack>())
+				{
+					undo->Record(std::make_unique<editor::UiRectCommand>(std::vector<editor::UiRectCommand::Item>{
+					        {selected.id, selectedRect->offsetMin, selectedRect->offsetMax, selectedRect->offsetMin + nudgeDelta, selectedRect->offsetMax + nudgeDelta}}));
+				}
 				selectedRect->offsetMin += nudgeDelta;
 				selectedRect->offsetMax += nudgeDelta;
 			}
@@ -1488,6 +1495,29 @@ namespace aether::editor
 			{
 				if (m_drag.kind != DragKind::Marquee)
 				{
+					// One command for the whole gesture, recorded on release rather than per
+					// frame: the origins captured at drag start are the before-state, and a
+					// multi-selection drag is a single undo step like the gizmo's.
+					if (m_drag.kind == DragKind::Move || m_drag.kind == DragKind::Resize || m_drag.kind == DragKind::Anchor)
+					{
+						std::vector<editor::UiRectCommand::Item> items;
+						for (const auto& dragOrigin: m_multiDragOrigins)
+						{
+							const auto* r = world.TryGet<ui::UIRect>(dragOrigin.entity);
+							if (r == nullptr || (r->offsetMin == dragOrigin.startOffsetMin && r->offsetMax == dragOrigin.startOffsetMax))
+							{
+								continue;
+							}
+							items.push_back({dragOrigin.entity.id, dragOrigin.startOffsetMin, dragOrigin.startOffsetMax, r->offsetMin, r->offsetMax});
+						}
+						if (!items.empty())
+						{
+							if (auto* undo = context.services.TryGet<UndoStack>())
+							{
+								undo->Record(std::make_unique<editor::UiRectCommand>(std::move(items)));
+							}
+						}
+					}
 					m_multiDragOrigins.clear();
 					m_drag = {};
 				}
