@@ -2625,7 +2625,10 @@ namespace aether::editor
 		};
 
 		methods.push_back({"editor.undo",
-		        "undo",
+		        // Namespaced, because edit.undo already answers to the bare "undo". Two
+		        // methods sharing one alias meant the MCP manifest, which is keyed by
+		        // alias, kept whichever was registered last and dropped the other.
+		        "editor_undo",
 		        "Undo the last scene edit, exactly as Ctrl+Z does - selection is remapped through the undone command. The step lands on the next editor frame, so read editor.undo_status afterwards to confirm it was consumed. Refused while playing or "
 		        "compiling, and when there is nothing to undo ('queued' comes back false).",
 		        true,
@@ -2633,7 +2636,7 @@ namespace aether::editor
 		        historyStep(false)});
 
 		methods.push_back({"editor.redo",
-		        "redo",
+		        "editor_redo",
 		        "Redo the last undone scene edit, exactly as Ctrl+Y does. Like editor.undo, the step lands on the next editor frame and 'queued' comes back false when the redo stack is empty.",
 		        true,
 		        Obj(),
@@ -2846,7 +2849,8 @@ namespace aether::editor
 		        }});
 
 		methods.push_back({"asset.select",
-		        "select_asset",
+		        // editor.select_asset already answers to "select_asset".
+		        "asset_select",
 		        "Select a project asset by path (project:// or absolute). The File Explorer mirrors it (preview card) and the Inspector shows the asset. Kind is inferred from the extension.",
 		        true,
 		        Obj({{"path", StrProp()}}, {"path"}),
