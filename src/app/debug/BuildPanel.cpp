@@ -8,6 +8,7 @@
 #include <chrono>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <thread>
 #include <utility>
@@ -151,18 +152,27 @@ namespace aether::editor
 		}
 		const auto current = std::ranges::find(visualStudios, m_visualStudioInstall, &VisualStudioInstallation::installPath);
 
+		// Every entry in this list is a Visual Studio, so the words "Visual Studio" are the
+		// least informative part of each name and the first to cost the edition and year their
+		// room. The full name is still used in messages, where there is space for it.
+		const auto shortName = [](const std::string& name) -> std::string
+		{
+			constexpr std::string_view kPrefix = "Visual Studio ";
+			return name.starts_with(kPrefix) ? name.substr(kPrefix.size()) : name;
+		};
+
 		ImGui::SeparatorText("Scripting");
 		iw::LabelColumn("C# Debugger");
 		const char* debugLabel = ICON_FA_BUG " Debug C#";
 		const float debugWidth = ImGui::CalcTextSize(debugLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
 		ImGui::SetNextItemWidth(-(debugWidth + ImGui::GetStyle().ItemSpacing.x));
-		const char* preview = current != visualStudios.end() ? current->displayName.c_str() : "No Visual Studio IDE found";
-		if (ImGui::BeginCombo("##scriptDebugger", preview))
+		const std::string preview = current != visualStudios.end() ? shortName(current->displayName) : std::string("No Visual Studio IDE found");
+		if (ImGui::BeginCombo("##scriptDebugger", preview.c_str()))
 		{
 			for (const VisualStudioInstallation& installation: visualStudios)
 			{
 				const bool isSelected = installation.installPath == m_visualStudioInstall;
-				const std::string label = installation.displayName + (installation.supportsDotNet10 ? "" : " (.NET 10 unsupported)") + (installation.hasDebuggerAutomation ? "" : " (debugger automation unavailable)");
+				const std::string label = shortName(installation.displayName) + (installation.supportsDotNet10 ? "" : " (.NET 10 unsupported)") + (installation.hasDebuggerAutomation ? "" : " (debugger automation unavailable)");
 				if (ImGui::Selectable(label.c_str(), isSelected))
 				{
 					m_visualStudioInstall = installation.installPath;
@@ -173,6 +183,12 @@ namespace aether::editor
 				}
 			}
 			ImGui::EndCombo();
+		}
+		// The install path used to be part of the name, which is what made it too long to
+		// read. It still matters when two installs share a product name, so it lives here.
+		if (current != visualStudios.end())
+		{
+			ImGui::SetItemTooltip("%s", current->installPath.string().c_str());
 		}
 		ImGui::SameLine();
 		const bool canDebugScripts = actions->debugScripts && current != visualStudios.end() && current->supportsDotNet10 && current->hasDebuggerAutomation;

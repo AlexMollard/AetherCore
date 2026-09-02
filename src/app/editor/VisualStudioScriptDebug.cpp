@@ -9,10 +9,11 @@
 #include <string_view>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "io/FileUtil.hpp"
 #include "io/Process.hpp"
 #include "project/ProjectCommon.hpp"
-#include "utils/StringUtils.hpp"
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -28,11 +29,6 @@ namespace aether::editor
 	namespace
 	{
 #ifdef _WIN32
-		std::string Trim(const std::string& text)
-		{
-			return std::string(aether::utils::TrimView(text));
-		}
-
 		std::optional<std::filesystem::path> FindVSWhere()
 		{
 			char programFiles[32768]{};
@@ -52,31 +48,14 @@ namespace aether::editor
 			return vswhere;
 		}
 
-		std::vector<std::filesystem::path> ParseLines(std::string_view output)
-		{
-			std::vector<std::filesystem::path> paths;
-			std::size_t start = 0;
-			while (start < output.size())
-			{
-				const std::size_t end = output.find('\n', start);
-				const std::string line = Trim(std::string(output.substr(start, end - start)));
-				if (!line.empty())
-				{
-					paths.emplace_back(line);
-				}
-				if (end == std::string_view::npos)
-				{
-					break;
-				}
-				start = end + 1;
-			}
-			return paths;
-		}
 
+		// Last resort only. The folder someone installed into is not a product name: an
+		// install at D:/VisualStudio read back as "Visual Studio VisualStudio", and appending
+		// the full path made it far too long for the combo that shows it.
 		std::string DisplayNameFor(const std::filesystem::path& installPath)
 		{
 			const std::string leaf = installPath.filename().string();
-			return leaf.empty() ? "Visual Studio (" + installPath.string() + ")" : "Visual Studio " + leaf + " (" + installPath.string() + ")";
+			return leaf.empty() ? "Visual Studio" : "Visual Studio " + leaf;
 		}
 
 		int VisualStudioMajorVersion(const std::filesystem::path& devenv)
@@ -222,21 +201,43 @@ namespace aether::editor
 		}
 
 		std::string output;
-		const std::string command = "\"" + vswhere->string() + "\" -all -products * -format value -property installationPath";
+		// JSON rather than one property per line: vswhere knows each install's real product
+		// name ("Visual Studio Professional 2026"), which is what the Build panel should show.
+		const std::string command = "\"" + vswhere->string() + "\" -all -products * -format json -utf8";
 		if (io::RunProcessCapture(command, output) != 0)
 		{
 			return installations;
 		}
 
-		for (const std::filesystem::path& installPath: ParseLines(output))
+		const nlohmann::json parsed = nlohmann::json::parse(output, nullptr, /*allow_exceptions=*/false);
+		if (!parsed.is_array())
 		{
+			return installations;
+		}
+
+		for (const nlohmann::json& entry: parsed)
+		{
+			if (!entry.is_object())
+			{
+				continue;
+			}
+			const std::filesystem::path installPath = entry.value("installationPath", std::string{});
+			if (installPath.empty())
+			{
+				continue;
+			}
 			const std::filesystem::path devenv = installPath / "Common7" / "IDE" / "devenv.exe";
 			if (!io::file_util::Exists(devenv))
 			{
 				continue;
 			}
+			std::string displayName = entry.value("displayName", std::string{});
+			if (displayName.empty())
+			{
+				displayName = DisplayNameFor(installPath);
+			}
 			const int majorVersion = VisualStudioMajorVersion(devenv);
-			installations.push_back({.installPath = installPath, .displayName = DisplayNameFor(installPath), .majorVersion = majorVersion, .supportsDotNet10 = majorVersion >= 18, .hasDebuggerAutomation = HasDteAutomation(majorVersion)});
+			installations.push_back({.installPath = installPath, .displayName = std::move(displayName), .majorVersion = majorVersion, .supportsDotNet10 = majorVersion >= 18, .hasDebuggerAutomation = HasDteAutomation(majorVersion)});
 		}
 #endif
 		return installations;
