@@ -250,10 +250,18 @@ namespace aether::editor
 		};
 
 		edited(PropColor4("Base color", &asset.baseColorFactor.x), "base_color");
-		edited(PropSlider("Metallic", &asset.metallicFactor, 0.0f, 1.0f, "%.2f"), "metallic");
-		edited(PropSlider("Roughness", &asset.roughnessFactor, 0.0f, 1.0f, "%.2f"), "roughness");
-		edited(PropSlider("Occlusion", &asset.occlusionStrength, 0.0f, 1.0f, "%.2f"), "occlusion");
-		edited(PropColor3("Emissive", &asset.emissiveFactor.x), "emissive");
+		edited(PropSlider("Metallic", &asset.metallicFactor, 0.0f, 1.0f, "%.2f",
+		              "0 for anything that is not metal, 1 for bare metal. The values between are for worn edges and blends rather than a dial for shininess - that is Roughness. Metal takes its colour from the base colour and has no diffuse of its own."),
+		        "metallic");
+		edited(PropSlider("Roughness", &asset.roughnessFactor, 0.0f, 1.0f, "%.2f",
+		              "How scattered the reflection is: 0 mirrors its surroundings, 1 diffuses them away entirely. This is what decides whether a highlight reads as a sharp glint or a broad sheen."),
+		        "roughness");
+		edited(PropSlider("Occlusion", &asset.occlusionStrength, 0.0f, 1.0f, "%.2f",
+		              "How far to apply the occlusion texture: 0 ignores it, 1 applies it in full. It does NOTHING without an occlusion map assigned below, and it only darkens ambient light - the sun and local lights are deliberately left alone so it cannot fight the shadow maps."),
+		        "occlusion");
+		edited(PropColor3("Emissive", &asset.emissiveFactor.x,
+		              "Light the surface appears to give off. It is added after shading, so an emissive surface stays bright inside a shadow - but it lights only itself, not anything around it."),
+		        "emissive");
 
 		iw::PropLabel("Flags");
 		// Wraps onto a second line rather than running off the edge when the panel is narrow.

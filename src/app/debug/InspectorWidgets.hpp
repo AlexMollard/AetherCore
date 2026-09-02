@@ -303,11 +303,12 @@ namespace aether::editor::iw
 		return changed;
 	}
 
-	inline bool PropColor3(const char* label, float* rgb)
+	inline bool PropColor3(const char* label, float* rgb, const char* tooltip = nullptr)
 	{
 		ImGui::PushID(label);
 		PropLabel(label);
 		const bool changed = ImGui::ColorEdit3("##col3", rgb, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+		ItemTooltip(tooltip);
 		ImGui::PopID();
 		return changed;
 	}
