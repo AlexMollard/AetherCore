@@ -247,5 +247,63 @@ namespace aether::editor
 			        app::UiAutomation::Get().Input().QueueKeyChord(key, ctrl, shift, alt);
 			        return json{{"status", "queued"}, {"key", name}, {"ctrl", ctrl}, {"shift", shift}, {"alt", alt}};
 		        }});
+
+		methods.push_back({"ui.scroll",
+		        "ui_scroll",
+		        "Scroll a window's contents so off-screen widgets become visible to ui_query and ui_click. "
+		        "Pass {window} plus 'dy'/'dx' pixel deltas, or 'to' as 'top' or 'bottom'. imgui does not report "
+		        "a label for a widget scrolled out of view, so a control missing from ui_query may simply need "
+		        "scrolling to. Names come from ui_query's 'window' field, child windows included. "
+		        "Returns the resulting scroll and its maximum so a caller can tell when it has reached the end.",
+		        true,
+		        Obj({{"window", StrProp()},
+		                {"dx", json{{"type", "number"}}},
+		                {"dy", json{{"type", "number"}}},
+		                {"to", StrProp()}},
+		                {"window"}),
+		        [](const json& params, MethodContext&) -> json
+		        {
+			        const std::string name = params.value("window", std::string{});
+			        ImGuiWindow* window = ImGui::FindWindowByName(name.c_str());
+			        if (window == nullptr)
+			        {
+				        return json{{"error", "no window named '" + name + "' (names come from ui_query's 'window' field)"}};
+			        }
+
+			        const std::string to = params.value("to", std::string{});
+			        if (!to.empty() && to != "top" && to != "bottom")
+			        {
+				        return json{{"error", "'to' must be 'top' or 'bottom', got '" + to + "'"}};
+			        }
+
+			        // Clamped here rather than left to imgui so the reported target is the
+			        // position a follow-up query will actually see.
+			        float targetX = window->Scroll.x;
+			        float targetY = window->Scroll.y;
+			        if (to == "top")
+			        {
+				        targetY = 0.0f;
+			        }
+			        else if (to == "bottom")
+			        {
+				        targetY = window->ScrollMax.y;
+			        }
+			        else
+			        {
+				        targetX = std::clamp(targetX + params.value("dx", 0.0f), 0.0f, window->ScrollMax.x);
+				        targetY = std::clamp(targetY + params.value("dy", 0.0f), 0.0f, window->ScrollMax.y);
+			        }
+			        ImGui::SetScrollX(window, targetX);
+			        ImGui::SetScrollY(window, targetY);
+
+			        // imgui applies a scroll target on the window's next Begin, so these are
+			        // where it is going, not where it is now - query again to see the result.
+			        return json{{"window", name},
+			                {"status", "queued"},
+			                {"scrollX", targetX},
+			                {"scrollY", targetY},
+			                {"scrollMaxX", window->ScrollMax.x},
+			                {"scrollMaxY", window->ScrollMax.y}};
+		        }});
 	}
 } // namespace aether::editor
