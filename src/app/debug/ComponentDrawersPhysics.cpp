@@ -181,6 +181,16 @@ namespace aether::editor
 				world.Remove<PhysicsStateComponent>(entity);
 				return;
 			}
+			// A collider cannot exist without a body, so PhysicsSystem re-creates one the moment
+			// this is removed - as a DEFAULT STATIC body. Removing it therefore reads as "the X
+			// did nothing" while quietly replacing the motion type, mass and damping with
+			// defaults. Say so rather than let it look broken.
+			if (world.Has<ColliderComponent>(entity) && open)
+			{
+				ImGui::TextColored(chrome::C(colors::Orange), ICON_FA_TRIANGLE_EXCLAMATION "  Removing this while a Collider is present");
+				ImGui::TextDisabled("    brings back a default Static body. Remove the Collider first");
+				ImGui::TextDisabled("    to drop physics from this entity.");
+			}
 			if (open)
 			{
 				const char* const kMotions[] = {"Static", "Kinematic", "Dynamic"};
