@@ -60,11 +60,21 @@ public static unsafe class Animation
     public static void SetBlend(Entity entity, int secondaryClipIndex, float transitionSpeed = 0f)
         => Native.aether_anim_set_blend(entity.Id, secondaryClipIndex, transitionSpeed);
 
+    /// <summary>
+    /// NOT IMPLEMENTED. Pose sampling runs on the GPU and nothing reads the hips back, so no
+    /// delta is ever accumulated: this flag gates nothing and <see cref="GetRootMotionDelta"/>
+    /// always returns zero. Move a character from script instead.
+    /// </summary>
     public static void SetRootMotionEnabled(Entity entity, bool enabled)
         => Native.aether_anim_set_root_motion_enabled(entity.Id, enabled ? 1 : 0);
 
+    /// <summary>NOT IMPLEMENTED - see <see cref="SetRootMotionEnabled"/>.</summary>
     public static bool GetRootMotionEnabled(Entity entity) => Native.aether_anim_get_root_motion_enabled(entity.Id) != 0;
 
+    /// <summary>
+    /// NOT IMPLEMENTED: always returns zero. Nothing computes root motion, so a character
+    /// driven from this will simply never move. The engine warns once if you call it.
+    /// </summary>
     public static Vector3 GetRootMotionDelta(Entity entity) => Native.aether_anim_get_root_motion_delta(entity.Id);
 
     public static int GetEntitiesWithAnimator(Span<Entity> buffer)

@@ -294,8 +294,6 @@ namespace aether
 		std::uint32_t hipsNodeIdx = UINT32_MAX;
 		glm::vec3 prevHipsWorldPos{0.0f, 0.0f, 0.0f};
 		glm::vec3 accumulatedDelta{0.0f, 0.0f, 0.0f};
-		bool applyToPhysics = true;
-		bool applyToTransform = true;
 		bool enabled = true;
 	};
 

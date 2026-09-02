@@ -1,3 +1,4 @@
+#include <mutex>
 #include "scripting/interop/InteropCommon.hpp"
 
 #include <algorithm>
@@ -548,6 +549,12 @@ AE_SCRIPT_API std::int32_t aether_anim_get_root_motion_enabled(std::uint32_t id)
 
 AE_SCRIPT_API Vec3 aether_anim_get_root_motion_delta(std::uint32_t id)
 {
+	// Root motion is not implemented: poses are sampled on the GPU and the hips are never
+	// read back, so nothing writes accumulatedDelta and this is always zero. Say so once -
+	// a script driving a character from this sees no movement and no reason for it.
+	static std::once_flag warnOnce;
+	std::call_once(warnOnce,
+	        [] { AE_WARN(aether::LogCategory::Animation, "Animation.GetRootMotionDelta: root motion is not implemented; this always returns zero."); });
 	const auto* rmComp = ActiveWorld().TryGet<aether::RootMotionComponent>(aether::Entity{id});
 	return rmComp != nullptr ? FromGlm(rmComp->accumulatedDelta) : Vec3{};
 }

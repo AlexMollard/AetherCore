@@ -183,9 +183,7 @@ AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
 AE_COMPONENT(RootMotionComponent, "Root Motion", "Behaviors", ICON_FA_PERSON_RUNNING)
-AE_FIELD_NT("apply_to_physics", applyToPhysics, Bool, "Reserved: nothing reads this yet, so it has no effect. Root motion is currently read from script via the accumulated delta.")
-AE_FIELD_NT("apply_to_transform", applyToTransform, Bool, "Reserved: nothing reads this yet, so it has no effect. Root motion is currently read from script via the accumulated delta.")
-AE_FIELD_NT("enabled", enabled, Bool, "Whether root motion accumulates at all. Scripts read and set this through the animation API.")
+AE_FIELD_NT("enabled", enabled, Bool, "Scripts read and set this through the animation API. Note that root motion is not implemented: nothing computes the delta yet, so this gates nothing and Animation.GetRootMotionDelta always returns zero.")
 AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
