@@ -128,6 +128,20 @@ TEST_CASE("UndoStack tracks unsaved changes across edits, save, undo and load")
 	CHECK(stack.HasUnsavedChanges());
 	stack.Clear();
 	CHECK_FALSE(stack.HasUnsavedChanges());
+
+	// A save is pinned optimistically because the write happens on another thread, and
+	// the pin has to be droppable when that write turns out to have failed - otherwise
+	// the editor keeps claiming the scene matches a file that was never written.
+	stack.Record(std::make_unique<TransformCommand>(std::vector<TransformCommand::Item>{{entity.id, origin, one}}));
+	stack.MarkSaved();
+	CHECK_FALSE(stack.HasUnsavedChanges());
+	stack.MarkUnsaved();
+	CHECK(stack.HasUnsavedChanges());
+
+	// And it stays dirty until something actually saves: a failed write must not be
+	// papered over by an unrelated undo returning to the same depth.
+	CHECK(stack.Undo(world, services) != nullptr);
+	CHECK(stack.HasUnsavedChanges());
 }
 
 TEST_CASE("RenameCommand restores the old name on undo and reapplies on redo")
