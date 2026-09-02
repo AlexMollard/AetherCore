@@ -1075,6 +1075,82 @@ namespace aether::editor
 		ImGui::PopStyleColor();
 	}
 
+	void DebugLayer::DrawShortcutsReference()
+	{
+		// Hand-maintained, because the bindings themselves live in three different files:
+		// the globals below are in this file's shortcut block, the scene ones in
+		// HierarchyPanel::OnImGui, and the viewport ones in ViewportPanel. Anything added
+		// there has to be added here too - undiscoverable shortcuts are the same as none.
+		struct Shortcut
+		{
+			const char* keys;
+			const char* what;
+		};
+		struct Group
+		{
+			const char* title;
+			std::vector<Shortcut> entries;
+		};
+		static const std::vector<Group> kGroups = {
+		        {"Global",
+		                {{"Ctrl+P", "Command palette"},
+		                        {"Ctrl+S", "Save the scene, or the focused material"},
+		                        {"Ctrl+Z", "Undo"},
+		                        {"Ctrl+Y  /  Ctrl+Shift+Z", "Redo"},
+		                        {"F1", "This list"},
+		                        {"F5", "Reload C# scripts"},
+		                        {"F6", "Pause / resume play"},
+		                        {"F7", "Step one frame"}}},
+		        {"Scene  (Hierarchy)",
+		                {{"Ctrl+C  /  Ctrl+X  /  Ctrl+V", "Copy, cut, paste entities"},
+		                        {"Ctrl+D", "Duplicate"},
+		                        {"Ctrl+G", "Group the selection"},
+		                        {"F2", "Rename"},
+		                        {"Delete", "Delete the selection"}}},
+		        {"Viewport",
+		                {{"W  /  E  /  R", "Move, rotate, scale gizmo"},
+		                        {"F", "Frame the selection"}}},
+		};
+
+		constexpr const char* kTitle = "Keyboard Shortcuts###shortcuts";
+		if (m_openShortcuts)
+		{
+			ImGui::OpenPopup(kTitle);
+			m_openShortcuts = false;
+		}
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f, viewport->WorkPos.y + viewport->WorkSize.y * 0.45f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		if (!ImGui::BeginPopupModal(kTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
+		{
+			return;
+		}
+		for (const Group& group: kGroups)
+		{
+			ImGui::SeparatorText(group.title);
+			if (ImGui::BeginTable(group.title, 2, ImGuiTableFlags_SizingFixedFit))
+			{
+				for (const Shortcut& entry: group.entries)
+				{
+					ImGui::TableNextRow();
+					ImGui::TableNextColumn();
+					ImGui::TextColored(chrome::kAccentHi, "%s", entry.keys);
+					ImGui::TableNextColumn();
+					ImGui::TextUnformatted(entry.what);
+				}
+				ImGui::EndTable();
+			}
+		}
+		ImGui::Spacing();
+		// Deliberately NOT F1: the key that opened this is still down on the frame the popup
+		// first draws, so closing on it too made the window open and shut in the same frame
+		// and F1 appeared to do nothing at all.
+		if (chrome::PrimaryButton("Close", ImVec2(120.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
+	}
+
 	void DebugLayer::DrawCommandPalette(app::LayerContext& context)
 	{
 		const ImGuiIO& io = ImGui::GetIO();
@@ -1115,6 +1191,7 @@ namespace aether::editor
 			actions.push_back({"Play: Speed 1x (normal)", [playState]() { playState->SetTimeScale(1.0f); }});
 			actions.push_back({"Play: Speed 2x (fast-forward)", [playState]() { playState->SetTimeScale(2.0f); }});
 		}
+		actions.push_back({"Help: Keyboard Shortcuts (F1)", [this]() { m_openShortcuts = true; }});
 		actions.push_back({"Layout: Reset to Default", [this]() { m_resetLayout = true; }});
 		for (const WorkflowLayoutDef& wf: kWorkflowLayouts)
 		{
@@ -1903,6 +1980,10 @@ namespace aether::editor
 
 		{
 			const ImGuiIO& io = ImGui::GetIO();
+			if (!io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F1, false))
+			{
+				m_openShortcuts = true;
+			}
 			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_S, false))
 			{
 				// Save what is being edited. With the Material window focused over a
@@ -2378,6 +2459,7 @@ namespace aether::editor
 		}
 
 		DrawCommandPalette(context);
+		DrawShortcutsReference();
 		DrawUnsavedChangesPopup(context);
 		DrawRecoveryPopup(context);
 

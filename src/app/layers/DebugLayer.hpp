@@ -52,6 +52,7 @@ namespace aether::editor
 		void DrawStatusBar(app::LayerContext& context);
 		// Ctrl+P fuzzy command palette (panel toggles, play, layout).
 		void DrawCommandPalette(app::LayerContext& context);
+		void DrawShortcutsReference();
 		// Named layout presets: capture/apply the ImGui dock ini + panel visibility.
 		void ReloadLayoutPresets();
 		void ApplyLayoutPreset(const LayoutPreset& preset);
@@ -148,6 +149,7 @@ namespace aether::editor
 
 		// Raised by the Edit menu; the palette also opens itself on Ctrl+P.
 		bool m_openCommandPalette = false;
+		bool m_openShortcuts = false;
 		char m_paletteQuery[128] = {};
 		int m_paletteSelected = 0;
 
