@@ -1180,11 +1180,22 @@ namespace aether::editor
 			{
 				return ErrNoEntity();
 			}
-			const glm::vec3 pos = ReadVec3(p, "position", glm::vec3(0.0f));
-			const glm::vec3 euler = ReadVec3(p, "rotationEuler", glm::vec3(0.0f));
-			const glm::vec3 scale = ReadVec3(p, "scale", glm::vec3(1.0f));
-			const glm::mat4 m = aether::ComposeTransform(pos, euler, scale);
+			// Partial update: anything not supplied keeps its current value. Defaulting the
+			// missing components to identity instead meant moving an entity silently threw
+			// away its rotation and scale, which is data loss on the most ordinary call this
+			// method has.
 			const auto* beforeTc = world.TryGet<TransformComponent>(entity);
+			glm::vec3 curPos{0.0f};
+			glm::vec3 curEuler{0.0f};
+			glm::vec3 curScale{1.0f};
+			if (beforeTc != nullptr)
+			{
+				aether::DecomposeTRS(beforeTc->localToWorld, curPos, curEuler, curScale);
+			}
+			const glm::vec3 pos = ReadVec3(p, "position", curPos);
+			const glm::vec3 euler = ReadVec3(p, "rotationEuler", curEuler);
+			const glm::vec3 scale = ReadVec3(p, "scale", curScale);
+			const glm::mat4 m = aether::ComposeTransform(pos, euler, scale);
 			const glm::mat4 before = beforeTc != nullptr ? beforeTc->localToWorld : m;
 			if (world.TryGet<TransformComponent>(entity) == nullptr)
 			{
@@ -1203,7 +1214,7 @@ namespace aether::editor
 		};
 		methods.push_back({"scene.transform",
 		        "set_transform",
-		        "Set an entity's transform (position / rotationEuler in degrees / scale) by id.",
+		        "Set an entity's transform (position / rotationEuler in degrees / scale) by id. Partial update: whatever you leave out keeps its current value.",
 		        true,
 		        Obj({{"id", IntProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"id"}),
 		        setTransform});
