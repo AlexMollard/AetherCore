@@ -37,12 +37,21 @@ namespace aether::editor
 		void OnAttach(app::LayerContext& context) override;
 		void OnDetach(app::LayerContext& context) override;
 		void OnImGui(app::LayerContext& context) override;
+
+		// The browser binds Delete, Ctrl+D and F2 for files. Those also act on the scene
+		// selection from anywhere, so without this one Delete asked to confirm deleting a
+		// file while the selected entity was already gone.
+		[[nodiscard]] bool OwnsEditingKeys() const override
+		{
+			return m_ownsEditingKeys && IsVisible();
+		}
 		// View preferences outlive the session. How you like to look at your assets is not
 		// something to set again every launch.
 		void LoadSettings(TomlConfig& config, app::LayerContext& context) override;
 		void SaveSettings(TomlConfig& config, app::LayerContext& context) const override;
 
 	private:
+		bool m_ownsEditingKeys = false;
 		// What the create menu makes. Kept above the declarations that name it.
 		enum class NewAssetKind
 		{

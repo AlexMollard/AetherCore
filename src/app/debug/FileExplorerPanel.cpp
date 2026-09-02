@@ -2288,7 +2288,11 @@ namespace aether::editor
 	{
 		// Only while this panel has the keyboard and nothing is being typed into - a rename
 		// field or the search box must keep its own Delete and Enter.
-		if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || ImGui::GetIO().WantTextInput || !m_renameTarget.empty())
+		const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+		// Recorded even when a rename field is open: the scene must not act on Delete just
+		// because this panel declined it.
+		m_ownsEditingKeys = focused;
+		if (!focused || ImGui::GetIO().WantTextInput || !m_renameTarget.empty())
 		{
 			return;
 		}
