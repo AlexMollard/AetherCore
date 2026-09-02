@@ -28,9 +28,19 @@ smoothly with correct name tags, and hold a chat conversation.
 ## Non-goals
 
 - **NAT traversal / hosting without port forwarding.** Deferred to its own spec.
-  The intended path is a vendor transport — Discord's Social SDK (lobbies +
-  relayed P2P) rather than Steam or Epic. The transport layer is deliberately
-  narrow so it can be swapped without touching replication.
+  The transport layer is deliberately narrow so traversal can be added without
+  touching replication.
+
+  *Superseded — this has since been built, and not the way this bullet
+  predicted.* The original plan named Discord's Social SDK as a vendor transport
+  offering "lobbies + relayed P2P". Checked against Discord's own documentation,
+  the relayed-P2P half does not exist: the Social SDK provides lobbies, presence
+  and voice, and no punchthrough, P2P transport or game-traffic relay. What
+  shipped instead punches on ENet's own socket (`src/engine/net/NatTraversal.*`),
+  because a NAT mapping belongs to the socket that created it — so a vendor
+  library binding its own socket could not have opened a hole ENet would send
+  from. A lobby service can still carry the candidate exchange, which is what
+  `ISignalingChannel` (`src/engine/net/Signaling.hpp`) is for.
 - **Voice chat.** A later direction, most likely once a 3D scene exists (the
   project is named for it). The channel model below reserves room: voice wants
   its own unreliable channel and must never share ordering with state snapshots.
@@ -43,7 +53,7 @@ smoothly with correct name tags, and hold a chat conversation.
 
 | Decision | Choice | Why |
 |---|---|---|
-| Transport | ENet, direct IP (LAN or forwarded port) | Already vendored (`CMake/Dependencies.cmake:286`) and proven in `ControlServer.cpp`. NAT is a separate problem with separate infrastructure. |
+| Transport | ENet, direct IP (LAN or forwarded port) | Already vendored (`CMake/Dependencies.cmake:286`) and proven in `ControlServer.cpp`. NAT is a separate problem with separate infrastructure — since solved on this same socket rather than beside it; see the Non-goals note above. |
 | Authority | Host-authoritative | One player hosts and plays; the host's simulation is truth. |
 | Local feel | Predict + smooth correction | Full rollback needs deterministic `b2World_Step` and hand-rolled Box2D snapshot/restore — the largest piece of the project, before anything is visible. Easing gets most of the feel for a fraction of the work and does not block upgrading later. |
 | Framework scope | Core + relevancy + interpolation | Identity, replicated fields, spawn/despawn, ownership, authority, RPCs, relevancy filtering, interpolated transforms. |
