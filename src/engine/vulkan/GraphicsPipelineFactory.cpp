@@ -5,6 +5,7 @@
 
 #include "io/FileSystem.hpp"
 #include "utils/Assert.hpp"
+#include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/GlobalBindingLayout.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
@@ -63,6 +64,15 @@ namespace aether::vkutil
 		if (layoutFree)
 		{
 			shaderFlags |= VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT;
+			// A layout-free shader that samples anything needs the mappings to find its
+			// bindings on the heap; without them the validation layer reports the missing
+			// mapping but names only the shader stage, not which pipeline asked for it. Say
+			// which one, so the omission is fixable instead of merely visible.
+			if (mappings == nullptr)
+			{
+				AE_WARN(LogCategory::Render, "GraphicsPipelineFactory: '{}' ({} / {}) is layout-free but passes no descriptor heap mappings; any sampler it declares will be unmapped.",
+				        desc.debugName != nullptr ? desc.debugName : "<unnamed>", desc.shaderVfsPath, desc.fragmentVfsPath);
+			}
 		}
 
 		const VkDescriptorSetLayout setLayouts[] = {global.setLayout};

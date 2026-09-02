@@ -465,6 +465,7 @@ namespace aether
 		                        .depthTestEnable = false,
 		                        .depthWriteEnable = false,
 		                        .debugName = "Skybox",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
 		                }));
 		m_skyboxPipeline = std::move(skyboxPipeline);
 
@@ -478,6 +479,7 @@ namespace aether
 		                        .depthWriteEnable = true,
 		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
 		                        .debugName = "Scene.PreDepth",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
 		                }));
 		m_preDepthPipeline = std::move(preDepthPipeline);
 
@@ -672,6 +674,7 @@ namespace aether
 		                        .depthWriteEnable = true,
 		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
 		                        .debugName = "Scene.PreDepth",
+		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
 		                }));
 		m_preDepthPipeline = std::move(preDepthPipeline);
 

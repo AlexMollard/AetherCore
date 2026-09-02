@@ -1,3 +1,4 @@
+#include "gpu/BindlessManager.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 
 #include <array>
@@ -267,6 +268,7 @@ namespace aether
 		        .vertexAttributes = kAttribs,
 		        .lineWidthDynamic = true,
 		        .debugName = "PhysicsDebug.Pipeline",
+		        .descriptorHeapMappings = gpu.GetBindlessManager().GetDescriptorHeapMappings(),
 		};
 
 		m_pipelineHandle = gpu::ResourceRegistry::CreateGraphicsPipeline(gpu.GetDevice(), desc);
