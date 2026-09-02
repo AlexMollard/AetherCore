@@ -427,6 +427,10 @@ namespace aether::editor
 		{
 			TileMapLayer layer;
 			layer.name = m_layerName[0] != '\0' ? m_layerName : ("Layer " + std::to_string(map->layers.size()));
+			if (auto* undo = context.TryGet<UndoStack>())
+			{
+				undo->Record(std::make_unique<editor::AddTileLayerCommand>(component->tilemapPath, map->layers.size(), layer));
+			}
 			map->layers.push_back(std::move(layer));
 			m_layerName[0] = '\0';
 			state->mapDirty = true;

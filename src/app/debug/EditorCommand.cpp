@@ -191,6 +191,48 @@ namespace aether::editor
 		map->dirty = true;
 	}
 
+	AddTileLayerCommand::AddTileLayerCommand(std::string tilemapPath, const std::size_t index, TileMapLayer layer)
+	      : m_tilemapPath(std::move(tilemapPath)), m_index(index), m_layer(std::move(layer))
+	{
+	}
+
+	void AddTileLayerCommand::Undo(World&, ServiceContainer& services)
+	{
+		auto* tiles = services.TryGet<TileAssetStore>();
+		if (tiles == nullptr)
+		{
+			return;
+		}
+		TileMapAsset* map = tiles->MutableTileMap(m_tilemapPath);
+		if (map == nullptr || m_index >= map->layers.size())
+		{
+			return;
+		}
+		// Re-captured before erasing, so a redo puts back whatever the layer actually held
+		// rather than the empty one it was created as.
+		m_layer = map->layers[m_index];
+		map->layers.erase(map->layers.begin() + static_cast<std::ptrdiff_t>(m_index));
+		map->dirty = true;
+	}
+
+	void AddTileLayerCommand::Redo(World&, ServiceContainer& services)
+	{
+		auto* tiles = services.TryGet<TileAssetStore>();
+		if (tiles == nullptr)
+		{
+			return;
+		}
+		TileMapAsset* map = tiles->MutableTileMap(m_tilemapPath);
+		if (map == nullptr)
+		{
+			return;
+		}
+		// Clamped for the same reason the remove command clamps: layers may have moved since.
+		const std::size_t at = std::min(m_index, map->layers.size());
+		map->layers.insert(map->layers.begin() + static_cast<std::ptrdiff_t>(at), m_layer);
+		map->dirty = true;
+	}
+
 	void TileStrokeCommand::Undo(World&, ServiceContainer& services)
 	{
 		Apply(services, /*forward=*/false);

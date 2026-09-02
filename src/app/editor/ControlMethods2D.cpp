@@ -648,6 +648,10 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 			        layer.opacity = std::clamp(p.value("opacity", 1.0f), 0.0f, 1.0f);
 			        layer.sortingLayer = p.value("sortingLayer", 0);
 			        layer.orderInLayer = p.value("orderInLayer", 0);
+			        if (auto* undo = ctx.services.TryGet<UndoStack>())
+			        {
+				        undo->Record(std::make_unique<AddTileLayerCommand>(tc.component->tilemapPath, tc.map->layers.size() - 1, layer));
+			        }
 			        return FinishTileEdit(tc, ctx, p.value("save", true), json{{"index", tc.map->layers.size() - 1}, {"name", layer.name}});
 		        }});
 

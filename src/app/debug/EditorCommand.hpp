@@ -145,6 +145,28 @@ namespace aether::editor
 		TileMapLayer m_layer;
 	};
 
+	// The mirror of RemoveTileLayerCommand. Adding a layer was the one tilemap edit that did
+	// not join history, so Ctrl+Z after it silently undid whatever came before instead - and
+	// deleting a layer, right next to it, has always been undoable.
+	class AddTileLayerCommand final : public IEditorCommand
+	{
+	public:
+		AddTileLayerCommand(std::string tilemapPath, std::size_t index, TileMapLayer layer);
+
+		void Undo(World& world, ServiceContainer& services) override;
+		void Redo(World& world, ServiceContainer& services) override;
+
+		[[nodiscard]] std::string_view Label() const override
+		{
+			return "Add tile layer";
+		}
+
+	private:
+		std::string m_tilemapPath;
+		std::size_t m_index;
+		TileMapLayer m_layer;
+	};
+
 	// Removing an entity's effect drops EffectRefComponent, EffectParamsComponent and the
 	// pipeline it assigned. Captured as the effect NAME plus its parameter values, not as the
 	// components verbatim: paramSlot is a runtime allocation into the effect param buffer, and
