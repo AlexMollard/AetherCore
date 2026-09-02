@@ -47,6 +47,11 @@ list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/debug/ProjectLaunc
 # Shared localhost ENet transport only. The Launcher supplies its own small method
 # table in LauncherLayer.cpp; the editor-only ControlMethods.cpp stays excluded.
 list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/editor/ControlServer.cpp")
+# ControlServer's refusal text lives here, and it is pure string/JSON work over the
+# method table - no editor dependency, so the slim Launcher can take it. It has to be
+# listed: editor/ is excluded wholesale above, so a file ControlServer.cpp needs is not
+# picked up just because it sits next to it.
+list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/editor/ControlDiagnostics.cpp")
 
 # ── Shared app objects ──────────────────────────────────────────────────────
 # Editor and GameRuntime compile most of src/app identically, and EngineTests compiles a
