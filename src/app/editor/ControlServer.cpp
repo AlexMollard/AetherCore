@@ -14,14 +14,112 @@
 
 #include "editor/ControlMethods.hpp"
 #include "net/EnetInit.hpp"
+#include "utils/FuzzyMatch.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
+
+#include <algorithm>
+#include <string_view>
+#include <utility>
 
 namespace aether::editor
 {
 	using nlohmann::json;
 	using aether::net::AcquireEnet;
 	using aether::net::ReleaseEnet;
+
+	namespace
+	{
+		std::string_view NamespaceOf(std::string_view name)
+		{
+			const auto dot = name.rfind('.');
+			return dot == std::string_view::npos ? std::string_view{} : name.substr(0, dot);
+		}
+
+		std::string_view LeafOf(std::string_view name)
+		{
+			const auto dot = name.rfind('.');
+			return dot == std::string_view::npos ? name : name.substr(dot + 1);
+		}
+
+		// A bare "unknown method" hands back nothing the caller can act on, even though
+		// the server knows every name it would have accepted. Callers reach for a
+		// plausible-but-wrong name far more often than they misspell one, so the useful
+		// signals are the namespace and the leaf, not edit distance alone.
+		std::string UnknownMethodError(const std::string& requested, const std::vector<ControlMethod>& methods)
+		{
+			const std::string_view wantNamespace = NamespaceOf(requested);
+			const std::string_view wantLeaf = LeafOf(requested);
+
+			// The MCP tool alias is advertised by describe but is not what dispatch
+			// matches on, so calling by it looks like a name that does not exist.
+			for (const ControlMethod& m: methods)
+			{
+				if (m.tool == requested)
+				{
+					return "unknown method: " + requested + " ('" + requested + "' is the MCP tool alias; call it as '" + m.name + "')";
+				}
+			}
+
+			std::vector<std::pair<int, std::string>> scored;
+			std::size_t inNamespace = 0;
+			for (const ControlMethod& m: methods)
+			{
+				const std::string_view leaf = LeafOf(m.name);
+				if (!wantNamespace.empty() && NamespaceOf(m.name) == wantNamespace)
+				{
+					++inNamespace;
+				}
+
+				// Shared leading characters, so a near-miss like entity/entities or
+				// scrol/scroll ranks first. Plain subsequence matching misses both of
+				// those: neither is a subsequence of the name it was reaching for.
+				std::size_t prefix = 0;
+				while (prefix < leaf.size() && prefix < wantLeaf.size() && leaf[prefix] == wantLeaf[prefix])
+				{
+					++prefix;
+				}
+
+				const auto fuzzy = FuzzyMatch(requested, m.name);
+				// Three characters, not two: "li" alone pulls in line/lights/list and turns
+				// the suggestion into noise, while every real near-miss shares more.
+				const bool similar = leaf == wantLeaf || prefix >= 3 || fuzzy.has_value();
+				if (!similar)
+				{
+					continue;
+				}
+
+				// A shared namespace alone is not a suggestion - it would rank every
+				// method in the namespace equally and print the first few alphabetically.
+				int score = static_cast<int>(prefix) * 5 + (leaf == wantLeaf ? 100 : 0) + (fuzzy ? *fuzzy / 10 : 0);
+				if (!wantNamespace.empty() && NamespaceOf(m.name) == wantNamespace)
+				{
+					score += 10;
+				}
+				scored.emplace_back(score, m.name);
+			}
+
+			std::string message = "unknown method: " + requested;
+			if (!scored.empty())
+			{
+				std::sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) { return a.first != b.first ? a.first > b.first : a.second < b.second; });
+				scored.resize(std::min<std::size_t>(scored.size(), 5));
+
+				std::string suggestion;
+				for (const auto& [ignored, name]: scored)
+				{
+					suggestion += suggestion.empty() ? "" : ", ";
+					suggestion += name;
+				}
+				message += ". Closest: " + suggestion;
+			}
+			if (inNamespace > 0)
+			{
+				message += ". The '" + std::string(wantNamespace) + ".' namespace has " + std::to_string(inNamespace) + " methods";
+			}
+			return message + ". Call 'describe' for the full list.";
+		}
+	} // namespace
 
 	struct ControlServer::Impl
 	{
@@ -319,6 +417,6 @@ namespace aether::editor
 				return m.handler(params, ctx).dump();
 			}
 		}
-		return json{{"error", std::string("unknown method: ") + method}}.dump();
+		return json{{"error", UnknownMethodError(method, m_impl->methods)}}.dump();
 	}
 } // namespace aether::editor
