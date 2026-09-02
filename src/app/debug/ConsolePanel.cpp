@@ -2,6 +2,7 @@
 #include "debug/EditorChrome.hpp"
 #include "debug/Icons.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <set>
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include "debug/OpenInEditor.hpp"
 #include "io/FileUtil.hpp"
@@ -61,6 +63,17 @@ namespace aether::editor
 				return {};
 			}
 			return std::filesystem::path(path).filename().string();
+		}
+
+		// The source location is the part of a row you act on, so it is composed
+		// separately from the message and pinned to the right edge when drawing.
+		std::string LocationText(const LogRingBuffer::Record& record)
+		{
+			if (record.line <= 0)
+			{
+				return {};
+			}
+			return '(' + Basename(record.file) + ':' + std::to_string(record.line) + ')';
 		}
 
 		std::string ToSingleLine(const std::string& text)
@@ -279,7 +292,9 @@ namespace aether::editor
 		}
 
 		// Compose one visible row as text (shared by rendering, copy and save).
-		const auto rowText = [this](const CollapsedRecord& cr)
+		// Rendering draws the location itself so it can pin it to the right edge,
+		// so it asks for the message half only; copy and save want the whole line.
+		const auto rowText = [this](const CollapsedRecord& cr, bool includeLocation = true)
 		{
 			const auto& r = cr.record;
 			std::string s;
@@ -299,9 +314,9 @@ namespace aether::editor
 			{
 				s += "  x" + std::to_string(cr.count);
 			}
-			if (r.line > 0)
+			if (includeLocation && r.line > 0)
 			{
-				s += "  (" + Basename(r.file) + ':' + std::to_string(r.line) + ')';
+				s += "  " + LocationText(r);
 			}
 			return s;
 		};
@@ -404,10 +419,30 @@ namespace aether::editor
 				// Display each entry on one line so multi-line messages don't break the
 				// clipper's uniform-row-height assumption (which corrupts scrolling).
 				// `label` keeps the full text for the copy actions below.
-				const std::string displayLabel = ToSingleLine(label);
+				const std::string displayLabel = ToSingleLine(rowText(cr, false));
+				const std::string location = LocationText(r);
+
+				// The location is drawn right-aligned rather than appended, so a long
+				// message is what gets ellipsised. Appending it meant the one part of
+				// the row you can act on was the first thing clipped away.
+				const float avail = ImGui::GetContentRegionAvail().x;
+				const float locationWidth = location.empty() ? 0.0f : ImGui::CalcTextSize(location.c_str()).x;
+				const float gap = location.empty() ? 0.0f : ImGui::GetStyle().ItemSpacing.x * 2.0f;
+				const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+
+				ImGui::Selectable("##row", false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(avail, 0.0f));
+
+				ImDrawList* drawList = ImGui::GetWindowDrawList();
+				const float messageMaxX = rowMin.x + std::max(0.0f, avail - locationWidth - gap);
 				ImGui::PushStyleColor(ImGuiCol_Text, LevelColor(r.level));
-				ImGui::Selectable(displayLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+				// Pass an explicit end: imgui would otherwise treat a "##" inside a log
+				// message as the start of a hidden label and drop the rest of the line.
+				ImGui::RenderTextEllipsis(drawList, rowMin, ImVec2(messageMaxX, rowMin.y + ImGui::GetTextLineHeight()), messageMaxX, displayLabel.c_str(), displayLabel.c_str() + displayLabel.size(), nullptr);
 				ImGui::PopStyleColor();
+				if (!location.empty())
+				{
+					drawList->AddText(ImVec2(rowMin.x + avail - locationWidth, rowMin.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), location.c_str());
+				}
 
 				if (r.line > 0)
 				{
