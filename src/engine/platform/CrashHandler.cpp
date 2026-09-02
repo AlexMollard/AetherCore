@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "io/PlatformPaths.hpp"
+#include "platform/CrashReportRetention.hpp"
 #include "utils/LogRingBuffer.hpp"
 #include "utils/Logger.hpp"
 
@@ -85,7 +86,7 @@ namespace aether
 			return std::format("{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}", localTime.tm_year + 1900, localTime.tm_mon + 1, localTime.tm_mday, localTime.tm_hour, localTime.tm_min, localTime.tm_sec);
 		}
 
-		std::filesystem::path BuildCrashBasePath()
+		std::filesystem::path CrashDirectory()
 		{
 			// Crash reports must not land in the game's install directory (a
 			std::filesystem::path crashDirectory = io::PlatformPaths::GetUserConfigDir();
@@ -100,7 +101,12 @@ namespace aether
 			{
 				exeName = "AetherCore";
 			}
-			crashDirectory = crashDirectory / "crashes" / exeName;
+			return crashDirectory / "crashes" / exeName;
+		}
+
+		std::filesystem::path BuildCrashBasePath()
+		{
+			const std::filesystem::path crashDirectory = CrashDirectory();
 
 			std::error_code errorCode;
 			std::filesystem::create_directories(crashDirectory, errorCode);
@@ -970,6 +976,10 @@ namespace aether
 		}
 
 		g_appName = std::string(appName);
+		if (const std::size_t removed = platform::PruneCrashReports(CrashDirectory(), g_appName + "_", platform::kDefaultCrashReportsToKeep); removed > 0)
+		{
+			AE_INFO(LogCategory::App, "CrashHandler: removed {} file(s) from crash reports older than the newest {}.", removed, platform::kDefaultCrashReportsToKeep);
+		}
 
 		std::set_terminate(TerminateHandlerThunk);
 		std::signal(SIGABRT, SignalHandlerThunk);
