@@ -111,6 +111,10 @@ namespace aether::editor
 		std::vector<MaterialGraph> m_redoHistory;
 
 		void SnapshotGraph();
+		// History belongs to ONE material. Without clearing it on every path that replaces the
+		// graph, undoing after opening a second material restores the FIRST one's graph into
+		// it - and auto-compile then writes that over the second material's file.
+		void ClearGraphHistory();
 		// Snapshot when a widget is first grabbed, so a drag is one undo step and not one per
 		// frame. Call immediately after the widget.
 		void SnapshotOnActivate();

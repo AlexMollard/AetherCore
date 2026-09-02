@@ -1016,6 +1016,7 @@ namespace aether::editor
 		m_edit = MaterialAssetEditState{};
 		m_edit.path = materialPath;
 		m_graph.reset();
+		ClearGraphHistory();
 		m_status.clear();
 		m_statusIsError = false;
 		m_positionsApplied = false;
@@ -1063,10 +1064,17 @@ namespace aether::editor
 		m_edit.saved = m_edit.spec;
 
 		m_graph = ParseMaterialGraph(MaterialSerializer::ToToml(m_edit.spec));
+		ClearGraphHistory();
 		m_compiledSignature = GraphSignature();
 		m_submittedSignature = m_compiledSignature;
 		m_savedGraphSignature = m_compiledSignature;
 		RefreshPreview(context);
+	}
+
+	void MaterialGraphPanel::ClearGraphHistory()
+	{
+		m_undoHistory.clear();
+		m_redoHistory.clear();
 	}
 
 	void MaterialGraphPanel::SnapshotGraph()
@@ -1244,6 +1252,7 @@ namespace aether::editor
 			if (ImGui::Button(ICON_FA_DIAGRAM_PROJECT "  Add a node graph"))
 			{
 				m_graph = GraphFromMaterial(m_edit.spec);
+				ClearGraphHistory();
 				m_positionsApplied = false;
 				m_compiledSignature.clear();
 				m_submittedSignature.clear();
