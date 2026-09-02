@@ -25,6 +25,7 @@
 #include "debug/EditorChrome.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
+#include "debug/EditorShortcuts.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/SelectionBounds.hpp"
 #include "debug/ScenePicker.hpp"
@@ -575,15 +576,15 @@ namespace aether::editor
 	{
 		if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
 		{
-			if (ImGui::IsKeyPressed(ImGuiKey_W))
+			if (ImGui::IsKeyPressed(shortcuts::kGizmoMove.key))
 			{
 				m_gizmoOp = 0;
 			}
-			if (ImGui::IsKeyPressed(ImGuiKey_E))
+			if (ImGui::IsKeyPressed(shortcuts::kGizmoRotate.key))
 			{
 				m_gizmoOp = 1;
 			}
-			if (ImGui::IsKeyPressed(ImGuiKey_R))
+			if (ImGui::IsKeyPressed(shortcuts::kGizmoScale.key))
 			{
 				m_gizmoOp = 2;
 			}
@@ -2074,7 +2075,7 @@ namespace aether::editor
 			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		}
 
-		if (editorViewportInteractive && m_editorCamActive && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F, false) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
+		if (editorViewportInteractive && m_editorCamActive && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsKeyPressed(shortcuts::kFrameSelection.key, false) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
 		{
 			auto& selection = context.Get<SceneSelection>();
 			World& world = context.Get<World>();

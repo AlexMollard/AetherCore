@@ -22,6 +22,7 @@
 #include "debug/ComponentDrawers.hpp"
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
+#include "debug/EditorShortcuts.hpp"
 #include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/MaterialAsset.hpp"
@@ -2317,17 +2318,17 @@ namespace aether::editor
 			auto* clipAssets = context.TryGet<AssetManager>();
 			auto* undo = context.TryGet<UndoStack>();
 
-			if (panelKeys && ImGui::IsKeyPressed(ImGuiKey_D, false))
+			if (panelKeys && ImGui::IsKeyPressed(shortcuts::kDuplicate.key, false))
 			{
 				m_pendingDuplicate = true;
 			}
-			if (panelKeys && ImGui::IsKeyPressed(ImGuiKey_G, false) && !selection.All().empty())
+			if (panelKeys && ImGui::IsKeyPressed(shortcuts::kGroup.key, false) && !selection.All().empty())
 			{
 				GroupSelectionUnderNewParent(context, world, selection, selection.Primary());
 			}
-			const bool copyKey = m_pendingCopy || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_C, false));
-			const bool cutKey = m_pendingCut || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_X, false));
-			const bool pasteKey = m_pendingPaste || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_V, false));
+			const bool copyKey = m_pendingCopy || (panelKeys && ImGui::IsKeyPressed(shortcuts::kCopy.key, false));
+			const bool cutKey = m_pendingCut || (panelKeys && ImGui::IsKeyPressed(shortcuts::kCut.key, false));
+			const bool pasteKey = m_pendingPaste || (panelKeys && ImGui::IsKeyPressed(shortcuts::kPaste.key, false));
 			m_pendingCopy = m_pendingCut = m_pendingPaste = false;
 
 			if ((copyKey || cutKey) && clipAssets != nullptr && !selection.All().empty())
@@ -2545,7 +2546,7 @@ namespace aether::editor
 
 			if (!ImGui::GetIO().WantTextInput && !GameKeyboardCaptured(world))
 			{
-				if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !selection.All().empty())
+				if (ImGui::IsKeyPressed(shortcuts::kDelete.key) && !selection.All().empty())
 				{
 					const std::vector<Entity> doomed = CollectSelectionRoots(world, selection);
 					// Snapshot before destroying so undo brings the subtrees back in place.
@@ -2568,7 +2569,7 @@ namespace aether::editor
 					}
 					selection.Clear();
 				}
-				if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F2) && selection.Primary().IsValid())
+				if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(shortcuts::kRename.key) && selection.Primary().IsValid())
 				{
 					BeginRename(world, selection.Primary());
 				}

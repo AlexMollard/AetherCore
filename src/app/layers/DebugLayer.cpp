@@ -32,6 +32,7 @@ using namespace std::string_view_literals;
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include "debug/EditorShortcuts.hpp"
 #include "debug/ConsolePanel.hpp"
 #include "debug/OpenInEditor.hpp"
 #include "debug/ScriptErrorOverlay.hpp"
@@ -1077,39 +1078,17 @@ namespace aether::editor
 
 	void DebugLayer::DrawShortcutsReference()
 	{
-		// Hand-maintained, because the bindings themselves live in three different files:
-		// the globals below are in this file's shortcut block, the scene ones in
-		// HierarchyPanel::OnImGui, and the viewport ones in ViewportPanel. Anything added
-		// there has to be added here too - undiscoverable shortcuts are the same as none.
-		struct Shortcut
-		{
-			const char* keys;
-			const char* what;
-		};
+		// Rendered from shortcuts::All(), which is the same table the call sites index into,
+		// so this cannot describe a key the editor does not actually use.
 		struct Group
 		{
 			const char* title;
-			std::vector<Shortcut> entries;
+			shortcuts::Context context;
 		};
-		static const std::vector<Group> kGroups = {
-		        {"Global",
-		                {{"Ctrl+P", "Command palette"},
-		                        {"Ctrl+S", "Save the scene, or the focused material"},
-		                        {"Ctrl+Z", "Undo"},
-		                        {"Ctrl+Y  /  Ctrl+Shift+Z", "Redo"},
-		                        {"F1", "This list"},
-		                        {"F5", "Reload C# scripts"},
-		                        {"F6", "Pause / resume play"},
-		                        {"F7", "Step one frame"}}},
-		        {"Scene  (Hierarchy)",
-		                {{"Ctrl+C  /  Ctrl+X  /  Ctrl+V", "Copy, cut, paste entities"},
-		                        {"Ctrl+D", "Duplicate"},
-		                        {"Ctrl+G", "Group the selection"},
-		                        {"F2", "Rename"},
-		                        {"Delete", "Delete the selection"}}},
-		        {"Viewport",
-		                {{"W  /  E  /  R", "Move, rotate, scale gizmo"},
-		                        {"F", "Frame the selection"}}},
+		static constexpr Group kGroups[] = {
+		        {"Global", shortcuts::Context::Global},
+		        {"Scene  (Hierarchy)", shortcuts::Context::Scene},
+		        {"Viewport", shortcuts::Context::Viewport},
 		};
 
 		constexpr const char* kTitle = "Keyboard Shortcuts###shortcuts";
@@ -1129,13 +1108,17 @@ namespace aether::editor
 			ImGui::SeparatorText(group.title);
 			if (ImGui::BeginTable(group.title, 2, ImGuiTableFlags_SizingFixedFit))
 			{
-				for (const Shortcut& entry: group.entries)
+				for (const shortcuts::Binding& entry: shortcuts::All())
 				{
+					if (entry.context != group.context)
+					{
+						continue;
+					}
 					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
-					ImGui::TextColored(chrome::kAccentHi, "%s", entry.keys);
+					ImGui::TextColored(chrome::kAccentHi, "%s", entry.display);
 					ImGui::TableNextColumn();
-					ImGui::TextUnformatted(entry.what);
+					ImGui::TextUnformatted(entry.description);
 				}
 				ImGui::EndTable();
 			}
@@ -1154,7 +1137,7 @@ namespace aether::editor
 	void DebugLayer::DrawCommandPalette(app::LayerContext& context)
 	{
 		const ImGuiIO& io = ImGui::GetIO();
-		if ((io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_P, false)) || m_openCommandPalette)
+		if ((io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kCommandPalette.key, false)) || m_openCommandPalette)
 		{
 			m_openCommandPalette = false;
 			m_paletteQuery[0] = '\0';
@@ -1955,8 +1938,8 @@ namespace aether::editor
 			const ImGuiIO& io = ImGui::GetIO();
 			if (io.KeyCtrl && !io.WantTextInput)
 			{
-				const bool zKey = ImGui::IsKeyPressed(ImGuiKey_Z, false);
-				const bool redoCombo = ImGui::IsKeyPressed(ImGuiKey_Y, false) || (zKey && io.KeyShift);
+				const bool zKey = ImGui::IsKeyPressed(shortcuts::kUndo.key, false);
+				const bool redoCombo = ImGui::IsKeyPressed(shortcuts::kRedo.key, false) || (zKey && io.KeyShift);
 				const bool undoCombo = zKey && !io.KeyShift;
 				if (undoCombo || redoCombo)
 				{
@@ -1980,11 +1963,11 @@ namespace aether::editor
 
 		{
 			const ImGuiIO& io = ImGui::GetIO();
-			if (!io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F1, false))
+			if (!io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kShortcuts.key, false))
 			{
 				m_openShortcuts = true;
 			}
-			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_S, false))
+			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kSave.key, false))
 			{
 				// Save what is being edited. With the Material window focused over a
 				// half-edited material, saving the scene instead is both surprising and
@@ -2003,11 +1986,11 @@ namespace aether::editor
 			const ImGuiIO& io = ImGui::GetIO();
 			if (!io.WantTextInput)
 			{
-				if (ImGui::IsKeyPressed(ImGuiKey_F6, false))
+				if (ImGui::IsKeyPressed(shortcuts::kPausePlay.key, false))
 				{
 					TogglePausePlaySession(context);
 				}
-				if (ImGui::IsKeyPressed(ImGuiKey_F7, false))
+				if (ImGui::IsKeyPressed(shortcuts::kStepFrame.key, false))
 				{
 					StepPlaySession(context);
 				}
