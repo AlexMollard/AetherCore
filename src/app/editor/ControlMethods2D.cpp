@@ -814,6 +814,13 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 			        SpriteAnimationAsset animation;
 			        animation.name = p.value("name", std::string{"Animation"});
+			        // The name becomes the filename when 'out' is omitted, so it needs the same
+			        // guard scenes, prefabs and tilesets have: a colon writes into an NTFS
+			        // stream and a separator writes outside the animations folder.
+			        if (!p.contains("out") && !app::scene::IsValidAssetName(animation.name))
+			        {
+				        return json{{"error", "'" + animation.name + "' is not a usable animation name; pass an explicit 'out' path or use a name without <>:\"/\|?*"}};
+			        }
 			        animation.atlasPath = atlasPath;
 			        animation.loopMode = *loopMode;
 			        for (const json& frame: p.value("frames", json::array()))
