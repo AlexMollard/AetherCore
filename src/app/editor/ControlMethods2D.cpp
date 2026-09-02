@@ -253,7 +253,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 	{
 		methods.push_back({"tiles.create",
 		        "create_tile_assets",
-		        "Create a tileset (every atlas sprite becomes a paintable tile) plus an empty tilemap, and bind the tilemap to an entity's Tile Map component when 'id' is given. Returns tileset/tilemap paths and the paintable tile list.",
+		        "Create a tileset (every atlas sprite becomes a paintable tile) plus an empty tilemap, and bind the tilemap to an entity's Tile Map component when 'id' is given. 'cellSize' is in world units and must be greater than 0. Returns tileset/tilemap paths and the paintable tile list.",
 		        true,
 		        Obj({{"atlas", StrProp()}, {"id", IntProp()}, {"name", StrProp()}, {"directory", StrProp()}, {"cellSize", NumProp()}, {"solid", json{{"type", "boolean"}, {"description", "give every tile Full collision (default false)"}}}},
 		                {"atlas"}),
@@ -433,7 +433,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"tiles.paint",
 		        "paint_tiles",
-		        "Paint tilemap cells. Each cell is {x, y, tile?, flipX?, flipY?} where 'tile' is a tileset tile index (get_tile_map lists them); omit 'tile' to erase. Edits join the editor's undo stack. 'save' (default true) persists the tilemap "
+		        "Paint tilemap cells. Each cell is {x, y, tile?, flipX?, flipY?} where 'tile' is a tileset tile index (get_tile_map lists them); omit 'tile' to erase. Cells beyond what the physics engine can carry collision for are refused, and every cell is checked before any is painted. Edits join the editor's undo stack. 'save' (default true) persists the tilemap "
 		        "asset.",
 		        true,
 		        Obj({{"id", IntProp()},
@@ -505,7 +505,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"tiles.fill",
 		        "fill_tiles",
-		        "Fill (or erase, when 'tile' is omitted) an inclusive cell rect [x0, y0, x1, y1] on a tilemap layer without sending every cell. Edits join the editor's undo stack.",
+		        "Fill (or erase, when 'tile' is omitted) an inclusive cell rect [x0, y0, x1, y1] on a tilemap layer without sending every cell. Edits join the editor's undo stack. Cells beyond what the physics engine can carry collision for are refused; the error names the limit.",
 		        true,
 		        Obj({{"id", IntProp()}, {"layer", IntProp()}, {"rect", RectProp()}, {"tile", IntProp()}, {"flipX", BoolProp()}, {"flipY", BoolProp()}, {"save", BoolProp()}}, {"id", "rect"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -578,7 +578,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"tiles.read",
 		        "read_tiles",
-		        "Read the non-empty cells of an inclusive cell rect [x0, y0, x1, y1] back as {x, y, tile, flipX, flipY} with 'tile' as a tileset index.",
+		        "Read the non-empty cells of an inclusive cell rect [x0, y0, x1, y1] back as {x, y, tile, flipX, flipY} with 'tile' as a tileset index. Large rects are capped - check 'truncated'.",
 		        false,
 		        Obj({{"id", IntProp()}, {"layer", IntProp()}, {"rect", RectProp()}}, {"id", "rect"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -653,7 +653,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"atlas.slice",
 		        "slice_atlas",
-		        "Grid-slice a texture into a sprite atlas asset (the same operation as the Sprite Slicer panel). Re-slicing an existing atlas keeps stable sprite ids where regions still correspond. Returns the atlas path and sprite list.",
+		        "Grid-slice a texture into a sprite atlas asset (the same operation as the Sprite Slicer panel). Re-slicing an existing atlas keeps stable sprite ids where regions still correspond. cellWidth/cellHeight are pixels and must be at least 1. Returns the atlas path, spriteCount, and the first 2,000 sprites - check 'truncated', because the atlas on disk holds them all.",
 		        true,
 		        Obj({{"texture", StrProp()},
 		                    {"cellWidth", IntProp()},
@@ -748,7 +748,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"atlas.info",
 		        "get_atlas",
-		        "List a sprite atlas' regions: index, name, and pixel rect. Indices/names feed create_sprite_animation; names identify sprites for Sprite Renderer components.",
+		        "List a sprite atlas' regions: index, name, and pixel rect. Indices/names feed create_sprite_animation; names identify sprites for Sprite Renderer components. Returns spriteCount and the first 2,000 regions - check 'truncated'.",
 		        false,
 		        Obj({{"path", StrProp()}}, {"path"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -778,7 +778,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"animation.create",
 		        "create_sprite_animation",
-		        "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration. Assign the result to a Sprite Animator component to play "
+		        "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration and must be greater than 0. Assign the result to a Sprite Animator component to play "
 		        "it.",
 		        true,
 		        Obj({{"atlas", StrProp()},
