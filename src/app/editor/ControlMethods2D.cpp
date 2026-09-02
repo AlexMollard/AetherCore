@@ -1082,6 +1082,24 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 			        return json{{"id", entity.id}, {"scripts", std::move(scripts)}};
 		        }});
 
+		methods.push_back({"scene.script_types",
+		        "list_script_types",
+		        "List the C# script type names add_script accepts, as loaded from the project's built assembly. Empty while no assembly is loaded (a project that has not been built yet), which is also when add_script stops checking the name.",
+		        false,
+		        Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        // The names were only reachable by getting one wrong: add_script listed
+			        // them in its refusal and nothing else would say them.
+			        auto* csharp = ctx.services.TryGet<app::scripting::CSharpScriptingSubsystem>();
+			        if (csharp == nullptr)
+			        {
+				        return json{{"error", "no C# scripting subsystem"}};
+			        }
+			        const std::vector<std::string>& known = csharp->GetScriptTypeNames();
+			        return json{{"types", known}, {"count", known.size()}, {"assemblyLoaded", !known.empty()}};
+		        }});
+
 		methods.push_back({"scene.remove_script",
 		        "remove_script",
 		        "Detach a C# script from an entity by type name.",
