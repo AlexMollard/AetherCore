@@ -1248,19 +1248,24 @@ namespace aether::editor
 					return ErrNoEntity();
 				}
 				const std::string type = p.value("type", std::string{});
+				// The catalog is the palette menu, so it knows colliders only under their
+				// shape-specific names and misses plain reflected components entirely. Falling
+				// back to reflection is what the editor's own add/remove already do; without it
+				// this endpoint rejected names scene.component_types had just advertised.
 				const ComponentCatalogEntry* entry = FindComponent(type);
-				if (entry == nullptr)
+				const reflect::ComponentType* reflected = entry != nullptr ? nullptr : reflect::FindComponentType(type);
+				if (entry == nullptr && reflected == nullptr)
 				{
-					return json{{"error", "unknown component '" + type + "' (call list_component_types)"}};
+					return json{{"error", "unknown component '" + type + "' (call scene.component_types / list_component_types)"}};
 				}
-				if (!entry->addable || (add ? !entry->add : !entry->remove))
+				if (entry != nullptr && (!entry->addable || (add ? !entry->add : !entry->remove)))
 				{
 					return json{{"error", "'" + type + "' is reference-only and cannot be added/removed as a component (e.g. UI Text is authored as a UI entity)"}};
 				}
 				// Report what actually happened. Claiming an add or a remove that did not occur
 				// is not only a misleading answer - the undo entry recorded below would be for
 				// a change that never happened, so the next undo appears to do nothing.
-				const bool present = entry->has && entry->has(world, entity);
+				const bool present = entry != nullptr ? (entry->has && entry->has(world, entity)) : (reflected->tryGetRawConst(world, entity) != nullptr);
 				if (add && present)
 				{
 					return json{{"id", entity.id}, {"type", type}, {"added", false}, {"alreadyPresent", true}};
@@ -1271,12 +1276,17 @@ namespace aether::editor
 				}
 				if (add)
 				{
-					if (const std::string blockReason = ComponentAddBlockReason(world, entity, *entry); !blockReason.empty())
+					if (entry != nullptr)
 					{
-						return json{{"error", "'" + type + "' cannot be added: " + blockReason}};
+						if (const std::string blockReason = ComponentAddBlockReason(world, entity, *entry); !blockReason.empty())
+						{
+							return json{{"error", "'" + type + "' cannot be added: " + blockReason}};
+						}
 					}
-					entry->add(world, entity, ctx.services);
-					EnableComponentFeatures(world, *entry);
+					if (!AddComponentTo(world, entity, type, ctx.services))
+					{
+						return json{{"error", "'" + type + "' could not be added"}};
+					}
 					if (auto* undo = ctx.services.TryGet<UndoStack>())
 					{
 						undo->Record(std::make_unique<AddComponentCommand>(entity.id, type));
@@ -1287,7 +1297,10 @@ namespace aether::editor
 					bool isReflected = false;
 					json snapshot;
 					CaptureComponentFields(world, entity, type, ctx.services, snapshot, isReflected);
-					entry->remove(world, entity);
+					if (!RemoveComponentFrom(world, entity, type))
+					{
+						return json{{"error", "'" + type + "' could not be removed"}};
+					}
 					if (auto* undo = ctx.services.TryGet<UndoStack>())
 					{
 						undo->Record(std::make_unique<RemoveComponentCommand>(entity.id, type, std::move(snapshot), isReflected));
