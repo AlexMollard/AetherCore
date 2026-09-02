@@ -38,6 +38,13 @@ namespace aether::editor
 
 		void OnImGui(app::LayerContext& context) override;
 
+		// The graph binds Delete for its own nodes and links, so the scene must not also
+		// delete the selected entity on the same keypress.
+		[[nodiscard]] bool OwnsEditingKeys() const override
+		{
+			return m_focused && IsVisible();
+		}
+
 		// Ctrl+S saves the scene. With this window focused and a material half-edited, that
 		// saved the wrong document and left the edits unsaved - so it gets asked first.
 		// Returns true when it handled the save.

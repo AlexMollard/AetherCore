@@ -2341,7 +2341,7 @@ namespace aether::editor
 			}
 
 			// gizmo drag then Ctrl+D again must work without re-clicking the
-			const bool panelKeys = !ImGui::GetIO().WantTextInput && !GameKeyboardCaptured(world) && ImGui::GetIO().KeyCtrl;
+			const bool panelKeys = !ImGui::GetIO().WantTextInput && !GameKeyboardCaptured(world) && !m_documentOwnsEditingKeys && ImGui::GetIO().KeyCtrl;
 			auto* clipAssets = context.TryGet<AssetManager>();
 			auto* undo = context.TryGet<UndoStack>();
 
@@ -2571,7 +2571,7 @@ namespace aether::editor
 				}
 			}
 
-			if (!ImGui::GetIO().WantTextInput && !GameKeyboardCaptured(world))
+			if (!ImGui::GetIO().WantTextInput && !GameKeyboardCaptured(world) && !m_documentOwnsEditingKeys)
 			{
 				if (ImGui::IsKeyPressed(shortcuts::kDelete.key) && !selection.All().empty())
 				{

@@ -177,6 +177,17 @@ namespace aether::editor
 			return m_visible;
 		}
 
+		// True while this panel is a focused document that binds the plain editing keys -
+		// Delete, Ctrl+D, Ctrl+C/V - for its own contents. Those act on the scene selection
+		// from anywhere by design, so that a gizmo drag can be followed by Ctrl+D without
+		// clicking back into the hierarchy; the cost was that Delete over a pixel canvas
+		// erased nothing and destroyed a selected entity instead. A panel that means
+		// something else by those keys says so here.
+		[[nodiscard]] virtual bool OwnsEditingKeys() const
+		{
+			return false;
+		}
+
 		void SetVisible(bool visible)
 		{
 			m_visible = visible;

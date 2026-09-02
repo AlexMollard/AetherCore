@@ -28,6 +28,11 @@ namespace aether::editor
 
 		void OnImGui(app::LayerContext& context) override;
 
+		[[nodiscard]] bool OwnsEditingKeys() const override
+		{
+			return m_focused && IsVisible();
+		}
+
 	public:
 		[[nodiscard]] bool HasUnsavedWork(app::LayerContext& context) const override;
 		bool SaveUnsavedWork(app::LayerContext& context) override;

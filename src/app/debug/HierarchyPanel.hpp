@@ -99,6 +99,18 @@ namespace aether::editor
 		void DrawTreeGuideLines(ImDrawList* drawList, const FlatTreeEntry& entry, const ImVec2& rowMin, const ImVec2& rowMax) const;
 		void UpdateKeyboardFocusScopeFromMouse(const ImVec2& sceneListMin, const ImVec2& sceneListMax);
 		bool SceneListOwnsKeyboard() const noexcept;
+
+	public:
+		// Set by DebugLayer each frame: a focused document panel that binds Delete /
+		// Ctrl+D / Ctrl+C-V for its own contents. Those keys act on the scene selection
+		// from anywhere so the viewport can use them, which meant Delete over a pixel
+		// canvas destroyed a selected entity instead of erasing.
+		void SetDocumentPanelOwnsEditingKeys(bool owns) noexcept
+		{
+			m_documentOwnsEditingKeys = owns;
+		}
+
+	private:
 		void HandleKeyboardNavigation(SceneSelection& selection);
 		void HandleTypeToJump(const World& world, SceneSelection& selection);
 		void DrawOpenSceneModal(app::LayerContext& context, World& world, SceneSelection& selection);
@@ -174,6 +186,7 @@ namespace aether::editor
 
 		int m_focusedRowIndex = -1;
 		KeyboardFocusScope m_keyboardFocusScope = KeyboardFocusScope::None;
+		bool m_documentOwnsEditingKeys = false;
 
 		std::string m_typeJumpText;
 		double m_typeJumpTime = -1.0;

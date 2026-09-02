@@ -37,9 +37,9 @@ namespace aether::editor::shortcuts
 	};
 
 	inline constexpr Binding kCommandPalette{ImGuiKey_P, "Ctrl+P", "Command palette", Context::Global};
-	inline constexpr Binding kSave{ImGuiKey_S, "Ctrl+S", "Save the scene, or the focused material", Context::Global};
+	inline constexpr Binding kSave{ImGuiKey_S, "Ctrl+S", "Save the scene, or a focused material / pixel canvas", Context::Global};
 	inline constexpr Binding kSaveAs{ImGuiKey_S, "Ctrl+Shift+S", "Save the scene under a new name", Context::Global};
-	inline constexpr Binding kUndo{ImGuiKey_Z, "Ctrl+Z", "Undo", Context::Global};
+	inline constexpr Binding kUndo{ImGuiKey_Z, "Ctrl+Z", "Undo, in the focused document or the scene", Context::Global};
 	inline constexpr Binding kRedo{ImGuiKey_Y, "Ctrl+Y  /  Ctrl+Shift+Z", "Redo", Context::Global};
 	inline constexpr Binding kShortcuts{ImGuiKey_F1, "F1", "This list", Context::Global};
 	inline constexpr Binding kReloadScripts{ImGuiKey_F5, "F5", "Reload C# scripts", Context::Global};

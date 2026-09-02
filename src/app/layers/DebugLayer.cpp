@@ -2021,6 +2021,18 @@ namespace aether::editor
 			{
 				m_openShortcuts = true;
 			}
+			// Scene editing keys deliberately work from anywhere, so a document panel that
+			// binds them for its own contents has to say so or Delete hits both.
+			if (m_hierarchyPanel != nullptr)
+			{
+				bool documentOwnsKeys = false;
+				for (const auto& panel: m_panels)
+				{
+					documentOwnsKeys = documentOwnsKeys || panel->OwnsEditingKeys();
+				}
+				m_hierarchyPanel->SetDocumentPanelOwnsEditingKeys(documentOwnsKeys);
+			}
+
 			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kSave.key, false))
 			{
 				// Shift is the Save As modifier everywhere else, and this used to ignore it -
