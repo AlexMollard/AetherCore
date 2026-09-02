@@ -395,6 +395,7 @@ namespace aether::ui
 			return;
 		}
 
+		const std::uint32_t previousCapacity = buf.capacity;
 		std::uint32_t newCapacity = buf.capacity == 0 ? kInitialCommandCapacity : buf.capacity;
 		while (newCapacity < count)
 		{
@@ -429,8 +430,14 @@ namespace aether::ui
 		buf.capacity = newCapacity;
 		// Growing the command buffer swaps the device address every DrawGroup's commands are
 		// read from. Rare in steady state; if it turns out to be happening constantly while the
-		// UI churns, that is the thing to chase.
-		AE_INFO(LogCategory::UI, "UiRenderer: command buffer grew to {} commands (needed {})", newCapacity, count);
+		// UI churns, that is the thing to chase - so anything past the initial capacity is
+		// worth a line, whether it grew into it or started there. Landing exactly ON that size
+		// is not: it happens for every frame slot on every renderer reset (nine lines per play
+		// cycle) and only reports the number this file already picked.
+		if (newCapacity > kInitialCommandCapacity)
+		{
+			AE_INFO(LogCategory::UI, "UiRenderer: command buffer holds {} commands, up from {} (needed {})", newCapacity, previousCapacity, count);
+		}
 	}
 
 	void UiRenderer::BuildFrame(glm::vec2 outputExtent, std::uint32_t frameSlot)
