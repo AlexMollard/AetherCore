@@ -372,7 +372,7 @@ AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
 AE_COMPONENT(NetworkTransformComponent, "Network Transform", "Networking", ICON_FA_ARROWS_LEFT_RIGHT)
-AE_FIELD_N("interpolation_delay", interpolationDelaySeconds, Float)
+AE_FIELD_NT("interpolation_delay", interpolationDelaySeconds, Float, "How far in the past a REMOTE entity is rendered, in seconds, so there is a packet either side of the render time to interpolate between. Raising it smooths motion over a worse connection at the cost of lag. It does nothing to a locally-owned entity: the owner is authoritative and takes no correction.")
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
