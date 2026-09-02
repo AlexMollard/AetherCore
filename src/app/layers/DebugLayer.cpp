@@ -1105,42 +1105,53 @@ namespace aether::editor
 		// Two columns, because the list grows every time a panel gains a binding and an
 		// auto-resizing popup has no scrollbar: one column would eventually run off the
 		// bottom of a shorter screen with no way to reach the rest.
-		if (ImGui::BeginTable("##shortcutColumns", 2, ImGuiTableFlags_SizingFixedFit))
-		{
-			const int half = (static_cast<int>(shortcuts::All().size()) + 1) / 2;
-			int drawn = 0;
-			bool wrapped = false;
-			ImGui::TableNextRow();
-			ImGui::TableNextColumn();
-			for (const Group& group: kGroups)
+		//
+		// Laid out with groups and measured text rather than tables. A table asks for the
+		// width available to it, an auto-resizing popup derives its width from its content,
+		// and nesting the two made that circular: the popup settled 200px narrower than its
+		// content and quietly cut every description ("Command palette" rendered as "Co").
+		const float accelWidth = [] {
+			float widest = 0.0f;
+			for (const shortcuts::Binding& entry: shortcuts::All())
 			{
-				// Break to the second column between sections, never inside one.
-				if (!wrapped && drawn >= half)
-				{
-					ImGui::TableNextColumn();
-					wrapped = true;
-				}
-				ImGui::SeparatorText(group.title);
-				if (ImGui::BeginTable(group.title, 2, ImGuiTableFlags_SizingFixedFit))
-				{
-					for (const shortcuts::Binding& entry: shortcuts::All())
-					{
-						if (entry.context != group.context)
-						{
-							continue;
-						}
-						ImGui::TableNextRow();
-						ImGui::TableNextColumn();
-						ImGui::TextColored(chrome::kAccentHi, "%s", entry.display);
-						ImGui::TableNextColumn();
-						ImGui::TextUnformatted(entry.description);
-						++drawn;
-					}
-					ImGui::EndTable();
-				}
+				widest = std::max(widest, ImGui::CalcTextSize(entry.display).x);
 			}
-			ImGui::EndTable();
+			return widest + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+		}();
+
+		const int half = (static_cast<int>(shortcuts::All().size()) + 1) / 2;
+		int drawn = 0;
+		bool wrapped = false;
+		ImGui::BeginGroup();
+		for (const Group& group: kGroups)
+		{
+			// Break to the second column between sections, never inside one.
+			if (!wrapped && drawn >= half)
+			{
+				ImGui::EndGroup();
+				ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x * 3.0f);
+				ImGui::BeginGroup();
+				wrapped = true;
+			}
+			ImGui::SeparatorText(group.title);
+			for (const shortcuts::Binding& entry: shortcuts::All())
+			{
+				if (entry.context != group.context)
+				{
+					continue;
+				}
+				const float rowStart = ImGui::GetCursorPosX();
+				ImGui::TextColored(chrome::kAccentHi, "%s", entry.display);
+				// SetCursorPosX rather than SameLine(x): both are window-relative, but
+				// SameLine's offset is resolved against the line start, which is not the group
+				// start - so the second column's descriptions drifted far to the right.
+				ImGui::SameLine(0.0f, 0.0f);
+				ImGui::SetCursorPosX(rowStart + accelWidth);
+				ImGui::TextUnformatted(entry.description);
+				++drawn;
+			}
 		}
+		ImGui::EndGroup();
 		ImGui::Spacing();
 		// Deliberately NOT F1: the key that opened this is still down on the frame the popup
 		// first draws, so closing on it too made the window open and shut in the same frame
