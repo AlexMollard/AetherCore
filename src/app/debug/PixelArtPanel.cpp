@@ -444,6 +444,21 @@ namespace aether::editor
 		return true;
 	}
 
+	bool PixelArtPanel::SaveIfFocusedAndDirty(app::LayerContext& context)
+	{
+		auto* doc = context.TryGet<PixelArtDocument>();
+		if (!m_focused || !IsVisible() || doc == nullptr || !doc->Dirty() || m_savePath.empty())
+		{
+			return false;
+		}
+		const std::filesystem::path disk = app::ResolveProjectPath(context.TryGet<app::EditorProjectContext>(), m_savePath);
+		m_status = doc->Save(disk) ? "Saved " + m_savePath : "Save failed: " + m_savePath;
+		// Handled either way. Reporting a failed save as unhandled would fall through and
+		// write the scene instead, which is the surprise this exists to remove - the status
+		// line already says the write did not happen.
+		return true;
+	}
+
 	bool PixelArtPanel::HasUnsavedWork(app::LayerContext& context) const
 	{
 		// The canvas is a service, not panel state, so it stays dirty even while this window

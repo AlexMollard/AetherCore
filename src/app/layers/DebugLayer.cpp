@@ -2038,7 +2038,9 @@ namespace aether::editor
 					// half-edited material, saving the scene instead is both surprising and
 					// leaves the thing you were working on unsaved.
 					auto* material = dynamic_cast<MaterialGraphPanel*>(FindPanelByName("Material"));
-					if (material == nullptr || !material->SaveIfFocusedAndDirty(context))
+					auto* pixels = dynamic_cast<PixelArtPanel*>(FindPanelByName("Pixel Art"));
+					const bool savedDocument = (material != nullptr && material->SaveIfFocusedAndDirty(context)) || (pixels != nullptr && pixels->SaveIfFocusedAndDirty(context));
+					if (!savedDocument)
 					{
 						SaveCurrentScene(context);
 					}

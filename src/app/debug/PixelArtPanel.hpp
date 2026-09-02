@@ -39,6 +39,12 @@ namespace aether::editor
 		bool UndoIfFocused(app::LayerContext& context);
 		bool RedoIfFocused(app::LayerContext& context);
 
+		// Same reason: Ctrl+S over a focused canvas saved the SCENE and left the artwork
+		// dirty, so the one thing the artist meant to save was the one thing that did not
+		// get saved. Writes to the path the panel already shows, which is what its own
+		// Save button does.
+		bool SaveIfFocusedAndDirty(app::LayerContext& context);
+
 	private:
 		// A canvas waiting to be opened over unsaved artwork. The document has always known
 		// it was dirty; the Open button simply never asked.
