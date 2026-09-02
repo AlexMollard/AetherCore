@@ -651,6 +651,9 @@ namespace aether
 					float tail = 0.0f;
 					std::size_t clamped = 0;
 					std::size_t unthrottled = 0;
+					// The occlusion heuristic below compares against the display period, which is
+					// only what the tracker reports when presents are display-paced.
+					const bool fifoPresent = DesiredPresentMode(m_settings) == gpu::PresentMode::Fifo;
 					const auto flipPeriodMs = static_cast<float>(presentTiming.PeriodMs());
 					for (std::size_t i = 0; i < count; ++i)
 					{
@@ -672,7 +675,13 @@ namespace aether
 						// has stopped throttling us, so the sample says nothing about the engine.
 						// Two separate conclusions in this area were drawn from runs like this
 						// before the counter existed, and both were wrong.
-						if (flipPeriodMs > 0.0f && frame.wallMs < flipPeriodMs * 0.5f)
+						//
+						// Only meaningful under FIFO. Under MAILBOX the tracker reports the PRESENT
+						// period rather than the display period, so a loop running faster than the
+						// screen makes every frame look "unthrottled" - or, once the two converge,
+						// none of them. A "240 fps, unthrottled=0" sample read as trustworthy on
+						// exactly that mistake, and MAILBOX is now the default.
+						if (fifoPresent && flipPeriodMs > 0.0f && frame.wallMs < flipPeriodMs * 0.5f)
 						{
 							++unthrottled;
 						}
@@ -701,7 +710,7 @@ namespace aether
 					        // not warmed up. Print which.
 					        m_gpu->GetPresentTiming().HasEstimate() ? 1 : 0, m_gpu->GetPresentTiming().IsVariableRate() ? 1 : 0,
 					        clamped, unthrottled, m_lastFocused ? 1 : 0, m_focusChanges - reportedFocusChanges,
-					        unthrottled > count / 20 ? "  <-- SAMPLE UNRELIABLE, window was occluded" : "",
+					        (fifoPresent && unthrottled > count / 20) ? "  <-- SAMPLE UNRELIABLE, window was occluded" : "",
 					        // Focus decides whether DWM throttles this window at all, so a sample
 					        // that spans a change is two different measurements averaged together.
 					        m_focusChanges > reportedFocusChanges ? "  <-- SAMPLE UNRELIABLE, focus changed mid-sample" : "");
