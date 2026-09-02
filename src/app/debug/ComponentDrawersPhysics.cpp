@@ -427,9 +427,9 @@ namespace aether::editor
 			iw::PropLabel("Axis");
 			ImGui::DragFloat3("##axis", &joint->axis.x, 0.02f);
 			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-			PropFloat("Limit min", &joint->minLimit, 0.01f, 0.0f, 0.0f, "%.3f");
+			PropFloat("Limit min", &joint->minLimit, 0.01f, 0.0f, 0.0f, "%.3f", FieldTip("Joint", "min_limit"));
 			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-			PropFloat("Limit max", &joint->maxLimit, 0.01f, 0.0f, 0.0f, "%.3f");
+			PropFloat("Limit max", &joint->maxLimit, 0.01f, 0.0f, 0.0f, "%.3f", FieldTip("Joint", "max_limit"));
 			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 			ImGui::TextDisabled(joint->type == JointType::Hinge ? "Limits in radians; min>=max = free spin" : "Limits in metres; min>=max = free slide");
 		}
@@ -438,7 +438,7 @@ namespace aether::editor
 			PropFloat("Distance", &joint->distance, 0.02f, -1.0f, 10000.0f, "%.3f", "-1 = keep the distance at creation time");
 			rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 		}
-		rebuild |= PropCheckbox("Collide connected", &joint->collideConnected);
+		rebuild |= PropCheckbox("Collide connected", &joint->collideConnected, FieldTip("Joint", "collide_connected"));
 
 		if (rebuild && physics != nullptr)
 		{

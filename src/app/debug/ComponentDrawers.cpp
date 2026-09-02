@@ -29,6 +29,7 @@
 #include "editor/ModelBake.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
+#include "debug/ReflectedComponentDrawer.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
 #include "layers/AppLayer.hpp"
@@ -539,16 +540,16 @@ namespace aether::editor
 		}
 		if (cam->projection == CameraProjection::Orthographic)
 		{
-			PropFloat("Size", &cam->orthographicHeight, 0.1f, 0.01f, 100000.0f, "%.2f");
+			PropFloat("Size", &cam->orthographicHeight, 0.1f, 0.01f, 100000.0f, "%.2f", FieldTip("Camera", "orthographic_height"));
 			cam->orthographicHeight = std::max(0.001f, cam->orthographicHeight);
 		}
 		else
 		{
-			PropFloat("FOV", &cam->fovDegrees, 0.2f, 10.0f, 170.0f, "%.1f\xc2\xb0");
+			PropFloat("FOV", &cam->fovDegrees, 0.2f, 10.0f, 170.0f, "%.1f\xc2\xb0", FieldTip("Camera", "fov"));
 			cam->fovDegrees = std::clamp(cam->fovDegrees, 1.0f, 179.0f);
 		}
-		PropFloat("Near", &cam->nearPlane, 0.01f, 0.001f, 100.0f, "%.3f");
-		PropFloat("Far", &cam->farPlane, 1.0f, 0.1f, 100000.0f, "%.1f");
+		PropFloat("Near", &cam->nearPlane, 0.01f, 0.001f, 100.0f, "%.3f", FieldTip("Camera", "near"));
+		PropFloat("Far", &cam->farPlane, 1.0f, 0.1f, 100000.0f, "%.1f", FieldTip("Camera", "far"));
 		cam->nearPlane = std::max(0.001f, cam->nearPlane);
 		cam->farPlane = std::max(cam->nearPlane + 0.01f, cam->farPlane);
 
