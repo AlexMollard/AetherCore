@@ -1985,7 +1985,15 @@ namespace aether::editor
 					// Ctrl+S saves the focused material rather than the scene. Undoing the
 					// scene while looking at a half-edited graph is the surprising answer.
 					auto* material = dynamic_cast<MaterialGraphPanel*>(FindPanelByName("Material"));
-					const bool handled = material != nullptr && (redoCombo ? material->RedoIfFocused() : material->UndoIfFocused());
+					bool handled = material != nullptr && (redoCombo ? material->RedoIfFocused() : material->UndoIfFocused());
+					if (!handled)
+					{
+						// A pixel canvas is a document too, and it had only toolbar buttons:
+						// Ctrl+Z over it left the artwork alone and undid a scene edit made
+						// earlier instead, which is the worst of both answers.
+						auto* pixels = dynamic_cast<PixelArtPanel*>(FindPanelByName("Pixel Art"));
+						handled = pixels != nullptr && (redoCombo ? pixels->RedoIfFocused(context) : pixels->UndoIfFocused(context));
+					}
 					if (!handled)
 					{
 						ApplyHistoryStep(context, redoCombo);

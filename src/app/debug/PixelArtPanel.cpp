@@ -84,6 +84,7 @@ namespace aether::editor
 		// Fetched before Begin so the title can carry the unsaved marker.
 		auto* doc = context.TryGet<PixelArtDocument>();
 		ImGui::Begin(editor::DocumentTitle(GetName(), doc != nullptr && doc->Dirty()).c_str(), VisiblePtr());
+		m_focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
 		if (doc == nullptr)
 		{
@@ -417,6 +418,30 @@ namespace aether::editor
 				m_shaping = false;
 			}
 		}
+	}
+
+	bool PixelArtPanel::UndoIfFocused(app::LayerContext& context)
+	{
+		// IsVisible as well as focus: a hidden panel never draws, so m_focused would
+		// keep whatever it held when the panel was last closed and swallow the key.
+		auto* doc = context.TryGet<PixelArtDocument>();
+		if (!m_focused || !IsVisible() || doc == nullptr || !doc->CanUndo())
+		{
+			return false;
+		}
+		doc->Undo();
+		return true;
+	}
+
+	bool PixelArtPanel::RedoIfFocused(app::LayerContext& context)
+	{
+		auto* doc = context.TryGet<PixelArtDocument>();
+		if (!m_focused || !IsVisible() || doc == nullptr || !doc->CanRedo())
+		{
+			return false;
+		}
+		doc->Redo();
+		return true;
 	}
 
 	bool PixelArtPanel::HasUnsavedWork(app::LayerContext& context) const

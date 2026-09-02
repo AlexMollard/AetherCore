@@ -32,6 +32,13 @@ namespace aether::editor
 		[[nodiscard]] bool HasUnsavedWork(app::LayerContext& context) const override;
 		bool SaveUnsavedWork(app::LayerContext& context) override;
 
+		// The canvas is its own document with its own history, so Ctrl+Z has to reach it
+		// while it has focus. Without this the key fell through to the scene and undid an
+		// unrelated edit behind the artist's back - the canvas has toolbar buttons, so the
+		// stroke stayed put and only the scene moved.
+		bool UndoIfFocused(app::LayerContext& context);
+		bool RedoIfFocused(app::LayerContext& context);
+
 	private:
 		// A canvas waiting to be opened over unsaved artwork. The document has always known
 		// it was dirty; the Open button simply never asked.
@@ -69,6 +76,7 @@ namespace aether::editor
 		int m_lastX = 0;
 		int m_lastY = 0;
 
+		bool m_focused = false;
 		std::string m_savePath = "project://assets/textures/new_sprite.png";
 		std::string m_status;
 		int m_newW = 32;
