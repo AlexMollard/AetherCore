@@ -754,7 +754,7 @@ namespace aether::editor
 
 		methods.push_back({"scene.get",
 		        "get_entity",
-		        "Full detail for one entity by id: name, world position, scale, its component type list, and 'editable' - the subset of those names get_component and set_component accept. Unreflected internals appear in 'components' under their raw C++ type name; they are real, just not addressable.",
+		        "Full detail for one entity by id: name, world position, rotationEuler and scale (the same three channels scene.transform writes), its component type list, and 'editable' - the subset of those names get_component and set_component accept. Unreflected internals appear in 'components' under their raw C++ type name; they are real, just not addressable.",
 		        false,
 		        Obj({{"id", IntProp()}}, {"id"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -781,6 +781,15 @@ namespace aether::editor
 				        const glm::mat4& m = t->localToWorld;
 				        j["position"] = Vec3ToJson(glm::vec3(m[3]));
 				        j["scale"] = Vec3ToJson(aether::ExtractScale(m));
+				        // Reporting two thirds of a transform meant scene.transform could set a
+				        // rotation this method could not show, so a caller had no way to read back
+				        // the edit it had just made. Named to match the parameter that writes it,
+				        // and decomposed the same way the Transform component reports it.
+				        glm::vec3 decomposedPosition;
+				        glm::vec3 euler;
+				        glm::vec3 decomposedScale;
+				        aether::DecomposeTRS(m, decomposedPosition, euler, decomposedScale);
+				        j["rotationEuler"] = Vec3ToJson(euler);
 			        }
 			        // Report the catalog names get_component/set_component accept, not entt's raw
 			        // C++ type names - the raw list could not be fed back into any other method.
