@@ -307,10 +307,13 @@ namespace aether::editor
 			}
 			dl->PopClipRect();
 
-			// Live count, bottom-left.
+			// Live count, bottom-left. Sat on the font's height rather than a fixed 18px: at
+			// the 1.5x content scale of a high-DPI display the text is taller than that, so it
+			// overran the preview frame and the frame clipped its top off.
 			char meta[32];
 			std::snprintf(meta, sizeof(meta), "%zu particles", sim.particles.size());
-			dl->AddText(ImVec2(p0.x + 8.0f, p1.y - 18.0f), IM_COL32(150, 156, 170, 200), meta);
+			const float inset = ImGui::GetStyle().ItemInnerSpacing.y;
+			dl->AddText(ImVec2(p0.x + 8.0f, p1.y - ImGui::GetTextLineHeight() - inset), IM_COL32(150, 156, 170, 200), meta);
 		}
 	} // namespace
 
