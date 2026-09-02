@@ -37,3 +37,22 @@ TEST_CASE("Names that would not land where they say are rejected")
 	CHECK_FALSE(IsValidAssetName("."));
 	CHECK_FALSE(IsValidAssetName(".."));
 }
+
+// The predicate is only useful if the save functions actually consult it. These call the two
+// that had the bug; a rejected name returns before touching the filesystem, so the cases are
+// side-effect free and do not need a scratch directory.
+TEST_CASE("The save functions refuse a name that would not land where it says")
+{
+	const aether::app::scene::SceneDescription empty;
+
+	CHECK_FALSE(aether::app::scene::SaveSceneFile("bad:name", empty));
+	CHECK_FALSE(aether::app::scene::SaveSceneFile("sub/dir", empty));
+	CHECK_FALSE(aether::app::scene::SaveSceneFile("", empty));
+
+	// Prefab saving has no control method - it is reached only through the hierarchy's
+	// context menu, which the UI automation cannot drive - so this is the only place the
+	// guard on that path is exercised at all.
+	CHECK_FALSE(aether::app::scene::SavePrefabFile("bad:name", empty));
+	CHECK_FALSE(aether::app::scene::SavePrefabFile("../escape", empty));
+	CHECK_FALSE(aether::app::scene::SavePrefabFile("", empty));
+}
