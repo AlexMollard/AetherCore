@@ -29,6 +29,7 @@ namespace aether::editor
 		void DrawVerdict(const FrameStats& stats) const;
 		void DrawPacingStrip() const;
 		void DrawPhaseBreakdown() const;
+		void DrawLatency(app::LayerContext& context) const;
 		void DrawSimVsReal() const;
 		void DrawStutterList(const FrameStats& stats) const;
 

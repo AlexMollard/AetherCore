@@ -1,7 +1,9 @@
 #include "PerformancePanel.hpp"
+#include "AetherCore.hpp"
 #include "debug/EditorChrome.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cfloat>
 #include <cstdio>
 #include <string>
@@ -233,7 +235,14 @@ namespace aether::editor
 			} rows[] = {
 			        {"Game work", &FrameTiming::gameWorkMs},
 			        {"In-flight wait", &FrameTiming::inFlightWaitMs},
-			        {"Pacer wait", &FrameTiming::pacerWaitMs},
+			        {"Frame cap wait", &FrameTiming::pacerWaitMs},
+			        // These three were absent, and they are most of an idle editor's frame. A
+			        // breakdown that does not add up to the frame sends you hunting for time
+			        // that was being displayed all along - which is exactly what happened when
+			        // the same fields were missing from the log.
+			        {"Latency pacer idle", &FrameTiming::pacerIdleMs},
+			        {"Input staleness", &FrameTiming::inputStaleMs},
+			        {"Loop tail", &FrameTiming::tailMs},
 			        {"Render exec", &FrameTiming::renderExecMs},
 			        {"Present wait", &FrameTiming::presentWaitMs},
 			};
@@ -245,7 +254,57 @@ namespace aether::editor
 				ImGui::TableNextColumn();
 				ImGui::Text("%.3f", static_cast<double>(MeanOf(m_frames, row.field)));
 			}
+
+			// The producer's phases against the frame they have to fit inside. Render exec and
+			// present wait belong to the render thread and overlap the producer, so they are
+			// excluded from the sum rather than double-counted.
+			const float accounted = MeanOf(m_frames, &FrameTiming::gameWorkMs) + MeanOf(m_frames, &FrameTiming::inFlightWaitMs)
+			        + MeanOf(m_frames, &FrameTiming::pacerWaitMs) + MeanOf(m_frames, &FrameTiming::pacerIdleMs)
+			        + MeanOf(m_frames, &FrameTiming::tailMs);
+			const float wall = MeanOf(m_frames, &FrameTiming::wallMs);
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			ImGui::TextDisabled("accounted / frame");
+			ImGui::TableNextColumn();
+			const bool balances = wall <= 0.0f || std::abs(wall - accounted) < wall * 0.1f;
+			ImGui::TextColored(balances ? chrome::kMuted : chrome::kWarning, "%.3f / %.3f", static_cast<double>(accounted), static_cast<double>(wall));
 			ImGui::EndTable();
+		}
+	}
+
+	void PerformancePanel::DrawLatency(app::LayerContext& context) const
+	{
+		auto* engine = context.TryGet<AetherCore>();
+		if (engine == nullptr)
+		{
+			return;
+		}
+		ImGui::SeparatorText("Input latency");
+
+		// The only end-to-end number here: from the frame sampling input to that frame being
+		// on screen, measured by the present-wait thread. Everything in the breakdown above is
+		// a component of it, and none of them is a substitute for it.
+		const float latchToFlip = engine->LatchToFlipMs();
+		if (latchToFlip > 0.0f)
+		{
+			ImGui::Text("%.2f ms", static_cast<double>(latchToFlip));
+			ImGui::SameLine();
+			ImGui::TextDisabled("input to photons (measured)");
+		}
+		else
+		{
+			ImGui::TextDisabled("Not measured - needs VK_KHR_present_wait.");
+		}
+
+		// Focus decides whether the compositor throttles this window at all, so a reading
+		// taken while it is in the background describes a machine nobody is looking at.
+		if (!engine->IsWindowFocused())
+		{
+			ImGui::TextColored(chrome::kWarning, ICON_FA_TRIANGLE_EXCLAMATION "  Window is not focused - these numbers are not what you feel when using it.");
+		}
+		if (engine->IsIdleThrottled())
+		{
+			ImGui::TextDisabled("Idle throttled: the editor is deliberately running slowly because nothing is happening.");
 		}
 	}
 
@@ -329,15 +388,20 @@ namespace aether::editor
 			m_titleAccum = 0.0f;
 		}
 
-		char title[96]{};
-		std::snprintf(title, sizeof(title), "Performance  |  %.0f FPS  |  %.2f ms###Performance",
-		        static_cast<double>(m_titleFps), static_cast<double>(m_titleMs));
+		// An idle-throttled editor reads 10 FPS, which looks like a catastrophe rather than the
+		// deliberate power saving it is. Say so in the title, where the number is.
+		const auto* engine = context.TryGet<AetherCore>();
+		const bool idle = engine != nullptr && engine->IsIdleThrottled();
+		char title[128]{};
+		std::snprintf(title, sizeof(title), "Performance  |  %.0f FPS%s  |  %.2f ms###Performance",
+		        static_cast<double>(m_titleFps), idle ? " (idle)" : "", static_cast<double>(m_titleMs));
 
 		ImGui::Begin(title, VisiblePtr());
 		chrome::PanelHeader("PERFORMANCE");
 		DrawVerdict(stats);
 		DrawPacingStrip();
 		DrawPhaseBreakdown();
+		DrawLatency(context);
 		DrawSimVsReal();
 		DrawStutterList(stats);
 		ImGui::End();
