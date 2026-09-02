@@ -259,6 +259,11 @@ namespace aether::app::scene
 
 	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefabIn)
 	{
+		if (!IsValidAssetName(prefabName))
+		{
+			AE_WARN(LogCategory::App, "SavePrefabFile: '{}' is not a usable prefab name", prefabName);
+			return false;
+		}
 		const std::filesystem::path dir{PrefabsDirectory()};
 		if (!io::file_util::CreateDirectories(dir))
 		{
@@ -379,9 +384,9 @@ namespace aether::app::scene
 		return names;
 	}
 
-	bool IsValidSceneName(std::string_view sceneName)
+	bool IsValidAssetName(std::string_view assetName)
 	{
-		if (sceneName.empty())
+		if (assetName.empty())
 		{
 			return false;
 		}
@@ -390,7 +395,7 @@ namespace aether::app::scene
 		// alternate data stream, left a 0-byte file called "bad", and reported success - the
 		// scene simply was not where the user was told it was.
 		constexpr std::string_view kForbidden = "<>:\"/\\|?*";
-		for (const char c: sceneName)
+		for (const char c: assetName)
 		{
 			if (kForbidden.find(c) != std::string_view::npos || static_cast<unsigned char>(c) < 0x20)
 			{
@@ -398,12 +403,12 @@ namespace aether::app::scene
 			}
 		}
 		// "." and ".." name a directory, not a scene.
-		return sceneName.find_first_not_of('.') != std::string_view::npos;
+		return assetName.find_first_not_of('.') != std::string_view::npos;
 	}
 
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene)
 	{
-		if (!IsValidSceneName(sceneName))
+		if (!IsValidAssetName(sceneName))
 		{
 			AE_WARN(LogCategory::App, "SaveSceneFile: '{}' is not a usable scene name", sceneName);
 			return false;

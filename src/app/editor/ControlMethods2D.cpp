@@ -27,6 +27,7 @@
 #include "debug/UndoStack.hpp"
 #include "io/FileGlobOptions.hpp"
 #include "io/FileSystem.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/SceneSubsystem.hpp"
@@ -244,12 +245,19 @@ namespace aether::editor
 				        return json{{"error", "asset stores unavailable"}};
 			        }
 			        const std::string atlasPath = p.value("atlas", std::string{});
+			        // Checked before the atlas is loaded: the name becomes a filename, and a colon
+			        // or a separator does not fail loudly - it writes somewhere else and reports
+			        // success. Cheap string check before the expensive load.
+			        const std::string name = p.value("name", AtlasStem(atlasPath));
+			        if (!app::scene::IsValidAssetName(name))
+			        {
+				        return json{{"error", "'" + name + "' is not a usable tileset name"}};
+			        }
 			        const auto atlas = sprites->LoadAtlas(atlasPath);
 			        if (!atlas.has_value())
 			        {
 				        return json{{"error", "failed to load atlas '" + atlasPath + "': " + atlas.error().ToString()}};
 			        }
-			        const std::string name = p.value("name", AtlasStem(atlasPath));
 			        std::string directory = p.value("directory", std::string{"project://assets/tilemaps/"});
 			        if (!directory.empty() && directory.back() != '/')
 			        {
