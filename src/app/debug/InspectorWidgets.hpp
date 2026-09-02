@@ -232,6 +232,12 @@ namespace aether::editor::iw
 		ImGui::SetCursorPosX(columnX);
 	}
 
+	// Every Prop* helper below draws a WHOLE ROW: the label in the shared left column, then
+	// its widget filling what is left. They are not inline widgets. Pairing two with
+	// ImGui::SameLine() re-bases the second one's label column from wherever the cursor
+	// happens to be, so its widget lands somewhere off to the right instead of the value
+	// column, and neither one reads as belonging to its label. To put several small controls
+	// on one line, draw them yourself and use SameLineOrWrap above, which is built for it.
 	inline void PropLabel(const char* label)
 	{
 		LabelColumn(label);
