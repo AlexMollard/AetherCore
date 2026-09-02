@@ -2015,6 +2015,13 @@ namespace aether::editor
 					{
 						ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.35f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION "  Overwrites the existing '%s' scene", m_sceneNameBuf);
 					}
+					// The name becomes a filename, so it is refused rather than written
+					// somewhere else. Say so while they type instead of failing the click.
+					const bool nameOk = app::scene::IsValidAssetName(m_sceneNameBuf);
+					if (m_sceneNameBuf[0] != '\0' && !nameOk)
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.40f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION "  A scene name cannot contain  <>:\"/\\|?*");
+					}
 					ImGui::Spacing();
 					ImGui::SameLine(ImGui::GetContentRegionMax().x - 196.0f);
 					if (chrome::OutlineButton("Cancel", ImVec2(90.0f, 0.0f)))
@@ -2022,20 +2029,24 @@ namespace aether::editor
 						ImGui::CloseCurrentPopup();
 					}
 					ImGui::SameLine();
-					ImGui::BeginDisabled(m_sceneNameBuf[0] == '\0');
-					if (chrome::PrimaryButton(exists ? ICON_FA_FLOPPY_DISK "  Overwrite" : ICON_FA_FLOPPY_DISK "  Save", ImVec2(98.0f, 0.0f)) || (entered && m_sceneNameBuf[0] != '\0'))
+					ImGui::BeginDisabled(m_sceneNameBuf[0] == '\0' || !nameOk);
+					if (chrome::PrimaryButton(exists ? ICON_FA_FLOPPY_DISK "  Overwrite" : ICON_FA_FLOPPY_DISK "  Save", ImVec2(98.0f, 0.0f)) || (entered && m_sceneNameBuf[0] != '\0' && nameOk))
 					{
 						if (auto* assets = context.TryGet<AssetManager>())
 						{
 							const auto captured = app::scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
-							app::scene::SaveSceneFile(m_sceneNameBuf, captured);
-							m_sceneListDirty = true;
-							if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
+							// Only call it saved if it was. Renaming the current scene after a
+							// failed write told the user their work was somewhere it was not.
+							if (app::scene::SaveSceneFile(m_sceneNameBuf, captured))
 							{
-								scenes->SetCurrentScene(m_sceneNameBuf);
+								m_sceneListDirty = true;
+								if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
+								{
+									scenes->SetCurrentScene(m_sceneNameBuf);
+								}
+								ImGui::CloseCurrentPopup();
 							}
 						}
-						ImGui::CloseCurrentPopup();
 					}
 					ImGui::EndDisabled();
 					ImGui::EndPopup();
@@ -2082,6 +2093,13 @@ namespace aether::editor
 						{
 							ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.35f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION "  Overwrites the existing '%s' prefab", m_prefabNameBuf);
 						}
+						// The name becomes a filename, so it is refused rather than written
+						// somewhere else. Say so while they type instead of failing the click.
+						const bool prefabNameOk = app::scene::IsValidAssetName(m_prefabNameBuf);
+						if (m_prefabNameBuf[0] != '\0' && !prefabNameOk)
+						{
+							ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.40f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION "  A prefab name cannot contain  <>:\"/\\|?*");
+						}
 						ImGui::Spacing();
 						ImGui::SameLine(ImGui::GetContentRegionMax().x - 196.0f);
 						if (chrome::OutlineButton("Cancel", ImVec2(90.0f, 0.0f)))
@@ -2089,14 +2107,16 @@ namespace aether::editor
 							ImGui::CloseCurrentPopup();
 						}
 						ImGui::SameLine();
-						ImGui::BeginDisabled(m_prefabNameBuf[0] == '\0');
-						if (chrome::PrimaryButton(exists ? ICON_FA_FLOPPY_DISK "  Overwrite" : ICON_FA_FLOPPY_DISK "  Save", ImVec2(98.0f, 0.0f)) || (entered && m_prefabNameBuf[0] != '\0'))
+						ImGui::BeginDisabled(m_prefabNameBuf[0] == '\0' || !prefabNameOk);
+						if (chrome::PrimaryButton(exists ? ICON_FA_FLOPPY_DISK "  Overwrite" : ICON_FA_FLOPPY_DISK "  Save", ImVec2(98.0f, 0.0f)) || (entered && m_prefabNameBuf[0] != '\0' && prefabNameOk))
 						{
 							if (auto* assets = context.TryGet<AssetManager>())
 							{
-								app::scene::SavePrefabFile(m_prefabNameBuf, app::scene::CapturePrefab(world, m_prefabSaveTarget, assets->GetMaterialRegistry(), assets->GetTextureRegistry()));
+								if (app::scene::SavePrefabFile(m_prefabNameBuf, app::scene::CapturePrefab(world, m_prefabSaveTarget, assets->GetMaterialRegistry(), assets->GetTextureRegistry())))
+								{
+									ImGui::CloseCurrentPopup();
+								}
 							}
-							ImGui::CloseCurrentPopup();
 						}
 						ImGui::EndDisabled();
 					}
