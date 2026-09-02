@@ -61,7 +61,24 @@ namespace aether::editor
 			const TileSetAsset* tileSet = nullptr;
 		};
 
-		TileContext ResolveTileContext(const json& p, MethodContext& ctx, bool needAssets = true)
+		// Largest cell coordinate the engine can fully support. Past Box2D's 100000-unit vertex
+	// limit a chunk's tile collision is skipped (Physics2DSystem warns and carries on, rather
+	// than asserting the editor dead as it used to), so accepting a coordinate out there would
+	// quietly hand back a map with holes in its collision. Refuse it the way a bad tile index
+	// is refused.
+	[[nodiscard]] std::int32_t MaxAuthorableCell(float cellSize)
+	{
+		return static_cast<std::int32_t>(100000.0f / std::max(cellSize, 0.0001f));
+	}
+
+	[[nodiscard]] nlohmann::json CellRangeError(glm::ivec2 cell, std::int32_t limit)
+	{
+		return nlohmann::json{{"error",
+		        "cell (" + std::to_string(cell.x) + ", " + std::to_string(cell.y) + ") is outside the supported range of +/-"
+		                + std::to_string(limit) + " cells for this map's cell size; a tile that far out cannot carry collision"}};
+	}
+
+	TileContext ResolveTileContext(const json& p, MethodContext& ctx, bool needAssets = true)
 		{
 			TileContext result;
 			auto* scenes = ctx.services.TryGet<SceneSubsystem>();
@@ -432,6 +449,18 @@ namespace aether::editor
 				        return json{{"error", "'cells' must contain between 1 and " + std::to_string(kMaxPaintCells) + " entries"}};
 			        }
 
+			        // Checked before anything is painted: the loop below returns on the first
+			        // bad cell, so validating inside it would leave the earlier cells applied.
+			        const std::int32_t cellLimit = MaxAuthorableCell(tc.map->cellSize);
+			        for (const json& cell: cells)
+			        {
+				        const glm::ivec2 at{cell.value("x", 0), cell.value("y", 0)};
+				        if (std::abs(at.x) >= cellLimit || std::abs(at.y) >= cellLimit)
+				        {
+					        return CellRangeError(at, cellLimit);
+				        }
+			        }
+
 			        TilePaintStroke stroke;
 			        stroke.tilemapPath = tc.component->tilemapPath;
 			        std::size_t painted = 0;
@@ -488,6 +517,14 @@ namespace aether::editor
 			        }
 			        const glm::ivec2 lo{std::min(rect[0].get<std::int32_t>(), rect[2].get<std::int32_t>()), std::min(rect[1].get<std::int32_t>(), rect[3].get<std::int32_t>())};
 			        const glm::ivec2 hi{std::max(rect[0].get<std::int32_t>(), rect[2].get<std::int32_t>()), std::max(rect[1].get<std::int32_t>(), rect[3].get<std::int32_t>())};
+			        const std::int32_t cellLimit = MaxAuthorableCell(tc.map->cellSize);
+			        for (const glm::ivec2 corner: {lo, hi})
+			        {
+			        	if (std::abs(corner.x) >= cellLimit || std::abs(corner.y) >= cellLimit)
+			        	{
+			        		return CellRangeError(corner, cellLimit);
+			        	}
+			        }
 			        const std::size_t area = static_cast<std::size_t>(hi.x - lo.x + 1) * static_cast<std::size_t>(hi.y - lo.y + 1);
 			        if (area > 1'000'000)
 			        {
@@ -553,6 +590,14 @@ namespace aether::editor
 			        }
 			        const glm::ivec2 lo{std::min(rect[0].get<std::int32_t>(), rect[2].get<std::int32_t>()), std::min(rect[1].get<std::int32_t>(), rect[3].get<std::int32_t>())};
 			        const glm::ivec2 hi{std::max(rect[0].get<std::int32_t>(), rect[2].get<std::int32_t>()), std::max(rect[1].get<std::int32_t>(), rect[3].get<std::int32_t>())};
+			        const std::int32_t cellLimit = MaxAuthorableCell(tc.map->cellSize);
+			        for (const glm::ivec2 corner: {lo, hi})
+			        {
+			        	if (std::abs(corner.x) >= cellLimit || std::abs(corner.y) >= cellLimit)
+			        	{
+			        		return CellRangeError(corner, cellLimit);
+			        	}
+			        }
 			        json cells = json::array();
 			        bool truncated = false;
 			        for (std::int32_t y = lo.y; y <= hi.y && !truncated; ++y)
