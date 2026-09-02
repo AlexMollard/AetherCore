@@ -228,7 +228,10 @@ namespace aether::editor
 		ImGui::Spacing();
 		auto& palette = doc.Palette();
 		const float swatch = 22.0f;
-		const int perRow = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / (swatch + 4.0f)));
+		// n swatches occupy n*swatch + (n-1)*spacing. Assuming a 4px gap when the style says
+		// 8 overcounted the row, so the last swatch was drawn past the edge and cut in half.
+		const float spacing = ImGui::GetStyle().ItemSpacing.x;
+		const int perRow = std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + spacing) / (swatch + spacing)));
 		for (std::size_t i = 0; i < palette.size(); ++i)
 		{
 			ImGui::PushID(static_cast<int>(i));

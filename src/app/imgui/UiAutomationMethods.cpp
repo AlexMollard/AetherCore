@@ -105,7 +105,7 @@ namespace aether::editor
 	{
 		methods.push_back({"ui.query",
 		        "ui_query",
-		        "List on-screen ImGui widgets from the last frame: window, label, screen rect, hovered/active state, and whether the widget was clipped by its window (part of it, usually the end of a label, is not visible). Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click.",
+		        "List on-screen ImGui widgets from the last frame: window, label, screen rect, hovered/active state, and whether the widget was clipped by its window (part of it is not visible). Filter on clippedHorizontally to find controls drawn past the side of a panel; plain clipped also covers rows at the edge of a scrolling list, which is ordinary. Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click.",
 		        false,
 		        Obj({{"window", StrProp()}, {"label", StrProp()}}),
 		        [](const json& params, MethodContext&) -> json
@@ -124,7 +124,7 @@ namespace aether::editor
 				        {
 					        continue;
 				        }
-				        items.push_back(json{{"window", item.window}, {"label", item.label}, {"x", item.x}, {"y", item.y}, {"w", item.w}, {"h", item.h}, {"hovered", g != nullptr && g->HoveredId == item.id}, {"active", g != nullptr && g->ActiveId == item.id}, {"clipped", item.clipped}});
+				        items.push_back(json{{"window", item.window}, {"label", item.label}, {"x", item.x}, {"y", item.y}, {"w", item.w}, {"h", item.h}, {"hovered", g != nullptr && g->HoveredId == item.id}, {"active", g != nullptr && g->ActiveId == item.id}, {"clipped", item.clipped}, {"clippedHorizontally", item.clippedHorizontally}});
 			        }
 			        return json{{"items", std::move(items)}};
 		        }});

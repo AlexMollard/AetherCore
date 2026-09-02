@@ -21,10 +21,10 @@ namespace
 
 		Frame() { UiAutomation::Get().BeginFrameSwap(); }
 
-		Frame& Item(const char* window, const char* label, bool clipped = false)
+		Frame& Item(const char* window, const char* label, bool clipped = false, bool clippedHorizontally = false)
 		{
 			const unsigned int id = next++;
-			UiAutomation::Get().RecordItemAdd(id, 10.0f * static_cast<float>(id), 20.0f, 30.0f, 40.0f, window, clipped);
+			UiAutomation::Get().RecordItemAdd(id, 10.0f * static_cast<float>(id), 20.0f, 30.0f, 40.0f, window, clipped, clippedHorizontally);
 			UiAutomation::Get().RecordItemInfo(id, label);
 			return *this;
 		}
@@ -149,4 +149,29 @@ TEST_CASE("A clipped widget is recorded as clipped")
 	}
 	CHECK(sawWhole);
 	CHECK(sawCut);
+}
+
+TEST_CASE("Clipping records which axis it happened on")
+{
+	// Both are clipped, but only one is worth acting on. A row half-drawn at the bottom of a
+	// scrolling list is what scrolling looks like; a control drawn past the side of a panel
+	// is a control the user cannot reach.
+	Frame frame;
+	frame.Item("List", "Bottom row", /*clipped=*/true, /*clippedHorizontally=*/false);
+	frame.Item("Toolbar", "Off the side", /*clipped=*/true, /*clippedHorizontally=*/true);
+	frame.Commit();
+
+	for (const UiItem& item: UiAutomation::Get().Snapshot())
+	{
+		if (item.label == "Bottom row")
+		{
+			CHECK(item.clipped);
+			CHECK_FALSE(item.clippedHorizontally);
+		}
+		if (item.label == "Off the side")
+		{
+			CHECK(item.clipped);
+			CHECK(item.clippedHorizontally);
+		}
+	}
 }

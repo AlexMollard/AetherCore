@@ -14,10 +14,10 @@ namespace aether::app
 		return instance;
 	}
 
-	void UiAutomation::RecordItemAdd(unsigned int id, float x, float y, float w, float h, const char* window, bool clipped)
+	void UiAutomation::RecordItemAdd(unsigned int id, float x, float y, float w, float h, const char* window, bool clipped, bool clippedHorizontally)
 	{
 		m_buildingIndex[id] = m_building.size();
-		m_building.push_back(UiItem{id, std::string{}, window != nullptr ? window : "", x, y, w, h, clipped});
+		m_building.push_back(UiItem{id, std::string{}, window != nullptr ? window : "", x, y, w, h, clipped, clippedHorizontally});
 	}
 
 	void UiAutomation::RecordItemInfo(unsigned int id, const char* label)
@@ -138,7 +138,8 @@ void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb
 	// Partially outside only: an item entirely outside has simply been scrolled out of
 	// view, which is ordinary and would drown the genuinely half-drawn ones in noise.
 	const bool clipped = current != nullptr && current->ClipRect.Overlaps(bb) && !current->ClipRect.Contains(bb);
-	aether::app::UiAutomation::Get().RecordItemAdd(static_cast<unsigned int>(id), bb.Min.x, bb.Min.y, bb.Max.x - bb.Min.x, bb.Max.y - bb.Min.y, window, clipped);
+	const bool clippedHorizontally = clipped && (bb.Max.x > current->ClipRect.Max.x || bb.Min.x < current->ClipRect.Min.x);
+	aether::app::UiAutomation::Get().RecordItemAdd(static_cast<unsigned int>(id), bb.Min.x, bb.Min.y, bb.Max.x - bb.Min.x, bb.Max.y - bb.Min.y, window, clipped, clippedHorizontally);
 }
 
 void ImGuiTestEngineHook_ItemInfo(ImGuiContext*, ImGuiID id, const char* label, ImGuiItemStatusFlags)

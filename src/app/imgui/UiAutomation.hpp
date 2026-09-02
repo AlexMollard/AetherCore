@@ -28,6 +28,11 @@ namespace aether::app
 		// draws a truncated string, which is exactly the bug this exists to make
 		// measurable. An item scrolled fully out of view is not clipped in this sense.
 		bool clipped = false;
+		// Clipped on the HORIZONTAL axis specifically. A row straddling the bottom of a
+		// scrolling list is clipped too and is entirely ordinary, so that noise drowns the
+		// case worth acting on: a control drawn past the side of its panel, where nothing on
+		// screen says it is there.
+		bool clippedHorizontally = false;
 	};
 
 	// Global singleton bridging ImGui's test-engine item hooks and synthetic input
@@ -48,7 +53,7 @@ namespace aether::app
 		[[nodiscard]] UiInputScript& Input() { return m_input; }
 
 		// Hook sinks (called from the ImGuiTestEngineHook_* symbols):
-		void RecordItemAdd(unsigned int id, float x, float y, float w, float h, const char* window, bool clipped = false);
+		void RecordItemAdd(unsigned int id, float x, float y, float w, float h, const char* window, bool clipped = false, bool clippedHorizontally = false);
 		void RecordItemInfo(unsigned int id, const char* label);
 		[[nodiscard]] const char* DebugLabel(unsigned int id) const;
 
