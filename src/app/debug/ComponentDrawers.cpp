@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <format>
 #include <string>
 #include <vector>
 
@@ -27,7 +28,6 @@
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ModelBake.hpp"
 #include "debug/Icons.hpp"
-#include "utils/Logger.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
@@ -324,19 +324,7 @@ namespace aether::editor
 		// Adds the component to an entity that does not have it, so a copy can be pasted
 		// onto a fresh entity rather than only over an existing one. Uses the catalog so
 		// this knows nothing about individual component types.
-		bool AddComponentByName(World& world, Entity entity, const std::string& name, ServiceContainer& services)
-		{
-			for (const editor::ComponentCatalogEntry& entry: editor::ComponentCatalog())
-			{
-				if (entry.name != name || entry.add == nullptr)
-				{
-					continue;
-				}
-				entry.add(world, entity, services);
-				return true;
-			}
-			return false;
-		}
+
 	}
 
 	iw::ComponentMenuTarget MenuFor(ServiceContainer& services, World& world, Entity entity, const char* component)
@@ -360,7 +348,7 @@ namespace aether::editor
 		nlohmann::json before;
 		bool isReflected = clipboard.isReflected;
 		const bool existed = CaptureComponentFields(world, entity, clipboard.component, services, before, isReflected);
-		if (!existed && !AddComponentByName(world, entity, clipboard.component, services))
+		if (!existed && !AddComponentTo(world, entity, clipboard.component, services))
 		{
 			return;
 		}
@@ -409,10 +397,35 @@ namespace aether::editor
 			}
 		}
 		const bool sameType = Clipboard().component == component;
+
+		// Setting several objects up the same way is the case this exists for, so a paste
+		// applies to every selected entity rather than only the one that was right-clicked.
+		// Only when the clicked entity is part of that selection: right-clicking something
+		// outside it means acting on that thing, not on the selection.
+		const auto* selection = services.TryGet<SceneSelection>();
+		const bool multi = selection != nullptr && selection->Contains(entity) && selection->All().size() > 1;
+		const std::string pasteLabel = multi ? std::format("Paste Values ({} entities)", selection->All().size()) : std::string("Paste Values");
+
 		ImGui::BeginDisabled(!sameType);
-		if (ImGui::Selectable("Paste Values"))
+		if (ImGui::Selectable(pasteLabel.c_str()))
 		{
-			PasteComponentInto(services, world, entity);
+			if (multi)
+			{
+				// One undo step for the whole paste: undoing a bulk edit one entity at a time
+				// is not what anyone means by undo.
+				const UndoStack::ScopedGroup group(services.TryGet<UndoStack>(), std::string("Paste ") + component);
+				for (const Entity selected: selection->All())
+				{
+					if (selected.IsValid() && world.GetRegistry().valid(World::ToEntt(selected)))
+					{
+						PasteComponentInto(services, world, selected);
+					}
+				}
+			}
+			else
+			{
+				PasteComponentInto(services, world, entity);
+			}
 		}
 		ImGui::EndDisabled();
 		if (!sameType && !Clipboard().component.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))

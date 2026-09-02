@@ -413,6 +413,37 @@ namespace aether::editor
 
 	// ── Component command helpers ──────────────────────────────────────
 
+	bool AddComponentTo(World& world, Entity entity, const std::string& type, ServiceContainer& services)
+	{
+		if (const ComponentCatalogEntry* entry = FindComponent(type); entry != nullptr && entry->add)
+		{
+			entry->add(world, entity, services);
+			EnableComponentFeatures(world, *entry);
+			return true;
+		}
+		if (const reflect::ComponentType* rt = reflect::FindComponentType(type); rt != nullptr && rt->emplaceDefault)
+		{
+			(void) rt->emplaceDefault(world, entity);
+			return true;
+		}
+		return false;
+	}
+
+	bool RemoveComponentFrom(World& world, Entity entity, const std::string& type)
+	{
+		if (const ComponentCatalogEntry* entry = FindComponent(type); entry != nullptr && entry->remove)
+		{
+			entry->remove(world, entity);
+			return true;
+		}
+		if (const reflect::ComponentType* rt = reflect::FindComponentType(type); rt != nullptr && rt->remove)
+		{
+			rt->remove(world, entity);
+			return true;
+		}
+		return false;
+	}
+
 	bool CaptureComponentFields(World& world, Entity entity, const std::string& type, ServiceContainer& services, nlohmann::json& out, bool& isReflected)
 	{
 		if (const auto* rt = reflect::FindComponentType(type))
@@ -500,11 +531,7 @@ namespace aether::editor
 		{
 			return;
 		}
-		const ComponentCatalogEntry* entry = FindComponent(m_componentName);
-		if (entry != nullptr && entry->remove)
-		{
-			entry->remove(world, entity);
-		}
+		(void) RemoveComponentFrom(world, entity, m_componentName);
 	}
 
 	void AddComponentCommand::Redo(World& world, ServiceContainer& services)
@@ -514,12 +541,7 @@ namespace aether::editor
 		{
 			return;
 		}
-		const ComponentCatalogEntry* entry = FindComponent(m_componentName);
-		if (entry != nullptr && entry->add)
-		{
-			entry->add(world, entity, services);
-			EnableComponentFeatures(world, *entry);
-		}
+		(void) AddComponentTo(world, entity, m_componentName, services);
 	}
 
 	// ── RemoveComponentCommand ─────────────────────────────────────────
@@ -536,20 +558,9 @@ namespace aether::editor
 		{
 			return;
 		}
-		const ComponentCatalogEntry* entry = FindComponent(m_componentName);
-		if (entry != nullptr && entry->add)
-		{
-			entry->add(world, entity, services);
-			EnableComponentFeatures(world, *entry);
-		}
-		else if (const auto* rt = reflect::FindComponentType(m_componentName); rt != nullptr && rt->emplaceDefault && rt->tryGetRaw(world, entity) == nullptr)
-		{
-			// The catalog is a UI menu, not a registry of every component: colliders live in
-			// it under shape-specific names ("Box Collider"), so a lookup by the reflected
-			// name finds nothing and the component is never re-created. Reflection knows how
-			// to make it, and ApplyComponentFields below needs it to exist or it gives up.
-			(void) rt->emplaceDefault(world, entity);
-		}
+		// The component has to exist again before its values can go back: ApplyComponentFields
+		// gives up on a missing component.
+		(void) AddComponentTo(world, entity, m_componentName, services);
 		if (!m_snapshot.empty())
 		{
 			ApplyComponentFields(world, entity, m_componentName, m_snapshot, m_isReflected, services);
@@ -563,11 +574,7 @@ namespace aether::editor
 		{
 			return;
 		}
-		const ComponentCatalogEntry* entry = FindComponent(m_componentName);
-		if (entry != nullptr && entry->remove)
-		{
-			entry->remove(world, entity);
-		}
+		(void) RemoveComponentFrom(world, entity, m_componentName);
 	}
 
 	// ── SetComponentCommand ────────────────────────────────────────────

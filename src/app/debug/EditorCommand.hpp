@@ -573,6 +573,14 @@ namespace aether::editor
 	// always proceed (and handle an empty snapshot) may ignore the result.
 	bool CaptureComponentFields(World& world, Entity entity, const std::string& type, ServiceContainer& services, nlohmann::json& out, bool& isReflected);
 
+	// Add or remove a component by its reflected name. The component catalog is a UI menu
+	// rather than a registry - it lists colliders under shape-specific names like "Box
+	// Collider" - so a lookup by reflected name misses them and every caller that used the
+	// catalog alone silently did nothing. These fall back to reflection, which knows every
+	// component by its real name. Return whether the component was actually added/removed.
+	bool AddComponentTo(World& world, Entity entity, const std::string& type, ServiceContainer& services);
+	bool RemoveComponentFrom(World& world, Entity entity, const std::string& type);
+
 	// Apply a JSON field snapshot to a component through the reflected or
 	// hand-authored path as indicated by isReflected.
 	void ApplyComponentFields(World& world, Entity entity, const std::string& type, const nlohmann::json& values, bool isReflected, ServiceContainer& services);
