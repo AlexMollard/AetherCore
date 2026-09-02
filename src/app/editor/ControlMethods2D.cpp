@@ -293,6 +293,17 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 			        }
 			        const bool solid = p.value("solid", false);
 
+			        // An atlas that loads but holds no sprites produced an empty tileset and
+			        // still reported success, leaving two asset files, a Tile Map component
+			        // bound to the entity, and a map nothing could ever be painted on because
+			        // every tile index is out of range. The usual cause is passing a
+			        // .tileset.toml where a .spriteatlas.toml belongs - it parses, it just
+			        // describes no sprites. Refused before anything is written.
+			        if ((*atlas)->sprites.empty())
+			        {
+				        return json{{"error", "atlas '" + atlasPath + "' defines no sprites, so there would be nothing to paint with (a .tileset.toml is not a .spriteatlas.toml - call atlas.slice to make one from a texture)"}};
+			        }
+
 			        TileSetAsset tileSet;
 			        tileSet.name = name;
 			        tileSet.cellSize = cellSize;
