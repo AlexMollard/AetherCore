@@ -2970,7 +2970,17 @@ namespace aether::editor
 				}
 				ImGui::Spacing();
 			}
-			ImGui::TextDisabled("This cannot be undone.");
+			// Says what actually happens. Claiming a delete cannot be undone when it goes to the
+			// recycle bin makes people hesitate over something reversible - and the one time it
+			// really is permanent, they have learned to discount the warning.
+			if (io::file_util::HasTrashSupport())
+			{
+				ImGui::TextDisabled("Moved to the %s, so you can restore it from there.", std::string(io::file_util::TrashDisplayName()).c_str());
+			}
+			else
+			{
+				ImGui::TextDisabled("This cannot be undone.");
+			}
 			if (m_deleteReferenceCount > 0)
 			{
 				// Unlike a rename, a delete has nowhere to repoint these: whatever used the

@@ -35,6 +35,15 @@ namespace aether::io::file_util
 	// in the confirmation it shows.
 	[[nodiscard]] bool MoveToTrash(const std::filesystem::path& path);
 
+	// Whether MoveToTrash can be expected to work here. For wording a confirmation honestly:
+	// a dialog that says a delete cannot be undone when it goes to the recycle bin is telling
+	// the user something false about a destructive action.
+	[[nodiscard]] bool HasTrashSupport();
+
+	// What this platform calls it, so the confirmation uses the words the user's own file
+	// manager does.
+	[[nodiscard]] std::string_view TrashDisplayName();
+
 	// The body of a freedesktop.org .trashinfo file: what Linux file managers read to offer
 	// "restore". Exposed (and compiled on every platform) so the encoding rules can be tested
 	// without a Linux desktop - a malformed Path= leaves a file in the trash that nothing can

@@ -22,6 +22,27 @@
 
 namespace aether::io::file_util
 {
+	bool HasTrashSupport()
+	{
+#if defined(_WIN32)
+		return true;
+#else
+		// Same discovery MoveToTrash does: with neither variable there is nowhere to put it.
+		const char* xdg = std::getenv("XDG_DATA_HOME");
+		const char* home = std::getenv("HOME");
+		return (xdg != nullptr && xdg[0] != 0) || (home != nullptr && home[0] != 0);
+#endif
+	}
+
+	std::string_view TrashDisplayName()
+	{
+#if defined(_WIN32)
+		return "Recycle Bin";
+#else
+		return "Trash";
+#endif
+	}
+
 	std::string BuildTrashInfo(const std::filesystem::path& originalPath, const std::string_view deletionDateIso)
 	{
 		// Path is percent-encoded per RFC 2396, except '/' which stays a separator. Without

@@ -80,3 +80,17 @@ TEST_CASE("BuildTrashInfo leaves unreserved characters alone")
 
 	CHECK(info.find("Path=/a/b-c_d.e~f/g.png") != std::string::npos);
 }
+
+// The delete confirmation words itself from these, so they have to agree with what
+// MoveToTrash will actually do - a dialog promising the recycle bin on a platform without
+// one is the same lie as the "cannot be undone" it replaced, pointing the other way.
+TEST_CASE("Trash support is advertised consistently with the platform")
+{
+#if defined(_WIN32)
+	CHECK(aether::io::file_util::HasTrashSupport());
+	CHECK(aether::io::file_util::TrashDisplayName() == "Recycle Bin");
+#else
+	CHECK(aether::io::file_util::TrashDisplayName() == "Trash");
+#endif
+	CHECK_FALSE(aether::io::file_util::TrashDisplayName().empty());
+}
