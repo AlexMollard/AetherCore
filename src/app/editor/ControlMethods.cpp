@@ -1388,7 +1388,15 @@ namespace aether::editor
 				return ErrNoEntity();
 			}
 			const std::string type = p.value("type", std::string{});
-			const json values = (p.contains("values") && p["values"].is_object()) ? p["values"] : json::object();
+			// get_component hands the object back under "fields", so accept that spelling too.
+			// Reading a component, changing one number and posting it straight back is the
+			// obvious thing to do with this pair, and it failed on the key name alone.
+			const auto objectAt = [&p](const char* key) { return p.contains(key) && p[key].is_object(); };
+			if (!objectAt("values") && !objectAt("fields"))
+			{
+				return json{{"error", "missing 'values' (an object of field name to value; 'fields' is accepted too, so get_component output can be posted back)"}};
+			}
+			const json values = objectAt("values") ? p["values"] : p["fields"];
 			// Capture the before-state for undo.
 			json beforeSnapshot;
 			bool isReflected = false;
@@ -1475,21 +1483,21 @@ namespace aether::editor
 		methods.push_back({"scene.set_component",
 		        "set_component",
 		        "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change "
-		        "(partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
+		        "(partial update; call get_component or list_component_types for field names/types). 'fields' is accepted as a synonym, so get_component output can be posted straight back. Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
 		        true,
-		        Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type", "values"}),
+		        Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}, {"fields", json{{"type", "object"}}}}, {"id", "type"}),
 		        setComponent});
 
 		const json componentSpec = Obj({{"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"type"});
 		const json entitySpec = Obj({{"name", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}, {"components", json{{"type", "array"}, {"items", componentSpec}, {"maxItems", 64}}}});
 		const json transformSpec = Obj({{"id", IntProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"id"});
 		const json componentItemSpec = Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type"});
-		const json setComponentSpec = Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}}, {"id", "type", "values"});
+		const json setComponentSpec = Obj({{"id", IntProp()}, {"type", StrProp()}, {"values", json{{"type", "object"}}}, {"fields", json{{"type", "object"}}}}, {"id", "type"});
 
 		const auto addComponentWithValues = [addComponent, setComponent](const json& p, MethodContext& ctx) -> json
 		{
 			json added = addComponent(p, ctx);
-			if (added.contains("error") || !p.contains("values"))
+			if (added.contains("error") || (!p.contains("values") && !p.contains("fields")))
 			{
 				return added;
 			}
