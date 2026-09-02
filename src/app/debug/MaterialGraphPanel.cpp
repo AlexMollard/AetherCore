@@ -1029,86 +1029,6 @@ namespace aether::editor
 		RefreshPreview(context);
 	}
 
-	void MaterialGraphPanel::RecordGraphHistory()
-	{
-		if (!m_graph)
-		{
-			return;
-		}
-		// Only while the graph is at rest. Dragging a node or a slider changes the signature
-		// every frame, and recording each one would make a single drag take fifty presses of
-		// Ctrl+Z to undo. Same quiescence test the auto-compile uses - a node drag holds the
-		// mouse without any item being active.
-		if (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left))
-		{
-			return;
-		}
-
-		std::string signature = GraphSignature();
-		if (!m_graphSnapshot)
-		{
-			m_graphSnapshot = *m_graph;
-			m_graphSnapshotSignature = std::move(signature);
-			return;
-		}
-		if (signature == m_graphSnapshotSignature)
-		{
-			return;
-		}
-
-		m_graphUndo.push_back(*m_graphSnapshot);
-		// A new edit invalidates anything that was undone, as everywhere else.
-		m_graphRedo.clear();
-		constexpr std::size_t kMaxGraphHistory = 64;
-		if (m_graphUndo.size() > kMaxGraphHistory)
-		{
-			m_graphUndo.erase(m_graphUndo.begin());
-		}
-		m_graphSnapshot = *m_graph;
-		m_graphSnapshotSignature = std::move(signature);
-		// A graph edit is an unsaved change to the material. Nothing set this before, so the
-		// title carried no asterisk and the unsaved-switch guard let a graph-only edit be
-		// thrown away without asking.
-		m_edit.dirty = true;
-	}
-
-	void MaterialGraphPanel::ApplyGraphHistory(std::vector<MaterialGraph>& from, std::vector<MaterialGraph>& to)
-	{
-		if (!m_graph || from.empty())
-		{
-			return;
-		}
-		to.push_back(*m_graph);
-		*m_graph = from.back();
-		from.pop_back();
-		// Re-baseline, or the restored state reads as a fresh edit and gets recorded again.
-		m_graphSnapshot = *m_graph;
-		m_graphSnapshotSignature = GraphSignature();
-		// The file no longer matches what is on screen; the title asterisk and the unsaved
-		// guard both key off this, and auto-compile picks the change up on its own.
-		m_edit.dirty = true;
-	}
-
-	bool MaterialGraphPanel::UndoIfFocused()
-	{
-		if (!m_focused || m_graphUndo.empty())
-		{
-			return false;
-		}
-		ApplyGraphHistory(m_graphUndo, m_graphRedo);
-		return true;
-	}
-
-	bool MaterialGraphPanel::RedoIfFocused()
-	{
-		if (!m_focused || m_graphRedo.empty())
-		{
-			return false;
-		}
-		ApplyGraphHistory(m_graphRedo, m_graphUndo);
-		return true;
-	}
-
 	bool MaterialGraphPanel::SaveIfFocusedAndDirty(app::LayerContext& context)
 	{
 		if (!m_focused || !m_edit.loaded || !m_edit.dirty || m_path.empty())
@@ -1406,7 +1326,6 @@ namespace aether::editor
 				}
 			}
 		}
-		RecordGraphHistory();
 		ImGui::End();
 	}
 

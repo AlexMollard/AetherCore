@@ -43,11 +43,6 @@ namespace aether::editor
 		// Returns true when it handled the save.
 		bool SaveIfFocusedAndDirty(app::LayerContext& context);
 
-		// Ctrl+Z with this window focused belongs to the graph, not the scene - the same
-		// routing Ctrl+S already uses. Returns true when it consumed the keystroke.
-		bool UndoIfFocused();
-		bool RedoIfFocused();
-
 	public:
 		[[nodiscard]] bool HasUnsavedWork(app::LayerContext& context) const override;
 		bool SaveUnsavedWork(app::LayerContext& context) override;
@@ -90,17 +85,6 @@ namespace aether::editor
 
 		// Present only when this material's shader comes from a graph.
 		std::optional<MaterialGraph> m_graph;
-		// Graph history. Snapshots rather than typed commands: a MaterialGraph is a couple of
-		// vectors, so copying one is cheaper than describing every way it can change, and it
-		// cannot drift out of step with the edit that produced it.
-		std::vector<MaterialGraph> m_graphUndo;
-		std::vector<MaterialGraph> m_graphRedo;
-		// The graph as of the last recorded point, and its signature, so a change can be
-		// detected without diffing.
-		std::optional<MaterialGraph> m_graphSnapshot;
-		std::string m_graphSnapshotSignature;
-		void RecordGraphHistory();
-		void ApplyGraphHistory(std::vector<MaterialGraph>& from, std::vector<MaterialGraph>& to);
 		std::string m_compiledSignature; // the graph as last compiled, to detect a real change
 		std::string m_submittedSignature; // the graph as last SENT to the compiler
 		// The slangc run in flight. Held as a future rather than a raw thread so that
