@@ -22,6 +22,9 @@ namespace aether::editor::shortcuts
 		Scene,
 		Viewport,
 		TilePalette,
+		Assets,
+		UiCanvas,
+		MaterialGraph,
 	};
 
 	struct Binding
@@ -66,13 +69,32 @@ namespace aether::editor::shortcuts
 	inline constexpr Binding kTileFlipX{ImGuiKey_X, "X", "Flip the stamp horizontally", Context::TilePalette};
 	inline constexpr Binding kTileFlipY{ImGuiKey_Y, "Shift+Y", "Flip the stamp vertically", Context::TilePalette};
 
+	inline constexpr Binding kAssetsSelectAll{ImGuiKey_A, "Ctrl+A", "Select everything the folder is showing", Context::Assets};
+	inline constexpr Binding kAssetsDuplicate{ImGuiKey_D, "Ctrl+D", "Duplicate the selected files", Context::Assets};
+	inline constexpr Binding kAssetsRename{ImGuiKey_F2, "F2", "Rename", Context::Assets};
+	inline constexpr Binding kAssetsDelete{ImGuiKey_Delete, "Delete", "Delete, after the usual confirmation", Context::Assets};
+	inline constexpr Binding kAssetsOpen{ImGuiKey_Enter, "Enter", "Open the file, or enter the folder", Context::Assets};
+	inline constexpr Binding kAssetsUp{ImGuiKey_Backspace, "Backspace", "Go up to the parent folder", Context::Assets};
+
+	// The arrow entries name a direction set rather than a single key, so the call site
+	// tests all four. The display string is what the user needs; the key is the one the
+	// binding is filed under.
+	inline constexpr Binding kCanvasNudge{ImGuiKey_LeftArrow, "Arrows", "Nudge the selected rect by a pixel, Shift for ten", Context::UiCanvas};
+	inline constexpr Binding kCanvasFrame{ImGuiKey_F, "F", "Zoom to fit the selection", Context::UiCanvas};
+
+	inline constexpr Binding kGraphAddNode{ImGuiKey_Space, "Space", "Add a node at the cursor", Context::MaterialGraph};
+	inline constexpr Binding kGraphDelete{ImGuiKey_Delete, "Delete  /  X", "Delete the selected nodes and links", Context::MaterialGraph};
+
 	// Everything above, for the reference to render. A binding missing from here is a binding
 	// nobody can discover, so add to this when you add one.
 	inline constexpr Binding kAll[] = {
 	        kCommandPalette, kSave, kUndo, kRedo, kShortcuts, kReloadScripts, kPausePlay, kStepFrame,
 	        kCopy, kCut, kPaste, kDuplicate, kGroup, kRename, kDelete,
 	        kGizmoMove, kGizmoRotate, kGizmoScale, kFrameSelection,
-	        kTilePencil, kTileRectangle, kTileFill, kTileErase, kTilePicker, kTileFlipX, kTileFlipY};
+	        kTilePencil, kTileRectangle, kTileFill, kTileErase, kTilePicker, kTileFlipX, kTileFlipY,
+	        kAssetsSelectAll, kAssetsDuplicate, kAssetsRename, kAssetsDelete, kAssetsOpen, kAssetsUp,
+	        kCanvasNudge, kCanvasFrame,
+	        kGraphAddNode, kGraphDelete};
 
 	[[nodiscard]] inline std::span<const Binding> All()
 	{

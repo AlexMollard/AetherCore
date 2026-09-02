@@ -26,6 +26,7 @@
 
 #include "assets/AssetManager.hpp"
 #include "debug/EditorDragDrop.hpp"
+#include "debug/EditorShortcuts.hpp"
 #include "debug/Icons.hpp"
 #include "debug/OpenInEditor.hpp"
 #include "debug/SceneSelection.hpp"
@@ -2330,7 +2331,7 @@ namespace aether::editor
 		}
 
 		const ImGuiIO& shortcutIo = ImGui::GetIO();
-		if (shortcutIo.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A))
+		if (shortcutIo.KeyCtrl && ImGui::IsKeyPressed(shortcuts::kAssetsSelectAll.key))
 		{
 			// Everything the folder is showing, in the order it is shown.
 			m_selectedPaths = order;
@@ -2340,7 +2341,7 @@ namespace aether::editor
 			}
 			return;
 		}
-		if (shortcutIo.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D))
+		if (shortcutIo.KeyCtrl && ImGui::IsKeyPressed(shortcuts::kAssetsDuplicate.key))
 		{
 			// Every selected file, matching what delete and drag already do. Folders are
 			// skipped: DuplicateEntry copies a file, and silently doing nothing for a folder
@@ -2370,17 +2371,17 @@ namespace aether::editor
 			return;
 		}
 
-		if (ImGui::IsKeyPressed(ImGuiKey_F2))
+		if (ImGui::IsKeyPressed(shortcuts::kAssetsRename.key))
 		{
 			BeginRename(*selected);
 		}
-		else if (ImGui::IsKeyPressed(ImGuiKey_Delete))
+		else if (ImGui::IsKeyPressed(shortcuts::kAssetsDelete.key))
 		{
 			// Straight to the same confirmation the menu opens, reference count and all -
 			// never a silent delete on a keypress.
 			BeginDelete(*selected);
 		}
-		else if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))
+		else if (ImGui::IsKeyPressed(shortcuts::kAssetsOpen.key) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))
 		{
 			if (selected->isDirectory)
 			{
@@ -2395,7 +2396,7 @@ namespace aether::editor
 				OpenInOS(selected->path);
 			}
 		}
-		else if (ImGui::IsKeyPressed(ImGuiKey_Backspace) && m_currentDir != m_root)
+		else if (ImGui::IsKeyPressed(shortcuts::kAssetsUp.key) && m_currentDir != m_root)
 		{
 			m_pendingOpenDir = m_currentDir.parent_path();
 		}

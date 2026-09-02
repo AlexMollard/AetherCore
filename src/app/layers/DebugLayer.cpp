@@ -514,7 +514,6 @@ namespace aether::editor
 		}
 	}
 
-
 	void DebugLayer::PersistSettings(app::LayerContext& context)
 	{
 		for (auto& panel: m_panels)
@@ -968,11 +967,7 @@ namespace aether::editor
 					divider();
 					const bool hasErrors = engineErrors > 0;
 					char engineLabel[64];
-					std::snprintf(engineLabel,
-					        sizeof(engineLabel),
-					        "%s  %zu##engineLog",
-					        hasErrors ? ICON_FA_CIRCLE_EXCLAMATION : ICON_FA_TRIANGLE_EXCLAMATION,
-					        hasErrors ? engineErrors : logCounts.warn);
+					std::snprintf(engineLabel, sizeof(engineLabel), "%s  %zu##engineLog", hasErrors ? ICON_FA_CIRCLE_EXCLAMATION : ICON_FA_TRIANGLE_EXCLAMATION, hasErrors ? engineErrors : logCounts.warn);
 					ImGui::PushStyleColor(ImGuiCol_Text, hasErrors ? C(colors::Error) : C(colors::Orange));
 					ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(hasErrors ? C(colors::Error) : C(colors::Orange), 0.18f));
 					const float engineWidth = ImGui::CalcTextSize(engineLabel, nullptr, true).x;
@@ -1061,8 +1056,7 @@ namespace aether::editor
 			ImGui::PopStyleColor();
 			if (idleThrottled)
 			{
-				ImGui::SetItemTooltip("Nothing is happening, so the editor has dropped to %.0f fps to save power. It returns to full speed the moment you interact with it.",
-				        static_cast<double>(io.Framerate));
+				ImGui::SetItemTooltip("Nothing is happening, so the editor has dropped to %.0f fps to save power. It returns to full speed the moment you interact with it.", static_cast<double>(io.Framerate));
 			}
 			if (!ms.empty())
 			{
@@ -1085,11 +1079,15 @@ namespace aether::editor
 			const char* title;
 			shortcuts::Context context;
 		};
+
 		static constexpr Group kGroups[] = {
 		        {"Global", shortcuts::Context::Global},
 		        {"Scene  (Hierarchy)", shortcuts::Context::Scene},
 		        {"Viewport", shortcuts::Context::Viewport},
 		        {"Tile Palette", shortcuts::Context::TilePalette},
+		        {"Assets", shortcuts::Context::Assets},
+		        {"UI Canvas", shortcuts::Context::UiCanvas},
+		        {"Material Graph", shortcuts::Context::MaterialGraph},
 		};
 
 		constexpr const char* kTitle = "Keyboard Shortcuts###shortcuts";
@@ -1104,25 +1102,44 @@ namespace aether::editor
 		{
 			return;
 		}
-		for (const Group& group: kGroups)
+		// Two columns, because the list grows every time a panel gains a binding and an
+		// auto-resizing popup has no scrollbar: one column would eventually run off the
+		// bottom of a shorter screen with no way to reach the rest.
+		if (ImGui::BeginTable("##shortcutColumns", 2, ImGuiTableFlags_SizingFixedFit))
 		{
-			ImGui::SeparatorText(group.title);
-			if (ImGui::BeginTable(group.title, 2, ImGuiTableFlags_SizingFixedFit))
+			const int half = (static_cast<int>(shortcuts::All().size()) + 1) / 2;
+			int drawn = 0;
+			bool wrapped = false;
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			for (const Group& group: kGroups)
 			{
-				for (const shortcuts::Binding& entry: shortcuts::All())
+				// Break to the second column between sections, never inside one.
+				if (!wrapped && drawn >= half)
 				{
-					if (entry.context != group.context)
-					{
-						continue;
-					}
-					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
-					ImGui::TextColored(chrome::kAccentHi, "%s", entry.display);
-					ImGui::TableNextColumn();
-					ImGui::TextUnformatted(entry.description);
+					wrapped = true;
 				}
-				ImGui::EndTable();
+				ImGui::SeparatorText(group.title);
+				if (ImGui::BeginTable(group.title, 2, ImGuiTableFlags_SizingFixedFit))
+				{
+					for (const shortcuts::Binding& entry: shortcuts::All())
+					{
+						if (entry.context != group.context)
+						{
+							continue;
+						}
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn();
+						ImGui::TextColored(chrome::kAccentHi, "%s", entry.display);
+						ImGui::TableNextColumn();
+						ImGui::TextUnformatted(entry.description);
+						++drawn;
+					}
+					ImGui::EndTable();
+				}
 			}
+			ImGui::EndTable();
 		}
 		ImGui::Spacing();
 		// Deliberately NOT F1: the key that opened this is still down on the frame the popup
@@ -2288,26 +2305,26 @@ namespace aether::editor
 
 			{
 				using namespace chrome;
-			// Somewhere to go when you are stuck. The engine ships a getting-started walkthrough
-			// and until now nothing in the editor mentioned it existed.
-			if (ImGui::BeginMenu("Help"))
-			{
-				const std::filesystem::path guide = FindDocsFile("getting-started.md");
-				if (ImGui::MenuItem(ICON_FA_BOOK "  Getting Started", nullptr, false, !guide.empty()))
+				// Somewhere to go when you are stuck. The engine ships a getting-started walkthrough
+				// and until now nothing in the editor mentioned it existed.
+				if (ImGui::BeginMenu("Help"))
 				{
-					OpenPathInShell(guide);
+					const std::filesystem::path guide = FindDocsFile("getting-started.md");
+					if (ImGui::MenuItem(ICON_FA_BOOK "  Getting Started", nullptr, false, !guide.empty()))
+					{
+						OpenPathInShell(guide);
+					}
+					if (guide.empty() && ImGui::IsItemHovered())
+					{
+						ImGui::SetTooltip("docs/getting-started.md was not found next to the editor.");
+					}
+					const std::filesystem::path docs = FindDocsFile({});
+					if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open Documentation Folder", nullptr, false, !docs.empty()))
+					{
+						OpenPathInShell(docs);
+					}
+					ImGui::EndMenu();
 				}
-				if (guide.empty() && ImGui::IsItemHovered())
-				{
-					ImGui::SetTooltip("docs/getting-started.md was not found next to the editor.");
-				}
-				const std::filesystem::path docs = FindDocsFile({});
-				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open Documentation Folder", nullptr, false, !docs.empty()))
-				{
-					OpenPathInShell(docs);
-				}
-				ImGui::EndMenu();
-			}
 				const auto* playState = context.TryGet<app::PlayState>();
 				const bool compiling = playState != nullptr && playState->IsCompiling();
 				const char* chip = compiling ? ICON_FA_HAMMER "  BUILD" : "AETHERCORE";

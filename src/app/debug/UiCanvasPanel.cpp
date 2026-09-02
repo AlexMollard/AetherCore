@@ -14,6 +14,7 @@
 
 #include "Color.hpp"
 #include "assets/AssetManager.hpp"
+#include "debug/EditorShortcuts.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "gpu/GpuTypes.hpp"
@@ -1262,7 +1263,7 @@ namespace aether::editor
 		{
 			const float nudgeAmount = io.KeyShift ? 10.f : 1.f;
 			glm::vec2 nudgeDelta{0.f};
-			if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+			if (ImGui::IsKeyPressed(shortcuts::kCanvasNudge.key))
 			{
 				nudgeDelta.x -= nudgeAmount;
 			}
@@ -1285,7 +1286,7 @@ namespace aether::editor
 				selectedRect->offsetMax += nudgeDelta;
 			}
 
-			if (ImGui::IsKeyPressed(ImGuiKey_F))
+			if (ImGui::IsKeyPressed(shortcuts::kCanvasFrame.key))
 			{
 				const glm::vec4 visualRect = ui::ResolveRect(selectedParentRect, *selectedRect);
 				const float zoomX = (canvasArea.x * 0.8f) / std::max(visualRect.z, 1.f);

@@ -16,6 +16,7 @@
 #include "assets/AssetManager.hpp"
 #include "debug/EditorChrome.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "debug/EditorShortcuts.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "editor/ShaderCompiler.hpp"
@@ -365,7 +366,7 @@ namespace aether::editor
 
 	void MaterialGraphPanel::DeleteSelection()
 	{
-		if (!ImGui::IsKeyPressed(ImGuiKey_Delete) && !ImGui::IsKeyPressed(ImGuiKey_X))
+		if (!ImGui::IsKeyPressed(shortcuts::kGraphDelete.key) && !ImGui::IsKeyPressed(ImGuiKey_X))
 		{
 			return;
 		}
@@ -549,7 +550,7 @@ namespace aether::editor
 		// ImNodes had already claimed - either way the menu never appeared. One flag, and the
 		// window level owns the popup.
 		const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-		if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || (ImGui::IsKeyPressed(ImGuiKey_Space) && !ImGui::IsAnyItemActive())))
+		if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || (ImGui::IsKeyPressed(shortcuts::kGraphAddNode.key) && !ImGui::IsAnyItemActive())))
 		{
 			const ImVec2 mouse = ImGui::GetMousePos();
 			m_addNodeScreenX = mouse.x;
