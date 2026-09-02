@@ -9,6 +9,7 @@
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "material/TextureRegistry.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
@@ -101,7 +102,7 @@ namespace aether
 		for (const entt::entity raw: entities)
 		{
 			const auto& component = entities.get<const TileMapComponent>(raw);
-			if (!component.visible || component.tilemapPath.empty())
+			if (!component.visible || component.tilemapPath.empty() || ecs::IsHiddenInEditor(world, World::FromEntt(raw)))
 			{
 				continue;
 			}

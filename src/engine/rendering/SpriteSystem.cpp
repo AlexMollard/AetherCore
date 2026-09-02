@@ -10,6 +10,7 @@
 #include "assets/SpriteAtlasAsset.hpp"
 #include "material/TextureRegistry.hpp"
 #include "rendering/RenderFramePacket.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
@@ -108,6 +109,10 @@ namespace aether
 			}
 
 			const Entity entity = World::FromEntt(raw);
+			if (ecs::IsHiddenInEditor(world, entity))
+			{
+				continue;
+			}
 			std::string_view texturePath = sprite.texturePath;
 			glm::vec4 uvRect = sprite.uvRect;
 			glm::vec2 pixelSize = sprite.pixelSize;

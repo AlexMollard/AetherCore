@@ -41,7 +41,7 @@ namespace aether
 				continue;
 			}
 
-			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttEntity)))
+			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttEntity)) || ecs::IsHiddenInEditor(world, World::FromEntt(enttEntity)))
 			{
 				continue;
 			}

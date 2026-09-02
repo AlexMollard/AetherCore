@@ -72,6 +72,7 @@ using namespace std::string_view_literals;
 #include "platform/Window.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/Components.hpp"
 #include "PlayState.hpp"
 #include "scene/ModelBakeHook.hpp"
@@ -768,6 +769,14 @@ namespace aether::editor
 			{
 				engine->RequestActivity();
 			}
+		}
+
+		// Editor scene visibility applies while authoring and not while playing, the same way
+		// the eye icon behaves in every editor that has one. Driven every frame rather than on
+		// the play transition so it cannot be left stuck on by a path that forgot to clear it.
+		{
+			const auto* visibilityPlayState = context.TryGet<app::PlayState>();
+			ecs::EditorSceneVisibilityRespected() = visibilityPlayState == nullptr || !visibilityPlayState->IsPlaying();
 		}
 
 		if (input.IsKeyPressed(aether::Key::F5))

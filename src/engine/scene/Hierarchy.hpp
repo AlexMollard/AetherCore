@@ -50,6 +50,26 @@ namespace aether::ecs
 		return !HasDisabledAncestor(world, entity);
 	}
 
+	// Editor scene visibility - the hierarchy's eye toggle. It hides an entity in the editor
+	// viewport ONLY: HiddenTag is never serialized, and a shipped game never sets the flag
+	// below, so hiding something to get it out of the way while authoring cannot follow the
+	// scene into the build. Disabling an entity is the way to affect the game.
+	//
+	// The flag exists because the editor and Play share one World: without it, hiding an
+	// entity would keep it hidden after pressing Play, which is not what an eye icon means.
+	// The editor sets it every frame from its play state; nothing else touches it.
+	inline bool& EditorSceneVisibilityRespected()
+	{
+		static bool respected = false;
+		return respected;
+	}
+
+	// Hidden entities hide their children too, the same way disabling does.
+	inline bool IsHiddenInEditor(const World& world, Entity entity)
+	{
+		return EditorSceneVisibilityRespected() && HasAncestorWith<HiddenTag>(world, entity);
+	}
+
 	inline bool IsAncestor(World& world, Entity entity, Entity possibleAncestor)
 	{
 		Entity cur = entity;
