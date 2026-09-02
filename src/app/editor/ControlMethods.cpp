@@ -1700,6 +1700,23 @@ namespace aether::editor
 				        undo->Record(std::make_unique<SceneReplaceCommand>(std::move(cmd)));
 			        }
 
+			        if (!loaded)
+			        {
+				        // Every other method says why it refused. This returned a bare
+				        // loaded:false, so a caller could not tell a typo from a parse error,
+				        // even though the engine had already logged the reason.
+				        std::vector<std::string> available = app::scene::ListSceneFiles();
+				        std::string detail = "could not load scene '" + name + "' (the current scene is untouched)";
+				        if (!available.empty())
+				        {
+					        detail += "; available: ";
+					        for (std::size_t i = 0; i < available.size(); ++i)
+					        {
+						        detail += (i > 0 ? ", " : "") + available[i];
+					        }
+				        }
+				        return json{{"scene", name}, {"loaded", false}, {"error", detail}};
+			        }
 			        return json{{"scene", name}, {"loaded", loaded}};
 		        }});
 
