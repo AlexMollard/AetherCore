@@ -54,7 +54,10 @@ int main(int argc, char** argv)
 		else if (arg == "-h" || arg == "--help")
 		{
 			std::cout << "usage: aether-ctl [--port N] <method> [params-json|-]\n"
-			             "  methods: info | scene.entities | scene.create | scene.transform | scene.delete | rendergraph\n"
+			             // Six names read as the whole list. There are a hundred-odd, and the
+			             // editor will enumerate them itself, so point at that instead.
+			             "  methods: run 'aether-ctl describe' for all of them, with parameters and descriptions\n"
+			             "           e.g. info | scene.entities | scene.create | scene.transform | scene.delete | rendergraph\n"
 			             "  params:  pass '-' to read JSON from stdin (recommended for large batches)\n"
 			             "  port:    --port, else $AETHER_CONTROL_PORT, else 8787\n";
 			return 0;
