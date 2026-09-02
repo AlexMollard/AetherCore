@@ -542,6 +542,14 @@ namespace aether::editor
 			entry->add(world, entity, services);
 			EnableComponentFeatures(world, *entry);
 		}
+		else if (const auto* rt = reflect::FindComponentType(m_componentName); rt != nullptr && rt->emplaceDefault && rt->tryGetRaw(world, entity) == nullptr)
+		{
+			// The catalog is a UI menu, not a registry of every component: colliders live in
+			// it under shape-specific names ("Box Collider"), so a lookup by the reflected
+			// name finds nothing and the component is never re-created. Reflection knows how
+			// to make it, and ApplyComponentFields below needs it to exist or it gives up.
+			(void) rt->emplaceDefault(world, entity);
+		}
 		if (!m_snapshot.empty())
 		{
 			ApplyComponentFields(world, entity, m_componentName, m_snapshot, m_isReflected, services);
