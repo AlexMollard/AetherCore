@@ -426,7 +426,10 @@ namespace aether::editor
 				// message is what gets ellipsised. Appending it meant the one part of
 				// the row you can act on was the first thing clipped away.
 				const float avail = ImGui::GetContentRegionAvail().x;
-				const float locationWidth = location.empty() ? 0.0f : ImGui::CalcTextSize(location.c_str()).x;
+				// Never let the location take more than half the row: on a narrow panel a
+				// long filename would otherwise leave the message no width at all, which
+				// is a worse row than the clipped location this replaced.
+				const float locationWidth = location.empty() ? 0.0f : std::min(ImGui::CalcTextSize(location.c_str()).x, avail * 0.5f);
 				const float gap = location.empty() ? 0.0f : ImGui::GetStyle().ItemSpacing.x * 2.0f;
 				const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 
@@ -441,7 +444,13 @@ namespace aether::editor
 				ImGui::PopStyleColor();
 				if (!location.empty())
 				{
-					drawList->AddText(ImVec2(rowMin.x + avail - locationWidth, rowMin.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), location.c_str());
+					// Ellipsised into its reserved box rather than drawn raw, so a clamped
+					// location shortens instead of spilling past the right edge.
+					const ImVec2 locationMin(rowMin.x + avail - locationWidth, rowMin.y);
+					const ImVec2 locationMax(rowMin.x + avail, rowMin.y + ImGui::GetTextLineHeight());
+					ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+					ImGui::RenderTextEllipsis(drawList, locationMin, locationMax, locationMax.x, location.c_str(), location.c_str() + location.size(), nullptr);
+					ImGui::PopStyleColor();
 				}
 
 				if (r.line > 0)
