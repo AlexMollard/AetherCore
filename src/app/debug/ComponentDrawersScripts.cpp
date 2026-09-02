@@ -467,6 +467,19 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_CODE "  Script", ICON_FA_XMARK "##removeScript", removed, ImGuiTreeNodeFlags_DefaultOpen);
 		if (removed)
 		{
+			// One command per script, so undo brings each back. Removing the component whole
+			// recorded nothing at all, so Ctrl+Z reached past it into an unrelated edit and
+			// every script the entity had was gone for good.
+			if (auto* undo = context.services.TryGet<UndoStack>())
+			{
+				if (const auto* scripts = world.TryGet<ScriptComponent>(entity))
+				{
+					for (const ScriptEntry& entry: scripts->scripts)
+					{
+						undo->Record(std::make_unique<RemoveScriptCommand>(entity.id, entry.path, entry));
+					}
+				}
+			}
 			world.Remove<ScriptComponent>(entity);
 			return;
 		}
