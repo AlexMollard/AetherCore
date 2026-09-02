@@ -109,6 +109,38 @@ namespace aether::net
 		return true;
 	}
 
+	bool NetworkSubsystem::ConnectThrough(const NatTraversal::Endpoint& peer)
+	{
+		if (m_host == nullptr)
+		{
+			m_lastError = "no socket to connect through - call Host() before punching";
+			return false;
+		}
+		if (m_serverPeer != nullptr)
+		{
+			m_lastError = "already connected to a host";
+			return false;
+		}
+
+		// Endpoint and ENetAddress share a convention exactly - host in network order,
+		// port in host order - so this is a copy rather than a conversion.
+		ENetAddress address{};
+		address.host = peer.host;
+		address.port = peer.port;
+
+		m_serverPeer = enet_host_connect(m_host, &address, kChannelCount, 0);
+		if (m_serverPeer == nullptr)
+		{
+			m_lastError = "no available peers";
+			return false;
+		}
+		// Nothing is destroyed and nothing is rebound: the traversal, its intercept and
+		// the socket all survive, which is the point.
+		m_role = NetRole::Client;
+		m_localId = kInvalidConnection;
+		return true;
+	}
+
 	void NetworkSubsystem::Disconnect()
 	{
 		// Before the host, always: its destructor clears the intercept it installed, and

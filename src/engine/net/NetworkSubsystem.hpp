@@ -33,6 +33,21 @@ namespace aether::net
 
 		bool Host(std::uint16_t port, int maxPeers);
 		bool Connect(std::string_view host, std::uint16_t port);
+
+		// Connects to a peer over the socket this transport ALREADY owns, rather than
+		// binding a new one.
+		//
+		// This is the only way to connect after a punch, and the distinction is the
+		// whole reason it exists. Connect() above starts by tearing the transport down
+		// and binding a fresh socket - which discards the NAT mapping the punch just
+		// created, because a mapping belongs to the socket that made it. The peer would
+		// then be sending to a hole nothing is listening behind.
+		//
+		// So a player who intends to traverse calls Host() first (binding a known port),
+		// punches, and connects with this. Their role becomes Client; the socket does not
+		// change, and neither does the hole.
+		bool ConnectThrough(const NatTraversal::Endpoint& peer);
+
 		void Disconnect();
 
 		// Drops ONE peer (host only), after everything already queued for it has been

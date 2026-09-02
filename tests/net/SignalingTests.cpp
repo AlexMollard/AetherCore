@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <string>
+#include <thread>
 
 #include "net/NatRendezvous.hpp"
 #include "net/NatTraversal.hpp"
@@ -211,4 +213,67 @@ TEST_CASE("An unreachable STUN server costs a candidate, not the connection")
 	}
 
 	CHECK(rendezvousA.GetState() == State::Open);
+}
+
+TEST_CASE("A connection is made over the punched socket, not a fresh one")
+{
+	// The failure this guards against is quiet and total: connect the ordinary way after
+	// a successful punch and the transport rebinds, the mapping is dropped, and the peer
+	// is left sending into a hole with nothing behind it.
+	net::NetworkSubsystem host;
+	net::NetworkSubsystem joiner;
+	REQUIRE(host.Host(24717, 4));
+	REQUIRE(joiner.Host(24718, 4)); // bound first so it has a socket worth punching from
+
+	net::LocalSignalingChannel channelHost;
+	net::LocalSignalingChannel channelJoiner;
+	net::LocalSignalingChannel::Pair(channelHost, channelJoiner);
+
+	net::NatRendezvous rendezvousHost(*host.Traversal(), channelHost, 24717);
+	net::NatRendezvous rendezvousJoiner(*joiner.Traversal(), channelJoiner, 24718);
+	rendezvousHost.Begin("");
+	rendezvousJoiner.Begin("");
+
+	for (int i = 0; i < 200 && rendezvousJoiner.GetState() != State::Open; ++i)
+	{
+		rendezvousHost.Tick(0.05f);
+		rendezvousJoiner.Tick(0.05f);
+		host.Poll();
+		joiner.Poll();
+	}
+	REQUIRE(rendezvousJoiner.GetState() == State::Open);
+
+	const auto path = rendezvousJoiner.OpenPath();
+	REQUIRE(path.has_value());
+
+	// Loopback has no NAT, so the mapping cannot be observed being lost here. What CAN
+	// be observed is the socket surviving, which is the same fact: the traversal owns an
+	// intercept on one specific ENetHost, so if it is still the same live object holding
+	// the same open path afterwards, nothing was rebound underneath it.
+	const net::NatTraversal* before = joiner.Traversal();
+	REQUIRE(before != nullptr);
+	REQUIRE(joiner.ConnectThrough(*path));
+	CHECK(joiner.Traversal() == before);
+	CHECK(joiner.Traversal()->GetState() == State::Open);
+
+	bool hostSawJoin = false;
+	bool joinerConnected = false;
+	for (int i = 0; i < 400 && !(hostSawJoin && joinerConnected); ++i)
+	{
+		host.Poll();
+		joiner.Poll();
+		for (const net::NetEvent& event: host.Events())
+		{
+			hostSawJoin = hostSawJoin || event.kind == net::NetEvent::Kind::Connected;
+		}
+		for (const net::NetEvent& event: joiner.Events())
+		{
+			joinerConnected = joinerConnected || event.kind == net::NetEvent::Kind::Connected;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
+
+	CHECK(hostSawJoin);
+	CHECK(joinerConnected);
+	CHECK(joiner.Role() == net::NetRole::Client);
 }

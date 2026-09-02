@@ -79,8 +79,10 @@ namespace aether::net
 		// house reach each other directly, and no NAT is involved at all.
 		void BeginPunch(std::span<const Endpoint> peerCandidates);
 
-		// The endpoint that answered, once Open. This is what to pass to enet_host_connect
-		// - the mapping for it already exists, which is what makes the connect succeed.
+		// The endpoint that answered, once Open. Connect to it with
+		// NetworkSubsystem::ConnectThrough, NOT by binding a new socket: the mapping that
+		// makes it reachable belongs to THIS socket, and a connect that rebinds discards
+		// the hole this whole exchange existed to open.
 		[[nodiscard]] std::optional<Endpoint> OpenPath() const
 		{
 			return m_open;
