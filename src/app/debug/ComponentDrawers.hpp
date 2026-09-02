@@ -70,7 +70,7 @@ namespace aether::editor
 	void DrawPhysics(app::LayerContext& context, World& world, Entity entity);
 	// Spatial tools for the reflected Collider 2D section (sprite-outline -> polygon).
 	void DrawCollider2DTools(app::LayerContext& context, World& world, Entity entity);
-	void DrawCollisionEvents(World& world, Entity entity);
+	void DrawCollisionEvents(app::LayerContext& context, World& world, Entity entity);
 	void DrawJoint(app::LayerContext& context, World& world, Entity entity);
 	void DrawMeshRenderer(app::LayerContext& context, World& world, Entity entity);
 	void DrawSpriteRenderer(app::LayerContext& context, World& world, Entity entity);

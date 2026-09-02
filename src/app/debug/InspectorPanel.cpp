@@ -726,7 +726,7 @@ namespace aether::editor
 		DrawCollider2DTools(context, world, entity);
 		DrawPhysics(context, world, entity);
 		DrawJoint(context, world, entity);
-		DrawCollisionEvents(world, entity);
+		DrawCollisionEvents(context, world, entity);
 		DrawMeshRenderer(context, world, entity);
 		DrawSpriteRenderer(context, world, entity);
 		DrawSpriteAnimator(context, world, entity);

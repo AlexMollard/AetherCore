@@ -112,10 +112,12 @@ namespace aether::editor
 			{
 				if (physics != nullptr)
 				{
+					RecordComponentRemoval(context, world, entity, "Collider");
 					physics->RemoveBody(world, entity);
 				}
 				else
 				{
+					RecordComponentRemoval(context, world, entity, "Collider");
 					world.Remove<ColliderComponent>(entity);
 				}
 				return;
@@ -173,6 +175,8 @@ namespace aether::editor
 			const bool open = RemovableSection(ICON_FA_WEIGHT_HANGING "  Rigid Body", ICON_FA_XMARK "##removeRigidBody", removed, ImGuiTreeNodeFlags_DefaultOpen, MenuFor(context, world, entity, "Rigid Body"));
 			if (removed)
 			{
+				// Snapshot before removing, or undo restores the component with default values.
+				RecordComponentRemoval(context, world, entity, "Rigid Body");
 				world.Remove<RigidBodyComponent>(entity);
 				world.Remove<PhysicsStateComponent>(entity);
 				return;
@@ -314,7 +318,7 @@ namespace aether::editor
 		ImGui::PopID();
 	}
 
-	void DrawCollisionEvents(World& world, Entity entity)
+	void DrawCollisionEvents(app::LayerContext& context, World& world, Entity entity)
 	{
 		auto* ev = world.TryGet<CollisionEventsComponent>(entity);
 		if (ev == nullptr)
@@ -325,6 +329,7 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_BOLT "  Collision Events", ICON_FA_XMARK "##removeCollisionEvents", removed);
 		if (removed)
 		{
+			RecordComponentRemoval(context, world, entity, "Collision Events");
 			world.Remove<CollisionEventsComponent>(entity);
 			return;
 		}
@@ -358,6 +363,7 @@ namespace aether::editor
 		const bool open = RemovableSection(ICON_FA_LINK "  Joint", ICON_FA_XMARK "##removeJoint", removed, 0, MenuFor(context, world, entity, "Joint"));
 		if (removed)
 		{
+			RecordComponentRemoval(context, world, entity, "Joint");
 			world.Remove<JointComponent>(entity);
 			return;
 		}
