@@ -1943,7 +1943,16 @@ namespace aether::editor
 				const bool undoCombo = zKey && !io.KeyShift;
 				if (undoCombo || redoCombo)
 				{
-					ApplyHistoryStep(context, redoCombo);
+					// The Material window keeps its own graph history. With it focused, Ctrl+Z
+					// belongs to the graph the user is looking at rather than the scene behind
+					// it - the same routing Ctrl+S already uses. It declines when it has
+					// nothing to undo, and the scene history takes the keystroke instead.
+					auto* material = dynamic_cast<MaterialGraphPanel*>(FindPanelByName("Material"));
+					const bool consumed = material != nullptr && (redoCombo ? material->RedoIfFocused() : material->UndoIfFocused());
+					if (!consumed)
+					{
+						ApplyHistoryStep(context, redoCombo);
+					}
 				}
 			}
 			if (m_pendingOpenSceneDialog)
