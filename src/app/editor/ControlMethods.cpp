@@ -2590,7 +2590,13 @@ namespace aether::editor
 				        return json{{"error", "no platform subsystem"}};
 			        }
 			        platform->GetWindow().RequestClose();
-			        return json{{"requested", true}};
+			        // The description has always told callers to check this flag; it was never
+			        // actually returned. An automation caller that reads "requested" as "the
+			        // editor is closing" waits on a process that is in fact sitting on the
+			        // confirmation dialog.
+			        const auto* undo = ctx.services.TryGet<UndoStack>();
+			        const bool unsaved = undo != nullptr && undo->HasUnsavedChanges();
+			        return json{{"requested", true}, {"unsaved", unsaved}};
 		        }});
 
 		methods.push_back({"editor.window_set",
