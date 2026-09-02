@@ -2579,7 +2579,7 @@ namespace aether::editor
 		// session answers it the same way a person would.
 		methods.push_back({"app.quit",
 		        "quit_app",
-		        "Ask the application to close, exactly as the title-bar X does. Unsaved work still raises the confirmation prompt rather than being discarded, so check the response's `unsaved` flag and answer the dialog (Save/Discard/Cancel) before expecting the process to exit.",
+		        "Ask the application to close, exactly as the title-bar X does. Unsaved work still raises the confirmation prompt rather than being discarded, so check the response's `unsaved` flag and answer the dialog (Save/Discard/Cancel) before expecting the process to exit. A clean editor exits before it can answer at all, so a transport timeout here means it closed - only a reply means it is still up.",
 		        true,
 		        Obj({}),
 		        [](const json&, MethodContext& ctx) -> json
