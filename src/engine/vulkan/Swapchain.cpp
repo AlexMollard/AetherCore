@@ -146,6 +146,11 @@ namespace aether
 		{
 			Throw(AetherError::Vulkan(static_cast<int32_t>(depthResult), "Failed to create depth image."));
 		}
+		// A freshly created image is UNDEFINED, and this runs again on every swapchain
+		// recreation. Without resetting the tracked layout, the barrier after a resize was
+		// recorded as OPTIMAL -> OPTIMAL and transitioned nothing, so the depth attachment
+		// was still UNDEFINED when the frame that declared it OPTIMAL was submitted.
+		m_depthLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 		const VkImageViewCreateInfo depthViewInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
