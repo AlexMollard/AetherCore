@@ -1180,22 +1180,22 @@ namespace aether::editor
 			{
 				return ErrNoEntity();
 			}
-			// Partial update: anything not supplied keeps its current value. Defaulting the
-			// missing components to identity instead meant moving an entity silently threw
-			// away its rotation and scale, which is data loss on the most ordinary call this
-			// method has.
+			// Partial update: anything not supplied keeps its current value. The merge itself
+			// lives in ComposeTransformOver so it can be tested; doing it here with identity
+			// defaults is what silently threw away rotation and scale when only a position
+			// was given.
 			const auto* beforeTc = world.TryGet<TransformComponent>(entity);
-			glm::vec3 curPos{0.0f};
-			glm::vec3 curEuler{0.0f};
-			glm::vec3 curScale{1.0f};
-			if (beforeTc != nullptr)
+			const glm::mat4 current = beforeTc != nullptr ? beforeTc->localToWorld : glm::mat4(1.0f);
+			const auto optionalVec3 = [&p](const char* key) -> std::optional<glm::vec3>
 			{
-				aether::DecomposeTRS(beforeTc->localToWorld, curPos, curEuler, curScale);
-			}
-			const glm::vec3 pos = ReadVec3(p, "position", curPos);
-			const glm::vec3 euler = ReadVec3(p, "rotationEuler", curEuler);
-			const glm::vec3 scale = ReadVec3(p, "scale", curScale);
-			const glm::mat4 m = aether::ComposeTransform(pos, euler, scale);
+				if (!p.contains(key))
+				{
+					return std::nullopt;
+				}
+				return ReadVec3(p, key, glm::vec3(0.0f));
+			};
+			const glm::mat4 m = aether::ComposeTransformOver(current,
+			        aether::PartialTransform{.position = optionalVec3("position"), .eulerDeg = optionalVec3("rotationEuler"), .scale = optionalVec3("scale")});
 			const glm::mat4 before = beforeTc != nullptr ? beforeTc->localToWorld : m;
 			if (world.TryGet<TransformComponent>(entity) == nullptr)
 			{

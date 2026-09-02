@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <optional>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -67,5 +68,24 @@ namespace aether
 		euler += delta.eulerDeg;
 		scale = glm::max(scale + delta.scale, glm::vec3(0.001f));
 		return ComposeTransform(pos, euler, scale);
+	}
+	// A partial transform edit: whichever parts are set replace the matching part of
+	// `current`, and the rest are taken from it unchanged. Composing from scratch with
+	// identity defaults instead is silent data loss - setting a position that way throws
+	// away the rotation and scale nobody mentioned.
+	struct PartialTransform
+	{
+		std::optional<glm::vec3> position;
+		std::optional<glm::vec3> eulerDeg;
+		std::optional<glm::vec3> scale;
+	};
+
+	inline glm::mat4 ComposeTransformOver(const glm::mat4& current, const PartialTransform& parts)
+	{
+		glm::vec3 pos{};
+		glm::vec3 euler{};
+		glm::vec3 scale{};
+		DecomposeTRS(current, pos, euler, scale);
+		return ComposeTransform(parts.position.value_or(pos), parts.eulerDeg.value_or(euler), parts.scale.value_or(scale));
 	}
 } // namespace aether
