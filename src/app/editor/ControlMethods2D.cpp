@@ -669,9 +669,20 @@ namespace aether::editor
 			        {
 				        return json{{"error", "failed to decode '" + texture + "': " + image.error().ToString()}};
 			        }
+			        // Clamping a nonsense cell size to 1 instead of refusing it produced an atlas
+			        // of one-pixel sprites - 400 of them for a 20x20 texture, a million for a
+			        // 1024x1024 - and wrote it to disk. Say no, the way a bad tile index does.
+			        const int cellWidth = p.value("cellWidth", 32);
+			        const int cellHeight = p.value("cellHeight", 32);
+			        if (cellWidth < 1 || cellHeight < 1)
+			        {
+				        return json{{"error",
+				                "cellWidth and cellHeight must be at least 1 pixel (got " + std::to_string(cellWidth) + "x" + std::to_string(cellHeight)
+				                        + "); slicing by a smaller cell would make one sprite per pixel"}};
+			        }
 			        SpriteSliceSettings settings;
-			        settings.cellWidth = std::max(p.value("cellWidth", 32), 1);
-			        settings.cellHeight = std::max(p.value("cellHeight", 32), 1);
+			        settings.cellWidth = cellWidth;
+			        settings.cellHeight = cellHeight;
 			        settings.paddingX = std::max(p.value("paddingX", 0), 0);
 			        settings.paddingY = std::max(p.value("paddingY", 0), 0);
 			        settings.spacingX = std::max(p.value("spacingX", 0), 0);
