@@ -376,7 +376,7 @@ namespace aether::editor
 		{
 			m_renderPassBenchmarks.clear();
 		}
-		ImGui::SameLine();
+		chrome::SameLineOrWrap(chrome::ButtonWidth("Enable all"));
 		if (ImGui::Button("Enable all"))
 		{
 			graph.ClearDebugDisabledPasses();

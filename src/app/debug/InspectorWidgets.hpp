@@ -15,6 +15,7 @@
 #include <misc/cpp/imgui_stdlib.h>
 
 #include "Color.hpp"
+#include "debug/EditorChrome.hpp"
 
 namespace aether::editor::iw
 {
@@ -151,14 +152,6 @@ namespace aether::editor::iw
 		return open;
 	}
 
-	// What SmallButton will actually measure for this label. Placing the button by a
-	// hardcoded inset instead left it hanging under the scrollbar, because the icon plus
-	// padding is wider than the inset and both scale with the font.
-	inline float RemoveButtonWidth(const char* label)
-	{
-		return ImGui::CalcTextSize(label, nullptr, /*hide_text_after_double_hash=*/true).x + ImGui::GetStyle().FramePadding.x * 2.0f;
-	}
-
 	inline bool RemovableSection(const char* label, const char* removeId, bool& removed, ImGuiTreeNodeFlags flags = 0, const ComponentMenuTarget& menu = {})
 	{
 		const bool open = BeginSection(label, flags);
@@ -166,7 +159,7 @@ namespace aether::editor::iw
 		// the X instead of the header.
 		DrawComponentContextMenu(menu);
 		ImGui::SameLine();
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - RemoveButtonWidth(removeId));
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - chrome::ButtonWidth(removeId));
 		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, WithAlpha(colors::Red, 0.25f));

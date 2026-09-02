@@ -157,8 +157,10 @@ namespace aether::editor
 		}
 		ImGui::EndDisabled();
 
-		ImGui::SameLine(0.0f, 16.0f);
-		ImGui::SetNextItemWidth(90.0f);
+		// The slider plus its trailing label, so the whole control wraps together.
+		constexpr float kZoomSliderWidth = 90.0f;
+		chrome::SameLineOrWrap(kZoomSliderWidth + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize("Zoom").x, 16.0f);
+		ImGui::SetNextItemWidth(kZoomSliderWidth);
 		ImGui::SliderInt("Zoom", &m_zoom, 1, 40, "%dx");
 
 		// New / Open / Save row.

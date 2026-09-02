@@ -656,7 +656,7 @@ namespace aether::editor
 		if (!h->parent.IsValid() && h->children.empty())
 		{
 			ImGui::SameLine();
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - iw::RemoveButtonWidth(ICON_FA_XMARK "##removeHierarchy"));
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - chrome::ButtonWidth(ICON_FA_XMARK "##removeHierarchy"));
 			const bool removeHierarchy = ImGui::SmallButton(ICON_FA_XMARK "##removeHierarchy");
 			ImGui::SetItemTooltip("Remove the Hierarchy component");
 			if (removeHierarchy)

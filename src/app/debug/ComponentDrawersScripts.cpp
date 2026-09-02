@@ -129,7 +129,7 @@ namespace aether::editor
 		iw::LabelColumn("Script");
 		// Reserve exactly the remove button plus the gap SameLine will add. A round number
 		// here was a pixel short, so the button sat under the scrollbar.
-		ImGui::SetNextItemWidth(-(iw::RemoveButtonWidth(ICON_FA_XMARK) + ImGui::GetStyle().ItemSpacing.x));
+		ImGui::SetNextItemWidth(-(chrome::ButtonWidth(ICON_FA_XMARK) + ImGui::GetStyle().ItemSpacing.x));
 		if (ImGui::BeginCombo("##scriptType", preview))
 		{
 			if (ImGui::Selectable("None", script.path.empty()))

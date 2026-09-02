@@ -8,6 +8,25 @@
 
 namespace aether::editor::chrome
 {
+	// What a button of this label will measure. Toolbars that guessed the width with a round
+	// number left their last control hanging off the panel edge.
+	[[nodiscard]] inline float ButtonWidth(const char* label)
+	{
+		return ImGui::CalcTextSize(label, nullptr, /*hide_text_after_double_hash=*/true).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+	}
+
+	// SameLine, unless the next control of this width would not fit - then start a row. A
+	// toolbar built from plain SameLine calls simply runs off the right edge once the panel
+	// is narrow enough, and nothing on screen says the control is there.
+	inline void SameLineOrWrap(float nextWidth, float spacing = -1.0f)
+	{
+		ImGui::SameLine(0.0f, spacing);
+		if (ImGui::GetContentRegionAvail().x < nextWidth)
+		{
+			ImGui::NewLine();
+		}
+	}
+
 	[[nodiscard]] inline ImVec4 C(const glm::vec4& v)
 	{
 		return ImVec4{v.r, v.g, v.b, v.a};
