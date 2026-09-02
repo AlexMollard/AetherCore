@@ -793,7 +793,7 @@ namespace aether::editor
 				        const std::string_view raw = storage.info().name();
 				        const auto& types = reflect::ComponentTypes();
 				        const auto match = std::find_if(types.begin(), types.end(), [raw](const reflect::ComponentType& t) { return t.cppTypeName == raw; });
-				        comps.push_back(match != types.end() ? match->name : std::string(raw));
+				        comps.push_back(match != types.end() ? match->name : reflect::PrettyComponentName(raw));
 			        }
 			        j["components"] = comps;
 

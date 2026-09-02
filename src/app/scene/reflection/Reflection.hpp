@@ -145,6 +145,11 @@ namespace aether::reflect
 		[[nodiscard]] const FieldDesc* FindField(std::string_view fieldName) const;
 	};
 
+	// A component with no reflection entry still has to be named in API output. Turns the
+	// compiler's spelling - "struct aether::PhysicsStateComponent" - into "Physics State", so
+	// one list does not mix human names with C++ identifiers.
+	[[nodiscard]] std::string PrettyComponentName(std::string_view cppTypeName);
+
 	const std::vector<ComponentType>& ComponentTypes();
 	const ComponentType* FindComponentType(std::string_view name);
 	void RegisterComponent(ComponentType type);
