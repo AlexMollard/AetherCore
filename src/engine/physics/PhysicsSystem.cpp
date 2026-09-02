@@ -831,7 +831,12 @@ namespace aether
 			const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
 
 			const PhysicsMotionType motion = rb != nullptr ? rb->motionType : PhysicsMotionType::Static;
-			const PhysicsLayer layer = collider.isSensor ? PhysicsLayer::Sensor : collider.layer;
+			// Statics belong in the non-moving broad-phase tree: Jolt keeps that tree separate
+			// precisely so it is not rebuilt every frame, and leaving them on Moving also pairs
+			// every static against every other static in the broad phase for nothing.
+			const PhysicsLayer layer = collider.isSensor        ? PhysicsLayer::Sensor
+			        : motion == PhysicsMotionType::Static       ? PhysicsLayer::NonMoving
+			                                                    : collider.layer;
 
 			JPH::BodyCreationSettings bcs{shape, JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), ToJoltMotionType(motion), ToJoltLayer(layer)};
 			bcs.mUserData = static_cast<JPH::uint64>(entity.id);
