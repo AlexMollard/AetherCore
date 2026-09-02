@@ -416,10 +416,11 @@ namespace aether
 
 		const auto shadowCount = static_cast<std::uint32_t>(m_perLightShadows.size());
 
-		// Running out of atlas room only breaks the loop above, so a light that asked for a
-		// shadow quietly renders without one and nothing says why. A point light needs six
-		// faces, so the atlas holds twelve of them and the thirteenth is where this starts.
-		// Logged only when the number changes - this runs every frame.
+		// Exceeding the entry budget only skips the light above, so one that asked for a
+		// shadow quietly renders without one and nothing says why. The cost is per entry, not
+		// per light: a point light spends six of the kMaxRenderedLocalShadowEntries on its
+		// cube faces and a spot light one, so the ceiling is eight point lights, or 48 spot
+		// lights, or a mix. Logged only when the number changes - this runs every frame.
 		const auto served = static_cast<std::uint32_t>(std::ranges::count_if(m_lightShadowIndices, [](const glm::vec2& v) { return v.x >= 0.0f; }));
 		const std::uint32_t dropped = budget > served ? budget - served : 0u;
 		if (dropped != m_lastDroppedShadowCasters)
@@ -427,7 +428,9 @@ namespace aether
 			m_lastDroppedShadowCasters = dropped;
 			if (dropped > 0)
 			{
-				AE_WARN(LogCategory::Render, "Local shadow atlas is full: {} of {} shadow-casting lights got no shadow. They still light the scene, they just stop casting.", dropped, budget);
+				AE_WARN(LogCategory::Render,
+				        "Local shadow budget is full: {} of {} shadow-casting lights got no shadow. They still light the scene, they just stop casting. A point light costs 6 of the {} entries, a spot light 1.",
+				        dropped, budget, kMaxRenderedLocalShadowEntries);
 			}
 		}
 
