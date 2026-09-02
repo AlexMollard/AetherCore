@@ -984,7 +984,7 @@ namespace aether::editor
 
 		methods.push_back({"scene.revert_prefab_instance",
 		        "revert_prefab_instance",
-		        "Discard a prefab instance's overrides and re-expand it from the prefab (a fresh, unmodified copy). 'id' is the instance root. Returns the new root id.",
+		        "Discard a prefab instance's component overrides and re-expand it from the prefab. The instance keeps where it is: its root transform is placement, stored on the instance reference rather than as an override, so reverting does not move it back to the origin. 'id' is the instance root. Returns the new root id - the old subtree is destroyed, so an id held from before the call no longer resolves.",
 		        true,
 		        Obj({{"id", IntProp()}}, {"id"}),
 		        [](const json& p, MethodContext& ctx) -> json
