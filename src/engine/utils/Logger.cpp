@@ -17,6 +17,8 @@
 #include <thread>
 #include <vector>
 
+#include "utils/LogRotation.hpp"
+
 #ifdef _WIN32
 #	ifndef NOMINMAX
 #		define NOMINMAX
@@ -619,6 +621,7 @@ namespace aether
 				std::filesystem::create_directories(logPath.parent_path(), errorCode);
 			}
 
+			RotateLogIfLarge(logPath, kDefaultMaxLogBytes);
 			backend.fileStream.open(logPath, std::ios::out | std::ios::app);
 		}
 
