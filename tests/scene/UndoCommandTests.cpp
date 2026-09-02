@@ -19,6 +19,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "debug/EditorCommand.hpp"
+#include "scene/reflection/Reflection.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "debug/UndoStack.hpp"
 #include "scene/Components.hpp"
@@ -643,6 +644,48 @@ TEST_CASE("RemoveEffectCommand undo declines when the effect services are absent
 
 	CHECK_FALSE(world.Has<EffectRefComponent>(entity));
 	CHECK_FALSE(world.Has<EffectParamsComponent>(entity));
+}
+
+// Undo re-creates a removed component by looking its name up in the component CATALOG, which
+// is a UI menu rather than a registry: colliders appear in it under shape-specific names, so
+// "Collider" found nothing, the component was never re-created, and ApplyComponentFields
+// gives up on a component that does not exist. Undo silently restored nothing.
+//
+// The fallback is the reflected type's emplaceDefault, so every reflected component the
+// editor can remove has to actually have one.
+TEST_CASE("Every reflected component can be re-created, so its removal is undoable")
+{
+	const auto& types = reflect::ComponentTypes();
+	REQUIRE_FALSE(types.empty());
+
+	std::vector<std::string> missing;
+	for (const reflect::ComponentType& type: types)
+	{
+		// Reference-only types are never added to an arbitrary entity, so they are never
+		// removed from one either.
+		if (type.addable && !type.emplaceDefault)
+		{
+			missing.push_back(type.name);
+		}
+	}
+	INFO("components that undo could not re-create: " << missing.size());
+	CHECK(missing.empty());
+}
+
+// The specific name that was broken. Guards against the catalog gaining a "Collider" entry
+// (or the reflected name changing) and quietly diverging again.
+TEST_CASE("The reflected Collider can be re-created by name")
+{
+	const reflect::ComponentType* type = reflect::FindComponentType("Collider");
+	REQUIRE(type != nullptr);
+	CHECK(type->emplaceDefault);
+
+	World world;
+	const Entity entity = MakeEntity(world, "E", glm::vec3(0.0f));
+	REQUIRE_FALSE(world.Has<ColliderComponent>(entity));
+
+	(void) type->emplaceDefault(world, entity);
+	CHECK(world.Has<ColliderComponent>(entity));
 }
 
 TEST_CASE("UndoStack group of one records the command itself")
