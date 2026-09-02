@@ -1263,7 +1263,12 @@ namespace aether::editor
 			}
 		}
 
-		if (m_drag.kind == DragKind::None && selectedRect != nullptr)
+		// Only while this panel holds the keyboard, and never while something is being
+		// typed into. A selected rect outlives the panel losing focus, so arrowing down
+		// the hierarchy nudged the rect a pixel per press - a real scene edit, one undo
+		// entry each, with nothing on screen to say it was happening.
+		const bool canvasHasKeys = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !io.WantTextInput;
+		if (canvasHasKeys && m_drag.kind == DragKind::None && selectedRect != nullptr)
 		{
 			const float nudgeAmount = io.KeyShift ? 10.f : 1.f;
 			glm::vec2 nudgeDelta{0.f};
