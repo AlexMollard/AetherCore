@@ -54,6 +54,7 @@ namespace aether::net
 			m_enetAcquired = false;
 			return false;
 		}
+		m_traversal = std::make_unique<NatTraversal>(m_host);
 		m_role = NetRole::Host;
 		m_localId = kInvalidConnection;
 		m_nextPeerId = 1;
@@ -103,12 +104,16 @@ namespace aether::net
 			m_enetAcquired = false;
 			return false;
 		}
+		m_traversal = std::make_unique<NatTraversal>(m_host);
 		m_role = NetRole::Client;
 		return true;
 	}
 
 	void NetworkSubsystem::Disconnect()
 	{
+		// Before the host, always: its destructor clears the intercept it installed, and
+		// a callback left pointing at freed state fires on the next datagram.
+		m_traversal.reset();
 		if (m_host != nullptr)
 		{
 			if (m_serverPeer != nullptr)

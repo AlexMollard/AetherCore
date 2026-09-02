@@ -57,6 +57,28 @@ namespace aether::net::stun
 	// is what RFC 5389 says to demultiplex on.
 	[[nodiscard]] bool LooksLikeStun(std::span<const std::byte> datagram);
 
+	// What a datagram is, once it is known to be STUN. Connectivity checks between two
+	// peers are themselves Binding Requests - the same exchange, aimed at the peer rather
+	// than a server - so a punch needs to tell a request from an answer to it.
+	enum class MessageKind
+	{
+		Other,
+		BindingRequest,
+		BindingSuccess,
+	};
+
+	[[nodiscard]] MessageKind Classify(std::span<const std::byte> datagram);
+
+	// The transaction id a datagram carries, so a reply can echo it back.
+	[[nodiscard]] std::optional<TransactionId> ReadTransactionId(std::span<const std::byte> datagram);
+
+	inline constexpr std::size_t kBindingResponseSize = kHeaderSize + 12;
+
+	// A Binding Success Response telling the sender the address it reached us from. This
+	// is what answers a peer's connectivity check, and it doubles as the proof the hole
+	// is open in that direction: receiving one means our own request got through.
+	[[nodiscard]] std::array<std::uint8_t, kBindingResponseSize> BuildBindingResponse(const TransactionId& id, const Endpoint& reflexive);
+
 	// The reflexive endpoint from a Binding Success Response, or nullopt if the message
 	// is not one, does not match `expected`, or carries no address.
 	//

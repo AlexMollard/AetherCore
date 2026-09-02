@@ -5,6 +5,9 @@
 #include <string_view>
 #include <vector>
 
+#include <memory>
+
+#include "net/NatTraversal.hpp"
 #include "net/NetTypes.hpp"
 
 struct _ENetHost;
@@ -50,6 +53,19 @@ namespace aether::net
 		// Drains ENet into Events(). Call once per frame before reading events;
 		// each call clears the previous frame's events.
 		void Poll();
+
+		// NAT traversal over this host's own socket, valid once Host or Connect has
+		// succeeded. It lives here because it has to share the socket: the hole a punch
+		// opens belongs to the socket that punched, so traversal done anywhere else
+		// would open one for a port this transport never sends from.
+		//
+		// Null until there is a host. Creating one installs an intercept that consumes
+		// STUN datagrams and passes everything else through untouched, so a transport
+		// that never asks for traversal behaves exactly as it did before.
+		[[nodiscard]] NatTraversal* Traversal() const
+		{
+			return m_traversal.get();
+		}
 
 		[[nodiscard]] std::span<const NetEvent> Events() const
 		{
@@ -101,6 +117,7 @@ namespace aether::net
 
 		_ENetHost* m_host = nullptr;
 		_ENetPeer* m_serverPeer = nullptr; // client only
+		std::unique_ptr<NatTraversal> m_traversal;
 		NetRole m_role = NetRole::Offline;
 		ConnectionId m_localId = kInvalidConnection;
 		ConnectionId m_nextPeerId = 1;

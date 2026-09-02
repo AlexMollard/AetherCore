@@ -79,6 +79,61 @@ namespace aether::net::stun
 		return out;
 	}
 
+	MessageKind Classify(std::span<const std::byte> datagram)
+	{
+		if (!LooksLikeStun(datagram))
+		{
+			return MessageKind::Other;
+		}
+		switch (ReadU16(Bytes(datagram)))
+		{
+			case kBindingRequest:
+				return MessageKind::BindingRequest;
+			case kBindingSuccess:
+				return MessageKind::BindingSuccess;
+			default:
+				return MessageKind::Other;
+		}
+	}
+
+	std::optional<TransactionId> ReadTransactionId(std::span<const std::byte> datagram)
+	{
+		if (!LooksLikeStun(datagram))
+		{
+			return std::nullopt;
+		}
+		const std::uint8_t* p = Bytes(datagram);
+		TransactionId id;
+		for (std::size_t i = 0; i < kTransactionIdSize; ++i)
+		{
+			id.bytes[i] = p[8 + i];
+		}
+		return id;
+	}
+
+	std::array<std::uint8_t, kBindingResponseSize> BuildBindingResponse(const TransactionId& id, const Endpoint& reflexive)
+	{
+		std::array<std::uint8_t, kBindingResponseSize> out{};
+		WriteU16(out.data(), kBindingSuccess);
+		WriteU16(out.data() + 2, 12); // one XOR-MAPPED-ADDRESS attribute
+		WriteU32(out.data() + 4, kMagicCookie);
+		for (std::size_t i = 0; i < kTransactionIdSize; ++i)
+		{
+			out[8 + i] = id.bytes[i];
+		}
+
+		// Only XOR-MAPPED-ADDRESS is sent. Emitting the plain attribute as well would
+		// hand a NAT that rewrites payload addresses something to corrupt, for the
+		// benefit of nothing that is going to talk to a peer of ours.
+		WriteU16(out.data() + 20, kAttrXorMappedAddress);
+		WriteU16(out.data() + 22, 8);
+		out[24] = 0x00;
+		out[25] = kFamilyIpv4;
+		WriteU16(out.data() + 26, static_cast<std::uint16_t>(reflexive.port ^ static_cast<std::uint16_t>(kMagicCookie >> 16)));
+		WriteU32(out.data() + 28, reflexive.address ^ kMagicCookie);
+		return out;
+	}
+
 	bool LooksLikeStun(std::span<const std::byte> datagram)
 	{
 		if (datagram.size() < kHeaderSize)

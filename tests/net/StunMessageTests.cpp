@@ -195,3 +195,50 @@ TEST_CASE("Malformed and non-STUN datagrams are refused rather than read past")
 	truncated.push_back(0x01);
 	CHECK_FALSE(ParseBindingResponse(AsBytes(MakeResponse(id, truncated)), id).has_value());
 }
+
+TEST_CASE("A binding response carries the peer's address back to it")
+{
+	const TransactionId id = MakeTransactionId();
+	const auto response = BuildBindingResponse(id, Endpoint{kAddress, kPort});
+	const std::vector<std::uint8_t> bytes(response.begin(), response.end());
+
+	CHECK(Classify(AsBytes(bytes)) == MessageKind::BindingSuccess);
+
+	// Asserted against the hand-computed vector, not just round-tripped: a build and a
+	// parse that XOR with the same wrong value agree with each other perfectly.
+	CHECK(bytes[20] == 0x00);
+	CHECK(bytes[21] == 0x20); // XOR-MAPPED-ADDRESS
+	CHECK(bytes[25] == 0x01); // IPv4
+	CHECK(bytes[26] == static_cast<std::uint8_t>(kXorPort >> 8));
+	CHECK(bytes[27] == static_cast<std::uint8_t>(kXorPort & 0xFF));
+	CHECK(bytes[28] == static_cast<std::uint8_t>(kXorAddress >> 24));
+	CHECK(bytes[31] == static_cast<std::uint8_t>(kXorAddress & 0xFF));
+
+	const auto parsed = ParseBindingResponse(AsBytes(bytes), id);
+	REQUIRE(parsed.has_value());
+	CHECK(parsed->address == kAddress);
+	CHECK(parsed->port == kPort);
+}
+
+TEST_CASE("A connectivity check is told apart from the answer to one")
+{
+	// The punch sends Binding Requests at the peer and must reply to the peer's own,
+	// so confusing the two directions would leave both sides waiting for each other.
+	const TransactionId id = MakeTransactionId();
+	const auto request = BuildBindingRequest(id);
+	const std::vector<std::uint8_t> requestBytes(request.begin(), request.end());
+	const auto response = BuildBindingResponse(id, Endpoint{kAddress, kPort});
+	const std::vector<std::uint8_t> responseBytes(response.begin(), response.end());
+
+	CHECK(Classify(AsBytes(requestBytes)) == MessageKind::BindingRequest);
+	CHECK(Classify(AsBytes(responseBytes)) == MessageKind::BindingSuccess);
+
+	const std::vector<std::uint8_t> notStun(40, 0xFF);
+	CHECK(Classify(AsBytes(notStun)) == MessageKind::Other);
+
+	// A reply has to echo the id it answers, so it must be readable off the request.
+	const auto echoed = ReadTransactionId(AsBytes(requestBytes));
+	REQUIRE(echoed.has_value());
+	CHECK(*echoed == id);
+	CHECK_FALSE(ReadTransactionId(AsBytes(notStun)).has_value());
+}
