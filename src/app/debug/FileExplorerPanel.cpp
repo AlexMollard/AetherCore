@@ -1051,6 +1051,21 @@ namespace aether::editor
 
 	bool FileExplorerPanel::DeleteEntry(const std::filesystem::path& target, const bool isDirectory)
 	{
+		// Try the recycle bin first. A confirmed delete is still a delete the user can regret,
+		// and every other application on the machine leaves it recoverable; a permanent
+		// remove_all on a folder took the whole subtree with no way back.
+		if (io::file_util::MoveToTrash(target))
+		{
+			m_opError.clear();
+			if (m_selectedPath == ToUtf8Path(target))
+			{
+				m_selectedPath.clear();
+			}
+			return true;
+		}
+
+		// No trash on this platform, or the shell refused. Fall back to the permanent delete
+		// rather than leaving the file there after the user confirmed.
 		std::error_code ec;
 		if (isDirectory)
 		{

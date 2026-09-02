@@ -27,5 +27,13 @@ namespace aether::io::file_util
 
 	[[nodiscard]] Expected<void> Remove(const std::filesystem::path& path);
 
+	// Moves a file or directory to the OS recycle bin / trash, so a mistaken delete in the
+	// editor is recoverable the way every other application on the machine behaves.
+	//
+	// Returns false when the platform has no trash support compiled in, rather than deleting
+	// anything: the caller decides whether to fall back to a permanent Remove, and can say so
+	// in the confirmation it shows.
+	[[nodiscard]] bool MoveToTrash(const std::filesystem::path& path);
+
 	[[nodiscard]] Expected<uintmax_t> FileSize(const std::filesystem::path& path);
 } // namespace aether::io::file_util

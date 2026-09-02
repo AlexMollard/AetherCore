@@ -7,8 +7,49 @@
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
+#if defined(_WIN32)
+#	define WIN32_LEAN_AND_MEAN
+#	include <windows.h>
+
+#	include <shellapi.h>
+
+// windows.h defines CopyFile as a macro that expands to CopyFileA/W, which silently renames
+// this file's own file_util::CopyFile and leaves every caller unresolved at link time.
+#	undef CopyFile
+#endif
+
 namespace aether::io::file_util
 {
+	bool MoveToTrash(const std::filesystem::path& path)
+	{
+#if defined(_WIN32)
+		std::error_code ec;
+		if (!std::filesystem::exists(path, ec))
+		{
+			return false;
+		}
+		// SHFileOperationW wants the source double-null terminated: it takes a LIST of paths
+		// and reads until an empty one. A single-terminated string walks off the end.
+		std::wstring source = std::filesystem::absolute(path, ec).wstring();
+		source.push_back(L'\0');
+		source.push_back(L'\0');
+
+		SHFILEOPSTRUCTW op{};
+		op.wFunc = FO_DELETE;
+		op.pFrom = source.c_str();
+		// ALLOWUNDO is what makes it the recycle bin rather than a delete. NOCONFIRMATION
+		// because the editor has already asked, and NOERRORUI so a failure comes back as a
+		// return code instead of a dialog behind the editor window.
+		op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+		return SHFileOperationW(&op) == 0 && op.fAnyOperationsAborted == FALSE;
+#else
+		// No trash implementation on this platform yet; the caller falls back to a permanent
+		// delete rather than this silently doing one.
+		(void) path;
+		return false;
+#endif
+	}
+
 	Expected<std::string> ReadText(const std::filesystem::path& path)
 	{
 		std::error_code ec;
