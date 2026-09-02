@@ -1568,12 +1568,16 @@ namespace aether
 				constexpr auto kDstWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 				constexpr auto kDstReadWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
+				// LOAD_OP_LOAD reads the attachment, so the barrier that hands it to this pass
+				// has to allow COLOR_ATTACHMENT_READ as well - on FIRST use too, which used to
+				// take the write-only path below and trip a READ_AFTER_WRITE hazard.
+				const bool loadRead = (a.loadOp == gpu::LoadOp::Load);
+
 				const auto it = states.find(resId);
 				if (it != states.end())
 				{
 					const ResourceState& s = it->second;
 					const bool layoutChange = (s.layout != kTarget);
-					const bool loadRead = (a.loadOp == gpu::LoadOp::Load);
 					if (layoutChange || loadRead)
 					{
 						const bool isWAR = (s.writeStage == 0 && s.readStages != 0);
@@ -1599,7 +1603,7 @@ namespace aether
 					        .srcStage = FirstUseSrcStage(resId),
 					        .srcAccess = FirstUseSrcAccess(resId),
 					        .dstStage = kDstStage,
-					        .dstAccess = kDstWrite,
+					        .dstAccess = loadRead ? kDstReadWrite : kDstWrite,
 					        .aspect = gpu::ImageAspect::Color,
 					});
 				}
