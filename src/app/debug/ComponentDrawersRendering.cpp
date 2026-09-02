@@ -267,16 +267,20 @@ namespace aether::editor
 		// Wraps onto a second line rather than running off the edge when the panel is narrow.
 		const float flagsColumn = ImGui::GetCursorPosX();
 		edited(ImGui::Checkbox("Two-sided", &asset.doubleSided), "double_sided");
+		iw::ItemTooltip("Draw back faces as well as front. Needed for flat geometry like leaves or cloth that would otherwise vanish from behind, and it costs the culling that would have thrown those faces away.");
 		iw::SameLineOrWrap(iw::CheckboxWidth("Blend"), flagsColumn);
 		edited(ImGui::Checkbox("Blend", &asset.alphaBlend), "alpha_blend");
+		iw::ItemTooltip("True transparency: the surface is mixed with whatever is behind it. Reach for Mask instead when the alpha is really just a cutout - blended surfaces have to be sorted and cannot write depth the way opaque ones do.");
 		iw::SameLineOrWrap(iw::CheckboxWidth("Mask"), flagsColumn);
 		edited(ImGui::Checkbox("Mask", &asset.alphaMask), "alpha_mask");
+		iw::ItemTooltip("Cut the surface out per pixel: anything below Cutoff is discarded outright, everything else stays fully opaque. This is what foliage and chain-link want, not Blend.");
 		iw::SameLineOrWrap(iw::CheckboxWidth("Vtx color"), flagsColumn);
 		edited(ImGui::Checkbox("Vtx color", &asset.modulateVertexColor), "vertex_color");
+		iw::ItemTooltip("Multiply the base colour by the colours stored in the mesh's vertices. Does nothing on a mesh that carries none, which is most of them unless the artist painted them in.");
 		edited(PropCheckbox("Receives shadows", &asset.receiveShadows, "When off, the sun never shadows this surface"), "receive_shadows");
 		if (asset.alphaMask)
 		{
-			changed |= PropFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f, "%.2f");
+			changed |= PropFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f, "%.2f", "The alpha below which a pixel is thrown away. Only Mask uses it.");
 		}
 
 		auto textureRow = [&](const char* label, const char* mapId, TextureHandle& h, TextureColorSpace colorSpace)
