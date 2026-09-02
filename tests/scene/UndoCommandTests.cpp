@@ -700,6 +700,39 @@ TEST_CASE("UndoStack group of one records the command itself")
 	REQUIRE(stack.UndoDepth() == 1);
 }
 
+TEST_CASE("UndoStack ignores a field diff for a component a command already recorded")
+{
+	// The Inspector diffs every drawn component after drawing to catch multi-frame widget
+	// drags. That pass runs on the same frame a context-menu command mutates a component -
+	// a paste, a reset - because the click that fires the menu item is a mouse release.
+	// Without the claim the change lands twice: once as the command, once as a drag nobody
+	// made, and one Ctrl+Z only half-undoes it.
+	UndoStack stack;
+	stack.Record(std::make_unique<SetComponentCommand>(7, "Collider", nlohmann::json{{"radius", 1.0}}, nlohmann::json{{"radius", 2.0}}, /*isReflected=*/true));
+	REQUIRE(stack.UndoDepth() == 1);
+
+	stack.RecordFieldEdit(7, "Collider", "radius", nlohmann::json(1.0), nlohmann::json(2.0), /*isReflected=*/true);
+	stack.FlushFieldEdit();
+	CHECK(stack.UndoDepth() == 1);
+
+	// A different component on the same entity was never claimed, so its edit still counts.
+	stack.RecordFieldEdit(7, "Rigid Body", "mass", nlohmann::json(1.0), nlohmann::json(2.0), /*isReflected=*/true);
+	stack.FlushFieldEdit();
+	CHECK(stack.UndoDepth() == 2);
+}
+
+TEST_CASE("UndoStack edit claims last only until cleared")
+{
+	// Claims live from one frame's drawing to that frame's diff. A drag on the next frame
+	// is a real edit and must still be recorded.
+	UndoStack stack;
+	stack.Record(std::make_unique<SetComponentCommand>(7, "Collider", nlohmann::json{{"radius", 1.0}}, nlohmann::json{{"radius", 2.0}}, /*isReflected=*/true));
+	stack.ClearEditClaims();
+	stack.RecordFieldEdit(7, "Collider", "radius", nlohmann::json(2.0), nlohmann::json(3.0), /*isReflected=*/true);
+	stack.FlushFieldEdit();
+	CHECK(stack.UndoDepth() == 2);
+}
+
 TEST_CASE("UndoStack empty group leaves no entry")
 {
 	UndoStack stack;

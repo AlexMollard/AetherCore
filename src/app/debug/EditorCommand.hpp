@@ -46,6 +46,21 @@ namespace aether::editor
 		{
 			return entity;
 		}
+
+		// The single component this command already accounts for, if any. The Inspector
+		// diffs every drawn component after drawing to catch multi-frame widget drags, and
+		// that pass runs on the same frame a menu command mutates a component - so without
+		// this the change is recorded twice: once as the command, once as a drag nobody
+		// made, and one Ctrl+Z only half-undoes it. An empty component names nothing.
+		struct EditTarget
+		{
+			std::uint32_t entityId = 0;
+			std::string_view component;
+		};
+		[[nodiscard]] virtual EditTarget Target() const
+		{
+			return {};
+		}
 	};
 
 	// Typed transform edit (gizmo drag, inspector transform, control set_transform).
@@ -291,6 +306,11 @@ namespace aether::editor
 			return "Add component";
 		}
 
+		[[nodiscard]] EditTarget Target() const override
+		{
+			return {m_entityId, m_componentName};
+		}
+
 	private:
 		std::uint32_t m_entityId;
 		std::string m_componentName;
@@ -310,6 +330,11 @@ namespace aether::editor
 		[[nodiscard]] std::string_view Label() const override
 		{
 			return "Remove component";
+		}
+
+		[[nodiscard]] EditTarget Target() const override
+		{
+			return {m_entityId, m_componentName};
 		}
 
 	private:
@@ -358,6 +383,11 @@ namespace aether::editor
 		[[nodiscard]] std::string_view Label() const override
 		{
 			return "Set component";
+		}
+
+		[[nodiscard]] EditTarget Target() const override
+		{
+			return {m_entityId, m_componentName};
 		}
 
 	private:

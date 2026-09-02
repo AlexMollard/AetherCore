@@ -14,8 +14,22 @@ namespace aether::editor
 		m_pendingFields.clear();
 	}
 
+	void UndoStack::ClearEditClaims()
+	{
+		m_claimedEdits.clear();
+	}
+
 	void UndoStack::Record(std::unique_ptr<IEditorCommand> command)
 	{
+		if (command != nullptr)
+		{
+			// Claim before anything else: a grouped command still has to suppress the
+			// Inspector's diff, and an early return below must not skip the claim.
+			if (const IEditorCommand::EditTarget target = command->Target(); !target.component.empty())
+			{
+				m_claimedEdits.emplace_back(target.entityId, std::string(target.component));
+			}
+		}
 		if (m_groupDepth > 0)
 		{
 			if (command != nullptr)
@@ -36,6 +50,14 @@ namespace aether::editor
 
 	void UndoStack::RecordFieldEdit(std::uint32_t entityId, const std::string& componentName, const std::string& field, const nlohmann::json& before, const nlohmann::json& after, bool isReflected)
 	{
+		// A command recorded during this frame's drawing already accounts for this
+		// component; the Inspector's post-draw diff sees the same change and would record it
+		// a second time as a drag the user never made.
+		if (std::any_of(m_claimedEdits.begin(), m_claimedEdits.end(),
+		        [&](const std::pair<std::uint32_t, std::string>& claim) { return claim.first == entityId && claim.second == componentName; }))
+		{
+			return;
+		}
 		auto it = std::find_if(m_pendingFields.begin(), m_pendingFields.end(), [&](const PendingFieldEdit& pending) { return pending.entityId == entityId && pending.componentName == componentName; });
 		if (it == m_pendingFields.end())
 		{

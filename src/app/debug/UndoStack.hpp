@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "debug/EditorCommand.hpp"
@@ -30,6 +31,11 @@ namespace aether::editor
 		// Record an already-applied typed command. Any coalesced field edit still in
 		// flight is finalized first, so history stays in the order the user made it.
 		void Record(std::unique_ptr<IEditorCommand> command);
+
+		// Forget which components were claimed by commands recorded during the previous
+		// frame. Call once before the Inspector snapshots its components: claims made while
+		// this frame's drawers run then survive to this frame's diff pass, and no further.
+		void ClearEditClaims();
 
 		// Collect everything recorded until the matching EndGroup into ONE history entry, so a
 		// request that edits many entities costs a single Ctrl+Z - the same way the hierarchy's
@@ -154,6 +160,9 @@ namespace aether::editor
 		};
 
 		std::vector<PendingFieldEdit> m_pendingFields;
+		// (entity, component) pairs a recorded command already accounts for this frame, so
+		// the Inspector's post-draw diff does not record the same change again as a drag.
+		std::vector<std::pair<std::uint32_t, std::string>> m_claimedEdits;
 
 		std::vector<std::unique_ptr<IEditorCommand>> m_undo;
 		std::vector<std::unique_ptr<IEditorCommand>> m_redo;

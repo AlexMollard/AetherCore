@@ -692,6 +692,12 @@ namespace aether::editor
 		// Every selected entity, not just the inspected one: the transform drawer
 		// applies its delta across the whole selection, and recording only the primary
 		// would drop the baseline and lose the rest.
+		if (fieldUndo != nullptr)
+		{
+			// Claims from the previous frame have served their purpose; anything a command
+			// records while this frame's drawers run is what the diff below must skip.
+			fieldUndo->ClearEditClaims();
+		}
 		std::vector<std::pair<Entity, std::vector<ReflectedComponentFields>>> fieldsBefore;
 		std::vector<ScriptEntry> scriptsBefore;
 		std::vector<std::uint32_t> tagsBefore;
