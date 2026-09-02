@@ -24,6 +24,15 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 
 ## Tools
 
+The endpoint's own `describe` is the authoritative, complete list - it is what
+the server generates its tools from, so it is never out of date. The table below
+is a **selection**: the tools worth knowing before you start, plus one row per
+subsystem for the areas whose tools are numerous and self-similar.
+
+```powershell
+aether-ctl describe        # every method, with parameters and descriptions
+```
+
 | Tool | Needs editor running? | Purpose |
 |------|:---:|---------|
 | `run_gauntlet` | no | Build Editor/GameRuntime/EngineTests, run the unit suite; `mode:"full"` also runs the GPU validation smokes. Returns `gauntlet-report.json`. |
@@ -62,6 +71,23 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 | `set_setting` | yes | Set one engine setting by key and apply it live, as the Settings panel does. |
 | `list_component_types` | yes | The 28 components the ComponentCatalog can add (name + category). |
 | `screenshot` | yes | Capture the current editor frame to a compressed `.png` and return its path — lets the agent *see* what's rendered. |
+| `get_component` / `set_component` | yes | Read and write one component's reflected fields on an entity by catalog name. |
+| `render_memory` | yes | GPU memory breakdown by texture and buffer; pass `limit:0` for the totals alone. |
+| `add_model` | yes | Spawn a glTF model into the scene, baking it first if only the raw asset exists. |
+| `select_asset` / `set_editor_camera` | yes | Focus an asset in the browser; move or read the edit-mode viewport camera. |
+| `list_scene_assets` | yes | The scene and prefab **names** `load_scene` / `save_scene` / `add_prefab_instance` take, plus the scene loaded now. |
+| `list_script_types` | yes | The C# script type names `add_script` accepts, from the project's built assembly. |
+| `undo` / `redo` / `undo_status` | yes | Step the editor's history and read its depth and unsaved state. |
+| `list_layouts` / `apply_layout` | yes | The named dock-layout presets, and switching to one. |
+| Prefab tools | yes | `add_prefab_instance`, `apply_prefab_instance`, `revert_prefab_instance`, `unpack_prefab_instance` — place a linked instance and manage its overrides. |
+| Script tools | yes | `add_script`, `remove_script`, `list_scripts` — attach C# scripts and read back their property values. |
+| Tile authoring | yes | `create_tile_assets`, `paint_tiles`, `fill_tiles`, `read_tiles`, `add_tile_layer`, `get_tile_map` — chunked tilemap editing that joins the editor's undo stack. |
+| Sprite / atlas tools | yes | `slice_atlas`, `get_atlas`, `create_sprite_animation`, `list_assets` — build atlases and animations from textures. |
+| Pixel-art tools | yes | `pixel_new`, `pixel_set`, `pixel_line`, `pixel_fill_rect`, `pixel_bucket`, `pixel_clear`, `pixel_set_color`, `pixel_get`, `pixel_info`, `pixel_open`, `pixel_save` — author a PNG canvas in the editor. |
+| UI automation | yes | `ui_query`, `ui_click`, `ui_drag`, `ui_hover`, `ui_input_text`, `ui_key`, `ui_scroll`, `ui_layout` — drive the editor's own interface, including panels scrolled out of view. |
+| Input simulation | yes | `send_input`, `play_input_sequence`, `set_speed`, `step`, `pause`, `resume` — drive and time-control a running game headlessly. |
+| Publish | yes | `publish_project`, `publish_status` — build a redistributable game and poll the run. |
+| Recovery | yes | `recovery_list`, `recovery_restore` — inspect and restore autosaved recovery copies. |
 
 Batch arguments are streamed to `aether-ctl` over stdin, avoiding the Windows
 command-line length limit for large scene requests. The agent can also *see*
