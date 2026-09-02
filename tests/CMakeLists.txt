@@ -10,6 +10,7 @@ add_executable(EngineTests
     # ImguiFrameData type its test exercises are compiled straight in here.
     "${CMAKE_SOURCE_DIR}/src/app/EngineContentPaths.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/ShaderCompiler.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/debug/ScenePicker.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/materialgraph/MaterialGraph.cpp"
 "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerApply.cpp"

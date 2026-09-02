@@ -16,6 +16,11 @@ namespace aether::editor
 {
 	PickHit PickEntity(World& world, PhysicsSystem* physics, const Ray& ray, float maxDist)
 	{
+		// The hierarchy's pointer toggle exists to let you click through something that is in
+		// the way. It sets NotPickableTag and nothing read it, so the toggle did nothing at
+		// all; every path that can return a hit has to honour it or it still does nothing.
+		const auto pickable = [&world](Entity e) { return !world.Has<NotPickableTag>(e); };
+
 		PickHit best{};
 		best.t = maxDist;
 		std::uint64_t bestSpriteOrder = 0;
@@ -47,6 +52,10 @@ namespace aether::editor
 				continue;
 			}
 			const Entity entity = World::FromEntt(enttE);
+			if (!pickable(entity))
+			{
+				continue;
+			}
 			const auto biased = [](std::int32_t value) { return static_cast<std::uint64_t>(std::clamp(value, -32768, 32767) + 32768); };
 			const std::uint64_t order = (biased(sprite.sortingLayer) << 48u) | (biased(sprite.orderInLayer) << 32u) | entity.id;
 			if (!haveSprite || order > bestSpriteOrder)
@@ -65,7 +74,7 @@ namespace aether::editor
 		for (const auto& [enttE, meshComp, tc]: world.View<MeshComponent, TransformComponent>().each())
 		{
 			const Entity e = World::FromEntt(enttE);
-			if (!e.IsValid() || meshComp.mesh == nullptr)
+			if (!e.IsValid() || meshComp.mesh == nullptr || !pickable(e))
 			{
 				continue;
 			}
@@ -105,7 +114,7 @@ namespace aether::editor
 				{
 					for (const auto& [enttE, rb]: world.View<RigidBodyComponent>().each())
 					{
-						if (rb.body.value == hit.body.value)
+						if (rb.body.value == hit.body.value && pickable(World::FromEntt(enttE)))
 						{
 							best.entity = World::FromEntt(enttE);
 							best.t = tWorld;

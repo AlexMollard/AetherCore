@@ -1411,6 +1411,10 @@ namespace aether::editor
 					{
 						world.Emplace<HiddenTag>(e);
 					}
+					// Deliberately not m_dirty and not undoable: neither tag is written to the
+					// scene file, so they are view state for this session rather than an edit
+					// to the scene. Marking the scene unsaved for them asked the user to save
+					// something that would not be saved.
 					break;
 				default:
 					if (notPickable)
@@ -1423,7 +1427,10 @@ namespace aether::editor
 					}
 					break;
 			}
-			m_dirty = true;
+			if (toggles[i].kind == 0)
+			{
+				m_dirty = true;
+			}
 		}
 	}
 
