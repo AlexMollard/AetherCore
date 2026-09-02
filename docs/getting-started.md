@@ -48,7 +48,7 @@ Slicer** and cut regions non-destructively; the slices keep stable identities if
 
 ## 3. Make it move
 
-`scripts/Player.cs` already exists. Open it (the **Project** panel's **Debug C#** button opens
+`scripts/Player.cs` already exists. Open it (the **Build** panel's **Debug C#** button opens
 the solution in Visual Studio with the debugger attached, or edit it in any editor):
 
 ```csharp
