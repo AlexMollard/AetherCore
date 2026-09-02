@@ -1089,6 +1089,7 @@ namespace aether::editor
 		        {"Global", shortcuts::Context::Global},
 		        {"Scene  (Hierarchy)", shortcuts::Context::Scene},
 		        {"Viewport", shortcuts::Context::Viewport},
+		        {"Tile Palette", shortcuts::Context::TilePalette},
 		};
 
 		constexpr const char* kTitle = "Keyboard Shortcuts###shortcuts";

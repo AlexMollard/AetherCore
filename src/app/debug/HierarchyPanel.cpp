@@ -891,11 +891,11 @@ namespace aether::editor
 		}
 		// Wrapping a selection in a fresh parent is how a hierarchy actually gets built, and
 		// there was no way to do it but create an empty and drag each entity onto it.
-		if (ImGui::MenuItem(ICON_FA_SITEMAP "  Group into new parent", "Ctrl+G"))
+		if (ImGui::MenuItem(ICON_FA_SITEMAP "  Group into new parent", shortcuts::kGroup.display))
 		{
 			GroupSelectionUnderNewParent(context, world, selection, e);
 		}
-		if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D"))
+		if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", shortcuts::kDuplicate.display))
 		{
 			if (!selection.Contains(e))
 			{
@@ -903,7 +903,7 @@ namespace aether::editor
 			}
 			m_pendingDuplicate = true;
 		}
-		if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C"))
+		if (ImGui::MenuItem(ICON_FA_COPY "  Copy", shortcuts::kCopy.display))
 		{
 			if (!selection.Contains(e))
 			{
@@ -911,7 +911,7 @@ namespace aether::editor
 			}
 			m_pendingCopy = true;
 		}
-		if (ImGui::MenuItem(ICON_FA_SCISSORS "  Cut", "Ctrl+X"))
+		if (ImGui::MenuItem(ICON_FA_SCISSORS "  Cut", shortcuts::kCut.display))
 		{
 			if (!selection.Contains(e))
 			{
@@ -919,7 +919,7 @@ namespace aether::editor
 			}
 			m_pendingCut = true;
 		}
-		if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V"))
+		if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", shortcuts::kPaste.display))
 		{
 			m_pendingPaste = true;
 		}

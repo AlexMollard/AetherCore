@@ -21,6 +21,7 @@ namespace aether::editor::shortcuts
 		Global,
 		Scene,
 		Viewport,
+		TilePalette,
 	};
 
 	struct Binding
@@ -54,12 +55,24 @@ namespace aether::editor::shortcuts
 	inline constexpr Binding kGizmoScale{ImGuiKey_R, "R", "Scale gizmo", Context::Viewport};
 	inline constexpr Binding kFrameSelection{ImGuiKey_F, "F", "Frame the selection", Context::Viewport};
 
+	// The tile tools follow image-editor convention, so they are the letters a painter
+	// already knows. They only apply while the Tile Palette is open, which is why plain
+	// R and E can mean something else in the viewport.
+	inline constexpr Binding kTilePencil{ImGuiKey_B, "B", "Pencil", Context::TilePalette};
+	inline constexpr Binding kTileRectangle{ImGuiKey_R, "R", "Rectangle", Context::TilePalette};
+	inline constexpr Binding kTileFill{ImGuiKey_G, "G", "Fill", Context::TilePalette};
+	inline constexpr Binding kTileErase{ImGuiKey_E, "E", "Erase", Context::TilePalette};
+	inline constexpr Binding kTilePicker{ImGuiKey_I, "I", "Pick the tile under the cursor", Context::TilePalette};
+	inline constexpr Binding kTileFlipX{ImGuiKey_X, "X", "Flip the stamp horizontally", Context::TilePalette};
+	inline constexpr Binding kTileFlipY{ImGuiKey_Y, "Shift+Y", "Flip the stamp vertically", Context::TilePalette};
+
 	// Everything above, for the reference to render. A binding missing from here is a binding
 	// nobody can discover, so add to this when you add one.
 	inline constexpr Binding kAll[] = {
 	        kCommandPalette, kSave, kUndo, kRedo, kShortcuts, kReloadScripts, kPausePlay, kStepFrame,
 	        kCopy, kCut, kPaste, kDuplicate, kGroup, kRename, kDelete,
-	        kGizmoMove, kGizmoRotate, kGizmoScale, kFrameSelection};
+	        kGizmoMove, kGizmoRotate, kGizmoScale, kFrameSelection,
+	        kTilePencil, kTileRectangle, kTileFill, kTileErase, kTilePicker, kTileFlipX, kTileFlipY};
 
 	[[nodiscard]] inline std::span<const Binding> All()
 	{

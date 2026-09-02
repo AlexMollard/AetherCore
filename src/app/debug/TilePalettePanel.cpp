@@ -11,6 +11,7 @@
 #include "assets/AssetManager.hpp"
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/TileAssetStore.hpp"
+#include "debug/EditorShortcuts.hpp"
 #include "debug/Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
 #include "debug/EditorCommand.hpp"
@@ -293,35 +294,37 @@ namespace aether::editor
 		ImGui::TextDisabled("Ctrl+Z undoes");
 		ImGui::SetItemTooltip("Tile paints share the editor's global undo history (Ctrl+Z / Ctrl+Y),\nso tile and entity edits undo together.");
 
-		// Image-editor tool hotkeys, while not typing into a field. Shift+Y mirrors
-		// vertically (plain Ctrl+Y stays redo above; plain X toggles horizontal).
+		// Image-editor tool hotkeys, while not typing into a field. The keys live in the
+		// shortcut table so the F1 reference lists them; Ctrl is excluded here so Ctrl+Y
+		// stays redo and Ctrl+X stays cut.
 		if (const ImGuiIO& io = ImGui::GetIO(); !io.WantTextInput && !io.KeyCtrl && !io.KeyAlt)
 		{
-			if (ImGui::IsKeyPressed(ImGuiKey_B, false))
+			using namespace aether::editor;
+			if (ImGui::IsKeyPressed(shortcuts::kTilePencil.key, false))
 			{
 				state->tool = TileTool::Pencil;
 			}
-			else if (ImGui::IsKeyPressed(ImGuiKey_R, false))
+			else if (ImGui::IsKeyPressed(shortcuts::kTileRectangle.key, false))
 			{
 				state->tool = TileTool::Rectangle;
 			}
-			else if (ImGui::IsKeyPressed(ImGuiKey_G, false))
+			else if (ImGui::IsKeyPressed(shortcuts::kTileFill.key, false))
 			{
 				state->tool = TileTool::Fill;
 			}
-			else if (ImGui::IsKeyPressed(ImGuiKey_E, false))
+			else if (ImGui::IsKeyPressed(shortcuts::kTileErase.key, false))
 			{
 				state->tool = TileTool::Erase;
 			}
-			else if (ImGui::IsKeyPressed(ImGuiKey_I, false))
+			else if (ImGui::IsKeyPressed(shortcuts::kTilePicker.key, false))
 			{
 				state->tool = TileTool::Picker;
 			}
-			else if (ImGui::IsKeyPressed(ImGuiKey_X, false))
+			else if (ImGui::IsKeyPressed(shortcuts::kTileFlipX.key, false))
 			{
 				state->flipX = !state->flipX;
 			}
-			else if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Y, false))
+			else if (io.KeyShift && ImGui::IsKeyPressed(shortcuts::kTileFlipY.key, false))
 			{
 				state->flipY = !state->flipY;
 			}
