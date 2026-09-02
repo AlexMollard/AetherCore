@@ -1987,13 +1987,25 @@ namespace aether::editor
 			}
 			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kSave.key, false))
 			{
-				// Save what is being edited. With the Material window focused over a
-				// half-edited material, saving the scene instead is both surprising and
-				// leaves the thing you were working on unsaved.
-				auto* material = dynamic_cast<MaterialGraphPanel*>(FindPanelByName("Material"));
-				if (material == nullptr || !material->SaveIfFocusedAndDirty(context))
+				// Shift is the Save As modifier everywhere else, and this used to ignore it -
+				// so Ctrl+Shift+S silently overwrote the current scene.
+				if (io.KeyShift)
 				{
-					SaveCurrentScene(context);
+					if (m_hierarchyPanel != nullptr)
+					{
+						m_hierarchyPanel->RequestSaveAsPopup();
+					}
+				}
+				else
+				{
+					// Save what is being edited. With the Material window focused over a
+					// half-edited material, saving the scene instead is both surprising and
+					// leaves the thing you were working on unsaved.
+					auto* material = dynamic_cast<MaterialGraphPanel*>(FindPanelByName("Material"));
+					if (material == nullptr || !material->SaveIfFocusedAndDirty(context))
+					{
+						SaveCurrentScene(context);
+					}
 				}
 			}
 		}
@@ -2069,11 +2081,11 @@ namespace aether::editor
 				{
 					ConfirmDiscard(context, PendingNav::OpenScene);
 				}
-				if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", "Ctrl+S"))
+				if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", shortcuts::kSave.display))
 				{
 					SaveCurrentScene(context);
 				}
-				if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As..."))
+				if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As...", shortcuts::kSaveAs.display))
 				{
 					if (m_hierarchyPanel != nullptr)
 					{
