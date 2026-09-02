@@ -27,6 +27,7 @@
 #include "debug/Icons.hpp"
 #include "utils/Logger.hpp"
 #include "debug/InspectorWidgets.hpp"
+#include "debug/ReflectedComponentDrawer.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
 #include "layers/AppLayer.hpp"
@@ -143,19 +144,19 @@ namespace aether::editor
 			ApplyAnchorPreset(*rect, preset);
 		}
 
-		PropDrag2("Anchor min", &rect->anchorMin.x, 0.01f, 0.f, 1.f, "%.2f");
-		PropDrag2("Anchor max", &rect->anchorMax.x, 0.01f, 0.f, 1.f, "%.2f");
+		PropDrag2("Anchor min", &rect->anchorMin.x, 0.01f, 0.f, 1.f, "%.2f", FieldTip("UI Rect", "anchor_min"));
+		PropDrag2("Anchor max", &rect->anchorMax.x, 0.01f, 0.f, 1.f, "%.2f", FieldTip("UI Rect", "anchor_max"));
 		rect->anchorMin = glm::clamp(rect->anchorMin, glm::vec2(0.f), glm::vec2(1.f));
 		rect->anchorMax = glm::clamp(rect->anchorMax, glm::vec2(0.f), glm::vec2(1.f));
 		rect->anchorMax = glm::max(rect->anchorMax, rect->anchorMin);
 
-		PropDrag2("Offset min", &rect->offsetMin.x, 1.f, 0.f, 0.f, "%.0f");
-		PropDrag2("Offset max", &rect->offsetMax.x, 1.f, 0.f, 0.f, "%.0f");
+		PropDrag2("Offset min", &rect->offsetMin.x, 1.f, 0.f, 0.f, "%.0f", FieldTip("UI Rect", "offset_min"));
+		PropDrag2("Offset max", &rect->offsetMax.x, 1.f, 0.f, 0.f, "%.0f", FieldTip("UI Rect", "offset_max"));
 		if (rect->anchorMin == rect->anchorMax)
 		{
 			rect->offsetMax = glm::max(rect->offsetMax, rect->offsetMin + glm::vec2(1.f));
 		}
-		PropDrag2("Pivot", &rect->pivot.x, 0.01f, 0.f, 1.f, "%.2f");
+		PropDrag2("Pivot", &rect->pivot.x, 0.01f, 0.f, 1.f, "%.2f", FieldTip("UI Rect", "pivot"));
 		rect->pivot = glm::clamp(rect->pivot, glm::vec2(0.f), glm::vec2(1.f));
 		ImGui::TextDisabled("Resolved %.1f, %.1f  %.1f x %.1f", rect->resolvedRect.x, rect->resolvedRect.y, rect->resolvedRect.z, rect->resolvedRect.w);
 	}

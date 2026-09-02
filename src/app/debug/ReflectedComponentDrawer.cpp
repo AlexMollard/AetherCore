@@ -521,6 +521,23 @@ namespace aether::editor
 		}
 	}
 
+	const char* FieldTip(const std::string_view component, const std::string_view field)
+	{
+		const reflect::ComponentType* type = reflect::FindComponentType(component);
+		if (type == nullptr)
+		{
+			return nullptr;
+		}
+		for (const auto& f: type->fields)
+		{
+			if (f.name == field)
+			{
+				return f.meta.tooltip.empty() ? nullptr : f.meta.tooltip.c_str();
+			}
+		}
+		return nullptr;
+	}
+
 	void DrawReflectedComponents(World& world, Entity entity, ServiceContainer& services, std::initializer_list<std::string_view> exclude)
 	{
 		auto* undo = services.TryGet<UndoStack>();

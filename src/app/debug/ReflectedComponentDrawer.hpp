@@ -60,4 +60,10 @@ namespace aether::editor
 	// drawers). `services` supplies the UndoStack, so field edits and the section's
 	// remove button record typed commands instead of relying on a scene diff.
 	void DrawReflectedComponents(World& world, Entity entity, ServiceContainer& services, std::initializer_list<std::string_view> exclude);
+
+	// The tooltip reflection records for a field, or nullptr. Components with a bespoke drawer
+	// are excluded from the reflected pass above, so they never see their own metadata - this
+	// is how they read it without a second copy of the text going stale beside the first.
+	// Both names are the reflected ones ("Collider", "half_extents"), not the drawn labels.
+	[[nodiscard]] const char* FieldTip(std::string_view component, std::string_view field);
 } // namespace aether::editor

@@ -25,6 +25,7 @@
 #include "debug/Icons.hpp"
 #include "utils/Logger.hpp"
 #include "debug/InspectorWidgets.hpp"
+#include "debug/ReflectedComponentDrawer.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
 #include "layers/AppLayer.hpp"
@@ -139,14 +140,14 @@ namespace aether::editor
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 						break;
 					case PhysicsShapeType::Sphere:
-						PropFloat("Radius", &collider->radius, 0.02f, 0.01f, 1000.0f, "%.3f");
+						PropFloat("Radius", &collider->radius, 0.02f, 0.01f, 1000.0f, "%.3f", FieldTip("Collider", "radius"));
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 						break;
 					case PhysicsShapeType::Capsule:
 					case PhysicsShapeType::Cylinder:
-						PropFloat("Radius", &collider->radius, 0.02f, 0.01f, 1000.0f, "%.3f");
+						PropFloat("Radius", &collider->radius, 0.02f, 0.01f, 1000.0f, "%.3f", FieldTip("Collider", "radius"));
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-						PropFloat("Half height", &collider->halfHeight, 0.02f, 0.01f, 1000.0f, "%.3f");
+						PropFloat("Half height", &collider->halfHeight, 0.02f, 0.01f, 1000.0f, "%.3f", FieldTip("Collider", "half_height"));
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 						break;
 				}
@@ -155,11 +156,11 @@ namespace aether::editor
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 
 				bool live = false;
-				live |= PropFloat("Friction", &collider->friction, 0.005f, 0.0f, 2.0f, "%.3f");
-				live |= PropFloat("Restitution", &collider->restitution, 0.005f, 0.0f, 1.0f, "%.3f");
+				live |= PropFloat("Friction", &collider->friction, 0.005f, 0.0f, 2.0f, "%.3f", FieldTip("Collider", "friction"));
+				live |= PropFloat("Restitution", &collider->restitution, 0.005f, 0.0f, 1.0f, "%.3f", FieldTip("Collider", "restitution"));
 				collider->friction = std::max(0.0f, collider->friction);
 				collider->restitution = std::clamp(collider->restitution, 0.0f, 1.0f);
-				rebuild |= PropCheckbox("Sensor (trigger)", &collider->isSensor, "Reports overlaps but produces no collision response");
+				rebuild |= PropCheckbox("Sensor (trigger)", &collider->isSensor, FieldTip("Collider", "is_sensor"));
 
 				if (live && physics != nullptr && rb != nullptr && rb->body.IsValid())
 				{
@@ -202,23 +203,23 @@ namespace aether::editor
 				}
 
 				bool live = false;
-				live |= PropFloat("Gravity factor", &rb->gravityFactor, 0.01f, -4.0f, 4.0f, "%.2f");
-				PropFloat("Mass", &rb->mass, 0.05f, 0.0f, 100000.0f, "%.2f", "0 = auto (computed from the shape)");
+				live |= PropFloat("Gravity factor", &rb->gravityFactor, 0.01f, -4.0f, 4.0f, "%.2f", FieldTip("Rigid Body", "gravity_factor"));
+				PropFloat("Mass", &rb->mass, 0.05f, 0.0f, 100000.0f, "%.2f", FieldTip("Rigid Body", "mass"));
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 				rb->mass = std::max(0.0f, rb->mass);
-				PropFloat("Linear damping", &rb->linearDamping, 0.005f, 0.0f, 1.0f, "%.3f");
+				PropFloat("Linear damping", &rb->linearDamping, 0.005f, 0.0f, 1.0f, "%.3f", FieldTip("Rigid Body", "linear_damping"));
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-				PropFloat("Angular damping", &rb->angularDamping, 0.005f, 0.0f, 1.0f, "%.3f");
+				PropFloat("Angular damping", &rb->angularDamping, 0.005f, 0.0f, 1.0f, "%.3f", FieldTip("Rigid Body", "angular_damping"));
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 				rb->linearDamping = std::clamp(rb->linearDamping, 0.0f, 1.0f);
 				rb->angularDamping = std::clamp(rb->angularDamping, 0.0f, 1.0f);
-				PropFloat("Max linear vel", &rb->maxLinearVelocity, 1.0f, 0.0f, 100000.0f, "%.0f");
+				PropFloat("Max linear vel", &rb->maxLinearVelocity, 1.0f, 0.0f, 100000.0f, "%.0f", FieldTip("Rigid Body", "max_linear_velocity"));
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
-				PropFloat("Max angular vel", &rb->maxAngularVelocity, 0.5f, 0.0f, 10000.0f, "%.1f");
+				PropFloat("Max angular vel", &rb->maxAngularVelocity, 0.5f, 0.0f, 10000.0f, "%.1f", FieldTip("Rigid Body", "max_angular_velocity"));
 				rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 
-				rebuild |= PropCheckbox("Continuous (CCD)", &rb->continuousCollision, "Continuous collision - stops fast bodies tunneling");
-				rebuild |= PropCheckbox("Can sleep", &rb->allowSleeping, "Let the solver deactivate this body when it comes to rest");
+				rebuild |= PropCheckbox("Continuous (CCD)", &rb->continuousCollision, FieldTip("Rigid Body", "continuous_collision"));
+				rebuild |= PropCheckbox("Can sleep", &rb->allowSleeping, FieldTip("Rigid Body", "allow_sleeping"));
 
 				iw::PropLabel("Freeze pos");
 				const float freezePosColumn = ImGui::GetCursorPosX();

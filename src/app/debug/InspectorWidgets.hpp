@@ -274,11 +274,12 @@ namespace aether::editor::iw
 		return changed;
 	}
 
-	inline bool PropDrag2(const char* label, float* v, float speed = 0.05f, float min = 0.0f, float max = 0.0f, const char* fmt = "%.2f")
+	inline bool PropDrag2(const char* label, float* v, float speed = 0.05f, float min = 0.0f, float max = 0.0f, const char* fmt = "%.2f", const char* tooltip = nullptr)
 	{
 		ImGui::PushID(label);
 		PropLabel(label);
 		const bool changed = ImGui::DragFloat2("##d2", v, speed, min, max, fmt);
+		ItemTooltip(tooltip);
 		ImGui::PopID();
 		return changed;
 	}
