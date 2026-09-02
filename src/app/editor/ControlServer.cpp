@@ -291,6 +291,30 @@ namespace aether::editor
 					}
 				}
 
+				// And reject parameters the method does not declare. A misspelled or wrong-named
+				// argument was silently dropped, so the handler ran with its default and the
+				// caller read the answer to a question it never asked - a level filter that
+				// filters nothing makes an error hunt look clean. Names starting with '_' are
+				// left alone by convention for client metadata.
+				if (const auto props = m.paramsSchema.find("properties");
+				    props != m.paramsSchema.end() && props->is_object() && !props->empty() && params.is_object())
+				{
+					for (const auto& [key, unused]: params.items())
+					{
+						if (key.starts_with('_') || props->contains(key))
+						{
+							continue;
+						}
+						std::string accepted;
+						for (const auto& [name, ignored]: props->items())
+						{
+							accepted += accepted.empty() ? "" : ", ";
+							accepted += name;
+						}
+						return json{{"error", "unknown parameter: " + key + " (accepts: " + accepted + ")"}}.dump();
+					}
+				}
+
 				MethodContext ctx{m_services, m_frameIndex.load(std::memory_order_relaxed), m_fps.load(std::memory_order_relaxed)};
 				return m.handler(params, ctx).dump();
 			}
