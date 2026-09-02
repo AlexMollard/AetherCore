@@ -123,8 +123,12 @@ namespace aether::editor
 		auto* cs = context.TryGet<app::scripting::CSharpScriptingSubsystem>();
 		const bool scriptingAvailable = cs != nullptr && cs->IsAvailable();
 		const char* preview = script.path.empty() ? "Drop or choose a script" : script.path.c_str();
+		// The label goes in the shared left column like every other inspector row. Left on the
+		// combo it was drawn to the RIGHT of the widget, past the space reserved for the remove
+		// button, so it ran off the panel and rendered as "Scri".
+		iw::LabelColumn("Script");
 		ImGui::SetNextItemWidth(-34.0f);
-		if (ImGui::BeginCombo("Script Type", preview))
+		if (ImGui::BeginCombo("##scriptType", preview))
 		{
 			if (ImGui::Selectable("None", script.path.empty()))
 			{
