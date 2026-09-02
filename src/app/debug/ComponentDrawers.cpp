@@ -420,6 +420,38 @@ namespace aether::editor
 			// Otherwise a greyed-out Paste looks broken rather than type-checked.
 			ImGui::SetTooltip("Clipboard holds a %s", Clipboard().component.c_str());
 		}
+
+		ImGui::Separator();
+		// Only reflected components can be reset: the default state is whatever the C++ type
+		// constructs, and reflection is the only thing that can build one by name. A
+		// hand-authored component has no such definition, so the entry is greyed rather than
+		// silently doing nothing.
+		const reflect::ComponentType* type = reflect::FindComponentType(component);
+		const bool resettable = type != nullptr && type->emplaceDefault;
+		ImGui::BeginDisabled(!resettable);
+		if (ImGui::Selectable("Reset to defaults"))
+		{
+			nlohmann::json before;
+			bool isReflected = false;
+			const bool captured = CaptureComponentFields(world, entity, component, services, before, isReflected);
+			// EmplaceOrReplace with a default-constructed value: the component stays, its
+			// fields go back to what the type declares.
+			(void) type->emplaceDefault(world, entity);
+			nlohmann::json after;
+			bool afterReflected = false;
+			if (captured && CaptureComponentFields(world, entity, component, services, after, afterReflected))
+			{
+				if (auto* undo = services.TryGet<UndoStack>())
+				{
+					undo->Record(std::make_unique<SetComponentCommand>(entity.id, component, std::move(before), std::move(after), isReflected));
+				}
+			}
+		}
+		ImGui::EndDisabled();
+		if (!resettable && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		{
+			ImGui::SetTooltip("%s has no reflected defaults to reset to", component.c_str());
+		}
 		ImGui::EndPopup();
 	}
 	} // namespace iw
