@@ -1022,7 +1022,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"scene.scripts",
 		        "list_scripts",
-		        "List the C# scripts attached to an entity.",
+		        "List the C# scripts attached to an entity: each one's type, whether it is attached yet, and its property values in the same shape add_script takes, so a value read here can be written straight back.",
 		        false,
 		        Obj({{"id", IntProp()}}, {"id"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -1043,7 +1043,40 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 			        {
 				        for (const ScriptEntry& script: sc->scripts)
 				        {
-					        scripts.push_back(script.path);
+					        // add_script accepts property values but nothing reported them
+					        // back, so a caller could set one and had no way to confirm it
+					        // took. Written as the inverse of the conversion add_script does,
+					        // so a value read here can be passed straight back to it.
+					        json properties = json::object();
+					        for (const auto& [name, value]: script.properties)
+					        {
+						        switch (value.type)
+						        {
+							        case ScriptPropertyValue::Type::Bool:
+								        properties[name] = value.i64 != 0;
+								        break;
+							        case ScriptPropertyValue::Type::Int:
+							        case ScriptPropertyValue::Type::Enum:
+								        properties[name] = value.i64;
+								        break;
+							        case ScriptPropertyValue::Type::Entity:
+								        properties[name] = value.i64;
+								        break;
+							        case ScriptPropertyValue::Type::Float:
+								        properties[name] = value.f4[0];
+								        break;
+							        case ScriptPropertyValue::Type::Vector3:
+								        properties[name] = json::array({value.f4[0], value.f4[1], value.f4[2]});
+								        break;
+							        case ScriptPropertyValue::Type::String:
+							        case ScriptPropertyValue::Type::Component:
+								        properties[name] = value.str;
+								        break;
+							        case ScriptPropertyValue::Type::None:
+								        break;
+						        }
+					        }
+					        scripts.push_back(json{{"type", script.path}, {"attached", script.attached}, {"properties", std::move(properties)}});
 				        }
 			        }
 			        return json{{"id", entity.id}, {"scripts", std::move(scripts)}};
