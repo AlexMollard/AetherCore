@@ -1032,8 +1032,14 @@ namespace aether::editor
 			}
 			const float frameMs = io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f;
 			const std::string res = std::format("{}x{}", extent.width, extent.height);
-			const std::string fps = std::format("{:.0f} FPS", io.Framerate);
-			const std::string ms = std::format("{:.2f} MS", frameMs);
+			// While the idle throttle is engaged the editor is deliberately drawing at a few
+			// frames a second, and the raw numbers ("10 FPS", "100.00 MS") read as a broken
+			// editor rather than a resting one. This is the always-visible readout, so it says
+			// what is actually going on instead.
+			const auto* idleEngine = context.TryGet<AetherCore>();
+			const bool idleThrottled = idleEngine != nullptr && idleEngine->IsIdleThrottled();
+			const std::string fps = idleThrottled ? std::string("IDLE") : std::format("{:.0f} FPS", io.Framerate);
+			const std::string ms = idleThrottled ? std::string() : std::format("{:.2f} MS", frameMs);
 			const float gap = 18.0f;
 			const float totalW = ImGui::CalcTextSize(ICON_FA_GAUGE_HIGH).x + 8.0f + ImGui::CalcTextSize(res.c_str()).x + gap + ImGui::CalcTextSize(fps.c_str()).x + gap + ImGui::CalcTextSize(ms.c_str()).x + 12.0f;
 			const float targetX = ImGui::GetWindowWidth() - totalW;
@@ -1049,13 +1055,21 @@ namespace aether::editor
 			ImGui::TextUnformatted(res.c_str());
 			ImGui::SameLine(0.0f, gap);
 			ImGui::PopStyleColor();
-			ImGui::PushStyleColor(ImGuiCol_Text, kText);
+			ImGui::PushStyleColor(ImGuiCol_Text, idleThrottled ? kFaint : kText);
 			ImGui::TextUnformatted(fps.c_str());
 			ImGui::PopStyleColor();
-			ImGui::SameLine(0.0f, gap);
-			ImGui::PushStyleColor(ImGuiCol_Text, kFaint);
-			ImGui::TextUnformatted(ms.c_str());
-			ImGui::PopStyleColor();
+			if (idleThrottled)
+			{
+				ImGui::SetItemTooltip("Nothing is happening, so the editor has dropped to %.0f fps to save power. It returns to full speed the moment you interact with it.",
+				        static_cast<double>(io.Framerate));
+			}
+			if (!ms.empty())
+			{
+				ImGui::SameLine(0.0f, gap);
+				ImGui::PushStyleColor(ImGuiCol_Text, kFaint);
+				ImGui::TextUnformatted(ms.c_str());
+				ImGui::PopStyleColor();
+			}
 		}
 		ImGui::EndChild();
 		ImGui::PopStyleColor();
