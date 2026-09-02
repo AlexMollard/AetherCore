@@ -790,7 +790,21 @@ namespace aether::editor
 		PendingCompile finished = std::move(*m_compiling);
 		m_compiling.reset();
 
-		std::optional<std::vector<PipelineCache::PreparedReload>> built = finished.result.get();
+		// Whatever the worker threw is rethrown here, and here is between ImGui::Begin and
+		// ImGui::End: letting it escape unbalances the window stack, so the next frame draws a
+		// corrupted UI instead of reporting a failed compile. The publish poll already guards
+		// its own future the same way.
+		std::optional<std::vector<PipelineCache::PreparedReload>> built;
+		try
+		{
+			built = finished.result.get();
+		}
+		catch (const std::exception& ex)
+		{
+			m_status = std::string("Shader compile failed: ") + ex.what();
+			m_statusIsError = true;
+			return;
+		}
 		auto* assets = context.TryGet<AssetManager>();
 		// Any path that abandons the result has to hand the shader objects back, or they are
 		// leaked - they were created by the driver but never registered.
