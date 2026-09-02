@@ -105,7 +105,7 @@ namespace aether::editor
 	{
 		methods.push_back({"ui.query",
 		        "ui_query",
-		        "List on-screen ImGui widgets from the last frame: window, label, screen rect, hovered/active state, and whether the widget was clipped by its window (part of it is not visible). Filter on clippedHorizontally to find controls drawn past the side of a panel; plain clipped also covers rows at the edge of a scrolling list, which is ordinary. Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click.",
+		        "List on-screen ImGui widgets from the last frame: window, label, screen rect, hovered/active state, and whether the widget was clipped by its window (part of it is not visible). Filter on clippedHorizontally to find controls drawn past the side of a panel; plain clipped also covers rows at the edge of a scrolling list, which is ordinary. Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click. AN EMPTY LABEL DOES NOT MEAN NO WIDGET: imgui only reports a label for the widget types that volunteer one, so combos and several others come back with a rect and an empty label, as does anything scrolled out of view. Treat a name missing from this list as unknown rather than absent - check the rects, or drive it by {x, y}, which is how an unlabelled combo is clicked.",
 		        false,
 		        Obj({{"window", StrProp()}, {"label", StrProp()}}),
 		        [](const json& params, MethodContext&) -> json
@@ -230,7 +230,7 @@ namespace aether::editor
 
 		methods.push_back({"ui.key",
 		        "ui_key",
-		        "Press a key, optionally with modifiers: enter, escape, tab, backspace, delete, space, left, right, up, down, home, end, or any single letter or digit. Set ctrl/shift/alt to send an editor shortcut such as ctrl+z.",
+		        "Press a key, optionally with modifiers: enter, escape, tab, backspace, delete, space, left, right, up, down, home, end, f1-f12, or any single letter or digit. Set ctrl/shift/alt to send an editor shortcut such as ctrl+z.",
 		        true,
 		        Obj({{"key", StrProp()}, {"ctrl", json{{"type", "boolean"}}}, {"shift", json{{"type", "boolean"}}}, {"alt", json{{"type", "boolean"}}}}, {"key"}),
 		        [](const json& params, MethodContext&) -> json
