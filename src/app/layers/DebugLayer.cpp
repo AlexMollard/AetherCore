@@ -749,9 +749,36 @@ namespace aether::editor
 		m_dockspaceBuilt = false;
 	}
 
+	void DebugLayer::DrainSceneWrites(app::LayerContext& context)
+	{
+		for (const auto& done: m_sceneWriter.TakeCompletions())
+		{
+			if (done.ok)
+			{
+				// Only now does the file hold what the recovery copy held, so only now is
+				// the copy safe to drop.
+				if (const auto* project = context.TryGet<app::EditorProjectContext>())
+				{
+					editor::AutosaveService::Discard(*project, done.sceneName);
+				}
+				continue;
+			}
+
+			// The save was reported clean when it was handed over, so take that back: the
+			// scene is dirty, the recovery copy stays, and the failure is on screen rather
+			// than only in the log.
+			if (auto* undo = context.TryGet<editor::UndoStack>())
+			{
+				undo->MarkUnsaved();
+			}
+			ShowToast(std::string(ICON_FA_TRIANGLE_EXCLAMATION "  Could not write scene '") + done.sceneName + "' - your changes are still unsaved.", true);
+		}
+	}
+
 	void DebugLayer::OnUpdate(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
+		DrainSceneWrites(context);
 		const Input& input = context.Get<Input>();
 
 		if (auto* engine = context.TryGet<AetherCore>())
@@ -1418,15 +1445,10 @@ namespace aether::editor
 				{
 					undo->MarkSaved();
 				}
-				// The scene file now holds everything the recovery copy did, so drop it -
-				// leaving it behind would offer stale work back on the next project open.
-				if (const auto* project = context.TryGet<app::EditorProjectContext>())
-				{
-					if (const auto* scenes = context.TryGet<SceneSubsystem>())
-					{
-						editor::AutosaveService::Discard(*project, scenes->GetCurrentScene());
-					}
-				}
+				// The recovery copy is NOT dropped here. The write is still in flight on the
+				// writer thread, and discarding the copy before it lands means a failed save
+				// destroys the one thing that could have recovered the work. DrainSceneWrites
+				// discards it once the file is actually on disk.
 				saved = true;
 			}
 		}

@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include "utils/Logger.hpp"
+
 namespace aether::app::scene
 {
 	BackgroundSceneWriter::BackgroundSceneWriter()
@@ -59,8 +61,16 @@ namespace aether::app::scene
 			m_busy = true;
 
 			lock.unlock();
-			SaveSceneFile(name, desc); // heavy work off the lock and off the main thread
+			const bool ok = SaveSceneFile(name, desc); // heavy work off the lock and off the main thread
+			if (!ok)
+			{
+				// Logged here as well as reported, because a write can fail after the
+				// editor has stopped draining completions - at shutdown, say - and a save
+				// that silently did not happen is the one failure that must never be quiet.
+				AE_ERROR(LogCategory::App, "Failed to write scene '{}' - the file on disk is unchanged.", name);
+			}
 			lock.lock();
+			m_completions.push_back(Completion{name, ok});
 
 			m_busy = false;
 			if (m_pending.empty())
@@ -68,5 +78,12 @@ namespace aether::app::scene
 				m_drained.notify_all();
 			}
 		}
+	}
+	std::vector<BackgroundSceneWriter::Completion> BackgroundSceneWriter::TakeCompletions()
+	{
+		std::vector<Completion> out;
+		const std::scoped_lock lock(m_mutex);
+		out.swap(m_completions);
+		return out;
 	}
 } // namespace aether::app::scene

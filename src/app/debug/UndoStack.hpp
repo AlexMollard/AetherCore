@@ -119,6 +119,11 @@ namespace aether::editor
 		// the branch holding it is discarded; see RecordCommand.
 		void MarkSaved();
 
+		// Drop the pin again. Used when a save that was optimistically marked clean turns
+		// out to have failed on the writer thread: erring dirty costs a prompt, erring
+		// clean costs the work.
+		void MarkUnsaved();
+
 		[[nodiscard]] bool HasUnsavedChanges() const
 		{
 			// A field edit mid-drag is already applied to the world but not yet recorded,

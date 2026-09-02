@@ -111,6 +111,11 @@ namespace aether::editor
 		RecordCommand(std::make_unique<CompositeCommand>(std::move(commands), "Set components"));
 	}
 
+	void UndoStack::MarkUnsaved()
+	{
+		m_cleanDepth.reset();
+	}
+
 	void UndoStack::MarkSaved()
 	{
 		// A drag in flight is already in the world, so it is in the capture this pin is

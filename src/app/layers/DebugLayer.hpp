@@ -66,6 +66,11 @@ namespace aether::editor
 		void SaveSettings(app::LayerContext& context);
 		void PersistSettings(app::LayerContext& context);
 		bool SaveCurrentScene(app::LayerContext& context);
+
+		// Act on scene writes that finished on the writer thread: drop the recovery copy
+		// once the file is really on disk, and put the scene back to unsaved with a visible
+		// error if it is not.
+		void DrainSceneWrites(app::LayerContext& context);
 		void SaveAndReturnToLauncher(app::LayerContext& context);
 
 		// Undo or redo one step, including the selection remap both need. Shared by the

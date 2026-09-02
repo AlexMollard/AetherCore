@@ -5,6 +5,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include "scene/SceneSerializer.hpp"
 
@@ -35,6 +36,19 @@ namespace aether::app::scene
 		// hand-off or any point that must observe the file on disk.
 		void Flush();
 
+		struct Completion
+		{
+			std::string sceneName;
+			bool ok = false;
+		};
+
+		// Writes that finished since the last call, in completion order. The result of
+		// the write used to be dropped on the floor: a save that failed still reported
+		// success, cleared the unsaved-changes guard and deleted the recovery copy, so a
+		// failed save destroyed the one thing that could have recovered the work. Drain
+		// this every frame and act on what actually reached disk.
+		[[nodiscard]] std::vector<Completion> TakeCompletions();
+
 	private:
 		void Run();
 
@@ -43,6 +57,7 @@ namespace aether::app::scene
 		std::condition_variable m_wake;    // worker: new job or stop requested
 		std::condition_variable m_drained; // Flush(): queue empty and nothing in flight
 		std::unordered_map<std::string, SceneDescription> m_pending;
+		std::vector<Completion> m_completions;
 		bool m_busy = false;
 		bool m_stop = false;
 	};
