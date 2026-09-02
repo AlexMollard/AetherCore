@@ -29,6 +29,9 @@ add_executable(EngineTests
     # Autosave's recovery rules: pure filesystem logic, and the half where a mistake
     # destroys work rather than merely failing to save it.
     "${CMAKE_SOURCE_DIR}/src/app/editor/AutosaveRecovery.cpp"
+    # What a refused control call says: pure text over pure data, and the difference
+    # between a caller that can fix the call and one that has to go and read describe.
+    "${CMAKE_SOURCE_DIR}/src/app/editor/ControlDiagnostics.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Reflection.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CoreComponents.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/MoreComponents.reflect.cpp"
