@@ -19,9 +19,11 @@
 
 namespace aether::editor::iw
 {
-	// Floor and ceiling for the label column. A fixed width was the reason "Linear damping",
-	// "Max angular velocity" and "Sensor (trigger)" all truncated: 128px is too narrow for the
-	// longer reflected field names, while a wide inspector had space going spare.
+	// Floor and ceiling for the label column, in pixels at the default UI scale. A fixed width
+	// was the reason "Linear damping", "Max angular velocity" and "Sensor (trigger)" all
+	// truncated: 128px is too narrow for the longer reflected field names, while a wide
+	// inspector had space going spare. They are scaled below, because the text they bound
+	// grows with the UI scale and a fixed ceiling does not.
 	inline constexpr float kLabelWidthMin = 140.0f;
 	inline constexpr float kLabelWidthMax = 260.0f;
 
@@ -30,10 +32,13 @@ namespace aether::editor::iw
 	[[nodiscard]] inline float LabelWidth()
 	{
 		const float content = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
+		// Follow the UI scale: at 1.75x the label text is 75% wider, so bounds fixed in pixels
+		// hold fewer characters and the long names the ceiling exists for truncate again.
+		const float scale = ImGui::GetStyle().FontScaleMain;
 		// The floor stands down rather than starve the value field: in a panel narrow enough
-		// that 140px of label would leave nothing to edit, half the width is the limit.
-		const float floorWidth = std::min(kLabelWidthMin, content * 0.5f);
-		return std::clamp(content * 0.42f, floorWidth, kLabelWidthMax);
+		// that a full label column would leave nothing to edit, half the width is the limit.
+		const float floorWidth = std::min(kLabelWidthMin * scale, content * 0.5f);
+		return std::clamp(content * 0.42f, floorWidth, kLabelWidthMax * scale);
 	}
 
 	// Identifies the component a section header belongs to, so the header can carry a
