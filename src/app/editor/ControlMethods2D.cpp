@@ -848,6 +848,15 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 				        }
 				        animation.frames.push_back(SpriteAnimationFrame{.spriteId = region->id, .durationSeconds = frame.is_object() ? std::max(frame.value("duration", 1.0f / fps), 0.001f) : 1.0f / fps});
 			        }
+			        // An empty frame list wrote a real .spriteanim.toml that reported success
+			        // with a zero duration - an animation asset that can never show anything,
+			        // and one nothing downstream refuses either. Checked before the write so a
+			        // refused call leaves no file behind.
+			        if (animation.frames.empty())
+			        {
+				        return json{{"error", "'frames' is empty, so the animation would have nothing to play (call atlas.info for the sprites this atlas offers)"}};
+			        }
+
 			        std::string out = p.value("out", std::string{});
 			        if (out.empty())
 			        {
