@@ -280,7 +280,13 @@ namespace aether::editor
 			        {
 				        directory.push_back('/');
 			        }
-			        const float cellSize = std::max(p.value("cellSize", 1.0f), 0.001f);
+			        // Clamping to an epsilon rather than refusing writes a tileset whose cells are
+			        // a thousandth of a unit - a broken asset from a typo, with no complaint.
+			        const float cellSize = p.value("cellSize", 1.0f);
+			        if (cellSize <= 0.0f)
+			        {
+				        return json{{"error", "cellSize must be greater than 0 (got " + std::to_string(cellSize) + ")"}};
+			        }
 			        const bool solid = p.value("solid", false);
 
 			        TileSetAsset tileSet;
@@ -707,7 +713,12 @@ namespace aether::editor
 			        SpriteAtlasAsset atlas = SpriteAtlasAsset::SliceGrid(texture, image->width, image->height, settings, previous, image->rgbaPixels);
 			        if (p.contains("pixelsPerUnit"))
 			        {
-				        atlas.pixelsPerUnit = std::max(p.value("pixelsPerUnit", 100.0f), 0.001f);
+				        const float pixelsPerUnit = p.value("pixelsPerUnit", 100.0f);
+				        if (pixelsPerUnit <= 0.0f)
+				        {
+					        return json{{"error", "pixelsPerUnit must be greater than 0 (got " + std::to_string(pixelsPerUnit) + ")"}};
+				        }
+				        atlas.pixelsPerUnit = pixelsPerUnit;
 			        }
 			        json spriteList = json::array();
 			        for (std::size_t i = 0; i < atlas.sprites.size(); ++i)
@@ -780,7 +791,11 @@ namespace aether::editor
 			        {
 				        return json{{"error", "loop must be loop, once, pingpong, or hold"}};
 			        }
-			        const float fps = std::max(p.value("fps", 10.0f), 0.001f);
+			        const float fps = p.value("fps", 10.0f);
+			        if (fps <= 0.0f)
+			        {
+				        return json{{"error", "fps must be greater than 0 (got " + std::to_string(fps) + "); a clamped 0 would play one frame every 1000 seconds"}};
+			        }
 
 			        SpriteAnimationAsset animation;
 			        animation.name = p.value("name", std::string{"Animation"});
