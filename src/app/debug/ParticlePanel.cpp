@@ -423,8 +423,11 @@ namespace aether::editor
 					m_config.burstCount = static_cast<std::uint32_t>(std::max(0, burst));
 				}
 				PropCheckbox("Emit on start", &m_config.emitOnStart, "Fire the burst once when the emitter appears");
-				ImGui::SameLine();
-				PropCheckbox("Emitting", &m_config.emitting);
+				// One row each. PropCheckbox draws a whole row - label column and all - so
+				// putting a second one on the same line re-based its column from the current
+				// cursor and pushed its checkbox to the panel edge, far from the value column
+				// every other one sits in, leaving neither box clearly attached to a label.
+				PropCheckbox("Emitting", &m_config.emitting, "Spawn new particles at the rate above");
 				PropCheckbox("Auto-destroy when done", &m_config.autoDestroyWhenDone, "One-shot effect entities retire themselves");
 				int maxP = static_cast<int>(m_config.maxParticles);
 				if (PropInt("Max particles", &maxP, 4.0f, 1, 100000))
@@ -488,8 +491,7 @@ namespace aether::editor
 			if (SectionHeader(ICON_FA_WEIGHT_HANGING "  Collision"))
 			{
 				PropCheckbox("World", &m_config.collideWorld, "Bounce off physics colliders (in-scene only)");
-				ImGui::SameLine();
-				PropCheckbox("Each other", &m_config.collideParticles);
+				PropCheckbox("Each other", &m_config.collideParticles, "Particles bounce off one another");
 				PropFloat("Bounce", &m_config.bounce, 0.02f, 0.0f, 1.0f, "%.2f");
 				PropFloat("Damping", &m_config.collisionDamping, 0.02f, 0.0f, 1.0f, "%.2f", "Tangential speed lost on a world hit");
 				PropFloat("Collision radius", &m_config.collisionRadius, 0.01f, 0.0f, 10.0f, "%.2f", "0 = derive from particle size");
