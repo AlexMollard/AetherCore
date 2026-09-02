@@ -1,3 +1,4 @@
+#include "AetherCore.hpp"
 #include "debug/SpriteAnimationPanel.hpp"
 #include "debug/EditorCommand.hpp"
 
@@ -192,6 +193,13 @@ namespace aether::editor
 			ImGui::SliderFloat("Speed", &m_previewSpeed, 0.1f, 4.0f, "%.2fx");
 			if (m_previewPlaying)
 			{
+				// A clip playing is work, even with nobody touching the keyboard. Without this
+				// the idle throttle steps it at 10 fps and the preview judders - which would
+				// look like the animation is wrong rather than the editor being asleep.
+				if (auto* engine = context.TryGet<AetherCore>())
+				{
+					engine->RequestActivity();
+				}
 				AdvancePreview(ImGui::GetIO().DeltaTime * m_previewSpeed);
 			}
 

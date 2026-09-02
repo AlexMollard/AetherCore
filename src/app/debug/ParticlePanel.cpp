@@ -1,3 +1,4 @@
+#include "AetherCore.hpp"
 #include "debug/ParticlePanel.hpp"
 #include "debug/UndoStack.hpp"
 #include "debug/EditorCommand.hpp"
@@ -338,6 +339,12 @@ namespace aether::editor
 		SyncPreview();
 		if (m_playing)
 		{
+			// A live preview is work: throttled to 10 fps the simulation looks broken rather
+			// than idle, and emission rates read wrong because each step covers 100 ms.
+			if (auto* engine = context.TryGet<AetherCore>())
+			{
+				engine->RequestActivity();
+			}
 			ParticleSystem::StepStandalone(m_preview, ImGui::GetIO().DeltaTime, glm::vec2(0.0f));
 		}
 
