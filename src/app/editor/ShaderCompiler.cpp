@@ -1,6 +1,7 @@
 #include "editor/ShaderCompiler.hpp"
 
 #include <unordered_map>
+#include <unordered_set>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -47,21 +48,73 @@ namespace aether::editor
 		// header edit, but never under-compiles (stale binary shipped).
 		bool IsShaderHeaderExtension(const fs::path& extension)
 		{
-			return extension == ".slang" || extension == ".slangh" || extension == ".hlsl" || extension == ".h";
+			return extension == ".slangh" || extension == ".hlsl" || extension == ".h";
 		}
 
-		std::optional<fs::file_time_type> NewestShaderSourceMTime(const fs::path& sourceDir)
+		// Which .slang files are included by another shader, and so have to invalidate it when
+		// they change. Treating EVERY .slang as a shared header instead - which is what
+		// counting them all did - meant regenerating one material's shader marked all of its
+		// siblings stale, and the editor recompiled every project shader on every open.
+		std::unordered_set<std::string> IncludedShaderNames(const fs::path& sourceDir)
 		{
-			std::optional<fs::file_time_type> newest;
+			std::unordered_set<std::string> included;
 			std::error_code ec;
-			for (const auto& entry: fs::directory_iterator(sourceDir, ec))
+			for (const auto& entry: fs::recursive_directory_iterator(sourceDir, ec))
 			{
 				if (ec)
 				{
 					break;
 				}
 				std::error_code fileEc;
-				if (!entry.is_regular_file(fileEc) || fileEc || !IsShaderHeaderExtension(entry.path().extension()))
+				const fs::path extension = entry.path().extension();
+				if (!entry.is_regular_file(fileEc) || fileEc || (extension != ".slang" && !IsShaderHeaderExtension(extension)))
+				{
+					continue;
+				}
+				const auto text = io::file_util::ReadText(entry.path());
+				if (!text)
+				{
+					continue;
+				}
+				// Any quoted or angled name on an #include line. Cheap and deliberately loose:
+				// over-listing a name only costs a recompile, missing one ships a stale binary.
+				std::size_t at = text->find("#include");
+				while (at != std::string::npos)
+				{
+					const std::size_t eol = text->find('\n', at);
+					const std::string line = text->substr(at, eol == std::string::npos ? std::string::npos : eol - at);
+					const std::size_t open = line.find_first_of("\"<");
+					const std::size_t close = open == std::string::npos ? std::string::npos : line.find_first_of("\">", open + 1);
+					if (open != std::string::npos && close != std::string::npos && close > open + 1)
+					{
+						included.insert(fs::path(line.substr(open + 1, close - open - 1)).filename().generic_string());
+					}
+					at = text->find("#include", at + 1);
+				}
+			}
+			return included;
+		}
+
+		// Recursive: the engine's shader headers live in subdirectories, and a scan that only
+		// looked at the top level would report the wrong answer for them.
+		std::optional<fs::file_time_type> NewestShaderSourceMTime(const fs::path& sourceDir, const std::unordered_set<std::string>* includedShaders = nullptr)
+		{
+			std::optional<fs::file_time_type> newest;
+			std::error_code ec;
+			for (const auto& entry: fs::recursive_directory_iterator(sourceDir, ec))
+			{
+				if (ec)
+				{
+					break;
+				}
+				std::error_code fileEc;
+				if (!entry.is_regular_file(fileEc) || fileEc)
+				{
+					continue;
+				}
+				const fs::path extension = entry.path().extension();
+				const bool isIncludedShader = includedShaders != nullptr && extension == ".slang" && includedShaders->contains(entry.path().filename().generic_string());
+				if (!IsShaderHeaderExtension(extension) && !isIncludedShader)
 				{
 					continue;
 				}
@@ -271,11 +324,34 @@ namespace aether::editor
 		return projectRoot / "Builds" / "Intermediate" / "shaders";
 	}
 
+	namespace
+	{
+		// Everything a shader in this directory depends on besides itself: the project's own
+		// headers, any .slang another shader includes, and the engine's shader headers. Both
+		// the single-shader and whole-project paths ask this same question, so they cannot
+		// disagree about what counts as stale.
+		std::optional<fs::file_time_type> NewestDependencyMTime(const fs::path& sourceDir)
+		{
+			const std::unordered_set<std::string> included = IncludedShaderNames(sourceDir);
+			auto newest = NewestShaderSourceMTime(sourceDir, &included);
+#ifdef AETHER_SHADER_INCLUDE_DIR
+			// A change to an engine header has to invalidate every project shader built
+			// against it, or the skip below ships a binary compiled against a header that no
+			// longer exists in that form.
+			if (const auto engineHeaders = NewestShaderSourceMTime(fs::path(AETHER_SHADER_INCLUDE_DIR)); engineHeaders && (!newest || *engineHeaders > *newest))
+			{
+				newest = engineHeaders;
+			}
+#endif
+			return newest;
+		}
+	} // namespace
+
 	bool CompileOne(const fs::path& slangFile, const fs::path& outDir, std::string& error)
 	{
 #ifdef AETHER_SLANGC_EXE
 		const fs::path outFile = outDir / (slangFile.stem().string() + ".spv");
-		const auto newestSourceMTime = NewestShaderSourceMTime(slangFile.parent_path());
+		const auto newestSourceMTime = NewestDependencyMTime(slangFile.parent_path());
 		if (!IsOutputStale(slangFile, outFile, newestSourceMTime))
 		{
 			return true;
@@ -365,7 +441,7 @@ namespace aether::editor
 		// with no way out but re-saving each material by hand.
 		RegenerateGraphShaders(projectRoot, sourceDir);
 
-		const auto newestSourceMTime = NewestShaderSourceMTime(sourceDir);
+		const auto newestSourceMTime = NewestDependencyMTime(sourceDir);
 
 		for (const auto& entry: fs::directory_iterator(sourceDir, ec))
 		{
@@ -379,7 +455,14 @@ namespace aether::editor
 			}
 
 			const fs::path outFile = outDir / (entry.path().stem().string() + ".spv");
-			const bool wasStale = IsOutputStale(entry.path(), outFile, newestSourceMTime);
+			// Staleness was already being computed here and used only to count: slangc ran on
+			// every shader on every open and every play, which was most of the editor's
+			// startup time for a project whose shaders had not changed at all.
+			if (!IsOutputStale(entry.path(), outFile, newestSourceMTime))
+			{
+				++result.upToDate;
+				continue;
+			}
 
 			std::string compileError;
 			if (!CompileOne(entry.path(), outDir, compileError))
@@ -388,10 +471,7 @@ namespace aether::editor
 				failures.push_back(entry.path().filename().string() + ": " + compileError);
 				continue;
 			}
-			if (wasStale)
-			{
-				++result.compiled;
-			}
+			++result.compiled;
 		}
 
 		result.ok = result.failed == 0;
@@ -405,10 +485,10 @@ namespace aether::editor
 		}
 		else
 		{
-			result.message = "Compiled " + std::to_string(result.compiled) + " shader(s), " + std::to_string(result.failed) + " failed.";
+			result.message = "Compiled " + std::to_string(result.compiled) + " shader(s), " + std::to_string(result.upToDate) + " up to date, " + std::to_string(result.failed) + " failed.";
 		}
 
-		AE_INFO(LogCategory::App, "Project shader compile ({}): {} compiled, {} failed.", projectRoot.generic_string(), result.compiled, result.failed);
+		AE_INFO(LogCategory::App, "Project shader compile ({}): {} compiled, {} up to date, {} failed.", projectRoot.generic_string(), result.compiled, result.upToDate, result.failed);
 		return result;
 	}
 } // namespace aether::editor

@@ -11,6 +11,9 @@ namespace aether::editor
 		std::string message;
 		int compiled = 0;
 		int failed = 0;
+		// Shaders whose .spv was already newer than every source and header, so slangc was
+		// never invoked for them.
+		int upToDate = 0;
 	};
 
 	[[nodiscard]] bool CanCompileShaders();
