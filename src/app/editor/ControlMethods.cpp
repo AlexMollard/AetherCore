@@ -589,7 +589,8 @@ namespace aether::editor
 
 		methods.push_back({"console.logs",
 		        "get_console_log",
-		        "Read a bounded tail of the live editor console. Filter by minimumLevel (verbose/info/warn/error), category, message text, or monotonic afterSeq for incremental polling.",
+		        "Read a bounded tail of the live editor console. Filter by minimumLevel (verbose/info/warn/error), category, message text, or monotonic afterSeq for incremental polling. "
+		        "'limit' caps how many entries come back (1-500, default 100) while 'matched' still reports how many the filter actually hit, so counting errors costs one small call rather than the whole tail.",
 		        false,
 		        Obj({{"limit", json{{"type", "integer"}, {"minimum", 1}, {"maximum", 500}}},
 		                {"minimumLevel", json{{"type", "string"}, {"enum", json::array({"verbose", "info", "warn", "error"})}}},
@@ -2310,7 +2311,8 @@ namespace aether::editor
 
 		methods.push_back({"render.memory",
 		        "render_memory",
-		        "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes.",
+		        "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes. "
+		        "'limit' caps how many texture and buffer rows come back (default 24); pass 0 for the totals and heap figures with no rows, which is the whole answer when you only want to compare counts or watch for a leak.",
 		        false,
 		        Obj({{"limit", IntProp()}}),
 		        [](const json& p, MethodContext&) -> json

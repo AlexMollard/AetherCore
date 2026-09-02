@@ -1082,7 +1082,8 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"assets.list",
 		        "list_assets",
-		        "Glob project files by virtual path, e.g. 'project://assets/**/*.png' or 'project://assets/**/*.spriteatlas.toml'. Feeds texture/atlas parameters on the other 2D authoring methods.",
+		        "Glob project files by virtual path, e.g. 'project://assets/**/*.png' or 'project://assets/**/*.spriteatlas.toml'. Feeds texture/atlas parameters on the other 2D authoring methods. "
+		        "'limit' caps how many paths come back while 'matched' and 'truncated' still describe the full result, so a small limit is enough to count what a glob hits.",
 		        false,
 		        Obj({{"glob", StrProp()}, {"limit", IntProp()}}),
 		        [](const json& p, MethodContext&) -> json
