@@ -15,6 +15,12 @@ namespace aether::editor::chrome
 		return ImGui::CalcTextSize(label, nullptr, /*hide_text_after_double_hash=*/true).x + ImGui::GetStyle().FramePadding.x * 2.0f;
 	}
 
+	// What a checkbox of this label will measure: the box is a square of frame height.
+	[[nodiscard]] inline float CheckboxWidth(const char* label)
+	{
+		return ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(label, nullptr, /*hide_text_after_double_hash=*/true).x;
+	}
+
 	// SameLine, unless the next control of this width would not fit - then start a row. A
 	// toolbar built from plain SameLine calls simply runs off the right edge once the panel
 	// is narrow enough, and nothing on screen says the control is there.

@@ -137,12 +137,16 @@ namespace aether::editor
 		toolButton(ICON_FA_CIRCLE, Tool::Ellipse, "Ellipse");
 		toolButton(ICON_FA_EYE_DROPPER, Tool::Eyedropper, "Eyedropper");
 
-		ImGui::SameLine(0.0f, 16.0f);
+		// Each group wraps as a unit rather than splitting across the edge. The row holds
+		// seven tool buttons before it even starts, so on a narrow panel - or at a larger UI
+		// scale, where every control grows - it does not come close to fitting on one line.
+		const ImGuiStyle& style = ImGui::GetStyle();
+		chrome::SameLineOrWrap(chrome::CheckboxWidth("Filled") + style.ItemSpacing.x + chrome::CheckboxWidth("Grid"), 16.0f);
 		ImGui::Checkbox("Filled", &m_filledShape);
 		ImGui::SameLine();
 		ImGui::Checkbox("Grid", &m_showGrid);
 
-		ImGui::SameLine(0.0f, 16.0f);
+		chrome::SameLineOrWrap(chrome::ButtonWidth(ICON_FA_ROTATE " Undo") + style.ItemSpacing.x + chrome::ButtonWidth("Redo"), 16.0f);
 		ImGui::BeginDisabled(!doc.CanUndo());
 		if (chrome::GhostButton(ICON_FA_ROTATE " Undo"))
 		{
@@ -178,7 +182,9 @@ namespace aether::editor
 			m_status = "New " + std::to_string(m_newW) + "x" + std::to_string(m_newH) + " canvas";
 		}
 
-		ImGui::SetNextItemWidth(-200.0f);
+		// Reserve what Open and Save actually measure. A round 200 was enough at the default
+		// UI scale and nowhere near it at a larger one, which pushed Save off the panel.
+		ImGui::SetNextItemWidth(-(chrome::ButtonWidth(ICON_FA_FOLDER_OPEN " Open") + chrome::ButtonWidth(ICON_FA_FLOPPY_DISK " Save") + style.ItemSpacing.x * 2.0f));
 		ImGui::InputText("##savepath", &m_savePath);
 		ImGui::SameLine();
 		if (chrome::GhostButton(ICON_FA_FOLDER_OPEN " Open"))
