@@ -1981,7 +1981,15 @@ namespace aether::editor
 				const bool undoCombo = zKey && !io.KeyShift;
 				if (undoCombo || redoCombo)
 				{
-					ApplyHistoryStep(context, redoCombo);
+					// A material is its own document with its own history, the same reason
+					// Ctrl+S saves the focused material rather than the scene. Undoing the
+					// scene while looking at a half-edited graph is the surprising answer.
+					auto* material = dynamic_cast<MaterialGraphPanel*>(FindPanelByName("Material"));
+					const bool handled = material != nullptr && (redoCombo ? material->RedoIfFocused() : material->UndoIfFocused());
+					if (!handled)
+					{
+						ApplyHistoryStep(context, redoCombo);
+					}
 				}
 			}
 			if (m_pendingOpenSceneDialog)

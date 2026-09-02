@@ -42,6 +42,10 @@ namespace aether::editor
 		// saved the wrong document and left the edits unsaved - so it gets asked first.
 		// Returns true when it handled the save.
 		bool SaveIfFocusedAndDirty(app::LayerContext& context);
+		// Ctrl+Z / Ctrl+Y route here when this panel has focus, the same way Ctrl+S does:
+		// a material is its own document and does not belong in the scene's history.
+		bool UndoIfFocused();
+		bool RedoIfFocused();
 
 	public:
 		[[nodiscard]] bool HasUnsavedWork(app::LayerContext& context) const override;
@@ -96,6 +100,21 @@ namespace aether::editor
 
 		// Present only when this material's shader comes from a graph.
 		std::optional<MaterialGraph> m_graph;
+
+		// Whole-graph snapshots, the same model PixelArtDocument uses: a graph is small, and
+		// copying one is far simpler than a per-operation command for every edit the node
+		// editor can make. Taken BEFORE a change, so the top of m_undoHistory is the state to
+		// go back to. Node positions ride along in the snapshot, so an undo also restores the
+		// layout as it stood at that moment.
+		static constexpr std::size_t kMaxGraphUndo = 64;
+		std::vector<MaterialGraph> m_undoHistory;
+		std::vector<MaterialGraph> m_redoHistory;
+
+		void SnapshotGraph();
+		// Snapshot when a widget is first grabbed, so a drag is one undo step and not one per
+		// frame. Call immediately after the widget.
+		void SnapshotOnActivate();
+		void RestoreGraph(std::vector<MaterialGraph>& from, std::vector<MaterialGraph>& to);
 		std::string m_compiledSignature; // the graph as last compiled, to detect a real change
 		std::string m_submittedSignature; // the graph as last SENT to the compiler
 		// The slangc run in flight. Held as a future rather than a raw thread so that

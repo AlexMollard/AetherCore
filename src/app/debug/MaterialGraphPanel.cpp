@@ -348,6 +348,7 @@ namespace aether::editor
 					return;
 				}
 
+				SnapshotGraph();
 				// An input takes one link; connecting again replaces rather than stacks.
 				std::erase_if(m_graph->links, [&](const MaterialLink& l) { return l.toNode == toNode && l.toPin == toPin; });
 				m_graph->links.push_back(MaterialLink{
@@ -360,6 +361,7 @@ namespace aether::editor
 		int destroyed = 0;
 		if (ImNodes::IsLinkDestroyed(&destroyed))
 		{
+			SnapshotGraph();
 			std::erase_if(m_graph->links, [&](const MaterialLink& l) { return l.id == destroyed; });
 		}
 	}
@@ -369,6 +371,13 @@ namespace aether::editor
 		if (!ImGui::IsKeyPressed(shortcuts::kGraphDelete.key) && !ImGui::IsKeyPressed(ImGuiKey_X))
 		{
 			return;
+		}
+
+		// One snapshot for the whole delete, not one per erase: selected links and nodes go
+		// together as a single action.
+		if (ImNodes::NumSelectedLinks() > 0 || ImNodes::NumSelectedNodes() > 0)
+		{
+			SnapshotGraph();
 		}
 
 		if (const int count = ImNodes::NumSelectedLinks(); count > 0)
@@ -455,10 +464,13 @@ namespace aether::editor
 				if (node.type == MaterialNodeType::ConstantColor)
 				{
 					ImGui::ColorEdit4("##c", node.value, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+					SnapshotOnActivate();
 				}
 				else if (node.type == MaterialNodeType::ConstantFloat)
 				{
-					if (ImGui::DragFloat("##f", &node.value[0], 0.01f))
+					const bool floatChanged = ImGui::DragFloat("##f", &node.value[0], 0.01f);
+					SnapshotOnActivate();
+					if (floatChanged)
 					{
 						node.value[1] = node.value[0];
 						node.value[2] = node.value[0];
@@ -477,23 +489,28 @@ namespace aether::editor
 				else if (node.type == MaterialNodeType::Panner)
 				{
 					ImGui::DragFloat2("##speed", node.value, 0.01f);
+					SnapshotOnActivate();
 					ImGui::SetItemTooltip("UV units per second");
 				}
 				else if (node.type == MaterialNodeType::Noise)
 				{
 					ImGui::DragFloat("##scale", &node.value[0], 0.1f, 0.0f, 256.0f);
+					SnapshotOnActivate();
 					ImGui::SetItemTooltip("Cells across the UV range");
 				}
 				else if (node.type == MaterialNodeType::Sine)
 				{
 					ImGui::DragFloat("##freq", &node.value[0], 0.05f);
+					SnapshotOnActivate();
 					ImGui::SetItemTooltip("Frequency. With nothing plugged in, X is time.");
 				}
 				else if (node.type == MaterialNodeType::Remap)
 				{
 					ImGui::DragFloat2("##in", &node.value[0], 0.01f);
+					SnapshotOnActivate();
 					ImGui::SetItemTooltip("From: min, max");
 					ImGui::DragFloat2("##out", &node.value[2], 0.01f);
+					SnapshotOnActivate();
 					ImGui::SetItemTooltip("To: min, max");
 				}
 				else if (node.type == MaterialNodeType::Channel)
@@ -611,6 +628,7 @@ namespace aether::editor
 			// Placed where the menu was opened; the grid-space position is written back by
 			// the canvas loop on the next frame.
 			ImNodes::SetNodeScreenSpacePos(node.id, ImVec2(m_addNodeScreenX, m_addNodeScreenY));
+			SnapshotGraph();
 			m_graph->nodes.push_back(node);
 		};
 
@@ -1049,6 +1067,65 @@ namespace aether::editor
 		m_submittedSignature = m_compiledSignature;
 		m_savedGraphSignature = m_compiledSignature;
 		RefreshPreview(context);
+	}
+
+	void MaterialGraphPanel::SnapshotGraph()
+	{
+		if (!m_graph.has_value())
+		{
+			return;
+		}
+		if (m_undoHistory.size() >= kMaxGraphUndo)
+		{
+			m_undoHistory.erase(m_undoHistory.begin());
+		}
+		m_undoHistory.push_back(*m_graph);
+		// A new edit invalidates the redo branch, as everywhere else.
+		m_redoHistory.clear();
+	}
+
+	void MaterialGraphPanel::SnapshotOnActivate()
+	{
+		if (ImGui::IsItemActivated())
+		{
+			SnapshotGraph();
+		}
+	}
+
+	void MaterialGraphPanel::RestoreGraph(std::vector<MaterialGraph>& from, std::vector<MaterialGraph>& to)
+	{
+		if (from.empty() || !m_graph.has_value())
+		{
+			return;
+		}
+		to.push_back(*m_graph);
+		*m_graph = std::move(from.back());
+		from.pop_back();
+		// ImNodes owns node positions once they have been pushed, and writes them back every
+		// frame - without this the restored layout is immediately overwritten by the live one.
+		m_positionsApplied = false;
+		m_status.clear();
+		m_statusIsError = false;
+	}
+
+	bool MaterialGraphPanel::UndoIfFocused()
+	{
+		if (!m_focused || !m_graph.has_value() || m_undoHistory.empty())
+		{
+			return false;
+		}
+		RestoreGraph(m_undoHistory, m_redoHistory);
+		return true;
+	}
+
+	bool MaterialGraphPanel::RedoIfFocused()
+	{
+		if (!m_focused || !m_graph.has_value() || m_redoHistory.empty())
+		{
+			return false;
+		}
+		RestoreGraph(m_redoHistory, m_undoHistory);
+		return true;
 	}
 
 	bool MaterialGraphPanel::SaveIfFocusedAndDirty(app::LayerContext& context)
