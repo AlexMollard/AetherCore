@@ -195,8 +195,10 @@ namespace aether::editor
 			{
 				// A clip playing is work, even with nobody touching the keyboard. Without this
 				// the idle throttle steps it at 10 fps and the preview judders - which would
-				// look like the animation is wrong rather than the editor being asleep.
-				if (auto* engine = context.TryGet<AetherCore>())
+				// look like the animation is wrong rather than the editor being asleep. Only
+				// while the window is focused: judder nobody is looking at is not worth
+				// holding the whole editor awake for.
+				if (auto* engine = context.TryGet<AetherCore>(); engine != nullptr && engine->IsWindowFocused())
 				{
 					engine->RequestActivity();
 				}

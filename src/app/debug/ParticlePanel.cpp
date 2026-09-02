@@ -343,8 +343,10 @@ namespace aether::editor
 		if (m_playing)
 		{
 			// A live preview is work: throttled to 10 fps the simulation looks broken rather
-			// than idle, and emission rates read wrong because each step covers 100 ms.
-			if (auto* engine = context.TryGet<AetherCore>())
+			// than idle, and emission rates read wrong because each step covers 100 ms. Only
+			// while someone is here to see it, though - left ungated this kept the editor at
+			// full frame rate after alt-tabbing away, animating a preview nobody was watching.
+			if (auto* engine = context.TryGet<AetherCore>(); engine != nullptr && engine->IsWindowFocused())
 			{
 				engine->RequestActivity();
 			}
