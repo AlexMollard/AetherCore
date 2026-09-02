@@ -1596,6 +1596,21 @@ namespace aether::editor
 		        BatchSchema(setComponentSpec),
 		        BatchOperation(setComponent)});
 
+		methods.push_back({"scene.assets",
+		        "list_scene_assets",
+		        "The scene and prefab NAMES the other methods take: scene.load and scene.save want a scene name, add_prefab_instance wants a prefab's save name. Both are bare names, not paths - assets.list globs the files but leaves the caller stripping a directory and two extensions off each one. 'current' is the scene loaded now.",
+		        false,
+		        Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        // These names were only reachable by getting one wrong: scene.load listed
+			        // the scenes in its refusal and add_prefab_instance did not even do that.
+			        const auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        return json{{"scenes", app::scene::ListSceneFiles()},
+			                {"prefabs", app::scene::ListPrefabFiles()},
+			                {"current", scenes != nullptr ? scenes->GetCurrentScene() : std::string{}}};
+		        }});
+
 		methods.push_back({"scene.component_types",
 		        "list_component_types",
 		        "List every component (name + category), plus, for components with editable fields, the field list get_component / set_component accept.",
