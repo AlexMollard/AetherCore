@@ -27,6 +27,7 @@
 #include "debug/Icons.hpp"
 #include "utils/Logger.hpp"
 #include "debug/InspectorWidgets.hpp"
+#include "debug/ReflectedComponentDrawer.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
 #include "layers/AppLayer.hpp"
@@ -827,8 +828,8 @@ namespace aether::editor
 			PropDrag2("Pixel Size", &sprite.pixelSize.x, 1.0f, 1.0f, 16384.0f, "%.0f");
 			PropDrag2("Pivot", &sprite.pivot.x, 0.01f, 0.0f, 1.0f);
 			PropFloat("Pixels Per Unit", &sprite.pixelsPerUnit, 1.0f, 0.001f, 10000.0f, "%.1f");
-			PropInt("Sorting Layer", &sprite.sortingLayer);
-			PropInt("Order In Layer", &sprite.orderInLayer);
+			PropInt("Sorting Layer", &sprite.sortingLayer, 1.0f, 0, 0, FieldTip("Sprite Renderer", "sorting_layer"));
+			PropInt("Order In Layer", &sprite.orderInLayer, 1.0f, 0, 0, FieldTip("Sprite Renderer", "order_in_layer"));
 			ImGui::TreePop();
 		}
 	}
