@@ -127,7 +127,9 @@ namespace aether::editor
 		// combo it was drawn to the RIGHT of the widget, past the space reserved for the remove
 		// button, so it ran off the panel and rendered as "Scri".
 		iw::LabelColumn("Script");
-		ImGui::SetNextItemWidth(-34.0f);
+		// Reserve exactly the remove button plus the gap SameLine will add. A round number
+		// here was a pixel short, so the button sat under the scrollbar.
+		ImGui::SetNextItemWidth(-(iw::RemoveButtonWidth(ICON_FA_XMARK) + ImGui::GetStyle().ItemSpacing.x));
 		if (ImGui::BeginCombo("##scriptType", preview))
 		{
 			if (ImGui::Selectable("None", script.path.empty()))

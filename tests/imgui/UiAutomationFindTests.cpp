@@ -21,10 +21,10 @@ namespace
 
 		Frame() { UiAutomation::Get().BeginFrameSwap(); }
 
-		Frame& Item(const char* window, const char* label)
+		Frame& Item(const char* window, const char* label, bool clipped = false)
 		{
 			const unsigned int id = next++;
-			UiAutomation::Get().RecordItemAdd(id, 10.0f * static_cast<float>(id), 20.0f, 30.0f, 40.0f, window);
+			UiAutomation::Get().RecordItemAdd(id, 10.0f * static_cast<float>(id), 20.0f, 30.0f, 40.0f, window, clipped);
 			UiAutomation::Get().RecordItemInfo(id, label);
 			return *this;
 		}
@@ -122,4 +122,31 @@ TEST_CASE("The window filter still narrows a label that appears in several")
 	const auto hit = UiAutomation::Get().FindItem("File Explorer", "Delete", err);
 	REQUIRE_MESSAGE(hit.has_value(), err);
 	CHECK(hit->window == "File Explorer");
+}
+
+TEST_CASE("A clipped widget is recorded as clipped")
+{
+	// The flag is the only way a caller can tell a truncated label from a whole one: the
+	// rect is the same either way, so a UI audit that reads rects alone sees nothing wrong.
+	Frame frame;
+	frame.Item("Inspector", "Whole").Item("Inspector", "Cut off", /*clipped=*/true);
+	frame.Commit();
+
+	bool sawWhole = false;
+	bool sawCut = false;
+	for (const UiItem& item: UiAutomation::Get().Snapshot())
+	{
+		if (item.label == "Whole")
+		{
+			sawWhole = true;
+			CHECK_FALSE(item.clipped);
+		}
+		if (item.label == "Cut off")
+		{
+			sawCut = true;
+			CHECK(item.clipped);
+		}
+	}
+	CHECK(sawWhole);
+	CHECK(sawCut);
 }

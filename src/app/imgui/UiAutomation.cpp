@@ -14,10 +14,10 @@ namespace aether::app
 		return instance;
 	}
 
-	void UiAutomation::RecordItemAdd(unsigned int id, float x, float y, float w, float h, const char* window)
+	void UiAutomation::RecordItemAdd(unsigned int id, float x, float y, float w, float h, const char* window, bool clipped)
 	{
 		m_buildingIndex[id] = m_building.size();
-		m_building.push_back(UiItem{id, std::string{}, window != nullptr ? window : "", x, y, w, h});
+		m_building.push_back(UiItem{id, std::string{}, window != nullptr ? window : "", x, y, w, h, clipped});
 	}
 
 	void UiAutomation::RecordItemInfo(unsigned int id, const char* label)
@@ -132,8 +132,13 @@ namespace aether::app
 
 void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb, const ImGuiLastItemData*)
 {
-	const char* window = (ctx != nullptr && ctx->CurrentWindow != nullptr) ? ctx->CurrentWindow->Name : "";
-	aether::app::UiAutomation::Get().RecordItemAdd(static_cast<unsigned int>(id), bb.Min.x, bb.Min.y, bb.Max.x - bb.Min.x, bb.Max.y - bb.Min.y, window);
+	const ImGuiWindow* current = (ctx != nullptr) ? ctx->CurrentWindow : nullptr;
+	const char* window = (current != nullptr) ? current->Name : "";
+	// ImGui clips drawing to this rect, so anything of the item outside it is invisible.
+	// Partially outside only: an item entirely outside has simply been scrolled out of
+	// view, which is ordinary and would drown the genuinely half-drawn ones in noise.
+	const bool clipped = current != nullptr && current->ClipRect.Overlaps(bb) && !current->ClipRect.Contains(bb);
+	aether::app::UiAutomation::Get().RecordItemAdd(static_cast<unsigned int>(id), bb.Min.x, bb.Min.y, bb.Max.x - bb.Min.x, bb.Max.y - bb.Min.y, window, clipped);
 }
 
 void ImGuiTestEngineHook_ItemInfo(ImGuiContext*, ImGuiID id, const char* label, ImGuiItemStatusFlags)

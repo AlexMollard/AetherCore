@@ -22,6 +22,12 @@ namespace aether::app
 		float y = 0.0f;
 		float w = 0.0f;
 		float h = 0.0f;
+		// The widget straddles the edge of its window's clip rect, so part of it - usually
+		// the tail of a label - was drawn and the rest was not. Rect arithmetic alone cannot
+		// see this: a label column narrower than its text reports a full-width rect and
+		// draws a truncated string, which is exactly the bug this exists to make
+		// measurable. An item scrolled fully out of view is not clipped in this sense.
+		bool clipped = false;
 	};
 
 	// Global singleton bridging ImGui's test-engine item hooks and synthetic input
@@ -42,7 +48,7 @@ namespace aether::app
 		[[nodiscard]] UiInputScript& Input() { return m_input; }
 
 		// Hook sinks (called from the ImGuiTestEngineHook_* symbols):
-		void RecordItemAdd(unsigned int id, float x, float y, float w, float h, const char* window);
+		void RecordItemAdd(unsigned int id, float x, float y, float w, float h, const char* window, bool clipped = false);
 		void RecordItemInfo(unsigned int id, const char* label);
 		[[nodiscard]] const char* DebugLabel(unsigned int id) const;
 
