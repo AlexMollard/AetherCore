@@ -14,6 +14,7 @@
 
 #include "Color.hpp"
 #include "assets/AssetManager.hpp"
+#include "debug/EditorChrome.hpp"
 #include "debug/EditorShortcuts.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
@@ -1057,8 +1058,11 @@ namespace aether::editor
 		ImGui::SameLine();
 		ImGui::Checkbox("Preview", &m_previewContent);
 
-		ImGui::SetNextItemWidth(96.f);
-		ImGui::SameLine();
+		// The drag plus its trailing label, so the whole control wraps together rather than
+		// half of it leaving the panel.
+		constexpr float kZoomWidth = 96.f;
+		chrome::SameLineOrWrap(kZoomWidth + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize("Zoom").x);
+		ImGui::SetNextItemWidth(kZoomWidth);
 		if (ImGui::DragFloat("Zoom", &m_zoom, 0.01f, kMinZoom, kMaxZoom, "%.2fx"))
 		{
 			m_zoom = std::clamp(m_zoom, kMinZoom, kMaxZoom);
