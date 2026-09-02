@@ -33,13 +33,16 @@ namespace aether::editor
 		bool DrawScalarField(const char* lbl, reflect::FieldType type, const reflect::FieldMeta& meta, reflect::FieldValue& v)
 		{
 			const float speed = meta.speed > 0.0f ? meta.speed : 0.05f;
+			// Reflection has carried a per-field tooltip all along and nothing ever drew it,
+			// so the one field that set it explained itself to nobody.
+			const char* const tip = meta.tooltip.empty() ? nullptr : meta.tooltip.c_str();
 			bool changed = false;
 			switch (type)
 			{
 				case FieldType::Float:
 				{
 					float x = static_cast<float>(v.num);
-					if (iw::PropFloat(lbl, &x, speed, meta.min, meta.max))
+					if (iw::PropFloat(lbl, &x, speed, meta.min, meta.max, "%.3f", tip))
 					{
 						v.num = x;
 						changed = true;
@@ -49,7 +52,7 @@ namespace aether::editor
 				case FieldType::Int:
 				{
 					int x = static_cast<int>(v.num);
-					if (iw::PropInt(lbl, &x))
+					if (iw::PropInt(lbl, &x, 1.0f, 0, 0, tip))
 					{
 						v.num = x;
 						changed = true;
@@ -59,7 +62,7 @@ namespace aether::editor
 				case FieldType::UInt:
 				{
 					int x = static_cast<int>(v.num);
-					if (iw::PropInt(lbl, &x, 1.0f, 0, 0))
+					if (iw::PropInt(lbl, &x, 1.0f, 0, 0, tip))
 					{
 						v.num = x < 0 ? 0 : x;
 						changed = true;
@@ -69,7 +72,7 @@ namespace aether::editor
 				case FieldType::Bool:
 				{
 					bool b = v.boolean;
-					if (iw::PropCheckbox(lbl, &b))
+					if (iw::PropCheckbox(lbl, &b, tip))
 					{
 						v.boolean = b;
 						changed = true;

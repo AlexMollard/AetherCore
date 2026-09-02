@@ -184,7 +184,7 @@ AE_FIELD_N("color", color, Color3)
 AE_FIELD_R(intensity, Float, 0.0f, 1000.0f)
 AE_FIELD_R(radius, Float, 0.0f, 500.0f)
 AE_FIELD_R(sourceRadius, Float, 0.0f, 10.0f)
-AE_FIELD_N("shadow", castsShadow, Bool)
+b.Field("shadow", ::aether::reflect::FieldType::Bool, &C::castsShadow, ::aether::reflect::FieldMeta{.tooltip = "Cast shadows from this light. The budget is 48 shadow entries: a point light spends 6 of them on its cube faces, a spot light 1. Past that, lights still light the scene but stop casting - the Console says which."});
 AE_FIELD_R(flicker, Float, 0.0f, 1.0f)
 AE_FIELD_R(flickerSpeed, Float, 0.0f, 60.0f)
 b.RequiresFeature(SceneFeatureFlags::Lighting3D);
@@ -199,7 +199,7 @@ AE_FIELD_R(radius, Float, 0.0f, 500.0f)
 AE_FIELD_ANGLE_AS("inner_angle_deg", innerAngleRad, "inner_rad")
 AE_FIELD_ANGLE_AS("outer_angle_deg", outerAngleRad, "outer_rad")
 AE_FIELD_R(sourceRadius, Float, 0.0f, 10.0f)
-AE_FIELD_N("shadow", castsShadow, Bool)
+b.Field("shadow", ::aether::reflect::FieldType::Bool, &C::castsShadow, ::aether::reflect::FieldMeta{.tooltip = "Cast shadows from this light. The budget is 48 shadow entries: a point light spends 6 of them on its cube faces, a spot light 1. Past that, lights still light the scene but stop casting - the Console says which."});
 AE_FIELD_R(flicker, Float, 0.0f, 1.0f)
 AE_FIELD_R(flickerSpeed, Float, 0.0f, 60.0f)
 b.RequiresFeature(SceneFeatureFlags::Lighting3D);
