@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <optional>
+#include <thread>
 #include <vector>
 
 #include "net/NatTraversal.hpp"
@@ -126,4 +128,35 @@ TEST_CASE("Being asked to punch at nothing is refused rather than waited out")
 
 	a.Traversal()->BeginPunch({});
 	CHECK(a.Traversal()->GetState() == State::Failed);
+}
+
+// Skipped by default: it needs the internet, and a test suite that fails when a
+// third party's server is down is a test suite people learn to ignore. Run it on
+// demand with --test-case="*real STUN*" --no-skip after touching StunMessage or the
+// discovery path - everything else here proves the messages are well-formed by our own
+// reading of RFC 5389, which is exactly the assumption a real server can falsify.
+TEST_CASE("Discovery works against a real STUN server" * doctest::skip())
+{
+	net::NetworkSubsystem host;
+	REQUIRE(host.Host(24707, 4));
+	REQUIRE(host.Traversal()->BeginDiscovery("stun.l.google.com", 19302));
+
+	// Real seconds, because a real round trip takes them.
+	for (int i = 0; i < 250 && host.Traversal()->GetState() == State::Discovering; ++i)
+	{
+		host.Traversal()->Tick(0.02f);
+		host.Poll();
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	}
+
+	INFO("failure reason: " << host.Traversal()->FailureReason());
+	REQUIRE(host.Traversal()->GetState() == State::Discovered);
+
+	const auto reflexive = host.Traversal()->PublicEndpoint();
+	REQUIRE(reflexive.has_value());
+	MESSAGE("public endpoint: " << net::NatTraversal::FormatAddress(*reflexive) << ':' << reflexive->port);
+
+	// A parse that silently produced zeroes would look like success otherwise.
+	CHECK(reflexive->host != 0);
+	CHECK(reflexive->port != 0);
 }
