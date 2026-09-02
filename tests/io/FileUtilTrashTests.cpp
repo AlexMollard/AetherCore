@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <string>
 
 #include "io/FileUtil.hpp"
 
@@ -47,4 +48,35 @@ TEST_CASE("MoveToTrash reports failure for a path that does not exist")
 	std::filesystem::remove(missing);
 
 	CHECK_FALSE(aether::io::file_util::MoveToTrash(missing));
+}
+
+// The .trashinfo body decides whether a Linux desktop can restore the file. It is built on
+// every platform so these rules can be checked without a Linux desktop - a malformed Path=
+// leaves a file sitting in the trash that nothing can put back.
+TEST_CASE("BuildTrashInfo writes a restorable freedesktop entry")
+{
+	const std::string info = aether::io::file_util::BuildTrashInfo("/home/dev/Assets/hero.png", "2026-09-02T11:00:00");
+
+	CHECK(info.starts_with("[Trash Info]"));
+	CHECK(info.find("Path=/home/dev/Assets/hero.png") != std::string::npos);
+	CHECK(info.find("DeletionDate=2026-09-02T11:00:00") != std::string::npos);
+}
+
+TEST_CASE("BuildTrashInfo percent-encodes what would break the entry, but not separators")
+{
+	const std::string info = aether::io::file_util::BuildTrashInfo("/home/dev/My Assets/a#b.png", "2026-09-02T11:00:00");
+
+	// Spaces and '#' must be encoded - '#' starts a comment in the desktop file format, so an
+	// unencoded one truncates the path and the entry silently points somewhere else.
+	CHECK(info.find("My%20Assets") != std::string::npos);
+	CHECK(info.find("a%23b.png") != std::string::npos);
+	// Separators must survive, or the path is meaningless.
+	CHECK(info.find("Path=/home/dev/") != std::string::npos);
+}
+
+TEST_CASE("BuildTrashInfo leaves unreserved characters alone")
+{
+	const std::string info = aether::io::file_util::BuildTrashInfo("/a/b-c_d.e~f/g.png", "2026-01-01T00:00:00");
+
+	CHECK(info.find("Path=/a/b-c_d.e~f/g.png") != std::string::npos);
 }

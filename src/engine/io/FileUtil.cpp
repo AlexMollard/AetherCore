@@ -1,5 +1,7 @@
 #include "FileUtil.hpp"
 
+#include <ctime>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -20,6 +22,35 @@
 
 namespace aether::io::file_util
 {
+	std::string BuildTrashInfo(const std::filesystem::path& originalPath, const std::string_view deletionDateIso)
+	{
+		// Path is percent-encoded per RFC 2396, except '/' which stays a separator. Without
+		// this a path containing a space or a '#' produces an info file the desktop cannot
+		// parse, and the trashed file becomes unrestorable.
+		const std::string absolute = originalPath.generic_string();
+		std::string encoded;
+		encoded.reserve(absolute.size());
+		for (const unsigned char c: absolute)
+		{
+			const bool unreserved = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+			        || c == '-' || c == '_' || c == '.' || c == '~' || c == '/';
+			if (unreserved)
+			{
+				encoded.push_back(static_cast<char>(c));
+				continue;
+			}
+			static constexpr char kHex[] = "0123456789ABCDEF";
+			encoded.push_back('%');
+			encoded.push_back(kHex[c >> 4]);
+			encoded.push_back(kHex[c & 0x0F]);
+		}
+
+		std::string info = "[Trash Info]\n";
+		info += "Path=" + encoded + "\n";
+		info += "DeletionDate=" + std::string(deletionDateIso) + "\n";
+		return info;
+	}
+
 	bool MoveToTrash(const std::filesystem::path& path)
 	{
 #if defined(_WIN32)
@@ -43,10 +74,90 @@ namespace aether::io::file_util
 		op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
 		return SHFileOperationW(&op) == 0 && op.fAnyOperationsAborted == FALSE;
 #else
-		// No trash implementation on this platform yet; the caller falls back to a permanent
-		// delete rather than this silently doing one.
-		(void) path;
-		return false;
+		// freedesktop.org trash spec: move the file under $XDG_DATA_HOME/Trash/files and drop
+		// a matching .trashinfo beside it so the desktop can offer "restore".
+		//
+		// Every failure returns false WITHOUT having moved anything, so the caller falls back
+		// to the permanent delete it would have done anyway. The one thing this must never do
+		// is report success while leaving the file somewhere nothing can restore it from.
+		std::error_code ec;
+		if (!std::filesystem::exists(path, ec))
+		{
+			return false;
+		}
+
+		std::filesystem::path dataHome;
+		if (const char* xdg = std::getenv("XDG_DATA_HOME"); xdg != nullptr && xdg[0] != 0)
+		{
+			dataHome = xdg;
+		}
+		else if (const char* home = std::getenv("HOME"); home != nullptr && home[0] != 0)
+		{
+			dataHome = std::filesystem::path(home) / ".local" / "share";
+		}
+		else
+		{
+			return false;
+		}
+
+		const std::filesystem::path trashDir = dataHome / "Trash";
+		const std::filesystem::path filesDir = trashDir / "files";
+		const std::filesystem::path infoDir = trashDir / "info";
+		std::filesystem::create_directories(filesDir, ec);
+		std::filesystem::create_directories(infoDir, ec);
+		if (ec)
+		{
+			return false;
+		}
+
+		const std::filesystem::path absolute = std::filesystem::absolute(path, ec);
+		if (ec)
+		{
+			return false;
+		}
+
+		// The spec requires the names in files/ and info/ to match and to be unique. Two
+		// deletes of the same filename would otherwise overwrite each other's entry.
+		std::filesystem::path target = filesDir / absolute.filename();
+		std::filesystem::path infoFile = infoDir / (absolute.filename().string() + ".trashinfo");
+		for (int suffix = 1; (std::filesystem::exists(target, ec) || std::filesystem::exists(infoFile, ec)) && suffix < 10000; ++suffix)
+		{
+			const std::string stem = absolute.stem().string() + "." + std::to_string(suffix);
+			const std::string name = stem + absolute.extension().string();
+			target = filesDir / name;
+			infoFile = infoDir / (name + ".trashinfo");
+		}
+		if (std::filesystem::exists(target, ec))
+		{
+			return false;
+		}
+
+		// The info file goes down FIRST: a file in files/ with no info beside it is an orphan
+		// the desktop cannot restore, whereas a stale info file with no data is harmless.
+		const std::time_t now = std::time(nullptr);
+		std::tm local{};
+#	if defined(_WIN32)
+		localtime_s(&local, &now);
+#	else
+		localtime_r(&now, &local);
+#	endif
+		char stamp[32]{};
+		(void) std::strftime(stamp, sizeof(stamp), "%Y-%m-%dT%H:%M:%S", &local);
+		if (auto written = WriteText(infoFile, BuildTrashInfo(absolute, stamp)); !written)
+		{
+			return false;
+		}
+
+		// rename() only works within a filesystem. Across one, fall back rather than copying:
+		// a half-copied directory tree is worse than the permanent delete the caller will do.
+		std::filesystem::rename(absolute, target, ec);
+		if (ec)
+		{
+			std::error_code cleanup;
+			std::filesystem::remove(infoFile, cleanup);
+			return false;
+		}
+		return true;
 #endif
 	}
 

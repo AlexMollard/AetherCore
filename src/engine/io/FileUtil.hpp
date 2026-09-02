@@ -35,5 +35,11 @@ namespace aether::io::file_util
 	// in the confirmation it shows.
 	[[nodiscard]] bool MoveToTrash(const std::filesystem::path& path);
 
+	// The body of a freedesktop.org .trashinfo file: what Linux file managers read to offer
+	// "restore". Exposed (and compiled on every platform) so the encoding rules can be tested
+	// without a Linux desktop - a malformed Path= leaves a file in the trash that nothing can
+	// put back.
+	[[nodiscard]] std::string BuildTrashInfo(const std::filesystem::path& originalPath, std::string_view deletionDateIso);
+
 	[[nodiscard]] Expected<uintmax_t> FileSize(const std::filesystem::path& path);
 } // namespace aether::io::file_util
