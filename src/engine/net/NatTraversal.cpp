@@ -289,15 +289,49 @@ namespace aether::net
 	std::vector<NatTraversal::Endpoint> NatTraversal::LocalCandidates(std::uint16_t port)
 	{
 		std::vector<Endpoint> out;
+		const auto add = [&out, port](std::uint32_t host) {
+			if (host == 0)
+			{
+				return;
+			}
+			const Endpoint candidate{host, port};
+			if (std::ranges::find(out, candidate) == out.end())
+			{
+				out.push_back(candidate);
+			}
+		};
 
-		// ENet resolves the machine's own name to its primary interface address. It is
-		// one candidate, not the full set a multi-homed machine has, but it covers the
-		// case this exists for: two players on one network, where the public endpoints
-		// are identical and only the LAN addresses can tell them apart.
-		ENetAddress address{};
-		if (enet_address_set_host(&address, "localhost") == 0)
+		// The address the routing table would actually use to leave this machine.
+		//
+		// Asked this way rather than by enumerating adapters, because enumerating is
+		// platform code - GetAdaptersAddresses here, getifaddrs there - and because a
+		// machine with a VPN up, a virtual switch, and both Wi-Fi and Ethernet has
+		// several answers of which only one is right. Connecting a UDP socket sends
+		// nothing; it only asks the kernel which local address it WOULD send from, which
+		// is precisely the question. The destination is documentation space, so even a
+		// misread cannot aim anything at a real host.
+		if (const ENetSocket probe = enet_socket_create(ENET_SOCKET_TYPE_DATAGRAM); probe != ENET_SOCKET_NULL)
 		{
-			out.push_back(Endpoint{address.host, port});
+			ENetAddress routable{};
+			if (enet_address_set_host_ip(&routable, "203.0.113.1") == 0)
+			{
+				routable.port = 9;
+				ENetAddress local{};
+				if (enet_socket_connect(probe, &routable) == 0 && enet_socket_get_address(probe, &local) == 0)
+				{
+					add(local.host);
+				}
+			}
+			enet_socket_destroy(probe);
+		}
+
+		// The machine's own name, as a fallback and as a second opinion. On a host with
+		// one interface this is the same answer; on one where the route probe failed -
+		// no default route at all, which is a LAN with no internet - it is the only one.
+		ENetAddress named{};
+		if (enet_address_set_host(&named, "localhost") == 0)
+		{
+			add(named.host);
 		}
 		return out;
 	}

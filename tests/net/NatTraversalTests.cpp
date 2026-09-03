@@ -160,3 +160,28 @@ TEST_CASE("Discovery works against a real STUN server" * doctest::skip())
 	CHECK(reflexive->host != 0);
 	CHECK(reflexive->port != 0);
 }
+
+TEST_CASE("Local candidates name real interfaces, without repeating one")
+{
+	const auto candidates = net::NatTraversal::LocalCandidates(24709);
+	REQUIRE_FALSE(candidates.empty());
+
+	for (const Endpoint& candidate: candidates)
+	{
+		// The port must be the one the transport is bound to, not one the probe picked:
+		// a peer punching at an ephemeral probe port would reach nothing.
+		CHECK(candidate.port == 24709);
+		CHECK(candidate.host != 0);
+		MESSAGE("local candidate: " << net::NatTraversal::FormatAddress(candidate));
+	}
+
+	// Duplicates cost a wasted connectivity check on every retry and eat into the cap a
+	// peer's candidate list is allowed, for no chance of opening anything new.
+	for (std::size_t i = 0; i < candidates.size(); ++i)
+	{
+		for (std::size_t j = i + 1; j < candidates.size(); ++j)
+		{
+			CHECK_FALSE(candidates[i] == candidates[j]);
+		}
+	}
+}
