@@ -417,6 +417,30 @@ CPMAddPackage(
     GIT_SHALLOW    TRUE
 )
 
+# Automatic port mapping: asks the router to open a port over UPnP-IGD, NAT-PMP or
+# PCP, so a host is reachable without anyone editing a firewall by hand. Sits beside
+# enet rather than inside it because it never touches a data socket - it only speaks to
+# the gateway, and leaves the transport's own socket alone.
+#
+# MPL-2.0, which is the first non-permissive licence in this file. It is file-level
+# copyleft: static linking into a closed-source game is permitted, and only changes to
+# libplum's OWN files would have to be published.
+CPMAddPackage(
+    NAME libplum
+    GIT_REPOSITORY https://github.com/paullouisageneau/libplum.git
+    GIT_TAG        v0.6.0
+    GIT_SHALLOW    TRUE
+    OPTIONS
+        "PLUM_NO_EXAMPLE ON"
+)
+
+# libplum defaults to a shared library; everything here is linked statically, so
+# consumers take the `plum-static` target instead. It is EXCLUDE_FROM_ALL upstream,
+# which only means it is built when something actually links it.
+if(TARGET plum-static)
+    set_target_properties(plum-static PROPERTIES FOLDER "Dependencies")
+endif()
+
 # lsalzman/enet's CMake scopes its include dir to its own build only; export it on
 # the target so consumers (App, aether-ctl) resolve <enet/enet.h>.
 if(TARGET enet)

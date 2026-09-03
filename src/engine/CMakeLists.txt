@@ -99,6 +99,10 @@ target_link_libraries(Engine PUBLIC zstd::libzstd_static)
 # ENet (UDP transport). PUBLIC so GameRuntime and EngineTests inherit the include
 # directory that Dependencies.cmake exports on the enet target.
 target_link_libraries(Engine PUBLIC enet)
+
+# Port mapping is PRIVATE: the gateway conversation is entirely an implementation
+# detail of PortMapping.cpp, and no engine header exposes a libplum type.
+target_link_libraries(Engine PRIVATE plum-static)
 if(WIN32)
     # enet's own CMakeLists only links winmm/ws2_32 under MINGW; MSVC/clang-cl builds
     # (every consumer here) need them supplied explicitly, same as Editor/Launcher/aether-ctl.
