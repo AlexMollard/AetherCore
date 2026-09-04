@@ -1,6 +1,6 @@
 #include "editor/AutosaveService.hpp"
 
-#include <algorithm>
+#include <system_error>
 #include <system_error>
 #include <utility>
 
@@ -25,6 +25,12 @@ namespace aether::editor
 	namespace
 	{
 		constexpr std::string_view kRecoverySuffix = ".scene.toml";
+
+		// Generation of the newest recovery write submitted by this process. Every
+		// submit and every invalidation (InvalidatePendingWrites) bumps it, so a write
+		// still queued when a newer one - or a save, discard or restore - arrives can
+		// recognise itself as stale before it touches the disk. Lives on the class (see
+		// AutosaveService.hpp) so TUs that only invalidate do not need this one.
 
 	} // namespace
 
@@ -71,8 +77,19 @@ namespace aether::editor
 			return;
 		}
 
-		if (!undo->HasUnsavedChanges() || undo->EditSequence() == m_lastSavedEditSeq)
+		const bool clean = !undo->HasUnsavedChanges();
+		if (clean || undo->EditSequence() == m_lastSavedEditSeq)
 		{
+			// The document went clean while a background write was still queued - the
+			// user saved (the save path discards the recovery copy), undid back to the
+			// file's state, or the document was replaced. The queued copy predates that
+			// moment; letting it land would recreate already-accounted-for content with
+			// a mtime newer than the scene, which FindRecoverable offers right back.
+			if (clean && m_recoveryWriteInFlight)
+			{
+				m_recoveryWriteInFlight = false;
+				InvalidatePendingWrites();
+			}
 			return;
 		}
 		if (std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastSave).count() < static_cast<long long>(intervalSeconds * 1000.0f))
@@ -96,8 +113,17 @@ namespace aether::editor
 
 		const std::filesystem::path target = RecoveryDirectory(*project) / (sceneName + std::string(kRecoverySuffix));
 		auto* io = context.TryGet<io::IoExecutor>();
-		auto write = [snapshot = std::move(snapshot), target, sceneName]() mutable
+		// Newest write wins: a submit supersedes any older copy still queued, and the
+		// generation it captures is what lets a save or discard cancel it in flight.
+		const std::uint64_t generation = ++s_recoveryWriteGeneration;
+		auto write = [snapshot = std::move(snapshot), target, sceneName, generation]() mutable
 		{
+			const auto superseded = [generation] { return s_recoveryWriteGeneration.load() != generation; };
+			if (superseded())
+			{
+				return;
+			}
+
 			std::string toml;
 			std::vector<std::byte> unusedBinary;
 			app::scene::SerializeScene(snapshot, toml, unusedBinary);
@@ -107,9 +133,34 @@ namespace aether::editor
 				AE_WARN(LogCategory::App, "Autosave: could not create '{}': {}", target.parent_path().string(), dir.error().message);
 				return;
 			}
-			if (auto written = io::file_util::WriteText(target, toml); !written)
+			// Temp-then-rename, never a truncating write over the copy itself: a crash
+			// mid-write used to leave a truncated recovery file NEWER than the scene it
+			// shadows, and FindRecoverable offers exactly that (it cannot know the copy
+			// is a corpse). The .tmp suffix also keeps it out of that scan.
+			std::filesystem::path tempFile = target;
+			tempFile += ".tmp";
+			if (auto written = io::file_util::WriteText(tempFile, toml); !written)
 			{
-				AE_WARN(LogCategory::App, "Autosave: could not write '{}': {}", target.string(), written.error().message);
+				AE_WARN(LogCategory::App, "Autosave: could not write '{}': {}", tempFile.string(), written.error().message);
+				return;
+			}
+			if (superseded())
+			{
+				// A save or discard happened while this write was queued or in flight:
+				// the target may already be gone, and re-creating it would resurrect
+				// content the user just accounted for.
+				AE_INFO(LogCategory::App, "Autosave: recovery write of '{}' skipped; superseded by a newer write, save or discard.", sceneName);
+				std::error_code removeEc;
+				std::filesystem::remove(tempFile, removeEc);
+				return;
+			}
+			std::error_code renameEc;
+			std::filesystem::rename(tempFile, target, renameEc);
+			if (renameEc)
+			{
+				AE_WARN(LogCategory::App, "Autosave: could not finalize '{}': {}", target.string(), renameEc.message());
+				std::error_code removeEc;
+				std::filesystem::remove(tempFile, removeEc);
 				return;
 			}
 			AE_INFO(LogCategory::App, "Autosaved a recovery copy of '{}' to {}", sceneName, target.string());
@@ -117,6 +168,7 @@ namespace aether::editor
 
 		if (io != nullptr)
 		{
+			m_recoveryWriteInFlight = true;
 			io->Submit(io::IOPriority::Background, std::move(write));
 		}
 		else

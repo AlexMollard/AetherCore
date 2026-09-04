@@ -15,6 +15,7 @@
 #include <exception>
 #include <filesystem>
 #include <future>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -357,9 +358,29 @@ namespace aether::editor
 			return paren == std::string::npos ? debugName : debugName.substr(0, paren);
 		}
 
+		// An id no live registry can hold: entity handles are 32-bit and it takes four
+		// billion entities to make 0xFFFFFFFF a real one. Garbage wire ids map here so
+		// every caller's existing validity check rejects them.
+		constexpr std::uint32_t kInvalidWireEntityId = std::numeric_limits<std::uint32_t>::max();
+
+		// Entity ids are 32-bit and 0 is the engine's null. A wire id outside [0, 2^32)
+		// used to wrap through the cast - -1 became 0xFFFFFFFF, 2^32 + n truncated to
+		// entity n - silently retargeting the call onto whatever entity happened to hold
+		// the wrapped id. Reject instead: garbage (wrong type, negative, too large)
+		// becomes kInvalidWireEntityId, an absent key stays the null id 0.
 		std::uint32_t IdOf(const json& p, const char* key = "id")
 		{
-			return static_cast<std::uint32_t>(p.value(key, static_cast<std::uint32_t>(0)));
+			if (!p.contains(key))
+			{
+				return 0;
+			}
+			const json& id = p[key];
+			if (!id.is_number_integer())
+			{
+				return kInvalidWireEntityId;
+			}
+			const std::int64_t value = id.get<std::int64_t>();
+			return value >= 0 && value <= static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max()) ? static_cast<std::uint32_t>(value) : kInvalidWireEntityId;
 		}
 
 		glm::vec3 ReadVec3(const json& obj, const char* key, glm::vec3 fallback)
@@ -3070,6 +3091,10 @@ namespace aether::editor
 				        return json{{"error", "'scene' is required"}};
 			        }
 			        std::string error;
+			        // Restore replaces the saved file with the recovery copy; a background
+			        // autosave write still queued from before the restore would land on top
+			        // with a fresh mtime and be offered right back on the next open.
+			        AutosaveService::InvalidatePendingWrites();
 			        if (!AutosaveService::Restore(*project, scene, error))
 			        {
 				        return json{{"error", error}};

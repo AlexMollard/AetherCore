@@ -40,6 +40,10 @@ namespace aether::editor
 		struct Inbound
 		{
 			ENetPeer* peer = nullptr;
+			// Identifies the CONNECTION, not the peer slot: a slot freed by a disconnect
+			// is recycled by the next client, and a stale reply handed to the recycled
+			// slot goes to the wrong client.
+			enet_uint32 connectId = 0;
 			std::uint64_t reqId = 0;
 			std::string method;
 			std::string params;
@@ -48,9 +52,12 @@ namespace aether::editor
 		struct Outbound
 		{
 			ENetPeer* peer = nullptr;
+			enet_uint32 connectId = 0;
 			std::string payload;
 		};
 
+		// The ENet thread only parses and enqueues; every handler runs on the game
+		// thread in DrainCommands, which posts its replies back through outQueue.
 		std::mutex inMutex;
 		std::queue<Inbound> inQueue;
 		std::mutex outMutex;
@@ -152,8 +159,25 @@ namespace aether::editor
 			while (!outLocal.empty())
 			{
 				Impl::Outbound& o = outLocal.front();
-				ENetPacket* packet = enet_packet_create(o.payload.data(), o.payload.size(), ENET_PACKET_FLAG_RELIABLE);
-				enet_peer_send(o.peer, 0, packet);
+				// Peer slots are a fixed array inside the host, so the pointer stays valid,
+				// but a slot freed by a disconnect can be recycled by a NEW connection.
+				// connectID is unique per connection, so a mismatch (or a dead state) means
+				// the client this reply belongs to is gone: drop it rather than deliver it
+				// to whoever took the slot.
+				if (o.peer != nullptr && o.peer->state == ENET_PEER_STATE_CONNECTED && o.peer->connectID == o.connectId)
+				{
+					ENetPacket* packet = enet_packet_create(o.payload.data(), o.payload.size(), ENET_PACKET_FLAG_RELIABLE);
+					if (packet == nullptr)
+					{
+						AE_WARN(LogCategory::App, "ControlServer: could not allocate a reply packet; dropping a reply.");
+					}
+					else if (enet_peer_send(o.peer, 0, packet) < 0)
+					{
+						// ENet did not queue the packet, so ownership never left us - not
+						// destroying it here leaked one packet per failed send.
+						enet_packet_destroy(packet);
+					}
+				}
 				outLocal.pop();
 			}
 			enet_host_flush(m_impl->host);
@@ -170,21 +194,65 @@ namespace aether::editor
 				}
 				else if (event.type == ENET_EVENT_TYPE_RECEIVE)
 				{
-					const std::string message(reinterpret_cast<const char*>(event.packet->data), event.packet->dataLength);
-					json parsed = json::parse(message, nullptr, false);
-					if (!parsed.is_discarded() && parsed.is_object())
+					// Untrusted wire data. Everything in here must answer with an error
+					// reply, never with an exception: this thread has no handler, so an
+					// escape (a nlohmann type_error, a bad allocation, anything a future
+					// edit adds) is std::terminate for the whole editor.
+					try
 					{
-						Impl::Inbound in;
-						in.peer = event.peer;
-						in.reqId = parsed.value("id", static_cast<std::uint64_t>(0));
-						in.method = parsed.value("method", std::string{});
-						in.params = parsed.contains("params") ? parsed["params"].dump() : std::string("{}");
-						const std::lock_guard<std::mutex> lock(m_impl->inMutex);
-						m_impl->inQueue.push(std::move(in));
-						// Commands are drained on the main loop thread, which may be parked in
-						// the idle event wait. Without this an automated session would sit
-						// behind the idle interval for every single call.
-						aether::Window::PostEmptyEvent();
+						const std::string message(reinterpret_cast<const char*>(event.packet->data), event.packet->dataLength);
+						json parsed = json::parse(message, nullptr, false);
+						// parsed.value() throws on a type mismatch, so the fields are
+						// type-checked up front; anything else falls to the catch below.
+						const bool hasId = parsed.is_object() && parsed.contains("id");
+						const bool hasMethod = parsed.is_object() && parsed.contains("method");
+						const bool idOk = !hasId || parsed["id"].is_number_integer();
+						const bool methodOk = !hasMethod || parsed["method"].is_string();
+						if (!parsed.is_discarded() && parsed.is_object() && idOk && methodOk)
+						{
+							Impl::Inbound in;
+							in.peer = event.peer;
+							in.connectId = event.peer != nullptr ? event.peer->connectID : 0;
+							in.reqId = parsed.value("id", static_cast<std::uint64_t>(0));
+							in.method = parsed.value("method", std::string{});
+							in.params = parsed.contains("params") ? parsed["params"].dump() : std::string("{}");
+							const std::lock_guard<std::mutex> lock(m_impl->inMutex);
+							m_impl->inQueue.push(std::move(in));
+							// Commands are drained on the main loop thread, which may be parked in
+							// the idle event wait. Without this an automated session would sit
+							// behind the idle interval for every single call.
+							aether::Window::PostEmptyEvent();
+						}
+						else
+						{
+							std::string why = "request is not valid JSON";
+							if (!parsed.is_discarded() && !parsed.is_object())
+							{
+								why = "request must be a JSON object";
+							}
+							else if (!idOk)
+							{
+								why = "field 'id' must be an integer";
+							}
+							else if (!methodOk)
+							{
+								why = "field 'method' must be a string";
+							}
+							AE_WARN(LogCategory::App, "ControlServer: dropping malformed request: {}.", why);
+							json envelope{{"id", hasId ? parsed.at("id") : json{}}, {"error", why}};
+							const std::lock_guard<std::mutex> lock(m_impl->outMutex);
+							m_impl->outQueue.push(Impl::Outbound{event.peer, event.peer != nullptr ? event.peer->connectID : 0, envelope.dump()});
+						}
+					}
+					catch (const std::exception& e)
+					{
+						AE_WARN(LogCategory::App, "ControlServer: dropping malformed request: {}.", e.what());
+						const std::lock_guard<std::mutex> lock(m_impl->outMutex);
+						m_impl->outQueue.push(Impl::Outbound{event.peer, event.peer != nullptr ? event.peer->connectID : 0, json{{"id", nullptr}, {"error", std::string("malformed request: ") + e.what()}}.dump()});
+					}
+					catch (...)
+					{
+						AE_WARN(LogCategory::App, "ControlServer: dropping a request that failed with an unknown error.");
 					}
 					enet_packet_destroy(event.packet);
 				}
@@ -248,7 +316,7 @@ namespace aether::editor
 
 			{
 				const std::lock_guard<std::mutex> lock(m_impl->outMutex);
-				m_impl->outQueue.push(Impl::Outbound{in.peer, envelope.dump()});
+			m_impl->outQueue.push(Impl::Outbound{in.peer, in.connectId, envelope.dump()});
 			}
 			inLocal.pop();
 		}

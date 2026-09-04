@@ -58,6 +58,14 @@ namespace aether::editor
 		// Drop the recovery copy for a scene - used after a real save makes it redundant.
 		static void Discard(const app::EditorProjectContext& project, const std::string& sceneName);
 
+		// Cancel every background recovery write still queued. A save (which discards the
+		// copy it made redundant), an explicit discard, or a restore makes anything still
+		// in flight stale; letting it land would recreate pre-save content with a mtime
+		// newer than the scene, which FindRecoverable then offers back on the next open.
+		// Callers on the main thread: Discard, Restore, and anything that replaces the
+		// saved scene behind autosave's back.
+		static void InvalidatePendingWrites();
+
 		// Whether a recovery copy describes the same scene as the file it shadows, once the
 		// differences that carry no work are normalised away (entity order, generated node
 		// ids and guids, int-vs-float spelling of whole numbers). False when either file
@@ -70,5 +78,9 @@ namespace aether::editor
 		std::chrono::steady_clock::time_point m_lastSave{};
 		std::uint64_t m_lastSavedEditSeq = 0;
 		bool m_started = false;
+		// Whether a background recovery write submitted by Tick may still be queued on
+		// the IO thread. Game-thread only; used to notice a save happening under a
+		// pending write and cancel it.
+		bool m_recoveryWriteInFlight = false;
 	};
 } // namespace aether::editor

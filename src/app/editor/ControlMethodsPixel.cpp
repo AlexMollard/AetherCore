@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -12,6 +13,8 @@
 
 #include "debug/PixelArtDocument.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "utils/LogCategory.hpp"
+#include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether::editor
@@ -38,6 +41,44 @@ namespace aether::editor
 		int Int(const json& params, const char* key, int fallback = 0)
 		{
 			return params.contains(key) && params[key].is_number_integer() ? params[key].get<int>() : fallback;
+		}
+
+		// Wire-supplied paths must stay inside the project root. ResolveProjectPath joins
+		// with operator/, which REPLACES the root for an absolute right-hand side
+		// ("C:/anywhere.png"), and ".." segments are never folded away, so without this
+		// check pixel.save/pixel.open could read and write anywhere the process can.
+		// Returns nullopt for anything that is not a relative path resolving back under
+		// the root (including when no project is open).
+		[[nodiscard]] std::optional<std::filesystem::path> ResolveProjectLocalPath(const app::EditorProjectContext* project, const std::string& vpath)
+		{
+			if (project == nullptr || project->root.empty())
+			{
+				return std::nullopt;
+			}
+			std::string_view rel = vpath;
+			constexpr std::string_view kPrefix = "project://";
+			if (rel.starts_with(kPrefix))
+			{
+				rel.remove_prefix(kPrefix.size());
+			}
+			const std::filesystem::path candidate(rel);
+			if (rel.empty() || candidate.is_absolute())
+			{
+				return std::nullopt;
+			}
+			std::string root = project->root.lexically_normal().generic_string();
+			while (root.size() > 1 && root.back() == '/')
+			{
+				root.pop_back();
+			}
+			// Lexical containment: normalization folds "a/.." away, and a leading climb
+			// ("../elsewhere") leaves the root and fails the prefix test.
+			const std::filesystem::path disk = (project->root / candidate).lexically_normal();
+			if (disk.generic_string().rfind(root + "/", 0) != 0)
+			{
+				return std::nullopt;
+			}
+			return disk;
 		}
 
 
@@ -162,22 +203,47 @@ namespace aether::editor
 		        Obj({{"path", json{{"type", "string"}}}}),
 		        withDoc([](const json& p, MethodContext& ctx, PixelArtDocument& doc) -> json
 		                {
-			                std::string vpath = p.contains("path") && p["path"].is_string() ? p["path"].get<std::string>() : doc.Path().generic_string();
-			                if (vpath.empty())
+			                // The default is the canvas' current file, a path this process put
+			                // there; an explicit wire path is resolved against the project root
+			                // and must stay inside it.
+			                std::filesystem::path disk;
+			                std::string echo;
+			                if (p.contains("path") && p["path"].is_string())
 			                {
-				                return json{{"ok", false}, {"error", "no path given and no current file"}};
+				                const std::string vpath = p["path"].get<std::string>();
+				                const auto local = ResolveProjectLocalPath(ctx.services.TryGet<app::EditorProjectContext>(), vpath);
+				                if (!local.has_value())
+				                {
+					                AE_WARN(LogCategory::App, "pixel.save: refusing path '{}': it is not a project-relative path staying inside the project root.", vpath);
+					                return json{{"ok", false}, {"error", "path must be a project-relative path staying inside the project root"}, {"path", vpath}};
+				                }
+				                disk = *local;
+				                echo = vpath;
 			                }
-			                const std::filesystem::path disk = app::ResolveProjectPath(ctx.services.TryGet<app::EditorProjectContext>(), vpath);
-			                const bool ok = !disk.empty() && doc.Save(disk);
-			                return json{{"ok", ok}, {"path", vpath}};
+			                else
+			                {
+				                disk = doc.Path();
+				                if (disk.empty())
+				                {
+					                return json{{"ok", false}, {"error", "no path given and no current file"}};
+				                }
+				                echo = disk.generic_string();
+			                }
+			                const bool ok = doc.Save(disk);
+			                return json{{"ok", ok}, {"path", echo}};
 		                })});
 
 		methods.push_back({"pixel.open", "pixel_open", "Load a PNG at 'path' (project:// virtual path) into the canvas for editing.", true, Obj({{"path", json{{"type", "string"}}}}, {"path"}),
 		        withDoc([](const json& p, MethodContext& ctx, PixelArtDocument& doc) -> json
 		                {
 			                const std::string vpath = p.contains("path") && p["path"].is_string() ? p["path"].get<std::string>() : std::string{};
-			                const std::filesystem::path disk = app::ResolveProjectPath(ctx.services.TryGet<app::EditorProjectContext>(), vpath);
-			                const bool ok = !disk.empty() && doc.Load(disk);
+			                const auto local = ResolveProjectLocalPath(ctx.services.TryGet<app::EditorProjectContext>(), vpath);
+			                if (!local.has_value())
+			                {
+				                AE_WARN(LogCategory::App, "pixel.open: refusing path '{}': it is not a project-relative path staying inside the project root.", vpath);
+				                return json{{"ok", false}, {"error", "path must be a project-relative path staying inside the project root"}};
+			                }
+			                const bool ok = doc.Load(*local);
 			                return json{{"ok", ok}, {"info", DocInfo(doc)}};
 		                })});
 	}
