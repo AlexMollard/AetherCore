@@ -38,6 +38,10 @@ namespace aether
 		m_debugName = config.debugName != nullptr ? config.debugName : "RenderQueue";
 		m_slotConsumed.fill(true);
 		AE_INFO(LogCategory::Render, "RenderQueue::Initialize({}): maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", m_debugName, m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
+		if (m_outputDrawCapacity > m_maxDraws && static_cast<std::uint64_t>(m_outputDrawCapacity) < static_cast<std::uint64_t>(m_maxDraws) * kCullMultiFrustumCount)
+		{
+			AE_WARN(LogCategory::Render, "RenderQueue::Initialize({}): outputDrawCapacity={} cannot hold {} cascade regions of {} draws; multi-frustum cull disabled, falling back to single-frustum cull.", m_debugName, m_outputDrawCapacity, kCullMultiFrustumCount, m_maxDraws);
+		}
 
 		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
 
@@ -947,9 +951,12 @@ namespace aether
 		const gpu::DeviceSize inputCmdOffset = 0;
 		const gpu::DeviceSize batchDescOffset = 0;
 
-		if (m_outputDrawCapacity > m_maxDraws)
+		// The multi-frustum cull writes kCullMultiFrustumCount independent output regions of
+		// cascadeStride each, so the indirect buffer must hold at least maxDraws *
+		// kCullMultiFrustumCount commands or the shader writes past its end. The
+		// kCullMultiFrustumCount frame constant BDAs come from SetMultiCullFrameAddrs.
+		if (static_cast<std::uint64_t>(m_outputDrawCapacity) >= static_cast<std::uint64_t>(m_maxDraws) * kCullMultiFrustumCount)
 		{
-			// write 3 independent output regions.  The 3 frame constant BDAs must have
 			const gpu::DeviceSize outputCmdOffset = 0;
 			const gpu::DeviceSize cascadeStride = static_cast<gpu::DeviceSize>(m_maxDraws) * sizeof(gpu::DrawIndexedIndirectCommand);
 

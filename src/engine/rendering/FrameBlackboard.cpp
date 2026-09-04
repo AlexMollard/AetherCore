@@ -116,7 +116,11 @@ namespace aether
 		}
 		else if (entry.metadata.source != source && entry.metadata.source != ProductSource::GraphPass && source == ProductSource::GraphPass)
 		{
-			AE_WARN(LogCategory::Engine, "FrameBlackboard: product '{}' of type '{}' changed from external setup source to graph-produced.", entry.name, entry.typeName);
+			// Refusing on purpose: external setup owns this product's metadata and re-asserts
+			// it every frame via CreateOrReplace, so a graph pass cannot take it over. Pass
+			// ordering is unaffected - Compile builds edges from pass.producedFrameProducts,
+			// not from this metadata.
+			AE_WARN(LogCategory::Engine, "FrameBlackboard: product '{}' of type '{}' keeps its external setup producer '{}'; graph producer '{}' not recorded in blackboard metadata.", entry.name, entry.typeName, entry.producerPass, producerName);
 			return;
 		}
 		entry.metadata.source = source;

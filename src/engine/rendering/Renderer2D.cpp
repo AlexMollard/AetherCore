@@ -99,8 +99,17 @@ namespace aether
 			return;
 		}
 		std::uint32_t capacity = frame.capacity == 0 ? kInitialSpriteCapacity : frame.capacity;
+		// Doubling in 32 bits wraps past 2^31 (2^31 * 2 == 0), which either spins this loop
+		// forever or exits with a capacity far below count - and BeginFrame's memcpy would
+		// then overflow the undersized buffer. Saturate instead; a count that large fails
+		// allocation on size alone and takes the error path below.
 		while (capacity < count)
 		{
+			if (capacity > (UINT32_MAX >> 1))
+			{
+				capacity = UINT32_MAX;
+				break;
+			}
 			capacity *= 2;
 		}
 		if (frame.buffer.IsValid())

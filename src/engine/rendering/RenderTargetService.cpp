@@ -166,6 +166,12 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		AE_ASSERT_ALWAYS(m_context && m_graph && m_bindlessManager, "RenderTargetService: runtime dependencies not bound before CreateCameraRenderTarget.");
+		// Extent is external input (script layer); a zero dimension would otherwise feed a
+		// divide-by-zero aspect into the RTT cull pass's projection every frame.
+		if (extent.width == 0u || extent.height == 0u)
+		{
+			AE_UNEXPECTED(AetherError::Engine("RenderTargetService: camera render target extent must be non-zero (got " + std::to_string(extent.width) + "x" + std::to_string(extent.height) + ")"));
+		}
 
 		const std::uint32_t id = m_nextId++;
 		Entry rt{};

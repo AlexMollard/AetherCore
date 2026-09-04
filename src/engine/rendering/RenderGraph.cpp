@@ -28,52 +28,6 @@ namespace aether
 
 	RenderGraph::~RenderGraph() = default;
 
-	RenderGraph::RenderGraph(RenderGraph&& other) noexcept
-	      // Declaration order, not alphabetical: members initialise in the order they are declared
-	      // regardless of what is written here, so any other order is a lie about what actually runs.
-	      : m_storage(std::move(other.m_storage)),
-	        m_diagnosticEngine(other.m_diagnosticEngine),
-	        m_passes(std::move(other.m_passes)),
-	        m_compiled(std::move(other.m_compiled)),
-	        m_lastCulledPasses(std::move(other.m_lastCulledPasses)),
-	        m_externalImages(std::move(other.m_externalImages)),
-	        m_externalBuffers(std::move(other.m_externalBuffers)),
-	        m_preparedDrawLists(std::move(other.m_preparedDrawLists)),
-	        m_blackboard(std::move(other.m_blackboard)),
-	        m_lastImageStates(std::move(other.m_lastImageStates)),
-	        m_lastBufferStates(std::move(other.m_lastBufferStates)),
-	        m_frameIndex(other.m_frameIndex),
-	        m_compileDirty(other.m_compileDirty),
-	        m_asyncComputeEnabled(other.m_asyncComputeEnabled)
-	{
-		const std::scoped_lock lock(other.m_debugStateMutex);
-	}
-
-	RenderGraph& RenderGraph::operator=(RenderGraph&& other) noexcept
-	{
-		if (this == &other)
-		{
-			return *this;
-		}
-
-		const std::scoped_lock lock(m_debugStateMutex, other.m_debugStateMutex);
-		m_storage = std::move(other.m_storage);
-		m_diagnosticEngine = other.m_diagnosticEngine;
-		m_passes = std::move(other.m_passes);
-		m_compiled = std::move(other.m_compiled);
-		m_lastCulledPasses = std::move(other.m_lastCulledPasses);
-		m_externalImages = std::move(other.m_externalImages);
-		m_externalBuffers = std::move(other.m_externalBuffers);
-		m_preparedDrawLists = std::move(other.m_preparedDrawLists);
-		m_blackboard = std::move(other.m_blackboard);
-		m_lastImageStates = std::move(other.m_lastImageStates);
-		m_lastBufferStates = std::move(other.m_lastBufferStates);
-		m_frameIndex = other.m_frameIndex;
-		m_compileDirty = other.m_compileDirty;
-		m_asyncComputeEnabled = other.m_asyncComputeEnabled;
-		return *this;
-	}
-
 	void RenderGraph::Initialize(gpu::Device device, gpu::Allocator allocator)
 	{
 		m_storage->Initialize(device, allocator);

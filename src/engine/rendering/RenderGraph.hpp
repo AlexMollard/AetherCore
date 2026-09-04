@@ -142,8 +142,12 @@ namespace aether
 
 		RenderGraph(const RenderGraph&) = delete;
 		RenderGraph& operator=(const RenderGraph&) = delete;
-		RenderGraph(RenderGraph&&) noexcept;
-		RenderGraph& operator=(RenderGraph&&) noexcept;
+		// Held by value (RenderingSubsystem::m_renderGraph) and never moved; the previous
+		// move ops dropped half the members (GPU timing pools, transient lifetimes), so they
+		// are deleted rather than half-fixed. A graph that needs to move must gain a complete
+		// transfer of every member under both debug-state locks.
+		RenderGraph(RenderGraph&&) = delete;
+		RenderGraph& operator=(RenderGraph&&) = delete;
 
 		void Initialize(gpu::Device device, gpu::Allocator allocator);
 		void SetVulkanContext(class VulkanContext* ctx);
