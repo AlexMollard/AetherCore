@@ -84,7 +84,10 @@ TEST_CASE("A graph survives a round trip through its file form")
 	const MaterialGraph& parsed = *read;
 	REQUIRE(parsed.nodes.size() == graph.nodes.size());
 	REQUIRE(parsed.links.size() == graph.links.size());
-	CHECK(parsed.nextId == graph.nextId);
+	// nextId is re-derived from the parsed graph, not echoed: this graph was hand-built
+	// with ids above its own nextId, and handing that back would mint a duplicate id on
+	// the next node add. What must round-trip is the guarantee, not the number.
+	CHECK(parsed.nextId > 8);
 	const MaterialNode* tex = parsed.Find(7);
 	REQUIRE(tex != nullptr);
 	CHECK(tex->type == MaterialNodeType::TextureSample);
