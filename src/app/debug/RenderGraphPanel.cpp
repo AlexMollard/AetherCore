@@ -221,8 +221,15 @@ namespace aether::editor
 
 		auto passes = graph.GetPasses();
 		const auto products = graph.GetBlackboard().GetProducts();
-		const auto& frameStats = graph.GetFrameStats();
-		const auto& frame = graph.GetLastFrameContext();
+		// The render thread rewrites these every frame. GetPasses() already hands back
+		// a copy taken under the graph's m_debugStateMutex; GetFrameStats() and
+		// GetLastFrameContext() hand out live references with no lock, so read each
+		// ONCE into a local copy rather than holding a reference that is re-read
+		// field-by-field across the whole draw while it is being rewritten - one frame's
+		// numbers per draw instead of a mix. (A tear-free read needs the render graph
+		// itself to publish these under the mutex; out of this slice's reach.)
+		const auto frameStats = graph.GetFrameStats();
+		const auto frame = graph.GetLastFrameContext();
 		const float imguiCpuMs = context.TryGet<ImguiSubsystem>() != nullptr ? context.Get<ImguiSubsystem>().GetLastRenderCpuTimeMs() : 0.0f;
 
 		float graphCpuMs = 0.0f;

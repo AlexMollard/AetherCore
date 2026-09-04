@@ -43,6 +43,7 @@
 #include "scene/CameraSystem.hpp"
 #include "camera/CameraManager.hpp"
 #include "scene/LightSystem.hpp"
+#include "scene/SceneSubsystem.hpp"
 #ifdef AETHERCORE_SCENE_APP
 #	include "net/CSharpRpcBridge.hpp"
 #	include "net/CSharpScriptFieldBridge.hpp"
@@ -185,6 +186,17 @@ namespace aether::app
 	{
 		m_settingsService.Save();
 
+		// Run() starts the render thread long before AttachAll; if anything in
+		// between threw (layer attach, system registration, network context), there
+		// are no attached layers but a live render thread still running against the
+		// subsystem graph this destructor is tearing down. Join it and drop the
+		// coroutine executor whenever the thread was started, layers or not.
+		if (m_renderThreadStarted)
+		{
+			m_engine.StopRenderThread();
+			aether::coro::set_default_executor(nullptr);
+		}
+
 		if (!m_layersAttached)
 		{
 			AE_VERBOSE(LogCategory::App, "Application destroyed before layers were attached.");
@@ -197,11 +209,6 @@ namespace aether::app
 		        .elapsedTimeSeconds = 0.0,
 		        .frameIndex = 0,
 		};
-
-		// Join the render thread AND wait the GPU idle BEFORE detaching layers,
-		m_engine.StopRenderThread();
-
-		aether::coro::set_default_executor(nullptr);
 
 		// (AETHERCORE_SCENE_APP undefined) never wires them, so it never links the
 #ifdef AETHERCORE_SCENE_APP
@@ -269,6 +276,7 @@ namespace aether::app
 
 		// Start the engine-owned render thread early (also registers the
 		m_engine.StartRenderThread();
+		m_renderThreadStarted = true;
 
 		LayerContext attachContext{
 		        .services = m_engine.GetServiceContainer(),
@@ -279,7 +287,20 @@ namespace aether::app
 		{
 			auto& services = attachContext.services;
 
+#ifdef AETHERCORE_EDITOR_APP
+			// The editor boots with no scene (the launcher stays up until a project
+			// is picked), so autoplay cannot mean "enter Playing now": a bare
+			// SetMode(Playing) would be a phantom session with no stop snapshot, no
+			// script rebuild and no way to Start (StartPlaySession refuses while
+			// IsPlaying) or Stop (the restore has nothing to restore). Start in
+			// Editing and let OnUpdate enter a REAL session once a scene is loaded.
+			// Shipped runtimes keep the direct boot-into-play: their scene exists at
+			// attach time and the publish bake forces autoplay exactly for that.
+			m_playState.SetMode(PlayState::Mode::Editing);
+			m_autoplayPending = m_settingsService.Get().app.autoplay;
+#else
 			m_playState.SetMode(m_settingsService.Get().app.autoplay ? PlayState::Mode::Playing : PlayState::Mode::Editing);
+#endif
 			services.Register<PlayState>(m_playState);
 			services.Register<aether::SettingsService>(m_settingsService);
 
@@ -448,6 +469,22 @@ namespace aether::app
 
 		// its worker thread, this polls it each frame and enters Playing when it's
 		UpdatePlaySession(ctx);
+
+#ifdef AETHERCORE_EDITOR_APP
+		// Deferred editor autoplay (see Run): the request waited until a scene was
+		// actually loaded. Enter Play through the normal session path - snapshot,
+		// script rebuild, selection save - rather than a bare mode flip, so Play/Stop
+		// behave exactly as if the user had pressed the Play button.
+		if (m_autoplayPending)
+		{
+			const auto* scenes = ctx.TryGet<SceneSubsystem>();
+			if (scenes != nullptr && !scenes->GetCurrentScene().empty())
+			{
+				m_autoplayPending = false;
+				StartPlaySession(ctx);
+			}
+		}
+#endif
 
 		if (auto* cameraSystem = ctx.TryGet<aether::CameraSystem>())
 		{

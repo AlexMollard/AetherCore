@@ -1402,6 +1402,20 @@ namespace aether::editor
 
 	bool DebugLayer::SaveCurrentScene(app::LayerContext& context)
 	{
+		// Same gate the undo shortcuts use (undoEditable): while Playing/Compiling the
+		// live World is the running simulation, not the authored document. Saving here
+		// would bake physics-displaced transforms and script-spawned entities into the
+		// scene file, MarkSaved() would pin the unsaved-changes baseline to that
+		// capture, and FlushDirtyTileMaps() would persist tile paints Stop is about to
+		// revert (the play snapshot restores those in memory only). Applies to every
+		// caller: Ctrl+S, the File menu, the unsaved-changes popup, and the launcher
+		// return. Focused-document saves (material graph, pixel art) are unaffected -
+		// those are separate documents, not the scene.
+		if (const auto* playState = context.TryGet<app::PlayState>(); playState != nullptr && (playState->IsPlaying() || playState->IsCompiling()))
+		{
+			ShowToast(std::string(ICON_FA_TRIANGLE_EXCLAMATION "  Cannot save the scene during Play - stop the session first."), true);
+			return false;
+		}
 		auto* scenes = context.TryGet<SceneSubsystem>();
 		const std::string currentName = scenes != nullptr ? scenes->GetCurrentScene() : std::string{};
 

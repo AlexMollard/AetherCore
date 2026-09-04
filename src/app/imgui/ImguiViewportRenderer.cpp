@@ -908,7 +908,33 @@ namespace aether
 		if (acquire == VK_ERROR_OUT_OF_DATE_KHR)
 		{
 			// the semaphore, so bailing would leave an acquired-never-presented image
+			// Idle before the helper tears the old swapchain and its frame objects
+			// down: the previous frame may still be executing against them (never
+			// free GPU resources the GPU may still be using).
+			vkDeviceWaitIdle(m_device);
 			CreateOrResizeViewportWindow(*m_vk, m_device, wd, wd.Width, wd.Height);
+			return;
+		}
+		if (acquire == VK_ERROR_SURFACE_LOST_KHR)
+		{
+			// Recreating the swapchain cannot fix a dead surface - creation would
+			// fail on it again. Tear the whole viewport window down (after an idle:
+			// DestroyOne frees the vertex/index buffers and swapchain the last
+			// submitted frame may still be walking) so the next frame's EnsureWindow
+			// builds a fresh surface from the still-alive GLFW window.
+			AE_WARN(LogCategory::UI, "ImGui viewport surface lost; rebuilding the viewport surface.");
+			vkDeviceWaitIdle(m_device);
+			DestroyOne(vp);
+			return;
+		}
+		if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR)
+		{
+			// Any other failure (DEVICE_LOST, TIMEOUT, driver-specific): no image
+			// was acquired, the acquire semaphore is unsignaled, and this frame's
+			// fence was never submitted - falling through would wait on it forever
+			// (vkWaitForFences below) or submit against an image that was never
+			// acquired. Skip the frame without touching wd.FrameIndex or the fences.
+			AE_WARN(LogCategory::UI, "ImGui viewport image acquire failed ({}); skipping frame.", static_cast<int>(acquire));
 			return;
 		}
 		wd.FrameIndex = imageIndex;

@@ -10,6 +10,7 @@
 #include "assets/AssetManager.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/UndoStack.hpp"
 #include "net/NetworkContext.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -227,6 +228,38 @@ namespace aether::app
 				e = remapRestored(e);
 			}
 			primaryToRestore = remapRestored(primaryToRestore);
+			// The undo/redo history addresses the same pre-play entity ids the remap above
+			// just walked. RestoreSceneInPlace keeps ids that stayed live but recreates
+			// anything destroyed mid-play under a fresh one, so once any id moved, a
+			// recorded command can hit the wrong entity (or a dead one) on the next
+			// Ctrl+Z. IEditorCommand exposes no id remap, so drop the history in that
+			// case - but NOT via editor::ResetEditHistory: that is for a REPLACED document
+			// and pins cleanDepth = 0, which would report outstanding pre-play edits as
+			// saved (the one thing the unsaved-changes tracking must never do; see
+			// UndoStack.hpp). Clear() + MarkUnsaved() keeps the truth instead: the restored
+			// document differs from disk by exactly what it differed by before Play. When
+			// no id moved the history is still valid and stays usable across the session.
+			bool idsShifted = false;
+			for (std::size_t i = 0; i < snapshot.entities.size() && i < restored.size(); ++i)
+			{
+				if (snapshot.entities[i].entityId != restored[i].id)
+				{
+					idsShifted = true;
+					break;
+				}
+			}
+			if (idsShifted)
+			{
+				if (auto* undo = context.services.TryGet<editor::UndoStack>())
+				{
+					const bool hadUnsavedChanges = undo->HasUnsavedChanges();
+					undo->Clear();
+					if (hadUnsavedChanges)
+					{
+						undo->MarkUnsaved();
+					}
+				}
+			}
 			playState->stopSnapshot.reset();
 			// A script may have switched scenes mid-play; the snapshot restore
 			// brings back the edited scene, so the name must follow it.

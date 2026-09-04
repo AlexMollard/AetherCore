@@ -93,5 +93,15 @@ namespace aether::app
 		LayerStack m_layers;
 		PlayState m_playState;
 		bool m_layersAttached = false;
+		// Run() starts the render thread long before AttachAll; anything throwing in
+		// between leaves no layers attached but a live render thread, so the destructor
+		// needs to know about the thread independently of the layers.
+		bool m_renderThreadStarted = false;
+#ifdef AETHERCORE_EDITOR_APP
+		// Editor-only autoplay deferral: the editor boots with no scene (the launcher
+		// is up until a project is picked), so the setting cannot enter Play at boot -
+		// OnUpdate starts the session once a scene is loaded. See Run()/OnUpdate.
+		bool m_autoplayPending = false;
+#endif
 	};
 } // namespace aether::app
