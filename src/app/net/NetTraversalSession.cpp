@@ -1,10 +1,12 @@
 #include "net/NetTraversalSession.hpp"
 
+#include <algorithm>
 #include <utility>
 
 #include "net/BroadcastSignaling.hpp"
 #include "net/RendezvousChannel.hpp"
 #include "net/RoomCode.hpp"
+#include "net/TurnClient.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether::net
@@ -26,6 +28,13 @@ namespace aether::net
 		// that follows it actually arrives, and a hole that closed in the interim
 		// must not leave this sitting in Connecting forever.
 		constexpr float kConnectingTimeoutSeconds = 10.0f;
+
+		// How long to give a relay before deciding it never produced a path either -
+		// generous, because TurnClient's own Allocate give-up (kMaxSendsPerTransaction
+		// retries at RFC 5389 s7.2.1 backoff) alone can take upward of a minute against a
+		// server that is simply not answering, and this budget has to outlast that AND
+		// leave the peer a real chance to publish its own relayed candidate afterward.
+		constexpr float kRelayTimeoutSeconds = 90.0f;
 
 		// A joiner needs a KNOWN local port: NatTraversal::LocalCandidates and
 		// NatRendezvous both take the bound port as a caller-supplied number rather
@@ -71,6 +80,15 @@ namespace aether::net
 		m_stunPort = port;
 	}
 
+	void NetTraversalSession::SetTurnServer(std::string host, std::uint16_t port, std::string username, std::string password, bool allowRelay)
+	{
+		m_turnHost = std::move(host);
+		m_turnPort = port;
+		m_turnUsername = std::move(username);
+		m_turnPassword = std::move(password);
+		m_allowRelay = allowRelay;
+	}
+
 	void NetTraversalSession::ResetForNewAttempt()
 	{
 		// A caller may retry straight from Failed, and this class is driven directly
@@ -85,6 +103,8 @@ namespace aether::net
 		m_failure.clear();
 		m_mappingElapsed = 0.0f;
 		m_connectingElapsed = 0.0f;
+		m_relayPublished = false;
+		m_relayElapsed = 0.0f;
 		m_joinInProgress = false;
 		m_localPort = 0;
 	}
@@ -257,10 +277,36 @@ namespace aether::net
 		const NatRendezvous::State state = m_rendezvous->GetState();
 		if (state == NatRendezvous::State::Failed)
 		{
-			// Symmetric NAT or a peer who never joined - NatTraversal and
-			// NatRendezvous already say which, plainly, in their own FailureReason
-			// (see NatTraversal.hpp:27-30); this just carries it through unchanged.
-			Fail(m_rendezvous->FailureReason());
+			// Symmetric NAT or a peer who never joined - NatTraversal and NatRendezvous
+			// already say which, plainly, in their own FailureReason (see
+			// NatTraversal.hpp:27-30). Done with the punch either way: NatRendezvous
+			// itself never retries past Failed (see its own class comment), but the
+			// NatTraversal it wraps - and the socket m_transport shares with it - is
+			// untouched by resetting just this wrapper, which is exactly what a relay
+			// attempt needs: the same socket, one rung further down the ladder.
+			const std::string punchFailure = m_rendezvous->FailureReason();
+			m_rendezvous.reset();
+
+			if (m_allowRelay && !m_turnHost.empty())
+			{
+				NatTraversal* traversal = m_transport.Traversal();
+				if (traversal != nullptr && traversal->BeginRelay(m_turnHost, m_turnPort, m_turnUsername, m_turnPassword))
+				{
+					AE_INFO(LogCategory::App, "Net: the punch failed - trying the configured relay before giving up");
+					m_relayPublished = false;
+					m_relayElapsed = 0.0f;
+					m_state = TraversalState::Relaying;
+					return;
+				}
+				// BeginRelay refused outright - turnHost itself would not resolve. Named
+				// specifically, because this is a DIFFERENT problem from the punch
+				// failing (and a different fix: check turnHost/turnPort, not the punch's
+				// own NAT-shaped advice) - see NatTraversal::BeginRelay.
+				Fail("the punch failed and the configured relay '" + m_turnHost + "' could not be reached - "
+				        + (traversal != nullptr ? traversal->RelayFailureReason() : std::string("no socket left to relay through")));
+				return;
+			}
+			Fail(punchFailure);
 			return;
 		}
 		if (state == NatRendezvous::State::Open)
@@ -287,6 +333,126 @@ namespace aether::net
 			return;
 		}
 		m_state = (state == NatRendezvous::State::Punching) ? TraversalState::Punching : TraversalState::Signaling;
+	}
+
+	void NetTraversalSession::TickRelay(float deltaSeconds)
+	{
+		NatTraversal* traversal = m_transport.Traversal();
+		if (traversal == nullptr)
+		{
+			Fail("the socket closed before the relay could reach the peer");
+			return;
+		}
+		traversal->Tick(deltaSeconds);
+
+		// Watched first, on every tick, for both roles: only the joiner ever calls
+		// ConnectThrough below, but the host is just as capable of being the one this
+		// arrives for - the joiner's CONNECT lands on it exactly like any other inbound
+		// packet once NatTraversal has unwrapped it off the relay.
+		for (const NetEvent& event: m_transport.Events())
+		{
+			if (event.kind == NetEvent::Kind::Connected)
+			{
+				AE_INFO(LogCategory::App, "Net: connected through the relay");
+				m_state = TraversalState::Connected;
+				m_joinInProgress = false;
+				return;
+			}
+			if (event.kind == NetEvent::Kind::Disconnected)
+			{
+				Fail("the connection closed before it finished - the relayed path may have gone stale");
+				return;
+			}
+		}
+
+		if (traversal->RelayState() == TurnClient::State::Failed)
+		{
+			// Distinct from every punch-failure reason above: a relay that never
+			// answers, or refuses the configured credentials, is a problem with the
+			// relay - naming it is what lets a player fix THAT rather than re-check a
+			// router setting that was never the issue here.
+			Fail("the relay '" + m_turnHost + "' did not answer - " + traversal->RelayFailureReason());
+			return;
+		}
+
+		if (!m_relayPublished && traversal->RelayState() == TurnClient::State::Allocated)
+		{
+			// Permitting every candidate the peer already offered - exactly what the
+			// punch was tried against, see NatTraversal::PeerCandidates - is what lets
+			// ITS packets through this new address at all; without a permission the
+			// relay drops them, punch or no punch.
+			for (const NatTraversal::Endpoint& peer: traversal->PeerCandidates())
+			{
+				traversal->PermitRelayPeer(peer);
+			}
+			// The relayed transport address is just another candidate - see
+			// NatTraversal.hpp - so it goes out over the exact same channel the LAN and
+			// reflexive candidates already did.
+			CandidateSet candidates;
+			candidates.endpoints = NatTraversal::LocalCandidates(m_localPort);
+			if (const auto relayed = traversal->RelayedEndpoint())
+			{
+				candidates.endpoints.push_back(*relayed);
+			}
+			m_signaling->Publish(candidates);
+			m_relayPublished = true;
+
+			// Only the JOINER dials (see the class comment / TickRendezvous) - and
+			// when it is THIS session's own relay that just came up, RelayConnectEndpoint()
+			// is what it must dial: ENet's own sends have to land on the loopback
+			// bridge, never on RelayedEndpoint() itself, which is the address just
+			// published above for the PEER to use instead (see NatTraversal.hpp and
+			// TurnRelaySocket.hpp for why confusing the two breaks the relay). The
+			// host does nothing extra here, exactly like every other rung - it stays
+			// passively listening, and the first datagram this relay forwards already
+			// arrives sourced from that same loopback address, which auto-creates the
+			// peer ENet needs with no explicit dial at all.
+			if (!m_isHostRole)
+			{
+				if (const auto connectEndpoint = traversal->RelayConnectEndpoint())
+				{
+					if (m_transport.ConnectThrough(*connectEndpoint))
+					{
+						m_connectingElapsed = 0.0f;
+						m_state = TraversalState::Connecting;
+						return;
+					}
+				}
+			}
+		}
+
+		// A joiner is the only role that ever dials (see the class comment) - so once
+		// the peer has had its own chance to relay, its candidate arrives here exactly
+		// like any other, just later, over the same channel. Only a candidate that was
+		// NOT already tried during the punch is worth a fresh ConnectThrough: anything
+		// already in PeerCandidates() is one this socket already failed to reach
+		// directly, and dialling it again would only repeat that failure.
+		if (!m_isHostRole)
+		{
+			if (const auto offered = m_signaling->Poll())
+			{
+				const std::vector<NatTraversal::Endpoint> alreadyTried = traversal->PeerCandidates();
+				for (const NatTraversal::Endpoint& candidate: offered->endpoints)
+				{
+					if (std::ranges::find(alreadyTried, candidate) != alreadyTried.end())
+					{
+						continue;
+					}
+					if (m_transport.ConnectThrough(candidate))
+					{
+						m_connectingElapsed = 0.0f;
+						m_state = TraversalState::Connecting;
+						return;
+					}
+				}
+			}
+		}
+
+		m_relayElapsed += deltaSeconds;
+		if (m_relayElapsed >= kRelayTimeoutSeconds)
+		{
+			Fail("the relay never produced a path to the peer");
+		}
 	}
 
 	void NetTraversalSession::TickConnecting(float deltaSeconds)
@@ -327,6 +493,9 @@ namespace aether::net
 		case TraversalState::Signaling:
 		case TraversalState::Punching:
 			TickRendezvous(deltaSeconds);
+			break;
+		case TraversalState::Relaying:
+			TickRelay(deltaSeconds);
 			break;
 		case TraversalState::Connecting:
 			TickConnecting(deltaSeconds);

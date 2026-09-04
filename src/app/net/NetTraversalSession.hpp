@@ -22,6 +22,7 @@ namespace aether::net
 		Mapping,    // asking the router for a port (host role only)
 		Signaling,  // publishing candidates over the room and waiting for the peer's
 		Punching,   // sending connectivity checks at whatever the peer offered
+		Relaying,   // the punch failed; asking a configured TURN relay for a path instead
 		Connecting, // a path opened; waiting for ENet's own handshake over it
 		Connected,  // done - NetworkReceiveSystem/NetworkSendSystem own the link now
 		Failed,     // no path reached the peer; see FailureReason
@@ -42,7 +43,11 @@ namespace aether::net
 	// punch at whatever the peer offers, and finish the real ENet handshake through
 	// the hole that opens. See the comment atop NatTraversal.hpp for why every step
 	// of this runs over the SAME socket the transport owns rather than one of its
-	// own - PortMapping is the one exception, and it touches no data socket at all.
+	// own - PortMapping and the TurnRelaySocket a relay allocation fronts are the two
+	// exceptions, and neither touches ENet's own data socket: PortMapping talks to the
+	// router, not the peer, and a TurnRelaySocket needs no hole punched toward it at
+	// all (see TurnRelaySocket.hpp's own class comment for why that is not a
+	// violation of this same rule).
 	//
 	// BOTH roles call NetworkSubsystem::Host() first (NetworkSubsystem.hpp:37-49) - a
 	// host to be reachable at all, a joiner because the punch and the ConnectThrough
@@ -81,6 +86,16 @@ namespace aether::net
 		// and what a test with no network reachability calls this with.
 		void SetStunServer(std::string host, std::uint16_t port = 3478);
 
+		// Overrides the TURN relay the ladder falls back to once a punch has genuinely
+		// failed - see the Relaying state above. `allowRelay` mirrors
+		// EngineSettings::Network::allowRelay: even a fully configured relay is never
+		// tried unless this is true, because every packet through it costs someone
+		// bandwidth (see NatTraversal.hpp). An empty `host` (the default, matching
+		// EngineSettings::Network::turnHost's empty default) disables relaying entirely,
+		// same shape as SetStunServer's empty-host case above - and what a test with no
+		// relay reachable calls this with, or simply never calls at all.
+		void SetTurnServer(std::string host, std::uint16_t port, std::string username, std::string password, bool allowRelay);
+
 		// Returns false only when the attempt could not even begin (a malformed room
 		// code, the local socket failing to bind) - GetState() is Failed in every
 		// case this returns false, with FailureReason() saying why. A true return
@@ -118,6 +133,7 @@ namespace aether::net
 		void BeginSignalingAndPunch();
 		void TickMapping(float deltaSeconds);
 		void TickRendezvous(float deltaSeconds);
+		void TickRelay(float deltaSeconds);
 		void TickConnecting(float deltaSeconds);
 		void Fail(std::string reason);
 
@@ -128,6 +144,12 @@ namespace aether::net
 
 		std::string m_stunHost = "stun.l.google.com";
 		std::uint16_t m_stunPort = 19302;
+
+		std::string m_turnHost;
+		std::uint16_t m_turnPort = 3478;
+		std::string m_turnUsername;
+		std::string m_turnPassword;
+		bool m_allowRelay = false;
 
 		SignalingBackend m_backend = SignalingBackend::LanBroadcast;
 		std::string m_signalingAddress;
@@ -141,6 +163,12 @@ namespace aether::net
 
 		std::optional<NatRendezvous> m_rendezvous;
 		float m_connectingElapsed = 0.0f;
+
+		// Set once the current relay attempt has published its candidate, so TickRelay
+		// does not re-publish (and re-permit every peer candidate) on every single tick
+		// while waiting for the peer to answer.
+		bool m_relayPublished = false;
+		float m_relayElapsed = 0.0f;
 
 		TraversalState m_state = TraversalState::Idle;
 		std::string m_failure;

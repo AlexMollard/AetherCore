@@ -529,6 +529,14 @@ namespace aether::net
 		static void RestoreSimulationAuthority(World& world);
 
 	private:
+		// Reads network.stunHost/stunPort/turnHost/turnPort/turnUsername/turnPassword/
+		// allowRelay straight off SettingsService and pushes them into m_traversalSession
+		// through its SetStunServer/SetTurnServer seams, so the connect ladder is never a
+		// second copy of those values that could drift from the one place a project (or
+		// Net.ConfigureRelay) actually sets them. Called at the top of HostWithCode and
+		// JoinByCode, which is early enough: neither backend nor socket exists yet.
+		void ConfigureTraversalFromSettings();
+
 		ServiceContainer& m_services;
 		NetworkSubsystem m_transport;
 		NetSession m_session;

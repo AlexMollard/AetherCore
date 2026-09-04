@@ -18,6 +18,7 @@
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
+#include "utils/SettingsService.hpp"
 
 namespace aether::net
 {
@@ -229,6 +230,22 @@ namespace aether::net
 		m_resyncRequests.clear();
 	}
 
+	void NetworkContext::ConfigureTraversalFromSettings()
+	{
+		// No SettingsService registered (a headless tool, or a test constructing this
+		// directly) leaves m_traversalSession on its own defaults, which already mirror
+		// EngineSettings::Network's - see NetTraversalSession.hpp.
+		SettingsService* settings = m_services.TryGet<SettingsService>();
+		if (settings == nullptr)
+		{
+			return;
+		}
+		const EngineSettings::Network& network = settings->Get().network;
+		m_traversalSession.SetStunServer(network.stunHost, static_cast<std::uint16_t>(network.stunPort));
+		m_traversalSession.SetTurnServer(network.turnHost, static_cast<std::uint16_t>(network.turnPort), network.turnUsername,
+		        network.turnPassword, network.allowRelay);
+	}
+
 	bool NetworkContext::HostWithCode(std::string_view roomCode, std::uint16_t port, int maxConnections)
 	{
 		// A traversal attempt binds the transport exactly like StartHost does, so an
@@ -239,6 +256,7 @@ namespace aether::net
 		{
 			return false;
 		}
+		ConfigureTraversalFromSettings();
 		m_disconnectReason.clear();
 		m_maxConnections = maxConnections > 0 ? maxConnections : kDefaultMaxConnections;
 		// The slack is the same reason StartHost adds it above - see kRefusalSlack -
@@ -260,6 +278,7 @@ namespace aether::net
 		{
 			return false;
 		}
+		ConfigureTraversalFromSettings();
 		m_disconnectReason.clear();
 		const bool started = m_traversalSession.JoinByCode(roomCode);
 		if (started)
