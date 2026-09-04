@@ -238,6 +238,26 @@ namespace aether::app::scene
 			{
 				prefabByGuid[EffectiveGuid(prefab->entities[i], i)] = &prefab->entities[i];
 			}
+			// Records are world-space (see the scene format invariant), so a child's
+			// captured transform moves whenever the INSTANCE ROOT moves - it no longer
+			// matches the prefab's own world pose, and diffing the two directly wrote a
+			// position/euler/scale override for every child of every instance the user
+			// ever dragged. Those overrides then pinned the children: a later edit to the
+			// prefab's child transforms could never reach a placed instance again.
+			//
+			// Compare against where the prefab WOULD put the child given this instance's
+			// current root instead: expected = liveRoot * inverse(prefabRoot) * prefChild.
+			// Only a genuine local edit differs, and what gets persisted is still the
+			// live world transform, so the on-disk format and the apply path are unchanged.
+			const auto* rootLink = world.TryGet<PrefabLinkComponent>(root);
+			const auto rootIt = rootLink != nullptr ? prefabByGuid.find(rootLink->prefabGuid) : prefabByGuid.end();
+			const auto* rootTransform = world.TryGet<TransformComponent>(root);
+			std::optional<glm::mat4> prefabToInstance;
+			if (rootIt != prefabByGuid.end() && rootTransform != nullptr && rootIt->second->hasTransform)
+			{
+				const glm::mat4 prefabRoot = ComposeTransform(rootIt->second->position, rootIt->second->eulerDeg, rootIt->second->scale);
+				prefabToInstance = rootTransform->localToWorld * glm::inverse(prefabRoot);
+			}
 			std::unordered_set<std::uint64_t> presentGuids;
 			for (const Entity e: CollectSubtree(world, root))
 			{
@@ -264,6 +284,13 @@ namespace aether::app::scene
 					{
 						EntityRecord liveC = std::move(oneCap.entities[0]);
 						EntityRecord prefC = *pit->second;
+						if (prefabToInstance && prefC.hasTransform)
+						{
+							// Lift the prefab's child pose into this instance's frame, so
+							// only a local edit reads as a difference.
+							const glm::mat4 expected = *prefabToInstance * ComposeTransform(prefC.position, prefC.eulerDeg, prefC.scale);
+							DecomposeTRS(expected, prefC.position, prefC.eulerDeg, prefC.scale);
+						}
 						CanonicalizeRecordTransform(liveC);
 						CanonicalizeRecordTransform(prefC);
 						std::string partial = ComputePrefabOverrideToml(liveC, prefC);

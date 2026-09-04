@@ -19,6 +19,7 @@
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/TagSlots.hpp"
+#include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "ui/UiComponents.hpp"
@@ -1853,4 +1854,49 @@ TEST_CASE("v9 scene fixtures migrate feature defaults without changing source ve
     CHECK(legacy3D->version == 9);
     CHECK(legacy3D->kind == SceneKind::Scene3D);
     CHECK(legacy3D->features == DefaultSceneFeatures(SceneKind::Scene3D));
+}
+
+TEST_CASE("Moving a prefab instance root does not override its children's transforms") {
+    // Records are world-space, so every child's captured transform moves with the
+    // instance root. Diffing that directly against the prefab wrote a transform
+    // override for every child of every instance the user had ever dragged, and those
+    // overrides then pinned the children against later edits to the prefab itself.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "aether_prefab_override_test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    SetProjectSceneDirectories(dir / "scenes", dir);
+
+    // A prefab whose child sits offset from its root.
+    World authoring = MakeWorld();
+    Entity prefabRoot = authoring.Create();
+    authoring.Emplace<NameComponent>(prefabRoot, NameComponent{.name = "Turret"});
+    authoring.Emplace<TransformComponent>(prefabRoot, TransformComponent{});
+    Entity prefabBarrel = authoring.Create();
+    authoring.Emplace<NameComponent>(prefabBarrel, NameComponent{.name = "Barrel"});
+    authoring.Emplace<TransformComponent>(prefabBarrel, TransformComponent{.localToWorld = ComposeTransform({0, 2, 0}, {0, 0, 0}, {1, 1, 1})});
+    ecs::SetParent(authoring, prefabBarrel, prefabRoot);
+    REQUIRE(SavePrefabFile("Turret", CapturePrefab(authoring, prefabRoot, mreg, treg)));
+
+    const auto prefab = ReadPrefabFile("Turret");
+    REQUIRE(prefab.has_value());
+
+    // Place an instance, then drag it somewhere else entirely.
+    World live = MakeWorld();
+    const Entity instance = InstantiatePrefabInstance("Turret", *prefab, live, ApplySceneDeps{}, glm::mat4(1.0f));
+    REQUIRE(instance.IsValid());
+    ecs::SetWorldTransform(live, instance, ComposeTransform({10, 0, -4}, {0, 90, 0}, {1, 1, 1}));
+
+    const SceneDescription captured = CaptureScene(live, mreg, treg);
+    REQUIRE(captured.prefabInstances.size() == 1);
+    // The move belongs to the instance record itself, not to per-child overrides.
+    CHECK(captured.prefabInstances[0].position.x == doctest::Approx(10.0f));
+    CHECK(captured.prefabInstances[0].overrides.empty());
+
+    ClearProjectSceneDirectories();
+    std::filesystem::remove_all(dir);
 }
