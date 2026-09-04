@@ -225,6 +225,29 @@ namespace aether::editor
 		EffectParams m_params;
 	};
 
+	// The inverse direction of RemoveEffectCommand: recorded after a palette apply puts an
+	// effect on an entity. Undo takes it back off and restores the plain material; redo
+	// re-applies it through the same entry point, so the param slot is allocated fresh
+	// rather than replayed from a stale index.
+	class AddEffectCommand final : public IEditorCommand
+	{
+	public:
+		AddEffectCommand(std::uint32_t entityId, std::string effectName, EffectParams params);
+
+		void Undo(World& world, ServiceContainer& services) override;
+		void Redo(World& world, ServiceContainer& services) override;
+
+		[[nodiscard]] std::string_view Label() const override
+		{
+			return "Add effect";
+		}
+
+	private:
+		std::uint32_t m_entityId;
+		std::string m_effectName;
+		EffectParams m_params;
+	};
+
 	// A Sprite Animation panel edit (frames, durations, events, loop mode) as a
 	// main-history command. Stores the before/after clip and applies it back
 	// through a callback the panel supplies, so the global Ctrl+Z drives it with

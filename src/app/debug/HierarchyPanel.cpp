@@ -1077,7 +1077,19 @@ namespace aether::editor
 		ImGui::Separator();
 		if (ImGui::MenuItem(ICON_FA_TRASH "  Delete (subtree)"))
 		{
+			// Snapshot before destroying so undo brings the subtree back in place, exactly
+			// like the keyboard Delete path.
+			std::unique_ptr<SubtreeLifetimeCommand> deleteCommand;
+			auto* undoStack = context.services.TryGet<UndoStack>();
+			if (undoStack != nullptr)
+			{
+				deleteCommand = SubtreeLifetimeCommand::Capture(world, context.services, {e}, /*createdByThisEdit=*/false, "Delete");
+			}
 			ecs::DestroyHierarchy(world, e);
+			if (deleteCommand != nullptr)
+			{
+				undoStack->Record(std::move(deleteCommand));
+			}
 			selection.Clear();
 			destroyed = true;
 		}

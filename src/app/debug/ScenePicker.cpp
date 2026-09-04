@@ -71,7 +71,7 @@ namespace aether::editor
 		// world-space t (chosen among sprites by sorting order), then meshes and physics
 		// below compete on t, so a closer 3D hit wins in mixed 2D/3D scenes. Pure-2D
 		// scenes have no meshes, so the top sprite still wins.
-		for (const auto& [enttE, meshComp, tc]: world.View<MeshComponent, TransformComponent>().each())
+		for (const auto& [enttE, meshComp, tc]: world.GetRegistry().view<MeshComponent, TransformComponent>(entt::exclude<DisabledComponent>).each())
 		{
 			const Entity e = World::FromEntt(enttE);
 			if (!e.IsValid() || meshComp.mesh == nullptr || !pickable(e))

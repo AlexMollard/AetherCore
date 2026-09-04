@@ -327,21 +327,26 @@ namespace aether::editor
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, iw::WithAlpha(colors::Orange, 0.12f));
 			if (auto* nc = world.TryGet<NameComponent>(entity))
 			{
-				char buf[128];
-				std::snprintf(buf, sizeof(buf), "%s", nc->name.c_str());
+				// Edited through a std::string copy rather than a char[128]: a fixed buffer
+				// silently truncated any name over 127 chars the moment the field committed,
+				// and recorded that truncation as an undoable edit.
+				std::string name = nc->name;
 				ImGui::SetNextItemWidth(-(idW + ImGui::GetStyle().ItemSpacing.x));
-				if (ImGui::InputText("##name", buf, sizeof(buf)))
+				if (ImGui::InputText("##name", &name))
 				{
 					// Record through the same coalescing buffer the reflected drawer uses, so a
 					// whole typing session collapses into one step. This header field is drawn by
 					// hand rather than by the reflected pass, so it was outside that hook entirely
 					// and renaming from the Inspector recorded nothing at all - undo silently
 					// skipped past it to whatever came before.
-					const std::string before = nc->name;
-					nc->name = buf;
-					if (auto* undo = context.TryGet<UndoStack>(); undo != nullptr && before != nc->name)
+					if (name != nc->name)
 					{
-						undo->RecordFieldEdit(entity.id, "Name", "name", nlohmann::json(before), nlohmann::json(nc->name), /*isReflected=*/true);
+						const std::string before = nc->name;
+						nc->name = std::move(name);
+						if (auto* undo = context.TryGet<UndoStack>(); undo != nullptr)
+						{
+							undo->RecordFieldEdit(entity.id, "Name", "name", nlohmann::json(before), nlohmann::json(nc->name), /*isReflected=*/true);
+						}
 					}
 				}
 			}
@@ -386,7 +391,20 @@ namespace aether::editor
 		ImGui::SetItemTooltip("Delete entity (and children)");
 		if (deleteClicked)
 		{
+			// Captured like the hierarchy's delete paths: without a SubtreeLifetimeCommand the
+			// delete records nothing, Ctrl+Z reaches past it to an earlier command, and the
+			// subtree is gone for good.
+			std::unique_ptr<SubtreeLifetimeCommand> deleteCommand;
+			auto* undoStack = context.services.TryGet<UndoStack>();
+			if (undoStack != nullptr)
+			{
+				deleteCommand = SubtreeLifetimeCommand::Capture(world, context.services, {entity}, /*createdByThisEdit=*/false, "Delete");
+			}
 			ecs::DestroyHierarchy(world, entity);
+			if (deleteCommand != nullptr)
+			{
+				undoStack->Record(std::move(deleteCommand));
+			}
 			selection.Clear();
 			ImGui::End();
 			return;
@@ -416,18 +434,44 @@ namespace aether::editor
 				DecomposeTRS(tc->localToWorld, curPos, curEuler, curScale);
 			}
 
+			auto* paletteUndo = context.TryGet<UndoStack>();
+			// The hand-authored entries below mutate the registry directly, so each records
+			// the same AddComponentCommand the catalog-driven loop at the end of this popup
+			// does - otherwise the add silently persisted into the next save and Ctrl+Z
+			// reached past it to whatever command came before.
+			const auto recordAdd = [paletteUndo, entity](const char* componentName)
+			{
+				if (paletteUndo != nullptr)
+				{
+					paletteUndo->Record(std::make_unique<AddComponentCommand>(entity.id, componentName));
+				}
+			};
+			// The implicit Transform is recorded separately so undoing the add does not
+			// strand a component the user never asked for (same contract as the catalog loop).
+			const auto ensureTransformRecorded = [&world, entity, &recordAdd]()
+			{
+				if (!world.Has<TransformComponent>(entity))
+				{
+					world.Emplace<TransformComponent>(entity);
+					recordAdd("Transform");
+				}
+			};
+
 			ImGui::SeparatorText("Core");
 			if (PaletteEntry(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform", m_addFilter, world.Has<TransformComponent>(entity)))
 			{
 				world.Emplace<TransformComponent>(entity);
+				recordAdd("Transform");
 			}
 			if (PaletteEntry(ICON_FA_PEN "  Name", m_addFilter, world.Has<NameComponent>(entity)))
 			{
 				world.Emplace<NameComponent>(entity, NameComponent{.name = "Entity"});
+				recordAdd("Name");
 			}
 			if (PaletteEntry(ICON_FA_SITEMAP "  Hierarchy", m_addFilter, world.Has<HierarchyComponent>(entity)))
 			{
 				world.Emplace<HierarchyComponent>(entity);
+				recordAdd("Hierarchy");
 			}
 
 			// Unity-style palette: one entry per component, everything available
@@ -436,10 +480,7 @@ namespace aether::editor
 			ImGui::SeparatorText("Rendering");
 			if (PaletteEntry(ICON_FA_CUBE "  Mesh Renderer", m_addFilter, world.Has<MeshComponent>(entity)) && primitives != nullptr && assets != nullptr)
 			{
-				if (!world.Has<TransformComponent>(entity))
-				{
-					world.Emplace<TransformComponent>(entity);
-				}
+				ensureTransformRecorded();
 				world.Emplace<MeshComponent>(entity, MeshComponent{.mesh = &primitives->Get(PrimitiveMesh::Cube)});
 				world.EmplaceOrReplace<MeshSourceComponent>(entity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = "cube", .primitiveIndex = 0});
 				if (!world.Has<MaterialComponent>(entity))
@@ -451,26 +492,24 @@ namespace aether::editor
 					MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 				}
 				world.EmplaceOrReplace<MeshRendererComponent>(entity);
+				// "Cube" is the catalog entry whose add/remove covers this whole mesh bundle.
+				recordAdd("Cube");
 			}
 			if (PaletteEntry(ICON_FA_IMAGE "  Sprite Renderer", m_addFilter, world.Has<SpriteRendererComponent>(entity)))
 			{
-				if (!world.Has<TransformComponent>(entity))
-				{
-					world.Emplace<TransformComponent>(entity);
-				}
+				ensureTransformRecorded();
 				world.EmplaceOrReplace<SpriteRendererComponent>(entity);
+				recordAdd("Sprite Renderer");
 			}
 			if (PaletteEntry(ICON_FA_FILM "  Sprite Animator", m_addFilter, world.Has<SpriteAnimatorComponent>(entity)))
 			{
-				if (!world.Has<TransformComponent>(entity))
-				{
-					world.Emplace<TransformComponent>(entity);
-				}
+				ensureTransformRecorded();
 				if (!world.Has<SpriteRendererComponent>(entity))
 				{
 					world.Emplace<SpriteRendererComponent>(entity);
 				}
 				world.EmplaceOrReplace<SpriteAnimatorComponent>(entity);
+				recordAdd("Sprite Animator");
 			}
 			if (PaletteEntry(ICON_FA_PALETTE "  Material", m_addFilter, world.Has<MaterialComponent>(entity)) && assets != nullptr)
 			{
@@ -478,6 +517,7 @@ namespace aether::editor
 				asset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.0f);
 				asset.roughnessFactor = 0.6f;
 				MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
+				recordAdd("Material");
 			}
 			if (sceneCtx != nullptr && sceneCtx->effects != nullptr && assets != nullptr)
 			{
@@ -486,32 +526,29 @@ namespace aether::editor
 				std::sort(effectNames.begin(), effectNames.end());
 				if (!effectNames.empty() && PaletteEntry(ICON_FA_BOLT "  Effect", m_addFilter, world.Has<EffectRefComponent>(entity)))
 				{
+					// ponytail: this entry records nothing - no command type can express an
+					// effect add yet (RemoveEffectCommand only tears one down), so Ctrl+Z still
+					// reaches past it until an AddEffectCommand exists in EditorCommand.
 					effects::ApplyEntityEffect(world, entity, effectNames.front(), *sceneCtx->effects, assets->GetPipelineCache(), assets->GetEffectParamBuffer());
 				}
 			}
 			if (PaletteEntry(ICON_FA_LIGHTBULB "  Point Light", m_addFilter, world.Has<PointLightComponent>(entity)))
 			{
-				if (!world.Has<TransformComponent>(entity))
-				{
-					world.Emplace<TransformComponent>(entity);
-				}
+				ensureTransformRecorded();
 				world.Emplace<PointLightComponent>(entity);
+				recordAdd("Point Light");
 			}
 			if (PaletteEntry(ICON_FA_LIGHTBULB "  Spot Light", m_addFilter, world.Has<SpotLightComponent>(entity)))
 			{
-				if (!world.Has<TransformComponent>(entity))
-				{
-					world.Emplace<TransformComponent>(entity);
-				}
+				ensureTransformRecorded();
 				world.Emplace<SpotLightComponent>(entity);
+				recordAdd("Spot Light");
 			}
 			if (PaletteEntry(ICON_FA_VIDEO "  Camera", m_addFilter, world.Has<CameraComponent>(entity)))
 			{
-				if (!world.Has<TransformComponent>(entity))
-				{
-					world.Emplace<TransformComponent>(entity);
-				}
+				ensureTransformRecorded();
 				world.Emplace<CameraComponent>(entity);
+				recordAdd("Camera");
 			}
 			if (m_addFilter[0] == '\0')
 			{
@@ -524,7 +561,14 @@ namespace aether::editor
 				ImGui::SeparatorText("Scripts");
 				if (PaletteEntry(ICON_FA_CODE "  Script", m_addFilter, false))
 				{
+					// Scripts are not components: recorded by diffing the slot list, the
+					// same way the hierarchy's script drop is.
+					const std::vector<ScriptEntry> scriptsBefore = CaptureScripts(world, entity);
 					AddScriptToEntity(world, entity);
+					if (paletteUndo != nullptr)
+					{
+						RecordScriptEdits(*paletteUndo, world, entity, scriptsBefore);
+					}
 				}
 			}
 
@@ -542,6 +586,7 @@ namespace aether::editor
 				if (PaletteEntry(ICON_FA_WEIGHT_HANGING "  Rigid Body", m_addFilter, world.Has<RigidBodyComponent>(entity)))
 				{
 					world.Emplace<RigidBodyComponent>(entity, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
+					recordAdd("Rigid Body");
 				}
 				if (PaletteEntry(ICON_FA_DRAW_POLYGON "  Collider", m_addFilter, world.Has<ColliderComponent>(entity)))
 				{
@@ -551,14 +596,18 @@ namespace aether::editor
 					c.radius = curScale.x * 0.5f;
 					c.halfHeight = curScale.y * 0.5f;
 					world.Emplace<ColliderComponent>(entity, c);
+					// The plain palette "Collider" IS the catalog's Box shape.
+					recordAdd("Box Collider");
 				}
 				if (PaletteEntry(ICON_FA_LINK "  Joint", m_addFilter, world.Has<JointComponent>(entity)))
 				{
 					world.Emplace<JointComponent>(entity, JointComponent{.anchor = curPos});
+					recordAdd("Joint");
 				}
 				if (PaletteEntry(ICON_FA_BOLT "  Collision Events", m_addFilter, world.Has<CollisionEventsComponent>(entity)))
 				{
 					world.GetRegistry().emplace<CollisionEventsComponent>(World::ToEntt(entity));
+					recordAdd("Collision Events");
 				}
 			}
 
@@ -574,11 +623,9 @@ namespace aether::editor
 					}
 					if (PaletteEntry(label, m_addFilter, entry->has(world, entity)))
 					{
-						if (!world.Has<TransformComponent>(entity))
-						{
-							world.Emplace<TransformComponent>(entity);
-						}
+						ensureTransformRecorded();
 						entry->add(world, entity, context.services);
+						recordAdd(entryName);
 					}
 				};
 				add2D("Rigid Body 2D", ICON_FA_WEIGHT_HANGING "  Rigid Body 2D");
@@ -673,6 +720,7 @@ namespace aether::editor
 			if (PaletteEntry(ICON_FA_GHOST "  Scene Transient", m_addFilter, world.Has<SceneTransientComponent>(entity)))
 			{
 				world.GetRegistry().emplace<SceneTransientComponent>(World::ToEntt(entity));
+				recordAdd("Scene Transient");
 			}
 			ImGui::EndPopup();
 		}
