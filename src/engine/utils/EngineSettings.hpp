@@ -183,6 +183,29 @@ namespace aether
 			float hotspotY = 0.0f;
 			bool pixelArt = true;      // nearest sampling, so small art scales up crisp
 		} cursor;
+
+		// NAT traversal servers, both plain IETF protocols (STUN: RFC 5389, TURN: RFC 5766 /
+		// 8656) so any of these can point at self-hosted coturn, a friend's box, or a paid
+		// provider - nothing here is tied to a vendor. See docs/multiplayer-relay.md.
+		struct Network
+		{
+			// One-shot "what is my public address" lookup, no game traffic. A public default
+			// is fine here - this is what NetTraversalSession used to hardcode at the call
+			// site before it became a setting.
+			std::string stunHost = "stun.l.google.com";
+			int stunPort = 19302;
+
+			// TURN relay: the fallback for a symmetric NAT, the one case a hole punch cannot
+			// solve by construction. Unlike STUN's single lookup, every packet of the match
+			// flows through this server, so - deliberately unlike stunHost above - there is
+			// no default host, and allowRelay defaults off. Enabling a relay is a choice for
+			// whoever configures the project or player to make, never one shipped for them.
+			std::string turnHost;
+			int turnPort = 3478;
+			std::string turnUsername;
+			std::string turnPassword;
+			bool allowRelay = false;
+		} network;
 	};
 
 	[[nodiscard]] inline std::pair<std::string_view, std::string_view> SplitSettingKey(std::string_view key)
@@ -253,6 +276,13 @@ namespace aether
 		f("cursor.hotspotX", settings.cursor.hotspotX);
 		f("cursor.hotspotY", settings.cursor.hotspotY);
 		f("cursor.pixelArt", settings.cursor.pixelArt);
+		f("network.stunHost", settings.network.stunHost);
+		f("network.stunPort", settings.network.stunPort);
+		f("network.turnHost", settings.network.turnHost);
+		f("network.turnPort", settings.network.turnPort);
+		f("network.turnUsername", settings.network.turnUsername);
+		f("network.turnPassword", settings.network.turnPassword);
+		f("network.allowRelay", settings.network.allowRelay);
 	}
 
 	// What a settings key means, what it will accept, and whether it needs a restart -
@@ -419,13 +449,17 @@ namespace aether
 
 	[[nodiscard]] inline SettingsHome SettingsHomeFor(std::string_view key) noexcept
 	{
-		// Window geometry, presentation and pacing, and the editor's own UI: all describe the
-		// machine sitting in front of the project, not the project.
+		// Window geometry, presentation and pacing, the editor's own UI, and the NAT
+		// traversal servers all describe the machine sitting in front of the project, not
+		// the project - a relay is whoever is running the engine's own choice to make (see
+		// docs/multiplayer-relay.md), never something a shipped project decides for them.
 		if (key == "window.width" || key == "window.height" || key == "window.mode"
 		        || key == "graphics.vsync" || key == "graphics.framesInFlight" || key == "graphics.lowLatencyPresent"
 		        || key == "graphics.renderScale" || key == "graphics.latencyPacing" || key == "graphics.syncSlackMs" || key == "graphics.asyncCompute"
 		        || key == "graphics.anisotropy" || key == "graphics.imguiViewports" || key == "graphics.uiScale"
-		        || key == "app.targetFps" || key == "app.idleFps" || key == "app.idleAfterSeconds" || key == "app.autosaveSeconds")
+		        || key == "app.targetFps" || key == "app.idleFps" || key == "app.idleAfterSeconds" || key == "app.autosaveSeconds"
+		        || key == "network.stunHost" || key == "network.stunPort" || key == "network.turnHost" || key == "network.turnPort"
+		        || key == "network.turnUsername" || key == "network.turnPassword" || key == "network.allowRelay")
 		{
 			return SettingsHome::User;
 		}

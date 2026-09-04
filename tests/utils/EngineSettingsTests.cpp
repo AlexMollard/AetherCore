@@ -508,3 +508,62 @@ name = oops
 	std::error_code ec;
 	std::filesystem::remove(path, ec);
 }
+
+// The relay carries a player's game traffic through a third party, unlike the one-shot
+// STUN lookup, so it must never be on by anything a project ships - only a deliberate
+// choice by whoever configures the engine. See docs/multiplayer-relay.md.
+TEST_CASE("TURN relay fields default to empty and off; STUN keeps a usable public default") {
+    const EngineSettings s;
+
+    CHECK(s.network.turnHost.empty());
+    CHECK(s.network.turnUsername.empty());
+    CHECK(s.network.turnPassword.empty());
+    CHECK(s.network.allowRelay == false);
+
+    CHECK_FALSE(s.network.stunHost.empty());
+    CHECK(s.network.stunPort == 19302);
+}
+
+TEST_CASE("Relay settings round-trip through Serialize/Apply like every other field") {
+    EngineSettings original;
+    original.network.stunHost = "stun.example.com";
+    original.network.stunPort = 3478;
+    original.network.turnHost = "turn.example.com";
+    original.network.turnPort = 3479;
+    original.network.turnUsername = "player1";
+    original.network.turnPassword = "s3cret";
+    original.network.allowRelay = true;
+
+    const std::string toml = EngineSettingsIO::Serialize(original);
+    EngineSettings rebuilt;
+    EngineSettingsIO::Apply(toml, rebuilt);
+
+    CHECK(rebuilt.network.stunHost == original.network.stunHost);
+    CHECK(rebuilt.network.stunPort == original.network.stunPort);
+    CHECK(rebuilt.network.turnHost == original.network.turnHost);
+    CHECK(rebuilt.network.turnPort == original.network.turnPort);
+    CHECK(rebuilt.network.turnUsername == original.network.turnUsername);
+    CHECK(rebuilt.network.turnPassword == original.network.turnPassword);
+    CHECK(rebuilt.network.allowRelay == original.network.allowRelay);
+}
+
+// Relay config describes the machine running the engine - a player's own coturn box or a
+// friend's - not the game project, so (unlike app.startupScene) a per-user layer must be
+// able to set it.
+TEST_CASE("A user-layer document can set the TURN relay, unlike project-only keys") {
+    EngineSettings s;
+
+    EngineSettingsIO::Apply("[network]\nturnHost = \"turn.example.com\"\nturnPort = 3478\nturnUsername = \"me\"\nturnPassword = \"pw\"\nallowRelay = true\n", s, SettingsScope::UserOverridable);
+
+    CHECK(s.network.turnHost == "turn.example.com");
+    CHECK(s.network.turnPort == 3478);
+    CHECK(s.network.turnUsername == "me");
+    CHECK(s.network.turnPassword == "pw");
+    CHECK(s.network.allowRelay == true);
+
+    // And it lands in the per-user override file, alongside the other machine-local keys.
+    EngineSettings base;
+    const std::string overrides = EngineSettingsIO::SerializeOverrides(s, base);
+    CHECK(overrides.find("turnHost") != std::string::npos);
+    CHECK(overrides.find("allowRelay") != std::string::npos);
+}

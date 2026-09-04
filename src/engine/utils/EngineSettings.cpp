@@ -91,6 +91,13 @@ namespace aether
 		        {"cursor.hotspotX", {.description = "Which point of the image sits under the mouse, 0..1 across the width.", .minValue = 0.0, .maxValue = 1.0}},
 		        {"cursor.hotspotY", {.description = "Which point of the image sits under the mouse, 0..1 down the height.", .minValue = 0.0, .maxValue = 1.0}},
 		        {"cursor.pixelArt", {.description = "Nearest-neighbour sampling, so small pointer art scales up crisp."}},
+		        {"network.stunHost", {.description = "STUN server used to discover this machine's public address for NAT traversal (RFC 5389). Plain protocol, any compliant server works - never carries game traffic."}},
+		        {"network.stunPort", {.description = "STUN server port.", .minValue = 1.0, .maxValue = 65535.0}},
+		        {"network.turnHost", {.description = "TURN relay server for peers a hole punch cannot reach, such as a symmetric NAT (RFC 5766/8656). Empty disables relaying regardless of allowRelay - point this at a self-hosted coturn or other IETF-compliant TURN server. See docs/multiplayer-relay.md."}},
+		        {"network.turnPort", {.description = "TURN server port.", .minValue = 1.0, .maxValue = 65535.0}},
+		        {"network.turnUsername", {.description = "TURN long-term credential username."}},
+		        {"network.turnPassword", {.description = "TURN long-term credential password."}},
+		        {"network.allowRelay", {.description = "Permit falling back to the TURN relay when a direct or punched connection fails. Off by default: relaying routes game traffic through a third party."}},
 		});
 
 		template<class T>
