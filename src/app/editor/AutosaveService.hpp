@@ -1,6 +1,8 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -64,7 +66,14 @@ namespace aether::editor
 		// newer than the scene, which FindRecoverable then offers back on the next open.
 		// Callers on the main thread: Discard, Restore, and anything that replaces the
 		// saved scene behind autosave's back.
-		static void InvalidatePendingWrites();
+		//
+		// Defined here so a TU that only needs to invalidate (AutosaveRecovery.cpp, which
+		// EngineTests links) does not have to pull in AutosaveService.cpp and everything
+		// its capture path depends on.
+		static void InvalidatePendingWrites()
+		{
+			++s_recoveryWriteGeneration;
+		}
 
 		// Whether a recovery copy describes the same scene as the file it shadows, once the
 		// differences that carry no work are normalised away (entity order, generated node
@@ -82,5 +91,11 @@ namespace aether::editor
 		// the IO thread. Game-thread only; used to notice a save happening under a
 		// pending write and cancel it.
 		bool m_recoveryWriteInFlight = false;
+
+		// Generation of the newest recovery write submitted by this process. Every submit
+		// and every invalidation bumps it, so a write still queued when a newer one - or a
+		// save, discard or restore - arrives recognises itself as stale before it touches
+		// the disk. Read on the IO thread, written on the game thread, hence atomic.
+		static inline std::atomic<std::uint64_t> s_recoveryWriteGeneration{0};
 	};
 } // namespace aether::editor

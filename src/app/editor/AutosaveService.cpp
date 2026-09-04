@@ -26,12 +26,6 @@ namespace aether::editor
 	{
 		constexpr std::string_view kRecoverySuffix = ".scene.toml";
 
-		// Generation of the newest recovery write submitted by this process. Every
-		// submit and every invalidation (InvalidatePendingWrites) bumps it, so a write
-		// still queued when a newer one - or a save, discard or restore - arrives can
-		// recognise itself as stale before it touches the disk. Lives on the class (see
-		// AutosaveService.hpp) so TUs that only invalidate do not need this one.
-
 	} // namespace
 
 	void AutosaveService::Tick(app::LayerContext& context)
