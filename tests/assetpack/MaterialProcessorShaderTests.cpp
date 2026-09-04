@@ -151,3 +151,29 @@ TEST_CASE("A mesh-embedded material's shader field decodes through the LoadMater
 		CHECK(decoded.shaderVfsPath.empty());
 	}
 }
+
+// integers are idiomatic TOML for whole values; as_floating_point() alone silently dropped
+// them and baked the header defaults (roughnessFactor = 0 came out as 1.0)
+TEST_CASE("MaterialProcessor accepts TOML integers for numeric material factors")
+{
+	const std::string toml =
+	        "[material]\n"
+	        "baseColorFactor = [1, 1, 1, 1]\n"
+	        "metallicFactor = 0\n"
+	        "roughnessFactor = 0\n"
+	        "alphaCutoff = 0\n";
+
+	const assetpipeline::ByteBuffer blob = assetpipeline::MaterialProcessor::Process(ToBytes(toml), "materials/int.material/properties.toml", "materials");
+	REQUIRE_FALSE(blob.empty());
+
+	BinaryReader reader(blob);
+	const auto hdr = reader.Read<MaterialHeaderDisk>();
+	REQUIRE(CheckMagic(hdr));
+	CHECK(hdr.metallicFactor == 0.f);
+	CHECK(hdr.roughnessFactor == 0.f);
+	CHECK(hdr.alphaCutoff == 0.f);
+	for (const float c: hdr.baseColorFactor)
+	{
+		CHECK(c == 1.f);
+	}
+}

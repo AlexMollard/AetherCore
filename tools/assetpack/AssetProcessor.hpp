@@ -10,6 +10,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,16 @@ namespace aether::assetpipeline
 	namespace fs = std::filesystem;
 
 	inline constexpr std::size_t kMinCompressSize = 64;
+
+	struct ZstdCCtxDeleter
+	{
+		void operator()(ZSTD_CCtx* ctx) const
+		{
+			ZSTD_freeCCtx(ctx);
+		}
+	};
+
+	using ZstdCCtxPtr = std::unique_ptr<ZSTD_CCtx, ZstdCCtxDeleter>;
 
 	inline bool IsAlreadyCompressed(const fs::path& path)
 	{
@@ -187,7 +198,7 @@ namespace aether::assetpipeline
 		PakFileResult result;
 		result.virtualPath = virtualPath;
 
-		ZSTD_CCtx* cctx = (compressionLevel > 0) ? ZSTD_createCCtx() : nullptr;
+		const ZstdCCtxPtr cctx((compressionLevel > 0) ? ZSTD_createCCtx() : nullptr);
 
 		std::ifstream in(diskPath, std::ios::binary | std::ios::ate);
 		if (!in)
@@ -227,7 +238,7 @@ namespace aether::assetpipeline
 				{
 					const std::size_t bound = ZSTD_compressBound(extra.rawSize);
 					std::vector<std::byte> compressed(bound);
-					const std::size_t compressedSize = ZSTD_compressCCtx(cctx, compressed.data(), bound, extra.data.data(), extra.rawSize, compressionLevel);
+					const std::size_t compressedSize = ZSTD_compressCCtx(cctx.get(), compressed.data(), bound, extra.data.data(), extra.rawSize, compressionLevel);
 					if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < extra.rawSize)
 					{
 						compressed.resize(compressedSize);
@@ -240,10 +251,6 @@ namespace aether::assetpipeline
 
 			result.rawSize = 0;
 			result.contentHash = 0;
-			if (cctx)
-			{
-				ZSTD_freeCCtx(cctx);
-			}
 			return result;
 		}
 
@@ -283,7 +290,7 @@ namespace aether::assetpipeline
 			{
 				const std::size_t bound = ZSTD_compressBound(extra.rawSize);
 				std::vector<std::byte> compressed(bound);
-				const std::size_t compressedSize = ZSTD_compressCCtx(cctx, compressed.data(), bound, extra.data.data(), extra.rawSize, compressionLevel);
+				const std::size_t compressedSize = ZSTD_compressCCtx(cctx.get(), compressed.data(), bound, extra.data.data(), extra.rawSize, compressionLevel);
 				if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < extra.rawSize)
 				{
 					compressed.resize(compressedSize);
@@ -305,7 +312,7 @@ namespace aether::assetpipeline
 			const std::size_t bound = ZSTD_compressBound(processedSize);
 			std::vector<std::byte> compressed(bound);
 
-			const std::size_t compressedSize = ZSTD_compressCCtx(cctx, compressed.data(), bound, rawData.data(), processedSize, compressionLevel);
+			const std::size_t compressedSize = ZSTD_compressCCtx(cctx.get(), compressed.data(), bound, rawData.data(), processedSize, compressionLevel);
 
 			if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < rawSize)
 			{
@@ -313,20 +320,12 @@ namespace aether::assetpipeline
 				result.data = std::move(compressed);
 				result.flags = PAK_FLAG_ZSTD;
 				result.ok = true;
-				if (cctx)
-				{
-					ZSTD_freeCCtx(cctx);
-				}
 				return result;
 			}
 		}
 
 		result.data = std::move(rawData);
 		result.ok = true;
-		if (cctx)
-		{
-			ZSTD_freeCCtx(cctx);
-		}
 		return result;
 	}
 } // namespace aether::assetpipeline

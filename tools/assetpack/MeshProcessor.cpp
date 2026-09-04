@@ -171,10 +171,18 @@ namespace aether::assetpipeline
 				for (auto& v: verts)
 				{
 					Vec3 n{v.normal[0], v.normal[1], v.normal[2]};
-					n = glm::normalize(n);
-					v.normal[0] = n.x;
-					v.normal[1] = n.y;
-					v.normal[2] = n.z;
+					if (glm::length(n) > 1e-8f)
+					{
+						n = glm::normalize(n);
+						v.normal[0] = n.x;
+						v.normal[1] = n.y;
+						v.normal[2] = n.z;
+					}
+					else
+					{
+						// Degenerate-only accumulation: normalizing would bake NaNs into the .mesh.
+						v.normal[0] = v.normal[1] = v.normal[2] = 0.f;
+					}
 				}
 			}
 

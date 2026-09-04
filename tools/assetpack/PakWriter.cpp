@@ -22,6 +22,9 @@ namespace aether::assetpipeline
 
 	namespace
 	{
+		// PakEntry::pathOffset is 32-bit; beyond this the pak index cannot address its path table.
+		constexpr uint64_t kMaxPathDataSize = 0xFFFFFFFFu;
+
 		bool IsExcludedProjectDirectory(const fs::path& rel)
 		{
 			const auto it = rel.begin();
@@ -241,6 +244,11 @@ namespace aether::assetpipeline
 			const uint64_t onDisk = static_cast<uint64_t>(item.data.size());
 
 			PakEntry entry;
+			if (pathData.size() > kMaxPathDataSize)
+			{
+				std::cerr << "AssetPacker: path data exceeds 4 GiB (too many entries); cannot write " << outPath << "\n";
+				return false;
+			}
 			entry.pathOffset = static_cast<uint32_t>(pathData.size());
 			entry.pathLen = static_cast<uint32_t>(item.virtualPath.size());
 			entry.flags = item.flags;

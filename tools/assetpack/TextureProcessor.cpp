@@ -27,7 +27,7 @@ namespace aether::assetpipeline
 				const int blockH = (height + 3) / 4;
 
 				const std::size_t bytesPerBlock = (fmt == BCnFmt::BC4) ? 8u : 16u;
-				std::vector<std::byte> out(static_cast<std::size_t>(blockW * blockH) * bytesPerBlock);
+				std::vector<std::byte> out(static_cast<std::size_t>(blockW) * static_cast<std::size_t>(blockH) * bytesPerBlock);
 				std::byte* dst = out.data();
 
 				Block4x4 block{};
@@ -83,6 +83,10 @@ namespace aether::assetpipeline
 				header.dwWidth = static_cast<uint32_t>(baseWidth);
 				header.dwPitchOrLinearSize = static_cast<uint32_t>(mips.empty() ? 0u : mips[0].compressed.size());
 				header.dwMipMapCount = static_cast<uint32_t>(mips.size());
+				if (mips.size() > 1u)
+				{
+					header.dwFlags |= DDSD_MIPMAPCOUNT;
+				}
 				header.dwCaps |= DDSCAPS_COMPLEX | DDSCAPS_MIPMAP;
 				dx10.dxgiFormat = dxgiFmt;
 
@@ -182,7 +186,7 @@ namespace aether::assetpipeline
 
 				const int newW = std::max(1, mipW / 2);
 				const int newH = std::max(1, mipH / 2);
-				mipStorage.resize(static_cast<std::size_t>(newW * newH) * srcChannels);
+				mipStorage.resize(static_cast<std::size_t>(newW) * static_cast<std::size_t>(newH) * static_cast<std::size_t>(srcChannels));
 				DownsampleBox2x2(srcPixels, mipW, mipH, srcChannels, mipStorage.data());
 
 				mipW = newW;

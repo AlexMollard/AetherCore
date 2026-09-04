@@ -31,6 +31,26 @@ namespace aether::assetpipeline
 				return {};
 			}
 
+			// TOML integers are idiomatic for whole values (e.g. roughnessFactor = 0); accept both node kinds.
+			auto readNumber = [](const toml::node* node, float& out) -> bool
+			{
+				if (node == nullptr)
+				{
+					return false;
+				}
+				if (auto* const f = node->as_floating_point())
+				{
+					out = static_cast<float>(f->get());
+					return true;
+				}
+				if (auto* const i = node->as_integer())
+				{
+					out = static_cast<float>(i->get());
+					return true;
+				}
+				return false;
+			};
+
 			auto readFloats = [&](const char* section, const char* key, float* out, int count, const std::vector<double>& fallback)
 			{
 				auto* const arr = tbl[section][key].as_array();
@@ -44,10 +64,10 @@ namespace aether::assetpipeline
 				}
 				for (int i = 0; i < count && i < static_cast<int>(arr->size()); ++i)
 				{
-					auto* const v = arr->get(i)->as_floating_point();
-					if (v)
+					float value = 0.f;
+					if (readNumber(arr->get(i), value))
 					{
-						out[i] = static_cast<float>(v->get());
+						out[i] = value;
 					}
 				}
 			};
@@ -62,24 +82,24 @@ namespace aether::assetpipeline
 			readFloats("material", "emissiveFactor", emissive, 3, {0.0, 0.0, 0.0});
 
 			{
-				auto* const v = tbl["material"]["metallicFactor"].as_floating_point();
-				if (v)
+				float value = 0.f;
+				if (readNumber(tbl["material"]["metallicFactor"].node(), value))
 				{
-					metallic = static_cast<float>(v->get());
+					metallic = value;
 				}
 			}
 			{
-				auto* const v = tbl["material"]["roughnessFactor"].as_floating_point();
-				if (v)
+				float value = 0.f;
+				if (readNumber(tbl["material"]["roughnessFactor"].node(), value))
 				{
-					roughness = static_cast<float>(v->get());
+					roughness = value;
 				}
 			}
 			{
-				auto* const v = tbl["material"]["alphaCutoff"].as_floating_point();
-				if (v)
+				float value = 0.f;
+				if (readNumber(tbl["material"]["alphaCutoff"].node(), value))
 				{
-					alphaCutoff = static_cast<float>(v->get());
+					alphaCutoff = value;
 				}
 			}
 
