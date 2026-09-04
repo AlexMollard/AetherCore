@@ -1,5 +1,6 @@
 #include "net/Signaling.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <sstream>
 #include <utility>
@@ -109,10 +110,26 @@ namespace aether::net
 		{
 			return;
 		}
-		// Overwrites rather than queues: a later publish is a better answer than an
-		// earlier one - it is the same peer with more candidates learned - and a queue
-		// would hand the reader a stale set first.
-		m_peer->m_inbox = EncodeCandidates(candidates);
+		// Accumulated, not overwritten: a peer may publish twice - its LAN addresses
+		// immediately, then its public endpoint once STUN answers - and whichever
+		// message the reader does not poll in time must not vanish. It could be the
+		// candidate that was going to be the one to work.
+		CandidateSet merged = m_peer->m_inbox.has_value() ? DecodeCandidates(*m_peer->m_inbox).value_or(CandidateSet{}) : CandidateSet{};
+		for (const NatTraversal::Endpoint& endpoint: candidates.endpoints)
+		{
+			if (merged.endpoints.size() >= kMaxCandidates)
+			{
+				// Dropped, not the ones already held: LAN addresses are published
+				// first and need no NAT traversal at all, so they must survive being
+				// capped ahead of anything a later publish adds.
+				break;
+			}
+			if (std::ranges::find(merged.endpoints, endpoint) == merged.endpoints.end())
+			{
+				merged.endpoints.push_back(endpoint);
+			}
+		}
+		m_peer->m_inbox = EncodeCandidates(merged);
 	}
 
 	std::optional<CandidateSet> LocalSignalingChannel::Poll()

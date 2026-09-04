@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <thread>
@@ -101,6 +102,77 @@ TEST_CASE("A local channel carries an offer to the other end, not back to the se
 	// Read once. A second poll with nothing new must say so rather than repeat, or the
 	// rendezvous above restarts its punch window on every frame.
 	CHECK_FALSE(b.Poll().has_value());
+}
+
+TEST_CASE("Publishing twice accumulates rather than discarding the first candidate")
+{
+	// NatRendezvous documents this requirement directly (see the comment on its
+	// m_peerCandidates): a peer publishes its LAN addresses immediately and its
+	// public endpoint later, once STUN answers, and whichever of the two the reader
+	// does not poll in time must not be lost - it could be the one candidate that
+	// actually punches through. Before the fix, Publish overwrote m_inbox outright,
+	// so this failed with received->endpoints.size() == 1.
+	net::LocalSignalingChannel a;
+	net::LocalSignalingChannel b;
+	net::LocalSignalingChannel::Pair(a, b);
+
+	net::CandidateSet first;
+	first.endpoints.push_back(At("10.0.0.5", 24711));
+	a.Publish(first);
+
+	net::CandidateSet second;
+	second.endpoints.push_back(At("203.0.113.9", 41234));
+	a.Publish(second);
+
+	const auto received = b.Poll();
+	REQUIRE(received.has_value());
+	REQUIRE(received->endpoints.size() == 2);
+	CHECK(std::ranges::find(received->endpoints, first.endpoints[0]) != received->endpoints.end());
+	CHECK(std::ranges::find(received->endpoints, second.endpoints[0]) != received->endpoints.end());
+}
+
+TEST_CASE("Publishing the same candidate twice does not duplicate it")
+{
+	net::LocalSignalingChannel a;
+	net::LocalSignalingChannel b;
+	net::LocalSignalingChannel::Pair(a, b);
+
+	net::CandidateSet set;
+	set.endpoints.push_back(At("10.0.0.5", 24711));
+	a.Publish(set);
+	a.Publish(set);
+
+	const auto received = b.Poll();
+	REQUIRE(received.has_value());
+	CHECK(received->endpoints.size() == 1);
+}
+
+TEST_CASE("Accumulation past the cap drops what a later publish adds, not what is already held")
+{
+	// A peer publishes its LAN addresses first - the ones that need no traversal at
+	// all - so if the accumulated total ever exceeds the cap, it must be the later,
+	// less useful candidates that give way, not the earlier ones already accepted.
+	net::LocalSignalingChannel a;
+	net::LocalSignalingChannel b;
+	net::LocalSignalingChannel::Pair(a, b);
+
+	net::CandidateSet first;
+	for (std::size_t i = 0; i < net::kMaxCandidates; ++i)
+	{
+		const std::string address = "192.168.1." + std::to_string(i + 1);
+		first.endpoints.push_back(At(address.c_str(), 24710));
+	}
+	a.Publish(first);
+
+	net::CandidateSet overflow;
+	overflow.endpoints.push_back(At("203.0.113.9", 41234));
+	a.Publish(overflow);
+
+	const auto received = b.Poll();
+	REQUIRE(received.has_value());
+	REQUIRE(received->endpoints.size() == net::kMaxCandidates);
+	CHECK(std::ranges::find(received->endpoints, overflow.endpoints[0]) == received->endpoints.end());
+	CHECK(received->endpoints[0] == first.endpoints[0]);
 }
 
 TEST_CASE("Two transports find each other knowing only a signalling channel")

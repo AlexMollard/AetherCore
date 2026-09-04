@@ -76,6 +76,9 @@ namespace aether::net
 		LocalSignalingChannel* m_peer = nullptr;
 		// Held as encoded text, not as a struct, so the encoding is exercised by every
 		// test that uses this rather than only by the ones that test it directly.
+		// Successive publishes accumulate into this rather than replace it - see
+		// Publish() - so whichever of a peer's two publishes (LAN first, public once
+		// STUN answers) is not polled in time is not silently lost.
 		std::optional<std::string> m_inbox;
 	};
 } // namespace aether::net
