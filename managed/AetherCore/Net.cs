@@ -5,6 +5,36 @@ using System.Text;
 namespace AetherCore;
 
 /// <summary>
+/// Progress of a <see cref="Net.HostWithCode"/> or <see cref="Net.JoinByCode"/>
+/// attempt. Mirrors the engine's <c>NetworkContext::TraversalState</c> exactly -
+/// the value comes straight off that wire-adjacent enum, so the member order here
+/// must never change.
+/// </summary>
+public enum NetTraversalState
+{
+    /// <summary>No traversal attempt is running.</summary>
+    Idle,
+
+    /// <summary>Asking the router for a port via UPnP/NAT-PMP/PCP.</summary>
+    Mapping,
+
+    /// <summary>Publishing and fetching candidates over the chosen signaling backend.</summary>
+    Signaling,
+
+    /// <summary>Exchanging connectivity checks against the peer's candidates.</summary>
+    Punching,
+
+    /// <summary>A path opened; establishing the session connection over it.</summary>
+    Connecting,
+
+    /// <summary>Connected and carrying session traffic.</summary>
+    Connected,
+
+    /// <summary>The attempt gave up - see <see cref="Net.TraversalError"/>.</summary>
+    Failed,
+}
+
+/// <summary>
 /// Multiplayer: hosting and joining a session, spawning replicated entities, and
 /// asking who owns what.
 /// </summary>
@@ -208,6 +238,100 @@ public static class Net
             fixed (byte* ptr = buffer)
             {
                 int written = Native.aether_net_last_error(ptr, buffer.Length);
+                return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+            }
+        }
+    }
+
+    // ── NAT traversal ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Generates a fresh room code to show the hosting player. Independent of any
+    /// session - call it before <see cref="HostWithCode"/> to have something to
+    /// display, and again if the player asks for a different one.
+    /// </summary>
+    public static unsafe string NewRoomCode()
+    {
+        Span<byte> buffer = stackalloc byte[16];
+        fixed (byte* ptr = buffer)
+        {
+            int written = Native.aether_net_new_room_code(ptr, buffer.Length);
+            return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Signal over the local network: candidates go out as LAN broadcasts, so only a
+    /// peer on the same network segment ever sees them and no server is needed at
+    /// all. This is the backend in effect until one of these two is called, so a
+    /// same-network game needs neither.
+    /// </summary>
+    public static void UseLanSignaling() => Native.aether_net_configure_signaling(0, null);
+
+    /// <summary>
+    /// Signal through a rendezvous server at <paramref name="address"/>
+    /// ("host:port"): both peers post their candidates there and it relays them to
+    /// each other, which is what lets two players behind two different routers find
+    /// one another. Call before <see cref="HostWithCode"/> or
+    /// <see cref="JoinByCode"/> - it only chooses where the next attempt looks.
+    /// </summary>
+    public static void UseRendezvousSignaling(string address)
+        => Native.aether_net_configure_signaling(1, address);
+
+    /// <summary>
+    /// Host a session with no port forwarding required: opens a port with UPnP/
+    /// NAT-PMP/PCP if the router offers one, publishes this peer's candidates under
+    /// <paramref name="code"/> through whichever signaling backend was chosen, and
+    /// punches a hole to the first peer that answers. This call only starts that -
+    /// poll <see cref="TraversalState"/> for progress and <see cref="IsConnected"/>
+    /// for the outcome, the same as <see cref="Host"/>.
+    /// </summary>
+    /// <param name="port">
+    /// Local UDP port to bind. 0 (the default) lets the OS pick one; the endpoint a
+    /// joiner actually reaches is whatever the router maps or the punch discovers,
+    /// never this number, so there is normally no reason to pin it.
+    /// </param>
+    /// <param name="maxConnections">Same meaning as on <see cref="Host"/>.</param>
+    /// <returns>False if the local bind failed outright. A true return means
+    /// traversal has started, not that a peer has connected.</returns>
+    public static bool HostWithCode(string code, int port = 0, int maxConnections = 32)
+        => Native.aether_net_host_with_code(code, (ushort)port, maxConnections) != 0;
+
+    /// <summary>
+    /// Join the session published under <paramref name="code"/>: fetches the host's
+    /// candidates through whichever signaling backend was chosen, punches a hole to
+    /// them, and connects through the resulting path once it opens. Poll
+    /// <see cref="TraversalState"/> for progress and <see cref="IsConnected"/> for
+    /// the outcome.
+    /// </summary>
+    /// <returns>False if the local bind failed or <paramref name="code"/> is not a
+    /// well-formed room code. A true return means traversal has started, not that
+    /// it will succeed.</returns>
+    public static bool JoinByCode(string code) => Native.aether_net_join_by_code(code) != 0;
+
+    /// <summary>
+    /// Where a <see cref="HostWithCode"/> or <see cref="JoinByCode"/> attempt
+    /// currently stands. <see cref="NetTraversalState.Idle"/> both before either has
+    /// been called and in a build with no session at all, so a title screen can read
+    /// this before anything has connected.
+    /// </summary>
+    public static NetTraversalState TraversalState
+        => (NetTraversalState)Native.aether_net_traversal_state();
+
+    /// <summary>
+    /// Why the last traversal attempt reached <see cref="NetTraversalState.Failed"/>
+    /// - a STUN timeout, a mapping refusal, a punch that never opened. Empty while
+    /// idle, in progress, or connected, the same empty-means-nothing-to-report
+    /// convention as <see cref="DisconnectReason"/>.
+    /// </summary>
+    public static unsafe string TraversalError
+    {
+        get
+        {
+            Span<byte> buffer = stackalloc byte[256];
+            fixed (byte* ptr = buffer)
+            {
+                int written = Native.aether_net_traversal_error(ptr, buffer.Length);
                 return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
             }
         }

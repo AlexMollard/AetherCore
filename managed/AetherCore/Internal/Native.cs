@@ -1027,6 +1027,35 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static unsafe partial int aether_net_last_error(byte* buffer, int capacity);
 
+    // ── Networking: NAT traversal ─────────────────────────────────────────────────
+    // Every one of these is safe with no session and no NetworkContext registered,
+    // matching the session exports above - TraversalState in particular has to read
+    // Idle on a title screen that has never called Host/JoinByCode.
+    // `backend` is 0 for LAN broadcast (address ignored) or 1 for rendezvous
+    // ("host:port"); anything else is refused. `state` mirrors NetworkContext's
+    // TraversalState enum (Idle, Mapping, Signaling, Punching, Connecting,
+    // Connected, Failed) in that exact order.
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_net_configure_signaling(int backend, string? address);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_net_host_with_code(string code, ushort port, int maxConnections);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_net_join_by_code(string code);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_net_traversal_state();
+
+    // The reason the last traversal failed, or empty when there is none.
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_net_traversal_error(byte* buffer, int capacity);
+
+    // A fresh room code to show the hosting player - independent of any session.
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_net_new_room_code(byte* buffer, int capacity);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_scene_file_exists(string name);
 

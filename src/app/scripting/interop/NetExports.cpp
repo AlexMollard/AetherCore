@@ -8,6 +8,7 @@
 
 #include "net/NetComponents.hpp"
 #include "net/NetworkContext.hpp"
+#include "net/RoomCode.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
@@ -426,5 +427,90 @@ AE_SCRIPT_API std::int32_t aether_net_last_error(char* buffer, std::int32_t capa
 	{
 	const aether::net::NetworkContext* context = Context();
 	return context != nullptr ? CopyOut(context->LastError(), buffer, capacity) : 0;
+	});
+}
+
+// ── Networking: NAT traversal ─────────────────────────────────────────────────
+// Session-free by the same rule as everything above: a title screen calls
+// TraversalState before any Host/Join has been attempted, and that has to read
+// Idle rather than crash or warn.
+
+AE_SCRIPT_API std::int32_t aether_net_configure_signaling(std::int32_t backend, const char* addressUtf8)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	aether::net::NetworkContext* context = Context();
+	// Backend is a wire-adjacent value chosen by a script, not by the network, but it
+	// is still an int cast to an enum - reject anything outside the two values rather
+	// than handing NetworkContext an out-of-range SignalingBackend to switch on.
+	if (context == nullptr || (backend != 0 && backend != 1))
+	{
+		return 0;
+	}
+	// LAN broadcast ignores the address entirely, so a null pointer there is normal;
+	// only the rendezvous backend actually reads it.
+	const std::string address = addressUtf8 != nullptr ? std::string{addressUtf8} : std::string{};
+	context->ConfigureSignaling(static_cast<aether::net::SignalingBackend>(backend), address);
+	return 1;
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_host_with_code(const char* codeUtf8, std::uint16_t port, std::int32_t maxConnections)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr || codeUtf8 == nullptr)
+	{
+		return 0;
+	}
+	return context->HostWithCode(codeUtf8, port, maxConnections) ? 1 : 0;
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_join_by_code(const char* codeUtf8)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr || codeUtf8 == nullptr)
+	{
+		return 0;
+	}
+	return context->JoinByCode(codeUtf8) ? 1 : 0;
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_traversal_state()
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	const aether::net::NetworkContext* context = Context();
+	// No context is Idle, not a failure - the state before anything has been tried,
+	// which is also the only state a single-player build should ever report.
+	if (context == nullptr)
+	{
+		return static_cast<std::int32_t>(aether::net::TraversalState::Idle);
+	}
+	return static_cast<std::int32_t>(context->GetTraversalState());
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_traversal_error(char* out, std::int32_t capacity)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	const aether::net::NetworkContext* context = Context();
+	return context != nullptr ? CopyOut(context->TraversalFailureReason(), out, capacity) : 0;
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_new_room_code(char* out, std::int32_t capacity)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	// Independent of any NetworkContext: a room code is just text a hosting player
+	// shows on screen before HostWithCode ever runs, so this works with no session.
+	return CopyOut(aether::net::NewRoomCode(), out, capacity);
 	});
 }
