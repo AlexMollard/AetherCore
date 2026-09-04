@@ -17,6 +17,7 @@
 #include "net/NetSession.hpp"
 #include "net/NetSnapshot.hpp"
 #include "net/NetSpawn.hpp"
+#include "net/NetTraversalSession.hpp"
 #include "net/NetworkSubsystem.hpp"
 #include "net/ReplicationSchema.hpp"
 #include "scene/Entity.hpp"
@@ -89,9 +90,14 @@ namespace aether::net
 			return m_transport.IsActive();
 		}
 
+		// A JOIN attempt also binds via NetworkSubsystem::Host() while it punches
+		// (see NetTraversalSession's class comment), which makes the transport
+		// report NetRole::Host for a peer that is not hosting anything and has
+		// connected to nobody yet. Do not believe it until the punch either
+		// finishes or gives up - JoinInProgress() names exactly that window.
 		[[nodiscard]] bool IsHost() const
 		{
-			return m_transport.Role() == NetRole::Host;
+			return m_transport.Role() == NetRole::Host && !m_traversalSession.JoinInProgress();
 		}
 
 		[[nodiscard]] bool IsClient() const
@@ -184,6 +190,42 @@ namespace aether::net
 		{
 			m_disconnectReason = std::move(reason);
 		}
+
+		// ── NAT traversal ────────────────────────────────────────────────────
+		// Room-code hosting and joining: the ladder that asks the router for a
+		// mapping, falls back to a rendezvous-and-punch over whichever
+		// SignalingBackend is configured, and finishes by connecting through
+		// whatever path opened - see NetTraversalSession, which does the actual
+		// work this forwards to.
+		//
+		// Neither HostWithCode nor JoinByCode touches World: the bookkeeping that
+		// does (assigning a host's scene-placed net ids) runs from TickTraversal
+		// below instead, once a real frame has actually passed - see its comment
+		// for why that is still soon enough.
+		void ConfigureSignaling(SignalingBackend backend, std::string address)
+		{
+			m_traversalSession.ConfigureSignaling(backend, std::move(address));
+		}
+
+		bool HostWithCode(std::string_view roomCode, std::uint16_t port, int maxConnections);
+		bool JoinByCode(std::string_view roomCode);
+
+		[[nodiscard]] TraversalState GetTraversalState() const
+		{
+			return m_traversalSession.GetState();
+		}
+
+		[[nodiscard]] const std::string& TraversalFailureReason() const
+		{
+			return m_traversalSession.FailureReason();
+		}
+
+		// Drives the traversal ladder and finishes the host-side session setup the
+		// moment it can safely run. Called once per frame from
+		// NetworkReceiveSystem, right after Poll() - the one call in the per-frame
+		// loop that already has World. A no-op whenever no attempt is running, so
+		// every offline frame and every direct-IP session costs one state check.
+		void TickTraversal(World& world, float dt);
 
 		// ── Shared state ─────────────────────────────────────────────────────
 		[[nodiscard]] NetworkSubsystem& Transport()
@@ -509,5 +551,13 @@ namespace aether::net
 
 		std::unique_ptr<ScriptFieldBridge> m_fieldBridge;
 		std::unique_ptr<RpcBridge> m_rpcBridge;
+
+		// Constructed against m_transport above, which it never outlives - see the
+		// declaration order requirement on NetTraversalSession's own constructor.
+		NetTraversalSession m_traversalSession;
+
+		// Set by HostWithCode, consumed by the first TickTraversal that runs after
+		// it - see that method's comment for why the delay is safe.
+		bool m_traversalHostSetupPending = false;
 	};
 } // namespace aether::net

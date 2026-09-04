@@ -112,6 +112,7 @@ namespace aether::net
 	NetworkContext::NetworkContext(ServiceContainer& services)
 	      : m_services(services)
 	      , m_schema(BuildReplicationSchema(reflect::ComponentTypes()))
+	      , m_traversalSession(m_transport)
 	{
 	}
 
@@ -226,6 +227,67 @@ namespace aether::net
 		m_session.Clear();
 		m_caches.clear();
 		m_resyncRequests.clear();
+	}
+
+	bool NetworkContext::HostWithCode(std::string_view roomCode, std::uint16_t port, int maxConnections)
+	{
+		// A traversal attempt binds the transport exactly like StartHost does, so an
+		// already-active session - direct-IP, or a traversal already under way -
+		// must go through Stop() first, which needs World and this call does not
+		// have. Refusing outright is simpler and safer than tearing one down halfway.
+		if (IsActive())
+		{
+			return false;
+		}
+		m_disconnectReason.clear();
+		m_maxConnections = maxConnections > 0 ? maxConnections : kDefaultMaxConnections;
+		// The slack is the same reason StartHost adds it above - see kRefusalSlack -
+		// and applies here too: m_maxConnections itself stays the pure player cap
+		// IsFull() compares against.
+		const bool started = m_traversalSession.HostWithCode(roomCode, port, m_maxConnections + kRefusalSlack);
+		if (started)
+		{
+			m_session.SetRole(NetRole::Host);
+			m_session.SetLocalConnection(kInvalidConnection);
+			m_traversalHostSetupPending = true;
+		}
+		return started;
+	}
+
+	bool NetworkContext::JoinByCode(std::string_view roomCode)
+	{
+		if (IsActive())
+		{
+			return false;
+		}
+		m_disconnectReason.clear();
+		const bool started = m_traversalSession.JoinByCode(roomCode);
+		if (started)
+		{
+			// Set now rather than left at Offline for however long the punch takes:
+			// SpawnPrefab and NetRpc target resolution both read m_session.Role()
+			// directly, and a role of Offline through that whole window would let
+			// them behave as if this were single-player.
+			m_session.SetRole(NetRole::Client);
+			m_session.SetLocalConnection(kInvalidConnection);
+		}
+		return started;
+	}
+
+	void NetworkContext::TickTraversal(World& world, float dt)
+	{
+		m_traversalSession.Tick(dt);
+
+		// Deferred from HostWithCode, which has no World: a host's scene-placed net
+		// ids must exist before the first real joiner can arrive, and this always
+		// runs at least a frame ahead of that - no real network round trip completes
+		// within the same frame HostWithCode was called on.
+		if (m_traversalHostSetupPending)
+		{
+			m_traversalHostSetupPending = false;
+			ResetForNewSession(world);
+			AssignScenePlacedNetIds(world, m_session);
+		}
 	}
 
 	void NetworkContext::SetReplicationReady(World& world, bool ready)

@@ -97,8 +97,6 @@ namespace aether::net
 
 	void NetworkReceiveSystem::Update(World& world, float dt)
 	{
-		(void) dt; // interpolation is a jitter buffer over wall-clock arrival times
-
 		NetworkContext& context = m_context;
 		if (!context.IsActive())
 		{
@@ -112,6 +110,14 @@ namespace aether::net
 		}
 
 		context.Transport().Poll();
+
+		// Real seconds, not the wall clock interpolation below reads instead: the
+		// traversal ladder's own timeouts (PortMapping's give-up window, the punch,
+		// the wait for ENet's handshake once a path opens) are driven the same way
+		// NatRendezvous already is. Run AFTER Poll() so a punch response or the ENet
+		// CONNECT that follows one is visible to it the same frame it arrived in,
+		// not one frame late.
+		context.TickTraversal(world, dt);
 		PruneDeadBindings(world);
 
 		// BOTH ROLES render someone else's simulation now: a client renders every
