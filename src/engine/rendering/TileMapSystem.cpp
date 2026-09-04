@@ -102,7 +102,9 @@ namespace aether
 		for (const entt::entity raw: entities)
 		{
 			const auto& component = entities.get<const TileMapComponent>(raw);
-			if (!component.visible || component.tilemapPath.empty() || ecs::IsHiddenInEditor(world, World::FromEntt(raw)))
+			const Entity entity = World::FromEntt(raw);
+			// Match WorldRenderer: disabling an ancestor hides the whole subtree.
+			if (!component.visible || component.tilemapPath.empty() || ecs::HasDisabledAncestor(world, entity) || ecs::IsHiddenInEditor(world, entity))
 			{
 				continue;
 			}
@@ -121,7 +123,6 @@ namespace aether
 			}
 			const TileSetAsset& tileSet = **tileSetResult;
 			const float cellSize = map.cellSize > 0.0f ? map.cellSize : tileSet.cellSize;
-			const Entity entity = World::FromEntt(raw);
 			const glm::mat4& entityTransform = entities.get<const TransformComponent>(raw).localToWorld;
 
 			for (std::size_t layerIndex = 0; layerIndex < map.layers.size(); ++layerIndex)

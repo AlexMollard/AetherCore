@@ -47,6 +47,26 @@ namespace aether
 			return DebugYellow;
 		}
 
+		// The debug overlay draws the collider's true simulation size. Entity
+		// scale is visual-only in 3D physics (PhysicsStateComponent::scale now
+		// carries the authored entity scale), so the dimensions come from the
+		// collider itself, not from the interpolated entity transform.
+		glm::vec3 ColliderDebugDimensions(const ColliderComponent& c)
+		{
+			switch (c.shape)
+			{
+				case PhysicsShapeType::Box:
+					return c.halfExtents * 2.0f;
+				case PhysicsShapeType::Sphere:
+					return glm::vec3(c.radius * 2.0f);
+				case PhysicsShapeType::Capsule:
+					return glm::vec3(c.radius * 2.0f, c.halfHeight * 2.0f + c.radius * 2.0f, c.radius * 2.0f);
+				case PhysicsShapeType::Cylinder:
+					return glm::vec3(c.radius * 2.0f, c.halfHeight * 2.0f, c.radius * 2.0f);
+			}
+			return glm::vec3(1.0f);
+		}
+
 		gpu::BufferHandle CreateStaticVertexBuffer(std::span<const DebugVertex> vertices, const char* debugName)
 		{
 			const gpu::MappedBufferDesc desc{
@@ -608,7 +628,7 @@ namespace aether
 		        [&](entt::entity /*entity*/, const ColliderComponent& shape, const PhysicsStateComponent& state, const RigidBodyComponent& rigid)
 		        {
 			        const glm::vec4 tint = m_colorMode == PhysicsDebugColorMode::ByMotionType ? GetColorForMotionType(rigid.motionType) : glm::vec4(colors::DebugYellow);
-			        const glm::mat4 model = glm::translate(glm::mat4(1.0f), state.currPosition) * glm::mat4(state.currRotation) * glm::mat4(glm::scale(glm::mat4(1.0f), state.scale));
+			        const glm::mat4 model = glm::translate(glm::mat4(1.0f), state.currPosition) * glm::mat4(state.currRotation) * glm::mat4(glm::scale(glm::mat4(1.0f), ColliderDebugDimensions(shape)));
 			        out.push_back({.model = model, .tint = tint, .shape = shape.shape});
 		        });
 	}

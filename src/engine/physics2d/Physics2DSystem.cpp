@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -185,6 +186,9 @@ namespace aether
 		b2WorldId world = b2_nullWorldId;
 		std::unordered_map<TileBodyKey, TileBodyEntry, TileBodyKeyHash> tileBodies;
 		DropThroughMap dropThrough;
+		// Bodies pulled out of the simulation because their hierarchy was
+		// disabled, keyed by entity id; SyncTransforms re-enables exactly these.
+		std::unordered_set<std::uint32_t> disabledByHierarchy;
 	};
 
 	Physics2DSystem::Physics2DSystem() : m_impl(std::make_unique<Impl>())
@@ -258,6 +262,13 @@ namespace aether
 
 			const b2BodyId body = b2CreateBody(m_impl->world, &bodyDef);
 			rigid.body = StoreBody(body);
+			// Created under a disabled ancestor: sit out until SyncTransforms sees
+			// the disable lifted, mirroring the 3D flush's startActive check.
+			if (ecs::HasDisabledAncestor(world, entity))
+			{
+				b2Body_Disable(body);
+				m_impl->disabledByHierarchy.insert(entity.id);
+			}
 
 			b2ShapeDef shapeDef = b2DefaultShapeDef();
 			shapeDef.density = std::max(collider.density, 0.001f);
@@ -698,7 +709,7 @@ namespace aether
 		for (const auto& [enttEntity, rigid, state, transform]: world.View<RigidBody2DComponent, Physics2DStateComponent, TransformComponent>().each())
 		{
 			(void) transform;
-			if (rigid.bodyType != Body2DType::Dynamic || !rigid.body.IsValid())
+			if (!rigid.body.IsValid())
 			{
 				continue;
 			}
@@ -707,7 +718,24 @@ namespace aether
 			{
 				continue;
 			}
-			if (ecs::HasDisabledAncestor(world, World::FromEntt(enttEntity)))
+			const Entity entity = World::FromEntt(enttEntity);
+			// A disabled ancestor pulls the body out of the simulation entirely -
+			// unlike the 3D system's DeactivateBody, Box2D's disabled set also
+			// removes it from queries - and re-enabling returns it awake.
+			if (ecs::HasDisabledAncestor(world, entity))
+			{
+				if (b2Body_IsEnabled(body))
+				{
+					b2Body_Disable(body);
+					m_impl->disabledByHierarchy.insert(entity.id);
+				}
+				continue;
+			}
+			if (m_impl->disabledByHierarchy.erase(entity.id) > 0)
+			{
+				b2Body_Enable(body);
+			}
+			if (rigid.bodyType != Body2DType::Dynamic)
 			{
 				continue;
 			}
@@ -719,7 +747,7 @@ namespace aether
 			const glm::vec2 renderPos = glm::mix(state.prevPosition, state.currPosition, alpha);
 			const float renderAngle = state.prevAngle + ShortestAngleDelta(state.prevAngle, state.currAngle) * alpha;
 
-			ecs::SetWorldTransform(world, World::FromEntt(enttEntity), ComposeTransform({renderPos.x, renderPos.y, state.depthZ}, {0.0f, 0.0f, glm::degrees(renderAngle)}, state.scale));
+			ecs::SetWorldTransform(world, entity, ComposeTransform({renderPos.x, renderPos.y, state.depthZ}, {0.0f, 0.0f, glm::degrees(renderAngle)}, state.scale));
 			++synced;
 		}
 		AE_PROFILE_PLOT("Physics2D.SyncedBodies", synced);
@@ -741,6 +769,8 @@ namespace aether
 				b2DestroyBody(body);
 			}
 			rigid->body = {};
+			// The disable-tracking entry must not outlive the body it names.
+			m_impl->disabledByHierarchy.erase(entity.id);
 		}
 		if (auto* collider = world.TryGet<Collider2DComponent>(entity))
 		{
@@ -781,6 +811,7 @@ namespace aether
 	void Physics2DSystem::OnRigidBody2DDestroyed(entt::registry& registry, entt::entity enttEntity)
 	{
 		auto& rigid = registry.get<RigidBody2DComponent>(enttEntity);
+		m_impl->disabledByHierarchy.erase(World::FromEntt(enttEntity).id);
 		if (!rigid.body.IsValid())
 		{
 			return;

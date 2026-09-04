@@ -137,3 +137,37 @@ TEST_CASE("DestroyHierarchy on an entity without HierarchyComponent just destroy
     ecs::DestroyHierarchy(world, lone);
     CHECK(!Alive(world, lone));
 }
+
+TEST_CASE("World::Destroy destroys the subtree and leaves no stale parent handles") {
+    World world = MakeWorld();
+    Entity root = world.Create();
+    Entity doomed = world.Create();
+    Entity child = world.Create();
+    Entity grandchild = world.Create();
+    Entity sibling = world.Create();
+    REQUIRE(ecs::SetParent(world, doomed, root));
+    REQUIRE(ecs::SetParent(world, child, doomed));
+    REQUIRE(ecs::SetParent(world, grandchild, child));
+    REQUIRE(ecs::SetParent(world, sibling, root));
+
+    world.Destroy(doomed);
+
+    CHECK(!Alive(world, doomed));
+    CHECK(!Alive(world, child));
+    CHECK(!Alive(world, grandchild));
+    CHECK(Alive(world, root));
+    CHECK(Alive(world, sibling));
+    CHECK(!HasChild(world, root, doomed));
+    CHECK(HasChild(world, root, sibling));
+
+    bool staleParent = false;
+    world.View<HierarchyComponent>().each([&](const HierarchyComponent& h) {
+        staleParent = staleParent || (h.parent.IsValid() && !Alive(world, h.parent));
+    });
+    CHECK_FALSE(staleParent);
+
+    // The destroyed subtree must not leak into the root list either.
+    const auto& roots = world.Roots();
+    CHECK(std::find(roots.begin(), roots.end(), doomed) == roots.end());
+    CHECK(std::find(roots.begin(), roots.end(), child) == roots.end());
+}

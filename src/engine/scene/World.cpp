@@ -48,11 +48,51 @@ namespace aether
 	void World::Destroy(Entity entity)
 	{
 		const entt::entity enttEntity = ToEntt(entity);
-		if (entity.IsValid() && m_registry.valid(enttEntity))
+		if (!entity.IsValid() || !m_registry.valid(enttEntity))
 		{
-			UnregisterRoot(entity);
-			m_registry.destroy(enttEntity);
+			return;
 		}
+		// Destroy the subtree, never orphan it: surviving children would hold a
+		// parent handle pointing at a destroyed id and silently drop out of the
+		// root list, so transform propagation stops at the dead link. Children
+		// first - each is detached from its dying parent before its own walk, so
+		// even a cyclic hand-authored scene cannot recurse forever - then unlink
+		// ourselves from our parent, then destroy.
+		std::vector<Entity> kids;
+		if (auto* h = m_registry.try_get<HierarchyComponent>(enttEntity))
+		{
+			kids = h->children;
+			h->children.clear();
+		}
+		for (const Entity child: kids)
+		{
+			// A malformed scene can list the same child twice, and the first walk
+			// already destroyed it - re-check before touching its storage.
+			if (!child.IsValid() || !m_registry.valid(ToEntt(child)))
+			{
+				continue;
+			}
+			if (auto* ch = m_registry.try_get<HierarchyComponent>(ToEntt(child)))
+			{
+				ch->parent = {};
+			}
+			Destroy(child);
+		}
+		if (!m_registry.valid(enttEntity))
+		{
+			// A cyclic hierarchy destroyed us from inside the loop above.
+			return;
+		}
+		if (auto* h = m_registry.try_get<HierarchyComponent>(enttEntity); h != nullptr && h->parent.IsValid())
+		{
+			if (auto* ph = m_registry.try_get<HierarchyComponent>(ToEntt(h->parent)))
+			{
+				auto& siblings = ph->children;
+				siblings.erase(std::remove(siblings.begin(), siblings.end(), entity), siblings.end());
+			}
+		}
+		UnregisterRoot(entity);
+		m_registry.destroy(enttEntity);
 	}
 
 	void World::RegisterRoot(Entity entity)

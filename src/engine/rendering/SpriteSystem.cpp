@@ -109,7 +109,8 @@ namespace aether
 			}
 
 			const Entity entity = World::FromEntt(raw);
-			if (ecs::IsHiddenInEditor(world, entity))
+			// Match WorldRenderer: disabling an ancestor hides the whole subtree.
+			if (ecs::HasDisabledAncestor(world, entity) || ecs::IsHiddenInEditor(world, entity))
 			{
 				continue;
 			}

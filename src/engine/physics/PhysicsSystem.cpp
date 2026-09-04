@@ -42,6 +42,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Platform thread configuration (name / priority for the physics thread).
@@ -56,6 +57,7 @@
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TransformEdit.hpp"
+#include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -353,6 +355,10 @@ namespace aether
 		std::unordered_map<std::uint32_t, LiveConstraint> constraints;
 		std::uint32_t nextConstraintId = 1;
 
+		// Bodies pulled out of the simulation because their hierarchy was disabled,
+		// keyed by entity id; SyncTransforms re-activates exactly these on re-enable.
+		std::unordered_set<std::uint32_t> suspendedByDisable;
+
 		std::vector<ContactCollector::Added> addedScratch;
 		std::vector<ContactCollector::Removed> removedScratch;
 	};
@@ -566,18 +572,26 @@ namespace aether
 			{
 				continue;
 			}
-
-			if (ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
+			const Entity handle = World::FromEntt(entity);
+			if (ecs::HasDisabledAncestor(world, handle))
 			{
 				if (bi.IsActive(id))
 				{
 					bi.DeactivateBody(id);
+					m_impl->suspendedByDisable.insert(handle.id);
 				}
 				continue;
 			}
 
 			if (!bi.IsActive(id))
 			{
+				// Lifting the disable resumes exactly the bodies the branch above
+				// deactivated; a body that fell asleep on its own stays asleep, and
+				// statics never enter the set so they are never woken.
+				if (m_impl->suspendedByDisable.erase(handle.id) > 0)
+				{
+					bi.ActivateBody(id);
+				}
 				continue;
 			}
 
@@ -590,7 +604,7 @@ namespace aether
 			const glm::vec3 renderPos = glm::mix(state.prevPosition, state.currPosition, alpha);
 			const glm::quat renderRot = glm::slerp(state.prevRotation, state.currRotation, alpha);
 
-			ecs::SetWorldTransform(world, World::FromEntt(entity), ToTransform(renderPos, renderRot, state.scale));
+			ecs::SetWorldTransform(world, handle, ToTransform(renderPos, renderRot, state.scale));
 			++synced;
 		}
 
@@ -702,21 +716,6 @@ namespace aether
 		}
 	}
 
-	static glm::vec3 ColliderVisualScale(const ColliderComponent& c)
-	{
-		switch (c.shape)
-		{
-			case PhysicsShapeType::Box:
-				return c.halfExtents * 2.0f;
-			case PhysicsShapeType::Sphere:
-				return glm::vec3(c.radius * 2.0f);
-			case PhysicsShapeType::Capsule:
-				return glm::vec3(c.radius * 2.0f, c.halfHeight * 2.0f + c.radius * 2.0f, c.radius * 2.0f);
-			case PhysicsShapeType::Cylinder:
-				return glm::vec3(c.radius * 2.0f, c.halfHeight * 2.0f, c.radius * 2.0f);
-		}
-		return glm::vec3(1.0f);
-	}
 
 	static JPH::Constraint* CreateJointConstraint(const JointComponent& j, JPH::Body& b1, JPH::Body& b2)
 	{
@@ -864,13 +863,18 @@ namespace aether
 			rbc.body = FromJolt(id);
 			rbc.motionType = motion;
 
-			const glm::vec3 visualScale = ColliderVisualScale(collider);
+			// The authored entity scale is visual-only in 3D physics - collider
+			// shapes are built from collider dimensions, never entity scale - so it
+			// must survive body creation. Writing the collider's dimensions here
+			// would silently resize the entity and persist through
+			// PhysicsStateComponent::scale into every later SyncTransforms write.
+			const glm::vec3 authoredScale = tc != nullptr ? ExtractScale(tc->localToWorld) : glm::vec3(1.0f);
 			const glm::vec3 wpos = FromJolt(bi.GetPosition(id));
 			const glm::quat wrot = FromJolt(bi.GetRotation(id));
-			reg.emplace_or_replace<PhysicsStateComponent>(enttEntity, wpos, wrot, wpos, wrot, visualScale);
+			reg.emplace_or_replace<PhysicsStateComponent>(enttEntity, wpos, wrot, wpos, wrot, authoredScale);
 			if (tc != nullptr)
 			{
-				tc->localToWorld = ToTransform(wpos, wrot, visualScale);
+				tc->localToWorld = ToTransform(wpos, wrot, authoredScale);
 			}
 
 			if (motion == PhysicsMotionType::Static)
@@ -1113,6 +1117,13 @@ namespace aether
 			return;
 		}
 
+		// Any live joint referencing this body would keep a JPH::Constraint pointed
+		// at the body destroyed below (and its collision-disable pair registered).
+		// OnRigidBodyDestroyed does this same cleanup on the on_destroy signal, but
+		// this path clears rigid->body first, so the signal handler bails out early.
+		DestroyJointsTouching(world.GetRegistry(), World::ToEntt(entity));
+		m_impl->suspendedByDisable.erase(entity.id);
+
 		auto& bodyInterface = m_impl->physics->GetBodyInterfaceNoLock();
 		const JPH::BodyID id = ToJolt(rigid->body);
 
@@ -1151,6 +1162,9 @@ namespace aether
 	void PhysicsSystem::OnRigidBodyDestroyed(entt::registry& registry, entt::entity enttEntity)
 	{
 		WaitForStep();
+		// The suspend-tracking entry must not outlive the body it names: a
+		// recreated body would be wrongly activated on re-enable.
+		m_impl->suspendedByDisable.erase(World::FromEntt(enttEntity).id);
 
 		if (!m_impl->physics)
 		{
@@ -1363,6 +1377,7 @@ namespace aether
 			const JPH::BodyID id = ToJolt(rb->body);
 			rb->initialVelocity = FromJolt(bi.GetLinearVelocity(id));
 			rb->body = {};
+			m_impl->suspendedByDisable.erase(entity.id);
 			bi.RemoveBody(id);
 			bi.DestroyBody(id);
 		}
