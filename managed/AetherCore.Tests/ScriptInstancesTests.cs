@@ -1,3 +1,4 @@
+using System.Collections;
 using AetherCore;
 using Xunit;
 
@@ -22,6 +23,29 @@ public sealed class ScriptInstancesTests : SdkTestBase
 
     private sealed class Shotgun : Weapon
     {
+    }
+
+    // Coroutine mutation-during-tick coverage for EntityScript.TickCoroutines: the
+    // list it walks is the same one script bodies can clear mid-tick.
+    private sealed class SelfStopping : EntityScript
+    {
+        public int Resumes;
+
+        public IEnumerator FinishesAfterStoppingEverything()
+        {
+            yield return null; // first step runs synchronously inside StartCoroutine
+            Resumes++;
+            StopAllCoroutines(); // clears the list while TickCoroutines is inside Tick
+        }
+
+        public IEnumerator KeepsGoingAfterStoppingEverything()
+        {
+            yield return null;
+            Resumes++;
+            StopAllCoroutines();
+            yield return null;
+            Resumes++;
+        }
     }
 
     private static T Attach<T>(uint entityId) where T : EntityScript, new()
@@ -174,5 +198,33 @@ public sealed class ScriptInstancesTests : SdkTestBase
         Assert.Equal(0, ScriptInstances.TrackedEntityCount);
         Assert.Null(new Entity(7).GetScript<Movement>());
         Assert.Null(new Entity(8).GetScript<Health>());
+    }
+
+    [Fact]
+    public void TickCoroutines_ToleratesARoutineThatStopsAllCoroutinesAsItFinishes()
+    {
+        SelfStopping script = new() { Self = new Entity(7) };
+        script.StartCoroutine(script.FinishesAfterStoppingEverything());
+
+        // The routine clears the coroutine list from inside its own tick and then
+        // completes, so dropping it must not index into the list it just emptied.
+        script.TickCoroutines(1.0f / 60.0f);
+
+        Assert.Equal(1, script.Resumes);
+    }
+
+    [Fact]
+    public void TickCoroutines_ToleratesARoutineThatStopsAllCoroutinesAndContinues()
+    {
+        SelfStopping script = new() { Self = new Entity(7) };
+        script.StartCoroutine(script.FinishesAfterStoppingEverything()); // index 0
+        script.StartCoroutine(script.KeepsGoingAfterStoppingEverything()); // index 1, ticks first
+
+        // The first-ticked routine clears the list mid-tick and yields again; the
+        // loop must stop rather than index back into the list it emptied.
+        script.TickCoroutines(1.0f / 60.0f);
+
+        // Both routines advanced once (before/while clearing); neither advanced again.
+        Assert.Equal(1, script.Resumes);
     }
 }

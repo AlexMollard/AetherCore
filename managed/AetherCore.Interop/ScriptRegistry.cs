@@ -350,11 +350,14 @@ internal static unsafe class ScriptRegistry
 
             var script = (EntityScript)Activator.CreateInstance(type)!;
             script.Bind(new Entity(entityId));
-            // Publish it as live on that entity before the handle exists, so the
-            // instance is already findable via Entity.GetScript by the time the
-            // native side can invoke anything on it.
-            ScriptInstances.Register(entityId, script);
+            // Pin the instance before publishing it as live: if the Alloc threw,
+            // the catch below would return 0 and an entry no handle ever backed
+            // would sit in ScriptInstances forever, rooting the collectible
+            // context. Native cannot invoke the instance before this returns its
+            // handle, so registering after the Alloc still leaves it findable via
+            // Entity.GetScript by the time anything can call into it.
             GCHandle handle = GCHandle.Alloc(script);
+            ScriptInstances.Register(entityId, script);
             return (ulong)GCHandle.ToIntPtr(handle).ToInt64();
         }
         catch (Exception ex)
@@ -371,14 +374,24 @@ internal static unsafe class ScriptRegistry
         {
             return;
         }
-        GCHandle gc = GCHandle.FromIntPtr((IntPtr)(long)handle);
-        // Stop reporting it as live on its entity first: the instance table is the
-        // mirror of these handles, so it must never outlive one.
-        if (gc.Target is EntityScript script)
+        try
         {
-            ScriptInstances.Unregister(script);
+            GCHandle gc = GCHandle.FromIntPtr((IntPtr)(long)handle);
+            // Stop reporting it as live on its entity first: the instance table is the
+            // mirror of these handles, so it must never outlive one.
+            if (gc.Target is EntityScript script)
+            {
+                ScriptInstances.Unregister(script);
+            }
+            gc.Free();
         }
-        gc.Free();
+        catch (Exception ex)
+        {
+            // The handle value is supplied entirely by native code: a double free,
+            // or a free of a handle UnloadScripts already drained, makes FromIntPtr
+            // or Free throw - and nothing may escape an entry point.
+            Bootstrap.ReportError($"DestroyInstance({handle}): {ex.Message}");
+        }
     }
 
     [UnmanagedCallersOnly]
@@ -466,7 +479,23 @@ internal static unsafe class ScriptRegistry
 
     private static EntityScript? Resolve(ulong handle)
     {
-        return handle == 0 ? null : GCHandle.FromIntPtr((IntPtr)(long)handle).Target as EntityScript;
+        if (handle == 0)
+        {
+            return null;
+        }
+        try
+        {
+            return GCHandle.FromIntPtr((IntPtr)(long)handle).Target as EntityScript;
+        }
+        catch (Exception ex)
+        {
+            // A handle value that is not a live GCHandle (a native double free, or
+            // a free of a handle UnloadScripts already drained) makes FromIntPtr
+            // throw, and nothing may escape a [UnmanagedCallersOnly] entry point.
+            // Every caller already treats null as "instance missing".
+            Bootstrap.ReportError($"Invalid script handle {handle}: {ex.Message}");
+            return null;
+        }
     }
 
     // ── Serialized script properties (inspector / scene overrides) ────────────
@@ -636,7 +665,18 @@ internal static unsafe class ScriptRegistry
         {
             return 0;
         }
-        return FillValue(script, props[index], outValue);
+        try
+        {
+            return FillValue(script, props[index], outValue);
+        }
+        catch (Exception ex)
+        {
+            // Like SetProperty below: the field table is keyed by type name, so a
+            // stale instance from a reloaded context can make GetValue throw, and
+            // nothing may escape a [UnmanagedCallersOnly] entry point.
+            Bootstrap.ReportError($"GetProperty({props[index].Name}): {ex.Message}");
+            return 0;
+        }
     }
 
     [UnmanagedCallersOnly]
@@ -651,7 +691,17 @@ internal static unsafe class ScriptRegistry
         {
             return 0;
         }
-        return FillValue(script, props[index], outValue);
+        try
+        {
+            return FillValue(script, props[index], outValue);
+        }
+        catch (Exception ex)
+        {
+            // Same discipline as GetProperty/SetProperty: reflection over the
+            // default instance must stay inside the entry point's guard.
+            Bootstrap.ReportError($"GetDefaultProperty({props[index].Name}): {ex.Message}");
+            return 0;
+        }
     }
 
     private static int FillValue(object script, Prop p, PropertyValue* outValue)

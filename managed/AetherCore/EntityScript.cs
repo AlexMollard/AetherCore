@@ -139,9 +139,19 @@ public abstract class EntityScript
         }
         for (int i = _coroutines.Count - 1; i >= 0; i--)
         {
-            if (!_coroutines[i].Tick(deltaTime))
+            // A coroutine body can mutate the list while we are inside Tick
+            // (StopAllCoroutines clears it, StartCoroutine appends), so the index
+            // must be re-checked against the live count on every step.
+            if (i >= _coroutines.Count)
             {
-                _coroutines.RemoveAt(i);
+                break;
+            }
+            Coroutine co = _coroutines[i];
+            if (!co.Tick(deltaTime))
+            {
+                // Remove by identity, not index: the body may have cleared the
+                // list while the routine was finishing, making i stale.
+                _coroutines.Remove(co);
             }
         }
     }
