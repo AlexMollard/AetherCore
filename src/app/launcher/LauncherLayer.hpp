@@ -74,6 +74,8 @@ namespace aether::app
 
 		void LoadPreview(const EditorProjectContext& project);
 		[[nodiscard]] std::uint64_t PreviewTextureFor(const EditorProjectContext& project) const;
+		// Releases one project's preview texture (unregister + destroy); safe when absent.
+		void ReleasePreview(const std::string& key);
 		void ReleasePreviews();
 
 		ProjectLauncherWindow m_window;

@@ -95,22 +95,41 @@ namespace aether::app::launcher
 			return std::nullopt;
 		}
 
-		std::string command = "\"" + editorExe.string() + "\" --project \"" + projectRoot.string() + "\" --ready-event \"" + readyEventName + "\"";
+		// Wide strings + CreateProcessW, matching the ShellExecuteW game-build spawn: a
+		// project under a path the ANSI code page cannot represent (a Cyrillic/Greek/CJK
+		// user name, say) survives wstring losslessly, while string() turns those
+		// characters into '?' and the spawn fails or opens a mangled folder.
+		const std::wstring wideReadyEventName(readyEventName.begin(), readyEventName.end());
+		std::wstring command = L"\"" + editorExe.wstring() + L"\" --project \"" + projectRoot.wstring() + L"\" --ready-event \"" + wideReadyEventName + L"\"";
 		if (centerX != INT_MIN && centerY != INT_MIN)
 		{
-			command += " --window-center \"" + std::to_string(centerX) + "," + std::to_string(centerY) + "\"";
+			command += L" --window-center \"" + std::to_wstring(centerX) + L"," + std::to_wstring(centerY) + L"\"";
 		}
 
+		// The editor reads its control port from the inherited environment (see
+		// ControlServerLayer), so the value must sit in OUR environment at CreateProcess
+		// time - but only for this one child. Restore the previous value afterwards
+		// (including on failure): leaving it set would hand a port the launcher no longer
+		// owns to every later child this process spawns.
+		const std::string previousControlPort = io::PlatformPaths::ReadEnvironmentVariable("AETHER_CONTROL_PORT");
 		if (controlPort > 0)
 		{
 			SetEnvironmentVariableA("AETHER_CONTROL_PORT", std::to_string(controlPort).c_str());
 		}
 
-		STARTUPINFOA startupInfo{};
+		STARTUPINFOW startupInfo{};
 		startupInfo.cb = sizeof(startupInfo);
 		PROCESS_INFORMATION processInfo{};
-		const std::string workingDir = dir.string();
-		const BOOL started = CreateProcessA(nullptr, command.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, workingDir.empty() ? nullptr : workingDir.c_str(), &startupInfo, &processInfo);
+		const std::wstring workingDir = dir.wstring();
+		const BOOL started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, workingDir.empty() ? nullptr : workingDir.c_str(), &startupInfo, &processInfo);
+		if (previousControlPort.empty())
+		{
+			SetEnvironmentVariableA("AETHER_CONTROL_PORT", nullptr);
+		}
+		else
+		{
+			SetEnvironmentVariableA("AETHER_CONTROL_PORT", previousControlPort.c_str());
+		}
 		if (started != 0)
 		{
 			CloseHandle(processInfo.hThread);

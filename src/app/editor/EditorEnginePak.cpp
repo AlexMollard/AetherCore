@@ -1,5 +1,11 @@
 #include "editor/EditorEnginePak.hpp"
 
+#ifdef _WIN32
+#	include <process.h>
+#else
+#	include <unistd.h>
+#endif
+
 #include <string_view>
 #include <system_error>
 
@@ -16,6 +22,18 @@ namespace aether::editor
 		constexpr std::string_view kEngineAssetFiles[] = {"branding/aethercore-icon-white.png"};
 
 		constexpr std::string_view kEngineShaderSubdir = "shaders";
+
+#ifdef _WIN32
+		int CurrentProcessId()
+		{
+			return _getpid();
+		}
+#else
+		int CurrentProcessId()
+		{
+			return static_cast<int>(getpid());
+		}
+#endif
 
 		std::optional<std::filesystem::path> EngineShaderDir()
 		{
@@ -85,9 +103,11 @@ namespace aether::editor
 		{
 			return {.succeeded = false, .message = "Could not resolve temp directory: " + ec.message()};
 		}
-		// Unique-per-pak staging dir + RAII cleanup so bakes of different paks don't
-		// collide and every early return removes the dir.
-		const std::filesystem::path staging = tempRoot / ("aether_engine_pak_stage_" + outputEnginePak.stem().string());
+		// Unique-per-process staging dir + RAII cleanup: every editor instance bakes the
+		// same "engine" stem into the same output pak, so the stem alone is NOT unique -
+		// two editors baking concurrently would remove_all each other's half-staged tree
+		// and pack whatever was left. The pid makes the claim actually hold.
+		const std::filesystem::path staging = tempRoot / ("aether_engine_pak_stage_" + outputEnginePak.stem().string() + "-" + std::to_string(CurrentProcessId()));
 		std::filesystem::remove_all(staging, ec);
 		if (auto dirResult = io::file_util::CreateDirectories(staging); !dirResult)
 		{

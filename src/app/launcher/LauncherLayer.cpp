@@ -364,7 +364,12 @@ namespace aether::app
 		if (m_controlBasePort > 0)
 		{
 			StartControlServer();
-			AE_INFO(LogCategory::App, "Launcher MCP endpoint uses port {}; spawned Editors inherit it after handoff. Set AETHER_CONTROL_PORT=off to disable.", m_controlBasePort);
+			// Log the port actually bound: StartControlServer can fall back off the
+			// documented one and has already warned when it did.
+			if (m_controlServer != nullptr)
+			{
+				AE_INFO(LogCategory::App, "Launcher MCP endpoint uses port {}; spawned Editors inherit it after handoff. Set AETHER_CONTROL_PORT=off to disable.", m_controlServer->Port());
+			}
 		}
 		else
 		{
@@ -438,14 +443,19 @@ namespace aether::app
 		}
 
 		m_editorStartupSeconds += context.deltaTimeSeconds;
-		if (m_editorStartupSeconds >= 20.0)
+		if (m_editorStartupSeconds >= 20.0 && m_windowState.launching)
 		{
-			m_pendingEditor.reset();
+			// The editor process is still alive (an exit was handled above) and may bind
+			// the handed-off control port at any moment, so the launcher must NOT take it
+			// back: rebinding here races the editor for the port and, when the editor wins,
+			// leaves the launcher with no MCP endpoint while an editor is running. Keep
+			// tracking the process instead - it either reports healthy (the launcher
+			// closes, per the handoff contract) or exits (that branch above then restarts
+			// the endpoint on a port that is genuinely free again).
 			m_editorStartupSeconds = 0.0;
 			m_windowState.launching = false;
-			m_windowState.error = "Editor is taking longer than expected to start. The launcher is still open.";
-			StartControlServer();
-			AE_WARN(LogCategory::App, "Editor did not confirm healthy startup within 20 seconds; keeping Launcher open.");
+			m_windowState.error = "Editor is taking longer than expected to start. The launcher is still open; the control port stays handed off to the editor.";
+			AE_WARN(LogCategory::App, "Editor did not confirm healthy startup within 20 seconds; keeping the Launcher open with the control port handed off (the editor process is still running).");
 		}
 	}
 
@@ -493,18 +503,30 @@ namespace aether::app
 		return it != m_previews.end() ? it->second.textureId : 0;
 	}
 
+	void LauncherLayer::ReleasePreview(const std::string& key)
+	{
+		const auto it = m_previews.find(key);
+		if (it == m_previews.end())
+		{
+			return;
+		}
+		if (it->second.textureId != 0)
+		{
+			if (auto* imgui = m_services != nullptr ? m_services->TryGet<ImguiSubsystem>() : nullptr; imgui != nullptr)
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(it->second.textureId));
+			}
+		}
+		it->second.texture.Destroy();
+		m_previews.erase(it);
+	}
+
 	void LauncherLayer::ReleasePreviews()
 	{
-		auto* imgui = m_services != nullptr ? m_services->TryGet<ImguiSubsystem>() : nullptr;
-		for (auto& [key, entry]: m_previews)
+		while (!m_previews.empty())
 		{
-			if (entry.textureId != 0 && imgui != nullptr)
-			{
-				imgui->UnregisterTexture(static_cast<ImTextureID>(entry.textureId));
-			}
-			entry.texture.Destroy();
+			ReleasePreview(m_previews.begin()->first);
 		}
-		m_previews.clear();
 	}
 
 	void LauncherLayer::OnImGui(LayerContext& /*context*/)
@@ -603,10 +625,18 @@ namespace aether::app
 	{
 		if (m_pendingEditor.has_value())
 		{
+			// A previously spawned editor is still running but never confirmed healthy
+			// (the 20s branch in OnUpdate keeps it tracked). It still holds the handed-off
+			// control port, and spawning a second editor now would hand the same port to
+			// two children.
+			m_windowState.error = "An editor started from this launcher is still running. Wait for it to finish starting, or close it, before opening another project.";
 			return;
 		}
+		// Hand off the port the launcher actually bound - a fallback port when the
+		// documented one was taken (see StartControlServer) - so the MCP client stays on
+		// one port across the handoff (AGENTS.md).
+		const int controlPort = m_controlServer != nullptr ? m_controlServer->Port() : m_controlBasePort;
 		StopControlServer();
-		const int controlPort = m_controlBasePort;
 		// Open the editor where the launcher is, so the handoff lands in the same place on
 		// screen instead of jumping - possibly to another monitor entirely.
 		int centerX = INT_MIN;
@@ -637,10 +667,26 @@ namespace aether::app
 		}
 		m_controlServer = std::make_unique<editor::ControlServer>(*m_services, [this]() { return BuildLauncherControlMethods(*this); }, "launcher");
 		m_controlServer->Start(m_controlBasePort);
-		if (!m_controlServer->IsRunning())
+		if (m_controlServer->IsRunning())
 		{
-			m_controlServer.reset();
+			return;
 		}
+		// ControlServer::Start already logged why the bind failed. Dropping the endpoint
+		// here left the launcher uncontrollable whenever the documented port was taken (a
+		// second launcher instance, a leftover editor); fall back to a nearby port and say
+		// so loudly instead.
+		const int maxPort = std::min(m_controlBasePort + 4, 65535);
+		for (int candidate = m_controlBasePort + 1; candidate <= maxPort; ++candidate)
+		{
+			m_controlServer->Start(candidate);
+			if (m_controlServer->IsRunning())
+			{
+				AE_WARN(LogCategory::App, "Launcher: MCP port {} was unavailable; the endpoint fell back to port {}. Point MCP clients at the fallback, or free the documented port.", m_controlBasePort, candidate);
+				return;
+			}
+		}
+		AE_WARN(LogCategory::App, "Launcher: could not start an MCP endpoint on any port from {} to {}; launcher control tools are offline for this session.", m_controlBasePort, maxPort);
+		m_controlServer.reset();
 	}
 
 	void LauncherLayer::StopControlServer()
@@ -667,7 +713,18 @@ namespace aether::app
 		m_recentProjects.insert(m_recentProjects.begin(), std::move(entry));
 		if (m_recentProjects.size() > static_cast<std::size_t>(project::kMaxRecentProjects))
 		{
+			// Same invariant as RemoveRecent: a recent dropped by the trim no longer
+			// references its preview, so the texture must not linger in m_previews.
+			std::vector<std::string> droppedKeys;
+			for (std::size_t index = static_cast<std::size_t>(project::kMaxRecentProjects); index < m_recentProjects.size(); ++index)
+			{
+				droppedKeys.push_back(project::NormalizePath(m_recentProjects[index].root).string());
+			}
 			m_recentProjects.resize(static_cast<std::size_t>(project::kMaxRecentProjects));
+			for (const std::string& key: droppedKeys)
+			{
+				ReleasePreview(key);
+			}
 		}
 		PersistSettings();
 	}
@@ -677,10 +734,16 @@ namespace aether::app
 		const std::filesystem::path resolved = project::NormalizePath(project::ResolveProjectRoot(root));
 		const std::size_t before = m_recentProjects.size();
 		std::erase_if(m_recentProjects, [&](const EditorProjectContext& p) { return project::NormalizePath(p.root) == resolved; });
-		if (m_recentProjects.size() != before)
+		if (m_recentProjects.size() == before)
 		{
-			PersistSettings();
+			return;
 		}
+		PersistSettings();
+		// m_previews is keyed by the same normalized root (LoadPreview), and erase_if just
+		// removed every recent referencing that key - so its preview texture and registered
+		// ImTextureID are now unreferenced. Without this, one GPU image per removed project
+		// accumulated until launcher exit.
+		ReleasePreview(resolved.string());
 	}
 
 	void LauncherLayer::RelocateRecent(const std::filesystem::path& oldRoot)

@@ -20,7 +20,11 @@ namespace aether::editor
 
 	[[nodiscard]] std::filesystem::path ProjectShaderIntermediateDir(const std::filesystem::path& projectRoot);
 
-	bool CompileOne(const std::filesystem::path& slangFile, const std::filesystem::path& outDir, std::string& error);
+	// Compiles one .slang to <outDir>/<stem>.spv. sourceDir (optional) names the shader
+	// source root the file lives under: when given, the .spv mirrors the file's subpath
+	// under it (assets/shaders/effects/Foo.slang -> effects/Foo.spv) and dependency
+	// staleness is scanned from the whole tree, exactly as CompileProject does.
+	bool CompileOne(const std::filesystem::path& slangFile, const std::filesystem::path& outDir, std::string& error, const std::filesystem::path& sourceDir = {});
 
 	[[nodiscard]] ShaderCompileResult CompileProject(const std::filesystem::path& projectRoot);
 } // namespace aether::editor

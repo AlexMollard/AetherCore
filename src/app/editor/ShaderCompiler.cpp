@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <mutex>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -345,19 +346,53 @@ namespace aether::editor
 #endif
 			return newest;
 		}
+
+		// Publish (worker thread), the Play recompile hook (main thread) and the Material
+		// window's async compile all run slangc into the same intermediate directory. Two
+		// concurrent runs would share <stem>.spv.tmp and <stem>.spv, and one run's cleanup
+		// delete can promote the other's half-written binary. Recursive so CompileProject
+		// can hold it across its loop of CompileOne calls.
+		std::recursive_mutex& CompileMutex()
+		{
+			static std::recursive_mutex mutex;
+			return mutex;
+		}
+
+		// Output path for a shader: its subpath under sourceDir with .spv, so the recursive
+		// source scan and the outputs agree (assets/shaders/effects/Foo.slang ->
+		// Intermediate/shaders/effects/Foo.spv) and two same-named shaders in different
+		// folders cannot clobber each other. Falls back to a flat <stem>.spv for callers
+		// that pass no sourceDir or a file outside it.
+		fs::path ShaderOutputFile(const fs::path& slangFile, const fs::path& outDir, const fs::path& sourceDir)
+		{
+			fs::path name = slangFile.filename();
+			if (!sourceDir.empty())
+			{
+				std::error_code ec;
+				const fs::path relative = fs::relative(slangFile, sourceDir, ec);
+				if (!ec && !relative.empty() && !relative.is_absolute() && *relative.begin() != fs::path(".."))
+				{
+					name = relative;
+				}
+			}
+			return outDir / name.replace_extension(".spv");
+		}
 	} // namespace
 
-	bool CompileOne(const fs::path& slangFile, const fs::path& outDir, std::string& error)
+	bool CompileOne(const fs::path& slangFile, const fs::path& outDir, std::string& error, const fs::path& sourceDir)
 	{
 #ifdef AETHER_SLANGC_EXE
-		const fs::path outFile = outDir / (slangFile.stem().string() + ".spv");
-		const auto newestSourceMTime = NewestDependencyMTime(slangFile.parent_path());
+		const std::lock_guard<std::recursive_mutex> compileLock(CompileMutex());
+		const fs::path outFile = ShaderOutputFile(slangFile, outDir, sourceDir);
+		// With a sourceDir, staleness is scanned from the whole source tree (a shader can
+		// include a header or shader from any subdirectory), not just the file's own folder.
+		const auto newestSourceMTime = NewestDependencyMTime(sourceDir.empty() ? slangFile.parent_path() : sourceDir);
 		if (!IsOutputStale(slangFile, outFile, newestSourceMTime))
 		{
 			return true;
 		}
 
-		if (auto dirResult = io::file_util::CreateDirectories(outDir); !dirResult)
+		if (auto dirResult = io::file_util::CreateDirectories(outFile.parent_path()); !dirResult)
 		{
 			error = "Could not create shader output folder: " + dirResult.error().message;
 			return false;
@@ -368,7 +403,8 @@ namespace aether::editor
 		// partial or truncated binary - the last-good .spv survives untouched, so a broken edit
 		// keeps rendering the previous shader instead of feeding garbage SPIR-V to Vulkan.
 		// (Format is fixed by "-target spirv" in AETHER_SLANG_ARGS, so the .tmp extension is safe.)
-		const fs::path tmpFile = outDir / (slangFile.stem().string() + ".spv.tmp");
+		fs::path tmpFile = outFile;
+		tmpFile += ".tmp";
 		std::error_code tmpEc;
 		fs::remove(tmpFile, tmpEc); // clear any leftover temp from a previously interrupted run
 
@@ -379,7 +415,8 @@ namespace aether::editor
 		includeArg = " -I " + Quoted(AETHER_SHADER_INCLUDE_DIR);
 #endif
 		const std::string command = Quoted(AETHER_SLANGC_EXE) + " " AETHER_SLANG_ARGS + includeArg + " -o " + Quoted(tmpFile) + " " + Quoted(slangFile);
-		const fs::path logFile = outDir / (slangFile.stem().string() + ".slangc.log");
+		fs::path logFile = outFile;
+		logFile.replace_extension(".slangc.log");
 		const int rc = io::RunProcessToLog(command, logFile);
 		if (rc != 0)
 		{
@@ -408,6 +445,7 @@ namespace aether::editor
 		(void) slangFile;
 		(void) outDir;
 		(void) error;
+		(void) sourceDir;
 		return true;
 #endif
 	}
@@ -434,6 +472,10 @@ namespace aether::editor
 		const fs::path outDir = ProjectShaderIntermediateDir(projectRoot);
 		std::vector<std::string> failures;
 
+		// Serialize against the publish worker and the Material window's async compile (see
+		// CompileMutex): all of them run slangc over this same intermediate directory.
+		const std::lock_guard<std::recursive_mutex> compileLock(CompileMutex());
+
 		// A graph-generated .slang is derived data, not a source file: regenerate it from the
 		// graph before compiling. Without this an engine-side change to a shared header (a new
 		// parameter on a helper every generated shader calls) silently rots every shader
@@ -443,7 +485,14 @@ namespace aether::editor
 
 		const auto newestSourceMTime = NewestDependencyMTime(sourceDir);
 
-		for (const auto& entry: fs::directory_iterator(sourceDir, ec))
+		// Recursive, matching the dependency scans above: IncludedShaderNames and
+		// NewestShaderSourceMTime already treat a .slang in any subdirectory as an
+		// includable dependency, so the compile loop must reach it too - otherwise its
+		// staleness is accounted against shaders that can never be rebuilt, and it neither
+		// produces an .spv nor packs one. Outputs mirror the source subpath (see
+		// ShaderOutputFile); PakWriter::AddDirectoryAs packs the tree recursively, and the
+		// shaders:// overlay mounts the intermediate root, so subpaths resolve end to end.
+		for (const auto& entry: fs::recursive_directory_iterator(sourceDir, ec))
 		{
 			if (ec)
 			{
@@ -454,7 +503,7 @@ namespace aether::editor
 				continue;
 			}
 
-			const fs::path outFile = outDir / (entry.path().stem().string() + ".spv");
+			const fs::path outFile = ShaderOutputFile(entry.path(), outDir, sourceDir);
 			// Staleness was already being computed here and used only to count: slangc ran on
 			// every shader on every open and every play, which was most of the editor's
 			// startup time for a project whose shaders had not changed at all.
@@ -465,10 +514,12 @@ namespace aether::editor
 			}
 
 			std::string compileError;
-			if (!CompileOne(entry.path(), outDir, compileError))
+			if (!CompileOne(entry.path(), outDir, compileError, sourceDir))
 			{
 				++result.failed;
-				failures.push_back(entry.path().filename().string() + ": " + compileError);
+				std::error_code relEc;
+				const fs::path label = fs::relative(entry.path(), sourceDir, relEc);
+				failures.push_back((relEc ? entry.path().filename() : label).generic_string() + ": " + compileError);
 				continue;
 			}
 			++result.compiled;
