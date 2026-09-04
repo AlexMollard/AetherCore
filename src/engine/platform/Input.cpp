@@ -137,18 +137,26 @@ namespace aether
 		// back, and a consumer that dies mid-frame cannot leave a key muted forever.
 		m_consumedKeys.fill(false);
 
+		// GLFW does not synthesise release events when the window loses focus: a
+		// key or mouse button held at the moment of an alt-tab keeps reporting
+		// PRESS from the stale pre-focus-loss state, so IsKeyDown sticks forever
+		// and HadActivityThisFrame pins the editor awake. Real device state is
+		// therefore only trusted while the window has focus; synthetic injection
+		// is unaffected.
+		const bool focused = glfwGetWindowAttrib(m_window, GLFW_FOCUSED) != 0;
+
 		for (int i = 0; i < kMaxKeys; ++i)
 		{
 			// Synthetic keys (control-server injection) OR into the real state, so
 			// headless playtests drive the same IsKeyDown/IsKeyPressed paths.
-			m_currKeys[i] = (glfwGetKey(m_window, i) == GLFW_PRESS) || m_syntheticKeys[i];
+			m_currKeys[i] = (focused && glfwGetKey(m_window, i) == GLFW_PRESS) || m_syntheticKeys[i];
 		}
 
 		for (int i = 0; i < kMaxMouseButtons; ++i)
 		{
 			// Synthetic buttons OR in like synthetic keys, so injected clicks drive the
 			// same IsMouseButtonDown/Pressed/Released paths a real click does.
-			m_currMouseButtons[i] = (glfwGetMouseButton(m_window, i) == GLFW_PRESS) || m_syntheticMouseButtons[i];
+			m_currMouseButtons[i] = (focused && glfwGetMouseButton(m_window, i) == GLFW_PRESS) || m_syntheticMouseButtons[i];
 		}
 
 		m_prevMousePos = m_mousePos;

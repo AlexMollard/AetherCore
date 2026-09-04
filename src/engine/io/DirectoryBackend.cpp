@@ -206,22 +206,53 @@ namespace aether::io
 		return matches;
 	}
 
-	std::filesystem::path DirectoryBackend::Resolve(std::string_view relativePath) const
+	std::optional<std::filesystem::path> DirectoryBackend::Resolve(std::string_view relativePath) const
 	{
-		return m_rootPath / relativePath;
+		// The mount root is a security boundary: relativePath arrives from scene and
+		// asset data as often as from engine code, and without a containment check a
+		// 'project://../secrets' style path reads and writes real files outside the
+		// root (Read, OpenStream and Write all resolve through here). The check is
+		// lexical - no symlink resolution - which is sound because the normalized
+		// candidate returned below is exactly the path handed to the OS, so what is
+		// validated is what gets opened, even on a case-insensitive filesystem.
+		const std::filesystem::path rel(relativePath);
+		if (rel.is_absolute() || rel.has_root_name())
+		{
+			return std::nullopt;
+		}
+
+		const std::filesystem::path root = m_rootPath.lexically_normal();
+		const std::filesystem::path candidate = (m_rootPath / rel).lexically_normal();
+		auto candidateIt = candidate.begin();
+		for (auto rootIt = root.begin(); rootIt != root.end(); ++rootIt, ++candidateIt)
+		{
+			if (candidateIt == candidate.end() || *candidateIt != *rootIt)
+			{
+				return std::nullopt;
+			}
+		}
+		return candidate;
 	}
 
 	std::optional<std::filesystem::path> DirectoryBackend::ResolveInsensitive(std::string_view relativePath, std::string* bestMatch) const
 	{
 		auto fullPath = Resolve(relativePath);
-
-		std::error_code ec;
-		if (std::filesystem::exists(fullPath, ec))
+		if (!fullPath)
 		{
-			return fullPath;
+			if (bestMatch)
+			{
+				*bestMatch = {};
+			}
+			return std::nullopt;
 		}
 
-		const auto parent = fullPath.parent_path();
+		std::error_code ec;
+		if (std::filesystem::exists(*fullPath, ec))
+		{
+			return *fullPath;
+		}
+
+		const auto parent = fullPath->parent_path();
 		const std::string targetFilename = std::filesystem::path(relativePath).filename().generic_string();
 
 		if (!std::filesystem::exists(parent, ec))
@@ -280,22 +311,26 @@ namespace aether::io
 	Expected<void> DirectoryBackend::Write(std::string_view relativePath, std::span<const std::byte> data) const
 	{
 		auto fullPath = Resolve(relativePath);
+		if (!fullPath)
+		{
+			AE_UNEXPECTED(AetherError::FileSystem("path escapes the mount root: " + std::string(relativePath)));
+		}
 
 		std::error_code ec;
-		auto parent = fullPath.parent_path();
+		auto parent = fullPath->parent_path();
 		if (!parent.empty())
 		{
 			std::filesystem::create_directories(parent, ec);
 			if (ec)
 			{
-				AE_UNEXPECTED(AetherError::FileSystem(std::format("failed to create directories for '{}': {}", fullPath.string(), ec.message())));
+				AE_UNEXPECTED(AetherError::FileSystem(std::format("failed to create directories for '{}': {}", fullPath->string(), ec.message())));
 			}
 		}
 
-		std::ofstream out(fullPath, std::ios::binary | std::ios::trunc);
+		std::ofstream out(*fullPath, std::ios::binary | std::ios::trunc);
 		if (!out)
 		{
-			AE_UNEXPECTED(AetherError::FileSystem("failed to open file for writing: " + fullPath.string()));
+			AE_UNEXPECTED(AetherError::FileSystem("failed to open file for writing: " + fullPath->string()));
 		}
 
 		out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
@@ -303,7 +338,7 @@ namespace aether::io
 
 		if (out.fail())
 		{
-			AE_UNEXPECTED(AetherError::FileSystem("failed to write file: " + fullPath.string()));
+			AE_UNEXPECTED(AetherError::FileSystem("failed to write file: " + fullPath->string()));
 		}
 
 		return {};
@@ -312,7 +347,11 @@ namespace aether::io
 	std::vector<std::string> DirectoryBackend::CollectDidYouMean(std::string_view relativePath, int maxSuggestions) const
 	{
 		const auto fullPath = Resolve(relativePath);
-		const auto parent = fullPath.parent_path();
+		if (!fullPath)
+		{
+			return {};
+		}
+		const auto parent = fullPath->parent_path();
 		const std::string targetFilename = std::filesystem::path(relativePath).filename().generic_string();
 
 		std::error_code ec;

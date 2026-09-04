@@ -102,6 +102,11 @@ namespace aether
 
 		void Advance(std::size_t n)
 		{
+			if (std::cmp_less(m_end - m_pos, n))
+			{
+				m_pos = m_end;
+				return;
+			}
 			m_pos += n;
 		}
 

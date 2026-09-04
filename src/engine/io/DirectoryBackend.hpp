@@ -21,7 +21,7 @@ namespace aether::io
 		[[nodiscard]] Expected<void> Write(std::string_view relativePath, std::span<const std::byte> data) const override;
 
 	private:
-		[[nodiscard]] std::filesystem::path Resolve(std::string_view relativePath) const;
+		[[nodiscard]] std::optional<std::filesystem::path> Resolve(std::string_view relativePath) const;
 
 		[[nodiscard]] std::optional<std::filesystem::path> ResolveInsensitive(std::string_view relativePath, std::string* bestMatch = nullptr) const;
 

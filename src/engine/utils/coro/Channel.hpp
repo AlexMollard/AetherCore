@@ -1,7 +1,7 @@
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
-#include <coroutine>
 #include <deque>
 #include <mutex>
 #include <optional>
@@ -82,133 +82,17 @@ namespace aether::coro
 			return m_buffer.front();
 		}
 
-		class write_awaiter
-		{
-		public:
-			write_awaiter(channel* ch, T value)
-			      : m_channel(ch), m_value(std::move(value))
-			{
-			}
-
-			[[nodiscard]] bool await_ready() const noexcept
-			{
-				std::scoped_lock l(m_channel->m_mutex);
-				return m_channel->m_buffer.size() < m_channel->m_capacity || m_channel->m_closed;
-			}
-
-			void await_suspend(std::coroutine_handle<> awaiting) noexcept
-			{
-				std::unique_lock lock(m_channel->m_mutex);
-				if (m_channel->m_buffer.size() < m_channel->m_capacity || m_channel->m_closed)
-				{
-					lock.unlock();
-					if (!m_channel->m_closed)
-					{
-						std::scoped_lock l2(m_channel->m_mutex);
-						m_channel->m_buffer.push_back(std::move(m_value));
-						m_channel->m_notEmpty.notify_one();
-					}
-					awaiting.resume();
-					return;
-				}
-				m_channel->m_writeWaiter = awaiting;
-				m_channel->m_pendingWriteValue = std::move(m_value);
-			}
-
-			void await_resume() noexcept
-			{
-			}
-
-		private:
-			channel* m_channel;
-			T m_value;
-		};
-
-		[[nodiscard]] write_awaiter write_async(T value)
-		{
-			return write_awaiter{this, std::move(value)};
-		}
-
-		class read_awaiter
-		{
-		public:
-			explicit read_awaiter(channel* ch)
-			      : m_channel(ch)
-			{
-			}
-
-			[[nodiscard]] bool await_ready() const noexcept
-			{
-				std::scoped_lock l(m_channel->m_mutex);
-				return !m_channel->m_buffer.empty() || m_channel->m_closed;
-			}
-
-			void await_suspend(std::coroutine_handle<> awaiting) noexcept
-			{
-				std::unique_lock lock(m_channel->m_mutex);
-				if (!m_channel->m_buffer.empty() || m_channel->m_closed)
-				{
-					lock.unlock();
-					awaiting.resume();
-					return;
-				}
-				m_channel->m_readWaiter = awaiting;
-			}
-
-			T await_resume()
-			{
-				std::scoped_lock lock(m_channel->m_mutex);
-				if (m_channel->m_buffer.empty())
-				{
-					throw std::runtime_error("channel::read_async: closed with no data");
-				}
-				T value = std::move(m_channel->m_buffer.front());
-				m_channel->m_buffer.pop_front();
-				m_channel->m_notFull.notify_one();
-				return value;
-			}
-
-		private:
-			channel* m_channel;
-		};
-
-		[[nodiscard]] read_awaiter read_async()
-		{
-			return read_awaiter{this};
-		}
-
-		void notify_read_waiter()
-		{
-			std::coroutine_handle<> h = nullptr;
-			{
-				std::scoped_lock l(m_mutex);
-				h = m_readWaiter;
-				m_readWaiter = nullptr;
-			}
-			if (h)
-			{
-				h.resume();
-			}
-		}
-
-		// -- Lifetime -----------------------------------------------------------
-
+		// No coroutine waiters to resume on close: the former write_async/read_async
+		// awaiter paths were deleted rather than fixed - nothing used them, and
+		// close() resuming a waiter while holding m_mutex deadlocked any coroutine
+		// that re-entered the channel. Blocking readers and writers wake from the
+		// condition variables above.
 		void close()
 		{
 			const std::scoped_lock l(m_mutex);
 			m_closed = true;
 			m_notEmpty.notify_all();
 			m_notFull.notify_all();
-			if (m_writeWaiter)
-			{
-				m_writeWaiter.resume();
-				m_writeWaiter = nullptr;
-			}
-			if (m_readWaiter)
-			{
-				m_readWaiter.resume();
-				m_readWaiter = nullptr;
-			}
 		}
 
 		[[nodiscard]] bool is_closed() const noexcept
@@ -237,9 +121,6 @@ namespace aether::coro
 		std::condition_variable m_notEmpty;
 		std::condition_variable m_notFull;
 
-		std::coroutine_handle<> m_writeWaiter = nullptr;
-		T m_pendingWriteValue{};
-		std::coroutine_handle<> m_readWaiter = nullptr;
 	};
 
 } // namespace aether::coro

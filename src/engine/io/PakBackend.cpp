@@ -97,7 +97,7 @@ namespace aether::io
 
 		for (const auto& e: entries)
 		{
-			if (static_cast<uint64_t>(e.pathOffset) + e.pathLen > header.pathDataSize || e.dataOffset > header.assetDataSize || e.dataSize > header.assetDataSize - e.dataOffset)
+			if (e.pathOffset > header.pathDataSize || e.pathLen > header.pathDataSize - e.pathOffset || e.dataOffset > header.assetDataSize || e.dataSize > header.assetDataSize - e.dataOffset)
 			{
 				throw FileSystemError("Corrupt pak entry (range out of bounds) in: " + m_pakPath.string());
 			}
@@ -218,6 +218,18 @@ namespace aether::io
 		if (decompSize == ZSTD_CONTENTSIZE_ERROR || decompSize == ZSTD_CONTENTSIZE_UNKNOWN)
 		{
 			AE_UNEXPECTED(AetherError::FileSystem("corrupt zstd frame for asset: " + std::string(relativePath)));
+		}
+
+		// The declared content size is untrusted: bound it against the entry's
+		// on-disk size times a generous compression ratio plus a hard cap, so a
+		// corrupt or hostile frame cannot drive an unbounded allocation - an
+		// uncaught bad_alloc would abort the app straight out of this
+		// Expected-returning function.
+		constexpr uint64_t kMaxCompressionRatio = 256;
+		constexpr uint64_t kMaxDecompressedBytes = 4ull * 1024ull * 1024ull * 1024ull;
+		if (decompSize > info.size * kMaxCompressionRatio || decompSize > kMaxDecompressedBytes)
+		{
+			AE_UNEXPECTED(AetherError::FileSystem("implausible decompressed size for asset: " + std::string(relativePath)));
 		}
 
 		std::vector<std::byte> result(static_cast<std::size_t>(decompSize));

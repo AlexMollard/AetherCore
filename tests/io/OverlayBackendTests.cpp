@@ -149,3 +149,42 @@ TEST_CASE("Glob strips a layer prefix case-insensitively")
 	REQUIRE(bytes.has_value());
 	CHECK(ToString(*bytes) == "spv bytes");
 }
+
+TEST_CASE("DirectoryBackend rejects paths that escape the mount root")
+{
+	const std::filesystem::path dir = MakeTempDir("traversal");
+	WriteFile(dir / "inside.txt", "inside");
+	const std::filesystem::path outsideFile = std::filesystem::temp_directory_path() / "ae_overlay_test_traversal_outside.txt";
+	WriteFile(outsideFile, "outside");
+
+	const io::DirectoryBackend backend(dir);
+
+	// Reads, existence checks and a '..' that stays inside the mount keep working.
+	REQUIRE(backend.Read("inside.txt").has_value());
+	CHECK(ToString(*backend.Read("inside.txt")) == "inside");
+	CHECK(backend.Exists("sub/../inside.txt"));
+
+	// Every escape spelling must fail for read, stream and write alike.
+	const std::vector<std::string> escapes = {
+	        "../ae_overlay_test_traversal_outside.txt",
+	        "a/../../ae_overlay_test_traversal_outside.txt",
+	        ".././../ae_overlay_test_traversal_outside.txt",
+	        outsideFile.generic_string(),
+	};
+	for (const std::string& escape: escapes)
+	{
+		CAPTURE(escape);
+		CHECK_FALSE(backend.Exists(escape));
+		CHECK_FALSE(backend.Read(escape).has_value());
+		CHECK_FALSE(backend.OpenStream(escape).has_value());
+		CHECK_FALSE(backend.Write(escape, std::span<const std::byte>{}).has_value());
+	}
+
+	// The rejected writes must not have touched the file they targeted.
+	std::ifstream in(outsideFile, std::ios::binary | std::ios::ate);
+	REQUIRE(in);
+	std::string contents(static_cast<std::size_t>(in.tellg()), '\0');
+	in.seekg(0, std::ios::beg);
+	in.read(contents.data(), static_cast<std::streamsize>(contents.size()));
+	CHECK(contents == "outside");
+}
