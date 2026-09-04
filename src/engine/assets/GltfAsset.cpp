@@ -26,6 +26,17 @@ namespace aether::assets
 {
 	namespace
 	{
+		// Hard ceilings so a corrupt .mesh/.skel/.anim header can never drive a huge
+		// allocation (same policy as TileMapAsset's kMax* limits).
+		constexpr uint32_t kMaxMeshVertices = 1u << 23;
+		constexpr uint32_t kMaxMeshIndices = 1u << 25;
+		constexpr uint32_t kMaxSubMeshes = 1u << 13;
+		constexpr uint32_t kMaxMaterials = 1u << 11;
+		constexpr uint32_t kMaxSkinRefPathLen = 4096;
+		constexpr uint32_t kMaxBones = 4096;
+		constexpr uint32_t kMaxAnimChannels = 1u << 16;
+		constexpr uint32_t kMaxAnimKeys = 1u << 20;
+
 		std::vector<std::string> CollectSimilarMeshPaths(std::string_view meshPath, int maxSuggestions = 3)
 		{
 			const std::size_t ss = meshPath.find("://");
@@ -208,6 +219,16 @@ namespace aether::assets
 				return false;
 			}
 
+			// Name length + parent index + inverse bind matrix is the smallest possible bone
+			// entry; bounding boneCount by that (and by a hard ceiling) keeps a corrupt or
+			// truncated header from driving a huge allocation.
+			constexpr uint32_t kMinBoneEntryBytes = 2 + 4 + 64;
+			if (hdr.boneCount > kMaxBones || static_cast<uint64_t>(hdr.boneCount) * kMinBoneEntryBytes > reader.Remaining())
+			{
+				AE_WARN(LogCategory::Engine, "Skeleton bone count {} out of range ({} bytes left): {}", hdr.boneCount, reader.Remaining(), skelPath);
+				return false;
+			}
+
 			AE_VERBOSE(LogCategory::Engine, "Loading skeleton '{}': {} bones, hash={}", skelPath, hdr.boneCount, hdr.skeletonHash);
 
 			outSkin.name = std::string(skelPath.substr(skelPath.find_last_of('/') + 1));
@@ -230,9 +251,21 @@ namespace aether::assets
 			for (uint32_t i = 0; i < hdr.boneCount; ++i)
 			{
 				auto boneNameLen = reader.Read<uint16_t>();
+				if (!reader.CanRead(boneNameLen))
+				{
+					AE_WARN(LogCategory::Engine, "Truncated bone name in skeleton: {}", skelPath);
+					return false;
+				}
 				bones[i].name = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
 				reader.Advance(boneNameLen);
 				bones[i].parentIndex = reader.Read<int32_t>();
+				// Parents may point forward (the packer sorts bones by name, so a parent can
+				// sort after its child), but never past the bone table or at the bone itself.
+				if (bones[i].parentIndex >= static_cast<int32_t>(hdr.boneCount) || bones[i].parentIndex == static_cast<int32_t>(i))
+				{
+					AE_WARN(LogCategory::Engine, "Bone {} ('{}') has invalid parent index {}: {}", i, bones[i].name, bones[i].parentIndex, skelPath);
+					return false;
+				}
 				reader.ReadRaw(bones[i].ibm, sizeof(bones[i].ibm));
 			}
 
@@ -327,6 +360,15 @@ namespace aether::assets
 				return anim;
 			}
 
+			// The channel header is the smallest possible channel entry; bounding
+			// channelCount by that (and by a hard ceiling) keeps a corrupt header from
+			// driving a huge allocation or walking past a truncated file.
+			if (hdr.channelCount > kMaxAnimChannels || static_cast<uint64_t>(hdr.channelCount) * sizeof(ChannelHeaderDisk) > reader.Remaining())
+			{
+				AE_WARN(LogCategory::Engine, "Animation channel count {} out of range ({} bytes left): {}", hdr.channelCount, reader.Remaining(), animPath);
+				return anim;
+			}
+
 			AE_VERBOSE(LogCategory::Engine, "LoadAnimation '{}': version={}, channels={}, nameLen={}", animPath, hdr.version, hdr.channelCount, hdr.nameLen);
 
 			if (hdr.version >= 3)
@@ -340,6 +382,11 @@ namespace aether::assets
 
 			AE_VERBOSE(LogCategory::Engine, "  flags=0x{:x}, hasBoneNames={}", hdr.flags, (hdr.version >= 3) && (hdr.flags & 1));
 
+			if (!reader.CanRead(hdr.nameLen))
+			{
+				AE_WARN(LogCategory::Engine, "Truncated animation name: {}", animPath);
+				return anim;
+			}
 			anim.name = std::string(reinterpret_cast<const char*>(reader.Data()), hdr.nameLen);
 			reader.Advance(hdr.nameLen);
 			anim.channels.reserve(hdr.channelCount);
@@ -356,6 +403,11 @@ namespace aether::assets
 				if (hasBoneNames)
 				{
 					auto boneNameLen = reader.Read<uint16_t>();
+					if (!reader.CanRead(boneNameLen))
+					{
+						AE_WARN(LogCategory::Engine, "Truncated bone name in animation channel: {}", animPath);
+						return {};
+					}
 					if (boneNameLen > 0)
 					{
 						channel.boneName = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
@@ -392,6 +444,13 @@ namespace aether::assets
 						break;
 				}
 
+				// Every key costs one time float plus one vec4 value on disk; a valid file
+				// always has that much left for the whole channel.
+				if (ch.keyCount > kMaxAnimKeys || static_cast<uint64_t>(ch.keyCount) * (sizeof(float) + sizeof(glm::vec4)) > reader.Remaining())
+				{
+					AE_WARN(LogCategory::Engine, "Animation channel key count {} out of range ({} bytes left): {}", ch.keyCount, reader.Remaining(), animPath);
+					return {};
+				}
 				channel.times.resize(ch.keyCount);
 				reader.ReadRaw(channel.times.data(), ch.keyCount * sizeof(float));
 
@@ -601,6 +660,22 @@ namespace aether::assets
 				AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(MESH_VERSION) + ") for '" + std::string(meshVfsPath) + "'. Re-run AssetPacker."));
 			}
 
+			// Hard ceilings plus a byte-accounting check: the vertex and index blobs the
+			// loader consumes must fit in what is left of the file, so a corrupt or truncated
+			// header can neither drive a huge allocation nor walk past the buffer.
+			if (hdr.vertexCount > kMaxMeshVertices || hdr.indexCount > kMaxMeshIndices || hdr.subMeshCount > kMaxSubMeshes || hdr.materialCount > kMaxMaterials || hdr.skinRefPathLen > kMaxSkinRefPathLen)
+			{
+				AE_WARN(LogCategory::Engine, "Mesh header counts out of range: {} verts, {} indices, {} submeshes, {} materials, skinRefLen={} for '{}'", hdr.vertexCount, hdr.indexCount, hdr.subMeshCount, hdr.materialCount, hdr.skinRefPathLen, meshVfsPath);
+				AE_UNEXPECTED(AetherError::Asset("mesh header counts out of range: " + std::string(meshVfsPath)));
+			}
+			const auto vertexBytes = static_cast<uint64_t>(hdr.vertexCount) * sizeof(DiskMeshVertex);
+			const auto indexBytes = static_cast<uint64_t>(hdr.indexCount) * ((hdr.indexType == 0) ? sizeof(uint16_t) : sizeof(uint32_t));
+			if (static_cast<uint64_t>(reader.Remaining()) < vertexBytes + indexBytes)
+			{
+				AE_WARN(LogCategory::Engine, "Truncated mesh '{}': needs {} vertex+index bytes, has {}", meshVfsPath, vertexBytes + indexBytes, reader.Remaining());
+				AE_UNEXPECTED(AetherError::Asset("truncated mesh data: " + std::string(meshVfsPath)));
+			}
+
 			AE_VERBOSE(LogCategory::Engine, "Loading mesh '{}': {} verts, {} indices, {} materials, skin={}", meshVfsPath, hdr.vertexCount, hdr.indexCount, hdr.materialCount, hdr.skinRefPathLen > 0 ? "yes" : "no");
 			AE_VERBOSE(LogCategory::Engine, "  AABB: [{}, {}, {}] -> [{}, {}, {}]", hdr.aabbMin[0], hdr.aabbMin[1], hdr.aabbMin[2], hdr.aabbMax[0], hdr.aabbMax[1], hdr.aabbMax[2]);
 			AE_VERBOSE(LogCategory::Engine, "  Sphere: center=[{}, {}, {}], radius={}", hdr.sphereCenter[0], hdr.sphereCenter[1], hdr.sphereCenter[2], hdr.sphereRadius);
@@ -626,10 +701,33 @@ namespace aether::assets
 				reader.ReadRaw(indices.data(), hdr.indexCount * sizeof(uint32_t));
 			}
 
+			// Every index must reference a vertex that exists; the submesh loops below copy
+			// vertices straight through diskVerts[idx], so a single bad index walks off the
+			// end of the vertex blob.
+			for (uint32_t i = 0; i < hdr.indexCount; ++i)
+			{
+				if (indices[i] >= hdr.vertexCount)
+				{
+					AE_WARN(LogCategory::Engine, "Mesh index {} -> vertex {} out of range ({} verts) in '{}'", i, indices[i], hdr.vertexCount, meshVfsPath);
+					AE_UNEXPECTED(AetherError::Asset("mesh index out of range: " + std::string(meshVfsPath)));
+				}
+			}
+
 			std::vector<SubMeshHeaderDisk> subMeshes(hdr.subMeshCount);
 			for (uint32_t sm = 0; sm < hdr.subMeshCount; ++sm)
 			{
 				subMeshes[sm] = reader.Read<SubMeshHeaderDisk>();
+			}
+			for (uint32_t sm = 0; sm < hdr.subMeshCount; ++sm)
+			{
+				const auto& rangeHdr = subMeshes[sm];
+				// Subtraction form: firstIndex is checked against the size before the
+				// difference is taken, so the addition can never overflow.
+				if (rangeHdr.firstIndex > indices.size() || rangeHdr.indexCount > indices.size() - rangeHdr.firstIndex)
+				{
+					AE_WARN(LogCategory::Engine, "Submesh {} index range [{}..{}] out of range ({} indices) in '{}'", sm, rangeHdr.firstIndex, rangeHdr.firstIndex + rangeHdr.indexCount, indices.size(), meshVfsPath);
+					AE_UNEXPECTED(AetherError::Asset("mesh submesh index range out of range: " + std::string(meshVfsPath)));
+				}
 			}
 
 			std::string skinRefPath;
@@ -799,30 +897,38 @@ namespace aether::assets
 
 						const uint32_t boneNodeOffset = (!asset.skins.empty() && !asset.skins[0].joints.empty()) ? static_cast<uint32_t>(asset.nodes.size() - asset.skins[0].joints.size()) : 0u;
 						AE_VERBOSE(LogCategory::Engine, "  AnimSet: boneNodeOffset={}, asset.nodes.size={}, skin joints={}", boneNodeOffset, asset.nodes.size(), asset.skins.empty() ? 0 : asset.skins[0].joints.size());
-
-						for (uint32_t i = 0; i < asetHdr.animCount; ++i)
+						// Each entry is at least a length-prefixed string (2 bytes); without
+						// this bound a corrupt animCount spins the loop billions of times.
+						if (static_cast<uint64_t>(asetHdr.animCount) * 2 > animSetReader.Remaining())
 						{
-							const std::string animRelPath = animSetReader.ReadString();
-							std::string animFullPath = mountRoot + animRelPath;
-							if (io::FileSystem::Exists(animFullPath))
+							AE_WARN(LogCategory::Engine, "AnimSet animation count {} out of range ({} bytes left): {}", asetHdr.animCount, animSetReader.Remaining(), animSetPath);
+						}
+						else
+						{
+							for (uint32_t i = 0; i < asetHdr.animCount; ++i)
 							{
-								GltfAnimation anim = LoadAnimation(animFullPath);
-								if (!anim.name.empty())
+								const std::string animRelPath = animSetReader.ReadString();
+								std::string animFullPath = mountRoot + animRelPath;
+								if (io::FileSystem::Exists(animFullPath))
 								{
-									if (boneNodeOffset > 0)
+									GltfAnimation anim = LoadAnimation(animFullPath);
+									if (!anim.name.empty())
 									{
-										AE_VERBOSE(LogCategory::Engine, "    Offsetting {} channels by +{}", anim.channels.size(), boneNodeOffset);
-										for (auto& ch: anim.channels)
+										if (boneNodeOffset > 0)
 										{
-											ch.nodeIndex += boneNodeOffset;
+											AE_VERBOSE(LogCategory::Engine, "    Offsetting {} channels by +{}", anim.channels.size(), boneNodeOffset);
+											for (auto& ch: anim.channels)
+											{
+												ch.nodeIndex += boneNodeOffset;
+											}
 										}
+										asset.animations.push_back(std::move(anim));
 									}
-									asset.animations.push_back(std::move(anim));
 								}
-							}
-							else
-							{
-								AE_WARN(LogCategory::Engine, "  Animation file not found: {}", animFullPath);
+								else
+								{
+									AE_WARN(LogCategory::Engine, "  Animation file not found: {}", animFullPath);
+								}
 							}
 						}
 					}

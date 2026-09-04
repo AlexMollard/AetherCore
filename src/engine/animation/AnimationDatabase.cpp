@@ -38,8 +38,16 @@ namespace aether
 		{
 			return db;
 		}
-
 		const auto numNodes = static_cast<std::uint32_t>(asset.nodes.size());
+		if (numNodes == 0)
+		{
+			// With no nodes, numNodes - 1 below would wrap to UINT32_MAX and the
+			// clamp would keep channels whose nodeIndex points past the empty
+			// bind-pose arrays the compute skinning pass reads.
+			AE_WARN(LogCategory::Engine, "AnimationDatabase: asset has {} animations but no nodes; skipping animation upload.", asset.animations.size());
+			return db;
+		}
+
 		std::uint32_t clampedChannels = 0;
 		for (const auto& clip: asset.animations)
 		{

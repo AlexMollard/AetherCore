@@ -84,6 +84,12 @@ namespace aether
 	Mesh Mesh::Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius)
 	{
 		Mesh mesh = Create(uploadContext, vertices);
+		if (!mesh.IsValid())
+		{
+			// Vertex-buffer creation failed: the returned mesh does not own its buffers,
+			// so an index buffer created below would never be released by Destroy().
+			return mesh;
+		}
 		mesh.m_indexCount = static_cast<std::uint32_t>(indices.size());
 
 		const gpu::DeviceSize indexSize = sizeof(std::uint32_t) * indices.size();
