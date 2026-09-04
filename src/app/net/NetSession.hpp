@@ -64,6 +64,10 @@ namespace aether::net
 			return m_nextSceneNetId++;
 		}
 
+		[[nodiscard]] ConnectionId LocalConnection() const
+		{
+			return m_localConnection;
+		}
 
 		void SetLocalConnection(ConnectionId id)
 		{
