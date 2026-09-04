@@ -60,29 +60,43 @@ namespace
 
 AE_SCRIPT_API std::uint32_t aether_entity_create()
 {
+	return SafeExport([&] -> std::uint32_t
+	{
 	aether::World& w = ActiveWorld();
 	const aether::Entity e = w.Create();
 	w.Emplace<aether::NameComponent>(e, aether::NameComponent{.name = "Entity"});
 	aether::app::scripting::ActiveContext().sceneEntities.push_back(e);
 	return e.id;
+	});
 }
 
 AE_SCRIPT_API void aether_entity_destroy(std::uint32_t id)
 {
+	SafeExport([&] -> void
+	{
 	// Deferred (Unity-style): scripts call this from inside their own
 	// callbacks, where an immediate destroy would free the ScriptComponent
 	// storage the runner is iterating. Flushed at the end of the script
 	// update (ScriptComponentSystem); the entity stays valid until then.
 	aether::app::scripting::ActiveContext().pendingDestroys.push_back(aether::Entity{id});
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_entity_valid(std::uint32_t id)
 {
-	return id != 0 ? 1 : 0;
+	return SafeExport([&] -> std::int32_t
+	{
+	// Registry truth, not "nonzero": ids that were never created, ids already
+	// destroyed, and ids booked for the deferred destroy flush are all invalid, so
+	// scripts stop calling into dead entities instead of trusting stale handles.
+	return EntityAlive(id) && !IsPendingDestroy(id) ? 1 : 0;
+	});
 }
 
 AE_SCRIPT_API void aether_mark_transient(std::uint32_t id)
 {
+	SafeExport([&] -> void
+	{
 	auto& reg = ActiveWorld().GetRegistry();
 	const auto e = aether::World::ToEntt(aether::Entity{id});
 	if (!reg.valid(e))
@@ -99,15 +113,25 @@ AE_SCRIPT_API void aether_mark_transient(std::uint32_t id)
 	{
 		reg.emplace<aether::DontDestroyOnLoadComponent>(e);
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_set_name(std::uint32_t id, const char* name)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	ActiveWorld().EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = name != nullptr ? name : ""});
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_get_name(std::uint32_t id, char* buf, std::int32_t bufLen)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	const auto* nc = ActiveWorld().TryGet<aether::NameComponent>(aether::Entity{id});
 	if (nc == nullptr || buf == nullptr || bufLen <= 0)
 	{
@@ -118,35 +142,44 @@ AE_SCRIPT_API std::int32_t aether_get_name(std::uint32_t id, char* buf, std::int
 	std::memcpy(buf, nc->name.data(), static_cast<size_t>(copy));
 	buf[copy] = '\0';
 	return copy;
+	});
 }
 
 AE_SCRIPT_API void aether_add_transform(std::uint32_t id)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	ActiveWorld().EmplaceOrReplace<aether::TransformComponent>(aether::Entity{id}, aether::TransformComponent{.localToWorld = glm::mat4(1.0f)});
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_has_transform(std::uint32_t id)
-{
-	return ActiveWorld().TryGet<aether::TransformComponent>(aether::Entity{id}) != nullptr ? 1 : 0;
-}
+{ return SafeExport([&] -> std::int32_t { return ActiveWorld().TryGet<aether::TransformComponent>(aether::Entity{id}) != nullptr ? 1 : 0; }); }
 
 AE_SCRIPT_API void aether_remove_transform(std::uint32_t id)
-{
-	ActiveWorld().Remove<aether::TransformComponent>(aether::Entity{id});
-}
+{ SafeExport([&] -> void { ActiveWorld().Remove<aether::TransformComponent>(aether::Entity{id}); }); }
 
 AE_SCRIPT_API Vec3 aether_get_position(std::uint32_t id)
 {
+	return SafeExport([&] -> Vec3
+	{
 	const auto* tc = ActiveWorld().TryGet<aether::TransformComponent>(aether::Entity{id});
 	if (tc == nullptr)
 	{
 		return {};
 	}
 	return FromGlm(glm::vec3(tc->localToWorld[3]));
+	});
 }
 
 AE_SCRIPT_API void aether_set_position(std::uint32_t id, Vec3 pos)
 {
+	SafeExport([&] -> void
+	{
 	aether::World& w = ActiveWorld();
 	const aether::Entity e{id};
 	auto* tc = w.TryGet<aether::TransformComponent>(e);
@@ -158,10 +191,13 @@ AE_SCRIPT_API void aether_set_position(std::uint32_t id, Vec3 pos)
 	m[3] = glm::vec4(ToGlm(pos), 1.0f);
 	aether::ecs::SetWorldTransform(w, e, m);
 	TeleportBodyToTransform(w, e);
+	});
 }
 
 AE_SCRIPT_API Vec3 aether_get_euler(std::uint32_t id)
 {
+	return SafeExport([&] -> Vec3
+	{
 	const auto* tc = ActiveWorld().TryGet<aether::TransformComponent>(aether::Entity{id});
 	if (tc == nullptr)
 	{
@@ -170,10 +206,13 @@ AE_SCRIPT_API Vec3 aether_get_euler(std::uint32_t id)
 	glm::vec3 pos{}, euler{}, scale{};
 	aether::DecomposeTRS(tc->localToWorld, pos, euler, scale);
 	return FromGlm(euler);
+	});
 }
 
 AE_SCRIPT_API void aether_set_euler(std::uint32_t id, Vec3 euler)
 {
+	SafeExport([&] -> void
+	{
 	aether::World& w = ActiveWorld();
 	const aether::Entity e{id};
 	auto* tc = w.TryGet<aether::TransformComponent>(e);
@@ -185,10 +224,13 @@ AE_SCRIPT_API void aether_set_euler(std::uint32_t id, Vec3 euler)
 	aether::DecomposeTRS(tc->localToWorld, pos, curEuler, scale);
 	aether::ecs::SetWorldTransform(w, e, aether::ComposeTransform(pos, ToGlm(euler), scale));
 	TeleportBodyToTransform(w, e);
+	});
 }
 
 AE_SCRIPT_API Vec3 aether_get_scale(std::uint32_t id)
 {
+	return SafeExport([&] -> Vec3
+	{
 	const auto* tc = ActiveWorld().TryGet<aether::TransformComponent>(aether::Entity{id});
 	if (tc == nullptr)
 	{
@@ -196,10 +238,13 @@ AE_SCRIPT_API Vec3 aether_get_scale(std::uint32_t id)
 	}
 	const auto& m = tc->localToWorld;
 	return FromGlm(aether::ExtractScale(m));
+	});
 }
 
 AE_SCRIPT_API void aether_set_scale(std::uint32_t id, Vec3 scale)
 {
+	SafeExport([&] -> void
+	{
 	aether::World& w = ActiveWorld();
 	const aether::Entity e{id};
 	auto* tc = w.TryGet<aether::TransformComponent>(e);
@@ -211,38 +256,76 @@ AE_SCRIPT_API void aether_set_scale(std::uint32_t id, Vec3 scale)
 	aether::DecomposeTRS(tc->localToWorld, pos, euler, curScale);
 	aether::ecs::SetWorldTransform(w, e, aether::ComposeTransform(pos, euler, ToGlm(scale)));
 	TeleportBodyToTransform(w, e);
+	});
 }
 
 AE_SCRIPT_API void aether_set_transform(std::uint32_t id, Vec3 pos, Vec3 euler, Vec3 scale)
 {
+	SafeExport([&] -> void
+	{
 	aether::World& w = ActiveWorld();
 	const aether::Entity e{id};
 	aether::ecs::SetWorldTransform(w, e, aether::ComposeTransform(ToGlm(pos), ToGlm(euler), ToGlm(scale)));
 	TeleportBodyToTransform(w, e);
+	});
 }
 
 AE_SCRIPT_API void aether_add_bob(std::uint32_t id, float amplitude, float frequency, float phase)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	ActiveWorld().EmplaceOrReplace<aether::BobComponent>(aether::Entity{id}, aether::BobComponent{.amplitude = amplitude, .frequency = frequency, .phase = phase});
+	});
 }
 
 AE_SCRIPT_API void aether_add_spin(std::uint32_t id, Vec3 eulerDegPerSec)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	ActiveWorld().EmplaceOrReplace<aether::SpinComponent>(aether::Entity{id}, aether::SpinComponent{.eulerDegPerSec = ToGlm(eulerDegPerSec)});
+	});
 }
 
 AE_SCRIPT_API void aether_add_orbit(std::uint32_t id, Vec3 center, float radius, float speedDeg, float startAngleDeg, float yawOffsetDeg, float height)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	ActiveWorld().EmplaceOrReplace<aether::OrbitComponent>(aether::Entity{id}, aether::OrbitComponent{.center = ToGlm(center), .radius = radius, .angularSpeedDeg = speedDeg, .angleDeg = startAngleDeg, .yawOffsetDeg = yawOffsetDeg, .height = height});
+	});
 }
 
 AE_SCRIPT_API void aether_add_material_pulse(std::uint32_t id, Vec3 emissiveA, Vec3 emissiveB, float frequency)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	ActiveWorld().EmplaceOrReplace<aether::MaterialPulseComponent>(aether::Entity{id}, aether::MaterialPulseComponent{.emissiveA = ToGlm(emissiveA), .emissiveB = ToGlm(emissiveB), .frequency = frequency});
+	});
 }
 
 AE_SCRIPT_API void aether_add_script(std::uint32_t id, const char* typeName)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	auto& world = ActiveWorld();
 	const aether::Entity entity{id};
 	auto* scripts = world.TryGet<aether::ScriptComponent>(entity);
@@ -251,40 +334,31 @@ AE_SCRIPT_API void aether_add_script(std::uint32_t id, const char* typeName)
 		scripts = &world.Emplace<aether::ScriptComponent>(entity);
 	}
 	scripts->scripts.push_back(aether::ScriptEntry{.path = typeName != nullptr ? typeName : ""});
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_scene_file_exists(const char* name)
-{
-	return aether::app::scene::ReadSceneFile(name != nullptr ? name : "").has_value() ? 1 : 0;
-}
+{ return SafeExport([&] -> std::int32_t { return aether::app::scene::ReadSceneFile(name != nullptr ? name : "").has_value() ? 1 : 0; }); }
 
 AE_SCRIPT_API std::uint32_t aether_tag_create(const char* name)
-{
-	return aether::TagCreate(name != nullptr ? name : "");
-}
+{ return SafeExport([&] -> std::uint32_t { return aether::TagCreate(name != nullptr ? name : ""); }); }
 
 AE_SCRIPT_API std::uint32_t aether_tag_get_id(const char* name)
-{
-	return aether::TagGetId(name != nullptr ? name : "");
-}
+{ return SafeExport([&] -> std::uint32_t { return aether::TagGetId(name != nullptr ? name : ""); }); }
 
 AE_SCRIPT_API void aether_tag_add(std::uint32_t entityId, std::uint32_t tagId)
-{
-	aether::TagAdd(&ActiveWorld(), entityId, tagId);
-}
+{ SafeExport([&] -> void { aether::TagAdd(&ActiveWorld(), entityId, tagId); }); }
 
 AE_SCRIPT_API std::int32_t aether_tag_has(std::uint32_t entityId, std::uint32_t tagId)
-{
-	return aether::TagHas(&ActiveWorld(), entityId, tagId) ? 1 : 0;
-}
+{ return SafeExport([&] -> std::int32_t { return aether::TagHas(&ActiveWorld(), entityId, tagId) ? 1 : 0; }); }
 
 AE_SCRIPT_API void aether_tag_remove(std::uint32_t entityId, std::uint32_t tagId)
-{
-	aether::TagRemove(&ActiveWorld(), entityId, tagId);
-}
+{ SafeExport([&] -> void { aether::TagRemove(&ActiveWorld(), entityId, tagId); }); }
 
 AE_SCRIPT_API std::int32_t aether_world_get_entities_with_transform(std::uint32_t* buf, std::int32_t cap)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	if (buf == nullptr || cap <= 0)
 	{
 		return 0;
@@ -299,10 +373,13 @@ AE_SCRIPT_API std::int32_t aether_world_get_entities_with_transform(std::uint32_
 		buf[n++] = aether::World::FromEntt(enttE).id;
 	}
 	return n;
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_tag_get_entities(std::uint32_t tagId, std::uint32_t* buf, std::int32_t cap)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	if (buf == nullptr || cap <= 0)
 	{
 		return 0;
@@ -318,4 +395,5 @@ AE_SCRIPT_API std::int32_t aether_tag_get_entities(std::uint32_t tagId, std::uin
 		        }
 	        });
 	return n;
+	});
 }

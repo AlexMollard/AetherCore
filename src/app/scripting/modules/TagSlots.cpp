@@ -89,13 +89,16 @@ namespace
 			return UINT32_MAX;
 		}
 
-		void AddTag(World* world, uint32_t entityId, uint32_t tagId)
+	void AddTag(World* world, uint32_t entityId, uint32_t tagId)
+	{
+		// Reached from scripts (aether_tag_add) and the editor/serializer alike, both
+		// with raw ids: a fabricated or destroyed id must not grow the TagSlot sparse
+		// sets (the tag would then silently ride along on a recycled id).
+		if (world->GetRegistry().valid(World::ToEntt(Entity{entityId})) && tagId < kMaxTagSlots)
 		{
-			if (tagId < kMaxTagSlots)
-			{
-				m_tagOps[tagId].add(world, entityId);
-			}
+			m_tagOps[tagId].add(world, entityId);
 		}
+	}
 
 		bool HasTag(World* world, uint32_t entityId, uint32_t tagId) const
 		{

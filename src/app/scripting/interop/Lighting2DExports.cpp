@@ -26,6 +26,8 @@ namespace
 
 AE_SCRIPT_API void aether_light2d_submit_light(float x, float y, float radius, Vec3 color, float intensity, int castsShadow)
 {
+	SafeExport([&] -> void
+	{
 	auto* reg = Registry();
 	if (reg == nullptr || static_cast<int>(reg->lights.size()) >= kMaxLights || radius <= 0.0f)
 	{
@@ -38,11 +40,14 @@ AE_SCRIPT_API void aether_light2d_submit_light(float x, float y, float radius, V
 	        .intensity = intensity,
 	        .castsShadow = castsShadow != 0,
 	});
+	});
 }
 
 // A capsule occluder: the segment a->b thickened by `radius`. Shadow-only; it does not draw anything.
 AE_SCRIPT_API void aether_light2d_submit_occluder_capsule(float ax, float ay, float bx, float by, float radius)
 {
+	SafeExport([&] -> void
+	{
 	auto* reg = Registry();
 	if (reg == nullptr || static_cast<int>(reg->occluders.size()) >= kMaxOccluders || radius <= 0.0f)
 	{
@@ -54,4 +59,5 @@ AE_SCRIPT_API void aether_light2d_submit_occluder_capsule(float ax, float ay, fl
 	occ.textureIndex = 0;
 	occ.flags = aether::kOccluder2DCapsule;
 	reg->occluders.push_back(occ);
+	});
 }

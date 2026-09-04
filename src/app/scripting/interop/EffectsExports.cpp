@@ -27,6 +27,8 @@ namespace
 
 AE_SCRIPT_API void aether_effect_set(std::uint32_t id, const char* name)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.effects == nullptr || ctx.assets == nullptr)
 	{
@@ -37,24 +39,17 @@ AE_SCRIPT_API void aether_effect_set(std::uint32_t id, const char* name)
 	{
 		AE_WARN(aether::LogCategory::App, "set_effect: unknown effect '{}'", name != nullptr ? name : "");
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_effect_set_color(std::uint32_t id, Vec3 color)
-{
-	MutateEffectParams(id, [&](aether::EffectParams& p) { p.tint = glm::vec4(ToGlm(color), p.tint.w); });
-}
+{ SafeExport([&] -> void { MutateEffectParams(id, [&](aether::EffectParams& p) { p.tint = glm::vec4(ToGlm(color), p.tint.w); }); }); }
 
 AE_SCRIPT_API void aether_effect_set_speed(std::uint32_t id, float speed)
-{
-	MutateEffectParams(id, [&](aether::EffectParams& p) { p.speed = speed; });
-}
+{ SafeExport([&] -> void { MutateEffectParams(id, [&](aether::EffectParams& p) { p.speed = speed; }); }); }
 
 AE_SCRIPT_API void aether_effect_set_scale(std::uint32_t id, float scale)
-{
-	MutateEffectParams(id, [&](aether::EffectParams& p) { p.scale = scale; });
-}
+{ SafeExport([&] -> void { MutateEffectParams(id, [&](aether::EffectParams& p) { p.scale = scale; }); }); }
 
 AE_SCRIPT_API void aether_effect_set_intensity(std::uint32_t id, float intensity)
-{
-	MutateEffectParams(id, [&](aether::EffectParams& p) { p.intensity = intensity; });
-}
+{ SafeExport([&] -> void { MutateEffectParams(id, [&](aether::EffectParams& p) { p.intensity = intensity; }); }); }

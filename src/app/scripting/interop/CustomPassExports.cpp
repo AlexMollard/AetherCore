@@ -26,24 +26,32 @@ namespace
 
 AE_SCRIPT_API void aether_custompass_register(const char* name, const char* shader, int stage)
 {
+	SafeExport([&] -> void
+	{
 	auto* reg = Registry();
 	if (reg == nullptr || name == nullptr)
 	{
 		return;
 	}
 	reg->registered[name] = {shader != nullptr ? shader : "", static_cast<aether::CustomPassStage>(stage)};
+	});
 }
 
 AE_SCRIPT_API void aether_custompass_unregister(const char* name)
 {
+	SafeExport([&] -> void
+	{
 	if (auto* reg = Registry(); reg != nullptr && name != nullptr)
 	{
 		reg->registered.erase(name);
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_custompass_submit(const char* name, const Vec4* data, int count, Vec4 params, Vec4 color0, Vec4 color1)
 {
+	SafeExport([&] -> void
+	{
 	auto* reg = Registry();
 	if (reg == nullptr || name == nullptr)
 	{
@@ -72,4 +80,5 @@ AE_SCRIPT_API void aether_custompass_submit(const char* name, const Vec4* data, 
 		}
 	}
 	reg->frame.passes.push_back(std::move(draw));
+	});
 }

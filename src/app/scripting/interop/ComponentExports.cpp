@@ -146,20 +146,31 @@ namespace
 
 AE_SCRIPT_API int aether_component_has(std::uint32_t id, const char* type)
 {
+	return SafeExport([&] -> int
+	{
 	const ComponentType* ct = FindType(type);
 	if (ct == nullptr || ct->has == nullptr)
 	{
 		return 0;
 	}
 	return ct->has(ActiveWorld(), aether::Entity{id}) ? 1 : 0;
+	});
 }
 
 // Adds with the component's declared defaults, or does nothing if it is already there -
 // so calling this from OnAttach is idempotent across a hot reload.
 AE_SCRIPT_API int aether_component_add(std::uint32_t id, const char* type)
 {
+	return SafeExport([&] -> int
+	{
 	const ComponentType* ct = FindType(type);
 	if (ct == nullptr || ct->emplaceDefault == nullptr)
+	{
+		return 0;
+	}
+	// emplaceDefault attaches the component to the id it is handed; a fabricated or
+	// destroyed id must be refused instead of growing the component's sparse set.
+	if (!EntityAlive(id))
 	{
 		return 0;
 	}
@@ -170,10 +181,13 @@ AE_SCRIPT_API int aether_component_add(std::uint32_t id, const char* type)
 		return 1;
 	}
 	return ct->emplaceDefault(world, entity) != nullptr ? 1 : 0;
+	});
 }
 
 AE_SCRIPT_API int aether_component_remove(std::uint32_t id, const char* type)
 {
+	return SafeExport([&] -> int
+	{
 	const ComponentType* ct = FindType(type);
 	if (ct == nullptr || ct->remove == nullptr)
 	{
@@ -181,10 +195,13 @@ AE_SCRIPT_API int aether_component_remove(std::uint32_t id, const char* type)
 	}
 	ct->remove(ActiveWorld(), aether::Entity{id});
 	return 1;
+	});
 }
 
 AE_SCRIPT_API int aether_component_get_number(std::uint32_t id, const char* type, const char* field, double* out)
 {
+	return SafeExport([&] -> int
+	{
 	const Resolved r = Resolve(id, type, field);
 	if (!r.Ok() || out == nullptr || r.field->get == nullptr)
 	{
@@ -192,10 +209,13 @@ AE_SCRIPT_API int aether_component_get_number(std::uint32_t id, const char* type
 	}
 	const FieldValue v = r.field->get(r.instance);
 	return ReadNumber(v, *out) ? 1 : 0;
+	});
 }
 
 AE_SCRIPT_API int aether_component_set_number(std::uint32_t id, const char* type, const char* field, double value)
 {
+	return SafeExport([&] -> int
+	{
 	const Resolved r = Resolve(id, type, field);
 	if (!r.Ok() || r.field->get == nullptr || r.field->set == nullptr)
 	{
@@ -215,12 +235,15 @@ AE_SCRIPT_API int aether_component_set_number(std::uint32_t id, const char* type
 		r.type->postSet(ActiveWorld(), aether::Entity{id});
 	}
 	return 1;
+	});
 }
 
 // Vec2/Vec3/Vec4 and both colour types share one export: they are all a glm::vec4 behind
 // the FieldValue, and the managed wrapper knows how many components it asked for.
 AE_SCRIPT_API int aether_component_get_vector(std::uint32_t id, const char* type, const char* field, Vec4* out)
 {
+	return SafeExport([&] -> int
+	{
 	const Resolved r = Resolve(id, type, field);
 	if (!r.Ok() || out == nullptr || r.field->get == nullptr)
 	{
@@ -233,10 +256,13 @@ AE_SCRIPT_API int aether_component_get_vector(std::uint32_t id, const char* type
 	}
 	*out = Vec4{v.vec.x, v.vec.y, v.vec.z, v.vec.w};
 	return 1;
+	});
 }
 
 AE_SCRIPT_API int aether_component_set_vector(std::uint32_t id, const char* type, const char* field, Vec4 value)
 {
+	return SafeExport([&] -> int
+	{
 	const Resolved r = Resolve(id, type, field);
 	if (!r.Ok() || r.field->get == nullptr || r.field->set == nullptr)
 	{
@@ -254,12 +280,15 @@ AE_SCRIPT_API int aether_component_set_vector(std::uint32_t id, const char* type
 		r.type->postSet(ActiveWorld(), aether::Entity{id});
 	}
 	return 1;
+	});
 }
 
 // Returns bytes written, or -1 when the field is not a string. Truncates rather than
 // failing, matching the other string-returning exports.
 AE_SCRIPT_API int aether_component_get_string(std::uint32_t id, const char* type, const char* field, char* buffer, int capacity)
 {
+	return SafeExport([&] -> int
+	{
 	const Resolved r = Resolve(id, type, field);
 	if (!r.Ok() || buffer == nullptr || capacity <= 0 || r.field->get == nullptr)
 	{
@@ -273,10 +302,13 @@ AE_SCRIPT_API int aether_component_get_string(std::uint32_t id, const char* type
 	const int written = static_cast<int>(v.str.size() < static_cast<std::size_t>(capacity) ? v.str.size() : static_cast<std::size_t>(capacity));
 	std::memcpy(buffer, v.str.data(), static_cast<std::size_t>(written));
 	return written;
+	});
 }
 
 AE_SCRIPT_API int aether_component_set_string(std::uint32_t id, const char* type, const char* field, const char* value)
 {
+	return SafeExport([&] -> int
+	{
 	const Resolved r = Resolve(id, type, field);
 	if (!r.Ok() || value == nullptr || r.field->get == nullptr || r.field->set == nullptr)
 	{
@@ -294,4 +326,5 @@ AE_SCRIPT_API int aether_component_set_string(std::uint32_t id, const char* type
 		r.type->postSet(ActiveWorld(), aether::Entity{id});
 	}
 	return 1;
+	});
 }

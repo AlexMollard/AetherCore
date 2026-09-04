@@ -18,6 +18,8 @@ using namespace aether::app::scripting::interop;
 // shutdown to run gets to run it. A script that called std::exit here would skip the save.
 AE_SCRIPT_API void aether_app_quit()
 {
+	SafeExport([&] -> void
+	{
 	auto* services = ActiveContext().services;
 	if (services == nullptr)
 	{
@@ -27,4 +29,5 @@ AE_SCRIPT_API void aether_app_quit()
 	{
 		platform->GetWindow().RequestClose();
 	}
+	});
 }

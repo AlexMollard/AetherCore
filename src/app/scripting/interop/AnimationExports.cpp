@@ -275,17 +275,15 @@ namespace
 } // namespace
 
 AE_SCRIPT_API std::int32_t aether_anim_add(std::uint32_t id, const char* animPath, std::int32_t lockRoot)
-{
-	return AddAnimationImpl(ActiveWorld(), id, animPath, lockRoot != 0);
-}
+{ return SafeExport([&] -> std::int32_t { return AddAnimationImpl(ActiveWorld(), id, animPath, lockRoot != 0); }); }
 
 AE_SCRIPT_API std::int32_t aether_anim_load_external(std::uint32_t id, const char* animPath)
-{
-	return AddAnimationImpl(ActiveWorld(), id, animPath, false);
-}
+{ return SafeExport([&] -> std::int32_t { return AddAnimationImpl(ActiveWorld(), id, animPath, false); }); }
 
 AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	auto& world = ActiveWorld();
 	if (FindSmcOrSpawned(world, id) == nullptr)
@@ -303,10 +301,13 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 	{
 		aether::CompileAnimations(world, id);
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_anim_clear_pending(std::uint32_t id)
 {
+	SafeExport([&] -> void
+	{
 	auto& w = ActiveWorld();
 	const auto clearFn = [](aether::SkinnedMeshComponent& smc)
 	{
@@ -317,10 +318,13 @@ AE_SCRIPT_API void aether_anim_clear_pending(std::uint32_t id)
 		clearFn(*smc);
 	}
 	ForEachSpawnedSmc(w, id, clearFn);
+	});
 }
 
 AE_SCRIPT_API void aether_anim_set_clip(std::uint32_t id, std::int32_t clipIndex)
 {
+	SafeExport([&] -> void
+	{
 	if (clipIndex < 0)
 	{
 		return;
@@ -337,48 +341,66 @@ AE_SCRIPT_API void aether_anim_set_clip(std::uint32_t id, std::int32_t clipIndex
 		setClip(*smc);
 	}
 	ForEachSpawnedSmc(w, id, setClip);
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_anim_get_current(std::uint32_t id)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
 	return smc != nullptr ? static_cast<std::int32_t>(smc->clipIndex) : -1;
+	});
 }
 
 AE_SCRIPT_API void aether_anim_set_playback_speed(std::uint32_t id, float speed)
 {
+	SafeExport([&] -> void
+	{
 	auto& w = ActiveWorld();
 	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 	{
 		smc->playbackSpeed = speed;
 	}
 	ForEachSpawnedSmc(w, id, [speed](aether::SkinnedMeshComponent& smc) { smc.playbackSpeed = speed; });
+	});
 }
 
 AE_SCRIPT_API float aether_anim_get_playback_speed(std::uint32_t id)
 {
+	return SafeExport([&] -> float
+	{
 	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
 	return smc != nullptr ? smc->playbackSpeed : 0.0f;
+	});
 }
 
 AE_SCRIPT_API void aether_anim_set_time(std::uint32_t id, float t)
 {
+	SafeExport([&] -> void
+	{
 	auto& w = ActiveWorld();
 	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 	{
 		smc->animTime = t;
 	}
 	ForEachSpawnedSmc(w, id, [t](aether::SkinnedMeshComponent& smc) { smc.animTime = t; });
+	});
 }
 
 AE_SCRIPT_API float aether_anim_get_time(std::uint32_t id)
 {
+	return SafeExport([&] -> float
+	{
 	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
 	return smc != nullptr ? smc->animTime : 0.0f;
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_anim_get_count(std::uint32_t id)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
 	if (smc == nullptr)
 	{
@@ -386,10 +408,13 @@ AE_SCRIPT_API std::int32_t aether_anim_get_count(std::uint32_t id)
 	}
 	const auto dbCount = smc->animDb != nullptr ? smc->animDb->GetClipCount() : 0;
 	return static_cast<std::int32_t>(dbCount + smc->pendingExternalAnims.size());
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_anim_get_name(std::uint32_t id, std::int32_t index, char* buf, std::int32_t bufLen)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	if (buf == nullptr || bufLen <= 0 || index < 0)
 	{
 		return 0;
@@ -421,10 +446,13 @@ AE_SCRIPT_API std::int32_t aether_anim_get_name(std::uint32_t id, std::int32_t i
 	std::memcpy(buf, name.data(), static_cast<size_t>(copy));
 	buf[copy] = '\0';
 	return copy;
+	});
 }
 
 AE_SCRIPT_API float aether_anim_get_duration(std::uint32_t id)
 {
+	return SafeExport([&] -> float
+	{
 	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
 	if (smc == nullptr)
 	{
@@ -449,10 +477,13 @@ AE_SCRIPT_API float aether_anim_get_duration(std::uint32_t id)
 		return dur;
 	}
 	return 0.0f;
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_anim_find(std::uint32_t id, const char* name)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
 	if (smc == nullptr || name == nullptr)
 	{
@@ -474,10 +505,13 @@ AE_SCRIPT_API std::int32_t aether_anim_find(std::uint32_t id, const char* name)
 		}
 	}
 	return -1;
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_anim_get_entities_with_animator(std::uint32_t* buf, std::int32_t cap)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	if (buf == nullptr || cap <= 0)
 	{
 		return 0;
@@ -492,10 +526,17 @@ AE_SCRIPT_API std::int32_t aether_anim_get_entities_with_animator(std::uint32_t*
 		buf[n++] = aether::World::FromEntt(enttE).id;
 	}
 	return n;
+	});
 }
 
 AE_SCRIPT_API void aether_anim_set_blend(std::uint32_t id, std::int32_t secondaryClipIndex, float transitionSpeed)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	if (secondaryClipIndex < 0)
 	{
 		return;
@@ -519,10 +560,13 @@ AE_SCRIPT_API void aether_anim_set_blend(std::uint32_t id, std::int32_t secondar
 		applyBlend();
 	}
 	ForEachSpawnedSmc(w, id, [&](aether::SkinnedMeshComponent&) { applyBlend(); });
+	});
 }
 
 AE_SCRIPT_API void aether_anim_set_root_motion_enabled(std::uint32_t id, std::int32_t enabled)
 {
+	SafeExport([&] -> void
+	{
 	auto& w = ActiveWorld();
 	const aether::Entity entity{id};
 	const bool on = enabled != 0;
@@ -539,16 +583,22 @@ AE_SCRIPT_API void aether_anim_set_root_motion_enabled(std::uint32_t id, std::in
 			        comp->enabled = on;
 		        }
 	        });
+	});
 }
 
 AE_SCRIPT_API std::int32_t aether_anim_get_root_motion_enabled(std::uint32_t id)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	const auto* rmComp = ActiveWorld().TryGet<aether::RootMotionComponent>(aether::Entity{id});
 	return rmComp != nullptr && rmComp->enabled ? 1 : 0;
+	});
 }
 
 AE_SCRIPT_API Vec3 aether_anim_get_root_motion_delta(std::uint32_t id)
 {
+	return SafeExport([&] -> Vec3
+	{
 	// Root motion is not implemented: poses are sampled on the GPU and the hips are never
 	// read back, so nothing writes accumulatedDelta and this is always zero. Say so once -
 	// a script driving a character from this sees no movement and no reason for it.
@@ -557,4 +607,5 @@ AE_SCRIPT_API Vec3 aether_anim_get_root_motion_delta(std::uint32_t id)
 	        [] { AE_WARN(aether::LogCategory::Animation, "Animation.GetRootMotionDelta: root motion is not implemented; this always returns zero."); });
 	const auto* rmComp = ActiveWorld().TryGet<aether::RootMotionComponent>(aether::Entity{id});
 	return rmComp != nullptr ? FromGlm(rmComp->accumulatedDelta) : Vec3{};
+	});
 }

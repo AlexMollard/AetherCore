@@ -20,6 +20,14 @@ using namespace aether::app::scripting::interop;
 
 AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 {
+	SafeExport([&] -> void
+	{
+	// The id is parented under (SpawnModel -> SetParent) and gets a NameComponent,
+	// so a dead id would emplace onto the registry before the model even loads.
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	auto& ctx = ActiveContext();
 	auto& w = ActiveWorld();
 	const std::string path = pathC != nullptr ? pathC : "";
@@ -90,10 +98,13 @@ AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 		w.EmplaceOrReplace<aether::MeshSourceComponent>(meshEntity, aether::MeshSourceComponent{.kind = aether::MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(i)});
 		ctx.sceneEntities.push_back(meshEntity);
 	}
+	});
 }
 
 AE_SCRIPT_API std::uint32_t aether_create_mesh(const char* typeC)
 {
+	return SafeExport([&] -> std::uint32_t
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.primitives == nullptr)
 	{
@@ -151,13 +162,16 @@ AE_SCRIPT_API std::uint32_t aether_create_mesh(const char* typeC)
 	entry.kindName = std::string(sv);
 	ctx.meshCache.push_back(std::move(entry));
 	return static_cast<std::uint32_t>(ctx.meshCache.size() - 1);
+	});
 }
 
 AE_SCRIPT_API void aether_add_mesh(std::uint32_t entityId, std::uint32_t meshHandle)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	auto& w = ActiveWorld();
-	if (meshHandle >= ctx.meshCache.size())
+	if (!EntityAlive(entityId) || meshHandle >= ctx.meshCache.size())
 	{
 		return;
 	}
@@ -177,13 +191,16 @@ AE_SCRIPT_API void aether_add_mesh(std::uint32_t entityId, std::uint32_t meshHan
 	{
 		w.EmplaceOrReplace<aether::NameComponent>(e, aether::NameComponent{.name = entry.displayName});
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_set_material(std::uint32_t id, Vec3 color, float metallic, float roughness)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	auto& w = ActiveWorld();
-	if (ctx.assets == nullptr)
+	if (!EntityAlive(id) || ctx.assets == nullptr)
 	{
 		return;
 	}
@@ -194,15 +211,16 @@ AE_SCRIPT_API void aether_set_material(std::uint32_t id, Vec3 color, float metal
 	const aether::Entity e{id};
 	w.EmplaceOrReplace<aether::MaterialInstanceComponent>(e, aether::MaterialInstanceComponent{asset});
 	aether::MaterialSystem::AssignMaterial(w, e, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), asset);
+	});
 }
 
 AE_SCRIPT_API void aether_set_material_color(std::uint32_t id, Vec3 color)
-{
-	aether_set_material(id, color, 0.0f, 0.6f);
-}
+{ SafeExport([&] -> void { aether_set_material(id, color, 0.0f, 0.6f); }); }
 
 AE_SCRIPT_API std::uint32_t aether_make_material(Vec3 color, float metallic, float roughness)
 {
+	return SafeExport([&] -> std::uint32_t
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets == nullptr)
 	{
@@ -213,91 +231,121 @@ AE_SCRIPT_API std::uint32_t aether_make_material(Vec3 color, float metallic, flo
 	asset.metallicFactor = metallic;
 	asset.roughnessFactor = roughness;
 	return ctx.assets->GetMaterialAuthoring().Create(asset);
+	});
 }
 
 AE_SCRIPT_API void aether_bind_material(std::uint32_t entityId, std::uint32_t materialId)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		ctx.assets->GetMaterialAuthoring().Bind(ActiveWorld(), aether::Entity{entityId}, materialId);
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_material_set_color(std::uint32_t materialId, Vec3 color)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		ctx.assets->GetMaterialAuthoring().SetBaseColor(ActiveWorld(), materialId, ToGlm(color));
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_material_set_metallic(std::uint32_t materialId, float value)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		ctx.assets->GetMaterialAuthoring().SetMetallic(ActiveWorld(), materialId, value);
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_material_set_roughness(std::uint32_t materialId, float value)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		ctx.assets->GetMaterialAuthoring().SetRoughness(ActiveWorld(), materialId, value);
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_material_set_emissive(std::uint32_t materialId, Vec3 color)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		ctx.assets->GetMaterialAuthoring().SetEmissive(ActiveWorld(), materialId, ToGlm(color));
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_entity_material_set_color(std::uint32_t entityId, Vec3 color)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		aether::MaterialSystem::SetBaseColor(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), ToGlm(color));
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_entity_material_set_metallic(std::uint32_t entityId, float value)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		aether::MaterialSystem::SetMetallic(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), value);
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_entity_material_set_roughness(std::uint32_t entityId, float value)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		aether::MaterialSystem::SetRoughness(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), value);
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_entity_material_set_emissive(std::uint32_t entityId, Vec3 color)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		aether::MaterialSystem::SetEmissive(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), ToGlm(color));
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_set_material_texture(std::uint32_t entityId, const char* path)
 {
+	SafeExport([&] -> void
+	{
 	auto& ctx = ActiveContext();
 	if (ctx.assets == nullptr)
 	{
@@ -307,4 +355,5 @@ AE_SCRIPT_API void aether_set_material_texture(std::uint32_t entityId, const cha
 	const aether::TextureHandle tex = texReg.Acquire(path != nullptr ? path : "");
 	aether::MaterialSystem::SetAlbedoTexture(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), tex);
 	texReg.Release(tex);
+	});
 }

@@ -41,10 +41,12 @@ namespace
 
 // ── Windows / layout ────────────────────────────────────────────────────────
 // Initial size the next window opens at (FirstUseEver: the user can still resize + it persists).
-AE_SCRIPT_API void aether_editorgui_set_next_window_size(Vec2 size) { ImGui::SetNextWindowSize(V2(size), ImGuiCond_FirstUseEver); }
+AE_SCRIPT_API void aether_editorgui_set_next_window_size(Vec2 size) { SafeExport([&] -> void { ImGui::SetNextWindowSize(V2(size), ImGuiCond_FirstUseEver); }); }
 
 AE_SCRIPT_API std::int32_t aether_editorgui_begin(const char* title, std::int32_t* open)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	bool o = open != nullptr ? (*open != 0) : true;
 	const bool visible = ImGui::Begin(title, open != nullptr ? &o : nullptr);
 	if (open != nullptr)
@@ -52,46 +54,53 @@ AE_SCRIPT_API std::int32_t aether_editorgui_begin(const char* title, std::int32_
 		*open = o ? 1 : 0;
 	}
 	return visible ? 1 : 0;
+	});
 }
-AE_SCRIPT_API void aether_editorgui_end() { ImGui::End(); }
+AE_SCRIPT_API void aether_editorgui_end() { SafeExport([&] -> void { ImGui::End(); }); }
 
 AE_SCRIPT_API std::int32_t aether_editorgui_begin_child(const char* id, Vec2 size, std::int32_t border)
-{
-	return ImGui::BeginChild(id, V2(size), border != 0) ? 1 : 0;
-}
-AE_SCRIPT_API void aether_editorgui_end_child() { ImGui::EndChild(); }
+{ return SafeExport([&] -> std::int32_t { return ImGui::BeginChild(id, V2(size), border != 0) ? 1 : 0; }); }
+AE_SCRIPT_API void aether_editorgui_end_child() { SafeExport([&] -> void { ImGui::EndChild(); }); }
 
-AE_SCRIPT_API void aether_editorgui_same_line() { ImGui::SameLine(); }
+AE_SCRIPT_API void aether_editorgui_same_line() { SafeExport([&] -> void { ImGui::SameLine(); }); }
 // Width of the next framed widget (combo/input/etc.); <0 means "fill to the right edge".
-AE_SCRIPT_API void aether_editorgui_set_next_item_width(float w) { ImGui::SetNextItemWidth(w); }
+AE_SCRIPT_API void aether_editorgui_set_next_item_width(float w) { SafeExport([&] -> void { ImGui::SetNextItemWidth(w); }); }
 // Height of a standard framed widget (font + frame padding) - for centering custom draw-list layout.
-AE_SCRIPT_API float aether_editorgui_frame_height() { return ImGui::GetFrameHeight(); }
-AE_SCRIPT_API Vec2 aether_editorgui_calc_text_size(const char* s) { const ImVec2 v = ImGui::CalcTextSize(s != nullptr ? s : ""); return {v.x, v.y}; }
+AE_SCRIPT_API float aether_editorgui_frame_height() { return SafeExport([&] -> float { return ImGui::GetFrameHeight(); }); }
+AE_SCRIPT_API Vec2 aether_editorgui_calc_text_size(const char* s) { return SafeExport([&] -> Vec2 { const ImVec2 v = ImGui::CalcTextSize(s != nullptr ? s : ""); return {v.x, v.y}; }); }
 // Clip subsequent draw-list drawing to a rect (e.g. a node's interior so text never spills). Must be
 // balanced with pop_clip_rect.
-AE_SCRIPT_API void aether_editorgui_push_clip_rect(Vec2 mn, Vec2 mx, std::int32_t intersect) { ImGui::GetWindowDrawList()->PushClipRect(V2(mn), V2(mx), intersect != 0); }
-AE_SCRIPT_API void aether_editorgui_pop_clip_rect() { ImGui::GetWindowDrawList()->PopClipRect(); }
-AE_SCRIPT_API void aether_editorgui_separator() { ImGui::Separator(); }
-AE_SCRIPT_API void aether_editorgui_spacing() { ImGui::Spacing(); }
+AE_SCRIPT_API void aether_editorgui_push_clip_rect(Vec2 mn, Vec2 mx, std::int32_t intersect) { SafeExport([&] -> void { ImGui::GetWindowDrawList()->PushClipRect(V2(mn), V2(mx), intersect != 0); }); }
+AE_SCRIPT_API void aether_editorgui_pop_clip_rect() { SafeExport([&] -> void { ImGui::GetWindowDrawList()->PopClipRect(); }); }
+AE_SCRIPT_API void aether_editorgui_separator() { SafeExport([&] -> void { ImGui::Separator(); }); }
+AE_SCRIPT_API void aether_editorgui_spacing() { SafeExport([&] -> void { ImGui::Spacing(); }); }
 AE_SCRIPT_API Vec2 aether_editorgui_content_avail()
 {
+	return SafeExport([&] -> Vec2
+	{
 	const ImVec2 a = ImGui::GetContentRegionAvail();
 	return {a.x, a.y};
+	});
 }
 AE_SCRIPT_API Vec2 aether_editorgui_cursor_screen_pos()
 {
+	return SafeExport([&] -> Vec2
+	{
 	const ImVec2 p = ImGui::GetCursorScreenPos();
 	return {p.x, p.y};
+	});
 }
-AE_SCRIPT_API void aether_editorgui_set_cursor_screen_pos(Vec2 p) { ImGui::SetCursorScreenPos(V2(p)); }
+AE_SCRIPT_API void aether_editorgui_set_cursor_screen_pos(Vec2 p) { SafeExport([&] -> void { ImGui::SetCursorScreenPos(V2(p)); }); }
 
 // ── Text / widgets ──────────────────────────────────────────────────────────
-AE_SCRIPT_API void aether_editorgui_text(const char* s) { ImGui::TextUnformatted(s); }
-AE_SCRIPT_API void aether_editorgui_text_colored(Vec4 col, const char* s) { ImGui::TextColored(V4(col), "%s", s); }
-AE_SCRIPT_API std::int32_t aether_editorgui_button(const char* label, Vec2 size) { return ImGui::Button(label, V2(size)) ? 1 : 0; }
-AE_SCRIPT_API std::int32_t aether_editorgui_small_button(const char* label) { return ImGui::SmallButton(label) ? 1 : 0; }
+AE_SCRIPT_API void aether_editorgui_text(const char* s) { SafeExport([&] -> void { ImGui::TextUnformatted(s); }); }
+AE_SCRIPT_API void aether_editorgui_text_colored(Vec4 col, const char* s) { SafeExport([&] -> void { ImGui::TextColored(V4(col), "%s", s); }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_button(const char* label, Vec2 size) { return SafeExport([&] -> std::int32_t { return ImGui::Button(label, V2(size)) ? 1 : 0; }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_small_button(const char* label) { return SafeExport([&] -> std::int32_t { return ImGui::SmallButton(label) ? 1 : 0; }); }
 AE_SCRIPT_API std::int32_t aether_editorgui_checkbox(const char* label, std::int32_t* v)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	bool b = v != nullptr && *v != 0;
 	const bool changed = ImGui::Checkbox(label, &b);
 	if (v != nullptr)
@@ -99,38 +108,47 @@ AE_SCRIPT_API std::int32_t aether_editorgui_checkbox(const char* label, std::int
 		*v = b ? 1 : 0;
 	}
 	return changed ? 1 : 0;
+	});
 }
 AE_SCRIPT_API std::int32_t aether_editorgui_input_text(const char* label, char* buf, std::int32_t bufLen)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	if (buf == nullptr || bufLen <= 0)
 	{
 		return 0;
 	}
 	return ImGui::InputText(label, buf, static_cast<std::size_t>(bufLen)) ? 1 : 0;
+	});
 }
 AE_SCRIPT_API std::int32_t aether_editorgui_input_text_multiline(const char* label, char* buf, std::int32_t bufLen, Vec2 size)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	if (buf == nullptr || bufLen <= 0)
 	{
 		return 0;
 	}
 	// Word-wrap long lines instead of scrolling horizontally, so the whole block stays visible.
 	return ImGui::InputTextMultiline(label, buf, static_cast<std::size_t>(bufLen), V2(size), ImGuiInputTextFlags_WordWrap) ? 1 : 0;
+	});
 }
-AE_SCRIPT_API std::int32_t aether_editorgui_input_float(const char* label, float* v) { return ImGui::InputFloat(label, v) ? 1 : 0; }
-AE_SCRIPT_API std::int32_t aether_editorgui_selectable(const char* label, std::int32_t selected) { return ImGui::Selectable(label, selected != 0) ? 1 : 0; }
+AE_SCRIPT_API std::int32_t aether_editorgui_input_float(const char* label, float* v) { return SafeExport([&] -> std::int32_t { return ImGui::InputFloat(label, v) ? 1 : 0; }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_selectable(const char* label, std::int32_t selected) { return SafeExport([&] -> std::int32_t { return ImGui::Selectable(label, selected != 0) ? 1 : 0; }); }
 // Open-ended combo: returns 1 while the popup is open; fill it with your own filter box + selectables,
 // then call end_combo (only if this returned 1). For building filterable pickers.
-AE_SCRIPT_API std::int32_t aether_editorgui_begin_combo(const char* label, const char* preview) { return ImGui::BeginCombo(label, preview) ? 1 : 0; }
-AE_SCRIPT_API void aether_editorgui_end_combo() { ImGui::EndCombo(); }
+AE_SCRIPT_API std::int32_t aether_editorgui_begin_combo(const char* label, const char* preview) { return SafeExport([&] -> std::int32_t { return ImGui::BeginCombo(label, preview) ? 1 : 0; }); }
+AE_SCRIPT_API void aether_editorgui_end_combo() { SafeExport([&] -> void { ImGui::EndCombo(); }); }
 // Focus the next widget (offset 0) - e.g. a filter field the moment its popup opens.
-AE_SCRIPT_API void aether_editorgui_set_keyboard_focus_here(std::int32_t offset) { ImGui::SetKeyboardFocusHere(offset); }
-AE_SCRIPT_API std::int32_t aether_editorgui_tree_node(const char* label) { return ImGui::TreeNode(label) ? 1 : 0; }
-AE_SCRIPT_API void aether_editorgui_tree_pop() { ImGui::TreePop(); }
+AE_SCRIPT_API void aether_editorgui_set_keyboard_focus_here(std::int32_t offset) { SafeExport([&] -> void { ImGui::SetKeyboardFocusHere(offset); }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_tree_node(const char* label) { return SafeExport([&] -> std::int32_t { return ImGui::TreeNode(label) ? 1 : 0; }); }
+AE_SCRIPT_API void aether_editorgui_tree_pop() { SafeExport([&] -> void { ImGui::TreePop(); }); }
 
 // Combo over a '\n'-joined items string (managed joins string[] with '\n'); returns 1 on change.
 AE_SCRIPT_API std::int32_t aether_editorgui_combo(const char* label, std::int32_t* current, const char* itemsNewlineJoined)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	// ImGui::Combo wants '\0'-separated + double-'\0'-terminated items.
 	std::string items(itemsNewlineJoined != nullptr ? itemsNewlineJoined : "");
 	for (char& c : items)
@@ -148,36 +166,43 @@ AE_SCRIPT_API std::int32_t aether_editorgui_combo(const char* label, std::int32_
 		*current = cur;
 	}
 	return changed ? 1 : 0;
+	});
 }
 
 // ── Canvas draw list ────────────────────────────────────────────────────────
-AE_SCRIPT_API void aether_editorgui_add_line(Vec2 a, Vec2 b, Vec4 col, float thick) { ImGui::GetWindowDrawList()->AddLine(V2(a), V2(b), U32(col), thick); }
-AE_SCRIPT_API void aether_editorgui_add_rect_filled(Vec2 mn, Vec2 mx, Vec4 col, float rounding) { ImGui::GetWindowDrawList()->AddRectFilled(V2(mn), V2(mx), U32(col), rounding); }
-AE_SCRIPT_API void aether_editorgui_add_rect(Vec2 mn, Vec2 mx, Vec4 col, float rounding, float thick) { ImGui::GetWindowDrawList()->AddRect(V2(mn), V2(mx), U32(col), rounding, 0, thick); }
-AE_SCRIPT_API void aether_editorgui_add_bezier(Vec2 p1, Vec2 p2, Vec2 p3, Vec2 p4, Vec4 col, float thick) { ImGui::GetWindowDrawList()->AddBezierCubic(V2(p1), V2(p2), V2(p3), V2(p4), U32(col), thick); }
-AE_SCRIPT_API void aether_editorgui_add_circle_filled(Vec2 c, float r, Vec4 col) { ImGui::GetWindowDrawList()->AddCircleFilled(V2(c), r, U32(col)); }
-AE_SCRIPT_API void aether_editorgui_add_triangle_filled(Vec2 a, Vec2 b, Vec2 c, Vec4 col) { ImGui::GetWindowDrawList()->AddTriangleFilled(V2(a), V2(b), V2(c), U32(col)); }
-AE_SCRIPT_API void aether_editorgui_add_text(Vec2 p, Vec4 col, const char* s) { ImGui::GetWindowDrawList()->AddText(V2(p), U32(col), s); }
+AE_SCRIPT_API void aether_editorgui_add_line(Vec2 a, Vec2 b, Vec4 col, float thick) { SafeExport([&] -> void { ImGui::GetWindowDrawList()->AddLine(V2(a), V2(b), U32(col), thick); }); }
+AE_SCRIPT_API void aether_editorgui_add_rect_filled(Vec2 mn, Vec2 mx, Vec4 col, float rounding) { SafeExport([&] -> void { ImGui::GetWindowDrawList()->AddRectFilled(V2(mn), V2(mx), U32(col), rounding); }); }
+AE_SCRIPT_API void aether_editorgui_add_rect(Vec2 mn, Vec2 mx, Vec4 col, float rounding, float thick) { SafeExport([&] -> void { ImGui::GetWindowDrawList()->AddRect(V2(mn), V2(mx), U32(col), rounding, 0, thick); }); }
+AE_SCRIPT_API void aether_editorgui_add_bezier(Vec2 p1, Vec2 p2, Vec2 p3, Vec2 p4, Vec4 col, float thick) { SafeExport([&] -> void { ImGui::GetWindowDrawList()->AddBezierCubic(V2(p1), V2(p2), V2(p3), V2(p4), U32(col), thick); }); }
+AE_SCRIPT_API void aether_editorgui_add_circle_filled(Vec2 c, float r, Vec4 col) { SafeExport([&] -> void { ImGui::GetWindowDrawList()->AddCircleFilled(V2(c), r, U32(col)); }); }
+AE_SCRIPT_API void aether_editorgui_add_triangle_filled(Vec2 a, Vec2 b, Vec2 c, Vec4 col) { SafeExport([&] -> void { ImGui::GetWindowDrawList()->AddTriangleFilled(V2(a), V2(b), V2(c), U32(col)); }); }
+AE_SCRIPT_API void aether_editorgui_add_text(Vec2 p, Vec4 col, const char* s) { SafeExport([&] -> void { ImGui::GetWindowDrawList()->AddText(V2(p), U32(col), s); }); }
 
 // Semantic theme colour (0..10; see the ThemeColor map + EditorColor enum). Follows the live theme.
-AE_SCRIPT_API Vec4 aether_editorgui_theme_color(std::int32_t id) { const ImVec4 c = ThemeColor(id); return {c.x, c.y, c.z, c.w}; }
+AE_SCRIPT_API Vec4 aether_editorgui_theme_color(std::int32_t id) { return SafeExport([&] -> Vec4 { const ImVec4 c = ThemeColor(id); return {c.x, c.y, c.z, c.w}; }); }
 
 // ── Interaction ─────────────────────────────────────────────────────────────
-AE_SCRIPT_API std::int32_t aether_editorgui_invisible_button(const char* id, Vec2 size) { return ImGui::InvisibleButton(id, V2(size)) ? 1 : 0; }
-AE_SCRIPT_API std::int32_t aether_editorgui_is_item_active() { return ImGui::IsItemActive() ? 1 : 0; }
-AE_SCRIPT_API std::int32_t aether_editorgui_is_item_hovered() { return ImGui::IsItemHovered() ? 1 : 0; }
-AE_SCRIPT_API std::int32_t aether_editorgui_is_item_clicked() { return ImGui::IsItemClicked() ? 1 : 0; }
+AE_SCRIPT_API std::int32_t aether_editorgui_invisible_button(const char* id, Vec2 size) { return SafeExport([&] -> std::int32_t { return ImGui::InvisibleButton(id, V2(size)) ? 1 : 0; }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_is_item_active() { return SafeExport([&] -> std::int32_t { return ImGui::IsItemActive() ? 1 : 0; }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_is_item_hovered() { return SafeExport([&] -> std::int32_t { return ImGui::IsItemHovered() ? 1 : 0; }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_is_item_clicked() { return SafeExport([&] -> std::int32_t { return ImGui::IsItemClicked() ? 1 : 0; }); }
 AE_SCRIPT_API Vec2 aether_editorgui_mouse_pos()
 {
+	return SafeExport([&] -> Vec2
+	{
 	const ImVec2 p = ImGui::GetIO().MousePos;
 	return {p.x, p.y};
+	});
 }
 AE_SCRIPT_API Vec2 aether_editorgui_mouse_drag_delta()
 {
+	return SafeExport([&] -> Vec2
+	{
 	const ImVec2 d = ImGui::GetMouseDragDelta();
 	return {d.x, d.y};
+	});
 }
-AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_dragging() { return ImGui::IsMouseDragging(ImGuiMouseButton_Left) ? 1 : 0; }
-AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_clicked() { return ImGui::IsMouseClicked(ImGuiMouseButton_Left) ? 1 : 0; }
-AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_down() { return ImGui::IsMouseDown(ImGuiMouseButton_Left) ? 1 : 0; }
-AE_SCRIPT_API float aether_editorgui_mouse_wheel() { return ImGui::GetIO().MouseWheel; }
+AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_dragging() { return SafeExport([&] -> std::int32_t { return ImGui::IsMouseDragging(ImGuiMouseButton_Left) ? 1 : 0; }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_clicked() { return SafeExport([&] -> std::int32_t { return ImGui::IsMouseClicked(ImGuiMouseButton_Left) ? 1 : 0; }); }
+AE_SCRIPT_API std::int32_t aether_editorgui_is_mouse_down() { return SafeExport([&] -> std::int32_t { return ImGui::IsMouseDown(ImGuiMouseButton_Left) ? 1 : 0; }); }
+AE_SCRIPT_API float aether_editorgui_mouse_wheel() { return SafeExport([&] -> float { return ImGui::GetIO().MouseWheel; }); }

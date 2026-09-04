@@ -44,6 +44,10 @@ namespace
 {
 	void AddCollider(std::uint32_t id, const aether::ColliderComponent& collider, std::int32_t dynamic)
 	{
+		if (!EntityAlive(id))
+		{
+			return;
+		}
 		auto& world = ActiveWorld();
 		const aether::Entity entity{id};
 		world.EmplaceOrReplace<aether::ColliderComponent>(entity, collider);
@@ -52,22 +56,18 @@ namespace
 } // namespace
 
 AE_SCRIPT_API void aether_physics_add_box(std::uint32_t id, Vec3 halfExtents, std::int32_t dynamic)
-{
-	AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Box, .halfExtents = ToGlm(halfExtents)}, dynamic);
-}
+{ SafeExport([&] -> void { AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Box, .halfExtents = ToGlm(halfExtents)}, dynamic); }); }
 
 AE_SCRIPT_API void aether_physics_add_sphere(std::uint32_t id, float radius, std::int32_t dynamic)
-{
-	AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Sphere, .radius = radius}, dynamic);
-}
+{ SafeExport([&] -> void { AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Sphere, .radius = radius}, dynamic); }); }
 
 AE_SCRIPT_API void aether_physics_add_capsule(std::uint32_t id, float halfHeight, float radius, std::int32_t dynamic)
-{
-	AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Capsule, .radius = radius, .halfHeight = halfHeight}, dynamic);
-}
+{ SafeExport([&] -> void { AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Capsule, .radius = radius, .halfHeight = halfHeight}, dynamic); }); }
 
 AE_SCRIPT_API void aether_physics_set_linear_velocity(std::uint32_t id, Vec3 velocity)
 {
+	SafeExport([&] -> void
+	{
 	auto* phys = ActiveContext().physics;
 	if (phys == nullptr)
 	{
@@ -77,10 +77,13 @@ AE_SCRIPT_API void aether_physics_set_linear_velocity(std::uint32_t id, Vec3 vel
 	{
 		phys->SetLinearVelocity(rb->body, ToGlm(velocity));
 	}
+	});
 }
 
 AE_SCRIPT_API Vec3 aether_physics_get_linear_velocity(std::uint32_t id)
 {
+	return SafeExport([&] -> Vec3
+	{
 	if (auto* phys = ActiveContext().physics)
 	{
 		if (const auto* rb = ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id}))
@@ -89,81 +92,104 @@ AE_SCRIPT_API Vec3 aether_physics_get_linear_velocity(std::uint32_t id)
 		}
 	}
 	return {};
+	});
 }
 
 AE_SCRIPT_API Vec3 aether_physics_get_position(std::uint32_t id)
 {
+	return SafeExport([&] -> Vec3
+	{
 	const auto* ps = ActiveWorld().TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
 	return ps != nullptr ? FromGlm(ps->currPosition) : Vec3{};
+	});
 }
 
 AE_SCRIPT_API Vec3 aether_physics_get_scale(std::uint32_t id)
 {
+	return SafeExport([&] -> Vec3
+	{
 	const auto* ps = ActiveWorld().TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
 	return ps != nullptr ? FromGlm(ps->scale) : Vec3{1.0f, 1.0f, 1.0f};
+	});
 }
 
 AE_SCRIPT_API void aether_physics_set_debug_enabled(std::int32_t enabled)
-{
-	aether::SetPhysicsDebugShapesEnabled(enabled != 0);
-}
+{ SafeExport([&] -> void { aether::SetPhysicsDebugShapesEnabled(enabled != 0); }); }
 
 AE_SCRIPT_API std::int32_t aether_physics_is_debug_enabled()
-{
-	return aether::IsPhysicsDebugShapesEnabled() ? 1 : 0;
-}
+{ return SafeExport([&] -> std::int32_t { return aether::IsPhysicsDebugShapesEnabled() ? 1 : 0; }); }
 
 AE_SCRIPT_API void aether_physics_set_angular_velocity(std::uint32_t id, Vec3 velocity)
 {
+	SafeExport([&] -> void
+	{
 	if (auto* phys = ActiveContext().physics)
 	{
 		phys->SetAngularVelocity(BodyOf(id), ToGlm(velocity));
 	}
+	});
 }
 
 AE_SCRIPT_API Vec3 aether_physics_get_angular_velocity(std::uint32_t id)
 {
+	return SafeExport([&] -> Vec3
+	{
 	if (auto* phys = ActiveContext().physics)
 	{
 		return FromGlm(phys->GetAngularVelocity(BodyOf(id)));
 	}
 	return {};
+	});
 }
 
 AE_SCRIPT_API void aether_physics_add_force(std::uint32_t id, Vec3 force)
 {
+	SafeExport([&] -> void
+	{
 	if (auto* phys = ActiveContext().physics)
 	{
 		phys->AddForce(BodyOf(id), ToGlm(force));
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_physics_add_impulse(std::uint32_t id, Vec3 impulse)
 {
+	SafeExport([&] -> void
+	{
 	if (auto* phys = ActiveContext().physics)
 	{
 		phys->AddImpulse(BodyOf(id), ToGlm(impulse));
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_physics_add_torque(std::uint32_t id, Vec3 torque)
 {
+	SafeExport([&] -> void
+	{
 	if (auto* phys = ActiveContext().physics)
 	{
 		phys->AddTorque(BodyOf(id), ToGlm(torque));
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_physics_add_angular_impulse(std::uint32_t id, Vec3 impulse)
 {
+	SafeExport([&] -> void
+	{
 	if (auto* phys = ActiveContext().physics)
 	{
 		phys->AddAngularImpulse(BodyOf(id), ToGlm(impulse));
 	}
+	});
 }
 
 AE_SCRIPT_API void aether_physics_freeze_rotation(std::uint32_t id, std::int32_t x, std::int32_t y, std::int32_t z)
 {
+	SafeExport([&] -> void
+	{
 	auto* phys = ActiveContext().physics;
 	auto* rb = ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id});
 	if (phys == nullptr || rb == nullptr)
@@ -172,10 +198,13 @@ AE_SCRIPT_API void aether_physics_freeze_rotation(std::uint32_t id, std::int32_t
 	}
 	rb->lockRotation = glm::bvec3(x != 0, y != 0, z != 0);
 	phys->RebuildBody(ActiveWorld(), aether::Entity{id});
+	});
 }
 
 AE_SCRIPT_API RaycastHit aether_physics_raycast(Vec3 origin, Vec3 direction, float maxDistance)
 {
+	return SafeExport([&] -> RaycastHit
+	{
 	RaycastHit out;
 	if (auto* phys = ActiveContext().physics)
 	{
@@ -187,10 +216,13 @@ AE_SCRIPT_API RaycastHit aether_physics_raycast(Vec3 origin, Vec3 direction, flo
 		out.entity = r.entity;
 	}
 	return out;
+	});
 }
 
 AE_SCRIPT_API RaycastHit aether_physics_spherecast(Vec3 origin, Vec3 direction, float radius, float maxDistance)
 {
+	return SafeExport([&] -> RaycastHit
+	{
 	RaycastHit out;
 	if (auto* phys = ActiveContext().physics)
 	{
@@ -202,40 +234,57 @@ AE_SCRIPT_API RaycastHit aether_physics_spherecast(Vec3 origin, Vec3 direction, 
 		out.entity = r.entity;
 	}
 	return out;
+	});
 }
 
 namespace
 {
-	std::vector<std::uint32_t> g_overlapCache;
+	// Per-thread: an inbound RPC dispatched on a worker thread (or any second
+	// caller reaching the export between Count() and At()) must not rebind the
+	// result set another script is still indexing.
+	thread_local std::vector<std::uint32_t> g_overlapCache;
 }
 
 AE_SCRIPT_API std::int32_t aether_physics_overlap_sphere(Vec3 center, float radius)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	g_overlapCache.clear();
 	if (auto* phys = ActiveContext().physics)
 	{
 		g_overlapCache = phys->OverlapSphere(ToGlm(center), radius);
 	}
 	return static_cast<std::int32_t>(g_overlapCache.size());
+	});
 }
 
 AE_SCRIPT_API std::uint32_t aether_physics_overlap_at(std::int32_t index)
 {
+	return SafeExport([&] -> std::uint32_t
+	{
 	if (index < 0 || static_cast<std::size_t>(index) >= g_overlapCache.size())
 	{
 		return 0;
 	}
 	return g_overlapCache[static_cast<std::size_t>(index)];
+	});
 }
 
 AE_SCRIPT_API void aether_physics_enable_events(std::uint32_t id)
 {
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
 	auto& world = ActiveWorld();
 	const aether::Entity e{id};
 	if (!world.Has<aether::CollisionEventsComponent>(e))
 	{
 		world.GetRegistry().emplace<aether::CollisionEventsComponent>(aether::World::ToEntt(e));
 	}
+	});
 }
 
 namespace
@@ -267,16 +316,22 @@ namespace
 
 AE_SCRIPT_API std::int32_t aether_physics_event_count(std::uint32_t id, std::int32_t kind)
 {
+	return SafeExport([&] -> std::int32_t
+	{
 	const std::vector<aether::Entity>* list = EventList(id, kind);
 	return list != nullptr ? static_cast<std::int32_t>(list->size()) : 0;
+	});
 }
 
 AE_SCRIPT_API std::uint32_t aether_physics_event_at(std::uint32_t id, std::int32_t kind, std::int32_t index)
 {
+	return SafeExport([&] -> std::uint32_t
+	{
 	const std::vector<aether::Entity>* list = EventList(id, kind);
 	if (list == nullptr || index < 0 || static_cast<std::size_t>(index) >= list->size())
 	{
 		return 0;
 	}
 	return (*list)[static_cast<std::size_t>(index)].id;
+	});
 }

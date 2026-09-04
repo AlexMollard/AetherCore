@@ -4,11 +4,16 @@
 #	pragma clang diagnostic ignored "-Wreturn-type-c-linkage" // POD value returns are part of the fixed managed ABI.
 #endif
 
+#include <algorithm>
 #include <cstdint>
+#include <exception>
+#include <type_traits>
 
 #include <glm/glm.hpp>
 
+#include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
+#include "utils/Logger.hpp"
 
 // The ABI is deliberately blittable: entity ids are uint32, vectors are Vec3
 
@@ -70,5 +75,52 @@ namespace aether::app::scripting::interop
 	[[nodiscard]] inline aether::World& ActiveWorld() noexcept
 	{
 		return *ActiveContext().world;
+	}
+
+	// Managed code hands exports raw uint32 entity ids it can fabricate or hold past
+	// a destroy. entt attaches components to such ids without complaint (growing
+	// sparse sets, leaving the components to silently ride along on the next recycled
+	// id), so every export that emplaces a component - or calls an engine helper that
+	// does - checks aliveness first and quietly refuses dead ids, matching the
+	// TryGet-based getters that already return their failure sentinel.
+	[[nodiscard]] inline bool EntityAlive(std::uint32_t id) noexcept
+	{
+		return ActiveWorld().GetRegistry().valid(aether::World::ToEntt(aether::Entity{id}));
+	}
+
+	// Entity.Destroy is deferred to the end of the script update, so an entity can be
+	// registry-valid for the rest of the frame while already booked for destruction.
+	// Validity as a script should observe it (Entity.Valid) excludes those.
+	[[nodiscard]] inline bool IsPendingDestroy(std::uint32_t id) noexcept
+	{
+		const auto& pending = ActiveContext().pendingDestroys;
+		return std::find(pending.begin(), pending.end(), aether::Entity{id}) != pending.end();
+	}
+
+	// No C++ exception may unwind out of an AE_SCRIPT_API export into managed frames
+	// (LibraryImport / UnmanagedCallersOnly): the CLR cannot unwind them, so what
+	// should be a logged script error instead FailFasts the process. Every export
+	// body runs through this barrier, which reports the failure and returns the
+	// export's zero failure sentinel.
+	template<typename Fn>
+	auto SafeExport(Fn&& fn) noexcept -> decltype(fn())
+	{
+		try
+		{
+			return fn();
+		}
+		catch (const std::exception& ex)
+		{
+			AE_ERROR(aether::LogCategory::App, "Script export failed with exception: {}", ex.what());
+		}
+		catch (...)
+		{
+			AE_ERROR(aether::LogCategory::App, "Script export failed with unknown exception");
+		}
+		using Result = decltype(fn());
+		if constexpr (!std::is_void_v<Result>)
+		{
+			return Result{};
+		}
 	}
 } // namespace aether::app::scripting::interop

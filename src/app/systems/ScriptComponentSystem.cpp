@@ -42,6 +42,23 @@ namespace aether::app
 		// same guard around its own managed dispatch, and two definitions of "publish
 		// the active context" would be two places to get the restore rule wrong.
 		using scripting::ActiveContextScope;
+
+		// Re-resolve a script entry by (entity, index). Returns null when the entity
+		// died or the entry vanished since the last fetch - both possible after any
+		// managed callback (deferred destroy, script list edit, pool realloc).
+		ScriptEntry* FindScriptEntry(World& world, Entity entity, std::uint32_t scriptIndex)
+		{
+			if (!world.GetRegistry().valid(World::ToEntt(entity)))
+			{
+				return nullptr;
+			}
+			auto* sc = world.TryGet<ScriptComponent>(entity);
+			if (sc == nullptr || scriptIndex >= sc->scripts.size())
+			{
+				return nullptr;
+			}
+			return &sc->scripts[scriptIndex];
+		}
 	} // namespace
 
 	ScriptComponentSystem::~ScriptComponentSystem()
@@ -56,14 +73,21 @@ namespace aether::app
 		return it != m_instances.end() ? it->second.handle : 0;
 	}
 
-	bool ScriptComponentSystem::UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& /*ctx*/, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt)
+	bool ScriptComponentSystem::UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt)
 	{
 		const auto* api = cs.Api();
 		if (api == nullptr)
 		{
 			return false;
 		}
-		const std::string& typeName = script.path;
+
+		// The managed calls below (CreateInstance runs the C# constructor, Invoke*
+		// run user callbacks) can add a ScriptComponent to any entity via
+		// aether_add_script, growing the entt pool and dangling every
+		// ScriptComponent*/ScriptEntry& held across the call. So typeName is a copy,
+		// and the entry is re-fetched from the world after every managed call.
+		ScriptEntry* entry = &script;
+		const std::string typeName = entry->path;
 		if (m_failedTypes.contains(typeName))
 		{
 			return false;
@@ -76,7 +100,7 @@ namespace aether::app
 			handle = it->second.handle;
 		}
 
-		if (!script.attached && handle != 0)
+		if (!entry->attached && handle != 0)
 		{
 			if (api->InvokeDetach != nullptr)
 			{
@@ -88,6 +112,11 @@ namespace aether::app
 			}
 			m_instances.erase(key);
 			handle = 0;
+			entry = FindScriptEntry(*ctx.world, entity, scriptIndex);
+			if (entry == nullptr)
+			{
+				return false;
+			}
 		}
 
 		if (handle == 0)
@@ -100,13 +129,20 @@ namespace aether::app
 				return false;
 			}
 			m_instances[key] = Instance{.handle = handle, .typeName = typeName};
-			cs.ApplyProperties(handle, typeName, script.properties);
-			script.attached = false; // a freshly created instance must attach
+			// The constructor may have grown the pool or killed the entry.
+			entry = FindScriptEntry(*ctx.world, entity, scriptIndex);
+			if (entry == nullptr)
+			{
+				// Orphaned instance; PurgeStaleCSharpInstances reclaims it below.
+				return false;
+			}
+			cs.ApplyProperties(handle, typeName, entry->properties);
+			entry->attached = false; // a freshly created instance must attach
 		}
 
-		if (!script.attached)
+		if (!entry->attached)
 		{
-			script.attached = true;
+			entry->attached = true;
 			if (api->InvokeAttach != nullptr)
 			{
 				api->InvokeAttach(handle);
@@ -240,14 +276,24 @@ namespace aether::app
 			{
 				continue;
 			}
-			auto* sc = world.TryGet<ScriptComponent>(e);
-			if (sc == nullptr || sc->scripts.empty())
+			// Re-fetch the component EVERY iteration; nothing derived from it crosses
+			// UpdateCSharpEntity. Its managed callbacks can call World.AddScript on an
+			// entity without a ScriptComponent yet, and that Emplace grows/reallocates
+			// the entt pool - dangling any ScriptComponent* or ScriptEntry& held here.
+			// The per-iteration validity/index re-check also ends the loop cleanly when a
+			// callback strips the component or (despite the deferred destroy) kills the
+			// entity mid-loop.
+			for (std::size_t i = 0;; ++i)
 			{
-				continue;
-			}
-
-			for (std::size_t i = 0; i < sc->scripts.size(); ++i)
-			{
+				if (!reg.valid(World::ToEntt(e)))
+				{
+					break;
+				}
+				auto* sc = world.TryGet<ScriptComponent>(e);
+				if (sc == nullptr || i >= sc->scripts.size())
+				{
+					break;
+				}
 				ScriptEntry& script = sc->scripts[i];
 				if (script.path.empty())
 				{
