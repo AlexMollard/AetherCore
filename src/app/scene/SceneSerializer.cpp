@@ -50,14 +50,50 @@ namespace aether::app::scene
 		// times (bullets, pickups, enemies); without this each spawn re-read the
 		// file and re-ran the TOML parser. Keyed by prefab name; refreshed on save
 		// and cleared when the active project's prefab directory changes.
+		//
+		// The stamp is the source file's mtime as of the parse. Without it the cache
+		// short-circuited ahead of the freshness check that exists precisely because
+		// prefabs get edited behind the editor's back (a git checkout, merge or pull,
+		// or a hand-edit), so an edited .prefab.toml stayed invisible until restart.
+		struct CachedPrefab
+		{
+			SceneDescription description;
+			std::filesystem::file_time_type sourceStamp{};
+		};
 		std::mutex g_prefabCacheMutex;
-		std::unordered_map<std::string, SceneDescription> g_prefabCache;
+		std::unordered_map<std::string, CachedPrefab> g_prefabCache;
 
 		// Serializes concurrent scene/prefab file writes. SaveSceneFile/SavePrefabFile
 		// may be driven from the BackgroundSceneWriter thread as well as the main
 		// thread (MCP scene.save, launcher hand-off); this keeps two writers from
 		// interleaving into the same file.
 		std::mutex g_sceneWriteMutex;
+
+		// WriteText truncates the target in place, so a crash, power loss or full disk
+		// mid-write leaves a half-written .scene.toml where a complete one used to be -
+		// and the cooked .bin is then correctly judged stale, so nothing can recover the
+		// scene. Write a sibling temp file and rename over the target instead: rename is
+		// atomic on both platforms, so the previous good file survives every failure
+		// before it and is replaced whole after it.
+		bool WriteTextAtomic(const std::filesystem::path& path, std::string_view text)
+		{
+			std::filesystem::path temp = path;
+			temp += ".tmp";
+			if (!io::file_util::WriteText(temp, text))
+			{
+				return false;
+			}
+			std::error_code ec;
+			std::filesystem::rename(temp, path, ec);
+			if (ec)
+			{
+				std::error_code removeEc;
+				std::filesystem::remove(temp, removeEc);
+				AE_WARN(LogCategory::App, "WriteTextAtomic: cannot replace '{}': {}", path.string(), ec.message());
+				return false;
+			}
+			return true;
+		}
 
 		void InvalidatePrefabCache()
 		{
@@ -73,6 +109,20 @@ namespace aether::app::scene
 		// TOML source at runtime for a fast, tokenizer-free parse.
 		constexpr std::string_view kSceneBinSuffix = ".scene.bin";
 		constexpr std::string_view kPrefabBinSuffix = ".prefab.bin";
+		// Missing / unreadable source (a pak-only prefab has no loose file) yields a
+		// default stamp, which compares equal on every later lookup - such a prefab
+		// cannot change on disk, so caching it forever is correct.
+		std::filesystem::file_time_type PrefabSourceStamp(const std::string& prefabName)
+		{
+			if (g_projectPrefabsDirectory.empty())
+			{
+				return {};
+			}
+			std::error_code ec;
+			const auto stamp = std::filesystem::last_write_time(g_projectPrefabsDirectory / (prefabName + std::string(kPrefabSuffix)), ec);
+			return ec ? std::filesystem::file_time_type{} : stamp;
+		}
+
 
 		std::string ProjectVirtualPath(std::string_view directory, const std::string& name, std::string_view suffix)
 		{
@@ -284,7 +334,7 @@ namespace aether::app::scene
 
 		{
 			const std::lock_guard<std::mutex> lock(g_sceneWriteMutex);
-			if (!io::file_util::WriteText(path, tomlText))
+			if (!WriteTextAtomic(path, tomlText))
 			{
 				AE_WARN(LogCategory::App, "SavePrefabFile: cannot write '{}'", path.string());
 				return false;
@@ -298,7 +348,7 @@ namespace aether::app::scene
 		// Refresh the cache so the next instantiation sees the saved edit without a re-read.
 		{
 			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
-			g_prefabCache[prefabName] = prefab;
+			g_prefabCache[prefabName] = CachedPrefab{prefab, PrefabSourceStamp(prefabName)};
 		}
 		AE_INFO(LogCategory::App, "Prefab saved: {} ({} entities)", path.string(), prefab.entities.size());
 		return true;
@@ -310,7 +360,12 @@ namespace aether::app::scene
 			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
 			if (const auto it = g_prefabCache.find(prefabName); it != g_prefabCache.end())
 			{
-				return it->second;
+				if (it->second.sourceStamp == PrefabSourceStamp(prefabName))
+				{
+					return it->second.description;
+				}
+				// Edited behind our back: drop the entry and re-parse below.
+				g_prefabCache.erase(it);
 			}
 		}
 
@@ -352,7 +407,7 @@ namespace aether::app::scene
 		if (parsed)
 		{
 			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
-			g_prefabCache[prefabName] = *parsed;
+			g_prefabCache[prefabName] = CachedPrefab{*parsed, PrefabSourceStamp(prefabName)};
 		}
 		return parsed;
 	}
@@ -426,7 +481,7 @@ namespace aether::app::scene
 		SerializeScene(scene, tomlText, binary);
 
 		const std::lock_guard<std::mutex> lock(g_sceneWriteMutex);
-		if (!io::file_util::WriteText(path, tomlText))
+		if (!WriteTextAtomic(path, tomlText))
 		{
 			AE_WARN(LogCategory::App, "SaveSceneFile: cannot write '{}'", path.string());
 			return false;

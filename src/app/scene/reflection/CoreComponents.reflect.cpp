@@ -19,6 +19,23 @@ using aether::reflect::FieldValue;
 
 namespace
 {
+	// ExtractScale reports column LENGTHS, which are always positive, so a mirrored
+	// basis (an odd number of negative scale axes, e.g. scale (-1, 1, 1)) reads back
+	// as positive scale plus a rotation that cannot reproduce the flip - and the next
+	// ComposeTransform silently drops the mirror. Folding the determinant sign into X
+	// makes the read/write pair round-trip a mirrored transform exactly, and leaves a
+	// non-mirrored one bit-identical to ExtractScale. ComposeTransform already honors
+	// negative scale components.
+	glm::vec3 ExtractSignedScale(const glm::mat4& m)
+	{
+		glm::vec3 scale = ExtractScale(m);
+		if (glm::dot(glm::cross(glm::vec3(m[0]), glm::vec3(m[1])), glm::vec3(m[2])) < 0.0f)
+		{
+			scale.x = -scale.x;
+		}
+		return scale;
+	}
+
 	const reflect::EnumTable& CameraProjectionEnum()
 	{
 		static const reflect::EnumTable table{{{"perspective", static_cast<int>(CameraProjection::Perspective)}, {"orthographic", static_cast<int>(CameraProjection::Orthographic)}}};
@@ -324,16 +341,18 @@ AE_FIELD_CUSTOM_REP(
 	        auto* t = static_cast<TransformComponent*>(c);
 	        // Rotation must be rebuilt, but the euler we would decompose is about to be
 	        // overwritten - so decomposing it is pure cost and pure error. Take position
-	        // exactly from column 3 and scale from the column lengths instead.
-	        t->localToWorld = ComposeTransform(glm::vec3(t->localToWorld[3]), glm::vec3(v.vec), ExtractScale(t->localToWorld));
+	        // exactly from column 3 and scale from the column lengths instead - signed,
+	        // so editing the rotation of a mirrored transform keeps the mirror.
+	        t->localToWorld = ComposeTransform(glm::vec3(t->localToWorld[3]), glm::vec3(v.vec), ExtractSignedScale(t->localToWorld));
         })
 AE_FIELD_CUSTOM(
         "scale",
         Vec3,
         [](const void* c)
         {
-	        // Column lengths are the scale; no need to solve for euler to read it.
-	        return reflect::MakeValue(ExtractScale(static_cast<const TransformComponent*>(c)->localToWorld));
+	        // Column lengths are the scale; no need to solve for euler to read it. The
+	        // sign carries the mirror, which a positive-only read would drop on save.
+	        return reflect::MakeValue(ExtractSignedScale(static_cast<const TransformComponent*>(c)->localToWorld));
         },
         [](void* c, const FieldValue& v)
         {

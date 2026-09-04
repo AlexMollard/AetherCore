@@ -1,7 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -233,12 +235,16 @@ namespace aether::reflect
 
 	inline void ApplyValue(const FieldValue& f, int& out)
 	{
-		out = static_cast<int>(f.num);
+		// Clamp before the cast: a double outside the type's range (a hand-edited file,
+		// cooked binary, or MCP number) is UB to convert and wraps to an arbitrary
+		// value instead of saturating; AE_ASSERT guards do not ship.
+		out = static_cast<int>(std::clamp(f.num, static_cast<double>(std::numeric_limits<int>::min()), static_cast<double>(std::numeric_limits<int>::max())));
 	}
 
 	inline void ApplyValue(const FieldValue& f, std::uint32_t& out)
 	{
-		out = static_cast<std::uint32_t>(f.num < 0.0 ? 0.0 : f.num);
+		// Same clamp on the upper end the negative case already guards below zero.
+		out = static_cast<std::uint32_t>(std::clamp(f.num, 0.0, static_cast<double>(std::numeric_limits<std::uint32_t>::max())));
 	}
 
 	inline void ApplyValue(const FieldValue& f, bool& out)
@@ -387,14 +393,21 @@ namespace aether::reflect
 				v.enumValue = static_cast<int>(static_cast<const C*>(comp)->*member);
 				return v;
 			};
-			f.set = [member](void* comp, const FieldValue& in)
+			f.set = [member, &table](void* comp, const FieldValue& in)
 			{
-				static_cast<C*>(comp)->*member = static_cast<E>(in.enumValue);
+				// Integers reach this setter unvalidated from files and MCP (only enum
+				// STRINGS are range-checked, via ValueOf's fallback in the TOML reader), and
+				// an enumerator the table does not name re-serializes as NameOf(v) == "" -
+				// silently blanking the key on the next save. Mirror the string fallback:
+				// keep the current value rather than store an out-of-range one.
+				if (!table.NameOf(in.enumValue).empty())
+				{
+					static_cast<C*>(comp)->*member = static_cast<E>(in.enumValue);
+				}
 			};
 			m_type.fields.push_back(std::move(f));
 			return *this;
 		}
-
 		ComponentBuilder& Addable(bool v)
 		{
 			m_type.addable = v;

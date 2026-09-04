@@ -113,7 +113,17 @@ namespace aether::app::scene
 				AE_WARN(LogCategory::App, "Scene load: mesh source '{}' unresolved for '{}'", c.rec.mesh->path, c.rec.name);
 			}
 
-			if (c.rec.skinned && model != nullptr && model->animationDb.IsValid())
+			const bool skinnable = c.rec.skinned && model != nullptr && model->animationDb.IsValid();
+			if (skinnable && c.rec.mesh->primitiveIndex >= model->primitives.size())
+			{
+				// Same bound as the `resolved` lookup above: a file whose mesh.index
+				// exceeds the loaded model's primitive count (model re-exported with
+				// fewer primitives, a hand-edited or corrupt file) would read out of
+				// bounds here and cast a garbage skinIndex into SkinnedMeshComponent.
+				AE_WARN(LogCategory::App, "Scene load: skinned record for '{}' skipped - mesh index {} outside model '{}' ({} primitives)",
+				        c.rec.name, c.rec.mesh->primitiveIndex, c.rec.mesh->path, model->primitives.size());
+			}
+			else if (skinnable)
 			{
 				const auto& primitive = model->primitives[c.rec.mesh->primitiveIndex];
 				if (primitive.skinIndex >= 0)
