@@ -24,6 +24,17 @@ public enum NetTraversalState
     /// <summary>Exchanging connectivity checks against the peer's candidates.</summary>
     Punching,
 
+    /// <summary>
+    /// A punch failed outright (typically a symmetric NAT on one side) and traffic is
+    /// being carried through a TURN relay instead, if one is configured and allowed -
+    /// see <see cref="Net.ConfigureRelay"/>. Skipped straight to <see cref="Failed"/>
+    /// when no relay is available to try.
+    /// </summary>
+    // ORDINAL POSITION IS LOAD-BEARING: this value is compared by ordinal against the
+    // engine's own TraversalState enum. It must stay exactly here - between Punching
+    // and Connecting - or every peer starts reporting the wrong state. Never reorder.
+    Relaying,
+
     /// <summary>A path opened; establishing the session connection over it.</summary>
     Connecting,
 
@@ -336,6 +347,47 @@ public static class Net
             }
         }
     }
+
+    /// <summary>
+    /// Points the connect ladder at a TURN relay server, the LAST resort for a NAT
+    /// that a hole punch cannot get through - a symmetric NAT hands out a different
+    /// public mapping per destination, which breaks the assumption punching depends
+    /// on (see docs/multiplayer-relay.md). Call this from a settings/title screen
+    /// BEFORE <see cref="HostWithCode"/> or <see cref="JoinByCode"/>; the ladder only
+    /// reaches for it after a punch has already failed, never in parallel with one.
+    /// </summary>
+    /// <param name="host">TURN server hostname or IP. Empty clears the relay.</param>
+    /// <param name="port">TURN server port (3478 for the reference coturn config).</param>
+    /// <param name="username">Long-term-credential username the server expects.</param>
+    /// <param name="password">Long-term-credential password the server expects.</param>
+    /// <param name="allow">
+    /// Whether the ladder may actually fall back to this relay. Defaults true, but
+    /// every byte of a relayed match flows through this server twice (once each way)
+    /// at whoever runs it's expense - show it to the player as a fallback they opt
+    /// into, not a default you flip on for them.
+    /// </param>
+    /// <remarks>
+    /// Writes straight through the same <c>network.*</c> settings
+    /// <c>settings.toml</c>/<c>EngineSettings.toml</c> configure (see
+    /// docs/multiplayer-relay.md) - there is no separate in-memory copy, so a value
+    /// set here is exactly what the ladder reads and what a later <c>Save()</c> from
+    /// the settings UI would persist. Do NOT call this with a credential compiled
+    /// into a shipped client: every copy of the game then carries the same shared
+    /// secret, readable by any player who inspects the binary. Mint one server-side
+    /// per session instead, and call this with the short-lived result - this engine
+    /// does not do that minting for you yet.
+    /// </remarks>
+    public static void ConfigureRelay(string host, int port, string username, string password, bool allow = true)
+        => Native.aether_net_configure_relay(host, (ushort)port, username, password, allow ? 1 : 0);
+
+    /// <summary>
+    /// True once a relay is both configured (a non-empty host from
+    /// <see cref="ConfigureRelay"/>) and allowed. When false, a symmetric-NAT peer
+    /// that fails to punch goes straight to <see cref="NetTraversalState.Failed"/>
+    /// with no relay rung to fall back to - so a game offering multiplayer across
+    /// arbitrary networks should show relay setup as a fallback path, not assume it.
+    /// </summary>
+    public static bool RelayConfigured => Native.aether_net_relay_configured() != 0;
 
     // ── Replicated entities ─────────────────────────────────────────────────────
 

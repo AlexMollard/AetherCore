@@ -252,4 +252,24 @@ public sealed class NetSessionTests : SdkTestBase
         Assert.Equal(string.Empty, NetSession.HostAddress);
         Assert.Equal((ushort)0, NetSession.HostPort);
     }
+
+    // ── NetTraversalState ordinals ──────────────────────────────────────────────
+
+    [Fact]
+    public void NetTraversalState_OrdinalsMatchTheEngineEnum()
+    {
+        // aether_net_traversal_state crosses the native boundary as a plain int cast
+        // from the C++ TraversalState enum (NetExports.cpp), so these ordinals have
+        // to match that enum member-for-member. A reorder on either side that slips
+        // past review is otherwise invisible until a build reports the wrong state -
+        // this pins the mapping so it fails loudly here instead.
+        Assert.Equal(0, (int)NetTraversalState.Idle);
+        Assert.Equal(1, (int)NetTraversalState.Mapping);
+        Assert.Equal(2, (int)NetTraversalState.Signaling);
+        Assert.Equal(3, (int)NetTraversalState.Punching);
+        Assert.Equal(4, (int)NetTraversalState.Relaying);
+        Assert.Equal(5, (int)NetTraversalState.Connecting);
+        Assert.Equal(6, (int)NetTraversalState.Connected);
+        Assert.Equal(7, (int)NetTraversalState.Failed);
+    }
 }

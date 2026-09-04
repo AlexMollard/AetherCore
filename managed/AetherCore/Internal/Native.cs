@@ -1033,8 +1033,9 @@ internal static unsafe partial class Native
     // Idle on a title screen that has never called Host/JoinByCode.
     // `backend` is 0 for LAN broadcast (address ignored) or 1 for rendezvous
     // ("host:port"); anything else is refused. `state` mirrors NetworkContext's
-    // TraversalState enum (Idle, Mapping, Signaling, Punching, Connecting,
-    // Connected, Failed) in that exact order.
+    // TraversalState enum (Idle, Mapping, Signaling, Punching, Relaying, Connecting,
+    // Connected, Failed) in that exact order - Relaying is ordinal 4, matching the
+    // C++ TraversalState this mirrors; do not reorder either side independently.
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_net_configure_signaling(int backend, string? address);
 
@@ -1055,6 +1056,22 @@ internal static unsafe partial class Native
     // A fresh room code to show the hosting player - independent of any session.
     [LibraryImport(Lib)]
     internal static unsafe partial int aether_net_new_room_code(byte* buffer, int capacity);
+
+    // Configures the TURN relay (last rung of the connect ladder, tried only after a
+    // punch has failed) by writing straight through the reflected network.* settings
+    // via SettingsService - no separate store, so this can never drift from what the
+    // native ladder reads. Safe with no session: a title screen calls this before any
+    // Host/JoinByCode. `allow` false leaves the host/port/credentials recorded but
+    // keeps the ladder from ever trying them.
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_net_configure_relay(string host, ushort port, string username, string password, int allow);
+
+    // 1 when allowRelay is set and a turnHost is configured - i.e. the ladder has a
+    // relay it is permitted to fall back to. 0 with no session, matching every other
+    // traversal query.
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_net_relay_configured();
 
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_scene_file_exists(string name);

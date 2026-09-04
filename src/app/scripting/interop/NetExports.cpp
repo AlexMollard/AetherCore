@@ -12,8 +12,10 @@
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
+#include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
+#include "utils/SettingsService.hpp"
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
@@ -512,5 +514,59 @@ AE_SCRIPT_API std::int32_t aether_net_new_room_code(char* out, std::int32_t capa
 	// Independent of any NetworkContext: a room code is just text a hosting player
 	// shows on screen before HostWithCode ever runs, so this works with no session.
 	return CopyOut(aether::net::NewRoomCode(), out, capacity);
+	});
+}
+
+// The relay is opt-in and configured through SettingsService, the single source of
+// truth network.* settings already flow through (see AGENTS.md) - never a second
+// store the connect ladder's own read of network.turnHost/allowRelay could drift
+// from. Safe with no session, matching every export above: a title screen sets up a
+// relay before Host/JoinByCode is ever called.
+AE_SCRIPT_API std::int32_t aether_net_configure_relay(const char* hostUtf8, std::uint16_t port, const char* usernameUtf8,
+        const char* passwordUtf8, std::int32_t allow)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	if (hostUtf8 == nullptr || usernameUtf8 == nullptr || passwordUtf8 == nullptr)
+	{
+		return 0;
+	}
+	const auto& ctx = ActiveContext();
+	aether::SettingsService* settings = ctx.services != nullptr ? ctx.services->TryGet<aether::SettingsService>() : nullptr;
+	if (settings == nullptr)
+	{
+		return 0;
+	}
+	aether::EngineSettings::Network& network = settings->Values().network;
+	network.turnHost = hostUtf8;
+	network.turnPort = port;
+	network.turnUsername = usernameUtf8;
+	network.turnPassword = passwordUtf8;
+	network.allowRelay = allow != 0;
+	// Each field applied and flagged dirty individually, the same two-step every other
+	// settings write in this codebase follows (see PostProcessingPanel.cpp) - there is
+	// no combined "network changed" key, and ApplyLive has nothing to do for any of
+	// these (the ladder reads Get().network directly, not a live-applied side effect).
+	settings->ApplyField("network.turnHost");
+	settings->ApplyField("network.turnPort");
+	settings->ApplyField("network.turnUsername");
+	settings->ApplyField("network.turnPassword");
+	settings->ApplyField("network.allowRelay");
+	return 1;
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_relay_configured()
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	const auto& ctx = ActiveContext();
+	const aether::SettingsService* settings = ctx.services != nullptr ? ctx.services->TryGet<aether::SettingsService>() : nullptr;
+	if (settings == nullptr)
+	{
+		return 0;
+	}
+	const aether::EngineSettings::Network& network = settings->Get().network;
+	return network.allowRelay && !network.turnHost.empty() ? 1 : 0;
 	});
 }

@@ -123,6 +123,62 @@ allowRelay = true
 `false` — both must be set deliberately. No default ships a relay nobody
 chose to run.
 
+## Configuring a relay from a script
+
+`settings.toml`/`EngineSettings.toml` above is the right place for a relay a
+project always wants available — a self-hosted coturn box the studio runs,
+say. A game that lets a *player* type in a relay (or that mints one per
+match) instead sets it at runtime, through `Net`:
+
+```csharp
+// Before HostWithCode / JoinByCode - a title or settings screen, typically.
+Net.ConfigureRelay("turn.example.com", 3478, "myuser", "mypassword");
+
+// Show the fallback only when there is actually something to fall back to.
+if (Net.RelayConfigured)
+{
+    ShowRelayFallbackNotice();
+}
+```
+
+`ConfigureRelay` writes straight through the same `network.turnHost` /
+`turnPort` / `turnUsername` / `turnPassword` / `allowRelay` settings the
+`.toml` files configure (`SettingsService` is the single source of truth for
+both) — there is no separate runtime copy, so whatever a script sets here is
+exactly what the connect ladder reads next time it reaches the `Relaying`
+rung. `RelayConfigured` reports whether the ladder currently has one to try
+at all: a non-empty host *and* `allowRelay` on.
+
+`allow` defaults to `true` on the call itself, but that is a convenience for
+the common case of "the player just typed in a relay and wants it used" —
+the *engine* default (`allowRelay = false` until something sets it) is still
+off, and it is still worth surfacing the relay to the player as a fallback
+they are opting into rather than something that just silently starts costing
+someone bandwidth.
+
+### Where the credentials must not go
+
+**Never compile a shared TURN password into a shipped client.** Every copy
+of the game embeds the same string, and a player who wants it needs nothing
+more than a hex editor or a packet capture of the game calling
+`ConfigureRelay` to read it straight back out — a "long-term credential" is
+long-term for the *server*, but it is not secret from the *players* it was
+shipped to. That is a fine model for a relay the studio itself runs, where
+"everyone playing this game" and "everyone with the credential" are the same
+set on purpose. It stops being fine the moment the credential is meant to
+gate anything else (rate-limiting one player's abuse, a paid relay tier, …),
+because every player already has it.
+
+The standard fix — which this engine does **not** implement yet — is a
+short-lived, per-session credential: a matchmaking or lobby service the
+players already trust mints a TURN username/password (or a REST-style
+time-limited credential, which coturn also supports) that is valid for one
+session and one pair of peers, and hands it to both ends over whatever
+secure channel that service already uses. A project that needs this has to
+build that minting step itself and call `ConfigureRelay` with the result;
+the long-term-credential `turnserver.conf` in this doc is the simpler
+"studio runs the relay for everyone" case, not a substitute for it.
+
 ## The cost, and why it's last
 
 Every byte of a relayed match passes through the TURN box twice — once in,
@@ -130,7 +186,10 @@ once out — which is bandwidth (and, on a paid provider, money) spent by
 whoever runs it, unlike a punched connection where packets go peer-to-peer.
 That's why the relay is meant to be the *last* rung of the connect ladder
 (`NetTraversalSession::TraversalState`: `Mapping` → `Signaling`/`Punching` →
-`Connecting`), tried only after a router port mapping and a hole punch have
-both failed, and why `allowRelay` defaults off: turning it on is an explicit
-choice to let a match spend someone's bandwidth to work around a NAT that
-can't be punched.
+`Relaying` → `Connecting`), tried only after a router port mapping and a hole
+punch have both genuinely failed — never in parallel with the punch, because
+someone's bandwidth is on the line — and why `allowRelay` defaults off:
+turning it on is an explicit choice to let a match spend someone's
+bandwidth to work around a NAT that can't be punched. `Relaying` is skipped
+straight to `Failed` when no relay is configured or `allowRelay` is off, so
+a project that never touches any of this behaves exactly as it always has.
