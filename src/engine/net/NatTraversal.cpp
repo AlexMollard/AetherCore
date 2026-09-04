@@ -6,6 +6,7 @@
 
 #include <enet/enet.h>
 
+#include "net/TurnRelaySocket.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether::net
@@ -65,6 +66,15 @@ namespace aether::net
 		if (m_host == nullptr)
 		{
 			return;
+		}
+		// Best-effort: tells the relay to drop the allocation now rather than waiting out
+		// its LIFETIME, exactly like TurnClient::Release() documents. Goes out over
+		// TurnRelaySocket's own relay-facing socket, independent of m_host entirely, so
+		// the ordering here relative to clearing the intercept below is not load-bearing -
+		// it just reads naturally as "tear down the relay, then the punch machinery".
+		if (m_relay != nullptr)
+		{
+			m_relay->Release();
 		}
 		// Cleared before deregistering: leaving the callback installed against a freed
 		// owner is a use-after-free on the next datagram, which would arrive during an
@@ -157,6 +167,106 @@ namespace aether::net
 		m_attempts = 0;
 	}
 
+	bool NatTraversal::BeginRelay(const std::string& turnHost, std::uint16_t turnPort, std::string username, std::string password)
+	{
+		if (m_host == nullptr)
+		{
+			return false;
+		}
+
+		ENetAddress resolved{};
+		if (enet_address_set_host(&resolved, turnHost.c_str()) != 0)
+		{
+			m_relay.reset();
+			m_relayResolveFailure = "could not resolve TURN server '" + turnHost + "'";
+			return false;
+		}
+
+		// ENetHost::address is not reliable here - see this class's own comment and
+		// TurnRelaySocket.hpp's ctor comment - so the loopback bridge is built from the
+		// socket's own actual bound port instead.
+		ENetAddress boundAddress{};
+		if (enet_socket_get_address(m_host->socket, &boundAddress) != 0)
+		{
+			m_relay.reset();
+			m_relayResolveFailure = "could not read this socket's own bound port";
+			return false;
+		}
+
+		const Endpoint server{resolved.host, turnPort};
+		m_relayResolveFailure.clear();
+		// TurnRelaySocket opens its OWN dedicated socket pair rather than going through
+		// Send() below - see BeginRelay's own declaration comment for why that is
+		// correct here and not a violation of this class's socket-sharing rule.
+		m_relay = std::make_unique<TurnRelaySocket>(boundAddress.port, ToStun(server), std::move(username), std::move(password));
+		if (!m_relay->IsValid())
+		{
+			// Treated exactly like a resolve failure - see TurnRelaySocket::IsValid()'s
+			// own comment: nothing to poll, and the caller must not proceed.
+			m_relayResolveFailure = "could not open the relay proxy's local sockets";
+			m_relay.reset();
+			return false;
+		}
+		m_relay->BeginAllocate();
+		return true;
+	}
+
+	TurnClient::State NatTraversal::RelayState() const
+	{
+		return m_relay ? m_relay->RelayState() : TurnClient::State::Idle;
+	}
+
+	std::optional<NatTraversal::Endpoint> NatTraversal::RelayedEndpoint() const
+	{
+		if (m_relay == nullptr)
+		{
+			return std::nullopt;
+		}
+		if (const auto relayed = m_relay->RelayedEndpoint())
+		{
+			return FromStun(*relayed);
+		}
+		return std::nullopt;
+	}
+
+	std::optional<NatTraversal::Endpoint> NatTraversal::RelayConnectEndpoint() const
+	{
+		if (m_relay == nullptr)
+		{
+			return std::nullopt;
+		}
+		ENetAddress loopback{};
+		enet_address_set_host_ip(&loopback, "127.0.0.1"); // a literal dotted quad; cannot fail
+		return Endpoint{loopback.host, m_relay->ProxyPort()};
+	}
+
+	const std::string& NatTraversal::RelayFailureReason() const
+	{
+		// m_relay outlives BeginRelay's own resolve failure - once it exists, IT is the
+		// authority on why relaying failed (a bad username/password, a server that never
+		// answered), not the stale text from a resolve that, by definition, succeeded.
+		return m_relay != nullptr ? m_relay->FailureReason() : m_relayResolveFailure;
+	}
+
+	void NatTraversal::PermitRelayPeer(const Endpoint& peer)
+	{
+		if (m_relay != nullptr)
+		{
+			m_relay->PermitPeer(ToStun(peer));
+		}
+	}
+
+	std::vector<NatTraversal::Endpoint> NatTraversal::PeerCandidates() const
+	{
+		std::vector<Endpoint> candidates;
+		candidates.reserve(m_checks.size());
+		for (const Check& check: m_checks)
+		{
+			candidates.push_back(check.target);
+		}
+		return candidates;
+	}
+
 	bool NatTraversal::OnDatagram(const Endpoint& from, std::span<const std::byte> data)
 	{
 		switch (stun::Classify(data))
@@ -206,6 +316,16 @@ namespace aether::net
 				return false;
 			}
 			case stun::MessageKind::Other:
+				// Neither a Binding Request nor a Binding Success, but that covers
+				// everything ELSE STUN-shaped too - TURN's Allocate/Refresh/
+				// CreatePermission/ChannelBind replies and Data indications all use
+				// the same 20-byte header with a different method, and ChannelData
+				// (RFC 5766 s11.4) does not look like STUN at all. Back when a relay
+				// shared this host's socket, THIS is where its control traffic used to
+				// land; now BeginRelay hands the whole relay leg to a TurnRelaySocket
+				// with its own dedicated relay-facing socket (see NatTraversal.hpp's
+				// class comment), so nothing this switch ever classifies as Other
+				// belongs to this class - falls through to "not ours" below.
 				break;
 		}
 
@@ -217,6 +337,14 @@ namespace aether::net
 
 	void NatTraversal::Tick(float deltaSeconds)
 	{
+		// Independent of m_state below - see the field comment on m_relay. A relay tried
+		// after a punch has already failed must keep retransmitting/refreshing on its own
+		// clock even though m_state is sitting at Failed forever.
+		if (m_relay != nullptr)
+		{
+			m_relay->Tick(deltaSeconds);
+		}
+
 		if (m_state != State::Discovering && m_state != State::Punching)
 		{
 			return;
