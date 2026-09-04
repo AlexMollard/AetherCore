@@ -98,6 +98,12 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 			// CLR-linked and cannot be.
 			return 0;
 		}
+		if (method.index > 0xFFFF)
+		{
+			// The wire field is u16; an index above it would wrap to a DIFFERENT
+			// method, and the receiver's bounds-check cannot tell. Refuse the call.
+			return 0;
+		}
 
 		const aether::net::RpcRoute route = aether::net::RouteRpc(world, session, method.target, entity);
 		if (!route.allowed)

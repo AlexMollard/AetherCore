@@ -33,7 +33,10 @@ namespace aether::net
 
 	void NetSession::ResetBindings()
 	{
-		m_nextNetId = 1;
+		// The scene-placed derivation counter restarts at 1 - that determinism is the
+		// whole reason this exists (see the header). The spawn counter does NOT: a
+		// reused spawn id would alias a late packet onto a live entity.
+		m_nextSceneNetId = 1;
 		m_byNetId.clear();
 		m_netIdByEntity.clear();
 	}
@@ -55,7 +58,8 @@ namespace aether::net
 	{
 		m_role = NetRole::Offline;
 		m_localConnection = kInvalidConnection;
-		m_nextNetId = 1;
+		m_nextNetId = kSpawnNetIdBase;
+		m_nextSceneNetId = 1;
 		m_byNetId.clear();
 		m_netIdByEntity.clear();
 		m_connections.clear();

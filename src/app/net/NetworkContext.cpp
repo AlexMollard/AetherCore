@@ -407,13 +407,37 @@ namespace aether::net
 
 	void NetworkContext::ApplySpawn(World& world, const SpawnMessage& msg)
 	{
-		if (m_session.EntityFor(msg.netId).IsValid())
+		if (const Entity existing = m_session.EntityFor(msg.netId); existing.IsValid())
 		{
-			// Already bound. This is the common case for the joining-client replay of
-			// a scene-placed entity: both ends derived the same id from the scene file,
+			// Already bound. The common case is the joining-client replay of a
+			// scene-placed entity: both ends derived the same id from the scene file,
 			// so there is nothing to create.
-			return;
+			if (msg.prefab.empty())
+			{
+				return;
+			}
+			auto* identity = world.TryGet<NetworkIdentity>(existing);
+			if (identity == nullptr || !identity->scenePlaced)
+			{
+				// A Spawn for an id bound to an already-spawned entity is the join
+				// replay re-sending something this client already has - a no-op.
+				return;
+			}
+			// Hard desync, unreachable since the id spaces were split (scene ids
+			// derive below kSpawnNetIdBase, spawned ids allocate above it) but kept
+			// as the safety net: it fires only if a peer violates that split - a
+			// hostile or version-skewed Spawn naming a prefab for an id this client
+			// derived for a scene-placed entity. The host owns id allocation, so the
+			// binding moves to its spawn instead of being silently dropped; the
+			// scene entity stays locally, unbound.
+			AE_ERROR(LogCategory::App,
+			        "Net: net id {} collision - the host spawned a prefab onto an id this client derived for a scene-placed entity; rebinding to the host's spawn",
+			        msg.netId);
+			identity->netId = 0;
+			m_session.Unbind(msg.netId);
+			ForgetNetId(msg.netId); // interpolation cache must not carry the scene entity onto the spawn
 		}
+
 		if (!IsSafePrefabName(msg.prefab))
 		{
 			// Either a scene-placed entity this client does not have - nothing generic

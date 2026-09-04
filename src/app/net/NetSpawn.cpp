@@ -7,6 +7,7 @@
 #include "net/NetComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
+#include "utils/Logger.hpp"
 
 namespace aether::net
 {
@@ -173,7 +174,15 @@ namespace aether::net
 			{
 				continue;
 			}
-			identity->netId = session.AllocateNetId();
+			const std::uint32_t netId = session.AllocateSceneNetId();
+			if (netId == 0)
+			{
+				AE_WARN(LogCategory::App,
+				        "Net: scene-placed net-id space exhausted at {} ids - entity with node id {} goes unreplicated",
+				        kSpawnNetIdBase, nodeId);
+				continue;
+			}
+			identity->netId = netId;
 			identity->scenePlaced = true;
 			session.Bind(identity->netId, entity);
 		}

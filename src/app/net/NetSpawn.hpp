@@ -152,12 +152,14 @@ namespace aether::net
 	// Applied to whatever a peer sent before anything stores or shows it.
 	[[nodiscard]] std::string SanitizeReason(std::string_view raw);
 
-	// Gives every scene-placed NetworkIdentity a deterministic id. Iterates in
-	// order of SceneNodeComponent::id - the stable, persisted scene-node id that
-	// round-trips through the scene file - which is identical on every machine
-	// loading the same scene, so host and client agree with no handshake. Entities
-	// with nodeId == 0 (prefab-instantiated, not top-level scene entities) are
-	// skipped; they get their id through spawn replication instead. ECS iteration
-	// order is NOT deterministic and must never be used here.
+	// Gives every scene-placed NetworkIdentity a deterministic id, drawn from the
+	// scene-placed space below kSpawnNetIdBase (NetSession::AllocateSceneNetId) so
+	// it can never collide with a spawned id on any peer. Iterates in order of
+	// SceneNodeComponent::id - the stable, persisted scene-node id that round-trips
+	// through the scene file - which is identical on every machine loading the same
+	// scene, so host and client agree with no handshake. Entities with nodeId == 0
+	// (prefab-instantiated, not top-level scene entities) are skipped; they get
+	// their id through spawn replication instead. ECS iteration order is NOT
+	// deterministic and must never be used here.
 	void AssignScenePlacedNetIds(World& world, NetSession& session);
 } // namespace aether::net

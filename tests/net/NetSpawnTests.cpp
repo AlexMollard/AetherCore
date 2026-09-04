@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <map>
 #include <utility>
 #include <vector>
@@ -140,6 +141,51 @@ TEST_CASE("Scene-placed net id assignment skips entities with no persisted node 
 	net::AssignScenePlacedNetIds(world, session);
 
 	CHECK(world.Get<net::NetworkIdentity>(prefabSpawned).netId == 0);
+}
+
+TEST_CASE("A host's spawned ids never collide with a client's scene-derived ids")
+{
+	// The SetReplicationReady cross-scene flow: the host's scene has few replicated
+	// entities, a client that becomes replication-ready later stands in a scene with
+	// MORE of them. Both derive scene-placed ids from 1 with no handshake, so the
+	// host's spawn counter must sit above every id any peer could derive. Pre-fix,
+	// one shared counter meant the host's first prefab spawn after one scene entity
+	// took id 2 - exactly the id the client below derives for its own second entity.
+	World hostWorld;
+	net::NetSession hostSession;
+	const Entity hostScene = hostWorld.Create();
+	hostWorld.Emplace<net::NetworkIdentity>(hostScene);
+	hostWorld.Emplace<SceneNodeComponent>(hostScene, SceneNodeComponent{.id = 1});
+	net::AssignScenePlacedNetIds(hostWorld, hostSession);
+
+	std::vector<std::uint32_t> spawned;
+	for (int i = 0; i < 3; ++i)
+	{
+		spawned.push_back(hostSession.AllocateNetId());
+	}
+
+	World clientWorld;
+	net::NetSession clientSession;
+	std::vector<Entity> clientEntities;
+	for (std::uint64_t nodeId = 1; nodeId <= 4; ++nodeId)
+	{
+		const Entity e = clientWorld.Create();
+		clientWorld.Emplace<net::NetworkIdentity>(e);
+		clientWorld.Emplace<SceneNodeComponent>(e, SceneNodeComponent{.id = nodeId});
+		clientEntities.push_back(e);
+	}
+	net::AssignScenePlacedNetIds(clientWorld, clientSession);
+
+	for (const Entity e: clientEntities)
+	{
+		const std::uint32_t derived = clientWorld.Get<net::NetworkIdentity>(e).netId;
+		REQUIRE(derived != 0);
+		CHECK(derived < net::kSpawnNetIdBase); // whole derived space is below the spawns
+	}
+	for (const std::uint32_t netId: spawned)
+	{
+		CHECK(netId >= net::kSpawnNetIdBase); // ...so no overlap is even possible
+	}
 }
 
 // The framework's only path-traversal defence. A prefab name arrives from a remote

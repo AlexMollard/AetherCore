@@ -553,6 +553,41 @@ TEST_CASE("ApplySpawn refuses a prefab name that could leave the prefab folder")
 	context.Stop(world);
 }
 
+TEST_CASE("ApplySpawn rebinds a net id the host spawned onto a scene-placed entity")
+{
+	// The SetReplicationReady cross-scene desync: the host's allocator reached an
+	// id this client derived for a scene-placed entity of a scene the host never
+	// numbered. The host owns allocation, so the binding must move to its spawn -
+	// not be silently dropped, which used to leave the spawn uncreated forever
+	// while host state mutated the scene entity.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+
+	const Entity sceneEntity = MakeScenePlaced(world, 7);
+	auto* identity = world.TryGet<aether::net::NetworkIdentity>(sceneEntity);
+	REQUIRE(identity != nullptr);
+	identity->netId = 5;
+	identity->scenePlaced = true;
+	context.Session().Bind(5, sceneEntity);
+
+	// A Spawn naming no prefab for a bound id stays the documented replay no-op.
+	aether::net::SpawnMessage replay;
+	replay.netId = 5;
+	context.ApplySpawn(world, replay);
+	CHECK(context.Session().EntityFor(5) == sceneEntity);
+
+	aether::net::SpawnMessage collision;
+	collision.netId = 5;
+	collision.prefab = "Enemy"; // no asset in this build, but the unbind happens first
+	context.ApplySpawn(world, collision);
+	CHECK_FALSE(context.Session().EntityFor(5).IsValid());
+	CHECK(world.Get<aether::net::NetworkIdentity>(sceneEntity).netId == 0);
+
+	context.Stop(world);
+}
+
 TEST_CASE("Stop puts every body it took off local simulation back")
 {
 	// A client hands a body it has no authority over to the network by making it

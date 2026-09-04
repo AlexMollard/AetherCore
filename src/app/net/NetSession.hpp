@@ -9,6 +9,17 @@
 
 namespace aether::net
 {
+	// The net-id space is split in two so the two ways an id can come to exist can
+	// never collide. Scene-placed ids are DERIVED identically on every peer from 1
+	// upward (AssignScenePlacedNetIds walks the scene file's node ids), while
+	// spawned ids come from the host's counter alone. A client that becomes
+	// replication-ready in a scene with more replicated scene entities than the
+	// host has ever allocated for must not have derived an id the host is about to
+	// hand a spawn - which one shared counter made possible (SetReplicationReady
+	// resets the client's derivation counter to 1). One million scene-placed ids
+	// per scene is the ceiling this reserves; AllocateSceneNetId returns 0 past it.
+	inline constexpr std::uint32_t kSpawnNetIdBase = 0x0010'0000u;
+
 	// Who we are on the network and what net ids map to what entities. Holds no
 	// sockets - the transport is separate - so it is trivially testable.
 	class NetSession
@@ -29,29 +40,43 @@ namespace aether::net
 			return m_role == NetRole::Host;
 		}
 
-		[[nodiscard]] ConnectionId LocalConnection() const
+		// Host-only, for session-spawned entities: ids start at kSpawnNetIdBase,
+		// above every id AssignScenePlacedNetIds can derive on ANY peer, so a spawn
+		// can never land on an id a client already holds. Ids are never reused
+		// within a session, so a late packet referencing a despawned entity resolves
+		// to nothing rather than to whatever entity happened to reuse the id.
+		std::uint32_t AllocateNetId()
 		{
-			return m_localConnection;
+			return m_nextNetId++;
 		}
+
+		// The scene-placed half of the id space: 1..kSpawnNetIdBase-1, assigned in
+		// SceneNodeComponent::id order by AssignScenePlacedNetIds. Both peers start
+		// this counter at 1, which is what makes the derivation agree with no
+		// handshake. Returns 0 when the scene-placed space is exhausted - the caller
+		// leaves that entity unbound rather than reaching into the spawn space.
+		std::uint32_t AllocateSceneNetId()
+		{
+			if (m_nextSceneNetId >= kSpawnNetIdBase)
+			{
+				return 0;
+			}
+			return m_nextSceneNetId++;
+		}
+
 
 		void SetLocalConnection(ConnectionId id)
 		{
 			m_localConnection = id;
 		}
 
-		// Host-only. Ids are never reused within a session, so a late packet
-		// referencing a despawned entity resolves to nothing rather than to
-		// whatever entity happened to reuse the id.
-		std::uint32_t AllocateNetId()
-		{
-			return m_nextNetId++;
-		}
-
 		void Bind(std::uint32_t netId, Entity entity);
 		void Unbind(std::uint32_t netId);
 
-		// Forget every binding and start allocating ids from 1 again, WITHOUT ending the
-		// session: the role, the local connection id and the connection list all survive.
+		// Forget every binding and start the scene-placed derivation counter at 1 again,
+		// WITHOUT ending the session: the role, the local connection id and the connection
+		// list all survive. The spawn counter is NOT rewound - ids are never reused within
+		// a session.
 		//
 		// Exists for one caller - a client that has changed scene since it was welcomed
 		// (see NetworkContext::SetReplicationReady). The scene-placed derivation is
@@ -86,7 +111,8 @@ namespace aether::net
 	private:
 		NetRole m_role = NetRole::Offline;
 		ConnectionId m_localConnection = kInvalidConnection;
-		std::uint32_t m_nextNetId = 1;
+		std::uint32_t m_nextNetId = kSpawnNetIdBase; // spawned ids only - never the scene-placed space
+		std::uint32_t m_nextSceneNetId = 1;
 		std::unordered_map<std::uint32_t, Entity> m_byNetId;
 		std::unordered_map<std::uint32_t, std::uint32_t> m_netIdByEntity; // Entity::id -> netId
 		std::vector<ConnectionId> m_connections;

@@ -27,6 +27,24 @@ TEST_CASE("NetSession allocates monotonic ids and maps them both ways")
 	CHECK(session.NetIdFor(b) == idB);
 }
 
+TEST_CASE("Scene-placed and spawned ids come from disjoint spaces")
+{
+	// The SetReplicationReady cross-scene fix: a client that re-derives scene ids
+	// from 1 in a bigger scene must never hold an id the host's spawn counter is
+	// about to hand out, and ResetBindings must not rewind the spawn counter - ids
+	// are never reused within a session.
+	net::NetSession session;
+
+	CHECK(session.AllocateSceneNetId() == 1);
+	CHECK(session.AllocateSceneNetId() == 2);
+	const std::uint32_t spawnId = session.AllocateNetId();
+	CHECK(spawnId >= net::kSpawnNetIdBase);
+
+	session.ResetBindings();
+	CHECK(session.AllocateSceneNetId() == 1); // deterministic re-derivation
+	CHECK(session.AllocateNetId() == spawnId + 1); // spawn counter survives
+}
+
 TEST_CASE("Unbinding removes both directions")
 {
 	net::NetSession session;
