@@ -167,6 +167,11 @@ namespace aether::gpu
 		static void Destroy(TextureHandle handle) noexcept;
 		static void Destroy(PipelineHandle handle) noexcept;
 
+		// Runs every deferred destruction queued so far immediately, instead of on the
+		// frame ring. Only safe once the GPU is idle: the pending vkDestroy* calls
+		// assume no submitted work still references the objects (shutdown paths).
+		static void DrainPendingDestructions() noexcept;
+
 		[[nodiscard]] static TextureHandle CreateTexture(const TextureDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
 
 		[[nodiscard]] static TextureHandle CreateAliasedTexture(const TextureDesc& desc, void* existingAllocation, DeviceSize memoryOffset, const char* debugName = nullptr) noexcept;

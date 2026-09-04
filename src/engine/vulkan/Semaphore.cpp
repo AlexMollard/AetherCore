@@ -63,13 +63,16 @@ namespace aether::gpu
 		        .pValues = &value,
 		};
 
-		const VkResult res = vkWaitSemaphores(vkDevice, &waitInfo, UINT64_MAX);
-		if (res != VK_SUCCESS && res != VK_TIMEOUT)
-		{
-			AE_WARN(LogCategory::Vulkan, "gpu::WaitTimelineSemaphore: vkWaitSemaphores returned {} (expected success or timeout).", static_cast<int>(res));
-			return false;
-		}
-		return true;
+	const VkResult res = vkWaitSemaphores(vkDevice, &waitInfo, UINT64_MAX);
+	if (res != VK_SUCCESS)
+	{
+		// Even a VK_TIMEOUT against an infinite wait means the timeline never reached
+		// the value - device lost or hung. Reporting success would have callers consume
+		// GPU results that were never produced.
+		AE_WARN(LogCategory::Vulkan, "gpu::WaitTimelineSemaphore: vkWaitSemaphores returned {} (expected success).", static_cast<int>(res));
+		return false;
+	}
+	return true;
 	}
 
 	void DestroyTimelineSemaphore(Device device, TimelineSemaphoreHandle sem) noexcept

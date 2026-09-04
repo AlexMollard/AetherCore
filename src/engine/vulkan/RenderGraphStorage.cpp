@@ -97,11 +97,29 @@ namespace aether
 		m_freeTransientSlots.clear();
 		m_freeExternalSlots.clear();
 
+		// The heap's pooled images were queued onto the registry's deferred destruction
+		// ring just above and are still bound to the heap's VkDeviceMemory, so the
+		// memory cannot be freed until those vkDestroyImage calls have actually run.
+		// AetherCore tears this storage down before GraphicsDevice::Shutdown, whose
+		// vkDeviceWaitIdle has therefore NOT run yet - idle is on us. Wait, drain the
+		// ring so every queued destroy executes now, then free the heap and any
+		// not-yet-drained retires (their residents went through the same ring) well
+		// before the allocator dies (VUID-vkFreeMemory-memory-00477/478).
+		if (m_device != VK_NULL_HANDLE && vkDeviceWaitIdle(m_device) != VK_SUCCESS)
+		{
+			AE_WARN(LogCategory::Vulkan, "RenderGraphStorage: vkDeviceWaitIdle failed during shutdown; tearing the transient heap down regardless.");
+		}
+		gpu::ResourceRegistry::DrainPendingDestructions();
 		if (m_transientHeapAllocation != VK_NULL_HANDLE)
 		{
 			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
 			m_transientHeapAllocation = VK_NULL_HANDLE;
 		}
+		for (const RetiredHeapAllocation& retired: m_retiredHeapAllocations)
+		{
+			vmaFreeMemory(m_allocator, retired.allocation);
+		}
+		m_retiredHeapAllocations.clear();
 		m_transientHeapCapacity = 0;
 		m_heapPlanSignature = 0;
 		m_heapPlanStandaloneSize = 0;
@@ -303,6 +321,8 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_currentFrame = frameIndex % kMaxFramesInFlight;
+		++m_frameClock;
+		ReleaseRetiredHeaps();
 		// Only the per-frame class is cleared here. Levels are refreshed by
 		// RefreshTransientStats() and the cumulative counters must survive the frame.
 		m_lastFrameStats.passCount = 0;
@@ -1270,13 +1290,45 @@ namespace aether
 
 		if (m_transientHeapAllocation != VK_NULL_HANDLE)
 		{
-			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
+			// The residents above were only queued onto the registry's deferred ring,
+			// and frames still in flight are reading the memory: freeing it now would
+			// destroy it under both. Retire it instead - BeginFrame frees it once no
+			// deferred destroy of a resident can still be pending - and let the caller
+			// allocate the replacement heap into fresh memory below.
+			m_retiredHeapAllocations.push_back(RetiredHeapAllocation{
+			        .allocation = m_transientHeapAllocation,
+			        .retiredAtClock = m_frameClock,
+			});
 			m_transientHeapAllocation = VK_NULL_HANDLE;
 		}
 		m_transientHeapCapacity = 0;
 		m_transientHeapAlignment = kTransientHeapAlignment;
 		m_heapPlanSignature = 0;
 		m_heapPlanStandaloneSize = 0;
+	}
+
+	void RenderGraphStorage::ReleaseRetiredHeaps()
+	{
+		// A retire's residents were queued onto the registry's destruction ring, which
+		// runs an entry kMaxFramesInFlight advances after the queue; one frame later the
+		// last frame that could still read the heap has also completed, because frames
+		// in flight are capped at the same kMaxFramesInFlight. Freeing any earlier would
+		// hand queued work a dead allocation and leave bound images behind
+		// (VUID-vkFreeMemory-memory-00477/478).
+		for (std::size_t i = 0; i < m_retiredHeapAllocations.size();)
+		{
+			const RetiredHeapAllocation retired = m_retiredHeapAllocations[i];
+			if (m_frameClock > retired.retiredAtClock + kMaxFramesInFlight)
+			{
+				vmaFreeMemory(m_allocator, retired.allocation);
+				m_retiredHeapAllocations[i] = m_retiredHeapAllocations.back();
+				m_retiredHeapAllocations.pop_back();
+			}
+			else
+			{
+				++i;
+			}
+		}
 	}
 
 	std::uint64_t RenderGraphStorage::HashHeapPlan(std::span<const TransientHeapRequest> requests, const TransientHeapPlan& plan)

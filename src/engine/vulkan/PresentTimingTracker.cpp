@@ -204,7 +204,7 @@ namespace aether
 
 			// The frame this flip belongs to sampled its input at latchNs. This is the only
 			// place in the engine where both ends of that journey are known.
-			if (const std::int64_t latchNs = m_latchNs[nextId % kLatchRing].exchange(0, std::memory_order_acq_rel); latchNs > 0 && nowNs > latchNs)
+		if (const std::int64_t latchNs = m_latchNs[presentId % kLatchRing].exchange(0, std::memory_order_acq_rel); latchNs > 0 && nowNs > latchNs)
 			{
 				const std::int64_t latencyNs = nowNs - latchNs;
 				// Implausible values mean the pairing is wrong, not that a frame took a second:

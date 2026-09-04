@@ -55,6 +55,16 @@ namespace aether
 		int w = 0;
 		int h = 0;
 		glfwGetFramebufferSize(window.GetHandle(), &w, &h);
+		// A minimised window reports a 0x0 framebuffer and no swapchain can exist at
+		// that extent, yet the minimise itself is exactly what fires the OUT_OF_DATE
+		// that recreates the swapchain here - unclamped, that recreation aborts the
+		// engine. 1x1 is the smallest legal extent, and the restore resize recreates
+		// the swapchain at the true size.
+		if (w <= 0 || h <= 0)
+		{
+			w = 1;
+			h = 1;
+		}
 
 		auto buildSwapchain = [&](const VkPresentModeKHR presentMode)
 		{

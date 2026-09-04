@@ -1573,6 +1573,11 @@ namespace aether::gpu
 		s_reg->Destroy(h);
 	}
 
+	void ResourceRegistry::DrainPendingDestructions() noexcept
+	{
+		s_reg->DrainAll();
+	}
+
 	PipelineHandle ResourceRegistry::CreateComputePipeline(Device device, const ComputePipelineDesc& desc) noexcept
 	{
 		const vkutil::ComputePipelineDesc vkDesc{

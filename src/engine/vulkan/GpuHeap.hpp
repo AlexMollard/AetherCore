@@ -65,6 +65,11 @@ namespace aether
 			return span;
 		}
 
+		// Returns the span's virtual range to the pool for reuse by later Allocs
+		// IMMEDIATELY: the caller must have waited out every in-flight use of the data
+		// (device idle, or the frames-in-flight ring having drained) first, or a queued
+		// frame may still be reading memory the next Alloc overwrites. No current
+		// caller frees mid-flight; keep it that way.
 		template<typename T>
 		void Free(GpuSpan<T>& span)
 		{

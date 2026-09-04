@@ -382,6 +382,9 @@ namespace aether
 
 		void AllocateTransientHeap(VkDeviceSize requiredSize, VkDeviceSize alignment, std::uint32_t memoryTypeBits);
 		void ReleaseTransientHeap();
+		// Frees retired heap allocations whose residents' deferred destructions have
+		// certainly run. Ticked once per frame from BeginFrame.
+		void ReleaseRetiredHeaps();
 		[[nodiscard]] static std::uint64_t HashHeapPlan(std::span<const TransientHeapRequest> requests, const TransientHeapPlan& plan);
 
 		VkDevice m_device = VK_NULL_HANDLE;
@@ -413,6 +416,19 @@ namespace aether
 		VmaAllocation m_transientHeapAllocation = VK_NULL_HANDLE;
 		VkDeviceSize m_transientHeapCapacity = 0;
 		VkDeviceSize m_transientHeapAlignment = kTransientHeapAlignment;
+		// Heaps retired by a plan change. Their residents' destruction is deferred
+		// through the registry's frames-in-flight ring and in-flight frames still read
+		// the memory, so the VkDeviceMemory must not be freed the moment the plan
+		// changes; it is held until nothing can still reference it. m_frameClock counts
+		// BeginFrame calls and only ever ticks in step with (or slower than) the
+		// registry's frame advances, never faster - ticking slower only delays frees.
+		struct RetiredHeapAllocation
+		{
+			VmaAllocation allocation = VK_NULL_HANDLE;
+			std::uint64_t retiredAtClock = 0;
+		};
+		std::vector<RetiredHeapAllocation> m_retiredHeapAllocations;
+		std::uint64_t m_frameClock = 0;
 		// Identifies the plan the live residents were laid out by. A plan is only re-applied
 		// when the graph changes shape, because applying one destroys every resident.
 		std::uint64_t m_heapPlanSignature = 0;

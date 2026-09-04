@@ -133,6 +133,17 @@ namespace aether::vkutil
 		const VkResult result = vkCreateShadersEXT(device, 2, shaderCreateInfos, nullptr, shaders);
 		if (result != VK_SUCCESS)
 		{
+			// vkCreateShadersEXT leaves every successfully created entry a valid handle
+			// (only the failed ones come back VK_NULL_HANDLE), so a partial failure -
+			// vertex linked, fragment rejected - leaks the vertex shader unless it is
+			// destroyed here, before the error abandons the array.
+			for (VkShaderEXT shader: shaders)
+			{
+				if (shader != VK_NULL_HANDLE)
+				{
+					vkDestroyShaderEXT(device, shader, nullptr);
+				}
+			}
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create graphics shaders for " + std::string(desc.shaderVfsPath)));
 		}
 
