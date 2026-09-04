@@ -245,7 +245,7 @@ namespace aether
 		{
 			m_bgMode = mode;
 			m_bgAngleRadians = angleRadians;
-			m_bgStopCount = stopCount;
+			m_bgStopCount = std::min(stopCount, kMaxBackgroundStops);
 			m_bgStops = stops;
 		}
 

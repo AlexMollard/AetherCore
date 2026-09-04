@@ -373,6 +373,7 @@ namespace aether
 		{
 			vkQueueWaitIdle(static_cast<VkQueue>(m_queue));
 			const std::uint32_t byteSize = fc.width * fc.height * BytesPerPixel(fc.format);
+			gpu::ResourceRegistry::InvalidateMappedBuffer(fc.buffer, 0, byteSize);
 			std::vector<std::uint8_t> raw(byteSize);
 			std::memcpy(raw.data(), fc.mapped, byteSize);
 			std::vector<std::uint8_t> rgba = ConvertToRgba(fc.format, raw.data(), fc.width, fc.height);
@@ -528,10 +529,18 @@ namespace aether
 		{
 			ok = vkWaitForFences(device, 1, &fence, VK_TRUE, 2'000'000'000ull) == VK_SUCCESS; // 2s
 		}
+		if (!ok)
+		{
+			// The copy may still be executing: never free the fence, command buffer, or
+			// readback buffer while the queue owns them. Block until it retires so the
+			// cleanup below is safe; the capture is still reported as failed.
+			vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+		}
 
 		if (ok && mapped != nullptr)
 		{
 			std::vector<std::uint8_t> raw(byteSize);
+			gpu::ResourceRegistry::InvalidateMappedBuffer(bufHandle, 0, byteSize);
 			std::memcpy(raw.data(), mapped, byteSize);
 			std::vector<std::uint8_t> rgba = ConvertToRgba(format, raw.data(), width, height);
 			ok = !rgba.empty() && WritePng(path, rgba.data(), width, height);
