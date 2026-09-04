@@ -6,7 +6,7 @@
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialPacking.hpp"
 #include "material/TextureRegistry.hpp"
-#include "utils/Hash.hpp"
+#include "utils/Logger.hpp"
 
 namespace aether
 {
@@ -19,15 +19,34 @@ namespace aether
 	void MaterialRegistry::InitializeDefault(const MaterialAsset& defaultAsset)
 	{
 		const MaterialHandle h = Acquire(defaultAsset);
+		if (h.IsValid())
+		{
+			const std::scoped_lock lock(m_mutex);
+			m_defaultHandle = h;
+			m_defaultSlot = h.index;
+			return;
+		}
+
+		// Acquire failed - the sink could not allocate (uninitialised buffer, or
+		// all 4096 slots live). kInvalidIndex is not a slot the renderer can
+		// safely index MaterialBuffer with, so pin slot 0 and write the default
+		// material's bytes there: every fallback stays in bounds, and only the
+		// WHICH material shows is wrong - and only when the sink was full.
+		const GpuMaterial packed = PackMaterial(defaultAsset, m_textures);
+		AE_ERROR(LogCategory::Engine, "MaterialRegistry: default material allocation failed - pinning slot 0 as the fallback");
 		const std::scoped_lock lock(m_mutex);
+		m_sink.Write(0u, packed);
 		m_defaultHandle = h;
-		m_defaultSlot = h.index;
+		m_defaultSlot = 0u;
 	}
 
 	MaterialHandle MaterialRegistry::Acquire(const MaterialAsset& asset)
 	{
 		const GpuMaterial packed = PackMaterial(asset, m_textures);
-		const std::uint64_t hash = utils::Fnv1a(&packed, sizeof(packed));
+		// The template is part of the cache identity: two materials with the same
+		// GPU state but different shaders must not share a slot, because the slot
+		// is also where TryDescribe reads the template back from.
+		const std::uint64_t hash = utils::Fnv1a(&packed, sizeof(packed)) ^ HashMaterialTemplate(asset.templateDesc);
 
 		const std::scoped_lock lock(m_mutex);
 
@@ -56,6 +75,7 @@ namespace aether
 		e.hash = hash;
 		e.refcount = 1;
 		e.alive = true;
+		e.templateDesc = asset.templateDesc;
 		const TextureHandle assetTextures[5] = {asset.albedoTex, asset.normalTex, asset.metallicRoughnessTex, asset.occlusionTex, asset.emissiveTex};
 		for (int i = 0; i < 5; ++i)
 		{
@@ -148,11 +168,13 @@ namespace aether
 		out.alphaBlend = (g.flags & GpuMaterial::kAlphaBlend) != 0;
 		out.alphaMask = (g.flags & GpuMaterial::kAlphaMask) != 0;
 		out.modulateVertexColor = (g.flags & GpuMaterial::kModulateVertexColor) != 0;
+		out.receiveShadows = (g.flags & GpuMaterial::kNoReceiveShadows) == 0;
 		out.albedoTex = e.textures[0];
 		out.normalTex = e.textures[1];
 		out.metallicRoughnessTex = e.textures[2];
 		out.occlusionTex = e.textures[3];
 		out.emissiveTex = e.textures[4];
+		out.templateDesc = e.templateDesc;
 		return true;
 	}
 } // namespace aether

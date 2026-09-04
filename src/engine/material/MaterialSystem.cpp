@@ -18,16 +18,22 @@ namespace aether
 		{
 			registry.Release(r.get<MaterialComponent>(e).handle);
 		}
+
+		// Owns the one connection ConnectLifecycle made, so DisconnectLifecycle can
+		// drop exactly that sink. sink.disconnect() detaches EVERY observer on the
+		// signal, and disconnect<&Fn>(registry) needs the registry the API no
+		// longer receives; release() needs neither. No-op until connected.
+		entt::connection s_materialConnection{};
 	} // namespace
 
 	void MaterialSystem::ConnectLifecycle(World& world, MaterialRegistry& registry)
 	{
-		world.GetRegistry().on_destroy<MaterialComponent>().connect<&OnMaterialDestroyed>(registry);
+		s_materialConnection = world.GetRegistry().on_destroy<MaterialComponent>().connect<&OnMaterialDestroyed>(registry);
 	}
 
-	void MaterialSystem::DisconnectLifecycle(World& world)
+	void MaterialSystem::DisconnectLifecycle(World&)
 	{
-		world.GetRegistry().on_destroy<MaterialComponent>().disconnect();
+		s_materialConnection.release();
 	}
 
 	void MaterialSystem::AssignMaterial(World& world, Entity entity, MaterialRegistry& registry, PipelineCache& pipelineCache, const MaterialAsset& asset)

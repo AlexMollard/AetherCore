@@ -7,6 +7,7 @@
 
 #include "material/GpuMaterial.hpp"
 #include "material/MaterialHandle.hpp"
+#include "material/MaterialTemplate.hpp"
 #include "material/TextureHandle.hpp"
 
 namespace aether
@@ -42,6 +43,9 @@ namespace aether
 			std::uint32_t generation = 0;
 			bool alive = false;
 			TextureHandle textures[5]{};
+			// The one authored field PackMaterial cannot round-trip: GpuMaterial
+			// is pipeline-agnostic, so the template lives here for TryDescribe.
+			MaterialTemplate templateDesc{};
 		};
 
 		IMaterialSlotSink& m_sink;

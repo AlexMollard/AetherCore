@@ -14,15 +14,22 @@ namespace aether
 		{
 			buffer.FreeSlot(r.get<EffectParamsComponent>(e).paramSlot);
 		}
+
+		// Owns the one connection ConnectLifecycle made, so DisconnectLifecycle can
+		// drop exactly that sink. sink.disconnect() detaches EVERY observer on the
+		// signal, and disconnect<&Fn>(buffer) needs the buffer the API no longer
+		// receives; release() needs neither. No-op until something was connected.
+		entt::connection s_effectParamsConnection{};
 	} // namespace
 
 	void EffectSystem::ConnectLifecycle(World& world, EffectParamBuffer& buffer)
 	{
-		world.GetRegistry().on_destroy<EffectParamsComponent>().connect<&OnEffectParamsDestroyed>(buffer);
+		s_effectParamsConnection = world.GetRegistry().on_destroy<EffectParamsComponent>().connect<&OnEffectParamsDestroyed>(buffer);
 	}
 
-	void EffectSystem::DisconnectLifecycle(World& world)
+	void EffectSystem::DisconnectLifecycle(World&)
 	{
-		world.GetRegistry().on_destroy<EffectParamsComponent>().disconnect();
+		s_effectParamsConnection.release();
 	}
+
 } // namespace aether

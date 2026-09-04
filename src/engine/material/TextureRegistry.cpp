@@ -16,7 +16,10 @@ namespace aether
 		const TextureHandle h = Acquire(fallbackPath);
 		const std::scoped_lock lock(m_mutex);
 		m_defaultHandle = h;
-		m_defaultSlot = h.IsValid() ? m_entries[h.index].texture.GetBindlessSlot() : 0xFFFFFFFFu;
+		// A failed load yields TextureHandle::Broken(), which passes IsValid() (so
+		// packing still routes through ResolveSlot) but is no entry index - the same
+		// bounds check every other handle consumer here applies.
+		m_defaultSlot = h.IsValid() && h.index < m_entries.size() ? m_entries[h.index].texture.GetBindlessSlot() : 0xFFFFFFFFu;
 	}
 
 	void TextureRegistry::InitializeDefault(TextureResource&& fallback)
@@ -183,6 +186,14 @@ namespace aether
 		}
 		const Entry& e = m_entries[handle.index];
 		if (!e.alive || e.generation != handle.generation)
+		{
+			return false;
+		}
+		// Builtin entries carry a reserved 0x01-prefixed "path" that is by
+		// construction never a real VFS path; serializing it bakes an unloadable
+		// path into the file, so a white/builtin load degrades to magenta after one
+		// save round-trip. Report no path so callers serialize "no texture".
+		if (!e.resolvedPath.empty() && e.resolvedPath.front() == '\x01')
 		{
 			return false;
 		}

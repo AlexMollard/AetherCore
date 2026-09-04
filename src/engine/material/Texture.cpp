@@ -5,7 +5,7 @@
 #include <bit>
 #include <cmath>
 #include <cstring>
-#include <filesystem>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -39,6 +39,24 @@ namespace aether
 
 			return slot;
 		}
+
+		// Destroys the image if any later step Throws. A failed upload must not
+		// leak the VkImage, its VMA allocation and its bindless descriptor slot;
+		// ResourceRegistry::Destroy defers the actual free to the destruction
+		// ring, so releasing here is as frame-safe as a Texture destructor.
+		struct ScopedTexture
+		{
+			gpu::TextureHandle handle{};
+			bool released = false;
+
+			~ScopedTexture()
+			{
+				if (!released && handle.IsValid())
+				{
+					gpu::ResourceRegistry::Destroy(handle);
+				}
+			}
+		};
 
 		// sRGB <-> linear. A mip is an average of the light the parent texels carry, and
 		// sRGB values are not proportional to light, so averaging them directly is simply
@@ -142,6 +160,7 @@ namespace aether
 			{
 				Throw(AetherError::Engine("Texture: CreateTexture failed"));
 			}
+			ScopedTexture lease{handle}; // any Throw below releases the image
 
 			const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(handle);
 
@@ -213,6 +232,7 @@ namespace aether
 
 			RegisterTextureBindless(handle, gpu::ImageLayout::ShaderReadOnly);
 
+			lease.released = true;
 			return handle;
 		}
 	} // namespace
@@ -248,22 +268,32 @@ namespace aether
 
 #pragma pack(pop)
 
-		gpu::Format DxgiToGpuFormat(uint32_t dxgi)
+		// The requested colour space decides the decode, exactly as the
+		// R8G8B8A8 path above does: BC7's Unorm and Unorm_sRGB variants share a
+		// block layout, so either payload can serve either request and the
+		// file's own encoding never overrides the caller's. BC4 is
+		// single-channel data with no sRGB variant at all - an sRGB request
+		// cannot be honoured, and serving it undecoded would silently tilt the
+		// surface (see TextureColorSpace), so it is refused instead.
+		Expected<gpu::Format> DxgiToGpuFormat(uint32_t dxgi, TextureColorSpace colorSpace, std::string_view debugPath)
 		{
 			switch (dxgi)
 			{
 				case DXGI_BC4_UNORM:
+					if (colorSpace == TextureColorSpace::Srgb)
+					{
+						AE_UNEXPECTED(AetherError::Asset("BC4 data texture '" + std::string(debugPath) + "' requested as sRGB - acquire it as TextureColorSpace::Linear"));
+					}
 					return gpu::Format::BC4UnormBlock;
 				case DXGI_BC7_UNORM:
-					return gpu::Format::BC7UnormBlock;
 				case DXGI_BC7_UNORM_SRGB:
-					return gpu::Format::BC7SrgbBlock;
+					return colorSpace == TextureColorSpace::Srgb ? gpu::Format::BC7SrgbBlock : gpu::Format::BC7UnormBlock;
 				default:
-					return gpu::Format::Undefined;
+					AE_UNEXPECTED(AetherError::Vulkan(0, "unsupported DXGI format " + std::to_string(dxgi) + " in: " + std::string(debugPath)));
 			}
 		}
 
-		Expected<gpu::TextureHandle> UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
+		Expected<gpu::TextureHandle> UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace)
 		{
 			constexpr std::size_t kMinSize = sizeof(uint32_t) + sizeof(DdsHeader) + sizeof(DdsDx10Header);
 			if (fileData.size() < kMinSize)
@@ -284,17 +314,13 @@ namespace aether
 				AE_UNEXPECTED(AetherError::Asset("only DX10-extended DDS files are supported: " + std::string(debugPath)));
 			}
 
-			const gpu::Format gpuFmt = DxgiToGpuFormat(dx10.dxgiFormat);
-			if (gpuFmt == gpu::Format::Undefined)
-			{
-				AE_UNEXPECTED(AetherError::Vulkan(0, "unsupported DXGI format " + std::to_string(dx10.dxgiFormat) + " in: " + std::string(debugPath)));
-			}
+			AE_TRY(gpuFmt, DxgiToGpuFormat(dx10.dxgiFormat, colorSpace, debugPath));
 
 			const uint32_t width = hdr.width;
 			const uint32_t height = hdr.height;
 			const std::string ddsName(debugPath);
 			const gpu::TextureDesc desc{
-			        .format = gpuFmt,
+			        .format = *gpuFmt,
 			        .extent = {width, height},
 			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
 			        .aspect = gpu::ImageAspect::Color,
@@ -359,7 +385,7 @@ namespace aether
 		if (magic == DDS_MAGIC)
 		{
 			Texture texture;
-			AE_TRY(handle, UploadBcnDds(fileData, debugPath, device, uploadQueue, uploadPool));
+			AE_TRY(handle, UploadBcnDds(fileData, debugPath, device, uploadQueue, uploadPool, colorSpace));
 			texture.m_handle = *handle;
 			texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
 			return texture;
