@@ -78,3 +78,15 @@ TEST_CASE("ShapeText middle-valigns a single line") {
     const auto g = ShapeText(f, "A", 48.f, {0, 0, 100, 100}, false, 0, 1);
     CHECK(g[0].rect.y == doctest::Approx(35.f));
 }
+
+TEST_CASE("ShapeText trailing newline does not add a phantom line") {
+    const auto f = MakeMonoFont();
+    const auto plain = ShapeText(f, "A", 48.f, {0, 0, 100, 100}, false, 0, 1);
+    const auto trailing = ShapeText(f, "A\n", 48.f, {0, 0, 100, 100}, false, 0, 1);
+    REQUIRE(plain.size() == 1);
+    REQUIRE(trailing.size() == 1);
+    // A phantom empty line would inflate the middle-aligned block height by a full
+    // lineHeight (50) and push the visible glyph down by half of that.
+    CHECK(trailing[0].rect.y == doctest::Approx(plain[0].rect.y));
+    CHECK(trailing[0].rect.y == doctest::Approx(35.f));
+}

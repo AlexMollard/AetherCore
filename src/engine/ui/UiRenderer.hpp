@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -168,6 +169,9 @@ namespace aether::ui
 		CursorService* m_cursor = nullptr;
 		std::string m_cursorTexturePath;
 		TextureHandle m_cursorTexture{};
+		// Earliest time a failed cursor Acquire may be retried; a Broken handle is re-attempted
+		// at most once per kCursorAcquireRetryInterval so a missing path cannot flood the log.
+		std::chrono::steady_clock::time_point m_cursorRetryAt{};
 		GpuDevice* m_gpu = nullptr;
 		gpu::UploadContext* m_upload = nullptr;
 		TextureRegistry* m_textures = nullptr;

@@ -422,8 +422,11 @@ namespace aether::ui
 		// this and was being ignored - then entity id, so canvases at equal bias keep a fixed order
 		// rather than trading places when a neighbour appears. (The effects list above already learned
 		// this lesson; the batched shapes never did.)
-		static std::vector<std::pair<int, Entity>> canvases;
-		canvases.clear();
+		// Local on purpose: a function-local static would be one process-wide buffer shared
+		// by every World building UI draw commands (editor preview world alongside the game
+		// world), and concurrent BuildDrawCommands calls would race on it - the deterministic
+		// order below is worth one small allocation per frame.
+		std::vector<std::pair<int, Entity>> canvases;
 		world.View<UICanvas>().each([&](entt::entity canvasEntity, UICanvas& canvas)
 		        { canvases.emplace_back(canvas.sortBias, World::FromEntt(canvasEntity)); });
 		std::sort(canvases.begin(), canvases.end(),

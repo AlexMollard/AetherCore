@@ -165,6 +165,17 @@ namespace aether::ui
 		m_fontCurveTextures.clear();
 		m_fontUploadFailed.clear();
 
+		// The cursor texture holds a TextureRegistry reference taken in AppendCursor; drop it
+		// before nulling the registry pointer, or the entry's refcount never falls and the
+		// cursor art outlives the renderer that was showing it.
+		if (m_textures != nullptr && m_cursorTexture.IsValid())
+		{
+			m_textures->Release(m_cursorTexture);
+		}
+		m_cursorTexture = {};
+		m_cursorTexturePath.clear();
+		m_cursorRetryAt = {};
+
 		m_defaultFontReady = false;
 		m_textures = nullptr;
 		m_upload = nullptr;
@@ -630,6 +641,11 @@ namespace aether::ui
 		// Above every element any canvas can produce. Layers count up from zero per canvas walk, so this
 		// only has to clear a realistic element count - not be astronomically large.
 		constexpr int kCursorLayer = 1 << 16;
+
+		// How often a failed cursor-texture Acquire is retried. Every frame would log a load
+		// failure per frame for a path that is simply missing; once a second still recovers the
+		// cursor within a second of its art becoming loadable.
+		constexpr std::chrono::seconds kCursorAcquireRetryInterval{1};
 	} // namespace
 
 	void UiRenderer::AppendCursor()
@@ -639,17 +655,31 @@ namespace aether::ui
 			return;
 		}
 
-		// Acquire takes a reference, so the handle is cached and only re-taken when the art actually
-		// changes - re-acquiring every frame would leak a reference per frame.
+		// Acquire takes a reference, so the handle is cached and only re-taken when the art
+		// actually changes - re-acquiring every frame would leak a reference per frame. A
+		// failed Acquire returns Broken(), which IsValid() reports as usable (it routes
+		// through ResolveSlot to the magenta default), so the retry gate has to name the
+		// index: a handle that is not a live entry is re-attempted at most once per
+		// kCursorAcquireRetryInterval, because the art may only become loadable later (a
+		// project configured before its art is imported) while a retry every frame would
+		// log a load failure every frame and bury real diagnostics behind one missing path.
 		const CursorService::Look& look = m_cursor->GetLook();
+		const bool cursorLive = m_cursorTexture.IsValid() && m_cursorTexture.index != TextureHandle::kBrokenIndex;
+		const auto now = std::chrono::steady_clock::now();
 		if (look.texture != m_cursorTexturePath)
 		{
-			if (m_cursorTexture.IsValid())
+			if (cursorLive)
 			{
 				m_textures->Release(m_cursorTexture);
 			}
 			m_cursorTexturePath = look.texture;
 			m_cursorTexture = m_textures->Acquire(m_cursorTexturePath);
+			m_cursorRetryAt = now + kCursorAcquireRetryInterval;
+		}
+		else if (!cursorLive && now >= m_cursorRetryAt)
+		{
+			m_cursorTexture = m_textures->Acquire(m_cursorTexturePath);
+			m_cursorRetryAt = now + kCursorAcquireRetryInterval;
 		}
 		if (!m_cursorTexture.IsValid())
 		{

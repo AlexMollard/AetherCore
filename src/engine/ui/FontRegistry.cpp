@@ -139,7 +139,14 @@ namespace aether::ui
 				wordStartPen = pen.x;
 			}
 		}
-		endLineAt(out.size(), pen.x);
+		// A trailing '\n' already closed the last real line inside the loop; closing again
+		// here would append an empty LineRange and inflate the vertical-alignment block
+		// height by a full lineHeight. An empty final segment (only spaces or missing
+		// glyphs since the last newline) has nothing on it to align, so it is not a line.
+		if (out.size() != lineStart)
+		{
+			endLineAt(out.size(), pen.x);
+		}
 
 		// Horizontal alignment: shift each line's glyphs by its own slack.
 		if (hAlign != 0)
