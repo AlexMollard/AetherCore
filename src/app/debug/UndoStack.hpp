@@ -93,7 +93,19 @@ namespace aether::editor
 		IEditorCommand* Undo(World& world, ServiceContainer& services);
 		IEditorCommand* Redo(World& world, ServiceContainer& services);
 
-		void Clear();
+		// Defined here, not in UndoStack.cpp: PlaySession.cpp compiles into GameRuntime,
+		// which deliberately does not link the editor-only translation units, and the
+		// play/stop restore has to drop a history that now addresses recreated entity
+		// ids. Both bodies are member-field resets, so inlining costs nothing.
+		void Clear()
+		{
+			m_undo.clear();
+			m_redo.clear();
+			m_pendingFields.clear();
+			// A fresh scene load starts clean: no history, and depth 0 is what is on disk.
+			m_editSeq = 0;
+			m_cleanDepth = 0;
+		}
 
 		[[nodiscard]] std::size_t UndoDepth() const
 		{
@@ -122,7 +134,11 @@ namespace aether::editor
 		// Drop the pin again. Used when a save that was optimistically marked clean turns
 		// out to have failed on the writer thread: erring dirty costs a prompt, erring
 		// clean costs the work.
-		void MarkUnsaved();
+		// Inline for the same reason as Clear (GameRuntime does not link UndoStack.cpp).
+		void MarkUnsaved()
+		{
+			m_cleanDepth.reset();
+		}
 
 		[[nodiscard]] bool HasUnsavedChanges() const
 		{

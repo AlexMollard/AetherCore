@@ -111,11 +111,6 @@ namespace aether::editor
 		RecordCommand(std::make_unique<CompositeCommand>(std::move(commands), "Set components"));
 	}
 
-	void UndoStack::MarkUnsaved()
-	{
-		m_cleanDepth.reset();
-	}
-
 	void UndoStack::MarkSaved()
 	{
 		// A drag in flight is already in the world, so it is in the capture this pin is
@@ -235,16 +230,6 @@ namespace aether::editor
 		}
 		++m_editSeq;
 		return raw;
-	}
-
-	void UndoStack::Clear()
-	{
-		m_undo.clear();
-		m_redo.clear();
-		m_pendingFields.clear();
-		// A fresh scene load starts clean: no history, and depth 0 is what is on disk.
-		m_editSeq = 0;
-		m_cleanDepth = 0;
 	}
 
 	void ResetEditHistory(ServiceContainer& services)
