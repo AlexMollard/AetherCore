@@ -55,6 +55,7 @@ endif()
 
 add_subdirectory(tools/assetpack)
 add_subdirectory(tools/control-client)
+add_subdirectory(tools/rendezvous)
 add_subdirectory(src/engine)
 add_subdirectory(src/app)
 
