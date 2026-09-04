@@ -258,19 +258,30 @@ namespace aether::editor
 				ImGui::DragFloat("Frame duration", &frame.durationSeconds, 0.005f, 0.001f, 60.0f, "%.3f s");
 				if (chrome::GhostButton("Move left") && m_selectedFrame > 0)
 				{
-					std::swap(m_animation.frames[static_cast<std::size_t>(m_selectedFrame)], m_animation.frames[static_cast<std::size_t>(m_selectedFrame - 1)]);
+					SwapFrames(m_selectedFrame, m_selectedFrame - 1);
 					--m_selectedFrame;
 				}
 				ImGui::SameLine();
 				if (chrome::GhostButton("Move right") && m_selectedFrame + 1 < static_cast<std::int32_t>(m_animation.frames.size()))
 				{
-					std::swap(m_animation.frames[static_cast<std::size_t>(m_selectedFrame)], m_animation.frames[static_cast<std::size_t>(m_selectedFrame + 1)]);
+					SwapFrames(m_selectedFrame, m_selectedFrame + 1);
 					++m_selectedFrame;
 				}
 				ImGui::SameLine();
 				if (chrome::GhostButton(ICON_FA_TRASH "  Delete", ImVec2(0.0f, 0.0f), chrome::kError))
 				{
+					const auto deletedFrame = static_cast<std::uint32_t>(m_selectedFrame);
 					m_animation.frames.erase(m_animation.frames.begin() + m_selectedFrame);
+					// Events live on frame indices: drop the ones on the deleted frame, shift the rest down.
+					std::erase_if(m_animation.events, [deletedFrame](const auto& e) { return e.frameIndex == deletedFrame; });
+					for (auto& e : m_animation.events)
+					{
+						if (e.frameIndex > deletedFrame)
+						{
+							--e.frameIndex;
+						}
+					}
+					m_selectedEvent = -1;
 					m_selectedFrame = std::min(m_selectedFrame, static_cast<std::int32_t>(m_animation.frames.size()) - 1);
 					m_previewFrame = 0;
 				}
@@ -509,6 +520,25 @@ namespace aether::editor
 	bool SpriteAnimationPanel::AnimationDirty() const
 	{
 		return !m_animationPath.empty() && AnimationSignature() != m_savedAnimationSignature;
+	}
+
+	void SpriteAnimationPanel::SwapFrames(const int a, const int b)
+	{
+		std::swap(m_animation.frames[static_cast<std::size_t>(a)], m_animation.frames[static_cast<std::size_t>(b)]);
+		// Events live on frame indices, so the two swapped indices trade their events.
+		const auto indexA = static_cast<std::uint32_t>(a);
+		const auto indexB = static_cast<std::uint32_t>(b);
+		for (auto& e : m_animation.events)
+		{
+			if (e.frameIndex == indexA)
+			{
+				e.frameIndex = indexB;
+			}
+			else if (e.frameIndex == indexB)
+			{
+				e.frameIndex = indexA;
+			}
+		}
 	}
 
 	void SpriteAnimationPanel::DrawUnsavedAnimationPrompt(app::LayerContext& context)

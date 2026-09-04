@@ -437,9 +437,10 @@ namespace aether::editor
 		bool inNode = false;
 		bool inLink = false;
 		bool sawGraph = false;
+		bool nodeInvalid = false;
 		const auto flush = [&]()
 		{
-			if (inNode)
+			if (inNode && !nodeInvalid)
 			{
 				graph.nodes.push_back(node);
 			}
@@ -449,6 +450,7 @@ namespace aether::editor
 			}
 			inNode = false;
 			inLink = false;
+			nodeInvalid = false;
 		};
 
 		text::ParseToml(materialToml,
@@ -483,10 +485,21 @@ namespace aether::editor
 			        else if (inNode)
 			        {
 				        if (entry.key == "id") { node.id = asInt(0); }
-				        else if (entry.key == "type") { node.type = static_cast<MaterialNodeType>(asInt(0)); }
+				        else if (entry.key == "type")
+				        {
+					        const int type = asInt(0);
+					        if (type < 0 || type > static_cast<int>(MaterialNodeType::ViewDirection))
+					        {
+						        nodeInvalid = true;
+					        }
+					        else
+					        {
+						        node.type = static_cast<MaterialNodeType>(type);
+					        }
+				        }
 				        else if (entry.key == "x") { node.x = text::ParseFloat(entry.value).value_or(0.0f); }
 				        else if (entry.key == "y") { node.y = text::ParseFloat(entry.value).value_or(0.0f); }
-				        else if (entry.key == "slot") { node.slot = static_cast<MaterialTextureSlot>(asInt(0)); }
+				        else if (entry.key == "slot") { node.slot = static_cast<MaterialTextureSlot>(std::clamp(asInt(0), 0, static_cast<int>(MaterialTextureSlot::Emissive))); }
 				        else if (entry.key == "channel") { node.channel = std::clamp(asInt(0), 0, 3); }
 				        else if (entry.key == "value")
 				        {
@@ -512,6 +525,16 @@ namespace aether::editor
 		if (!sawGraph || graph.nodes.empty())
 		{
 			return std::nullopt;
+		}
+		// The file's next_id is advisory: re-derive it from what actually parsed so a
+		// missing or stale value can never mint a duplicate node or link id.
+		for (const MaterialNode& parsedNode : graph.nodes)
+		{
+			graph.nextId = std::max(graph.nextId, parsedNode.id + 1);
+		}
+		for (const MaterialLink& parsedLink : graph.links)
+		{
+			graph.nextId = std::max(graph.nextId, parsedLink.id + 1);
 		}
 		return graph;
 	}

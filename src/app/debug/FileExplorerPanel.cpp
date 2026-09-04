@@ -1062,6 +1062,7 @@ namespace aether::editor
 			{
 				m_selectedPath.clear();
 			}
+			m_treeDirty = true;
 			return true;
 		}
 

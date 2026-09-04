@@ -297,6 +297,37 @@ TEST_CASE("A material with no graph reports no graph")
 	CHECK(!ParseMaterialGraph("").has_value());
 }
 
+// A hand-edited material can carry any integer as a node type; it must not index past the
+// spec table. The bogus node is skipped and the rest of the graph still loads.
+TEST_CASE("An out-of-range node type is skipped, not cast into the spec table")
+{
+	MaterialGraph graph = MakeDefaultMaterialGraph();
+	const std::string file = SerializeMaterialGraph(graph)
+	        + "\n[graph.node.99]\nid = 99\ntype = 99\nx = 0\ny = 0\n";
+
+	const std::optional<MaterialGraph> parsed = ParseMaterialGraph(file);
+	REQUIRE(parsed.has_value());
+	CHECK(parsed->Find(99) == nullptr);
+	CHECK(parsed->nodes.size() == graph.nodes.size());
+}
+
+// A missing or stale next_id must not make the next added node reuse an existing id.
+TEST_CASE("next_id is re-derived from the parsed nodes so new ids cannot collide")
+{
+	MaterialGraph graph = MakeDefaultMaterialGraph();
+	graph.nodes.push_back(MaterialNode{.id = 7, .type = MaterialNodeType::Fresnel});
+	std::string file = SerializeMaterialGraph(graph);
+	// Stale it by hand, the way a mangled or hand-edited file arrives.
+	const std::size_t at = file.find("next_id");
+	REQUIRE(at != std::string::npos);
+	file.replace(at, file.find('\n', at) - at, "next_id = 1");
+
+	const std::optional<MaterialGraph> parsed = ParseMaterialGraph(file);
+	REQUIRE(parsed.has_value());
+	CHECK(parsed->nextId > 7);
+	CHECK(parsed->Find(parsed->nextId) == nullptr);
+}
+
 // "[graphics]" must not be mistaken for the graph block by a prefix test.
 TEST_CASE("A section that merely starts with graph is not a graph")
 {

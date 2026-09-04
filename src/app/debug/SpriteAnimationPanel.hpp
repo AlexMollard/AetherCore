@@ -38,6 +38,7 @@ namespace aether::editor
 		// over work that is not. Built only when a switch is requested.
 		[[nodiscard]] std::uint64_t AnimationSignature() const;
 		[[nodiscard]] bool AnimationDirty() const;
+		void SwapFrames(int a, int b);
 		void DrawUnsavedAnimationPrompt(app::LayerContext& context);
 		std::uint64_t m_savedAnimationSignature = 0;
 		std::string m_pendingAnimationPath;

@@ -575,8 +575,11 @@ namespace aether::editor
 		if (!m_hasSlicePreview && m_selectedRegion >= 0 && m_selectedRegion < static_cast<std::int32_t>(m_atlas.sprites.size()) && ImGui::IsItemHovered() && ImGui::GetIO().KeyAlt && ImGui::IsMouseDown(ImGuiMouseButton_Left))
 		{
 			SpriteRegion& region = m_atlas.sprites[static_cast<std::size_t>(m_selectedRegion)];
-			const ImVec2 mouse = ImGui::GetIO().MousePos;
-			region.pivot = glm::clamp(glm::vec2{(mouse.x - origin.x) / m_zoom - region.pixelRect.x, (mouse.y - origin.y) / m_zoom - region.pixelRect.y} / glm::vec2{region.pixelRect.width, region.pixelRect.height}, glm::vec2(0.0f), glm::vec2(1.0f));
+			if (region.pixelRect.width > 0 && region.pixelRect.height > 0)
+			{
+				const ImVec2 mouse = ImGui::GetIO().MousePos;
+				region.pivot = glm::clamp(glm::vec2{(mouse.x - origin.x) / m_zoom - region.pixelRect.x, (mouse.y - origin.y) / m_zoom - region.pixelRect.y} / glm::vec2{region.pixelRect.width, region.pixelRect.height}, glm::vec2(0.0f), glm::vec2(1.0f));
+			}
 		}
 		ImGui::EndChild();
 		ImGui::PopStyleColor();
