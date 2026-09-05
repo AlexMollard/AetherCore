@@ -26,6 +26,13 @@ namespace aether::net
 		// never resends an unchanged value, a stale field applied out of order stays
 		// wrong until that field next changes - permanently, in the common case.
 		constexpr enet_uint32 kUnreliableSequenced = ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT;
+
+		// ENet bounds a peer's buffered incoming data at 32 MB (host->maximumWaitingData),
+		// not at the count delivered per service call - so a flooding peer can hand one
+		// Poll a batch that all gets copied onto the main thread before any upper layer
+		// sees a byte. No legitimate message comes close to this (a fragmented snapshot
+		// is ~8 KB), so anything larger is dropped here rather than copied.
+		constexpr std::size_t kMaxPacketBytes = 64 * 1024;
 	} // namespace
 
 	NetworkSubsystem::~NetworkSubsystem()
@@ -245,6 +252,13 @@ namespace aether::net
 		}
 		ENetPacket* packet = enet_packet_create(bytes.data(), bytes.size(),
 		        reliable ? ENET_PACKET_FLAG_RELIABLE : kUnreliableSequenced);
+		// enet_packet_create returns nullptr on allocation failure, and both
+		// enet_peer_send and enet_host_broadcast dereference the packet - returning
+		// here is the only path that does not crash inside ENet.
+		if (packet == nullptr)
+		{
+			return;
+		}
 		// enet_peer_send only takes ownership of the packet on success; on failure
 		// (bad channel, oversized payload, allocation failure) it leaves the packet
 		// with a zero refcount for us to free, or it leaks.
@@ -262,6 +276,10 @@ namespace aether::net
 		}
 		ENetPacket* packet = enet_packet_create(bytes.data(), bytes.size(),
 		        reliable ? ENET_PACKET_FLAG_RELIABLE : kUnreliableSequenced);
+		if (packet == nullptr)
+		{
+			return; // allocation failure; enet_host_broadcast would dereference null
+		}
 		// enet_host_broadcast frees the packet itself when no peer accepts it, unlike
 		// enet_peer_send - do not destroy it here.
 		enet_host_broadcast(m_host, static_cast<enet_uint8>(channel), packet);
@@ -293,6 +311,15 @@ namespace aether::net
 			}
 			case ENET_EVENT_TYPE_DISCONNECT:
 			{
+				// If this was the client's link to the host, forget it here or the
+				// transport stays wedged: m_serverPeer dangling makes Role() report
+				// Client over a dead link and ConnectThrough refuse with "already
+				// connected to a host" - and Connect() would destroy the socket and
+				// the NAT mapping the punch that led here created.
+				if (event.peer == m_serverPeer)
+				{
+					m_serverPeer = nullptr;
+				}
 				const auto id = static_cast<ConnectionId>(reinterpret_cast<std::uintptr_t>(event.peer->data));
 				event.peer->data = nullptr;
 				m_events.push_back(NetEvent{.kind = NetEvent::Kind::Disconnected, .peer = id});
@@ -300,11 +327,17 @@ namespace aether::net
 			}
 			case ENET_EVENT_TYPE_RECEIVE:
 			{
-				const auto id = static_cast<ConnectionId>(reinterpret_cast<std::uintptr_t>(event.peer->data));
-				NetEvent e{.kind = NetEvent::Kind::Data, .peer = id, .channel = event.channelID};
-				e.data.resize(event.packet->dataLength);
-				std::memcpy(e.data.data(), event.packet->data, event.packet->dataLength);
-				m_events.push_back(std::move(e));
+				// The packet is always destroyed - ENet's budget must keep draining or
+				// the peer stalls - but only packets under the ceiling are copied into
+				// m_events. See kMaxPacketBytes above.
+				if (event.packet->dataLength <= kMaxPacketBytes)
+				{
+					const auto id = static_cast<ConnectionId>(reinterpret_cast<std::uintptr_t>(event.peer->data));
+					NetEvent e{.kind = NetEvent::Kind::Data, .peer = id, .channel = event.channelID};
+					e.data.resize(event.packet->dataLength);
+					std::memcpy(e.data.data(), event.packet->data, event.packet->dataLength);
+					m_events.push_back(std::move(e));
+				}
 				enet_packet_destroy(event.packet);
 				break;
 			}

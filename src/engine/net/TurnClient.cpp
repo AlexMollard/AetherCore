@@ -360,11 +360,29 @@ namespace aether::net
 	{
 		if (entry.channelNumber == 0)
 		{
-			entry.channelNumber = m_nextChannelNumber;
-			++m_nextChannelNumber;
-			if (m_nextChannelNumber > 0x7FFFu)
+			// Numbers wrap, but a wrapped number must never land on one some other
+			// binding still holds: OnDatagram's lookup hands ChannelData to the FIRST
+			// matching bound channel, so a reuse would attribute relayed traffic to
+			// the OLD peer.
+			std::uint16_t candidate = m_nextChannelNumber;
+			for (unsigned tries = 0; tries <= 0x7FFFu - 0x4000u; ++tries)
 			{
-				m_nextChannelNumber = 0x4000u; // wrap; a session binding 16k peers never happens, but never drift out of the valid range either
+				const bool taken = std::ranges::any_of(m_peers,
+				        [&](const PeerBinding& p) { return p.channelBound && p.channelNumber == candidate; });
+				if (!taken)
+				{
+					entry.channelNumber = candidate;
+					m_nextChannelNumber = candidate < 0x7FFFu ? static_cast<std::uint16_t>(candidate + 1) : 0x4000u;
+					break;
+				}
+				candidate = candidate < 0x7FFFu ? static_cast<std::uint16_t>(candidate + 1) : 0x4000u;
+			}
+			if (entry.channelNumber == 0)
+			{
+				// Every number is held by a live binding - keep this peer on Send
+				// indications rather than bind onto an occupied channel.
+				entry.channelCooldown = kUpkeepCooldownSeconds;
+				return;
 			}
 		}
 		entry.channelPending.id = stun::MakeTransactionId();
@@ -400,6 +418,17 @@ namespace aether::net
 			return;
 		}
 
+		// A 438/error NONCE is adopted only from a response whose MESSAGE-INTEGRITY
+		// verifies: by this point the key is known and every conformant server reply
+		// is integrity-protected (RFC 5389 s10.2.3), so an unverified one is an
+		// on-path spoof racing the real reply - adopting its nonce would wedge the
+		// retry loop against the genuine server. Keep waiting instead.
+		const auto key = stun::crypto::LongTermKey(m_username, m_realm, m_password);
+		if (!reader.VerifyMessageIntegrity(key))
+		{
+			AE_WARN(LogCategory::App, "TURN: unverified CreatePermission error response ignored; still waiting");
+			return;
+		}
 		// A fresh NONCE (e.g. from a 438) is adopted regardless of the error code, so the next
 		// attempt - after the cooldown below - has whatever the server most recently issued.
 		if (const auto nonce = reader.Text(stun::Attribute::Nonce); nonce.has_value())
@@ -437,6 +466,16 @@ namespace aether::net
 			return;
 		}
 
+		// Same rule as CreatePermission: post-auth, an error response that does not
+		// verify is a spoof racing the real reply, not the server's new nonce.
+		{
+			const auto key = stun::crypto::LongTermKey(m_username, m_realm, m_password);
+			if (!reader.VerifyMessageIntegrity(key))
+			{
+				AE_WARN(LogCategory::App, "TURN: unverified ChannelBind error response ignored; still waiting");
+				return;
+			}
+		}
 		if (const auto nonce = reader.Text(stun::Attribute::Nonce); nonce.has_value())
 		{
 			m_nonce.assign(*nonce);

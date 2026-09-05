@@ -34,4 +34,10 @@ namespace aether::net
 			enet_deinitialize();
 		}
 	}
+
+	int EnetReferenceCount()
+	{
+		const std::lock_guard<std::mutex> lock(g_enetInitMutex);
+		return g_enetRefCount;
+	}
 } // namespace aether::net

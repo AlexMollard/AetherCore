@@ -28,6 +28,17 @@ namespace aether::editor
 	using aether::net::AcquireEnet;
 	using aether::net::ReleaseEnet;
 
+	namespace
+	{
+		// The inbound queue is drained once per editor frame; a local client sending
+		// faster than that would otherwise grow it (two strings plus a params JSON per
+		// entry) without bound. 64 is several frames' worth of any sane automation.
+		constexpr std::size_t kMaxQueuedRequests = 64;
+		// No legitimate control request is anywhere near this large; anything bigger
+		// is a flood (or a dump of a hostile packet) and is refused before parsing,
+		// where the parse itself is the cost being attacked.
+		constexpr std::size_t kMaxRequestBytes = 256 * 1024;
+	} // namespace
 
 	struct ControlServer::Impl
 	{
@@ -198,6 +209,18 @@ namespace aether::editor
 					// reply, never with an exception: this thread has no handler, so an
 					// escape (a nlohmann type_error, a bad allocation, anything a future
 					// edit adds) is std::terminate for the whole editor.
+					const auto refuse = [&](std::string_view why, bool hadId, const json& id)
+					{
+						AE_WARN(LogCategory::App, "ControlServer: dropping request: {}.", why);
+						const std::lock_guard<std::mutex> outLock(m_impl->outMutex);
+						m_impl->outQueue.push(Impl::Outbound{event.peer, event.peer != nullptr ? event.peer->connectID : 0,
+						        json{{"id", hadId ? id : json{}}, {"error", why}}.dump()});
+					};
+					if (event.packet->dataLength > kMaxRequestBytes)
+					{
+						refuse("request too large", false, json{});
+					}
+					else
 					try
 					{
 						const std::string message(reinterpret_cast<const char*>(event.packet->data), event.packet->dataLength);
@@ -210,18 +233,36 @@ namespace aether::editor
 						const bool methodOk = !hasMethod || parsed["method"].is_string();
 						if (!parsed.is_discarded() && parsed.is_object() && idOk && methodOk)
 						{
+							const std::lock_guard<std::mutex> lock(m_impl->inMutex);
+							// Drop (with an error reply) rather than queue when the game
+							// thread is behind: an unbounded queue is the memory spike, and
+							// a client that far ahead is flooding, not automating.
+							if (m_impl->inQueue.size() >= kMaxQueuedRequests)
+							{
+								const std::uint64_t reqId = parsed.value("id", static_cast<std::uint64_t>(0));
+								const std::lock_guard<std::mutex> outLock(m_impl->outMutex);
+								m_impl->outQueue.push(Impl::Outbound{event.peer, event.peer != nullptr ? event.peer->connectID : 0,
+								        json{{"id", reqId}, {"error", "server busy - request dropped"}}.dump()});
+								enet_packet_destroy(event.packet);
+								continue;
+							}
 							Impl::Inbound in;
 							in.peer = event.peer;
 							in.connectId = event.peer != nullptr ? event.peer->connectID : 0;
 							in.reqId = parsed.value("id", static_cast<std::uint64_t>(0));
 							in.method = parsed.value("method", std::string{});
 							in.params = parsed.contains("params") ? parsed["params"].dump() : std::string("{}");
-							const std::lock_guard<std::mutex> lock(m_impl->inMutex);
+							const bool wasEmpty = m_impl->inQueue.empty();
 							m_impl->inQueue.push(std::move(in));
 							// Commands are drained on the main loop thread, which may be parked in
 							// the idle event wait. Without this an automated session would sit
-							// behind the idle interval for every single call.
-							aether::Window::PostEmptyEvent();
+							// behind the idle interval for every single call. One post per
+							// transition to non-empty is enough; one per request just lets a
+							// flood pin the main loop awake.
+							if (wasEmpty)
+							{
+								aether::Window::PostEmptyEvent();
+							}
 						}
 						else
 						{
@@ -238,10 +279,7 @@ namespace aether::editor
 							{
 								why = "field 'method' must be a string";
 							}
-							AE_WARN(LogCategory::App, "ControlServer: dropping malformed request: {}.", why);
-							json envelope{{"id", hasId ? parsed.at("id") : json{}}, {"error", why}};
-							const std::lock_guard<std::mutex> lock(m_impl->outMutex);
-							m_impl->outQueue.push(Impl::Outbound{event.peer, event.peer != nullptr ? event.peer->connectID : 0, envelope.dump()});
+							refuse(why, hasId, hasId ? parsed.at("id") : json{});
 						}
 					}
 					catch (const std::exception& e)
@@ -259,6 +297,7 @@ namespace aether::editor
 			}
 		}
 	}
+
 
 	void ControlServer::DrainCommands()
 	{

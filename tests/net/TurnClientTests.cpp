@@ -511,3 +511,104 @@ TEST_CASE("A datagram from anyone but the configured TURN server is left alone")
 	CHECK_FALSE(delivery.consumed);
 	CHECK_FALSE(delivery.peer.has_value());
 }
+
+TEST_CASE("An unverified error response on the permission path does not replace the nonce")
+{
+	// An on-path attacker who sees the CreatePermission can race a forged 438 with
+	// a nonce of their choosing. Post-auth every conformant server reply is
+	// integrity-protected, so an unverified error is the forgery - adopting its
+	// nonce wedges every later retry against the real server.
+	SentLog sent;
+	TurnClient client = MakeClient(sent);
+	DriveToAllocated(client, sent);
+
+	sent.clear();
+	client.PermitPeer(kPeer);
+	REQUIRE(sent.size() == 1);
+	{
+		const auto reader = stun::MessageReader::Parse(AsBytes(sent.back()));
+		REQUIRE(reader.has_value());
+		stun::MessageBuilder forged(stun::Method::CreatePermission, stun::MessageClass::ErrorResponse, reader->GetTransactionId());
+		forged.AddU32(stun::Attribute::ErrorCode, PackErrorCode(438));
+		forged.AddText(stun::Attribute::Nonce, "attacker-nonce"); // and no MESSAGE-INTEGRITY
+		CHECK(client.OnDatagram(kServer, std::as_bytes(forged.Bytes())).consumed);
+	}
+
+	// Either a cooldown retry (pre-fix) or a retransmission (post-fix) follows; in
+	// both worlds the next CreatePermission on the wire shows which nonce stuck.
+	client.Tick(6.0f);
+	REQUIRE(sent.size() == 2);
+	const auto reader = stun::MessageReader::Parse(AsBytes(sent.back()));
+	REQUIRE(reader.has_value());
+	REQUIRE(reader->GetMethod() == stun::Method::CreatePermission);
+	const auto nonce = reader->Text(stun::Attribute::Nonce);
+	REQUIRE(nonce.has_value());
+	CHECK(*nonce == "nonce-1"); // pre-fix this is "attacker-nonce"
+}
+
+TEST_CASE("Once every channel number is bound, an extra peer stays on Send indications instead of reusing a bound channel")
+{
+	// Channel numbers wrap 0x7FFF -> 0x4000. A wrapped bind used to land on a
+	// number the FIRST-bound peer still holds, and OnDatagram hands ChannelData
+	// to the first matching binding - misdelivering that peer's relayed traffic.
+	//
+	// Binding all 0x4000 numbers takes 0x4000 ticks, i.e. ~164 seconds of client
+	// time, so allocation and permission refreshes necessarily fire part-way
+	// through. This test therefore never asserts an exact send COUNT: it picks the
+	// request it wants out of the log by method. Counting would pin the refresh
+	// schedule, which is not what this test is about, and which is exactly how it
+	// failed first time round.
+	SentLog sent;
+	TurnClient client = MakeClient(sent);
+	DriveToAllocated(client, sent);
+
+	const auto lastOfMethod = [](const SentLog& log, stun::Method method) -> std::vector<std::uint8_t>
+	{
+		for (auto it = log.rbegin(); it != log.rend(); ++it)
+		{
+			const auto reader = stun::MessageReader::Parse(AsBytes(*it));
+			if (reader.has_value() && reader->GetMethod() == method)
+			{
+				return *it;
+			}
+		}
+		return {};
+	};
+
+	// Bind all 0x4000 channel numbers (0x4000..0x7FFF), one per peer.
+	for (std::uint32_t i = 0; i < 0x4000u; ++i)
+	{
+		const stun::Endpoint peer = MakeEndpoint(0x0A000000u + i + 1u, 40000);
+		client.PermitPeer(peer);
+		const std::vector<std::uint8_t> permission = lastOfMethod(sent, stun::Method::CreatePermission);
+		REQUIRE_FALSE(permission.empty());
+		RespondSuccess(client, stun::Method::CreatePermission, permission);
+		client.Tick(0.01f);
+		const std::vector<std::uint8_t> bind = lastOfMethod(sent, stun::Method::ChannelBind);
+		REQUIRE_FALSE(bind.empty());
+		RespondSuccess(client, stun::Method::ChannelBind, bind);
+		sent.clear();
+	}
+
+	// Peer number 0x4001: the counter has wrapped, and no number is free.
+	const stun::Endpoint extra = MakeEndpoint(0x0A000000u + 0x4001u, 40000);
+	client.PermitPeer(extra);
+	const std::vector<std::uint8_t> extraPermission = lastOfMethod(sent, stun::Method::CreatePermission);
+	REQUIRE_FALSE(extraPermission.empty());
+	RespondSuccess(client, stun::Method::CreatePermission, extraPermission);
+	client.Tick(0.01f);
+
+	// Pre-fix this tick produced a ChannelBind reusing 0x4000; post-fix there is
+	// no free number, so the peer must stay on Send indications.
+	CHECK(lastOfMethod(sent, stun::Method::ChannelBind).empty());
+
+	sent.clear();
+	const std::vector<std::byte> payload{std::byte{0x01}};
+	client.SendToPeer(extra, payload);
+	REQUIRE_FALSE(sent.empty());
+	// A Send indication, never ChannelData on a channel another peer still holds.
+	for (const auto& raw: sent)
+	{
+		CHECK_FALSE(stun::LooksLikeChannelData(AsBytes(raw)));
+	}
+}

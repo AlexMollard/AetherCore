@@ -5,6 +5,7 @@
 #include <span>
 #include <thread>
 
+#include "net/EnetInit.hpp"
 #include "net/NetComponents.hpp"
 #include "net/NetSession.hpp"
 #include "net/NetSnapshot.hpp"
@@ -130,18 +131,20 @@ TEST_CASE("A client connects to a host over loopback and exchanges a payload")
 
 TEST_CASE("Two subsystems can coexist and outlive each other")
 {
-	// This is the scenario the shared ENet refcount (EnetInit.hpp) exists for: an
-	// editor ControlServer and a game NetworkSubsystem sharing one process, where
-	// either can tear down while the other is still active. It will NOT fail against
-	// a broken (non-shared, or unrefcounted) implementation on Windows, because the
-	// underlying WSAStartup/timeBeginPeriod primitives tolerate redundant init/deinit
-	// - so passing here is not proof the refcount is genuine. It pins the intended
-	// usage and would catch a regression on a platform where double-deinit is fatal.
+	// The shared ENet refcount (EnetInit.hpp) exists for an editor ControlServer
+	// and a game NetworkSubsystem sharing one process, where either can tear down
+	// while the other is still active. On Windows the underlying WSAStartup /
+	// timeBeginPeriod primitives tolerate redundant init/deinit, so the refcount
+	// is asserted directly through EnetReferenceCount(): two references while
+	// both subsystems are up, zero once both are down. With the refcounting
+	// deleted (AcquireEnet/ReleaseEnet as no-ops) the counter stays 0 and this
+	// fails - which no behavioural check on this platform can.
 	net::NetworkSubsystem host;
 	net::NetworkSubsystem client;
 
 	REQUIRE(host.Host(24682, 4));
 	REQUIRE(client.Connect("127.0.0.1", 24682));
+	CHECK(net::EnetReferenceCount() == 2);
 
 	net::ConnectionId hostSawPeer = 0;
 	const bool connected = PumpUntil(host, client,
@@ -161,6 +164,7 @@ TEST_CASE("Two subsystems can coexist and outlive each other")
 	// The client tears down and releases its ENet reference while the host is
 	// still active - the host must keep working afterwards.
 	client.Disconnect();
+	CHECK(net::EnetReferenceCount() == 1);
 
 	const std::string payload = "still alive";
 	host.Send(hostSawPeer, net::kChannelReliable, true,
@@ -169,7 +173,105 @@ TEST_CASE("Two subsystems can coexist and outlive each other")
 	CHECK(host.Role() == net::NetRole::Host);
 
 	host.Disconnect();
+	CHECK(net::EnetReferenceCount() == 0);
 	CHECK(host.Role() == net::NetRole::Offline);
+}
+
+TEST_CASE("A client whose host dies can ConnectThrough again on the same socket")
+{
+	// Regression: Poll's DISCONNECT case never cleared m_serverPeer, so a client
+	// that lost its host stayed wedged - ConnectThrough refused with "already
+	// connected to a host", and the only way out was Connect(), which destroys the
+	// punched socket and its NAT mapping. ConnectThrough has to succeed on the
+	// existing socket once the Disconnected event has been delivered.
+	net::NetworkSubsystem host;
+	net::NetworkSubsystem client;
+
+	REQUIRE(host.Host(24687, 4));
+	REQUIRE(client.Connect("127.0.0.1", 24687));
+
+	REQUIRE(PumpUntil(host, client,
+	        [&]
+	        {
+		        for (const net::NetEvent& e: host.Events())
+		        {
+			        if (e.kind == net::NetEvent::Kind::Connected)
+			        {
+				        return true;
+			        }
+		        }
+		        return false;
+	        }));
+
+	// The host dies outright - the client learns of it only via the transport
+	// timeout or reset, not through any call of its own.
+	host.Disconnect();
+
+	REQUIRE(PumpUntil(client, host,
+	        [&]
+	        {
+		        for (const net::NetEvent& e: client.Events())
+		        {
+			        if (e.kind == net::NetEvent::Kind::Disconnected)
+			        {
+				        return true;
+		        }
+		        }
+		        return false;
+	        },
+	        10000));
+
+	// Before the fix this failed with "already connected to a host".
+	const net::NatTraversal::Endpoint endpoint{0x7F000001u, 24688};
+	REQUIRE(client.ConnectThrough(endpoint));
+}
+
+TEST_CASE("A packet over the transport's size ceiling is dropped, not copied")
+{
+	// Poll caps what it will copy into m_events per packet; anything larger is
+	// destroyed at the transport. Pre-fix, a hostile peer's oversized packet was
+	// handed up in full - the allocation spike this ceiling exists to bound.
+	net::NetworkSubsystem host;
+	net::NetworkSubsystem client;
+
+	REQUIRE(host.Host(24689, 4));
+	REQUIRE(client.Connect("127.0.0.1", 24689));
+
+	REQUIRE(PumpUntil(host, client,
+	        [&]
+	        {
+		        for (const net::NetEvent& e: host.Events())
+		        {
+			        if (e.kind == net::NetEvent::Kind::Connected)
+			        {
+				        return true;
+			        }
+		        }
+		        return false;
+	        }));
+
+	std::vector<std::byte> big(128 * 1024);
+	client.Send(0, net::kChannelReliable, true, big);
+	client.Flush();
+
+	bool sawAny = false;
+	PumpUntil(host, client,
+	        [&]
+	        {
+		        for (const net::NetEvent& e: host.Events())
+		        {
+			        if (e.kind == net::NetEvent::Kind::Data)
+			        {
+				        sawAny = true;
+			        }
+		        }
+		        return false;
+	        },
+	        300);
+	CHECK_FALSE(sawAny);
+
+	client.Disconnect();
+	host.Disconnect();
 }
 
 TEST_CASE("A send on an invalid channel is a no-op")

@@ -47,17 +47,22 @@ namespace aether::net::stun
 
 	TransactionId MakeTransactionId()
 	{
-		// Seeded per call from the clock as well as random_device: on the platforms where
-		// random_device is a fixed sequence (some MinGW builds), seeding from it alone
-		// would hand every peer on every run the same "random" id.
-		static thread_local std::mt19937 engine{[]
+		// Two random_device draws (64 bits) mixed with the clock seed a 64-bit engine,
+		// which then fills all 12 id bytes. A single 32-bit draw - the previous seeding -
+		// left only ~2^32 distinct output sequences, making the header's 96-bit-
+		// randomness claim false and an off-path spoofed Binding Success a CPU-hours
+		// enumeration rather than a practical impossibility. On platforms where
+		// random_device is a fixed sequence (some MinGW builds) the clock is the only
+		// real entropy, which is why it stays in the mix.
+		static thread_local std::mt19937_64 engine{[]
 		        {
 			        std::random_device device;
-			        const auto now = static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count());
-			        return device() ^ now;
+			        const auto seed = (static_cast<std::uint64_t>(device()) << 32) ^ device()
+			                ^ static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+			        return seed;
 		        }()};
 		std::uniform_int_distribution<unsigned int> byte(0, 255);
-
+	
 		TransactionId id;
 		for (std::uint8_t& b: id.bytes)
 		{

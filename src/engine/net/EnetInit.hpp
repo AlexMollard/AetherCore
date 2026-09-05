@@ -9,4 +9,10 @@ namespace aether::net
 	// enet_deinitialize() while the other is still running.
 	[[nodiscard]] bool AcquireEnet();
 	void ReleaseEnet();
+
+	// Test observation only: the current number of outstanding ENet references.
+	// The suite cannot observe the refcount through behaviour on Windows (the
+	// underlying primitives tolerate redundant init/deinit), so it asserts on this
+	// instead - nothing outside the tests should need it.
+	[[nodiscard]] int EnetReferenceCount();
 } // namespace aether::net
