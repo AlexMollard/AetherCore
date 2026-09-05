@@ -8,6 +8,7 @@
 
 #include "net/NetComponents.hpp"
 #include "net/NetworkContext.hpp"
+#include "net/NetRpc.hpp"
 #include "net/RoomCode.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
@@ -19,6 +20,28 @@
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
+
+// FFI ordinal parity, pinned on the native side at compile time.
+//
+// NetTraversalState (managed/AetherCore/Net.cs) and NetRpcTarget
+// (managed/AetherCore/NetAttributes.cs) cross this boundary as plain ints - and
+// an RPC target then goes on the wire as a raw byte - compared by ORDINAL, never
+// by name. A C# test cannot read a C++ enum, so the managed tests pin the managed
+// literals (managed/AetherCore.Tests/NetSessionTests.cs) and these static_asserts
+// pin the native side: reordering either enum fails a build instead of every peer
+// silently reporting the wrong traversal state or RPC direction. Change both
+// sides together or not at all.
+static_assert(static_cast<std::int32_t>(aether::net::TraversalState::Idle) == 0);
+static_assert(static_cast<std::int32_t>(aether::net::TraversalState::Mapping) == 1);
+static_assert(static_cast<std::int32_t>(aether::net::TraversalState::Signaling) == 2);
+static_assert(static_cast<std::int32_t>(aether::net::TraversalState::Punching) == 3);
+static_assert(static_cast<std::int32_t>(aether::net::TraversalState::Relaying) == 4);
+static_assert(static_cast<std::int32_t>(aether::net::TraversalState::Connecting) == 5);
+static_assert(static_cast<std::int32_t>(aether::net::TraversalState::Connected) == 6);
+static_assert(static_cast<std::int32_t>(aether::net::TraversalState::Failed) == 7);
+static_assert(static_cast<std::int32_t>(aether::net::NetRpcTarget::Server) == 0);
+static_assert(static_cast<std::int32_t>(aether::net::NetRpcTarget::Client) == 1);
+static_assert(static_cast<std::int32_t>(aether::net::NetRpcTarget::Multicast) == 2);
 
 // The Net.* script API's native half.
 //
@@ -57,6 +80,31 @@ namespace
 		}
 		std::memcpy(buffer, value.data(), n);
 		return static_cast<std::int32_t>(n);
+	}
+
+	// A replicated display name rides the snapshot codec, which refuses a string past
+	// its own 64 KiB cap - and a refused string aborts the whole packet it was written
+	// into, so every field after it is lost. Capping at the source keeps the value
+	// sendable. Generous rather than large: this is a nameplate label, not a document.
+	constexpr std::size_t kMaxPlayerNameBytes = 256u;
+
+	// Truncate to at most `maxBytes`, backing off to a UTF-8 code-point boundary for
+	// the same reason CopyOut does: cutting inside a multi-byte character leaves a
+	// dangling continuation sequence that decodes to a replacement character.
+	std::string ClampUtf8(const char* utf8, std::size_t maxBytes)
+	{
+		std::string value{utf8};
+		if (value.size() <= maxBytes)
+		{
+			return value;
+		}
+		std::size_t n = maxBytes;
+		while (n > 0 && (static_cast<unsigned char>(value[n]) & 0xC0u) == 0x80u)
+		{
+			--n;
+		}
+		value.resize(n);
+		return value;
 	}
 
 	// Queue `entity` and everything under it for destruction at the end of the script
@@ -302,12 +350,16 @@ AE_SCRIPT_API void aether_net_set_player_name(std::uint32_t entityId, const char
 		        entityId);
 		return;
 	}
-	if (auto* player = world.TryGet<aether::net::NetPlayer>(entity))
-	{
-		player->displayName = nameUtf8;
-		return;
-	}
-	world.Emplace<aether::net::NetPlayer>(entity, aether::net::NetPlayer{.displayName = nameUtf8});
+	// Capped before it is stored, because displayName is a REPLICATED string and the
+	// snapshot codec refuses one past its own 64 KiB limit - an uncapped name would
+	// be emitted, rejected at the far end, and abort the whole packet it rode in,
+	// losing every field written after it, permanently (the sender's cache believes
+	// it was delivered). Truncating here keeps the value sendable instead. A name is
+	// a label on a nameplate, so the bound is generous rather than large, and it
+	// backs off to a UTF-8 code-point boundary the way CopyOut does, so a cut never
+	// produces half a character.
+	world.EmplaceOrReplace<aether::net::NetPlayer>(entity,
+	        aether::net::NetPlayer{.displayName = ClampUtf8(nameUtf8, kMaxPlayerNameBytes)});
 	});
 }
 
@@ -346,7 +398,15 @@ AE_SCRIPT_API std::int32_t aether_net_get_player_name(std::uint32_t entityId, ch
 {
 	return SafeExport([&] -> std::int32_t
 	{
-	const auto* player = ActiveWorld().TryGet<aether::net::NetPlayer>(aether::Entity{entityId});
+	const aether::Entity entity{entityId};
+	// Id 0 is the SDK's invalid handle, but entt's slot 0 is a live entity: without
+	// this check Net.GetPlayerName(default) answers for whatever the world's
+	// first-created entity happens to be.
+	if (!entity.IsValid())
+	{
+		return 0;
+	}
+	const auto* player = ActiveWorld().TryGet<aether::net::NetPlayer>(entity);
 	return player != nullptr ? CopyOut(player->displayName, buffer, capacity) : 0;
 	});
 }
@@ -360,7 +420,14 @@ AE_SCRIPT_API std::uint32_t aether_net_get_player_ping(std::uint32_t entityId)
 	// value is the only answer that exists. On the owner it is the same number the
 	// transport reported a tick ago, so one accessor serves both and a game never has
 	// to ask which peer it is running on.
-	const auto* player = ActiveWorld().TryGet<aether::net::NetPlayer>(aether::Entity{entityId});
+	const aether::Entity entity{entityId};
+	// Same reason as aether_net_get_player_name: id 0 is invalid but entt slot 0
+	// is live, and that entity's ping is not this caller's to read.
+	if (!entity.IsValid())
+	{
+		return 0u;
+	}
+	const auto* player = ActiveWorld().TryGet<aether::net::NetPlayer>(entity);
 	return player != nullptr ? player->pingMs : 0u;
 	});
 }
@@ -378,7 +445,12 @@ AE_SCRIPT_API std::uint32_t aether_net_owner_of(std::uint32_t entityId)
 {
 	return SafeExport([&] -> std::uint32_t
 	{
-	const auto* identity = ActiveWorld().TryGet<aether::net::NetworkIdentity>(aether::Entity{entityId});
+	// Id 0 is the SDK's invalid handle but entt's slot 0 is live, so an ungated
+	// TryGet reports the owner of an unrelated entity. Skip to the not-replicated
+	// answer rather than returning 0: 0 IS the host's connection id, so a plain
+	// zero would attribute a fabricated entity to the host on every client.
+	const aether::Entity entity{entityId};
+	const auto* identity = entity.IsValid() ? ActiveWorld().TryGet<aether::net::NetworkIdentity>(entity) : nullptr;
 	if (identity != nullptr)
 	{
 		// Verbatim, INCLUDING kInvalidConnection - which is 0, which is also the host's

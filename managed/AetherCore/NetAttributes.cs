@@ -3,11 +3,16 @@ using System;
 namespace AetherCore;
 
 /// <summary>
-/// Marks a public script field for network replication. The host writes it, every
-/// client reads it - the same shape as marking a C++ component field with
-/// AE_FIELD_REP, so a project replicates its own state without adding an engine
-/// component. Only the host may meaningfully change a replicated field; a client
-/// write is overwritten by the next snapshot.
+/// Marks a public script field for network replication. The OWNER of the entity
+/// writes it - the owner simulates the entity and sends its changed values, and
+/// the host relays them to every other peer - the same shape as marking a C++
+/// component field with AE_FIELD_REP, so a project replicates its own state
+/// without adding an engine component. A write by anybody else is what gets
+/// overwritten: a non-owner's value is replaced by the owner's next send. Gate
+/// writes with <see cref="Net.HasAuthority"/> rather than
+/// <see cref="Net.IsHost"/> - the host is not authoritative for a client's
+/// entities. Offline this peer owns everything, so single-player writes need no
+/// role test.
 /// </summary>
 /// <remarks>
 /// Replication reuses the inspector's property table, so the field must also be a

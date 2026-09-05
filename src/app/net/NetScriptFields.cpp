@@ -140,7 +140,7 @@ namespace aether::net
 	        const ScriptFieldBridge& bridge, const std::vector<Entity>& replicated)
 	{
 		ByteWriter body;
-		std::uint16_t count = 0;
+		std::uint32_t count = 0;
 
 		for (const Entity entity: replicated)
 		{
@@ -189,6 +189,17 @@ namespace aether::net
 					        .fieldIndex = prop.index,
 					        .scriptTypeHash = typeHash,
 					};
+					// Refused BEFORE cache.Changed records it: a value the reader
+					// would reject (non-finite float, string past its cap) must not
+					// be emitted at all, and must not be remembered as sent - the
+					// cache is what would otherwise re-emit it in every later
+					// packet, aborting each one at this field and losing every
+					// field written after it. Recovery to a legal value still
+					// registers as a change, because nothing was recorded.
+					if (!IsSendableFieldValue(value))
+					{
+						continue;
+					}
 					if (!cache.Changed(key, value))
 					{
 						continue;
@@ -209,7 +220,7 @@ namespace aether::net
 		}
 
 		ByteWriter packet;
-		packet.U16(count);
+		packet.U32(count);
 		packet.Bytes(body.View());
 		return packet.Take();
 	}
@@ -218,9 +229,9 @@ namespace aether::net
 	        std::span<const std::byte> packet, const StateWriteGate& gate)
 	{
 		ByteReader r{packet};
-		const std::uint16_t count = r.U16();
+		const std::uint32_t count = r.U32();
 
-		for (std::uint16_t i = 0; i < count; ++i)
+		for (std::uint32_t i = 0; i < count; ++i)
 		{
 			const std::uint32_t netId = r.U32();
 			const std::uint32_t typeHash = r.U32();

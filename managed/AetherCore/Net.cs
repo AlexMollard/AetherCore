@@ -96,14 +96,20 @@ public static class Net
     /// dropped silently - which is the only version of a player cap a game can present
     /// honestly.
     /// </param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="port"/> is
+    /// outside 0..65535 - refused here rather than silently listening on the
+    /// truncated value, which no caller asked for.</exception>
     public static bool Host(int port, int maxConnections = 32)
-        => Native.aether_net_host((ushort)port, maxConnections) != 0;
+        => Native.aether_net_host(PortOrThrow(port), maxConnections) != 0;
 
     /// <summary>Begin connecting to a host. Returns false only if the address could
     /// not be resolved or a socket could not be opened; a successful return means the
     /// attempt started, not that it succeeded - poll <see cref="IsConnected"/>.</summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="port"/> is
+    /// outside 0..65535 - see <see cref="Host"/>. An unchecked cast would dial
+    /// (ushort)70000 = 4464 and report the attempt started.</exception>
     public static bool Connect(string ip, int port)
-        => Native.aether_net_connect(ip, (ushort)port) != 0;
+        => Native.aether_net_connect(ip, PortOrThrow(port)) != 0;
 
     /// <summary>Leave the session (or stop hosting). Safe when not connected.</summary>
     public static void Disconnect() => Native.aether_net_disconnect();
@@ -305,8 +311,10 @@ public static class Net
     /// <param name="maxConnections">Same meaning as on <see cref="Host"/>.</param>
     /// <returns>False if the local bind failed outright. A true return means
     /// traversal has started, not that a peer has connected.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="port"/> is
+    /// outside 0..65535 - see <see cref="Host"/>.</exception>
     public static bool HostWithCode(string code, int port = 0, int maxConnections = 32)
-        => Native.aether_net_host_with_code(code, (ushort)port, maxConnections) != 0;
+        => Native.aether_net_host_with_code(code, PortOrThrow(port), maxConnections) != 0;
 
     /// <summary>
     /// Join the session published under <paramref name="code"/>: fetches the host's
@@ -377,8 +385,10 @@ public static class Net
     /// per session instead, and call this with the short-lived result - this engine
     /// does not do that minting for you yet.
     /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="port"/> is
+    /// outside 0..65535 - see <see cref="Host"/>.</exception>
     public static void ConfigureRelay(string host, int port, string username, string password, bool allow = true)
-        => Native.aether_net_configure_relay(host, (ushort)port, username, password, allow ? 1 : 0);
+        => Native.aether_net_configure_relay(host, PortOrThrow(port), username, password, allow ? 1 : 0);
 
     /// <summary>
     /// True once a relay is both configured (a non-empty host from
@@ -641,5 +651,20 @@ public static class Net
         {
             return Native.aether_net_call_rpc(entity.Id, methodName, ptr, blob.Length, expectedTarget) != 0;
         }
+    }
+
+    // Host/Connect/HostWithCode/ConfigureRelay take an int port because game code
+    // naturally passes one, and an unchecked (ushort) cast SILENTLY TRUNCATES:
+    // (ushort)70000 is 4464, so Connect would dial a port nobody named and report
+    // the attempt started. Thrown rather than returned as false - LastError never
+    // hears about it, so a false here would be undiagnosable, and a port outside
+    // its domain is a caller bug, the same class as Net.Call's bad-argument throw.
+    private static ushort PortOrThrow(int port)
+    {
+        if (port is < 0 or > ushort.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(port), port, "A UDP port is 0..65535.");
+        }
+        return (ushort)port;
     }
 }

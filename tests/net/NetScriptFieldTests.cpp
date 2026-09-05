@@ -180,7 +180,7 @@ TEST_CASE("A replicated script field reaches the client instance")
 
 TEST_CASE("The script-field record is exactly the documented layout")
 {
-	// u16 count, then per field u32 netId + u32 typeHash + u16 propertyIndex +
+	// u32 count, then per field u32 netId + u32 typeHash + u16 propertyIndex +
 	// u8 fieldType + the value, which uses the same codec component fields use. If
 	// either half drifts, replicated script fields decode as garbage - so pin it.
 	TwoScriptedWorlds tw;
@@ -191,7 +191,7 @@ TEST_CASE("The script-field record is exactly the documented layout")
 	const std::vector<std::byte> packet =
 	        net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity});
 
-	constexpr std::size_t kHeader = 2;              // u16 count
+	constexpr std::size_t kHeader = 4;              // u32 count
 	constexpr std::size_t kRecordPrefix = 4 + 4 + 2 + 1; // netId, typeHash, propertyIndex, fieldType
 	CHECK(packet.size() == kHeader + kRecordPrefix + 4); // an Int value is four bytes
 
@@ -256,7 +256,7 @@ TEST_CASE("A script field for an unknown net id does not desync the cursor for t
 	tw.clientBridge.Declare("Health", {{.index = 2, .type = ScriptPropertyValue::Type::Int}});
 
 	net::ByteWriter w;
-	w.U16(2);
+	w.U32(2);
 	// Field 1: well-formed, but nobody is bound to this net id - skipped.
 	w.U32(9999);
 	w.U32(net::ScriptTypeHash("Health"));
@@ -285,7 +285,7 @@ TEST_CASE("A script field for a type the entity does not carry does not desync t
 	tw.clientBridge.Declare("Health", {{.index = 2, .type = ScriptPropertyValue::Type::Int}});
 
 	net::ByteWriter w;
-	w.U16(2);
+	w.U32(2);
 	// Field 1: the right entity, but it carries no script of this type - skipped.
 	w.U32(1);
 	w.U32(net::ScriptTypeHash("SomeOtherScript"));
@@ -313,7 +313,7 @@ TEST_CASE("A script field the receiver does not consider replicated is rejected,
 	tw.clientBridge.Declare("Health", {{.index = 2, .type = ScriptPropertyValue::Type::Int}});
 
 	net::ByteWriter w;
-	w.U16(2);
+	w.U32(2);
 	w.U32(1);
 	w.U32(net::ScriptTypeHash("Health"));
 	w.U16(5); // not a replicated property on this peer
@@ -341,7 +341,7 @@ TEST_CASE("A stale index whose type no longer matches is dropped rather than wri
 	tw.clientBridge.Declare("Health", {{.index = 2, .type = ScriptPropertyValue::Type::String}});
 
 	net::ByteWriter w;
-	w.U16(1);
+	w.U32(1);
 	w.U32(1);
 	w.U32(net::ScriptTypeHash("Health"));
 	w.U16(2);
@@ -359,7 +359,7 @@ TEST_CASE("A script-field packet with an unusable type tag is abandoned, not gue
 	tw.clientBridge.Declare("Health", {{.index = 2, .type = ScriptPropertyValue::Type::Int}});
 
 	net::ByteWriter w;
-	w.U16(1);
+	w.U32(1);
 	w.U32(1);
 	w.U32(net::ScriptTypeHash("Health"));
 	w.U16(2);
@@ -377,7 +377,7 @@ TEST_CASE("A truncated script-field packet applies nothing")
 	tw.clientBridge.Declare("Health", {{.index = 2, .type = ScriptPropertyValue::Type::Int}});
 
 	net::ByteWriter w;
-	w.U16(1);
+	w.U32(1);
 	w.U32(1);
 	w.U32(net::ScriptTypeHash("Health"));
 	w.U16(2);
@@ -537,7 +537,7 @@ TEST_CASE("A duplicate script of the same type on one entity replicates only onc
 	REQUIRE_FALSE(packet.empty());
 
 	net::ByteReader r{packet};
-	CHECK(r.U16() == 1);
+	CHECK(r.U32() == 1);
 
 	// And the second build says nothing, rather than flip-flopping between the two.
 	CHECK(net::BuildScriptFieldPacket(tw.host, tw.hostSession, cache, tw.hostBridge, {tw.hostEntity}).empty());
@@ -571,6 +571,50 @@ TEST_CASE("Only entities in the relevant set contribute script fields")
 	REQUIRE_FALSE(packet.empty());
 
 	net::ByteReader r{packet};
-	CHECK(r.U16() == 1); // exactly one field: the relevant entity's
+	CHECK(r.U32() == 1); // exactly one field: the relevant entity's
 	CHECK(r.U32() == 1); // its net id, not the irrelevant entity's (2)
+}
+
+// Pins the ownership gate at THIS seam. The enforcement lives in StateWriteGate
+// and is threaded in by NetworkSystems (OwnedBy(peer) on the host), but until
+// this case every test here applied with TrustAll - so a wiring regression that
+// passed TrustAll() from the host would leave this whole suite green while any
+// client could write any entity's replicated script fields by naming its net id.
+TEST_CASE("The gate refuses a script field for an entity the sender does not own")
+{
+	TwoScriptedWorlds tw;
+	tw.clientBridge.Declare("Health", {{.index = 2, .type = ScriptPropertyValue::Type::Int}});
+
+	// The receiving world: one entity owned by connection 7 (the sender), one by
+	// connection 9. Both carry the script the packet names.
+	tw.client.TryGet<net::NetworkIdentity>(tw.clientEntity)->owner = 7;
+	const Entity other = tw.client.Create();
+	auto& otherIdentity = tw.client.Emplace<net::NetworkIdentity>(other);
+	otherIdentity.netId = 2;
+	otherIdentity.owner = 9;
+	tw.client.Emplace<ScriptComponent>(other).scripts.push_back(ScriptEntry{.path = "Health"});
+	tw.clientSession.Bind(2, other);
+
+	net::ByteWriter w;
+	w.U32(2);
+	// Field 1: the sender (7) naming the entity connection 9 owns - must be refused.
+	w.U32(2);
+	w.U32(net::ScriptTypeHash("Health"));
+	w.U16(2);
+	w.U8(static_cast<std::uint8_t>(reflect::FieldType::Int));
+	net::WriteFieldValue(w, reflect::MakeValue(-1));
+	// Field 2: the sender's own entity - must land, which also proves the refused
+	// field's value bytes were consumed rather than desyncing the cursor.
+	w.U32(1);
+	w.U32(net::ScriptTypeHash("Health"));
+	w.U16(2);
+	w.U8(static_cast<std::uint8_t>(reflect::FieldType::Int));
+	net::WriteFieldValue(w, reflect::MakeValue(77));
+
+	net::ApplyScriptFieldPacket(tw.client, tw.clientSession, tw.clientBridge, w.Take(), net::StateWriteGate::OwnedBy(7));
+
+	CHECK(tw.clientBridge.Peek(other.id, 0, 2) == nullptr); // not the sender's entity
+	const ScriptPropertyValue* applied = tw.clientBridge.Peek(tw.clientEntity.id, 0, 2);
+	REQUIRE(applied != nullptr);
+	CHECK(applied->i64 == 77); // the sender's own entity, applied
 }
