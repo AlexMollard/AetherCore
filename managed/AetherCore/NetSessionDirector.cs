@@ -414,7 +414,12 @@ public abstract class NetSessionDirector : EntityScript
     /// <para>
     /// This is a voluntary departure whichever branch reached it, so the reconnect
     /// machinery is cleared out on the way: an attempt still in flight would otherwise
-    /// drag the player back into the session they just left.
+    /// drag the player back into the session they just left. <see cref="NetSession.HostAddress"/>/
+    /// <see cref="NetSession.HostPort"/>/<see cref="NetSession.HostRoomCode"/> are cleared
+    /// for the same reason every <c>NetSession.Begin*</c> method clears the OTHER kind's
+    /// fields on success: a departed session has nowhere of its own left to reconnect to,
+    /// so nothing here should still look like a live reconnect target to whatever this
+    /// peer does next.
     /// </para>
     /// </remarks>
     public void Leave(string status)
@@ -422,6 +427,9 @@ public abstract class NetSessionDirector : EntityScript
         Api.NetDisconnect();
         NetSession.StatusMessage = status;
         NetSession.JoinRequested = false;
+        NetSession.HostAddress = string.Empty;
+        NetSession.HostPort = 0;
+        NetSession.HostRoomCode = string.Empty;
         _wasInSession = false;
         _reconnecting = false;
         _attemptLive = false;

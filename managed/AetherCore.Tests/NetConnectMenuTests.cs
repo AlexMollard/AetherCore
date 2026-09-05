@@ -65,6 +65,27 @@ public sealed class NetConnectMenuTests : SdkTestBase
         Assert.False(menu.IsHosting);
     }
 
+    [Fact]
+    public void HostSucceedsAgainEvenIfTheEngineStillReportsTheOldSessionActive()
+    {
+        // The reported bug this pins: host from the lobby, enter the arena, leave, and
+        // a second host attempt does nothing or fails. NetworkContext::HostWithCode
+        // takes no World reference and cannot tear a previous session down itself, so
+        // it refuses outright - correctly - whenever the engine still reports one
+        // active (see Host's own remarks). This menu is a fresh instance every time its
+        // scene loads, so nothing on IT is stale; what has to be true instead is that
+        // Host no longer TRUSTS the engine's prior session state and clears it itself.
+        Engine.IsHost = true;
+        NetConnectMenu menu = NewMenu();
+
+        bool started = menu.Host();
+
+        Assert.Equal(1, Engine.DisconnectCount);
+        Assert.True(started);
+        Assert.True(menu.IsHosting);
+        Assert.Single(Engine.HostWithCodeAttempts);
+    }
+
     // ── Joining: the ReplicationReady transition ───────────────────────────────
 
     [Fact]
@@ -180,6 +201,21 @@ public sealed class NetConnectMenuTests : SdkTestBase
         Assert.False(secondJoin);
         Assert.False(hostWhileJoining);
         Assert.Equal(new[] { "PA1R01" }, Engine.JoinByCodeAttempts);
+    }
+
+    [Fact]
+    public void JoinSucceedsAgainEvenIfTheEngineStillReportsTheOldSessionActive()
+    {
+        // Same shape as Host's own regression above: JoinByCode is the same
+        // refuse-outright-rather-than-self-heal design as HostWithCode.
+        Engine.IsClient = true;
+        NetConnectMenu menu = NewMenu();
+
+        bool started = menu.Join("PA1R01");
+
+        Assert.Equal(1, Engine.DisconnectCount);
+        Assert.True(started);
+        Assert.True(menu.IsJoining);
     }
 
     // ── Offline: unaffected by this class entirely ─────────────────────────────

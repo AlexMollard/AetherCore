@@ -137,6 +137,22 @@ public class NetConnectMenu : EntityScript
         {
             return false;
         }
+        // NetworkContext::HostWithCode takes no World reference, so - unlike
+        // Net.Host's plain StartHost, which tears a previous session down itself -
+        // it cannot safely do that here and refuses outright instead when the
+        // engine still reports one active (see its own remarks). This menu is a
+        // fresh instance every time its scene loads, but the SESSION is process-
+        // wide state that survives a scene change on purpose - a route back to
+        // this menu that ended a session some way other than this class's own
+        // Join/EnterArena pairing, or one whose teardown has not finished, must
+        // not leave a live session for this attempt to inherit and be silently
+        // refused against; clear it here so hosting again always gets a clean
+        // slate rather than depending on every possible caller upstream to have
+        // already done so.
+        if (Api.NetIsHost || Api.NetIsClient || Api.NetIsConnected)
+        {
+            Api.NetDisconnect();
+        }
         (bool started, string roomCode) = NetSession.BeginHostWithCode(code, port, maxConnections);
         if (!started)
         {
@@ -169,6 +185,15 @@ public class NetConnectMenu : EntityScript
         if (trimmed.Length == 0)
         {
             return false;
+        }
+        // See Host's own remarks: JoinByCode is the same non-self-healing shape as
+        // HostWithCode - refuses outright rather than tearing a still-active
+        // session down itself - so this clears one before the attempt starts
+        // rather than trusting whatever route brought this peer back to the menu
+        // already did.
+        if (Api.NetIsHost || Api.NetIsClient || Api.NetIsConnected)
+        {
+            Api.NetDisconnect();
         }
         // Before the call, not after: BeginJoinByCode can succeed and hand traffic to
         // the transport on the same frame, and a burst that arrives before this line

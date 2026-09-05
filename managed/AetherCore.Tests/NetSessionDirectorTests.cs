@@ -1019,6 +1019,25 @@ public sealed class NetSessionDirectorTests : SdkTestBase
     }
 
     [Fact]
+    public void LeavingClearsTheReconnectTargetSoItCannotSurviveIntoWhateverComesNext()
+    {
+        // NetSession.HostAddress/HostPort/HostRoomCode are process-wide statics that
+        // outlive this scene on purpose - that is what lets a dropped link reconnect
+        // after the arena reloads them. A VOLUNTARY leave ends that session for good,
+        // so nothing here should still look like a live reconnect target to whatever
+        // this peer does next: a fresh join by a different code, a hosted session, or
+        // a solo game that should never attempt to reconnect to anything.
+        RecordingDirector director = InSessionByCode("PA1R01");
+
+        director.LeaveRequested = true;
+        Tick(director);
+
+        Assert.Equal(string.Empty, NetSession.HostAddress);
+        Assert.Equal((ushort)0, NetSession.HostPort);
+        Assert.Equal(string.Empty, NetSession.HostRoomCode);
+    }
+
+    [Fact]
     public void AnEmptyReturnSceneMeansStayWhereWeAre()
     {
         // What a game with a single persistent scene wants.
