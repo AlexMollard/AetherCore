@@ -86,7 +86,7 @@ internal static unsafe class ScriptRegistry
     // different declaration-order tables, so an index would name a different method
     // on each. The array position is this process's LOCAL dispatch index, resolved
     // from the name by GetNetRpcMethod on both the send and the receive side.
-    private static readonly Dictionary<string, MethodInfo[]> s_rpcMethods = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, RpcEntry[]> s_rpcMethods = new(StringComparer.Ordinal);
 
     // A default-constructed instance per type, so the inspector can show default
     // field values when no live instance exists (edit mode).
@@ -178,11 +178,22 @@ internal static unsafe class ScriptRegistry
         return indices.ToArray();
     }
 
+    // One [NetRpc] method's resolved metadata: reflected once per type at load,
+    // never re-reflected per call. Limiter is null when the method declares no
+    // NetRpcAttribute.MaxPerSecond (the default) - unlimited, so InvokeNetRpc
+    // dispatches exactly as it did before rate limiting existed.
+    private sealed class RpcEntry
+    {
+        public required MethodInfo Method;
+        public required NetRpcAttribute Attribute;
+        public RpcRateLimiter? Limiter;
+    }
+
     // Public instance methods of `type` marked [NetRpc], sorted into declaration
     // order. GetMethods does not itself guarantee declaration order, so the sort
     // by MetadataToken (assigned in declaration order within a type) makes the
     // wire index deterministic - it must never silently shift between loads.
-    private static MethodInfo[] BuildRpcMethods(Type type)
+    private static RpcEntry[] BuildRpcMethods(Type type)
     {
         var methods = new List<MethodInfo>();
         foreach (MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
@@ -193,7 +204,22 @@ internal static unsafe class ScriptRegistry
             }
         }
         methods.Sort(static (a, b) => a.MetadataToken.CompareTo(b.MetadataToken));
-        return methods.ToArray();
+
+        var entries = new RpcEntry[methods.Count];
+        for (int i = 0; i < methods.Count; i++)
+        {
+            NetRpcAttribute attribute = methods[i].GetCustomAttribute<NetRpcAttribute>(inherit: true)
+                ?? new NetRpcAttribute(NetRpcTarget.Server);
+            entries[i] = new RpcEntry
+            {
+                Method = methods[i],
+                Attribute = attribute,
+                Limiter = attribute.MaxPerSecond > 0
+                    ? new RpcRateLimiter(attribute.MaxPerSecond, attribute.Burst)
+                    : null,
+            };
+        }
+        return entries;
     }
 
     // ── Assembly / registry lifecycle ─────────────────────────────────────────
@@ -279,6 +305,15 @@ internal static unsafe class ScriptRegistry
         }
 
         var names = new List<string>();
+        // Server-target [NetRpc] methods that declare no MaxPerSecond, collected
+        // across the whole assembly so the load logs ONE diagnostic naming all of
+        // them - never one per method (that is exactly the noise that trains an
+        // author to stop reading these logs) and never per call (a Server method is
+        // the one an unbounded remote client can reach at all, so this has nothing
+        // to do with any single call). Client/Multicast methods are excluded
+        // entirely: only the host ever originates those, so there is no remote
+        // caller to rate-limit against in the first place.
+        var unlimitedServerRpcs = new List<string>();
         foreach (Type type in assembly.GetTypes())
         {
             // Editor-tooling windows (not mutually exclusive with scripts, so a separate check).
@@ -302,7 +337,15 @@ internal static unsafe class ScriptRegistry
             Prop[] props = BuildProps(type);
             s_props[type.Name] = props;
             s_replicated[type.Name] = BuildReplicatedIndices(props);
-            s_rpcMethods[type.Name] = BuildRpcMethods(type);
+            RpcEntry[] rpcMethods = BuildRpcMethods(type);
+            s_rpcMethods[type.Name] = rpcMethods;
+            foreach (RpcEntry entry in rpcMethods)
+            {
+                if (entry.Limiter is null && entry.Attribute.Target == NetRpcTarget.Server)
+                {
+                    unlimitedServerRpcs.Add($"{type.Name}.{entry.Method.Name}");
+                }
+            }
             names.Add(type.Name);
             try
             {
@@ -314,10 +357,27 @@ internal static unsafe class ScriptRegistry
             }
         }
         names.Sort(StringComparer.Ordinal);
+        unlimitedServerRpcs.Sort(StringComparer.Ordinal);
         s_typeNames = names.ToArray();
         s_context = context;
 
         Log.Info($"Loaded {s_typeNames.Length} C# script type(s) from {Path.GetFileName(assemblyPath)}");
+        if (unlimitedServerRpcs.Count > 0)
+        {
+            // Info, not Warn: this fires on every load of a project that has not
+            // (yet, or ever intends to) rate-limit a given method, which for most
+            // small/trusted-LAN games is most methods, most of the time - a Warn
+            // that fires that unconditionally trains an author to stop reading
+            // warnings, which is worse than the footgun it would be trying to
+            // flag. This is a standing reminder of a decision not yet made, not a
+            // report of something currently going wrong - the same distinction as
+            // "N script types loaded" versus InvokeNetRpc's Warn for a call the
+            // limiter is ACTIVELY dropping right now.
+            Log.Info($"AetherCore: {unlimitedServerRpcs.Count} [NetRpc(NetRpcTarget.Server)] method(s) declare " +
+                $"no MaxPerSecond, so any connected client can call them at any rate: " +
+                $"{string.Join(", ", unlimitedServerRpcs)}. Set NetRpcAttribute.MaxPerSecond (and Burst) on each " +
+                "once its rate is decided.");
+        }
         return s_typeNames.Length;
     }
 
@@ -429,6 +489,26 @@ internal static unsafe class ScriptRegistry
         {
             try { script.OnDetach(); }
             catch (Exception ex) { Bootstrap.ReportError($"{script.GetType().Name}.OnDetach: {ex}"); }
+        }
+    }
+
+    /// <summary>
+    /// The ownership-change callback the native OwnershipHook wiring calls
+    /// whenever a script's entity's <c>NetworkIdentity.owner</c> changes - most
+    /// importantly the very first time it becomes known on a client, since
+    /// <see cref="Net.IsOwner"/> answers false for everything until the host's
+    /// Welcome lands and ownership genuinely is not knowable at attach time.
+    /// Resolves the handle exactly like <see cref="InvokeUpdate"/>, and does
+    /// nothing for a stale handle - a reload or a despawn can race the native
+    /// event that triggers this call.
+    /// </summary>
+    [UnmanagedCallersOnly]
+    internal static void InvokeOwnershipChanged(ulong handle, uint owner, int isOwner)
+    {
+        if (Resolve(handle) is { } script)
+        {
+            try { script.OnOwnershipChanged(owner, isOwner != 0); }
+            catch (Exception ex) { Bootstrap.ReportError($"{script.GetType().Name}.OnOwnershipChanged: {ex}"); }
         }
     }
 
@@ -575,21 +655,20 @@ internal static unsafe class ScriptRegistry
     {
         try
         {
-            if (!s_rpcMethods.TryGetValue(Utf8.ToString(typeNameUtf8), out MethodInfo[]? methods))
+            if (!s_rpcMethods.TryGetValue(Utf8.ToString(typeNameUtf8), out RpcEntry[]? methods))
             {
                 return -1;
             }
             string methodName = Utf8.ToString(methodNameUtf8);
             for (int i = 0; i < methods.Length; i++)
             {
-                if (methods[i].Name != methodName)
+                if (methods[i].Method.Name != methodName)
                 {
                     continue;
                 }
                 if (outTarget != null)
                 {
-                    var attribute = methods[i].GetCustomAttribute<NetRpcAttribute>(inherit: true);
-                    *outTarget = (int)(attribute?.Target ?? NetRpcTarget.Server);
+                    *outTarget = (int)methods[i].Attribute.Target;
                 }
                 return i;
             }
@@ -603,6 +682,32 @@ internal static unsafe class ScriptRegistry
     }
 
     /// <summary>
+    /// The connection InvokeNetRpc is running THIS call on behalf of, for
+    /// <see cref="RpcRateLimiter"/>. InvokeNetRpc's own arguments carry no sender
+    /// field - the ABI predates per-method rate limiting - so this reads it back
+    /// from the ownership invariant the RPC layer already enforces natively
+    /// (see NetRpc.cpp's ApplyRpc and RouteRpc):
+    ///   - Server only ever runs here for a wire-arrived call ApplyRpc has already
+    ///     proven came from the target entity's owning connection, or for the
+    ///     host's own local call on an entity it owns. Either way the entity's
+    ///     owner names the caller. (Host code MAY call a Server RPC on an entity it
+    ///     does not own - Host+Server always routes locally in RouteRpc - and this
+    ///     attributes that one case to the entity's owner rather than literally
+    ///     "the host process"; that is not a path a remote attacker can drive, so
+    ///     sharing the bucket there is a deliberate, safe simplification, not a
+    ///     workaround for missing wire data.)
+    ///   - Client and Multicast only ever originate from the host (see
+    ///     NetRpcTarget's remarks; ApplyRpc's direction gate drops anything else
+    ///     before InvokeNetRpc ever runs), so the caller is always the host.
+    /// </summary>
+    private static uint CallingConnectionId(EntityScript script, NetRpcTarget target)
+        => target == NetRpcTarget.Server ? Net.OwnerOf(script.Self) : HostConnectionId;
+
+    // Connection id 0 always names the host - see Net.OwnerOf's remarks and
+    // RouteRpc's use of kInvalidConnection (also 0) for a host-owned entity.
+    private const uint HostConnectionId = 0;
+
+    /// <summary>
     /// The decode side: runs [NetRpc] method <paramref name="methodIndex"/> of the
     /// script instance <paramref name="handle"/> names. <paramref name="argBlob"/> is
     /// a single value - null/empty for a parameterless method, otherwise interpreted
@@ -614,6 +719,12 @@ internal static unsafe class ScriptRegistry
     /// than throwing - a peer can send anything, and a script assembly can reload
     /// out from under it. Any exception the method body itself raises is caught here
     /// too: nothing may escape across the native boundary.
+    ///
+    /// A method declaring <see cref="NetRpcAttribute.MaxPerSecond"/> is metered
+    /// through its cached <see cref="RpcRateLimiter"/> BEFORE the reflection
+    /// dispatch below: a call past the limit is dropped exactly like the other
+    /// silent-drop cases above (never queued, never thrown), with one warning per
+    /// distinct (method, connection) so a flood cannot turn into a logging flood.
     /// </summary>
     [UnmanagedCallersOnly]
     internal static void InvokeNetRpc(ulong handle, int methodIndex, byte* argBlob, int argLen)
@@ -622,15 +733,32 @@ internal static unsafe class ScriptRegistry
         {
             return;
         }
-        if (!s_rpcMethods.TryGetValue(script.GetType().Name, out MethodInfo[]? methods)
+        if (!s_rpcMethods.TryGetValue(script.GetType().Name, out RpcEntry[]? methods)
             || methodIndex < 0 || methodIndex >= methods.Length)
         {
             return;
         }
 
-        MethodInfo method = methods[methodIndex];
+        RpcEntry entry = methods[methodIndex];
+        MethodInfo method = entry.Method;
         try
         {
+            if (entry.Limiter is { } limiter)
+            {
+                uint connectionId = CallingConnectionId(script, entry.Attribute.Target);
+                if (!limiter.TryAdmit(connectionId, out bool warnCaller))
+                {
+                    if (warnCaller)
+                    {
+                        Log.Warn($"{script.GetType().Name}.{method.Name}: dropped a Net RPC from connection " +
+                            $"{connectionId} - past its [NetRpc(MaxPerSecond={entry.Attribute.MaxPerSecond})] limit. " +
+                            "Raise MaxPerSecond/Burst if this caller's rate is legitimate, or investigate a flood. " +
+                            "Further drops from this connection will not be logged.");
+                    }
+                    return;
+                }
+            }
+
             ParameterInfo[] parameters = method.GetParameters();
             object?[] callArgs;
             if (parameters.Length == 0)

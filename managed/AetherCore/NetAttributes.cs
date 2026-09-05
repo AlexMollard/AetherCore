@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace AetherCore;
 
@@ -80,4 +81,114 @@ public sealed class NetRpcAttribute : Attribute
 
     /// <summary>Where the call is executed.</summary>
     public NetRpcTarget Target { get; }
+
+    /// <summary>
+    /// Steady-state cap on accepted calls per second from one calling connection -
+    /// see <see cref="RpcRateLimiter"/> for exactly what "calling connection" means
+    /// for a given <see cref="Target"/>. The default, 0, is UNLIMITED: every
+    /// existing [NetRpc] method that does not set this keeps its exact current
+    /// behavior. That default is also precisely the shape of the two exploitable
+    /// cheats a real 4-player deathmatch's audit found - a host handler with no
+    /// rate limit at all - so it trades "nothing changes for a game that says
+    /// nothing" for "the footgun stays live until a game author sets this". Set it
+    /// on every <see cref="NetRpcTarget.Server"/> method a client's input drives (a
+    /// fire button, a hit report, a chat line): the framework cannot guess a safe
+    /// number for a specific game, but it can make "no limit" a decision an author
+    /// has to notice rather than one they never see.
+    /// </summary>
+    public int MaxPerSecond { get; init; }
+
+    /// <summary>
+    /// Extra calls a caller may spend in a burst above the steady
+    /// <see cref="MaxPerSecond"/> rate (token-bucket capacity). Ignored while
+    /// <see cref="MaxPerSecond"/> is 0. Left at its default (0) while
+    /// <see cref="MaxPerSecond"/> is set, the bucket's capacity is just
+    /// <see cref="MaxPerSecond"/> itself - a caller may spend one second's whole
+    /// budget at once but no more.
+    /// </summary>
+    public int Burst { get; init; }
+}
+
+/// <summary>
+/// Per-connection token bucket enforcing one <see cref="NetRpcAttribute"/>
+/// method's <see cref="NetRpcAttribute.MaxPerSecond"/> / <see cref="NetRpcAttribute.Burst"/>.
+/// One instance guards one method for the life of the loaded script assembly
+/// (<c>ScriptRegistry</c> builds it once, alongside the method's cached
+/// <c>MethodInfo</c>, when <see cref="NetRpcAttribute.MaxPerSecond"/> is set), so
+/// a flood of calls never re-allocates and a caller's bucket survives across
+/// calls for as long as the connection does.
+/// </summary>
+/// <remarks>
+/// <c>connectionId</c>-style values are per the framework's own
+/// convention: 0 always names the host (see <see cref="Net.OwnerOf"/>). Kept
+/// separate from a single global counter on purpose - a global cap lets one
+/// flooding peer exhaust the budget every other caller of the same method
+/// needs, which is exactly the shape of the two exploits this attribute exists
+/// to close. See <c>ScriptRegistry.InvokeNetRpc</c> for how "the calling
+/// connection" is derived for a given call: today's ABI carries no explicit
+/// sender field, so it is read back from the ownership invariant the RPC layer
+/// already enforces (a <see cref="NetRpcTarget.Server"/> call only ever runs for
+/// the entity's owning connection; a <see cref="NetRpcTarget.Client"/> or
+/// <see cref="NetRpcTarget.Multicast"/> call only ever originates from the
+/// host).
+/// </remarks>
+internal sealed class RpcRateLimiter
+{
+    private struct Bucket
+    {
+        public double Tokens;
+        public double LastRefillSeconds;
+    }
+
+    private readonly double _refillPerSecond;
+    private readonly double _capacity;
+    private readonly Dictionary<uint, Bucket> _buckets = new();
+
+    // Connections already warned about a refusal from this method - warned once,
+    // ever, per connection, never once per packet. A flood is exactly the moment
+    // logging must not itself become a flood.
+    private readonly HashSet<uint> _warnedConnections = new();
+
+    public RpcRateLimiter(int maxPerSecond, int burst)
+    {
+        _refillPerSecond = maxPerSecond;
+        _capacity = burst > 0 ? burst : maxPerSecond;
+    }
+
+    /// <summary>
+    /// Spends one token for <paramref name="connectionId"/> if it has one to
+    /// spend. A refusal is a drop, never a queue - a queue just moves a flood's
+    /// memory cost onto the process instead of preventing it. <paramref
+    /// name="warnCaller"/> is true only the first time this connection is ever
+    /// refused, so a caller can log a single actionable warning without
+    /// repeating it for every further dropped call in the same flood.
+    /// </summary>
+    public bool TryAdmit(uint connectionId, out bool warnCaller)
+    {
+        double now = Environment.TickCount64 / 1000.0;
+        if (!_buckets.TryGetValue(connectionId, out Bucket bucket))
+        {
+            // A caller's first-ever call sees a full bucket: a burst is meant to be
+            // spendable immediately, not earned by waiting first.
+            bucket = new Bucket { Tokens = _capacity, LastRefillSeconds = now };
+        }
+        else
+        {
+            double elapsed = now - bucket.LastRefillSeconds;
+            bucket.Tokens = Math.Min(_capacity, bucket.Tokens + elapsed * _refillPerSecond);
+            bucket.LastRefillSeconds = now;
+        }
+
+        if (bucket.Tokens < 1.0)
+        {
+            _buckets[connectionId] = bucket;
+            warnCaller = _warnedConnections.Add(connectionId);
+            return false;
+        }
+
+        bucket.Tokens -= 1.0;
+        _buckets[connectionId] = bucket;
+        warnCaller = false;
+        return true;
+    }
 }

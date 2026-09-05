@@ -97,4 +97,11 @@ internal unsafe struct ManagedScriptApi
     // Compile a project's scripts in-process. Returns 0 on success and fills the diagnostics
     // buffer with compiler output; see ScriptCompiler.cs for why this is not `dotnet build`.
     public delegate* unmanaged<byte*, byte*, byte*, int, byte*, int, int> CompileScripts;
+
+    // Networking: ownership change. Called whenever a script's entity's owning
+    // connection changes (including the first time it becomes known on a client -
+    // see EntityScript.OnOwnershipChanged). `owner` is the new owning connection id
+    // and `isOwner` is whether THIS peer is that owner. Appended at the end so no
+    // existing ordinal shifts.
+    public delegate* unmanaged<ulong, uint, int, void> InvokeOwnershipChanged;
 }

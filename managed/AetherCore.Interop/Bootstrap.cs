@@ -86,6 +86,9 @@ internal static unsafe class Bootstrap
             outApi->InvokeNetRpc = &ScriptRegistry.InvokeNetRpc;
         outApi->CompileScripts = &Api_CompileScripts;
 
+            // Appended at the end - see Abi.cs's InvokeOwnershipChanged for why.
+            outApi->InvokeOwnershipChanged = &ScriptRegistry.InvokeOwnershipChanged;
+
             Log.Info($"AetherCore bootstrap OK (.NET {Environment.Version})");
             return 0;
         }
