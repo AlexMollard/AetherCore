@@ -113,9 +113,11 @@ namespace aether::net
 	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, SnapshotCache& cache,
 	        const std::vector<Entity>& replicated);
 
-	// Receive side. Ignores unknown net ids, out-of-range indices, fields not present in
-	// the replication schema, entities missing the component, entities `gate` refuses,
-	// and truncated packets - a peer can send anything.
+	// Receive side. Ignores packets whose schema hash differs (a skewed catalog
+	// would decode every index against the wrong table), non-finite float values,
+	// unknown net ids, out-of-range indices, fields not present in the replication
+	// schema, entities missing the component, entities `gate` refuses, and
+	// truncated packets - a peer can send anything.
 	void ApplySnapshot(World& world, const ReplicationSchema& schema,
 	        const std::vector<reflect::ComponentType>& catalog, NetSession& session, std::span<const std::byte> packet,
 	        const StateWriteGate& gate);

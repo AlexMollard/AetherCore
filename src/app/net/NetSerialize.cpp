@@ -1,6 +1,8 @@
 #include "net/NetSerialize.hpp"
 
+#include <cmath>
 #include <cstring>
+#include <limits>
 
 namespace aether::net
 {
@@ -147,6 +149,11 @@ namespace aether::net
 		return out;
 	}
 
+	void ByteReader::Fail()
+	{
+		m_ok = false;
+	}
+
 	bool IsReplicableFieldType(reflect::FieldType type)
 	{
 		using reflect::FieldType;
@@ -167,6 +174,37 @@ namespace aether::net
 		case FieldType::EntityRef:
 		case FieldType::List:
 			return false;
+		}
+		return false;
+	}
+
+	bool IsSendableFieldValue(const reflect::FieldValue& value)
+	{
+		using reflect::FieldType;
+		switch (value.type)
+		{
+		case FieldType::Float:
+			// Not just isfinite: num is a double, and one past FLT_MAX narrows to
+			// inf on the 32-bit wire (the cast itself is undefined), so the range
+			// check comes first.
+			return std::isfinite(value.num) && std::abs(value.num) <= static_cast<double>(std::numeric_limits<float>::max());
+		case FieldType::Int:
+		case FieldType::UInt:
+		case FieldType::Bool:
+		case FieldType::Enum:
+			return true;
+		case FieldType::Vec2:
+		case FieldType::Vec3:
+		case FieldType::Vec4:
+		case FieldType::Color3:
+		case FieldType::Color4:
+			return std::isfinite(value.vec.x) && std::isfinite(value.vec.y) && std::isfinite(value.vec.z)
+			        && std::isfinite(value.vec.w);
+		case FieldType::String:
+			return value.str.size() <= kMaxStringBytes;
+		case FieldType::EntityRef:
+		case FieldType::List:
+			return true; // never replicated
 		}
 		return false;
 	}
@@ -217,51 +255,74 @@ namespace aether::net
 		}
 	}
 
-	reflect::FieldValue ReadFieldValue(ByteReader& r, reflect::FieldType type)
+	bool ReadFieldValue(ByteReader& r, reflect::FieldType type, reflect::FieldValue& out)
 	{
 		using reflect::FieldType;
-		reflect::FieldValue v;
-		v.type = type;
+		out = reflect::FieldValue{};
+		out.type = type;
 		switch (type)
 		{
 		case FieldType::Float:
-			v.num = r.F32();
+			out.num = r.F32();
 			break;
 		case FieldType::Int:
-			v.num = r.I32();
+			out.num = r.I32();
 			break;
 		case FieldType::UInt:
-			v.num = r.U32();
+			out.num = r.U32();
 			break;
 		case FieldType::Bool:
-			v.boolean = r.U8() != 0;
+			out.boolean = r.U8() != 0;
 			break;
 		case FieldType::Vec2:
-			v.vec.x = r.F32();
-			v.vec.y = r.F32();
+			out.vec.x = r.F32();
+			out.vec.y = r.F32();
 			break;
 		case FieldType::Vec3:
 		case FieldType::Color3:
-			v.vec.x = r.F32();
-			v.vec.y = r.F32();
-			v.vec.z = r.F32();
+			out.vec.x = r.F32();
+			out.vec.y = r.F32();
+			out.vec.z = r.F32();
 			break;
 		case FieldType::Vec4:
 		case FieldType::Color4:
-			v.vec.x = r.F32();
-			v.vec.y = r.F32();
-			v.vec.z = r.F32();
-			v.vec.w = r.F32();
+			out.vec.x = r.F32();
+			out.vec.y = r.F32();
+			out.vec.z = r.F32();
+			out.vec.w = r.F32();
 			break;
 		case FieldType::Enum:
-			v.enumValue = r.I32();
+			out.enumValue = r.I32();
 			break;
 		case FieldType::String:
-			v.str = r.Str();
+			out.str = r.Str();
 			break;
 		case FieldType::EntityRef:
 		case FieldType::List:
 			break;
+		}
+		if (!r.Ok())
+		{
+			return false; // truncated or corrupt; the reader is already failed
+		}
+		if (!IsSendableFieldValue(out))
+		{
+			// Decodable but rejected (a non-finite float). The bytes are consumed,
+			// so the caller can drop just this field and keep parsing the packet.
+			return false;
+		}
+		return true;
+	}
+
+	reflect::FieldValue ReadFieldValue(ByteReader& r, reflect::FieldType type)
+	{
+		reflect::FieldValue v;
+		if (!ReadFieldValue(r, type, v))
+		{
+			// This form has no per-field rejection channel: make the rejection
+			// visible as a reader failure so the caller aborts the packet rather
+			// than writing a rejected value into anything.
+			r.Fail();
 		}
 		return v;
 	}

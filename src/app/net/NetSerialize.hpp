@@ -61,6 +61,7 @@ namespace aether::net
 		float F32();
 		std::string Str();
 		std::vector<std::byte> Bytes(std::size_t n);
+		void Fail(); // set the sticky failure without reading anything
 
 		[[nodiscard]] bool Ok() const
 		{
@@ -80,9 +81,29 @@ namespace aether::net
 		bool m_ok = true;
 	};
 
-	// FieldValue codec. The type tag is NOT written - the schema already agrees on it
-	// at both ends, so writing it per field would be pure overhead on every snapshot.
+	// FieldValue codec. The type tag is NOT written - the schema (now verified by
+	// the snapshot header's hash) already agrees on it at both ends, so writing it
+	// per field would be pure overhead on every snapshot.
 	void WriteFieldValue(ByteWriter& w, const reflect::FieldValue& value);
+
+	// True when `value` can ride this codec: finite floats (and within float
+	// range - the wire is 32-bit, so a double past FLT_MAX would arrive as inf),
+	// and strings within the reader's length cap. The writer must skip values that
+	// fail this (a value every receiver drops must never reach the wire), and the
+	// reader rejects them on the way in, so no peer can install NaN/Inf into a
+	// component.
+	[[nodiscard]] bool IsSendableFieldValue(const reflect::FieldValue& value);
+
+	// Decodes one field value of `type`. Returns false when the payload is
+	// unusable, in exactly two flavours the caller distinguishes with Ok(): a
+	// failed reader (truncated - the rest of the packet is unparseable), or a
+	// decoded value that IsSendableFieldValue rejects, whose bytes ARE consumed so
+	// the caller can skip just this field and keep parsing the packet.
+	[[nodiscard]] bool ReadFieldValue(ByteReader& r, reflect::FieldType type, reflect::FieldValue& out);
+
+	// Strict form: a decoded-but-rejected value (e.g. a non-finite float) fails the
+	// reader, so callers that cannot skip a field individually still refuse the
+	// packet instead of applying poison.
 	[[nodiscard]] reflect::FieldValue ReadFieldValue(ByteReader& r, reflect::FieldType type);
 
 	// True for types replication can carry. EntityRef and List are excluded: an entity

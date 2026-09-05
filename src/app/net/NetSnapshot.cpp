@@ -81,7 +81,7 @@ namespace aether::net
 	        const std::vector<Entity>& replicated)
 	{
 		ByteWriter body;
-		std::uint16_t count = 0;
+		std::uint32_t count = 0; // u32 on the wire: a u16 would wrap past 65535 changed fields and silently drop the tail
 
 		for (const Entity entity: replicated)
 		{
@@ -99,6 +99,15 @@ namespace aether::net
 					continue;
 				}
 				const reflect::FieldValue value = type.fields[field.fieldIndex].get(component);
+				// Refuse before the cache records it, and before the header promises
+				// it: a value the peer's reader would reject (non-finite float, string
+				// past the reader's cap) must never reach the wire - one such field
+				// makes every packet carrying it die at that byte, and recording it in
+				// the cache would suppress the field until it changed again.
+				if (!IsSendableFieldValue(value))
+				{
+					continue;
+				}
 				const FieldKey key{.netId = netId, .componentIndex = field.componentIndex, .fieldIndex = field.fieldIndex};
 				if (!cache.Changed(key, value))
 				{
@@ -118,7 +127,11 @@ namespace aether::net
 		}
 
 		ByteWriter packet;
-		packet.U16(count);
+		// Schema identity first: under catalog skew the indices below name
+		// different fields on the receiver, and every byte after them desyncs -
+		// so a peer whose schema hash differs refuses the whole packet.
+		packet.U32(schema.hash);
+		packet.U32(count);
 		packet.Bytes(body.View());
 		return packet.Take();
 	}
@@ -128,9 +141,14 @@ namespace aether::net
 	        const StateWriteGate& gate)
 	{
 		ByteReader r{packet};
-		const std::uint16_t count = r.U16();
+		const std::uint32_t hash = r.U32();
+		const std::uint32_t count = r.U32();
+		if (!r.Ok() || hash != schema.hash)
+		{
+			return; // not our schema: every index below would name a different field
+		}
 
-		for (std::uint16_t i = 0; i < count; ++i)
+		for (std::uint32_t i = 0; i < count; ++i)
 		{
 			const std::uint32_t netId = r.U32();
 			const std::uint16_t componentIndex = r.U16();
@@ -151,10 +169,17 @@ namespace aether::net
 			// replicated, or the cursor desyncs and every remaining field in the packet
 			// is garbage. The type to decode it with comes from the catalog field, which
 			// is already known good at this point regardless of schema membership.
-			const reflect::FieldValue value = ReadFieldValue(r, field.type);
-			if (!r.Ok())
+			reflect::FieldValue value;
+			if (!ReadFieldValue(r, field.type, value))
 			{
-				return;
+				if (!r.Ok())
+				{
+					return; // truncated; the rest of the packet is unparseable
+				}
+				// A decoded-but-rejected payload (a non-finite float) has consumed
+				// its bytes: drop this field alone and keep parsing, so one
+				// poisoned value cannot take the rest of the packet with it.
+				continue;
 			}
 
 			// Catalog bounds-checking alone lets a peer name ANY reflected field in the

@@ -18,7 +18,8 @@ namespace aether::net
 
 	// One replicated field, addressed by its position in the component catalog.
 	// Both ends run the same binary's static registration, so the indices agree
-	// without a handshake.
+	// without a handshake - an assumption the snapshot header's schema hash now
+	// verifies at runtime rather than trusting.
 	struct ReplicatedField
 	{
 		std::uint16_t componentIndex = 0;
@@ -31,6 +32,11 @@ namespace aether::net
 	struct ReplicationSchema
 	{
 		std::vector<ReplicatedField> fields;
+		// Identity of `fields` (positions AND types), hashed once at build time.
+		// Snapshot packets carry it so a peer whose catalog differs refuses them
+	// instead of decoding field indices against the wrong table and writing
+		// garbage into unrelated components.
+		std::uint32_t hash = 0;
 		// The same membership as `fields`, keyed for O(1) lookup. ApplySnapshot has to
 		// answer "may a peer write this (component, field)?" for every entry in every
 		// inbound packet - catalog bounds-checking alone would let a peer name ANY

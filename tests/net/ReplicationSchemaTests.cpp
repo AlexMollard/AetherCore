@@ -50,3 +50,43 @@ TEST_CASE("A replicable-type check keeps EntityRef and List out of the schema")
 	CHECK_FALSE(net::IsReplicableFieldType(reflect::FieldType::List));
 	CHECK(net::IsReplicableFieldType(reflect::FieldType::Vec3));
 }
+
+TEST_CASE("The schema hash is deterministic and distinguishes catalogs")
+{
+	// Snapshot packets carry this hash so a peer whose catalog differs refuses
+	// them instead of decoding field indices against the wrong table. It is pure
+	// FNV-1a over field positions and types - nothing run-specific - so the same
+	// catalog must hash equal on every build and every run.
+	CHECK(net::BuildReplicationSchema(reflect::ComponentTypes()).hash
+	        == net::BuildReplicationSchema(reflect::ComponentTypes()).hash);
+
+	reflect::ComponentType ct;
+	ct.name = "SyntheticA";
+	reflect::FieldDesc f;
+	f.name = "a";
+	f.type = reflect::FieldType::Float;
+	f.meta.replicated = true;
+	ct.fields.push_back(f);
+
+	const net::ReplicationSchema one = net::BuildReplicationSchema({ct});
+	CHECK(one.fields.size() == 1);
+
+	// The minimal version skew: one replicated field added before an existing
+	// one shifts every position after it.
+	reflect::ComponentType shifted = ct;
+	reflect::FieldDesc extra = f;
+	extra.name = "b";
+	shifted.fields.insert(shifted.fields.begin(), extra);
+	CHECK(net::BuildReplicationSchema({shifted}).hash != one.hash);
+
+	// A retyped field at the same position: same indices, different FieldType.
+	reflect::ComponentType retyped = ct;
+	retyped.fields[0].type = reflect::FieldType::String;
+	CHECK(net::BuildReplicationSchema({retyped}).hash != one.hash);
+
+	// Component order is registration order, which is fixed per binary but not
+	// per source - two link orders are two different catalogs and must not agree.
+	reflect::ComponentType ctB = ct;
+	ctB.name = "SyntheticB";
+	CHECK(net::BuildReplicationSchema({ct, ctB}).hash != net::BuildReplicationSchema({ctB, ct}).hash);
+}
