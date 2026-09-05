@@ -151,10 +151,30 @@ namespace aether::net
 	// both pass for an owning client sending target=Server at a [NetRpc(Client)] or
 	// [NetRpc(Multicast)] method - only the declaration contradicts that packet, so
 	// without this gate the client executes a host-side method body on the host.
+	//
+	// Every drop above also leaves exactly one actionable, deduplicated AE_WARN
+	// behind (LogCategory::App) - see NetRpc.cpp's WarnRpcDropOnce - naming the
+	// symbol involved and, for the ownership gate specifically, the fix ("send it
+	// on an entity you own"). Warning is keyed per distinct cause for the life of
+	// the process, so a flood of bad calls cannot flood the log; nothing here
+	// changes which calls are accepted or dropped.
 	void ApplyRpc(World& world, NetSession& session, const RpcBridge& bridge, const RpcMessage& msg,
 	        ConnectionId sender, bool localIsHost);
 
 	// ── Outbound ────────────────────────────────────────────────────────────────
+
+	// Why RouteRpc refused a call, kept purely for diagnostics: NetRpcExports.cpp
+	// reads this to tell a script author what to fix when Net.Call returns false.
+	// Nothing reads `reason` to decide anything - `allowed` alone is the decision
+	// RouteRpc has always made, so adding or renaming a case here can never change
+	// behaviour.
+	enum class RpcRouteRefusal : std::uint8_t
+	{
+		None,                      // route.allowed - nothing to explain
+		ClientOriginatedBroadcast, // a client tried to send Client or Multicast
+		Unreplicated,              // the target entity has no net id
+		MissingNetworkIdentity,    // has a net id but no NetworkIdentity component
+	};
 
 	// Where one outbound call goes. Returned rather than sent so the whole authority
 	// decision is a pure function of role, target and ownership, and can be tested
@@ -172,6 +192,8 @@ namespace aether::net
 		// Peers to send the encoded packet to. On a client the single entry is
 		// kInvalidConnection, which the transport reads as "the host".
 		std::vector<ConnectionId> recipients;
+		// See RpcRouteRefusal. Meaningless when `allowed` is true.
+		RpcRouteRefusal reason = RpcRouteRefusal::None;
 	};
 
 	// Whether an explicit call-site target contradicts the method's [NetRpc]
@@ -209,4 +231,11 @@ namespace aether::net
 	// Host-to-client targets require `entity` to be replicated (a live net id); a
 	// packet naming net id 0 addresses nothing on the far end.
 	[[nodiscard]] RpcRoute RouteRpc(const World& world, const NetSession& session, NetRpcTarget target, Entity entity);
+
+	// Test-only: clears ApplyRpc's once-per-cause warning dedup. Without this a
+	// TEST_CASE that intentionally repeats a bad call to prove "warns once" would
+	// see zero warnings whenever an earlier TEST_CASE already tripped the same
+	// cause - the dedup state is a process-wide static, same as it would be in a
+	// real running host. Never call this outside tests.
+	void ResetRpcApplyWarningsForTest();
 } // namespace aether::net

@@ -1,10 +1,12 @@
 #include "scripting/interop/InteropCommon.hpp"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "net/CSharpRpcBridge.hpp"
@@ -61,6 +63,51 @@ namespace
 		RpcDepthGuard(const RpcDepthGuard&) = delete;
 		RpcDepthGuard& operator=(const RpcDepthGuard&) = delete;
 	};
+
+	// Every distinct reason Net.Call's native half refuses an outbound call.
+	// Separate from ApplyRpc's cause list (NetRpc.cpp): these diagnose "why did my
+	// Net.Call return false" on the process that MADE the call, not on whichever
+	// peer might have received it.
+	enum class RpcCallDropCause : std::uint8_t
+	{
+		NoScriptComponent,
+		MethodNotDeclared,
+		TargetMismatch,
+		IndexOverflow,
+		RouteRefused,
+		Count,
+	};
+
+	// One flag per cause, same reasoning as ApplyRpc's dedup in NetRpc.cpp: bounds
+	// this export's own logging to at most Count lines for the life of the
+	// process no matter how a misbehaving or buggy caller floods Net.Call.
+	std::atomic_flag g_callDropWarned[static_cast<std::size_t>(RpcCallDropCause::Count)];
+
+	// A method name is caller-controlled and unbounded; capped so a pathological
+	// name cannot make the log line itself the payload.
+	constexpr std::size_t kLoggedNameCap = 96;
+
+	std::string CapName(std::string_view name)
+	{
+		if (name.size() <= kLoggedNameCap)
+		{
+			return std::string(name);
+		}
+		return std::string(name.substr(0, kLoggedNameCap)) + "...(truncated)";
+	}
+
+	// Logs `fmt` at most once per `cause` for the life of the process - see
+	// ApplyRpc's WarnRpcDropOnce (NetRpc.cpp) for the identical reasoning. Free on
+	// every path except a repeat refusal, which is now bounded rather than spammy.
+	template<typename... Args>
+	void WarnCallDropOnce(RpcCallDropCause cause, std::format_string<Args...> fmt, Args&&... args)
+	{
+		if (g_callDropWarned[static_cast<std::size_t>(cause)].test_and_set(std::memory_order_relaxed))
+		{
+			return;
+		}
+		AE_WARN(aether::LogCategory::App, fmt, std::forward<Args>(args)...);
+	}
 } // namespace
 
 // Net.Call's native half, and the framework's ONLY RPC send path. The method's
@@ -118,6 +165,10 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 		const auto* scripts = world.TryGet<aether::ScriptComponent>(entity);
 		if (scripts == nullptr)
 		{
+			WarnCallDropOnce(RpcCallDropCause::NoScriptComponent,
+			        "Net.Call refused: entity {} has no ScriptComponent, so it declares no [NetRpc] methods at "
+			        "all; '{}' cannot run.",
+			        entityId, CapName(methodNameUtf8));
 			return 0;
 		}
 
@@ -160,6 +211,11 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 				// Net.CallServer naming a method that declares Client or Multicast. The
 				// rule lives in NetRpc.cpp so it is reachable from EngineTests - this TU is
 				// CLR-linked and cannot be.
+				WarnCallDropOnce(RpcCallDropCause::TargetMismatch,
+				        "Net.Call refused: '{}' on entity {} declares [NetRpc] target={}, but was called with an "
+				        "explicit target of {}; call it through Net.Call (whatever it declares), or fix the "
+				        "explicit target to match the attribute.",
+				        CapName(methodName), entityId, static_cast<int>(method.target), expectedTarget);
 				return 0;
 			}
 			if (method.index > 0xFFFF)
@@ -167,12 +223,36 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 				// The dispatch index the local invoke hands to bridge.Invoke is u16; an
 				// index above it would wrap to a DIFFERENT method of this peer's own
 				// table, and nothing downstream could tell. Refuse the call.
+				WarnCallDropOnce(RpcCallDropCause::IndexOverflow,
+				        "Net.Call refused: '{}' on entity {} resolved to local dispatch index {}, which exceeds "
+				        "the 65535 limit the wire format allows.",
+				        CapName(methodName), entityId, method.index);
 				return 0;
 			}
 
 			const aether::net::RpcRoute route = aether::net::RouteRpc(world, session, method.target, entity);
 			if (!route.allowed)
 			{
+				std::string_view why = "refused by routing policy";
+				switch (route.reason)
+				{
+					case aether::net::RpcRouteRefusal::ClientOriginatedBroadcast:
+						why = "a client cannot originate a Client/Multicast RPC - declare it [NetRpc(Server)] and "
+						      "let the host decide, or only invoke Client/Multicast methods from the host";
+						break;
+					case aether::net::RpcRouteRefusal::Unreplicated:
+						why = "the target entity has no net id (it is not replicated) - give it a NetworkIdentity "
+						      "before calling networked RPCs on it";
+						break;
+					case aether::net::RpcRouteRefusal::MissingNetworkIdentity:
+						why = "the target entity has a net id but no NetworkIdentity component";
+						break;
+					case aether::net::RpcRouteRefusal::None:
+					default:
+						break;
+				}
+				WarnCallDropOnce(RpcCallDropCause::RouteRefused, "Net.Call refused: '{}' on entity {}: {}.",
+				        CapName(methodName), entityId, why);
 				return 0;
 			}
 
@@ -198,6 +278,10 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 			}
 			return 1;
 		}
+		WarnCallDropOnce(RpcCallDropCause::MethodNotDeclared,
+		        "Net.Call refused: no [NetRpc] method named '{}' is declared on any of the {} script(s) attached "
+		        "to entity {}; attach a script whose [NetRpc] method has that exact name, or check for a typo.",
+		        CapName(methodName), scripts->scripts.size(), entityId);
 		return 0; // no script on this entity declares that RPC
 	});
 }

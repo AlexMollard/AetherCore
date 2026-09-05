@@ -12,6 +12,7 @@
 #include "net/NetSession.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
+#include "utils/LogRingBuffer.hpp"
 
 using namespace aether;
 
@@ -787,4 +788,82 @@ TEST_CASE("An explicit call-site target that contradicts the declaration is a mi
 	// A value no enumerator has - an assembly built against a newer NetRpcTarget than
 	// this binary knows. It matches nothing, so it is refused rather than coerced.
 	CHECK(net::RpcTargetMismatch(99, net::NetRpcTarget::Server));
+}
+
+// ── Diagnostics ─────────────────────────────────────────────────────────────
+// Every silent drop above now leaves an actionable warning behind, deduplicated
+// per cause so a flood of bad calls cannot flood the log. These read the global
+// LogRingBuffer (the same tail the editor Console reads), clearing it first so
+// what comes back is exactly what this test's own calls produced.
+
+TEST_CASE("ApplyRpc's ownership-refusal warning fires once, not once per repeated call")
+{
+	net::ResetRpcApplyWarningsForTest();
+	LogRingBuffer::Get().Clear();
+
+	World world;
+	net::NetSession session;
+	MakeReplicated(world, session, 1, kOwner);
+
+	FakeRpcBridge bridge;
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{
+	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {}};
+
+	// The identical bad call five times, as an attacker (or a buggy client) would
+	// by repeating a request the host keeps refusing.
+	for (int i = 0; i < 5; ++i)
+	{
+		net::ApplyRpc(world, session, bridge, msg, kOtherClient, /*localIsHost=*/true);
+	}
+	CHECK(bridge.calls.empty());
+
+	std::vector<LogRingBuffer::Record> records;
+	LogRingBuffer::Get().Snapshot(records);
+	const auto matches = std::count_if(records.begin(), records.end(), [](const LogRingBuffer::Record& r)
+	{
+		return r.category == "App" && r.message.find("does not own") != std::string::npos;
+	});
+	// Exactly one - not zero (the refusal is silent no longer) and not five (a
+	// flood of the same cause does not amplify the log).
+	CHECK(matches == 1);
+}
+
+TEST_CASE("ApplyRpc's drop warnings name the symbol and are keyed per distinct cause, not once ever")
+{
+	net::ResetRpcApplyWarningsForTest();
+	LogRingBuffer::Get().Clear();
+
+	World world;
+	net::NetSession session;
+	FakeRpcBridge bridge;
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+
+	// Cause A: an unresolved net id.
+	const net::RpcMessage unknownNetId{.netId = 42, .scriptTypeHash = 0, .methodName = "Say", .args = {}};
+	net::ApplyRpc(world, session, bridge, unknownNetId, kOwner, /*localIsHost=*/true);
+
+	// Cause B: an ownership violation on a DIFFERENT entity. A different cause
+	// must still warn even though cause A already used its one warning this run -
+	// the dedup key is per cause, not "has this process warned about ApplyRpc yet".
+	MakeReplicated(world, session, 7, kOwner);
+	const net::RpcMessage notOwned{
+	        .netId = 7, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {}};
+	net::ApplyRpc(world, session, bridge, notOwned, kOtherClient, /*localIsHost=*/true);
+
+	CHECK(bridge.calls.empty());
+
+	std::vector<LogRingBuffer::Record> records;
+	LogRingBuffer::Get().Snapshot(records);
+	const auto countContaining = [&records](std::string_view needle)
+	{
+		return std::count_if(records.begin(), records.end(), [&](const LogRingBuffer::Record& r)
+		{
+			return r.category == "App" && r.message.find(needle) != std::string::npos;
+		});
+	};
+	// The unresolved net id (42) is named in cause A's message ...
+	CHECK(countContaining("42") == 1);
+	// ... and cause B's message names the fix, not just the failure.
+	CHECK(countContaining("does not own") == 1);
 }

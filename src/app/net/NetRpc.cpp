@@ -1,11 +1,14 @@
 #include "net/NetRpc.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <format>
 
 #include "net/NetComponents.hpp"
 #include "net/NetSession.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
+#include "utils/Logger.hpp"
 
 namespace aether::net
 {
@@ -24,6 +27,59 @@ namespace aether::net
 				}
 			}
 			return std::nullopt;
+		}
+
+		// Every distinct reason ApplyRpc used to drop a call silently. Order is
+		// irrelevant - this only indexes the once-per-cause dedup array below and
+		// gives Count a compile-time value.
+		enum class RpcApplyDropCause : std::uint8_t
+		{
+			WrongDirection,
+			UnknownNetId,
+			NotReplicated,
+			NotOwnedBySender,
+			NoScriptComponent,
+			UnknownScriptType,
+			MethodNotFound,
+			DeclarationMismatch,
+			IndexOverflow,
+			Count,
+		};
+
+		// One flag per cause: an attacker sending hundreds of bad calls a second
+		// trips the SAME cause every time, so this bounds ApplyRpc's own logging to
+		// at most Count lines for the life of the process, however fast or varied
+		// the flood is. Only cleared by ResetRpcApplyWarningsForTest - a real host
+		// runs one process per session, so "once" there really does mean once.
+		std::atomic_flag g_applyDropWarned[static_cast<std::size_t>(RpcApplyDropCause::Count)];
+
+		// A method name (and a script type name) rides the wire as attacker-
+		// controlled, unbounded text; capped so a hostile multi-kilobyte name
+		// cannot make the log line itself the payload.
+		constexpr std::size_t kLoggedNameCap = 96;
+
+		std::string CapName(std::string_view name)
+		{
+			if (name.size() <= kLoggedNameCap)
+			{
+				return std::string(name);
+			}
+			return std::string(name.substr(0, kLoggedNameCap)) + "...(truncated)";
+		}
+
+		// Logs `fmt` at most once per `cause` for the life of the process. The dedup
+		// key is the cause alone, never an argument, so varying the method name or
+		// net id in a flood cannot produce more than Count log lines. Skipped
+		// entirely - no formatting cost - once a cause has already warned, so this
+		// is free on every path except the rare (and now bounded) repeat drop.
+		template<typename... Args>
+		void WarnRpcDropOnce(RpcApplyDropCause cause, std::format_string<Args...> fmt, Args&&... args)
+		{
+			if (g_applyDropWarned[static_cast<std::size_t>(cause)].test_and_set(std::memory_order_relaxed))
+			{
+				return;
+			}
+			AE_WARN(LogCategory::App, fmt, std::forward<Args>(args)...);
 		}
 	} // namespace
 
@@ -85,12 +141,22 @@ namespace aether::net
 		const bool inboundIsServerBound = msg.target == NetRpcTarget::Server;
 		if (localIsHost != inboundIsServerBound)
 		{
+			WarnRpcDropOnce(RpcApplyDropCause::WrongDirection,
+			        "Net RPC dropped: '{}' (net id {}) arrived with target={} but this peer is the {} and only "
+			        "accepts {} calls; the sender's Net.Call/[NetRpc] target does not match which side may "
+			        "originate this direction.",
+			        CapName(msg.methodName), msg.netId, static_cast<int>(msg.target), localIsHost ? "host" : "client",
+			        localIsHost ? "Server" : "Client or Multicast");
 			return;
 		}
 
 		const Entity entity = session.EntityFor(msg.netId);
 		if (!entity.IsValid())
 		{
+			WarnRpcDropOnce(RpcApplyDropCause::UnknownNetId,
+			        "Net RPC dropped: '{}' named net id {}, which this peer has no entity bound to (already "
+			        "despawned, or never replicated here).",
+			        CapName(msg.methodName), msg.netId);
 			return;
 		}
 		if (localIsHost)
@@ -98,19 +164,42 @@ namespace aether::net
 			// A client may only drive what it owns. An entity with no NetworkIdentity
 			// is not a replicated entity at all, so nothing a peer says addresses it.
 			const auto* identity = world.TryGet<NetworkIdentity>(entity);
-			if (identity == nullptr || identity->owner != sender)
+			if (identity == nullptr)
 			{
+				WarnRpcDropOnce(RpcApplyDropCause::NotReplicated,
+				        "Net RPC dropped: '{}' targets net id {}, but that entity carries no NetworkIdentity so it "
+				        "is not replicated at all; only entities spawned/bound through the network layer can "
+				        "receive RPCs.",
+				        CapName(msg.methodName), msg.netId);
+				return;
+			}
+			if (identity->owner != sender)
+			{
+				WarnRpcDropOnce(RpcApplyDropCause::NotOwnedBySender,
+				        "Net RPC dropped: connection {} sent '{}' to net id {}, which it does not own (owner is "
+				        "{}); put a [NetRpc(Server)] method on a script attached to an entity the CALLER owns - "
+				        "never on a host-owned or another player's entity.",
+				        sender, CapName(msg.methodName), msg.netId,
+				        identity->owner == kInvalidConnection ? std::string("the host")
+				                                               : std::format("connection {}", identity->owner));
 				return;
 			}
 		}
 		const auto* scripts = world.TryGet<ScriptComponent>(entity);
 		if (scripts == nullptr)
 		{
+			WarnRpcDropOnce(RpcApplyDropCause::NoScriptComponent,
+			        "Net RPC dropped: '{}' targets net id {}, but that entity has no ScriptComponent at all.",
+			        CapName(msg.methodName), msg.netId);
 			return;
 		}
 		const std::optional<std::uint32_t> scriptIndex = FindScriptIndex(*scripts, msg.scriptTypeHash);
 		if (!scriptIndex.has_value())
 		{
+			WarnRpcDropOnce(RpcApplyDropCause::UnknownScriptType,
+			        "Net RPC dropped: '{}' targets net id {} with script type hash 0x{:08X}, which matches no "
+			        "script attached to that entity (build/version skew, or the wrong entity).",
+			        CapName(msg.methodName), msg.netId, msg.scriptTypeHash);
 			return; // unknown type hash: no script on this entity matches
 		}
 
@@ -122,6 +211,10 @@ namespace aether::net
 		const RpcMethod method = bridge.FindMethod(typeName, msg.methodName);
 		if (!method.Found())
 		{
+			WarnRpcDropOnce(RpcApplyDropCause::MethodNotFound,
+			        "Net RPC dropped: no [NetRpc] method named '{}' is declared on script type '{}' in this peer's "
+			        "build (build/version skew, or a typo in the method name).",
+			        CapName(msg.methodName), CapName(typeName));
 			return;
 		}
 		if (method.target != msg.target)
@@ -131,12 +224,22 @@ namespace aether::net
 			// [NetRpc(Multicast)]-declared method; only the declaration contradicts
 			// that packet. The attribute is the single statement of where a method
 			// may run, so a wire byte that disagrees with it loses.
+			WarnRpcDropOnce(RpcApplyDropCause::DeclarationMismatch,
+			        "Net RPC dropped: '{}' arrived with wire target={} but its [NetRpc] attribute on '{}' declares "
+			        "target={}; the attribute is authoritative - fix the Net.Call target or the attribute so they "
+			        "agree.",
+			        CapName(msg.methodName), static_cast<int>(msg.target), CapName(typeName),
+			        static_cast<int>(method.target));
 			return;
 		}
 		if (method.index > 0xFFFF)
 		{
 			// Invoke takes the dispatch index as u16; truncating an index above it
 			// would silently run a DIFFERENT method of this peer's own table.
+			WarnRpcDropOnce(RpcApplyDropCause::IndexOverflow,
+			        "Net RPC dropped: '{}' resolved to dispatch index {} on '{}', which exceeds the 65535 limit "
+			        "the wire format allows; this peer's RPC table for that type is implausibly large.",
+			        CapName(msg.methodName), method.index, CapName(typeName));
 			return;
 		}
 		bridge.Invoke(entity, *scriptIndex, static_cast<std::uint16_t>(method.index), msg.args);
@@ -169,10 +272,12 @@ namespace aether::net
 				// AUTHORITY. Only the host originates a host-to-client call. A client
 				// that wants everyone to hear something sends a Server RPC and lets the
 				// host decide whether to multicast it - which is exactly the chat flow.
+				route.reason = RpcRouteRefusal::ClientOriginatedBroadcast;
 				return route;
 			}
 			if (netId == 0)
 			{
+				route.reason = RpcRouteRefusal::Unreplicated;
 				return route; // unreplicated entity: the call would arrive addressed to nothing
 			}
 			route.allowed = true;
@@ -193,6 +298,7 @@ namespace aether::net
 			// A host-to-client packet names the entity by net id. Without one there is
 			// nothing to address, and quietly running it here instead would report
 			// success for a call no client ever saw.
+			route.reason = RpcRouteRefusal::Unreplicated;
 			return route;
 		}
 
@@ -209,6 +315,7 @@ namespace aether::net
 		const auto* identity = world.TryGet<NetworkIdentity>(entity);
 		if (identity == nullptr)
 		{
+			route.reason = RpcRouteRefusal::MissingNetworkIdentity;
 			return route; // not a replicated entity, so it has no owning client
 		}
 		route.allowed = true;
@@ -227,5 +334,13 @@ namespace aether::net
 		// An owner that is no longer connected leaves no recipients: the call is
 		// allowed but there is nobody left to deliver it to.
 		return route;
+	}
+
+	void ResetRpcApplyWarningsForTest()
+	{
+		for (auto& flag: g_applyDropWarned)
+		{
+			flag.clear(std::memory_order_relaxed);
+		}
 	}
 }
