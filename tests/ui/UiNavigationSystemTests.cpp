@@ -272,6 +272,49 @@ TEST_CASE("A key that activates nothing is left for the game")
 	CHECK(input.IsKeyPressed(Key::Space)); // still the jump button
 }
 
+// ── Mouse ────────────────────────────────────────────────────────────────────
+// Hover is a real, useful signal for STYLING - Ui.IsHovered reads it directly,
+// independently of any of this - but it must never move KEYBOARD focus on its own:
+// see Ui.HasFocus's own remarks ("the engine never focuses anything on its own").
+// Only a click, a keyboard direction/Tab, or a gamepad direction/button may move
+// `focused`; the cursor position below feeds nothing but the click target.
+//
+// The click half of this (a click resolves `hovered` into `focused`/`activated`, and
+// a click on nothing now clears focus) has NO coverage here: Input::SetSyntheticMouseButton
+// has no windowless-seed path the way SetSyntheticKey does (see its own remarks) - it
+// only takes effect through Input::Update(), which dereferences the real GLFW window
+// unconditionally and is unsafe to call with none. Exercising a synthetic click needs a
+// live window and cursor, which this suite does not have.
+
+TEST_CASE("Resting the mouse over a selectable does not focus it")
+{
+	World w;
+	Input input;
+
+	const Entity only = MakeSelectable(w, {0, 0, 100, 20});
+
+	input.SetSyntheticMousePos({50.f, 10.f}); // inside the rect, nothing clicked
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK_FALSE(Sel(w, only).focused);
+}
+
+TEST_CASE("Hovering a different selectable does not steal focus from the one already chosen")
+{
+	World w;
+	Input input;
+
+	const Entity chosen = MakeSelectable(w, {0, 0, 100, 20});
+	const Entity other = MakeSelectable(w, {0, 100, 100, 20});
+	Sel(w, chosen).focused = true;
+
+	input.SetSyntheticMousePos({50.f, 110.f}); // inside `other`'s rect, nothing clicked
+	ui::UiNavigationSystem::Update(w, input);
+
+	CHECK(Sel(w, chosen).focused);
+	CHECK_FALSE(Sel(w, other).focused);
+}
+
 // ── Gamepad navigation ──────────────────────────────────────────────────────
 // The point of putting controller support here rather than in a game: these screens are the
 // same ones the arrow keys already drove, and none of them had to change.

@@ -123,7 +123,10 @@ public static class Ui
     /// <summary>True if <paramref name="point"/> (screen px) is inside the element's current rect.</summary>
     public static bool Contains(Entity e, Vector2 point) => Native.aether_ui_contains_point(e.Id, point) != 0;
 
-    /// <summary>True while the cursor is over the element.</summary>
+    /// <summary>True while the cursor is over the element - independent of
+    /// <see cref="IsFocused"/>/<see cref="HasFocus"/>. Resting the mouse over a
+    /// selectable never moves the keyboard by itself (see <see cref="HasFocus"/>'s own
+    /// remarks); this is the query a hover highlight styles from instead.</summary>
     public static bool IsHovered(Entity e) => Contains(e, Input.MousePosition);
 
     /// <summary>True while the element is hovered and the left mouse button is held.</summary>
@@ -134,8 +137,9 @@ public static class Ui
 
     // ── Selection / focus (driven by the engine's UiNavigationSystem) ─────────────
     // Give an element a UI Selectable component and the engine handles spatial keyboard
-    // navigation + mouse hover/click across the active selectables. Screens just style by
-    // IsFocused and act on WasActivated - no manual index/hover/click tracking.
+    // navigation and click across the active selectables (mouse hover styles only, via
+    // IsHovered above - it never moves the keyboard). Screens just style by IsFocused
+    // and act on WasActivated - no manual index/hover/click tracking.
 
     /// <summary>True while this selectable is the focused one.</summary>
     public static bool IsFocused(Entity e) => Native.aether_ui_is_focused(e.Id) != 0;
@@ -161,12 +165,15 @@ public static class Ui
     /// The gate a character controller wants: no focus means the player is playing, and
     /// focus means the letters they are typing (or the arrows they are navigating a menu
     /// with) belong to the interface and must not also be steering. The engine never
-    /// focuses anything on its own, so this is false for a screen the player has not
-    /// reached for - a HUD does not silently disable the game by existing.
+    /// focuses anything on its own - not even by resting the mouse over a selectable,
+    /// which only ever styles as <see cref="IsHovered"/> until a click, a keyboard
+    /// direction, Tab, a gamepad direction, or <see cref="SetFocus"/> actually claims it
+    /// - so this is false for a screen the player has not reached for: a HUD does not
+    /// silently disable the game by existing, and neither does the cursor merely
+    /// drifting across one of its widgets.
     /// </remarks>
     public static bool HasFocus => Native.aether_ui_focused_entity() != 0;
 
-    /// <summary>Make this selectable the focused one.</summary>
     /// <summary>
     /// Make an element navigable - focusable by mouse, arrow keys, d-pad and stick, and
     /// activatable by click, Enter/Space or the gamepad's A button.
@@ -180,6 +187,7 @@ public static class Ui
     /// </remarks>
     public static void SetSelectable(Entity e, bool selectable = true) => Native.aether_ui_set_selectable(e.Id, selectable ? 1 : 0);
 
+    /// <summary>Make this selectable the focused one.</summary>
     public static void SetFocus(Entity e) => Native.aether_ui_set_focus(e.Id);
 
     /// <summary>
@@ -190,7 +198,10 @@ public static class Ui
     /// rather than a value the next frame overwrites. Call it when an in-game panel that
     /// took the keyboard - a chat box, a console - is done with it: a selectable that
     /// keeps focus is still activated by Enter <em>and Space</em>, which is how a HUD
-    /// text field quietly turns the jump button into "start typing".
+    /// text field quietly turns the jump button into "start typing". A click that lands
+    /// on nothing selectable already does this on its own - the engine's own way of a
+    /// player clicking out of a field or a highlighted menu item - so most screens never
+    /// need to call this explicitly at all.
     /// </remarks>
     public static void ClearFocus() => Native.aether_ui_clear_focus();
 
@@ -237,6 +248,15 @@ public static class Ui
     /// <summary>True on the frame a slider, toggle, or text box on this entity was changed by the
     /// user (keyboard/drag/activation/typing). Poll this to persist settings.</summary>
     public static bool WasChanged(Entity e) => Native.aether_ui_was_changed(e.Id) != 0;
+
+    // ── Button ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Create a button under <paramref name="canvas"/>. Pass an invalid entity to
+    /// attach to the first canvas (creating one if none exists). The returned entity carries
+    /// a real <c>UIButton</c> (so <see cref="GetButtonLabel"/>/<see cref="SetButtonLabel"/> work
+    /// on it) and is selectable, so <see cref="WasActivated"/> picks up a mouse click,
+    /// Enter/Space, or gamepad A through the engine's navigation system.</summary>
+    public static Entity CreateButton(Entity canvas = default) => new(Native.aether_ui_create_button(canvas.Id));
 
     // ── Text box ──────────────────────────────────────────────────────────────────
     // A single-line editable field. Editing is modal: the player clicks it (or presses

@@ -192,7 +192,15 @@ namespace aether::ui
 			focused = Entity{};
 		}
 
-		// Mouse hover focuses on movement; a hovered element is the click target.
+		// The cursor position feeds exactly one thing below: which element a CLICK would
+		// land on (`hovered`). Merely resting the mouse over a selectable must never move
+		// keyboard focus by itself - Ui.HasFocus documents "the engine never focuses
+		// anything on its own", and a screen with one selectable sitting mid-screen (a
+		// single text box, say) would otherwise have its keyboard permanently and
+		// silently stolen the instant the cursor drifted across it, with no click, no key
+		// press, and nothing on screen to explain it. A script that wants to STYLE the
+		// element under the cursor - independent of keyboard focus entirely - already has
+		// Ui.IsHovered for exactly that; hover here exists only to resolve a click.
 		const glm::vec2 mouse = input.GetMousePos();
 		Entity hovered{};
 		for (const Candidate& c: cands)
@@ -206,19 +214,7 @@ namespace aether::ui
 		// An element that has claimed the keyboard (a text field being edited) keeps the keys the
 		// nav system would otherwise spend: arrows must move its caret, Enter must submit to it.
 		// Tab is deliberately exempt - it is the guaranteed keyboard exit from a captured field.
-		// Computed BEFORE the hover steal below, so it describes the element that actually owns
-		// the keyboard right now rather than whatever the cursor happens to be sitting over.
 		const bool captured = focused.IsValid() && world.Has<UIKeyboardCapture>(focused);
-
-		// Mouse movement focuses what it passes over - but not while a field owns the keyboard.
-		// Losing focus is how UiTextBoxSystem ends editing, with no `submitted` and no `cancelled`,
-		// so an unguarded steal throws away a half-typed value the moment the mouse is nudged.
-		// A real click still moves focus (below): clicking away is the documented way out.
-		const glm::vec2 mouseDelta = input.GetMouseDelta();
-		if (!captured && (mouseDelta.x != 0.0f || mouseDelta.y != 0.0f) && hovered.IsValid())
-		{
-			focused = hovered;
-		}
 
 		// Keyboard: spatial move to the nearest selectable in the pressed direction.
 		if (!captured)
@@ -351,10 +347,26 @@ namespace aether::ui
 			toActivate = focused;
 			input.ConsumeGamepadButton(GamepadButton::A);
 		}
-		if (input.IsMouseButtonPressed(MouseButton::Left) && hovered.IsValid())
+		if (input.IsMouseButtonPressed(MouseButton::Left))
 		{
-			toActivate = hovered;
-			focused = hovered;
+			if (hovered.IsValid())
+			{
+				toActivate = hovered;
+				focused = hovered;
+			}
+			else
+			{
+				// The other half of "clicking away is the documented way out" (see the
+				// hover remarks above): a click on a DIFFERENT selectable already moves
+				// focus away from whatever had it, but a click on nothing selectable at
+				// all - the game world around the UI, empty canvas space - left focus
+				// untouched before this. A field clicked into deliberately, then clicked
+				// away from into the game rather than onto another widget, kept the
+				// keyboard forever: UiTextBoxSystem ends editing precisely when the
+				// focused element stops matching it, which clearing focus here is what
+				// actually drives.
+				focused = Entity{};
+			}
 		}
 
 		// Commit focus and activation to every selectable (inactive ones clear naturally).
