@@ -282,6 +282,10 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_ui_was_changed(uint id);
 
+    // ── Button ───────────────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ui_create_button(uint canvasId);
+
     // ── Text box ─────────────────────────────────────────────────────────────────
     [LibraryImport(Lib)]
     internal static partial uint aether_ui_create_text_box(uint canvasId);

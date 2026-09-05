@@ -508,6 +508,16 @@ AE_SCRIPT_API void aether_ui_set_button_label(std::uint32_t id, const char* text
 	});
 }
 
+// ── Button ───────────────────────────────────────────────────────────────────
+AE_SCRIPT_API std::uint32_t aether_ui_create_button(std::uint32_t canvasId)
+{
+	return SafeExport([&] -> std::uint32_t
+	{
+	auto& world = ActiveWorld();
+	return aether::ui::CreateButtonEntity(world, ResolveCanvas(world, canvasId)).id;
+	});
+}
+
 // ── Text box ────────────────────────────────────────────────────────────────
 AE_SCRIPT_API std::uint32_t aether_ui_create_text_box(std::uint32_t canvasId)
 {
