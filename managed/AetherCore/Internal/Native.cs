@@ -1035,6 +1035,17 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static unsafe partial int aether_net_last_error(byte* buffer, int capacity);
 
+    // ── Networking: lag-compensated hit validation ─────────────────────────────────
+    // Reconstructs an entity's position/rotation from a specific connection's own
+    // point of view (see NetRewind.hpp for the full design). Returns 0 when there is
+    // no interpolation history to rewind: position/rotation are then zeroed and
+    // appliedDelaySeconds still carries the estimate that would have applied - unless
+    // the call was refused outright (no session, or an id resolving to nothing), which
+    // leaves all three untouched. Net.TryRewind's own locals default to zero either way.
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_net_rewind_transform(uint entityId, uint viewerConnection,
+        Vector3* position, Vector3* rotation, float* appliedDelaySeconds);
+
     // ── Networking: NAT traversal ─────────────────────────────────────────────────
     // Every one of these is safe with no session and no NetworkContext registered,
     // matching the session exports above - TraversalState in particular has to read

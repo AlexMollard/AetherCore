@@ -569,6 +569,80 @@ public static partial class Net
         }
     }
 
+    // ── Lag-compensated hit validation ─────────────────────────────────────────
+
+    /// <summary>
+    /// Reconstructs where <paramref name="entity"/> was, from <paramref name="viewerConnection"/>'s
+    /// OWN point of view, at the moment this host estimates that connection's screen was
+    /// showing it. Built for exactly one job: judging a claim like "my shot hit you"
+    /// against what the shooter actually aimed at, instead of the victim's current,
+    /// more-up-to-date position.
+    /// </summary>
+    /// <param name="entity">The entity being judged - typically the claimed victim of a hit.</param>
+    /// <param name="viewerConnection">
+    /// The connection whose point of view to reconstruct - typically the shooter, read
+    /// off <see cref="OwnerOf"/> the entity that carried the claim.
+    /// </param>
+    /// <param name="position">
+    /// The reconstructed position when this returns <c>true</c>; <see cref="Vector3.Zero"/>
+    /// otherwise. Never trust this when the return value is <c>false</c>.
+    /// </param>
+    /// <param name="rotationEuler">
+    /// The reconstructed rotation (Euler angles, the same convention <c>Transform</c>
+    /// uses) when this returns <c>true</c>; zero otherwise.
+    /// </param>
+    /// <param name="appliedDelaySeconds">
+    /// How far behind this host's clock the returned pose actually is, in seconds, AFTER
+    /// the hard cap below - the number worth logging or showing on a debug overlay.
+    /// Never a value to send anywhere or feed back into another call: see the remarks.
+    /// </param>
+    /// <returns>
+    /// <c>false</c> when there is no interpolation history to rewind - <paramref name="entity"/>
+    /// is not replicated, carries no <c>NetworkTransform</c> (interpolation smoothing is
+    /// opt-in), or is owned by this peer. The caller then has only the entity's LIVE
+    /// transform to fall back on; this never fabricates a plausible-looking position.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// <b>The rewind time is never a number a caller (or a remote peer) supplies.</b> It
+    /// comes ENTIRELY from this host's own estimate of <paramref name="viewerConnection"/>'s
+    /// view delay - its round trip plus its render delay - and that estimate is hard-capped
+    /// (currently 300 ms; see <c>kMaxRewindSeconds</c> in <c>NetRewind.hpp</c>) regardless of
+    /// how bad the connection's measured link quality gets. A claimed timestamp from the far
+    /// end would be a licence to rewind arbitrarily far into the past and claim a hit on
+    /// wherever the victim used to stand; nothing here accepts one, and a connection with an
+    /// absurd estimated delay is clamped down to the cap rather than honoured or refused.
+    /// </para>
+    /// <para>
+    /// <b>The accepted cost.</b> Rewinding the victim toward where the shooter saw them means
+    /// the victim CAN be hit slightly after they believe they have already moved away - the
+    /// same trade every shooter that compensates for lag makes. The cap bounds it: a target
+    /// can be hit for compensated lag, never for an unbounded slice of the past.
+    /// </para>
+    /// <para>
+    /// <b>This changes no existing accept/reject decision by itself.</b> It is a capability a
+    /// validation path opts into for one specific claim - nothing starts rewinding anything
+    /// just because this method exists somewhere in a project's scripts.
+    /// </para>
+    /// <para>
+    /// Host-only in practice: the round trip and the interpolation history this reads both
+    /// come from data only the host accumulates for every connection, and a claim-validation
+    /// RPC only ever runs on the host to begin with (see <see cref="NetRpcTarget.Server"/>).
+    /// </para>
+    /// </remarks>
+    public static unsafe bool TryRewind(Entity entity, uint viewerConnection, out Vector3 position,
+        out Vector3 rotationEuler, out float appliedDelaySeconds)
+    {
+        Vector3 pos = default;
+        Vector3 rot = default;
+        float delay = 0f;
+        bool hasHistory = Native.aether_net_rewind_transform(entity.Id, viewerConnection, &pos, &rot, &delay) != 0;
+        position = pos;
+        rotationEuler = rot;
+        appliedDelaySeconds = delay;
+        return hasHistory;
+    }
+
     // ── RPCs ────────────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -61,6 +61,10 @@ add_executable(EngineTests
     # ConnectThrough). Links here because it only touches the transport and the engine
     # net primitives, never the CLR host.
     "${CMAKE_SOURCE_DIR}/src/app/net/NetTraversalSession.cpp"
+    # Lag-compensated hit validation. Pure sampling over an InterpolationBuffer plus
+    # NetworkContext's own RTT estimate, so it links here for the same reason
+    # NetTraversalSession does: no CLR host, no export layer.
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetRewind.cpp"
     # The one definition of g_activeContext, which ActiveContextScope publishes and
     # every script/RPC callback path depends on.
     "${CMAKE_SOURCE_DIR}/src/app/scripting/SceneContext.cpp"

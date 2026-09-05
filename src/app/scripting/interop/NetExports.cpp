@@ -8,6 +8,7 @@
 
 #include "net/NetComponents.hpp"
 #include "net/NetworkContext.hpp"
+#include "net/NetRewind.hpp"
 #include "net/NetRpc.hpp"
 #include "net/RoomCode.hpp"
 #include "scene/Entity.hpp"
@@ -674,5 +675,40 @@ AE_SCRIPT_API std::int32_t aether_net_relay_configured()
 	}
 	const aether::EngineSettings::Network& network = settings->Get().network;
 	return network.allowRelay && !network.turnHost.empty() ? 1 : 0;
+	});
+}
+
+// ── Networking: lag-compensated hit validation ────────────────────────────────
+// See NetRewind.hpp for the whole design and the honesty boundary it documents -
+// this export is a thin marshalling wrapper and adds no policy of its own.
+
+AE_SCRIPT_API std::int32_t aether_net_rewind_transform(std::uint32_t entityId, std::uint32_t viewerConnection,
+        Vec3* outPosition, Vec3* outRotation, float* outAppliedDelaySeconds)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	aether::net::NetworkContext* context = Context();
+	const aether::Entity entity{entityId};
+	// No session, or an id that resolves to nothing: there is nothing to rewind, and
+	// that is the honest answer - offline every entity's live transform IS the truth.
+	if (context == nullptr || !entity.IsValid() || !EntityAlive(entityId))
+	{
+		return 0;
+	}
+	const aether::net::RewindSample sample =
+	        aether::net::RewindTransform(ActiveWorld(), *context, viewerConnection, entity);
+	if (outPosition != nullptr)
+	{
+		*outPosition = FromGlm(sample.position);
+	}
+	if (outRotation != nullptr)
+	{
+		*outRotation = FromGlm(sample.rotation);
+	}
+	if (outAppliedDelaySeconds != nullptr)
+	{
+		*outAppliedDelaySeconds = sample.appliedDelaySeconds;
+	}
+	return sample.hasHistory ? 1 : 0;
 	});
 }
