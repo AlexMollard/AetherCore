@@ -641,6 +641,81 @@ public sealed class NetSessionDirectorTests : SdkTestBase
         Assert.Equal(new[] { "Title" }, Engine.ScenesLoaded);
     }
 
+    // ── First connection: by code ───────────────────────────────────────────────
+
+    [Fact]
+    public void AJoinByCodeStillPunchingIsNotTreatedAsUnreachable()
+    {
+        // While the connect ladder punches, the transport reports neither host nor
+        // client (see NetTraversalSession's class remarks on JoinInProgress) - the
+        // exact signal a direct join's watchdog reads as "gave up on its own". A
+        // code-based join must not confuse the two and bail out on the first frame.
+        NetSession.HostRoomCode = "PA1R01";
+        NetSession.JoinRequested = true;
+        Engine.TraversalState = NetTraversalState.Punching;
+        RecordingDirector director = NewDirector();
+        director.ConnectTimeoutSeconds = 8.0f;
+        director.OnAttach();
+
+        Tick(director, 20, 0.1f); // two seconds, well under the timeout
+
+        Assert.Empty(Engine.ScenesLoaded);
+    }
+
+    [Fact]
+    public void AJoinByCodeThatFailsTraversalReturnsToTheMenuWithTheTraversalError()
+    {
+        NetSession.HostRoomCode = "PA1R01";
+        NetSession.JoinRequested = true;
+        Engine.TraversalState = NetTraversalState.Punching;
+        RecordingDirector director = NewDirector();
+        director.OnAttach();
+        Tick(director);
+        Assert.Empty(Engine.ScenesLoaded);
+
+        Engine.TraversalState = NetTraversalState.Failed;
+        Engine.TraversalError = "No relay is configured for a symmetric NAT";
+        Tick(director);
+
+        Assert.Equal("No relay is configured for a symmetric NAT", NetSession.StatusMessage);
+        Assert.Equal(new[] { "Title" }, Engine.ScenesLoaded);
+    }
+
+    [Fact]
+    public void AJoinByCodeThatNeverAnswersGivesUpOutLoud()
+    {
+        NetSession.HostRoomCode = "PA1R01";
+        NetSession.JoinRequested = true;
+        Engine.TraversalState = NetTraversalState.Signaling; // nobody has answered the room yet
+        RecordingDirector director = NewDirector();
+        director.ConnectTimeoutSeconds = 8.0f;
+        director.OnAttach();
+
+        Assert.True(TickUntilReturned(director, 40, 0.25f)); // up to ten seconds
+
+        Assert.Equal(NetSessionDirector.ConnectTimedOutMessage, NetSession.StatusMessage);
+        Assert.Equal(new[] { "Title" }, Engine.ScenesLoaded);
+    }
+
+    [Fact]
+    public void AJoinByCodeConnectingSucceedsTheSameWayADirectJoinDoes()
+    {
+        NetSession.HostRoomCode = "PA1R01";
+        NetSession.JoinRequested = true;
+        Engine.TraversalState = NetTraversalState.Punching;
+        RecordingDirector director = NewDirector();
+        director.OnAttach();
+        Tick(director);
+
+        Engine.TraversalState = NetTraversalState.Connected;
+        Engine.IsClient = true;
+        Engine.IsConnected = true;
+        Tick(director);
+
+        Assert.Equal("Connected.", LastStatusText());
+        Assert.Empty(Engine.ScenesLoaded);
+    }
+
     // ── Client: endings ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -839,6 +914,91 @@ public sealed class NetSessionDirectorTests : SdkTestBase
         Assert.Equal(attemptsBeforeTheRefusal, Engine.ConnectAttempts.Count);
     }
 
+    // ── Reconnecting: by code ───────────────────────────────────────────────────
+
+    [Fact]
+    public void ThereIsSomethingToReconnectToWhenThisPeerJoinedByCode()
+    {
+        RecordingDirector director = InSessionByCode("PA1R01");
+
+        DropTheLink();
+        Tick(director);
+
+        Assert.True(director.IsReconnecting);
+        Assert.Contains("Reconnecting", LastStatusText());
+        Assert.Empty(Engine.ScenesLoaded);
+    }
+
+    [Fact]
+    public void ReconnectingByCodeRetriesThroughJoinByCodeNotADirectConnect()
+    {
+        RecordingDirector director = InSessionByCode("PA1R01");
+        director.ReconnectDelaySeconds = 0.5f;
+        DropTheLink();
+        Tick(director);
+
+        TickUntilJoinByCodeAttemptGoesOut(director, 20, 0.1f);
+
+        Assert.Empty(Engine.ConnectAttempts);
+        Assert.Equal("PA1R01", Assert.Single(Engine.JoinByCodeAttempts));
+    }
+
+    [Fact]
+    public void AReconnectByCodeStillPunchingIsNotAbandonedBeforeItsTimeout()
+    {
+        // The same misleading-transport window as a first connection by code (see
+        // TickInitialConnectByCode): NetIsClient would report false for the whole time
+        // the ladder punches, so the in-flight test has to read TraversalState instead.
+        RecordingDirector director = InSessionByCode("PA1R01");
+        director.ReconnectDelaySeconds = 0.5f;
+        director.ReconnectTimeoutSeconds = 5.0f;
+        DropTheLink();
+        Tick(director);
+        TickUntilJoinByCodeAttemptGoesOut(director, 20, 0.1f);
+
+        Engine.TraversalState = NetTraversalState.Punching; // still working, not connected yet
+        Tick(director, 20, 0.1f); // two more seconds, well under the 5s timeout
+
+        Assert.Single(Engine.JoinByCodeAttempts); // no second attempt fired yet
+        Assert.True(director.IsReconnecting);
+    }
+
+    [Fact]
+    public void AReconnectByCodeThatFailsTraversalCountsAsAFailedAttemptRatherThanWaitingOutTheTimeout()
+    {
+        RecordingDirector director = InSessionByCode("PA1R01");
+        director.ReconnectAttempts = 1;
+        director.ReconnectDelaySeconds = 0.5f;
+        director.ReconnectTimeoutSeconds = 5.0f;
+        DropTheLink();
+        Tick(director);
+        TickUntilJoinByCodeAttemptGoesOut(director, 20, 0.1f);
+
+        Engine.TraversalState = NetTraversalState.Failed;
+        Tick(director, 5, 0.1f); // half a second - far short of the 5s per-attempt timeout
+
+        Assert.False(director.IsReconnecting);
+        Assert.Equal(NetSessionDirector.HostDisconnectedMessage, NetSession.StatusMessage);
+    }
+
+    [Fact]
+    public void ASuccessfulReconnectByCodeClearsTheModeAndSaysSo()
+    {
+        RecordingDirector director = InSessionByCode("PA1R01");
+        director.ReconnectDelaySeconds = 0.5f;
+        DropTheLink();
+        Tick(director);
+        TickUntilJoinByCodeAttemptGoesOut(director, 20, 0.1f);
+
+        Engine.TraversalState = NetTraversalState.Connected;
+        Engine.IsClient = true;
+        Engine.IsConnected = true;
+        Tick(director);
+
+        Assert.False(director.IsReconnecting);
+        Assert.Equal("Reconnected.", LastStatusText());
+    }
+
     // ── Leaving ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1011,6 +1171,37 @@ public sealed class NetSessionDirectorTests : SdkTestBase
         director.OnAttach();
         Tick(director);
         return director;
+    }
+
+    /// <summary>A director that has been a live client, joined by room code, for a
+    /// frame.</summary>
+    private RecordingDirector InSessionByCode(string code)
+    {
+        NetSession.HostRoomCode = code;
+        NetSession.HostAddress = string.Empty;
+        NetSession.HostPort = 0;
+        NetSession.JoinRequested = true;
+        Engine.IsClient = true;
+        Engine.IsConnected = true;
+        RecordingDirector director = NewDirector();
+        director.OnAttach();
+        Tick(director);
+        return director;
+    }
+
+    /// <summary>Tick until the reconnect sequence actually issues a Net.JoinByCode.</summary>
+    private void TickUntilJoinByCodeAttemptGoesOut(NetSessionDirector director, int maxFrames, float deltaTime)
+    {
+        int before = Engine.JoinByCodeAttempts.Count;
+        for (int i = 0; i < maxFrames; i++)
+        {
+            director.OnUpdate(deltaTime);
+            if (Engine.JoinByCodeAttempts.Count > before)
+            {
+                return;
+            }
+        }
+        throw new InvalidOperationException($"No reconnect attempt within {maxFrames} frames.");
     }
 
     /// <summary>Lose the link with nothing to say - a timeout, a pulled cable. The

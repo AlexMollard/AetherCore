@@ -65,11 +65,26 @@ public static class NetSession
 
     /// <summary>The host this player last asked to join, so a dropped link knows where
     /// to try coming back to. Empty when this player is hosting, which is what makes
-    /// "there is nowhere to reconnect to" answerable.</summary>
+    /// "there is nowhere to reconnect to" answerable. Empty too when the join was by
+    /// room code instead of a typed address - see <see cref="HostRoomCode"/>, its
+    /// mutually exclusive counterpart.</summary>
     public static string HostAddress = string.Empty;
 
     /// <summary>Port half of <see cref="HostAddress"/>.</summary>
     public static ushort HostPort;
+
+    /// <summary>The room code this player last asked to join, so a dropped link can be
+    /// rejoined by the same code instead of by address. Empty when this player is
+    /// hosting or joined by a typed address instead - see <see cref="HostAddress"/>,
+    /// its mutually exclusive counterpart.</summary>
+    /// <remarks>
+    /// A code identifies the SESSION, not an endpoint, so it survives exactly the
+    /// change a stored address does not: the far end's real address moving behind its
+    /// NAT, or simply not being known yet when this join began. That is the whole
+    /// reason a room-code join needs its own reconnect target rather than reusing
+    /// <see cref="HostAddress"/> for whatever endpoint the punch happened to find.
+    /// </remarks>
+    public static string HostRoomCode = string.Empty;
 
     /// <summary>
     /// True from the moment a join is requested until the session is left.
@@ -109,7 +124,63 @@ public static class NetSession
         JoinRequested = false;
         HostAddress = string.Empty;
         HostPort = 0;
+        HostRoomCode = string.Empty;
         return true;
+    }
+
+    /// <summary>
+    /// Host a session that needs no forwarded port: mint or accept a room code and
+    /// start listening through <see cref="Net.HostWithCode"/>, recording that this
+    /// player is the host and so has nowhere to reconnect to - exactly
+    /// <see cref="BeginHost"/>'s contract, run over the connect ladder instead of a
+    /// bound port.
+    /// </summary>
+    /// <param name="code">A code to host under - e.g. one a player was handed by
+    /// somebody re-hosting after a drop. Null or empty mints a fresh one with
+    /// <see cref="Net.NewRoomCode"/>.</param>
+    /// <param name="port">Local UDP port to bind. 0 lets the OS choose - see
+    /// <see cref="Net.HostWithCode"/> for why there is normally no reason to pin
+    /// it.</param>
+    /// <param name="maxConnections">Same meaning as on <see cref="BeginHost"/>.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>Signalling is deliberately not chosen here.</b> Candidates already publish
+    /// over LAN broadcast with no call at all - the connect ladder's own
+    /// zero-configuration default, see <see cref="Net.UseLanSignaling"/> - so a
+    /// same-network game needs nothing else. Reaching a peer across the internet needs
+    /// a rendezvous address: call <see cref="Net.UseRendezvousSignaling"/> once,
+    /// before this. This method never calls either itself, on purpose - an implicit
+    /// choice here would be an explicit selection that silently and permanently
+    /// overrides a signalling backend a settings screen configured, the same way a
+    /// direct <see cref="Net.UseLanSignaling"/> call would. "Calls neither" is not a
+    /// misconfiguration to guard against: it is exactly what a LAN-only game is
+    /// supposed to do, and it already works.
+    /// </para>
+    /// <para>
+    /// Progress and failure live on <see cref="Net"/>, not duplicated here: poll
+    /// <see cref="Net.TraversalState"/>, and once it reaches
+    /// <see cref="NetTraversalState.Failed"/> read <see cref="Net.TraversalError"/> -
+    /// typically a symmetric NAT with no relay configured, see
+    /// <see cref="Net.ConfigureRelay"/>.
+    /// </para>
+    /// </remarks>
+    /// <returns>The code hosted under - whatever was supplied, or minted when
+    /// <paramref name="code"/> was null or empty - paired with whether the local bind
+    /// even started. A false <c>Started</c> leaves every reconnect field untouched,
+    /// the same as a failed <see cref="BeginHost"/>.</returns>
+    public static (bool Started, string Code) BeginHostWithCode(string? code = null, int port = 0,
+        int maxConnections = 32)
+    {
+        string roomCode = string.IsNullOrEmpty(code) ? Api.NetNewRoomCode() : code;
+        if (!Api.NetHostWithCode(roomCode, port, maxConnections))
+        {
+            return (false, roomCode);
+        }
+        JoinRequested = false;
+        HostAddress = string.Empty;
+        HostPort = 0;
+        HostRoomCode = string.Empty;
+        return (true, roomCode);
     }
 
     /// <summary>
@@ -127,6 +198,47 @@ public static class NetSession
         JoinRequested = true;
         HostAddress = address;
         HostPort = port;
+        HostRoomCode = string.Empty;
+        return true;
+    }
+
+    /// <summary>
+    /// Join the session published under <paramref name="code"/> - fetching the host's
+    /// candidates, punching a hole to them, and connecting through the result - and
+    /// record the CODE, not an address, as where to come back to if the link later
+    /// drops without explanation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A room code rather than <see cref="HostAddress"/>/<see cref="HostPort"/>: the
+    /// whole reason this join needed a code instead of a typed address is that the
+    /// host's real address either sits behind a NAT or was not known ahead of time, so
+    /// an endpoint captured at join time could easily be stale by the time a reconnect
+    /// needs it. The code names the SESSION and survives exactly the kind of change an
+    /// address does not - see <see cref="HostRoomCode"/>.
+    /// </para>
+    /// <para>
+    /// Same signalling rule as <see cref="BeginHostWithCode"/>: candidates already
+    /// exchange over LAN broadcast with no call needed; call
+    /// <see cref="Net.UseRendezvousSignaling"/> once beforehand for a peer across the
+    /// internet. This method makes no signalling choice on its own.
+    /// </para>
+    /// </remarks>
+    /// <returns>False if the local bind failed or <paramref name="code"/> is not a
+    /// well-formed room code - see <see cref="Net.JoinByCode"/>. A true return means
+    /// traversal has STARTED, not that it will succeed - poll
+    /// <see cref="Net.TraversalState"/> the same way <see cref="BeginHostWithCode"/>
+    /// says to.</returns>
+    public static bool BeginJoinByCode(string code)
+    {
+        if (!Api.NetJoinByCode(code))
+        {
+            return false;
+        }
+        JoinRequested = true;
+        HostAddress = string.Empty;
+        HostPort = 0;
+        HostRoomCode = code;
         return true;
     }
 

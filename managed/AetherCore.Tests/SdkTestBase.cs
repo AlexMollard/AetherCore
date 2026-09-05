@@ -43,6 +43,7 @@ public abstract class SdkTestBase : IDisposable
         NetSession.StatusMessage = string.Empty;
         NetSession.HostAddress = string.Empty;
         NetSession.HostPort = 0;
+        NetSession.HostRoomCode = string.Empty;
         NetSession.JoinRequested = false;
     }
 }

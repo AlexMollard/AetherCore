@@ -69,6 +69,21 @@ public sealed class TestEngineBackend : IEngineBackend
     /// <summary>Whether <see cref="Net.Host"/> succeeds.</summary>
     public bool HostSucceeds = true;
 
+    /// <summary>Whether <see cref="Net.HostWithCode"/> succeeds.</summary>
+    public bool HostWithCodeSucceeds = true;
+
+    /// <summary>Whether <see cref="Net.JoinByCode"/> succeeds.</summary>
+    public bool JoinByCodeSucceeds = true;
+
+    /// <summary>What <see cref="Net.NewRoomCode"/> mints.</summary>
+    public string RoomCodeToMint = "ABCDEF";
+
+    /// <summary>What <see cref="Net.TraversalState"/> reports.</summary>
+    public NetTraversalState TraversalState;
+
+    /// <summary>What <see cref="Net.TraversalError"/> reports.</summary>
+    public string TraversalError = string.Empty;
+
     // ── Recorded calls ──────────────────────────────────────────────────────────
 
     /// <summary>Every <c>Net.Spawn</c>, as (prefab, position, owner).</summary>
@@ -88,6 +103,12 @@ public sealed class TestEngineBackend : IEngineBackend
 
     /// <summary>Every <c>Net.Connect</c>, as (address, port).</summary>
     public List<(string Address, int Port)> ConnectAttempts = new();
+
+    /// <summary>Every <c>Net.HostWithCode</c> call, as (code, port, maxConnections).</summary>
+    public List<(string Code, int Port, int MaxConnections)> HostWithCodeAttempts = new();
+
+    /// <summary>Every <c>Net.JoinByCode</c> call, by code.</summary>
+    public List<string> JoinByCodeAttempts = new();
 
     /// <summary>Every value written to <c>Net.ReplicationReady</c>.</summary>
     public List<bool> ReplicationReadyWrites = new();
@@ -198,6 +219,29 @@ public sealed class TestEngineBackend : IEngineBackend
 
     /// <inheritdoc/>
     public void NetDisconnect() => DisconnectCount++;
+
+    /// <inheritdoc/>
+    public bool NetHostWithCode(string code, int port, int maxConnections)
+    {
+        HostWithCodeAttempts.Add((code, port, maxConnections));
+        return HostWithCodeSucceeds;
+    }
+
+    /// <inheritdoc/>
+    public bool NetJoinByCode(string code)
+    {
+        JoinByCodeAttempts.Add(code);
+        return JoinByCodeSucceeds;
+    }
+
+    /// <inheritdoc/>
+    public string NetNewRoomCode() => RoomCodeToMint;
+
+    /// <inheritdoc/>
+    public NetTraversalState NetTraversalState => TraversalState;
+
+    /// <inheritdoc/>
+    public string NetTraversalError => TraversalError;
 
     /// <inheritdoc/>
     public Entity[] NetPlayers

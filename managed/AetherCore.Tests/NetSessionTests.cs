@@ -254,6 +254,126 @@ public sealed class NetSessionTests : SdkTestBase
         Assert.Equal((ushort)0, NetSession.HostPort);
     }
 
+    // ── BeginHostWithCode / BeginJoinByCode ─────────────────────────────────────
+
+    [Fact]
+    public void BeginHostWithCode_MintsACodeWhenNoneIsGivenAndHasNowhereToReconnectTo()
+    {
+        Engine.RoomCodeToMint = "ABCDEF";
+        NetSession.JoinRequested = true;
+        NetSession.HostAddress = "10.0.0.1";
+        NetSession.HostPort = 1234;
+        NetSession.HostRoomCode = "STALE1";
+
+        (bool started, string code) = NetSession.BeginHostWithCode();
+
+        Assert.True(started);
+        Assert.Equal("ABCDEF", code);
+        Assert.False(NetSession.JoinRequested);
+        Assert.Equal(string.Empty, NetSession.HostAddress);
+        Assert.Equal((ushort)0, NetSession.HostPort);
+        Assert.Equal(string.Empty, NetSession.HostRoomCode); // a host has nowhere to reconnect to
+        Assert.Equal(("ABCDEF", 0, 32), Assert.Single(Engine.HostWithCodeAttempts));
+    }
+
+    [Fact]
+    public void BeginHostWithCode_HostsUnderTheSuppliedCodeInsteadOfMintingOne()
+    {
+        (bool started, string code) = NetSession.BeginHostWithCode("PA1R01", port: 7000, maxConnections: 5);
+
+        Assert.True(started);
+        Assert.Equal("PA1R01", code);
+        Assert.Equal(("PA1R01", 7000, 5), Assert.Single(Engine.HostWithCodeAttempts));
+    }
+
+    [Fact]
+    public void BeginHostWithCode_LeavesEverythingAloneWhenTheLocalBindFailed()
+    {
+        Engine.HostWithCodeSucceeds = false;
+        NetSession.JoinRequested = true;
+        NetSession.HostAddress = "10.0.0.1";
+        NetSession.HostPort = 1234;
+        NetSession.HostRoomCode = "STALE1";
+
+        (bool started, string code) = NetSession.BeginHostWithCode("PA1R01");
+
+        Assert.False(started);
+        Assert.Equal("PA1R01", code); // the code attempted is still reported, for logging
+        Assert.True(NetSession.JoinRequested);
+        Assert.Equal("10.0.0.1", NetSession.HostAddress);
+        Assert.Equal((ushort)1234, NetSession.HostPort);
+        Assert.Equal("STALE1", NetSession.HostRoomCode);
+    }
+
+    [Fact]
+    public void BeginJoinByCode_RecordsTheCodeAsTheReconnectTargetInsteadOfAnAddress()
+    {
+        Assert.True(NetSession.BeginJoinByCode("PA1R01"));
+
+        Assert.True(NetSession.JoinRequested);
+        Assert.Equal(string.Empty, NetSession.HostAddress);
+        Assert.Equal((ushort)0, NetSession.HostPort);
+        Assert.Equal("PA1R01", NetSession.HostRoomCode);
+        Assert.Equal("PA1R01", Assert.Single(Engine.JoinByCodeAttempts));
+    }
+
+    [Fact]
+    public void BeginJoinByCode_RecordsNothingWhenTheAttemptCouldNotStart()
+    {
+        Engine.JoinByCodeSucceeds = false;
+
+        Assert.False(NetSession.BeginJoinByCode("PA1R01"));
+
+        Assert.False(NetSession.JoinRequested);
+        Assert.Equal(string.Empty, NetSession.HostRoomCode);
+    }
+
+    [Fact]
+    public void BeginHost_ClearsAPreviousRoomCode()
+    {
+        // Mutual exclusivity: a direct host has nowhere to reconnect to, by address OR
+        // by a code left over from an earlier code-based session.
+        NetSession.HostRoomCode = "STALE1";
+
+        Assert.True(NetSession.BeginHost(7777, 3));
+
+        Assert.Equal(string.Empty, NetSession.HostRoomCode);
+    }
+
+    [Fact]
+    public void BeginJoin_ClearsAPreviousRoomCode()
+    {
+        // A direct-address join reconnects by address, not by a code from an earlier
+        // session - the two reconnect targets are mutually exclusive.
+        NetSession.HostRoomCode = "STALE1";
+
+        Assert.True(NetSession.BeginJoin("10.0.0.1", 1234));
+
+        Assert.Equal(string.Empty, NetSession.HostRoomCode);
+    }
+
+    // ── Signalling defaulting rule ───────────────────────────────────────────────
+
+    [Fact]
+    public void BeginHostWithCode_NeedsNoSignalingSelectionMadeFirst()
+    {
+        // Neither Net.UseLanSignaling nor Net.UseRendezvousSignaling has been called.
+        // The engine's own connect ladder already defaults to LAN broadcast with zero
+        // configuration (NetTraversalSession's m_backend default), so NetSession must
+        // not gate hosting on a selection, and must not make one on the caller's
+        // behalf either - an implicit choice here would permanently override a future
+        // settings-driven rendezvous default the same way an explicit call would.
+        (bool started, string _) = NetSession.BeginHostWithCode();
+
+        Assert.True(started);
+    }
+
+    [Fact]
+    public void BeginJoinByCode_NeedsNoSignalingSelectionMadeFirst()
+    {
+        Assert.True(NetSession.BeginJoinByCode("PA1R01"));
+    }
+
     // ── FFI enum ordinals ────────────────────────────────────────────────────────
 
     [Fact]

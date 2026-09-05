@@ -59,6 +59,23 @@ internal interface IEngineBackend
     /// <summary><see cref="Net.Disconnect"/>.</summary>
     void NetDisconnect();
 
+    // ── Net: room codes and NAT traversal ───────────────────────────────────────
+
+    /// <summary><see cref="Net.HostWithCode"/>.</summary>
+    bool NetHostWithCode(string code, int port, int maxConnections);
+
+    /// <summary><see cref="Net.JoinByCode"/>.</summary>
+    bool NetJoinByCode(string code);
+
+    /// <summary><see cref="Net.NewRoomCode"/>.</summary>
+    string NetNewRoomCode();
+
+    /// <summary><see cref="Net.TraversalState"/>.</summary>
+    NetTraversalState NetTraversalState { get; }
+
+    /// <summary><see cref="Net.TraversalError"/>.</summary>
+    string NetTraversalError { get; }
+
     // ── Net: players ────────────────────────────────────────────────────────────
 
     /// <summary><see cref="Net.Players"/>.</summary>
@@ -181,6 +198,22 @@ internal sealed class NativeEngineBackend : IEngineBackend
 
     /// <inheritdoc/>
     public void NetDisconnect() => Net.Disconnect();
+
+    /// <inheritdoc/>
+    public bool NetHostWithCode(string code, int port, int maxConnections)
+        => Net.HostWithCode(code, port, maxConnections);
+
+    /// <inheritdoc/>
+    public bool NetJoinByCode(string code) => Net.JoinByCode(code);
+
+    /// <inheritdoc/>
+    public string NetNewRoomCode() => Net.NewRoomCode();
+
+    /// <inheritdoc/>
+    public NetTraversalState NetTraversalState => Net.TraversalState;
+
+    /// <inheritdoc/>
+    public string NetTraversalError => Net.TraversalError;
 
     /// <inheritdoc/>
     public Entity[] NetPlayers => Net.Players;

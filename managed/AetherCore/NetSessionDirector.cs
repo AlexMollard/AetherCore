@@ -270,9 +270,36 @@ public abstract class NetSessionDirector : EntityScript
         // editor. See NetSession.JoinRequested for why a stale static has to be cleared
         // here - it survives the editor's Play/Stop cycle, and a stale one would route a
         // genuine single-player session down the client branch.
-        if (!Api.NetIsClient && !Api.NetIsHost && !Api.NetIsConnected && Api.NetDisconnectReason.Length == 0)
+        //
+        // A room-code join in flight looks EXACTLY like nothing-live to the transport,
+        // which is the whole reason TickInitialConnectByCode exists: a joiner binds a
+        // socket like a host does, so IsClient/IsConnected both stay false for as long
+        // as the ladder is asking the router, trading candidates and punching. Clearing
+        // the flag on that evidence would abandon a perfectly healthy attempt the
+        // moment the arena scene attached and silently demote it to single-player, so
+        // an attempt whose ladder is still running is not stale by definition.
+        if (!Api.NetIsClient && !Api.NetIsHost && !Api.NetIsConnected && Api.NetDisconnectReason.Length == 0
+                && !TraversalAttemptLive)
         {
             NetSession.JoinRequested = false;
+        }
+    }
+
+    /// <summary>
+    /// True while a room-code attempt is somewhere on the connect ladder. Idle means no
+    /// attempt was ever started; Failed means one ended and its reason is what the menu
+    /// should show, so neither counts as live.
+    /// </summary>
+    private static bool TraversalAttemptLive
+    {
+        get
+        {
+            if (NetSession.HostRoomCode.Length == 0)
+            {
+                return false;
+            }
+            NetTraversalState state = Api.NetTraversalState;
+            return state != NetTraversalState.Idle && state != NetTraversalState.Failed;
         }
     }
 
@@ -764,6 +791,12 @@ public abstract class NetSessionDirector : EntityScript
     {
         _connectElapsed += deltaTime;
 
+        if (NetSession.HostRoomCode.Length > 0)
+        {
+            TickInitialConnectByCode();
+            return;
+        }
+
         if (!Api.NetIsClient)
         {
             Log.Warn("Net session: the connection was never established");
@@ -784,6 +817,47 @@ public abstract class NetSessionDirector : EntityScript
         ShowStatus($"Connecting to {where}... {_connectElapsed:0.0}s");
     }
 
+    /// <summary>
+    /// <see cref="TickInitialConnect"/> for a room-code join. The transport itself is
+    /// misleading for as long as the connect ladder is punching - a joiner binds a
+    /// socket exactly like a host does, so <see cref="Net.IsClient"/> stays false the
+    /// whole time the ladder works and only flips once the real handshake finishes (see
+    /// <c>NetTraversalSession</c>'s class remarks on <c>JoinInProgress</c>). Watching it
+    /// here would report "never connected" on literally every frame before that,
+    /// so progress and failure are read off <see cref="Net.TraversalState"/> instead.
+    /// </summary>
+    private void TickInitialConnectByCode()
+    {
+        NetTraversalState state = Api.NetTraversalState;
+        if (state == NetTraversalState.Failed)
+        {
+            string why = Api.NetTraversalError;
+            Log.Warn($"Net session: could not join room '{NetSession.HostRoomCode}' - {why}");
+            Leave(why.Length > 0 ? why : UnreachableMessage);
+            return;
+        }
+
+        if (_connectElapsed >= ConnectTimeoutSeconds)
+        {
+            Log.Warn($"Net session: no answer after {ConnectTimeoutSeconds:0} seconds, returning to the menu");
+            Leave(ConnectTimedOutMessage);
+            return;
+        }
+
+        ShowStatus($"Joining {NetSession.HostRoomCode}: {DescribeTraversal(state)} {_connectElapsed:0.0}s");
+    }
+
+    /// <summary>One line of status text per <see cref="NetTraversalState"/> rung, for
+    /// the line a code-based join or reconnect shows while it works.</summary>
+    private static string DescribeTraversal(NetTraversalState state) => state switch
+    {
+        NetTraversalState.Mapping => "asking your router for a path in",
+        NetTraversalState.Signaling => "finding your friend",
+        NetTraversalState.Punching => "opening a path",
+        NetTraversalState.Relaying => "relaying through a server",
+        _ => "connecting",
+    };
+
     // ── Reconnecting ────────────────────────────────────────────────────────────
 
     /// <summary>Start the bounded retry sequence after a silent drop.</summary>
@@ -794,7 +868,7 @@ public abstract class NetSessionDirector : EntityScript
     /// </remarks>
     private void BeginReconnect()
     {
-        if (NetSession.HostAddress.Length == 0)
+        if (NetSession.HostAddress.Length == 0 && NetSession.HostRoomCode.Length == 0)
         {
             Log.Warn("Net session: link lost and no host address to return to");
             Leave(HostDisconnectedMessage);
@@ -814,12 +888,22 @@ public abstract class NetSessionDirector : EntityScript
 
     /// <summary>One frame of the retry sequence: wait, attempt, judge, repeat.</summary>
     /// <remarks>
+    /// <para>
     /// The reason check comes first and covers both states below it, mid-attempt and
     /// waiting between attempts alike. The host can answer "no" at any point in the
     /// sequence - not only while a socket is open - and a reason that arrives during the
     /// wait is exactly as final as one that arrives mid-attempt; checking it only inside
     /// <c>_attemptLive</c> would keep this peer counting down to a retry the host has
     /// already refused.
+    /// </para>
+    /// <para>
+    /// A room-code attempt is judged by <see cref="Net.TraversalState"/> rather than
+    /// <see cref="Net.IsClient"/> - see <see cref="TickInitialConnectByCode"/> for why
+    /// that flag cannot be trusted while the ladder is still punching - and a
+    /// <see cref="NetTraversalState.Failed"/> ends the attempt immediately rather than
+    /// waiting out the rest of <see cref="ReconnectTimeoutSeconds"/> for a ladder that
+    /// has already given up.
+    /// </para>
     /// </remarks>
     private void TickReconnect(float deltaTime)
     {
@@ -833,15 +917,20 @@ public abstract class NetSessionDirector : EntityScript
             return;
         }
 
+        bool byCode = NetSession.HostRoomCode.Length > 0;
+
         if (_attemptLive)
         {
             _attemptElapsed += deltaTime;
-            if (Api.NetIsClient && _attemptElapsed < ReconnectTimeoutSeconds)
+            bool stillInFlight = byCode
+                ? Api.NetTraversalState != NetTraversalState.Failed && _attemptElapsed < ReconnectTimeoutSeconds
+                : Api.NetIsClient && _attemptElapsed < ReconnectTimeoutSeconds;
+            if (stillInFlight)
             {
                 return; // still in flight
             }
-            // Timed out, or the transport gave up on its own. Tidy up before the next one,
-            // or a half-open attempt races the one after it.
+            // Timed out, failed outright, or the transport gave up on its own. Tidy up
+            // before the next one, or a half-open attempt races the one after it.
             Api.NetDisconnect();
             _attemptLive = false;
             _untilNextAttempt = ReconnectDelaySeconds;
@@ -864,7 +953,10 @@ public abstract class NetSessionDirector : EntityScript
         _attemptsMade++;
         _attemptElapsed = 0.0f;
         ShowStatus($"Reconnecting... ({_attemptsMade}/{ReconnectAttempts})");
-        if (Api.NetConnect(NetSession.HostAddress, NetSession.HostPort))
+        bool started = byCode
+            ? Api.NetJoinByCode(NetSession.HostRoomCode)
+            : Api.NetConnect(NetSession.HostAddress, NetSession.HostPort);
+        if (started)
         {
             _attemptLive = true;
             return;
