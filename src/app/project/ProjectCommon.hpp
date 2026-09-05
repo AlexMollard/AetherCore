@@ -26,6 +26,8 @@ namespace aether::app::project
 	{
 		Blank3D,
 		Blank2D,
+		Multiplayer2D,
+		Multiplayer3D,
 	};
 
 	struct ProjectTemplateInfo
@@ -36,15 +38,34 @@ namespace aether::app::project
 		std::string_view description;
 	};
 
-	inline constexpr std::array<ProjectTemplateInfo, 2> kProjectTemplates{{
+	inline constexpr std::array<ProjectTemplateInfo, 4> kProjectTemplates{{
 	        {ProjectTemplate::Blank3D, ProjectKind::Scene3D, "Blank 3D", "Perspective camera and the standard 3D starter scene."},
 	        {ProjectTemplate::Blank2D, ProjectKind::Scene2D, "Blank 2D", "Orthographic camera and an empty XY-plane scene."},
+	        {ProjectTemplate::Multiplayer2D, ProjectKind::Scene2D, "Multiplayer 2D", "Orthographic camera with room-code hosting and joining - no port forwarding needed."},
+	        {ProjectTemplate::Multiplayer3D, ProjectKind::Scene3D, "Multiplayer 3D", "Perspective camera with room-code hosting and joining - no port forwarding needed."},
 	}};
 
+	// The single source of truth for which kind each template seeds - looked up rather
+	// than a two-way ternary, so a template can be 2D or 3D independently of which
+	// number it is in the list (Multiplayer2D and Blank3D are not adjacent).
 	[[nodiscard]] constexpr ProjectKind ProjectKindForTemplate(ProjectTemplate projectTemplate)
 	{
-		return projectTemplate == ProjectTemplate::Blank2D ? ProjectKind::Scene2D : ProjectKind::Scene3D;
+		for (const ProjectTemplateInfo& info: kProjectTemplates)
+		{
+			if (info.value == projectTemplate)
+			{
+				return info.kind;
+			}
+		}
+		return ProjectKind::Scene3D;
 	}
+
+	// The [project].template string a template is written/read under (e.g. "blank_3d",
+	// "multiplayer_2d") - the single source both WriteProjectDescriptor and the Launcher's
+	// create_project control method key off, so a new template needs this list updated in
+	// exactly one place.
+	[[nodiscard]] std::string_view TemplateName(ProjectTemplate projectTemplate);
+	[[nodiscard]] std::optional<ProjectTemplate> ProjectTemplateFromName(std::string_view name);
 
 	[[nodiscard]] std::filesystem::path NormalizePath(std::filesystem::path path);
 	[[nodiscard]] std::string DisplayPath(const std::filesystem::path& path);

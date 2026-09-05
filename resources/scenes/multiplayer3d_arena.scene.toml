@@ -1,0 +1,152 @@
+# AetherCore scene - multiplayer 3D project template: the Arena.
+#
+# MultiplayerSession (NetSessionDirector) on GameSession does the actual work: it
+# spawns the player prefab at Spawn0/Spawn1 per connection - and once, solo, when this
+# scene is opened straight from the editor with no session at all - keeps the roster,
+# and sends everyone back to the Lobby when the session ends. GameSession carries no
+# networking script of its own beyond that: the player prefab's own Player.cs is where
+# this template's [Replicated] field and [NetRpc(Server)] method live, precisely
+# because GameSession is host-owned and a client's Server RPC is only ever accepted
+# when it targets an entity that client itself owns.
+#
+# The camera is fixed rather than following either player - there is no single "the"
+# player to follow once there can be two - and framed wide enough to hold both spawn
+# points without either character walking off the edge. Ground and Key Light match the
+# Blank 3D template's own values: a kinematic body still wants a floor to read against,
+# and a PBR material with no light on it renders black.
+[environment]
+ambient = [ 0.12, 0.12, 0.13 ]
+sky_horizon = [ 0.42, 0.48, 0.64 ]
+sky_void = [ 0.001, 0.002, 0.004 ]
+sky_zenith = [ 0.09, 0.16, 0.38 ]
+sun_color = [ 1.0, 0.92, 0.82 ]
+sun_direction = [ -0.6307061, 0.68326485, 0.36791185 ]
+sun_intensity = 4.0
+
+[scene]
+features = [ 'meshes_3d', 'lighting_3d', 'physics_3d' ]
+kind = '3d'
+name = ''
+version = 16
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Key Light'
+node = -5634853581213265595
+parent = -1
+position = [ 3.0, 4.0, 3.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.92, 0.82 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 18.0
+    radius = 12.0
+    shadow = true
+    sourceRadius = 0.1
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Ground'
+node = -5067268959687688024
+parent = -1
+position = [ 0.0, -0.05, 0.0 ]
+scale = [ 8.0, 0.1, 8.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.18, 0.18, 0.18, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.65
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
+    half_extents = [ 4.0, 0.05, 4.0 ]
+    half_height = 0.05
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'static'
+    radius = 0.5
+    restitution = 0.0
+    sensor = false
+    shape = 'box'
+
+[[entities]]
+euler = [ -22.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 2275872304481802116
+parent = -1
+position = [ 0.0, 4.0, 8.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 2.0
+    background = 'sky_gradient'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 8.22
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.05, 0.06, 0.1 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.03 ]
+        position = 1.0
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Spawn0'
+node = 1961226872114831500
+parent = -1
+position = [ -2.0, 0.75, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Spawn1'
+node = 1287898127853231459
+parent = -1
+position = [ 2.0, 0.75, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'GameSession'
+node = 5407933839377535175
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'MultiplayerSession'

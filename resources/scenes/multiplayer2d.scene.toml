@@ -1,0 +1,57 @@
+# AetherCore scene - multiplayer 2D project template: the Lobby.
+#
+# This is where a player types a room code or presses H to host one, before ever
+# touching the arena. There is no scene-authored UI here - MultiplayerLobby.cs builds
+# its own canvas at OnAttach, the same way NetSessionDirector's own status line does -
+# so this file stays a camera and one entity.
+#
+# The camera exists only so a startup scene with no gameplay in it still has one -
+# without it the editor opens on the engine's implicit default pose and publishing
+# warns the startup scene has no main camera.
+[scene]
+features = [ 'sprites' ]
+kind = '2d'
+name = ''
+version = 16
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = 8880958340094409074
+parent = -1
+position = [ 0.0, 0.0, 10.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 5.6
+    background = 'solid_colour'
+    clear_color = [ 0.08, 0.09, 0.11 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 10.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'orthographic'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.05, 0.06, 0.1 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.03 ]
+        position = 1.0
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Lobby'
+node = 2800822007360765849
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'MultiplayerLobby'

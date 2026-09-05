@@ -52,20 +52,15 @@ namespace aether::app
 
 		json ProjectTemplateProp()
 		{
-			return json{{"type", "string"}, {"enum", json::array({"blank_3d", "blank_2d"})}};
-		}
-
-		std::optional<project::ProjectTemplate> ProjectTemplateFromName(std::string_view name)
-		{
-			if (name == "blank_3d")
+			// Derived from kProjectTemplates rather than a second hardcoded list, so a new
+			// template (see project/ProjectCommon.hpp) shows up here and at the
+			// project::ProjectTemplateFromName call below without this file changing at all.
+			json names = json::array();
+			for (const project::ProjectTemplateInfo& info: project::kProjectTemplates)
 			{
-				return project::ProjectTemplate::Blank3D;
+				names.push_back(std::string(project::TemplateName(info.value)));
 			}
-			if (name == "blank_2d")
-			{
-				return project::ProjectTemplate::Blank2D;
-			}
-			return std::nullopt;
+			return json{{"type", "string"}, {"enum", std::move(names)}};
 		}
 
 		// single project via --project and never reads it.
@@ -146,7 +141,7 @@ namespace aether::app
 
 			methods.push_back({"launcher.create_project",
 			        "create_project",
-			        "Create a Blank 2D or Blank 3D project, then hand the control port from the Launcher to its Editor process.",
+			        "Create a new project from a template - Blank 3D, Blank 2D, Multiplayer 2D, or Multiplayer 3D - then hand the control port from the Launcher to its Editor process.",
 			        true,
 			        Obj({{"root", StrProp()}, {"name", StrProp()}, {"template", ProjectTemplateProp()}}, {"root", "template"}),
 			        [&launcher](const json& params, editor::MethodContext&) -> json
@@ -154,10 +149,19 @@ namespace aether::app
 				        const std::filesystem::path root = params.value("root", std::string{});
 				        const std::string name = params.value("name", std::string{});
 				        const std::string templateName = params.value("template", std::string{});
-				        const std::optional<project::ProjectTemplate> projectTemplate = ProjectTemplateFromName(templateName);
+				        const std::optional<project::ProjectTemplate> projectTemplate = project::ProjectTemplateFromName(templateName);
 				        if (!projectTemplate.has_value())
 				        {
-					        return json{{"error", "template must be 'blank_3d' or 'blank_2d'"}};
+					        std::string allowed;
+					        for (const project::ProjectTemplateInfo& info: project::kProjectTemplates)
+					        {
+						        if (!allowed.empty())
+						        {
+							        allowed += ", ";
+						        }
+						        allowed += "'" + std::string(project::TemplateName(info.value)) + "'";
+					        }
+					        return json{{"error", "template must be one of: " + allowed}};
 				        }
 				        if (const std::string error = launcher.QueueCreateProjectForControl(root, name, *projectTemplate); !error.empty())
 				        {

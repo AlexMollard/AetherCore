@@ -1,0 +1,77 @@
+# AetherCore scene - multiplayer 2D project template: the Arena.
+#
+# MultiplayerSession (NetSessionDirector) on GameSession does the actual work: it
+# spawns the player prefab at Spawn0/Spawn1 per connection - and once, solo, when this
+# scene is opened straight from the editor with no session at all - keeps the roster,
+# and sends everyone back to the Lobby when the session ends. GameSession carries no
+# networking script of its own beyond that: the player prefab's own Player.cs is where
+# this template's [Replicated] field and [NetRpc(Server)] method live, precisely
+# because GameSession is host-owned and a client's Server RPC is only ever accepted
+# when it targets an entity that client itself owns.
+#
+# The camera is fixed rather than following either player - there is no single "the"
+# player to follow once there can be two - and framed wide enough to hold both spawn
+# points without either character walking off the edge.
+[scene]
+features = [ 'sprites' ]
+kind = '2d'
+name = ''
+version = 16
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+node = -5404249845862603353
+parent = -1
+position = [ 0.0, 0.0, 10.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 5.6
+    background = 'solid_colour'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 10.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 6.0
+    projection = 'orthographic'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.05, 0.06, 0.1 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.03 ]
+        position = 1.0
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Spawn0'
+node = 1178728700612965449
+parent = -1
+position = [ -2.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Spawn1'
+node = 3335202960625921475
+parent = -1
+position = [ 2.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'GameSession'
+node = -3836405974389194693
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'MultiplayerSession'
