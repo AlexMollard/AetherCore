@@ -298,6 +298,7 @@ was merely out of date.
 
 | You want | Look at |
 |---|---|
+| Multiplayer - what it gives you, what it costs, and every failure mode | [Multiplayer](multiplayer.md) |
 | The full scripting surface | `managed/AetherCore/` — one file per area (`Input`, `Physics2D`, `Ui`, `Scene`, `Time`, `Audio` is **not** among them yet) |
 | What a component's fields are called | `list_component_types` over the control endpoint, or the Inspector |
 | Engine architecture | [Render-frame extraction](architecture/render-frame-extraction.md), [Asset database](asset-database.md) |

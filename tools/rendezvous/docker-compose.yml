@@ -1,0 +1,15 @@
+# One command, from this directory, on whatever host you run this: `docker compose up
+# -d --build`. `restart: unless-stopped` is the whole reason this exists over a bare
+# `docker run` - it is what makes the server come back after the host reboots (a free
+# VM you are not babysitting WILL reboot for maintenance) without a cron job or a
+# systemd unit of your own.
+services:
+  rendezvous:
+    build: .
+    image: aether-rendezvous
+    restart: unless-stopped
+    # UDP only - this server never opens or needs a TCP port. Change the left side to
+    # move the PUBLIC port; --port on the container's own command line (see
+    # ../README.md) would change which port it listens on internally instead.
+    ports:
+      - "24701:24701/udp"

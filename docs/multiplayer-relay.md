@@ -1,7 +1,9 @@
 # Multiplayer relay (TURN)
 
-How a match survives a symmetric NAT, and how to point the engine at a relay
-without tying the project to any vendor.
+Part of the [multiplayer reference](multiplayer.md) — start there for the connect
+ladder, the authority model and the latency budget; this page goes deep on the
+last rung of that ladder only: how a match survives a symmetric NAT, and how to
+point the engine at a relay without tying the project to any vendor.
 
 ## Why a relay at all
 
