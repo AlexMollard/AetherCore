@@ -90,6 +90,17 @@ public sealed class PlayerCombat : EntityScript
     /// accept a shot, as a fraction, to absorb frame quantisation and jitter.</summary>
     public float HostRateTolerance = 0.7f;
 
+    /// <summary>How many seconds of landed hits one shooter may have bunched up at
+    /// once before the host's hit pace gate catches up with them.</summary>
+    /// <remarks>
+    /// Kept on the shooter, not read off <see cref="Projectile"/>, because the gate
+    /// bills the shooter: it should say "one full flight's worth of projectiles",
+    /// which is Projectile.MaxLifetime's default. Tuning them apart only loosens or
+    /// tightens the burst, never the sustained rate - that is the fire interval
+    /// above.
+    /// </remarks>
+    public float HostHitBurstSeconds = 1.0f;
+
     // ── Replicated ──────────────────────────────────────────────────────────────
 
     /// <summary>This player's health. Written only by its owner - see the class
@@ -164,6 +175,46 @@ public sealed class PlayerCombat : EntityScript
     // less than one interval after the clock's origin.
     private float _lastAcceptedFire = float.NegativeInfinity;
 
+    // Host-side validation state (the methods that use it sit after ReportKill):
+    // Everything below lives on the HOST's copy of a player and exists because a
+    // server RPC says whatever its sender wants it to say. The host cannot make the
+    // shooter honest - it never re-simulates the shot - but it can stop taking the
+    // report's word for pace, proof and identity. Offline none of it runs: there is
+    // no other peer to disbelieve, and the one peer there is owns every player, so
+    // HasAuthority paths are the only paths.
+
+    // Per-shooter hit pace as a lazily refilled token bucket. The fire gate above
+    // lets at most one projectile leave per FireInterval * HostRateTolerance, and a
+    // projectile is airborne for HostHitBurstSeconds' worth of them at once - plus
+    // one, for several honest hits arriving in the same burst. Refill rate equals
+    // the fire rate exactly, which is what makes "hits land no faster than the gun
+    // can fire" true for a client that skips its own trigger discipline.
+
+    private float _hitTokens;
+    private float _hitTokensAt = float.NegativeInfinity;
+
+    // The host's own account of this player's health, decremented when the host
+    // ACCEPTS a hit - never read back off the wire. A replicated script field and
+    // an RPC travel on the same reliable channel, but the RPC is queued the moment
+    // ApplyHit returns while the field waits for the send pass, so a ReportKill can
+    // arrive while the replicated Health still reads one hit above zero. This
+    // ledger has no such race: it is written before ApplyHit is sent, which is
+    // strictly before the victim can be hurt, let alone die and report it.
+    private int _hostHealthShadow = 100;
+
+    // The death the host can account for: when the ledger crosses zero, who fired
+    // the finishing hit (connection and entity - the entity is what catches a
+    // connection id that has been reused by a different, later joiner), and whether
+    // that death still needs its kill credited.
+    private float _hostDownAt;
+    private bool _hostKillOpen;
+    private uint _hostLethalConnection;
+    private Entity _hostLethalEntity;
+
+    // One warning per player per session for refused host traffic. A flood that is
+    // being dropped must not become a second flood in the log.
+    private bool _hostTrafficWarned;
+
     // Presentation latches. Same shape as NetPlayerSync's: the per-frame path is a
     // compare, and the first apply happens even when the value is already the default.
     private int _shownHealth = int.MinValue;
@@ -175,6 +226,10 @@ public sealed class PlayerCombat : EntityScript
     {
         // Ready to fire immediately rather than one interval after spawning.
         _sinceFire = FireInterval;
+        // The host's ledger starts at spawn health. A field initializer cannot say
+        // MaxHealth (instance field), and a prefab that retunes it must not leave the
+        // host counting a different body than the owner applies damage to.
+        _hostHealthShadow = MaxHealth;
         if (Net.HasAuthority(Self))
         {
             Health = MaxHealth;
@@ -358,7 +413,7 @@ public sealed class PlayerCombat : EntityScript
         float now = Time.TotalTime;
         if (now - _lastAcceptedFire < FireInterval * HostRateTolerance)
         {
-            Log.Warn($"[Whisper] PlayerCombat: refusing a shot from connection {Net.OwnerOf(Self)} - faster than the fire rate");
+            NoteRefusedHostTraffic("shots faster than the fire rate");
             return;
         }
 
@@ -373,7 +428,7 @@ public sealed class PlayerCombat : EntityScript
         Vector3 here = Self.Position;
         if (new Vector2(x - here.X, y - here.Y).Length() > MaxMuzzleDistance)
         {
-            Log.Warn($"[Whisper] PlayerCombat: refusing a shot from connection {Net.OwnerOf(Self)} - muzzle is not near the shooter");
+            NoteRefusedHostTraffic("a muzzle nowhere near the shooter");
             return;
         }
 
@@ -382,26 +437,54 @@ public sealed class PlayerCombat : EntityScript
     }
 
     /// <summary>
-    /// Victim -> host: "that shot killed me, and this is who fired it." The host hands
-    /// the credit to the killer's own peer, and tells everybody.
+    /// Victim -> host: "that shot killed me, and this is who fired it." The host
+    /// decides whether to believe it, and only then hands the credit to the killer's
+    /// own peer and tells everybody.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The victim cannot address the killer directly: a server RPC is only accepted on
     /// an entity the sender owns, so it says this on ITSELF and the host does the rest.
+    /// </para>
+    /// <para>
+    /// <b>The host carries the kill.</b> A ReportKill names any connection it likes,
+    /// so the death is checked against the host's own ledger of accepted hits (the
+    /// killer must be the one the ledger recorded as landing the finishing blow) and
+    /// the credit is one-shot per death. The victim still applies the death to itself
+    /// - Deaths and the respawn timer are the victim's own facts, as they have always
+    /// been - but it can no longer award kills, frame a name into every transcript,
+    /// or announce anything the host cannot account for.
+    /// </para>
     /// </remarks>
     /// <param name="killerConnection">The connection that owns the killer's player.</param>
     [NetRpc(NetRpcTarget.Server)]
     public void ReportKill(string killerConnection)
     {
-        string victimName = Net.GetPlayerName(Self);
-        Entity killer = uint.TryParse(killerConnection, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint connection)
-            ? PlayerOwnedBy(connection)
-            : default;
-
-        if (!killer.IsValid || killer == Self)
+        if (!uint.TryParse(killerConnection, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint killerId)
+            || !_hostKillOpen
+            || killerId != _hostLethalConnection)
         {
-            // The killer left between the shot and the death. The death still counted -
-            // the victim has already added it to itself - so say so and stop.
+            // Not a death the host can account for: nobody it recorded as lethal hit
+            // this player, or this death has already been credited. Silent - a
+            // refusal line per attempt is exactly the announcement flood this gate
+            // exists to stop.
+            NoteRefusedHostTraffic("a kill report the host cannot account for");
+            return;
+        }
+        _hostKillOpen = false; // one credit per death, whatever arrives after it
+
+        string victimName = Net.GetPlayerName(Self);
+        Entity killer = PlayerOwnedBy(killerId);
+
+        if (!killer.IsValid || killer != _hostLethalEntity)
+        {
+            // The killer left between the shot and the death - or the connection id
+            // now names a different, later joiner; connection ids are reused after a
+            // disconnect/rejoin cycle. The ENTITY comparison is what tells those
+            // apart from an honest credit: a slot handed to a new player is a new
+            // entity, so a reused id fails it where a merely-departed one also does,
+            // and neither gets the kill. The death is real either way - the ledger
+            // proved it above - so say so and stop.
             ChatBox.Announce(Self, $"{victimName} died");
             return;
         }
@@ -410,6 +493,94 @@ public sealed class PlayerCombat : EntityScript
         // that peer may add to that player's score.
         Net.Call(killer, nameof(AwardKill));
         ChatBox.Announce(Self, $"{Net.GetPlayerName(killer)} fragged {victimName}");
+    }
+
+    // ── Host-side validation ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Host-side: charge one landed hit against this shooter's pace. True to accept,
+    /// false when hits are arriving faster than the fire gate lets projectiles leave.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the host's copy of the SHOOTER's player, called from
+    /// <see cref="Projectile.ReportHit"/> after the per-projectile checks. Refusing
+    /// here is what bounds a modified client that creates no bogus projectiles but
+    /// replays hit reports: sustained, it can land hits no faster than the weapon's
+    /// own fire rate.
+    /// </remarks>
+    internal bool TryAcceptHostHit(float now)
+    {
+        float interval = FireInterval * HostRateTolerance;
+        float burst = (float)((int)System.Math.Ceiling(HostHitBurstSeconds / interval) + 1);
+        _hitTokens = System.Math.Min(burst, _hitTokens + (now - _hitTokensAt) / interval);
+        _hitTokensAt = now;
+        if (_hitTokens < 1.0f)
+        {
+            return false;
+        }
+        _hitTokens -= 1.0f;
+        return true;
+    }
+
+    /// <summary>
+    /// Host-side: record that a hit the host accepted is about to take
+    /// <see cref="Damage"/> off this player, and remember who fired the one that,
+    /// by the host's account, finishes it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Runs on the host's copy of the VICTIM's player, from
+    /// <see cref="Projectile.ReportHit"/>, before ApplyHit is sent. Because the
+    /// owner applies every hit the host accepted - and only those - in the order
+    /// the host sent them, this ledger tracks the victim's true health exactly;
+    /// <see cref="ReportKill"/> trusts it rather than the replicated
+    /// <see cref="Health"/>, which can still read one hit stale when a kill report
+    /// overtakes its own field update.
+    /// </para>
+    /// <para>
+    /// The respawn branch reconstructs itself from evidence: a hit can only LAND on
+    /// a living player (the owner's ApplyHit no-ops on a corpse), so a hit arriving
+    /// while the ledger says down is either a late report against the corpse -
+    /// ignored, exactly as the owner ignores it - or, once the respawn wait has
+    /// passed, proof the player is back up, and the ledger reopens at full health
+    /// before charging it.
+    /// </para>
+    /// </remarks>
+    internal void NoteHostHit(uint shooter, float now)
+    {
+        if (_hostHealthShadow <= 0)
+        {
+            if (now - _hostDownAt < RespawnSeconds)
+            {
+                return; // against the corpse: the owner's ApplyHit no-ops too
+            }
+            _hostHealthShadow = MaxHealth; // the victim must be back up: it just took a hit
+        }
+        _hostHealthShadow -= Damage;
+        if (_hostHealthShadow > 0)
+        {
+            return;
+        }
+        _hostDownAt = now;
+        _hostKillOpen = true;
+        _hostLethalConnection = shooter;
+        _hostLethalEntity = PlayerOwnedBy(shooter);
+    }
+
+    /// <summary>Host-side: note that traffic from this player was refused by one of
+    /// the host's gates. Logged once per player per session.</summary>
+    /// <remarks>
+    /// Once, because the refusals themselves arrive at wire speed: a warning line
+    /// per dropped packet is a second flood the host pays for, in its log this time.
+    /// </remarks>
+    internal void NoteRefusedHostTraffic(string why)
+    {
+        if (_hostTrafficWarned)
+        {
+            return;
+        }
+        _hostTrafficWarned = true;
+        Log.Warn($"[Whisper] PlayerCombat: dropping traffic from connection {Net.OwnerOf(Self)} - {why}; further drops are silent");
     }
 
     // ── Owner, on the far end of the host ───────────────────────────────────────

@@ -40,6 +40,13 @@ public sealed class NameTag : EntityScript
     private WorldLabel? _label;
     private int _appliedColor = -1;
 
+    // Last raw name seen and what was drawn for it. The name is replicated from the
+    // player's owner and a modified client can put anything in it, so it goes through
+    // ChatBox.Sanitize before it reaches the font - but never per frame: the tag is
+    // rebuilt on change only, like the colour latch beside it.
+    private string _shownName = string.Empty;
+    private string _drawnName = string.Empty;
+
     /// <inheritdoc/>
     public override void OnAttach()
     {
@@ -63,8 +70,13 @@ public sealed class NameTag : EntityScript
         // no name. Derived from the same replicated health every peer already has, so
         // the tag and the character agree without either being told.
         bool down = GetScript<PlayerCombat>() is { IsAlive: false };
-        _label.Track(Self.Position + new Vector3(0.0f, VerticalOffset, 0.0f),
-            down ? string.Empty : Net.GetPlayerName(Self));
+        string raw = down ? string.Empty : Net.GetPlayerName(Self);
+        if (raw != _shownName)
+        {
+            _shownName = raw;
+            _drawnName = ChatBox.Sanitize(raw);
+        }
+        _label.Track(Self.Position + new Vector3(0.0f, VerticalOffset, 0.0f), _drawnName);
 
         // Looked up per frame for the same reason the name is: on a client the colour
         // arrives by replication after the entity does. Latched on the index so the

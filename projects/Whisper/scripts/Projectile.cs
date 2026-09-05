@@ -15,7 +15,11 @@ namespace AetherGame;
 /// owner-is-authoritative rule the players themselves follow, and it is why a shot
 /// registers on the shooter's screen with no round trip once the projectile exists.
 /// Every other peer's copy is driven purely by replication, exactly like a remote
-/// player: it never simulates, never casts, and never reports anything.
+/// player: it never simulates, never casts, and never reports anything. What the
+/// shooter does NOT decide is what the host will believe: <see cref="ReportHit"/>
+/// bounds each projectile to one accepted resolution, each claimed victim to
+/// somewhere the shot could have reached, and each shooter to the weapon's own
+/// pace - the host's copy of the same rules, for the copies that never simulate.
 /// </para>
 /// <para>
 /// <b>Bounding the flight is the important part.</b> A projectile that misses and is
@@ -58,14 +62,41 @@ public sealed class Projectile : EntityScript
     /// by this so a shot grazing a body still connects.</summary>
     public float Radius = 0.18f;
 
+    /// <summary>How much further from the projectile's start than its own flight
+    /// can explain a claimed victim may be before the host refuses the hit.</summary>
+    /// <remarks>
+    /// Not a physics check - a bound, like <c>PlayerCombat.MaxMuzzleDistance</c>.
+    /// The host's copy of the victim trails the victim by about a round trip and a
+    /// player runs at 7 units/s, so 4 units covers what replication lag can add to
+    /// an honest hit's distance plus the body's half-width, while still refusing a
+    /// shot that claims somebody further away than it can have travelled in the
+    /// time it has been alive.
+    /// </remarks>
+    public float HitClaimSlack = 4.0f;
+
     private Vector2 _direction;
     private Entity _shooter;
     private float _age;
     private bool _spent;
 
+    // Host-side resolution latch. The owner's _spent never travels - it lives only
+    // on the shooter's machine, and the host's copy of a client's projectile never
+    // simulates - so the host keeps its own: ONE ReportHit accepted per projectile,
+    // ever. Without it, a modified client could replay hit reports on one entity
+    // and drain any victim's health at wire speed; with it, the most one projectile
+    // can ever cost its claimed victim is one PlayerCombat.Damage.
+    private bool _hostResolved;
+
+    // Where this copy first saw the projectile - on the host, the muzzle position
+    // RequestFire already validated. Recorded in OnAttach, before replication can
+    // have moved anything, so it is exact; only the host's copy ever reads it.
+    private Vector3 _hostSpawn;
+
     /// <inheritdoc/>
     public override void OnAttach()
     {
+        _hostSpawn = Self.Position;
+
         // Resolved on every peer: the tint below needs it, and the owner needs it as
         // the one body its own shot may never report a hit on.
         _shooter = PlayerCombat.PlayerOwnedBy(Net.OwnerOf(Self));
@@ -212,7 +243,14 @@ public sealed class Projectile : EntityScript
     /// The host does not re-simulate the shot - the shooter is authoritative for its
     /// own projectile, which is the accepted trade of this design - but it does check
     /// the things that are its own to know: that the named player exists, is not the
-    /// shooter, and is still alive.
+    /// shooter, and is still alive; that this projectile has not already resolved
+    /// (one hit per shot, the same rule the owner's <c>_spent</c> enforces on the
+    /// shooter's machine); that the claimed victim is somewhere the projectile could
+    /// physically have reached by now; and that this shooter is not landing hits
+    /// faster than the fire gate lets projectiles leave the barrel. What the host
+    /// still takes on trust is the geometry of the hit itself - without host-side
+    /// re-simulation there is no way to know the shot was ever aimed at the victim,
+    /// only that it could have been.
     /// </remarks>
     [NetRpc(NetRpcTarget.Server)]
     public void ReportHit(string victimConnection)
@@ -227,10 +265,50 @@ public sealed class Projectile : EntityScript
             return; // nobody shoots themselves, whatever a peer claims
         }
         Entity victim = PlayerCombat.PlayerOwnedBy(connection);
-        if (victim.GetScript<PlayerCombat>() is not { IsAlive: true })
+        if (victim.GetScript<PlayerCombat>() is not { IsAlive: true } victimCombat)
         {
             return; // gone, or already down
         }
+        Entity shooterPlayer = PlayerCombat.PlayerOwnedBy(shooter);
+        if (shooterPlayer.GetScript<PlayerCombat>() is not { } shooterCombat)
+        {
+            return; // the shooter's connection is gone; there is nobody to bill this hit to
+        }
+
+        // The host's own bounds. Each closes one cheat the checks above do not:
+        // replaying one resolution against many victims or many times, claiming a
+        // victim further away than the shot has had time to travel, and pacing hit
+        // reports faster than the weapon fires. Offline none of this is reachable -
+        // the self-hit test above has already returned, because the one peer there
+        // is owns every player.
+        float now = Time.TotalTime;
+        if (_hostResolved)
+        {
+            shooterCombat.NoteRefusedHostTraffic("a projectile cannot hit twice");
+            return;
+        }
+        if (_age > MaxLifetime + HostGraceSeconds)
+        {
+            return; // past any flight its owner could still be reporting; the reap is due
+        }
+        Vector3 victimPosition = victim.Position;
+        Vector2 fromSpawn = new(victimPosition.X - _hostSpawn.X, victimPosition.Y - _hostSpawn.Y);
+        float reach = Speed * System.Math.Min(_age, MaxLifetime) + Radius + HitClaimSlack;
+        if (fromSpawn.Length() > reach)
+        {
+            shooterCombat.NoteRefusedHostTraffic("a claimed victim out of the projectile's reach");
+            return;
+        }
+        if (!shooterCombat.TryAcceptHostHit(now))
+        {
+            return; // hits landing faster than the fire gate lets shots leave
+        }
+
+        _hostResolved = true;
+        // The victim's ledger entry is recorded BEFORE ApplyHit is sent, which is
+        // what makes the host's account of who killed whom immune to the race
+        // between an RPC and the health field it changes - see NoteHostHit.
+        victimCombat.NoteHostHit(shooter, now);
         // Client-targeted, so it lands on the victim's own peer: the only one allowed
         // to change that player's health.
         Net.Call(victim, nameof(PlayerCombat.ApplyHit), shooter.ToString(CultureInfo.InvariantCulture));

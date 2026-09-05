@@ -122,7 +122,10 @@ public sealed class PlayerRoster : EntityScript
                 continue;
             }
             NetSessionPlayer player = players[i];
-            Ui.SetText(_rows[i], $"{Fit(player.Name)} {Health(player)} {Score(player)} {Latency(player)}");
+            // The name comes from replication the player's own machine authored, so
+            // it goes through the same filter the chat line uses before it reaches
+            // the font - for the same reasons.
+            Ui.SetText(_rows[i], $"{Fit(ChatBox.Sanitize(player.Name))} {Health(player)} {Score(player)} {Latency(player)}");
             Ui.SetTextColor(_rows[i], ColorOf(player));
         }
     }

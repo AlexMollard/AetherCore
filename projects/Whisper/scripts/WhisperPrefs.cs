@@ -39,6 +39,11 @@ public static class WhisperPrefs
     /// without becoming a list that needs managing.</summary>
     public const int RecentCapacity = 4;
 
+    /// <summary>Longest player name kept, in characters. The length cap half of
+    /// <see cref="Clean"/>; exposed so the connect screen can tell its text box the
+    /// same limit it is about to enforce.</summary>
+    public const int MaxNameLength = 64;
+
     private static readonly List<string> s_recent = new();
     private static bool s_loaded;
 
@@ -145,15 +150,22 @@ public static class WhisperPrefs
         return Path.Combine(dir, "prefs.json");
     }
 
-    // Trim, and refuse anything the ASCII-only font pipeline cannot draw, so a name that
-    // came off disk is drawable without every caller re-checking it.
-    private static string Clean(string? value)
+    /// <summary>Trim, and refuse anything the ASCII-only font pipeline cannot draw:
+    /// the same contract for a name going live this session as for one coming back
+    /// off disk.</summary>
+    /// <remarks>
+    /// Public because the connect screen's live commit is the other side of the same
+    /// rule: <see cref="PlayerName"/> cleaned only on load would let a name typed
+    /// this session reach every peer's transcript with glyphs the font cannot draw,
+    /// exactly as though it had come off a hand-edited file.
+    /// </remarks>
+    public static string Clean(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
             return string.Empty;
         }
-        Span<char> buffer = stackalloc char[64];
+        Span<char> buffer = stackalloc char[MaxNameLength];
         int n = 0;
         foreach (char c in value.Trim())
         {

@@ -94,6 +94,26 @@ public sealed class ChatBox : EntityScript
     /// <summary>How long it then takes to fade away.</summary>
     public float FadeSeconds = 1.2f;
 
+    /// <summary>Minimum seconds between lines one sender may put on every peer's
+    /// transcript through <see cref="SendChat"/>.</summary>
+    /// <remarks>Enforced by the host, per sender - see SendChat. Half a second is
+    /// far below anything an honest keyboard can type at, which is the point: real
+    /// traffic never notices the gate, and a tight loop of
+    /// <c>Net.Call</c>s never gets past it.</remarks>
+    public float SendMinInterval = 0.5f;
+
+    /// <summary>Lines a sender may send back-to-back before
+    /// <see cref="SendMinInterval"/> starts to bite.</summary>
+    public int SendBurstLines = 3;
+
+    // Host-side pace for the sender this instance's entity belongs to, refilled
+    // lazily when a line arrives so nobody pays per-frame work while the chat is
+    // idle. The negative-infinity start mirrors PlayerCombat._lastAcceptedFire: the
+    // first messages of a session are never refused for arriving "too soon".
+    private float _sendTokens;
+    private float _sendTokensAt = float.NegativeInfinity;
+    private bool _floodWarned;
+
     private static readonly Vector4 LogColor = new(0.90f, 0.92f, 1.00f, 1.0f);
     private static readonly Vector4 UnreadColor = new(1.00f, 0.729f, 0.310f, 1.0f);
     private static readonly Vector4 ScrollColor = new(0.478f, 0.518f, 0.596f, 1.0f);
@@ -490,9 +510,9 @@ public sealed class ChatBox : EntityScript
     }
 
     /// <summary>
-    /// Reduce a typed string to something safe to put on the wire and in a font: printable
-    /// ASCII only, collapsed whitespace trimmed off the ends, and clipped to
-    /// <see cref="MaxMessageLength"/>.
+    /// Reduce a typed string to something safe to put on the wire and in a font:
+    /// printable ASCII only, collapsed whitespace trimmed off the ends, and clipped
+    /// to <see cref="MaxMessageLength"/>.
     /// </summary>
     /// <remarks>
     /// The ASCII filter is a hard requirement of the font pipeline (non-ASCII has no
@@ -500,7 +520,12 @@ public sealed class ChatBox : EntityScript
     /// is joined with <c>\n</c> - one pasted newline would otherwise count as a single
     /// entry while occupying two of the eight visible lines.
     /// </remarks>
-    private static string Sanitize(string raw)
+    /// <remarks>Internal rather than private because every place a replicated DISPLAY
+    /// NAME reaches the screen goes through it as well - the chat line, the floating
+    /// tag, the roster row. The name is owner-authored replication, so the only
+    /// sender whose sanitising the receiving peers can take on trust is nobody.
+    /// </remarks>
+    internal static string Sanitize(string raw)
     {
         StringBuilder builder = new(raw.Length);
         foreach (char c in raw)
@@ -533,11 +558,22 @@ public sealed class ChatBox : EntityScript
     /// message came from, so the sender supplies the body and nothing else.
     /// </summary>
     /// <remarks>
-    /// Declared here, on the player, because the host rejects a server RPC aimed at an
-    /// entity the sending connection does not own - see the remarks on the class.
+    /// <para>
+    /// Declared here, on the player, because the host rejects a server RPC aimed at
+    /// an entity the sending connection does not own - see the remarks on the class.
     /// <see cref="EntityScript.Self"/> inside this method is the SENDER's player entity
     /// on whichever peer is running it, which is exactly the entity whose replicated
     /// name should be on the line.
+    /// </para>
+    /// <para>
+    /// <b>The host paces the sender.</b> One accepted line costs its sender a single
+    /// call and costs every OTHER peer a multicast, a transcript rebuild and an
+    /// unread badge, so the rate has to be bounded where the fan-out happens - by the
+    /// host, not by the sender's own good behaviour. The bucket below allows a short
+    /// burst and then one line per <see cref="SendMinInterval"/>; an honest typer
+    /// cannot reach the limit, offline included, because every line needs an Enter
+    /// the box has to be open to receive.
+    /// </para>
     /// </remarks>
     /// <param name="message">The raw body, re-sanitised here: the sending client is the
     /// one peer whose sanitising the host cannot take on trust.</param>
@@ -549,10 +585,28 @@ public sealed class ChatBox : EntityScript
         {
             return;
         }
+
+        float now = Time.TotalTime;
+        _sendTokens = System.Math.Min((float)SendBurstLines, _sendTokens + (now - _sendTokensAt) / SendMinInterval);
+        _sendTokensAt = now;
+        if (_sendTokens < 1.0f)
+        {
+            if (!_floodWarned)
+            {
+                _floodWarned = true;
+                Log.Warn($"[Whisper] ChatBox: dropping chat from connection {Net.OwnerOf(Self)} - faster than {SendBurstLines} lines per {SendMinInterval:0.0}s; further drops are silent");
+            }
+            return;
+        }
+        _sendTokens -= 1.0f;
+
         // Net.GetPlayerName reads the replicated NetPlayer.displayName the sender's own
         // machine authored and replication carried here, so attribution is the host's
-        // copy of the name rather than anything the sender put in this call.
-        Net.Call(Self, nameof(ReceiveChat), $"{Net.GetPlayerName(Self)}: {clean}");
+        // copy of the name rather than anything the sender put in this call - but a
+        // modified client authors that FIELD directly too, so the name goes through
+        // Sanitize like the body: it is the one string in the line the sender did not
+        // just get checked, and the transcript joins lines with newlines.
+        Net.Call(Self, nameof(ReceiveChat), $"{Sanitize(Net.GetPlayerName(Self))}: {clean}");
     }
 
     /// <summary>
@@ -583,12 +637,25 @@ public sealed class ChatBox : EntityScript
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <paramref name="carrier"/> has to be an entity the HOST owns that carries this
-    /// script, in practice the host's own player. Two independent rules force that: a
-    /// multicast is refused outright unless it originates on the host, and the call is
-    /// addressed on the wire by the carrier's net id, so the carrier must be replicated
-    /// as well. <see cref="WhisperSession"/> has the third reason - a leave
-    /// announcement outlives the entity it is about.
+    /// <paramref name="carrier"/> has to be a REPLICATED entity carrying this script,
+    /// and this call has to run on the host process. Those are the two rules that
+    /// actually bind: a multicast is refused at the sender unless it originates on
+    /// the host - a client's <see cref="Net.Call"/> on a Multicast method never
+    /// leaves the client - and the wire addresses the carrier by net id, so an
+    /// unreplicated entity cannot carry anything. WHO OWNS the carrier is not one of
+    /// the rules: the framework gates a host-to-client call on the sending process's
+    /// role, never on the carrier's owner, which is why
+    /// <see cref="PlayerCombat.ReportKill"/> legitimately rides a VICTIM-owned
+    /// player - the host process is speaking, and that is the whole test.
+    /// </para>
+    /// <para>
+    /// The host's own player is still the PREFERRED carrier for lines that must
+    /// outlive their subject: <see cref="WhisperSession"/> announces departures on
+    /// it precisely because a leave line has to be speakable about an entity the
+    /// framework has already destroyed. A kill line has no such requirement - the
+    /// victim is alive at hit time and the report lands on the victim's own entity -
+    /// so the entity the death is already being reported on is an acceptable
+    /// carrier for it.
     /// </para>
     /// <para>
     /// Returning false means "not yet", not "failed". A player entity that has only
@@ -597,8 +664,9 @@ public sealed class ChatBox : EntityScript
     /// has not been instantiated - reporting success there would lose the line
     /// silently. The caller is expected to hold it and try again on a later frame.
     /// </para>
-    /// </remarks>
-    /// <param name="carrier">The host-owned, replicated player the line rides on.</param>
+    /// <param name="carrier">A replicated entity carrying this script - any owner
+    /// will do, though the host's own player is the one that survives its subject
+    /// leaving. See the remarks.</param>
     /// <param name="line">The finished line, e.g. "Alice joined". Sanitised here, so a
     /// display name carrying something the font has no glyph for cannot reach the
     /// transcript by the back door that <see cref="SendChat"/> already closes.</param>

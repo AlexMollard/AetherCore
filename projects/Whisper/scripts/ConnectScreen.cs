@@ -102,6 +102,12 @@ public sealed class ConnectScreen : EntityScript
         }
         _recentEmpty = Scene.Find("RecentEmpty");
 
+        // Refused at the keystroke rather than clipped at commit - the same
+        // arrangement the chat box uses for messages. Clean still enforces it (and
+        // the character filter) on the way in: a length the box honoured is not a
+        // length a paste or a script has to. Set before the saved name goes in, so
+        // an over-long value from a hand-edited file is trimmed once, visibly.
+        Ui.SetMaxLength(NameField, WhisperPrefs.MaxNameLength);
         Ui.SetTextBoxText(NameField, WhisperPrefs.PlayerName);
         RefreshRecentList();
 
@@ -348,7 +354,20 @@ public sealed class ConnectScreen : EntityScript
     /// </remarks>
     private void CommitName()
     {
-        string typed = Ui.GetTextBoxText(NameField);
+        string raw = Ui.GetTextBoxText(NameField);
+        // Cleaned BEFORE it goes live: the name is owner-authored replication read
+        // by every peer, and WhisperPrefs.Clean on load alone would only protect
+        // against a hand-edited file, not against what is typed this session. This
+        // is the front half of ChatBox's own name sanitising - that one catches a
+        // modified client; this one catches an honest player with a non-ASCII
+        // keyboard layout.
+        string typed = WhisperPrefs.Clean(raw);
+        if (typed != raw)
+        {
+            // Show the form that will be used, so the name that connects is the
+            // name the player sees.
+            Ui.SetTextBoxText(NameField, typed);
+        }
         NetSession.LocalPlayerName = typed;
         if (typed == WhisperPrefs.PlayerName)
         {
