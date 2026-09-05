@@ -92,10 +92,40 @@ public sealed class Projectile : EntityScript
     // have moved anything, so it is exact; only the host's copy ever reads it.
     private Vector3 _hostSpawn;
 
+    /// <summary>
+    /// True for a local, display-only echo of this peer's own shot - see
+    /// <see cref="PlayerCombat.TryTakePredictedShot"/> - spawned instantly
+    /// instead of waiting on <see cref="PlayerCombat.RequestFire"/>'s round trip.
+    /// It is not the entity the host or any other peer knows about, so it must
+    /// never damage anyone, never report a hit, and never ask the host for
+    /// anything: see every other use of this flag below.
+    /// </summary>
+    internal bool IsPredicted { get; private set; }
+
     /// <inheritdoc/>
     public override void OnAttach()
     {
         _hostSpawn = Self.Position;
+
+        if (PlayerCombat.TryTakePredictedShot(out Entity predictedShooter, out Vector2 predictedDirection))
+        {
+            // A local, display-only echo of this peer's own shot, shown instantly
+            // instead of waiting on RequestFire's round trip - see IsPredicted for
+            // what that turns off below. The shooter comes from the static hand-off
+            // rather than Net.OwnerOf(Self): this entity was made by
+            // Scene.Instantiate, not Net.Spawn, so it carries the "bullet" prefab's
+            // own baked Network Identity (an empty table, authored with no owner)
+            // as-is - reading it back here would resolve to the HOST's player and
+            // tint, whoever actually fired this.
+            _shooter = predictedShooter;
+            _direction = predictedDirection;
+            IsPredicted = true;
+            if (_shooter.GetScript<NetPlayerSync>() is { } predictedSync)
+            {
+                SpriteRenderer.SetTint(Self, predictedSync.Color);
+            }
+            return;
+        }
 
         // Resolved on every peer: the tint below needs it, and the owner needs it as
         // the one body its own shot may never report a hit on.
@@ -132,7 +162,14 @@ public sealed class Projectile : EntityScript
             return;
         }
 
-        if (_spent || !Net.HasAuthority(Self) || Time.IsPaused)
+        // IsPredicted stands in for Net.HasAuthority(Self) here: this entity was
+        // made by Scene.Instantiate rather than Net.Spawn, so it carries the
+        // "bullet" prefab's own unbound Network Identity, and that reads as
+        // owned by the HOST (see OnAttach) rather than by this peer - the one
+        // case Net.HasAuthority answers wrong for an entity that is not actually
+        // replicated anywhere. IsPredicted, set from this peer's own bookkeeping,
+        // is the correct answer for it.
+        if (_spent || !(IsPredicted || Net.HasAuthority(Self)) || Time.IsPaused)
         {
             return;
         }
@@ -206,8 +243,10 @@ public sealed class Projectile : EntityScript
     {
         // Alive is read off the victim's REPLICATED health, so a corpse cannot be
         // shot again - and its collider is a sensor by then, so this branch is
-        // usually not even reached.
-        if (struck != _shooter && struck.GetScript<PlayerCombat>() is { IsAlive: true })
+        // usually not even reached. IsPredicted is checked first and unconditionally:
+        // a local echo is not the entity the host knows about and must never claim a
+        // hit, whatever it appears to touch.
+        if (!IsPredicted && struck != _shooter && struck.GetScript<PlayerCombat>() is { IsAlive: true })
         {
             // Addressed to THIS projectile, which this peer owns. The host refuses a
             // server RPC aimed at anything the sender does not own, so the hit cannot
@@ -217,17 +256,25 @@ public sealed class Projectile : EntityScript
         Expire();
     }
 
-    /// <summary>Stop simulating and ask the host to destroy this.</summary>
+    /// <summary>Stop simulating and destroy this - asking the host first, unless
+    /// this is a predicted echo the host has never heard of.</summary>
     /// <remarks>
     /// Hidden here rather than waiting for the despawn to come back, so the shot
-    /// disappears on the shooter's screen the instant it lands. The entity itself is
+    /// disappears on the shooter's screen the instant it lands. The real entity is
     /// destroyed by the host on every peer at once, through one path, which is what
-    /// makes "the entity count returns to where it started" mean something.
+    /// makes "the entity count returns to where it started" mean something; a
+    /// predicted echo has no such path to take - it is purely local - so it destroys
+    /// itself directly instead.
     /// </remarks>
     private void Expire()
     {
         _spent = true;
         SpriteRenderer.SetVisible(Self, false);
+        if (IsPredicted)
+        {
+            Self.Destroy();
+            return;
+        }
         Net.CallServer(Self, nameof(RequestDespawn));
     }
 
