@@ -51,6 +51,13 @@ public static class WhisperPrefs
     /// chosen one, so a first run shows the field's placeholder rather than "Player".</summary>
     public static string PlayerName { get; set; } = string.Empty;
 
+    /// <summary>The rendezvous server (<c>host:port</c>) last committed on the connect
+    /// screen, for a room-code join across two different networks. Empty plays LAN-only,
+    /// which is the honest default: nobody has to run anything for two players on the same
+    /// network to find each other, and this is blank until a player is told an address to
+    /// type - see <c>ConnectScreen.ConfigureSignaling</c>.</summary>
+    public static string RendezvousAddress { get; set; } = string.Empty;
+
     /// <summary>Servers joined most recently first, newest at index 0.</summary>
     public static IReadOnlyList<string> Recent
     {
@@ -82,6 +89,7 @@ public static class WhisperPrefs
                 return;
             }
             PlayerName = Clean(dto.Name);
+            RendezvousAddress = Clean(dto.Rendezvous);
             s_recent.Clear();
             if (dto.Recent != null)
             {
@@ -131,7 +139,7 @@ public static class WhisperPrefs
     {
         try
         {
-            Dto dto = new() { Name = PlayerName, Recent = s_recent.ToArray() };
+            Dto dto = new() { Name = PlayerName, Recent = s_recent.ToArray(), Rendezvous = RendezvousAddress };
             File.WriteAllText(PathOnDisk(), JsonSerializer.Serialize(dto));
         }
         catch (Exception e)
@@ -187,5 +195,6 @@ public static class WhisperPrefs
     {
         public string? Name { get; set; }
         public string[]? Recent { get; set; }
+        public string? Rendezvous { get; set; }
     }
 }

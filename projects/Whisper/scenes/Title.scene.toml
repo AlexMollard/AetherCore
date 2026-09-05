@@ -28,10 +28,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     [[entities.scripts]]
     type = 'ConnectScreen'
 
-        [entities.scripts.properties.AddressField]
-        t = 'entity'
-        v = 13
-
         [entities.scripts.properties.HostButton]
         t = 'entity'
         v = 15
@@ -40,9 +36,21 @@ scale = [ 1.0, 1.0, 1.0 ]
         t = 'entity'
         v = 16
 
+        [entities.scripts.properties.JoinField]
+        t = 'entity'
+        v = 13
+
         [entities.scripts.properties.NameField]
         t = 'entity'
         v = 11
+
+        [entities.scripts.properties.RendezvousField]
+        t = 'entity'
+        v = 31
+
+        [entities.scripts.properties.RoomCodeText]
+        t = 'entity'
+        v = 26
 
         [entities.scripts.properties.StatusDot]
         t = 'entity'
@@ -322,7 +330,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'AddressLabel'
+name = 'JoinLabel'
 node = 7100000000000000012
 parent = 0
 parent_node = -5229137263843115868
@@ -341,13 +349,13 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 18.0
-    text = 'SERVER ADDRESS'
+    text = 'ROOM CODE OR ADDRESS'
     v_align = 'middle'
     wrap = false
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'AddressField'
+name = 'JoinField'
 node = 4960597735083997608
 parent = 0
 parent_node = -5229137263843115868
@@ -377,7 +385,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     padding = 14.0
     password = false
     pixel_size = 26.0
-    placeholder = '127.0.0.1:7777'
+    placeholder = 'PA1R06 or 127.0.0.1:7777'
     placeholder_color = [ 0.34999999999999998, 0.38, 0.44500000000000001, 1.0 ]
     selection_color = [ 0.54500000000000004, 0.72899999999999998, 0.94899999999999995, 0.34999999999999998 ]
     text = ''
@@ -385,7 +393,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'AddressHint'
+name = 'JoinHint'
 node = 7100000000000000014
 parent = 0
 parent_node = -5229137263843115868
@@ -404,7 +412,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 17.0
-    text = 'leave blank for 127.0.0.1:7777'
+    text = 'a 6-char code from your host - or an address, e.g. 127.0.0.1:7777'
     v_align = 'middle'
     wrap = false
 
@@ -717,13 +725,13 @@ scale = [ 1.0, 1.0, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
     pixel_size = 18.0
-    text = 'HOST opens a four player session on port 7777.'
+    text = 'HOST shows a room code to read aloud. JOIN takes it back - or an address.'
     v_align = 'middle'
     wrap = false
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'NoteLine1'
+name = 'RoomCodeText'
 node = 7100000000000000026
 parent = 0
 parent_node = -5229137263843115868
@@ -733,16 +741,16 @@ scale = [ 1.0, 1.0, 1.0 ]
     [entities.ui_rect]
     anchor_max = [ 0.48499999999999999, 0.72599999999999998 ]
     anchor_min = [ 0.48499999999999999, 0.72599999999999998 ]
-    offset_max = [ 800.0, 12.0 ]
-    offset_min = [ 0.0, -12.0 ]
+    offset_max = [ 800.0, 14.0 ]
+    offset_min = [ 0.0, -14.0 ]
     pivot = [ 0.0, 0.5 ]
 
     [entities.ui_text]
-    color = [ 0.35899999999999999, 0.39000000000000001, 0.45900000000000002, 1.0 ]
+    color = [ 0.54500000000000004, 0.72899999999999998, 0.94899999999999995, 1.0 ]
     font = 'IBMPlexMono-Italic'
     h_align = 'left'
-    pixel_size = 18.0
-    text = 'JOIN connects to the address on the left.'
+    pixel_size = 22.0
+    text = ''
     v_align = 'middle'
     wrap = false
 
@@ -837,6 +845,44 @@ scale = [ 1.0, 1.0, 1.0 ]
     text = 'TAB move    ENTER edit or confirm    CLICK select    ESC leaves a session'
     v_align = 'middle'
     wrap = false
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'RendezvousField'
+node = 8236914705823461197
+parent = 0
+parent_node = -5229137263843115868
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.ui_rect]
+    anchor_max = [ 0.436, 0.63400000000000001 ]
+    anchor_min = [ 0.113, 0.63400000000000001 ]
+    offset_max = [ 0.0, 22.0 ]
+    offset_min = [ 0.0, -22.0 ]
+    pivot = [ 0.5, 0.5 ]
+
+    [entities.ui_selectable]
+    group = ''
+    interactable = true
+
+    [entities.ui_text_box]
+    allowed_chars = ''
+    bg_color = [ 0.055, 0.062, 0.078, 1.0 ]
+    bg_color_focused = [ 0.085999999999999993, 0.098000000000000004, 0.125, 1.0 ]
+    caret_color = [ 0.54500000000000004, 0.72899999999999998, 0.94899999999999995, 1.0 ]
+    content_type = 'host'
+    corner_radius = 3.0
+    font = 'IBMPlexMono-Italic'
+    max_length = 48
+    padding = 12.0
+    password = false
+    pixel_size = 18.0
+    placeholder = 'rendezvous server (optional) - blank plays LAN only'
+    placeholder_color = [ 0.34999999999999998, 0.38, 0.44500000000000001, 1.0 ]
+    selection_color = [ 0.54500000000000004, 0.72899999999999998, 0.94899999999999995, 0.34999999999999998 ]
+    text = ''
+    text_color = [ 0.79000000000000004, 0.81999999999999995, 0.86999999999999999, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
