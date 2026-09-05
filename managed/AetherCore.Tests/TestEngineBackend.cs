@@ -84,6 +84,9 @@ public sealed class TestEngineBackend : IEngineBackend
     /// <summary>What <see cref="Net.TraversalError"/> reports.</summary>
     public string TraversalError = string.Empty;
 
+    /// <summary>What <see cref="Net.LastError"/> reports.</summary>
+    public string LastError = string.Empty;
+
     // ── Recorded calls ──────────────────────────────────────────────────────────
 
     /// <summary>Every <c>Net.Spawn</c>, as (prefab, position, owner).</summary>
@@ -242,6 +245,9 @@ public sealed class TestEngineBackend : IEngineBackend
 
     /// <inheritdoc/>
     public string NetTraversalError => TraversalError;
+
+    /// <inheritdoc/>
+    public string NetLastError => LastError;
 
     /// <inheritdoc/>
     public Entity[] NetPlayers

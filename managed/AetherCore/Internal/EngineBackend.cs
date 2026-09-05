@@ -76,6 +76,12 @@ internal interface IEngineBackend
     /// <summary><see cref="Net.TraversalError"/>.</summary>
     string NetTraversalError { get; }
 
+    /// <summary><see cref="Net.LastError"/>. Routed through the seam like every other
+    /// net string: a convenience type that reads it on a FAILURE path would otherwise
+    /// P/Invoke straight into an engine the test host does not have, and its own
+    /// failure tests would be the first thing to crash.</summary>
+    string NetLastError { get; }
+
     // ── Net: players ────────────────────────────────────────────────────────────
 
     /// <summary><see cref="Net.Players"/>.</summary>
@@ -214,6 +220,9 @@ internal sealed class NativeEngineBackend : IEngineBackend
 
     /// <inheritdoc/>
     public string NetTraversalError => Net.TraversalError;
+
+    /// <inheritdoc/>
+    public string NetLastError => Net.LastError;
 
     /// <inheritdoc/>
     public Entity[] NetPlayers => Net.Players;
