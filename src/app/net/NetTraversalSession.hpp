@@ -130,7 +130,7 @@ namespace aether::net
 	private:
 		void ResetForNewAttempt();
 		[[nodiscard]] bool EnsureSignalingChannel(const std::string& roomCode);
-		void BeginSignalingAndPunch();
+		void BeginSignalingAndPunch(std::optional<NatTraversal::Endpoint> mappedEndpoint = std::nullopt);
 		void TickMapping(float deltaSeconds);
 		void TickRendezvous(float deltaSeconds);
 		void TickRelay(float deltaSeconds);

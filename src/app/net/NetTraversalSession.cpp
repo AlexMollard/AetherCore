@@ -222,10 +222,18 @@ namespace aether::net
 		return true;
 	}
 
-	void NetTraversalSession::BeginSignalingAndPunch()
+	void NetTraversalSession::BeginSignalingAndPunch(std::optional<NatTraversal::Endpoint> mappedEndpoint)
 	{
-		m_portMapping.Release();
-		m_rendezvous.emplace(*m_transport.Traversal(), *m_signaling, m_localPort);
+		// A mapping whose endpoint is being carried as a candidate (the Mapped rung
+		// below) must stay ALIVE: the address being advertised stops working the
+		// moment it is released. Every other path here is a mapping that failed or
+		// was abandoned - releasing those is what keeps the router from holding a
+		// hole open for an attempt that will never use it.
+		if (!mappedEndpoint.has_value())
+		{
+			m_portMapping.Release();
+		}
+		m_rendezvous.emplace(*m_transport.Traversal(), *m_signaling, m_localPort, mappedEndpoint);
 		m_rendezvous->Begin(m_stunHost, m_stunPort);
 		m_state = TraversalState::Signaling;
 	}
@@ -237,20 +245,26 @@ namespace aether::net
 		{
 		case PortMapping::State::Mapped:
 		{
-			// A mapping means no punch is needed at all (PortMapping.hpp:73-80) - and
-			// tearing a WORKING mapping down to punch anyway would only make a host
-			// that is already reachable look like one that might not be. The mapped
-			// address still has to reach the peer somehow, so it is published as a
-			// candidate exactly like a STUN answer would be, then this is done.
-			CandidateSet candidates;
-			candidates.endpoints = NatTraversal::LocalCandidates(m_localPort);
-			if (const auto mapped = NatTraversal::ParseEndpoint(m_portMapping.ExternalHost(), m_portMapping.ExternalPort()))
+			// A mapping is one more candidate, not a verdict. Its success reply comes
+			// back over unauthenticated LAN protocols (UPnP/NAT-PMP/PCP), and a router
+			// that reports a mapping the outside world cannot actually reach - double
+			// NAT, CGNAT - or a LAN spoofer forging the reply would otherwise end the
+			// ladder right here with nothing verified: this side would never hear the
+			// peer again, never allocate a relay of its own, and a joiner whose punch
+			// at the bogus address failed would burn its whole relay budget waiting
+			// for an answer that cannot come. So the mapping's endpoint is published
+			// (pinned to every publish - see NatRendezvous) and the ladder keeps
+			// running. When the mapping is real the punch machinery is harmless - the
+			// checks simply succeed, and a joiner that connects through the mapping
+			// lands as a Connected event in TickRendezvous - and when it is not, the
+			// ladder fails over to the relay like any other rung.
+			std::optional<NatTraversal::Endpoint> mapped;
+			if (const auto parsed = NatTraversal::ParseEndpoint(m_portMapping.ExternalHost(), m_portMapping.ExternalPort()))
 			{
-				candidates.endpoints.push_back(*mapped);
+				mapped = parsed;
 			}
-			m_signaling->Publish(candidates);
-			AE_INFO(LogCategory::App, "Net: reachable via a router mapping - no punch needed");
-			m_state = TraversalState::Connected;
+			AE_INFO(LogCategory::App, "Net: router mapping acquired - publishing it as a candidate and keeping the punch armed");
+			BeginSignalingAndPunch(mapped);
 			break;
 		}
 		case PortMapping::State::Unavailable:
@@ -273,6 +287,28 @@ namespace aether::net
 
 	void NetTraversalSession::TickRendezvous(float deltaSeconds)
 	{
+		// Watched first, on every tick, exactly like TickRelay: since the Mapped
+		// rung keeps the ladder running, a peer can complete ENet's handshake
+		// through the mapping while THIS side's own punch at its candidates is
+		// still failing - a joiner behind a symmetric NAT never answers a check
+		// even though the mapping carries its CONNECT fine. A live connection
+		// outranks whatever rung the ladder thinks it is on; without this check a
+		// punch timeout below would Fail() and tear down a connection that is up.
+		for (const NetEvent& event: m_transport.Events())
+		{
+			if (event.kind == NetEvent::Kind::Connected)
+			{
+				AE_INFO(LogCategory::App, "Net: connected while the ladder was still running");
+				m_state = TraversalState::Connected;
+				m_joinInProgress = false;
+				return;
+			}
+			if (event.kind == NetEvent::Kind::Disconnected)
+			{
+				Fail("the connection closed before it finished - the punched path may have gone stale");
+				return;
+			}
+		}
 		m_rendezvous->Tick(deltaSeconds);
 		const NatRendezvous::State state = m_rendezvous->GetState();
 		if (state == NatRendezvous::State::Failed)

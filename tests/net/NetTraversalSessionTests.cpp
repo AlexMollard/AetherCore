@@ -276,3 +276,44 @@ TEST_CASE("A relay that never answers ends the ladder at Failed, naming the rela
 	// relay configured - a relay that is reachable but silent is a different problem.
 	CHECK(reason.find("symmetric") == std::string::npos);
 }
+
+TEST_CASE("A peer that connects while the ladder is still running outranks the ladder")
+{
+	// The Mapped rung keeps the ladder running after publishing the mapping's
+	// endpoint (a mapping is a candidate, not a verdict), which makes this race
+	// real: a joiner can complete ENet's handshake through the mapping while this
+	// side's own punch at its candidates is still failing - or, as staged here,
+	// while the signalling channel offers nothing at all. Without the event watch
+	// in TickRendezvous the peer's own twenty-second timeout then Fails the
+	// attempt and Disconnects a connection that is up and carrying traffic.
+	net::NetworkSubsystem hostTransport;
+	net::LocalSignalingChannel lonely; // paired with nothing: no candidate is ever offered
+	net::NetTraversalSession hostSession(hostTransport);
+	hostSession.ConfigureSignalingChannel(lonely);
+	hostSession.SetStunServer("");
+
+	REQUIRE(hostSession.HostWithCode(net::NewRoomCode(), 24787, 4));
+	PumpOnce(hostSession, hostTransport, 6.0f); // past the mapping give-up window
+	REQUIRE(hostSession.GetState() == State::Signaling);
+
+	// A direct-IP joiner - standing in for one that arrived through a mapping this
+	// session published and cannot see from inside the ladder.
+	net::NetworkSubsystem joinerTransport;
+	REQUIRE(joinerTransport.Connect("127.0.0.1", 24787));
+
+	bool connected = false;
+	for (int i = 0; i < 500 && !connected; ++i)
+	{
+		PumpOnce(hostSession, hostTransport, 0.05f);
+		joinerTransport.Poll();
+		// Past the joiner's whole ENet handshake on the first iterations; past the
+		// host's twenty-second peer timeout by the end, so a session that ignored
+		// the connection fails the loop instead of passing it by attrition.
+		connected = hostSession.GetState() == State::Connected && joinerTransport.Role() == net::NetRole::Client;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+
+	CHECK(connected);
+	// The live socket was not torn down around the session's own rung bookkeeping.
+	CHECK(hostTransport.Traversal() != nullptr);
+}

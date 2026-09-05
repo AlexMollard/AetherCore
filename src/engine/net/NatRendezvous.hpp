@@ -31,8 +31,13 @@ namespace aether::net
 
 		// Neither reference is owned; both must outlive this. `localPort` is the port the
 		// transport is bound to, which is what a peer on the same LAN must be told - the
-		// public port a NAT invents is no use to it.
-		NatRendezvous(NatTraversal& traversal, ISignalingChannel& channel, std::uint16_t localPort);
+		// public port a NAT invents is no use to it. `pinnedCandidate` is one more
+		// address this same socket is reachable on that no discovery here will ever
+		// learn - a router mapping's external endpoint (see NetTraversalSession's
+		// Mapping rung) - carried on every publish so a later one, which replaces what
+		// the channel holds, cannot drop it.
+		NatRendezvous(NatTraversal& traversal, ISignalingChannel& channel, std::uint16_t localPort,
+		        std::optional<Endpoint> pinnedCandidate = std::nullopt);
 
 		// Publishes local candidates and starts discovery. An empty `stunHost` skips
 		// discovery entirely, which is the LAN case: there is no NAT to ask about.
@@ -60,9 +65,14 @@ namespace aether::net
 		// Accumulated rather than replaced: a peer may publish twice - once with its LAN
 		// addresses and again once STUN has answered it - and the second message must add
 		// to the first rather than discard candidates that might have been the ones to
-		// work.
+		// work. Folded in through AccumulateCandidates, which also CAPS it: distinct
+		// endpoints never dedupe, and an uncapped list is an unbounded set of datagram
+		// destinations for anyone who keeps inventing fresh ones.
 		std::vector<Endpoint> m_peerCandidates;
-
+		// One extra address every publish carries - see the constructor. optional
+		// rather than "host 0 means none", because 0 is a real value a malformed
+		// endpoint could otherwise smuggle in as "no candidate".
+		std::optional<Endpoint> m_pinnedCandidate;
 		float m_elapsed = 0.0f;
 		std::string m_failure;
 		bool m_timedOut = false;

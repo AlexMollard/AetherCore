@@ -48,11 +48,12 @@ namespace aether::net
 		// Poll() for why the repetition lives there and not here.
 		void Publish(const CandidateSet& candidates) override;
 
-		// Drains every datagram waiting on the socket without ever blocking the
-		// frame loop, and returns the union of what survived the room/nonce filter
-		// and kMaxCandidates cap. Also the one place this channel repeats the last
-		// Publish on a timer; see the .cpp for why that lives here and not in the
-		// caller.
+		// Drains up to kMaxDatagramsPerPoll datagrams waiting on the socket without
+		// ever blocking the frame loop, and returns the union of what survived the
+		// room/nonce filter and kMaxCandidates cap. A LAN peer can keep the queue
+		// non-empty forever, so the drain is bounded per call and the rest waits for
+		// the next Poll(). Also the one place this channel repeats the last Publish
+		// on a timer; see the .cpp for why that lives here and not in the caller.
 		[[nodiscard]] std::optional<CandidateSet> Poll() override;
 
 		// False when the room code did not normalize, or the socket could not be

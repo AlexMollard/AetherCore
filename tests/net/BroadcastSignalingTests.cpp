@@ -1,8 +1,12 @@
 #include <doctest/doctest.h>
 
+#include <array>
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <thread>
+
+#include <enet/enet.h>
 
 #include "net/BroadcastSignaling.hpp"
 #include "net/NatTraversal.hpp"
@@ -130,6 +134,80 @@ TEST_CASE("An unusable channel reports why instead of throwing or crashing")
 	set.endpoints.push_back(*endpoint);
 	channel.Publish(set);
 	CHECK_FALSE(channel.Poll().has_value());
+}
+
+namespace
+{
+	// One raw loopback socket standing in for a hostile LAN peer: it can put
+	// anything on this machine's receive queue, and only the channel's own drain
+	// bound decides how much of the frame one Poll() spends on it.
+	class RawSender
+	{
+	public:
+		RawSender()
+		{
+			m_socket = enet_socket_create(ENET_SOCKET_TYPE_DATAGRAM);
+			REQUIRE(m_socket != ENET_SOCKET_NULL);
+			ENetAddress any{};
+			any.host = ENET_HOST_ANY;
+			any.port = ENET_PORT_ANY;
+			REQUIRE(enet_socket_bind(m_socket, &any) == 0);
+			REQUIRE(enet_socket_set_option(m_socket, ENET_SOCKOPT_NONBLOCK, 1) == 0);
+		}
+
+		~RawSender()
+		{
+			enet_socket_destroy(m_socket);
+		}
+
+		RawSender(const RawSender&) = delete;
+		RawSender& operator=(const RawSender&) = delete;
+
+		void SendTo(std::uint16_t port, std::string_view payload)
+		{
+			ENetAddress to{};
+			to.host = ENET_HOST_TO_NET_32(0x7F000001); // 127.0.0.1
+			to.port = port;
+			ENetBuffer buffer{};
+			buffer.data = const_cast<char*>(payload.data());
+			buffer.dataLength = payload.size();
+			enet_socket_send(m_socket, &to, &buffer, 1);
+		}
+
+	private:
+		ENetSocket m_socket = ENET_SOCKET_NULL;
+	};
+} // namespace
+
+TEST_CASE("A flooded socket bounds one Poll - what is left waits for the next call")
+{
+	// Pre-fix, Poll() drained until the socket was empty; on a real LAN a peer can
+	// keep it non-empty forever, which is a frame-loop hang, not a slow poll. What
+	// a bounded flood can still prove is WHERE the drain stops: the valid line
+	// queued behind more datagrams than one Poll reads must come back on the NEXT
+	// Poll, not this one.
+	constexpr std::uint16_t kPort = 24797; // away from the game default and every other net test
+	net::BroadcastSignalingChannel channel(kRoom, kPort);
+	REQUIRE(channel.IsUsable());
+	CHECK(channel.FailureReason().empty()); // a usable channel carries no failure text
+
+	RawSender flooder;
+	for (int i = 0; i < 70; ++i)
+	{
+		flooder.SendTo(kPort, "garbage that fails the parse"); // recv happens before the parse
+	}
+	const auto endpoint = net::NatTraversal::ParseEndpoint("192.168.1.40", 24710);
+	REQUIRE(endpoint.has_value());
+	flooder.SendTo(kPort, Line(kRoom, kPeerNonce, ValidBlob())); // 71st: valid, and LAST
+
+	// Loopback delivers same-pair datagrams in order, so all 70 garbage lines sit
+	// ahead of the valid one. A Poll bounded at 64 stops before reaching it.
+	CHECK_FALSE(channel.Poll().has_value());
+
+	const auto received = channel.Poll();
+	REQUIRE(received.has_value());
+	REQUIRE(received->endpoints.size() == 1);
+	CHECK(received->endpoints[0] == *endpoint);
 }
 
 // Skipped by default: whether a broadcast actually leaves the interface depends on

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "net/RendezvousChannel.hpp"
+
 namespace aether::net
 {
 	namespace
@@ -13,10 +15,12 @@ namespace aether::net
 		constexpr float kPeerTimeout = 20.0f;
 	} // namespace
 
-	NatRendezvous::NatRendezvous(NatTraversal& traversal, ISignalingChannel& channel, std::uint16_t localPort)
+	NatRendezvous::NatRendezvous(NatTraversal& traversal, ISignalingChannel& channel, std::uint16_t localPort,
+	        std::optional<Endpoint> pinnedCandidate)
 	      : m_traversal(traversal),
 	        m_channel(channel),
-	        m_localPort(localPort)
+	        m_localPort(localPort),
+	        m_pinnedCandidate(pinnedCandidate)
 	{
 	}
 
@@ -27,6 +31,14 @@ namespace aether::net
 		if (const auto reflexive = m_traversal.PublicEndpoint())
 		{
 			set.endpoints.push_back(*reflexive);
+		}
+		// Rides on every publish, not just the first: a channel's later publish
+		// REPLACES what it holds (see LocalSignalingChannel::Publish), so a mapping's
+		// endpoint mentioned once and never again would vanish exactly when the
+		// reflexive one arrived.
+		if (m_pinnedCandidate)
+		{
+			set.endpoints.push_back(*m_pinnedCandidate);
 		}
 		if (!set.endpoints.empty())
 		{
@@ -92,15 +104,15 @@ namespace aether::net
 
 		if (const auto offered = m_channel.Poll())
 		{
-			bool grew = false;
-			for (const Endpoint& candidate: offered->endpoints)
-			{
-				if (std::ranges::find(m_peerCandidates, candidate) == m_peerCandidates.end())
-				{
-					m_peerCandidates.push_back(candidate);
-					grew = true;
-				}
-			}
+			// Folded through the same capped, deduping AccumulateCandidates the
+			// channels use, not a private copy of the rule: distinct endpoints do
+			// not dedupe, and ports 1..65535 are free to anyone who has learned the
+			// room, so an uncapped accumulator here grows without bound, re-arms
+			// BeginPunch (and its timeout) on every growth, and sprays a datagram at
+			// each new address on every retry - this machine, aimed by a stranger.
+			// At the cap nothing is ever new again, so the window below expires on
+			// its own.
+			const bool grew = AccumulateCandidates(m_peerCandidates, *offered);
 			// Restarted only when something genuinely new arrived. A candidate that has
 			// not been tried deserves the full punch window, but a peer republishing the
 			// same list must not be able to hold the attempt open forever.

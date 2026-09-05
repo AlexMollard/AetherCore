@@ -12,6 +12,7 @@
 
 #include "net/NatTraversal.hpp"
 #include "net/NetworkSubsystem.hpp"
+#include "net/Signaling.hpp"
 
 using namespace aether;
 using Endpoint = net::NatTraversal::Endpoint;
@@ -133,6 +134,28 @@ TEST_CASE("Being asked to punch at nothing is refused rather than waited out")
 
 	a.Traversal()->BeginPunch({});
 	CHECK(a.Traversal()->GetState() == State::Failed);
+}
+
+TEST_CASE("BeginPunch arms no more checks than the candidate cap, whatever it is handed")
+{
+	// BeginPunch turns a candidate into unsolicited datagrams on a 250ms timer, so
+	// the cap the wire side enforces is enforced here too - a caller handing in an
+	// over-long span must not be able to arm a spray wider than any peer could ever
+	// legitimately offer. Nothing is ticked, so nothing is sent.
+	net::NetworkSubsystem a;
+	REQUIRE(a.Host(24708, 4));
+
+	std::vector<Endpoint> flood;
+	for (int i = 0; i < 32; ++i)
+	{
+		const auto endpoint = net::NatTraversal::ParseEndpoint("127.0.0.1", static_cast<std::uint16_t>(21000 + i));
+		REQUIRE(endpoint.has_value());
+		flood.push_back(*endpoint);
+	}
+
+	a.Traversal()->BeginPunch(flood);
+	CHECK(a.Traversal()->GetState() == State::Punching);
+	CHECK(a.Traversal()->PeerCandidates().size() == net::kMaxCandidates);
 }
 
 // Skipped by default: it needs the internet, and a test suite that fails when a

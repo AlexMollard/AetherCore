@@ -28,6 +28,14 @@ namespace aether::net
 		// instead, or a late joiner on the same LAN never learns anything at all.
 		constexpr std::chrono::milliseconds kRepublishInterval{1000};
 
+		// A single Poll() used to drain until the socket was empty, but "empty" is
+		// remote-controlled: any device on the LAN can keep datagrams queued forever
+		// (even garbage that fails ParseLine - the recv happens before the parse), and
+		// Poll runs from the frame loop via NatRendezvous::Tick. Same bound as
+		// RendezvousChannel's identical loop: read this many, leave the rest for the
+		// next Poll().
+		constexpr int kMaxDatagramsPerPoll = 64;
+
 		std::uint64_t NowMs()
 		{
 			return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
@@ -97,8 +105,11 @@ namespace aether::net
 		// only sends them. Non-blocking so Poll() can drain without ever stalling
 		// the frame loop; broadcast-enabled so the send below is even allowed to
 		// leave the interface; reuse-address so a second instance on this same
-		// machine (two local test peers, or a crashed session's socket still in
-		// TIME_WAIT) does not fail to bind for no reason a player could act on.
+		// machine (two local test peers, or a crashed session's process whose socket
+		// the OS has not yet reaped) does not fail to bind for no reason a player
+		// could act on. Not a hijack vector worth closing: a process that can bind
+		// inside this machine can do far worse to it than eat a broadcast, and
+		// dropping reuse would break the two-instances-on-one-machine case outright.
 		ENetAddress bindAddress{};
 		bindAddress.host = ENET_HOST_ANY;
 		bindAddress.port = m_port;
@@ -185,7 +196,7 @@ namespace aether::net
 		CandidateSet merged;
 		bool any = false;
 		std::array<char, kMaxLineLength> buffer{};
-		for (;;)
+		for (int i = 0; i < kMaxDatagramsPerPoll; ++i)
 		{
 			ENetAddress from{};
 			ENetBuffer recvBuffer{};

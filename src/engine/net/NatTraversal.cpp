@@ -6,6 +6,7 @@
 
 #include <enet/enet.h>
 
+#include "net/Signaling.hpp"
 #include "net/TurnRelaySocket.hpp"
 #include "utils/Logger.hpp"
 
@@ -153,11 +154,18 @@ namespace aether::net
 		}
 
 		// Every candidate gets its own transaction id, so the answer identifies which
-		// path opened rather than only that one of them did.
+		// path opened rather than only that one of them did. Capped here as well as at
+		// every accumulator above: this method turns a candidate into unsolicited
+		// datagrams on a 250ms timer, so a caller handing in an over-long span must not
+		// be able to arm more of them than the wire-side cap ever allows through.
 		m_checks.clear();
-		m_checks.reserve(peerCandidates.size());
+		m_checks.reserve(std::min(peerCandidates.size(), kMaxCandidates));
 		for (const Endpoint& candidate: peerCandidates)
 		{
+			if (m_checks.size() >= kMaxCandidates)
+			{
+				break;
+			}
 			m_checks.push_back(Check{candidate, stun::MakeTransactionId()});
 		}
 		m_open.reset();
@@ -287,34 +295,48 @@ namespace aether::net
 			}
 			case stun::MessageKind::BindingSuccess:
 			{
-				if (m_state == State::Discovering)
+			if (m_state == State::Discovering)
+			{
+				// Pinned to the server the request went to: only the STUN server
+				// was ever told that transaction id, so a success naming it from
+				// any other source is a stranger answering a question it was not
+				// asked - accepting it would let them choose this socket's
+				// "public" endpoint, which is then published to the peer.
+				if (from.host != m_stunServer.host || from.port != m_stunServer.port)
 				{
-					if (const auto reflexive = stun::ParseBindingResponse(data, m_discoveryId))
-					{
-						m_public = FromStun(*reflexive);
-						m_state = State::Discovered;
-						AE_INFO(LogCategory::App, "NAT traversal: public endpoint discovered on this socket.");
-						return true;
-					}
 					return false;
 				}
-				if (m_state == State::Punching)
+				if (const auto reflexive = stun::ParseBindingResponse(data, m_discoveryId))
 				{
-					// Matched by transaction id, not by source address: a NAT can
-					// answer from a different port than the one written to, and
-					// trusting the source would drop the very reply being waited for.
-					const auto match = std::ranges::find_if(m_checks, [&](const Check& c) { return stun::ParseBindingResponse(data, c.id).has_value(); });
-					if (match == m_checks.end())
-					{
-						return false;
-					}
-					m_open = from;
-					m_state = State::Open;
-					AE_INFO(LogCategory::App, "NAT traversal: a path to the peer is open.");
+					m_public = FromStun(*reflexive);
+					m_state = State::Discovered;
+					AE_INFO(LogCategory::App, "NAT traversal: public endpoint discovered on this socket.");
 					return true;
 				}
 				return false;
 			}
+			if (m_state == State::Punching)
+			{
+				// Matched by transaction id AND by the candidate the request was
+				// sent to: a reply can only come back from an address the check
+				// actually reached, so one naming the right transaction from
+				// anywhere else is a stranger claiming a path it is not on -
+				// accepting it would aim m_open (and the connect that follows) at
+				// an address nobody agreed to. A peer whose NAT rewrites the reply
+				// source fails its check on this side and opens its own instead,
+				// which is the direction a connect runs through anyway.
+				const auto match = std::ranges::find_if(m_checks, [&](const Check& c) { return (from.host == c.target.host && from.port == c.target.port) && stun::ParseBindingResponse(data, c.id).has_value(); });
+				if (match == m_checks.end())
+				{
+					return false;
+				}
+				m_open = from;
+				m_state = State::Open;
+				AE_INFO(LogCategory::App, "NAT traversal: a path to the peer is open.");
+				return true;
+			}
+			return false;
+		}
 			case stun::MessageKind::Other:
 				// Neither a Binding Request nor a Binding Success, but that covers
 				// everything ELSE STUN-shaped too - TURN's Allocate/Refresh/
