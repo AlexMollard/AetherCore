@@ -23,26 +23,37 @@ namespace aether::net
 	// NEVER the transport's socket - see the comment at the top of NatTraversal.hpp
 	// for why a NAT mapping belongs to the socket that punched from it, and binding a
 	// second one for the punch itself would open a hole nothing ever sends from.
-	//
 	// The wire grammar is fixed by the server this talks to, byte for byte, the same
 	// in both directions:
-	//   AECR1 <ROOMCODE> <blob>\n
-	// where <blob> is exactly what EncodeCandidates() produced. It contains spaces,
-	// so it is always the rest of the line, never split further. A trailing CRLF is
-	// tolerated as well as a bare LF; nothing else about the shape is negotiable, so
-	// the parse and serialise steps below are free functions, deliberately kept apart
-	// from socket I/O, so a test can hold them to that grammar without a server or a
-	// network anywhere in the loop.
+	//   AECR2 <ROOMCODE> <TOKEN> <BODY>\n
+	// where <BODY> is exactly what EncodeCandidates() produced (client -> server,
+	// and a forwarded peer blob server -> client), or the single character `-`
+	// (server -> client only: "here is your token, nothing else"). BODY contains
+	// spaces, so it is always the rest of the line, never split further. A trailing
+	// CRLF is tolerated as well as a bare LF; nothing else about the shape is
+	// negotiable, so the parse and serialise steps below are free functions,
+	// deliberately kept apart from socket I/O, so a test can hold them to that
+	// grammar without a server or a network anywhere in the loop.
+	//
+	// <TOKEN> is the per-peer capability token the server hands out and demands
+	// back; it is what keeps the server from being a reflection amplifier a
+	// stranger can aim at arbitrary addresses (see tools/rendezvous for the server
+	// half). `-` means "no token yet" and is what a first contact - or a client
+	// that lost its token - sends; the server answers with the token and no body,
+	// and every datagram after that carries it. In server -> client lines the
+	// token is always the RECIPIENT'S own.
 
-	// One parsed line: which room it claims to be for, and everything after that -
-	// still text, because turning it into candidates is DecodeCandidates' job, not
-	// this layer's. Keeping the two separate means a malformed candidate list is
-	// diagnosed by the one piece of code that already understands that grammar,
-	// instead of a second, slightly different copy of its rejection rules living here.
+	// One parsed line: which room it claims to be for, the token it carried, and
+	// everything after that - still text, because turning a body into candidates
+	// is DecodeCandidates' job, not this layer's. Keeping the two separate means a
+	// malformed candidate list is diagnosed by the one piece of code that already
+	// understands that grammar, instead of a second, slightly different copy of
+	// its rejection rules living here.
 	struct RendezvousDatagram
 	{
 		std::string roomCode;
-		std::string blob;
+		std::string token;
+		std::string body;
 	};
 
 	// Matches slice C's server-side cap exactly, so the two ends never disagree about
@@ -56,22 +67,28 @@ namespace aether::net
 	// a caller supplies a bare host with no ":port".
 	inline constexpr std::uint16_t kDefaultRendezvousPort = 24701;
 
-	// The wire form of one line. Used for the client -> server direction, and, since
-	// both directions share a grammar, reusable to build the round trip a test needs
-	// against ParseRendezvousDatagram below.
-	[[nodiscard]] std::string EncodeRendezvousDatagram(std::string_view roomCode, std::string_view blob);
+	// The wire form of one line. `token` goes on the wire verbatim - `-` for "no
+	// token yet", or the sixteen hex characters the server issued. Used for the
+	// client -> server direction, and, since both directions share a grammar,
+	// reusable to build the round trip a test needs against ParseRendezvousDatagram
+	// below.
+	[[nodiscard]] std::string EncodeRendezvousDatagram(std::string_view roomCode, std::string_view token, std::string_view blob);
 
-	// Splits a raw datagram into (room code, blob) without judging whether the room
-	// code is the one this machine cares about, or whether the blob decodes to
-	// anything - both are the caller's business. Refuses anything that does not fully
-	// match the grammar: a wrong or absent version, a missing field, more than one
-	// line, or a datagram over kMaxRendezvousDatagramLength - salvaging nothing rather
-	// than acting on a half-read line.
+	// Splits a raw datagram into (room code, token, body) without judging whether
+	// the room code is the one this machine cares about, or whether the body decodes
+	// to anything - both are the caller's business. Refuses anything that does not
+	// fully match the grammar: a wrong or absent version, a token that is neither
+	// `-` nor sixteen hex characters, a missing field, more than one line, or a
+	// datagram over kMaxRendezvousDatagramLength - salvaging nothing rather than
+	// acting on a half-read line.
 	[[nodiscard]] std::optional<RendezvousDatagram> ParseRendezvousDatagram(std::string_view datagram);
 
-	// The full read path in one call: parses, checks the room code against the one
-	// this channel is joined to, and decodes the blob - returning candidates only
-	// when every one of those steps agrees this datagram is real, current, and ours.
+	// The grammar half of the read path in one call: parses, checks the room code
+	// against the one this channel is joined to, and decodes the body - returning
+	// candidates only when every one of those steps agrees this datagram is real
+	// and ours. A `-` body (the server's token-only handshake) is not candidates
+	// and reads back as nullopt; storing the token it carried is the CHANNEL's
+	// business, not the grammar's.
 	[[nodiscard]] std::optional<CandidateSet> InterpretRendezvousDatagram(std::string_view datagram, std::string_view expectedRoomCode);
 
 	// Folds newly-decoded endpoints into a running total: skips ones already present,
@@ -110,11 +127,13 @@ namespace aether::net
 		// persistence as the first send.
 		void Publish(const CandidateSet& candidates) override;
 
-		// Drains every datagram currently queued on the socket, non-blocking. Ignores
-		// anything for a different room, anything that fails the grammar, and drives
-		// the retransmit timer above. Returns the accumulated candidate set when this
-		// call added at least one endpoint that was not already known, nullopt when
-		// nothing new arrived.
+		// Drains up to kMaxDatagramsPerPoll datagrams queued on the socket,
+		// non-blocking. Ignores anything for a different room, anything that fails
+		// the grammar, and anything not from the configured server; learns the
+		// server-issued token from what it accepts; and drives the retransmit timer
+		// above. Returns the accumulated candidate set when this call added at
+		// least one endpoint that was not already known, nullopt when nothing new
+		// arrived.
 		[[nodiscard]] std::optional<CandidateSet> Poll() override;
 
 		// False when construction failed - a malformed address, an unresolvable host,
@@ -134,7 +153,7 @@ namespace aether::net
 
 	private:
 		void Fail(std::string reason);
-		void Send(const std::string& datagram);
+		void SendDatagram(std::string_view body);
 		void MaybeRetransmit();
 
 		// ENet's own ENetSocket type is `SOCKET` on Windows and `int` on POSIX -
@@ -150,6 +169,11 @@ namespace aether::net
 		std::string m_failure;
 
 		std::string m_roomCode;
+		// The capability token this peer was issued, empty until the server's first
+		// answer carries it. Empty is sent as `-` on the wire - see the grammar
+		// comment above the free functions for why the token exists at all.
+		std::string m_token;
+
 		// Network byte order for the host, host byte order for the port - ENet's own
 		// convention; see NatTraversal::Endpoint for the same split and why.
 		std::uint32_t m_serverHost = 0;

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <charconv>
 #include <utility>
 
@@ -17,8 +18,17 @@ namespace aether::net
 		// The 5-byte version token. Followed by exactly one space before the room
 		// code, so together with that separator this is the same 6-byte magic the
 		// server checks for - just implemented as split-then-compare rather than a
-		// fixed-prefix match, which reads the same either way.
-		constexpr std::string_view kVersion = "AECR1";
+		// fixed-prefix match, which reads the same either way. AECR1 is this
+		// protocol's dead ancestor: that one had no token round trip, which made
+		// the server a reflection amplifier, so a server that still speaks it (or a
+		// client that still sends it) is refused unread rather than half-worked
+		// with.
+		constexpr std::string_view kVersion = "AECR2";
+
+		// "No token yet" - what a first contact sends, and the only other value the
+		// token field may hold besides sixteen hex characters.
+		constexpr std::string_view kNoToken = "-";
+		constexpr std::size_t kTokenHexLength = 16;
 
 		// How often an unacknowledged publish goes out again, and how many times
 		// before giving up. UDP drops datagrams and the server may not have this
@@ -51,6 +61,17 @@ namespace aether::net
 				return std::nullopt;
 			}
 			return static_cast<std::uint16_t>(value);
+		}
+
+		// A token has to be exactly `-` or sixteen hex characters; the server emits
+		// uppercase and accepts either case, and so does this parse.
+		[[nodiscard]] bool IsValidToken(std::string_view token)
+		{
+			if (token == kNoToken)
+			{
+				return true;
+			}
+			return token.size() == kTokenHexLength && std::ranges::all_of(token, [](char c) { return std::isxdigit(static_cast<unsigned char>(c)) != 0; });
 		}
 
 		struct HostPort
@@ -88,13 +109,15 @@ namespace aether::net
 		}
 	} // namespace
 
-	std::string EncodeRendezvousDatagram(std::string_view roomCode, std::string_view blob)
+	std::string EncodeRendezvousDatagram(std::string_view roomCode, std::string_view token, std::string_view blob)
 	{
 		std::string out;
-		out.reserve(kVersion.size() + 1 + roomCode.size() + 1 + blob.size() + 1);
+		out.reserve(kVersion.size() + 1 + roomCode.size() + 1 + token.size() + 1 + blob.size() + 1);
 		out += kVersion;
 		out += ' ';
 		out += roomCode;
+		out += ' ';
+		out += token;
 		out += ' ';
 		out += blob;
 		out += '\n';
@@ -127,26 +150,39 @@ namespace aether::net
 			return std::nullopt;
 		}
 
-		const std::size_t firstSpace = line.find(' ');
-		if (firstSpace == std::string_view::npos)
+		// Four space-separated fields, the last of which may itself contain spaces -
+		// so the leading three are split off and the rest is taken whole, exactly like
+		// the server does it.
+		std::array<std::string_view, 3> fields{};
+		std::size_t pos = 0;
+		for (std::size_t i = 0; i < fields.size(); ++i)
 		{
-			return std::nullopt; // no room code, let alone a blob
+			const std::size_t space = line.find(' ', pos);
+			if (space == std::string_view::npos)
+			{
+				return std::nullopt; // fewer than four fields - a truncated line
+			}
+			fields[i] = line.substr(pos, space - pos);
+			pos = space + 1;
 		}
-		if (line.substr(0, firstSpace) != kVersion)
+		if (pos >= line.size())
 		{
-			return std::nullopt;
+			return std::nullopt; // the fourth field exists as a separator but is empty
 		}
 
-		const std::string_view rest = line.substr(firstSpace + 1);
-		const std::size_t secondSpace = rest.find(' ');
-		if (secondSpace == std::string_view::npos)
+		if (fields[0] != kVersion)
 		{
-			return std::nullopt; // a room code with nothing after it - a truncated line
+			return std::nullopt; // wrong or absent version, AECR1 included
+		}
+		if (!IsValidToken(fields[2]))
+		{
+			return std::nullopt; // neither "-" nor sixteen hex characters
 		}
 
 		RendezvousDatagram out;
-		out.roomCode = std::string(rest.substr(0, secondSpace));
-		out.blob = std::string(rest.substr(secondSpace + 1));
+		out.roomCode = std::string(fields[1]);
+		out.token = std::string(fields[2]);
+		out.body = std::string(line.substr(pos));
 		return out;
 	}
 
@@ -157,7 +193,14 @@ namespace aether::net
 		{
 			return std::nullopt;
 		}
-		return DecodeCandidates(parsed->blob);
+		// The handshake-only body is the server saying "here is your token, nothing
+		// else" - that is not candidates, and reading it as a blob would only produce
+		// a decode failure that means nothing.
+		if (parsed->body == kNoToken)
+		{
+			return std::nullopt;
+		}
+		return DecodeCandidates(parsed->body);
 	}
 
 	bool AccumulateCandidates(std::vector<NatTraversal::Endpoint>& accumulator, const CandidateSet& incoming)
@@ -249,11 +292,17 @@ namespace aether::net
 		AE_WARN(LogCategory::App, "Rendezvous channel failed: {}", m_failure);
 	}
 
-	void RendezvousChannel::Send(const std::string& datagram)
+	void RendezvousChannel::SendDatagram(std::string_view body)
 	{
 		ENetAddress to{};
 		to.host = m_serverHost;
 		to.port = m_serverPort;
+
+		// The token goes on every datagram, `-` until the server has issued one:
+		// without it the server ignores the body outright, so first contact is
+		// always a token round trip (see the grammar comment in the header).
+		const std::string_view token = m_token.empty() ? std::string_view{kNoToken} : std::string_view{m_token};
+		const std::string datagram = EncodeRendezvousDatagram(m_roomCode, token, body);
 
 		ENetBuffer wire{};
 		wire.data = const_cast<char*>(datagram.data());
@@ -272,7 +321,7 @@ namespace aether::net
 		{
 			return;
 		}
-		Send(EncodeRendezvousDatagram(m_roomCode, *m_outboundBlob));
+		SendDatagram(*m_outboundBlob);
 		m_lastSend = now;
 		--m_retriesLeft;
 	}
@@ -286,7 +335,7 @@ namespace aether::net
 
 		std::string blob = EncodeCandidates(candidates);
 		m_lastSend = std::chrono::steady_clock::now();
-		Send(EncodeRendezvousDatagram(m_roomCode, blob));
+		SendDatagram(blob);
 
 		// A later Publish() carries genuinely new information - the local candidates
 		// were known immediately, the public one only once STUN answers - so it
@@ -329,7 +378,46 @@ namespace aether::net
 			}
 
 			const std::string_view datagram(buffer.data(), static_cast<std::size_t>(received));
-			if (const auto offered = InterpretRendezvousDatagram(datagram, m_roomCode))
+			// Only the configured server may speak for this room. The socket is bound
+			// to ANY:ephemeral and the room code is public (the host itself broadcasts
+			// it), so grammar and code alone prove nothing about who sent a datagram -
+			// accepting one from any other source would let a single spoofed line both
+			// freeze the local publish (sawReply below) and aim punches, and later
+			// relays, at addresses nobody offered. Checked before anything is parsed.
+			if (from.host != m_serverHost || from.port != m_serverPort)
+			{
+				continue;
+			}
+
+			const auto parsed = ParseRendezvousDatagram(datagram);
+			if (!parsed || parsed->roomCode != m_roomCode)
+			{
+				continue;
+			}
+			// The server puts this peer's own token in every line it sends. Storing
+			// it on receipt is what makes the NEXT publish land: a datagram sent
+			// without it is ignored outright, blob and all.
+			if (parsed->token != kNoToken && parsed->token != m_token)
+			{
+				m_token = parsed->token;
+				// A token-only answer means the server heard us but could not accept
+				// what we sent - it arrived without the token it is answering with.
+				// The outstanding blob (if any) goes back out right away, now with
+				// it, rather than waiting out the retransmit timer: the server is
+				// demonstrably listening, and a two-second pause here is a two-second
+				// delay on every first publish of a session.
+				if (m_outboundBlob.has_value() && m_awaitingFirstReply && m_retriesLeft > 0)
+				{
+					SendDatagram(*m_outboundBlob);
+					m_lastSend = std::chrono::steady_clock::now();
+					--m_retriesLeft;
+				}
+			}
+			if (parsed->body == kNoToken)
+			{
+				continue; // handshake-only: a token, deliberately nothing else
+			}
+			if (const auto offered = DecodeCandidates(parsed->body))
 			{
 				sawReply = true;
 				grew = AccumulateCandidates(m_accumulated, *offered) || grew;
