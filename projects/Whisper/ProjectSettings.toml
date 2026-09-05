@@ -8,6 +8,20 @@ asynccompute = true
 fxaa = false
 vsync = true
 
+[network]
+# Rendezvous server for internet play between two players on different networks.
+# LAN play (both players on the same network) needs nothing here at all - Whisper
+# ships working LAN-only with this section fully commented out, exactly as below.
+#
+# For internet play, uncomment BOTH lines and paste in a server address - your own
+# (see tools/rendezvous/ for how to stand one up for free) or one someone else is
+# running. It only ever relays the few-hundred-byte "here is my address" blobs two
+# players' games exchange to find each other, never game traffic - see
+# docs/multiplayer.md for the security posture of that open port.
+#
+# rendezvoushost = "your-server.example.com"
+# rendezvousport = 24701
+
 [paths]
 assets = "assets"
 prefabs = "assets/prefabs"

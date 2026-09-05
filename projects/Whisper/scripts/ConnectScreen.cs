@@ -40,14 +40,19 @@ namespace AetherGame;
 /// <para>
 /// <b>What still needs someone else's infrastructure.</b> Two players on the same network
 /// need nothing at all - LAN discovery is the connect ladder's own zero-configuration
-/// default. Two players on different networks need a rendezvous server address from
-/// whoever is running one (<see cref="WhisperPrefs.RendezvousAddress"/>, typed into
-/// <see cref="RendezvousField"/> and remembered like the player's name) - it only ever
-/// carries the tiny candidate blobs that let two NATs find each other, never game
-/// traffic. A NAT that a hole punch cannot get through past that needs a TURN relay,
-/// which is off by default and configured outside this screen; when the ladder fails for
-/// that reason, <see cref="Net.RelayConfigured"/> says so and this screen reports it
-/// plainly rather than leaving a spinner running.
+/// default. Two players on different networks need a rendezvous server: either the game
+/// itself ships one, by setting <c>network.rendezvousHost</c> in
+/// <c>ProjectSettings.toml</c> (see <c>tools/rendezvous/</c> and
+/// <c>docs/multiplayer.md</c>) so every player gets it for free with nothing to type, or a
+/// player types one themselves into <see cref="RendezvousField"/>
+/// (<see cref="WhisperPrefs.RendezvousAddress"/>, remembered like the player's name) for a
+/// specific server that overrides the project's own. Either way it only ever carries the
+/// tiny candidate blobs that let two NATs find each other, never game traffic - see
+/// <see cref="ConfigureSignaling"/> for exactly how the two are reconciled. A NAT that a
+/// hole punch cannot get through past that needs a TURN relay, which is off by default and
+/// configured outside this screen; when the ladder fails for that reason,
+/// <see cref="Net.RelayConfigured"/> says so and this screen reports it plainly rather than
+/// leaving a spinner running.
 /// </para>
 /// <para>
 /// <b>Layout</b> (the numbers live in <c>Title.scene.toml</c>, the reasoning has to live
@@ -90,9 +95,11 @@ public sealed class ConnectScreen : EntityScript
     public Entity JoinField;
 
     /// <summary>Rendezvous server (<c>host:port</c>) to exchange candidates through for a
-    /// join across two different networks. Blank plays LAN-only, which needs this at all -
-    /// see <see cref="WhisperPrefs.RendezvousAddress"/>. Optional: an invalid entity here
-    /// just means the screen never offers internet play.</summary>
+    /// join across two different networks - an override for a specific server, checked
+    /// before this project's own <c>network.rendezvousHost</c> default (see
+    /// <see cref="ConfigureSignaling"/>). Blank defers to that project default, or to
+    /// LAN-only if it too is unset - see <see cref="WhisperPrefs.RendezvousAddress"/>.
+    /// Optional: an invalid entity here just means a player cannot type their own override.</summary>
     public Entity RendezvousField;
 
     /// <summary>Starts hosting under a fresh room code.</summary>
@@ -156,6 +163,19 @@ public sealed class ConnectScreen : EntityScript
     // The highest rung a code-based attempt reached before failing, tracked so a punch
     // failure can be told apart from a mapping or signalling failure - see DescribeFailure.
     private NetTraversalState _peakTraversalState = NetTraversalState.Idle;
+
+    // Whether THIS process has ever made an explicit signalling choice (rendezvous
+    // or LAN) via ConfigureSignaling below. Static, not per-instance, for the same
+    // reason WhisperPrefs and NetSession.HostRoomCode are: NetworkContext's own
+    // signalling choice (NetTraversalSession::m_signalingChosen) lives for the whole
+    // process too, and outlives this screen across an Arena round trip - an
+    // instance field here would forget an earlier explicit choice on the very scene
+    // reload that most needs to remember it (see ConfigureSignaling's remarks).
+    // Known ceiling: repeated Play/Stop of the SAME editor process can leave this
+    // true while a freshly-constructed NetworkContext's own flag is false again,
+    // which very briefly hides the engine's own rendezvous default on the next Play
+    // - not a concern for a published build, which never does that.
+    private static bool s_signalingExplicit;
 
     /// <inheritdoc/>
     public override void OnAttach()
@@ -458,7 +478,7 @@ public sealed class ConnectScreen : EntityScript
 
         if (_joinElapsed >= JoinTimeoutSeconds)
         {
-            AbandonJoin($"Room {_joinTarget}: no answer after {JoinTimeoutSeconds:0} seconds");
+            AbandonJoin($"Room {_joinTarget}: {DescribeNoAnswer()}");
             return;
         }
 
@@ -545,18 +565,22 @@ public sealed class ConnectScreen : EntityScript
 
     /// <summary>
     /// Choose how candidates are exchanged, before every <see cref="StartHost"/> or
-    /// <see cref="StartJoinByCode"/>: over the local network with no server at all, or
-    /// through the rendezvous address the player supplied for a game across two networks.
+    /// <see cref="StartJoinByCode"/>: through whatever address the player typed into
+    /// <see cref="RendezvousField"/>, else this project's own
+    /// <c>network.rendezvousHost</c> default if one is configured, else the local
+    /// network with no server at all.
     /// </summary>
     /// <remarks>
     /// Neither <see cref="NetSession.BeginHostWithCode"/> nor
-    /// <see cref="NetSession.BeginJoinByCode"/> makes this choice itself - deliberately,
-    /// so that a settings screen's own default is never silently overridden by a menu that
-    /// does not know it exists. This screen's own explicit choice is exactly what a
-    /// settings-free game needs instead: whatever the player last typed into
-    /// <see cref="RendezvousField"/>, called every attempt rather than once, so clearing
-    /// the field switches straight back to LAN-only without a stale rendezvous address
-    /// from an earlier attempt this process still silently in effect.
+    /// <see cref="NetSession.BeginJoinByCode"/> makes this choice itself -
+    /// deliberately, so a project's own default is never silently overridden by a
+    /// menu that does not know it exists. This method mirrors that: a blank field
+    /// leaves the backend UNCONFIGURED rather than forcing LAN, so
+    /// <c>NetTraversalSession::SetRendezvousDefault</c> gets its one chance to apply
+    /// the project's setting - UNLESS this screen already made an explicit choice
+    /// earlier in this process (<see cref="s_signalingExplicit"/>), in which case
+    /// silence here would leave that earlier choice's address stale rather than
+    /// genuinely reverting to LAN-only, which is what clearing the field means.
     /// </remarks>
     private void ConfigureSignaling()
     {
@@ -564,11 +588,27 @@ public sealed class ConnectScreen : EntityScript
         if (rendezvous.Length > 0)
         {
             Net.UseRendezvousSignaling(rendezvous);
+            s_signalingExplicit = true;
+            return;
         }
-        else
+        if (s_signalingExplicit)
         {
+            // This screen chose Rendezvous at some earlier point in this process and
+            // the field has since been cleared - that is itself a deliberate choice
+            // ("go back to LAN-only"), not silence, so it must be forced explicitly
+            // or the stale address stays in effect (see the class remarks above on
+            // why this method exists at all).
             Net.UseLanSignaling();
+            return;
         }
+        // Neither this screen nor an earlier attempt this process has chosen
+        // anything: leave it unconfigured so EngineSettings.Network.rendezvousHost -
+        // set once in ProjectSettings.toml, needing no code and no per-player typing
+        // at all - gets its one chance to apply (NetTraversalSession::
+        // SetRendezvousDefault re-reads it on every Host/Join and only ever fills a
+        // gap, never overrides). Calling UseLanSignaling here, as this used to do
+        // unconditionally, would make that setting permanently unreachable from the
+        // very first title-screen visit of every run.
     }
 
     /// <summary>One line of status text per <see cref="NetTraversalState"/> rung, matching
@@ -599,6 +639,28 @@ public sealed class ConnectScreen : EntityScript
         if (_peakTraversalState >= NetTraversalState.Punching && !Net.RelayConfigured)
         {
             reason += " - this network needs a relay and none is configured";
+        }
+        return reason;
+    }
+
+    /// <summary>Why a code-based join timed out with nobody ever answering - as
+    /// opposed to <see cref="DescribeFailure"/>'s native Failed states, this rung has
+    /// no error to read: LAN broadcast reaching nobody on another network and a code
+    /// with nobody behind it look identical from here, both "asked, nothing came
+    /// back". Named specifically only when <c>_peakTraversalState</c> never even
+    /// reached <see cref="NetTraversalState.Punching"/> (a peer WAS heard from past
+    /// that point, so this is not why it stalled) and this screen's own rendezvous
+    /// field is blank - the one half of "is a rendezvous server configured" this
+    /// screen can actually see; ProjectSettings.toml's own network.rendezvousHost is
+    /// applied engine-side and not readable from here, so this names what IT knows
+    /// rather than overclaiming about a default it cannot see.</summary>
+    private string DescribeNoAnswer()
+    {
+        string reason = $"no answer after {JoinTimeoutSeconds:0} seconds";
+        if (_peakTraversalState < NetTraversalState.Punching && WhisperPrefs.RendezvousAddress.Length == 0)
+        {
+            reason += " - no rendezvous address is set above, so only a host on this same network can be found; " +
+                      "paste one there, or set network.rendezvousHost in ProjectSettings.toml, for internet play";
         }
         return reason;
     }
