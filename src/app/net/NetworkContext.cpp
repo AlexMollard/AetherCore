@@ -246,6 +246,7 @@ namespace aether::net
 		m_traversalSession.SetStunServer(network.stunHost, static_cast<std::uint16_t>(network.stunPort));
 		m_traversalSession.SetTurnServer(network.turnHost, static_cast<std::uint16_t>(network.turnPort), network.turnUsername,
 		        network.turnPassword, network.allowRelay);
+		m_traversalSession.SetRendezvousDefault(network.rendezvousHost, static_cast<std::uint16_t>(network.rendezvousPort));
 	}
 
 	bool NetworkContext::HostWithCode(std::string_view roomCode, std::uint16_t port, int maxConnections)

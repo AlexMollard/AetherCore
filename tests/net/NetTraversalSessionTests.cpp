@@ -38,6 +38,50 @@ TEST_CASE("Nothing is asked for before HostWithCode or JoinByCode runs")
 	CHECK_FALSE(session.JoinInProgress());
 }
 
+TEST_CASE("A configured rendezvous seeds the backend, but never overrides what the game asked for")
+{
+	// The settings cascade is re-read on EVERY HostWithCode/JoinByCode, which is
+	// AFTER a game has had its chance to choose - so a default that overrode would
+	// silently undo the game's choice on the second join of a session, and only
+	// over the internet, where it is hardest to notice.
+	SUBCASE("nothing configured stays on the rung that needs no server")
+	{
+		net::NetworkSubsystem transport;
+		net::NetTraversalSession session(transport);
+		session.SetRendezvousDefault("", 24701); // the empty default in EngineSettings
+		CHECK(session.Backend() == net::SignalingBackend::LanBroadcast);
+		CHECK(session.SignalingAddress().empty());
+	}
+
+	SUBCASE("a configured host is adopted when the game chose nothing")
+	{
+		net::NetworkSubsystem transport;
+		net::NetTraversalSession session(transport);
+		session.SetRendezvousDefault("rendezvous.example.com", 24701);
+		CHECK(session.Backend() == net::SignalingBackend::Rendezvous);
+		CHECK(session.SignalingAddress() == "rendezvous.example.com:24701");
+	}
+
+	SUBCASE("the game's own choice wins, however often settings are re-read")
+	{
+		net::NetworkSubsystem transport;
+		net::NetTraversalSession session(transport);
+		session.ConfigureSignaling(net::SignalingBackend::Rendezvous, "chosen.example.com:9000");
+		session.SetRendezvousDefault("configured.example.com", 24701);
+		session.SetRendezvousDefault("configured.example.com", 24701); // as a second join would
+		CHECK(session.SignalingAddress() == "chosen.example.com:9000");
+	}
+
+	SUBCASE("a game that deliberately chose LAN is not dragged onto a rendezvous")
+	{
+		net::NetworkSubsystem transport;
+		net::NetTraversalSession session(transport);
+		session.ConfigureSignaling(net::SignalingBackend::LanBroadcast, "");
+		session.SetRendezvousDefault("configured.example.com", 24701);
+		CHECK(session.Backend() == net::SignalingBackend::LanBroadcast);
+	}
+}
+
 TEST_CASE("A malformed room code fails before anything is bound or published")
 {
 	net::NetworkSubsystem transport;

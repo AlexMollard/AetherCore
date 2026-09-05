@@ -78,6 +78,27 @@ namespace aether::net
 		// builds its own channel) plugs into without this class knowing it exists.
 		void ConfigureSignalingChannel(ISignalingChannel& channel);
 
+		// Seeds the rendezvous backend from configuration (EngineSettings::Network::
+		// rendezvousHost) WITHOUT overriding a game that already chose a backend
+		// itself. An empty host leaves the default alone, which is LAN broadcast -
+		// the one rung that needs no server anywhere.
+		void SetRendezvousDefault(std::string host, std::uint16_t port);
+
+		// Which backend the next attempt will actually use, and the address it will
+		// use it with. Exposed because "how are we even trying to reach them" is
+		// something a menu legitimately narrates - and because the precedence
+		// SetRendezvousDefault implements is otherwise unobservable, so it could
+		// regress silently.
+		[[nodiscard]] SignalingBackend Backend() const
+		{
+			return m_backend;
+		}
+
+		[[nodiscard]] const std::string& SignalingAddress() const
+		{
+			return m_signalingAddress;
+		}
+
 		// Overrides the STUN server discovery asks for this socket's public endpoint.
 		// Defaults to a well-known public one (see the .cpp) so ConfigureSignaling
 		// alone is enough to punch across the internet. An empty host disables
@@ -152,6 +173,9 @@ namespace aether::net
 		bool m_allowRelay = false;
 
 		SignalingBackend m_backend = SignalingBackend::LanBroadcast;
+		// Whether a caller stated a backend explicitly, which SetRendezvousDefault
+		// must not overwrite. See its comment for the precedence order.
+		bool m_signalingChosen = false;
 		std::string m_signalingAddress;
 		bool m_useInjectedChannel = false;
 		std::unique_ptr<ISignalingChannel> m_ownedSignaling;

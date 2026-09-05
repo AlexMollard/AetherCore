@@ -98,6 +98,8 @@ namespace aether
 		        {"network.turnUsername", {.description = "TURN long-term credential username."}},
 		        {"network.turnPassword", {.description = "TURN long-term credential password."}},
 		        {"network.allowRelay", {.description = "Permit falling back to the TURN relay when a direct or punched connection fails. Off by default: relaying routes game traffic through a third party."}},
+		        {"network.rendezvousHost", {.description = "Rendezvous server that trades connect candidates with a peer on another network, so neither player forwards a port. Empty means LAN play only. It carries candidate addresses, never game traffic - run tools/rendezvous anywhere with a public address."}},
+		        {"network.rendezvousPort", {.description = "Rendezvous server port.", .minValue = 1.0, .maxValue = 65535.0}},
 		});
 
 		template<class T>

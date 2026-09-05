@@ -205,6 +205,15 @@ namespace aether
 			std::string turnUsername;
 			std::string turnPassword;
 			bool allowRelay = false;
+
+			// Rendezvous server used to trade connect candidates with the other peer
+			// when they are not on this network. Like turnHost there is no default,
+			// because somebody has to run the box - but unlike a relay it costs almost
+			// nothing to run and never sees game traffic: it forwards a few hundred
+			// bytes of candidate addresses per join and forgets the room. Empty means
+			// LAN play only, which needs no server at all. See tools/rendezvous/.
+			std::string rendezvousHost;
+			int rendezvousPort = 24701;
 		} network;
 	};
 
@@ -283,6 +292,8 @@ namespace aether
 		f("network.turnUsername", settings.network.turnUsername);
 		f("network.turnPassword", settings.network.turnPassword);
 		f("network.allowRelay", settings.network.allowRelay);
+		f("network.rendezvousHost", settings.network.rendezvousHost);
+		f("network.rendezvousPort", settings.network.rendezvousPort);
 	}
 
 	// What a settings key means, what it will accept, and whether it needs a restart -
@@ -459,7 +470,8 @@ namespace aether
 		        || key == "graphics.anisotropy" || key == "graphics.imguiViewports" || key == "graphics.uiScale"
 		        || key == "app.targetFps" || key == "app.idleFps" || key == "app.idleAfterSeconds" || key == "app.autosaveSeconds"
 		        || key == "network.stunHost" || key == "network.stunPort" || key == "network.turnHost" || key == "network.turnPort"
-		        || key == "network.turnUsername" || key == "network.turnPassword" || key == "network.allowRelay")
+		        || key == "network.turnUsername" || key == "network.turnPassword" || key == "network.allowRelay"
+		        || key == "network.rendezvousHost" || key == "network.rendezvousPort")
 		{
 			return SettingsHome::User;
 		}

@@ -65,6 +65,7 @@ namespace aether::net
 		m_useInjectedChannel = false;
 		m_ownedSignaling.reset();
 		m_signaling = nullptr;
+		m_signalingChosen = true;
 	}
 
 	void NetTraversalSession::ConfigureSignalingChannel(ISignalingChannel& channel)
@@ -72,6 +73,23 @@ namespace aether::net
 		m_ownedSignaling.reset();
 		m_signaling = &channel;
 		m_useInjectedChannel = true;
+		m_signalingChosen = true;
+	}
+
+	void NetTraversalSession::SetRendezvousDefault(std::string host, std::uint16_t port)
+	{
+		// A default, never an override. The settings cascade is read on every
+		// HostWithCode/JoinByCode - AFTER a game has had its chance to call
+		// ConfigureSignaling - so applying this unconditionally would silently undo
+		// the game's own choice on the second join of a session. Precedence, widest
+		// to narrowest: what the game asked for, else what the machine is configured
+		// for, else LAN broadcast, which needs no server at all.
+		if (m_signalingChosen || host.empty())
+		{
+			return;
+		}
+		m_backend = SignalingBackend::Rendezvous;
+		m_signalingAddress = host + ":" + std::to_string(port);
 	}
 
 	void NetTraversalSession::SetStunServer(std::string host, std::uint16_t port)
