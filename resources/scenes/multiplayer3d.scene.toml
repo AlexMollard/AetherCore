@@ -1,10 +1,13 @@
 # AetherCore scene - multiplayer 3D project template: the Lobby.
 #
 # This is where a player types a room code or presses H to host one, before ever
-# touching the arena. There is no scene-authored UI here - MultiplayerLobby.cs builds
-# its own canvas at OnAttach, the same way NetSessionDirector's own status line does -
-# so this file stays a camera and one entity. The connect ceremony is identical to the
-# 2D template's Lobby (same MultiplayerLobby.cs, shared verbatim); only the camera
+# touching the arena. MultiplayerLobby.cs is a thin subclass of the SDK's
+# NetConnectMenu - the room-code/traversal state machine lives there, not in this
+# project - and only builds its own canvas at OnAttach, the same way
+# NetSessionDirector's own status line does, so this file stays a camera and one
+# entity. See MultiplayerLobby.cs's own file comment for why the widgets are built
+# there instead of authored here. The connect ceremony is identical to the 2D
+# template's Lobby (same MultiplayerLobby.cs, shared verbatim); only the camera
 # projection differs, to match this project's perspective default.
 #
 # The camera exists only so a startup scene with no gameplay in it still has one -
