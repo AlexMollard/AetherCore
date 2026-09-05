@@ -17,6 +17,12 @@ namespace aether::net
 	struct RelevancySettings
 	{
 		float radius = 60.f;
+		// Hysteresis for the leave half only: an entity already relevant to a
+		// connection stays relevant until it is radius * (1 + exitMargin) away, so an
+		// entity (or viewer) oscillating across the boundary does not destroy and
+		// re-Spawn itself client-side on every crossing. Entry stays at `radius`.
+		// Zero restores the hard edge both ways.
+		float exitMargin = 0.1f;
 		bool enabled = true;
 	};
 
@@ -39,9 +45,11 @@ namespace aether::net
 	[[nodiscard]] std::vector<Entity> RelevantWithTransformless(World& world, ConnectionId viewer, glm::vec3 viewerPos,
 	        const RelevancySettings& settings);
 
-	// Where `viewer` sees from: the first entity it owns that has a transform. A
-	// connection that owns nothing positioned yet views from the origin, which only
-	// affects what it receives, never what it may own.
+	// Where `viewer` sees from: the owned entity with the LOWEST entity id that
+	// has a transform - deterministic, because ECS iteration order is not, and an
+	// anchor that flaps between owned entities is relevancy churn for everything
+	// near either radius. A connection that owns nothing positioned yet views from
+	// the origin, which only affects what it receives, never what it may own.
 	//
 	// Lives here rather than on either network system because BOTH must agree on it:
 	// the host's join replay filters by relevancy from this position and every send

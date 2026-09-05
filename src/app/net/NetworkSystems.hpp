@@ -13,9 +13,18 @@
 #include "net/NetTypes.hpp"
 #include "scene/Entity.hpp"
 #include "scene/System.hpp"
-
 namespace aether::net
 {
+	// How many NetMessage::Rpc packets one connection may land on a host per
+	// second. A Server RPC is the one inbound packet that costs the host real work
+	// per call - a script scan, a handle lookup, a managed reflection dispatch -
+	// while costing the sender almost nothing, and a handler that relays via a
+	// Multicast turns each accepted call into a packet per connection. This is a
+	// cost ceiling rather than a gameplay knob: far past any honest game's RPC
+	// traffic, and only ever consulted on the host, whose cost is the one being
+	// defended.
+	inline constexpr int kMaxInboundRpcsPerSecond = 64;
+
 	class NetworkContext;
 	class SnapshotCache;
 
@@ -56,6 +65,21 @@ namespace aether::net
 		// would otherwise resolve to a dangling handle that an inbound packet hands
 		// straight to try_get.
 		void PruneDeadBindings(World& world);
+
+		// One admitted-Rpc-per-window question for `peer`, host side only - see
+		// kMaxInboundRpcsPerSecond. A fixed window rather than anything cleverer: the
+		// only property that matters is that a stale entry can never outlive its
+		// window, so a connection id reused after a Stop/StartHost cycle inherits at
+		// most one window's worth of suppression and then a clean slate.
+		bool AdmitInboundRpc(ConnectionId peer);
+
+		struct RpcWindow
+		{
+			float start = 0.f;
+			int admitted = 0;
+		};
+
+		std::unordered_map<ConnectionId, RpcWindow> m_rpcWindows;
 
 		// Snapshot fields are written straight onto TransformComponent by
 		// ApplySnapshot, which is right for the authoritative value and wrong for
@@ -138,6 +162,9 @@ namespace aether::net
 		}
 
 	private:
+		[[nodiscard]] bool UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
+		        const glm::vec3 viewerPos, std::vector<Entity>& relevant, SnapshotCache& cache);
+
 		// Diffs `relevant` for `connection` against what was relevant to it a moment
 		// ago. An entity that fell out (still alive elsewhere, just not bound here
 		// any more - a destroyed one was already handled by Despawn) gets a
@@ -156,8 +183,6 @@ namespace aether::net
 		// Returns whether anything was admitted this tick, which is what makes the
 		// snapshot that follows a full resync rather than a diff - and therefore what
 		// decides the channel it goes out on.
-		[[nodiscard]] bool UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
-		        const std::vector<Entity>& relevant, SnapshotCache& cache);
 
 		// A client's entire send path: what it owns, once, to the host. Separate from
 		// Update's host loop rather than folded into it because the two share no

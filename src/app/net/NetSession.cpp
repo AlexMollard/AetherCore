@@ -6,6 +6,22 @@ namespace aether::net
 {
 	void NetSession::Bind(std::uint32_t netId, Entity entity)
 	{
+		// Both directions are REPLACED, not merged. Binding over an existing pair
+		// used to strand the loser's entry in the opposite map: NetIdFor would keep
+		// returning an id that EntityFor resolved to somebody else, and a later
+		// unbind of either left the other dangling until the receive system's sweep
+		// noticed. No production caller can reach this (spawn ids are never reused
+		// and ApplySpawn unbinds a collision first), but Bind is public API and one
+		// wrong call away.
+		if (const auto forward = m_netIdByEntity.find(entity.id); forward != m_netIdByEntity.end()
+		        && forward->second != netId)
+		{
+			m_byNetId.erase(forward->second);
+		}
+		if (const auto reverse = m_byNetId.find(netId); reverse != m_byNetId.end() && reverse->second.id != entity.id)
+		{
+			m_netIdByEntity.erase(reverse->second.id);
+		}
 		m_byNetId[netId] = entity;
 		m_netIdByEntity[entity.id] = netId;
 	}

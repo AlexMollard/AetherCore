@@ -170,12 +170,52 @@ namespace aether::net
 		}
 		for (const std::uint32_t netId: dead)
 		{
+			// A binding whose entity died on the HOST is a despawn nobody announced.
+			// ReleaseForDespawn is the only other Despawn broadcaster and it runs only
+			// when the game went through Net.Despawn; every other destruction route -
+			// a scene load, a script's Entity.Destroy, a bare DestroyHierarchy -
+			// reaches exactly here having said nothing. Without this broadcast every
+			// client keeps a frozen replica for the rest of the session, and relevancy
+			// cannot repair it: the leave loop skips an unbound netId on the
+			// assumption Despawn already told that connection, which is precisely the
+			// assumption a silent death breaks.
+			//
+			// Spawned ids only (>= kSpawnNetIdBase). A scene-placed entity's existence
+			// is governed by the scene file every peer derives it from, not by the
+			// session: despawning it here would delete it on today's clients while the
+			// next joiner re-derives it from the scene, permanently diverging the two.
+			// The same scenePlaced split Stop, OnDisconnected and ClientCanRecreate
+			// already make; the id spaces are disjoint by construction (NetSession).
+			if (m_context.IsHost() && netId >= kSpawnNetIdBase)
+			{
+				m_context.Transport().Broadcast(kChannelReliable, true, EncodeDespawn(netId));
+			}
 			m_context.Session().Unbind(netId);
 			m_context.ForgetNetId(netId);
 			m_remote.erase(netId);
 		}
 	}
 
+	// See the declaration and kMaxInboundRpcsPerSecond. Here rather than in
+	// ApplyRpc because the budget is about what a SENDER is allowed to cost, not
+	// about the call: the same packet is unbudgeted on a client, where the sender
+	// is the host.
+	bool NetworkReceiveSystem::AdmitInboundRpc(ConnectionId peer)
+	{
+		const float now = m_context.Now();
+		RpcWindow& window = m_rpcWindows[peer];
+		if (now - window.start >= 1.f)
+		{
+			window.start = now;
+			window.admitted = 0;
+		}
+		if (window.admitted >= kMaxInboundRpcsPerSecond)
+		{
+			return false;
+		}
+		++window.admitted;
+		return true;
+	}
 	void NetworkReceiveSystem::OnConnected(World& world, ConnectionId peer)
 	{
 		NetworkContext& context = m_context;
@@ -292,6 +332,11 @@ namespace aether::net
 
 		context.Session().RemoveConnection(peer);
 		context.DropCacheFor(peer);
+		// The departed connection's RPC window goes with it: a connection id is
+		// reusable after a Stop/StartHost cycle, and the fresh peer must not inherit
+		// the old one's spent budget (the fixed window already bounds any leak here
+		// to one second, so this is hygiene rather than correctness).
+		m_rpcWindows.erase(peer);
 		AE_INFO(LogCategory::App, "Net: connection {} left ({} entity/entities despawned, {} released)", peer,
 		        owned.size(), released.size());
 	}
@@ -373,6 +418,15 @@ namespace aether::net
 			{
 				return;
 			}
+			if (HoldingReplication(context))
+			{
+				// The same principle as Snapshot's guard, for the one message that
+				// DESTROYS rather than writes: a despawn naming an id this peer happens to
+				// have bound would tear a hole in whatever world it is standing in, and
+				// the id spaces are only disjoint by derivation, not by guarantee. The
+				// host resends everything this client missed the moment it arrives.
+				return;
+			}
 			ByteReader reader{payload};
 			if (const std::optional<std::uint32_t> netId = DecodeDespawn(reader))
 			{
@@ -388,6 +442,12 @@ namespace aether::net
 			// itself (or, worse, could try to tell the host) to forget something.
 			if (context.IsHost())
 			{
+				return;
+			}
+			if (HoldingReplication(context))
+			{
+				// A leave destroys exactly like a despawn does (ApplyRelevancyLeave),
+				// so it is refused for exactly the same reason - see Despawn above.
 				return;
 			}
 			ByteReader reader{payload};
@@ -408,6 +468,17 @@ namespace aether::net
 			// the call and not of the message kind. Its two gates (direction, then
 			// ownership) are what make the inbound half safe: this is the only route
 			// by which a client can affect host state at all.
+			//
+			// Bounded BEFORE any of that work runs: each accepted Server call costs
+			// the host a reflection dispatch (and a relay fan-out if the handler
+			// multicasts), so a peer pumping its own legitimately-owned entities at
+			// line rate would spend the host's core to save its own. Dropped silently,
+			// like every other refusal in this switch - a drop reason is a response a
+			// flooder would only read as "keep going".
+			if (context.IsHost() && !AdmitInboundRpc(peer))
+			{
+				return;
+			}
 			ByteReader reader{payload};
 			const std::optional<RpcMessage> msg = DecodeRpc(reader);
 			if (!msg.has_value())
@@ -654,14 +725,6 @@ namespace aether::net
 	//
 	// The second half is what makes "zero correction on the owned entity" true on the
 	// wire rather than only in the receiver.
-	namespace
-	{
-		// Bounds how long a client can hold a stale value for an entity that has stopped
-		// changing, when the diff carrying its last update was dropped. Long enough that the
-		// extra full state send is negligible beside the per-tick diffs, short enough that a
-		// desync is not something a player experiences.
-		constexpr float kResyncIntervalSeconds = 1.0f;
-	} // namespace
 
 	void NetworkSendSystem::Update(World& world, float dt)
 	{
@@ -701,7 +764,7 @@ namespace aether::net
 			nextSend = now + 1.f / rate;
 
 			const glm::vec3 viewerPos = ViewerPosition(world, connection);
-			const std::vector<Entity> relevant = RelevantWithTransformless(world, connection, viewerPos,
+			std::vector<Entity> relevant = RelevantWithTransformless(world, connection, viewerPos,
 			        context.Relevancy());
 			SnapshotCache& cache = context.CacheFor(connection);
 
@@ -735,7 +798,8 @@ namespace aether::net
 				cache.Clear();
 			}
 
-			const bool admitted = UpdateRelevancyMembership(world, context, connection, relevant, cache) || periodicResync;
+			const bool admitted = UpdateRelevancyMembership(world, context, connection, viewerPos, relevant, cache)
+			        || periodicResync;
 
 			const std::vector<Entity> replicated = ExceptOwnedBy(world, relevant, connection);
 
@@ -815,17 +879,30 @@ namespace aether::net
 		}
 		SnapshotCache& cache = context.CacheFor(kInvalidConnection);
 
+		// The same bound the host's per-connection loop gives itself: diffs are
+		// unreliable and BuildSnapshot records every value as sent, so losing the
+		// LAST update before an owned entity goes idle leaves the host wrong about
+		// it forever - a player who stops walking is the common case. Forgetting only
+		// the cache makes the next upload a full state write, and sending that tick
+		// reliable is the same "a resync is not a diff, so it must not be droppable"
+		// rule as the admission path above.
+		float& nextResync = m_nextResyncByConnection[kInvalidConnection];
+		const bool periodicResync = now >= nextResync;
+		if (periodicResync)
+		{
+			nextResync = now + kResyncIntervalSeconds;
+			cache.Clear();
+		}
+
 		const std::vector<std::byte> snapshot = BuildSnapshot(world, context.Schema(), context.Catalog(),
 		        context.Session(), cache, owned);
 		if (!snapshot.empty())
 		{
-			// Unreliable for the same reason the host's diffs are: a dropped upload is
-			// superseded by the next one 50 ms later, and a retransmitted position is
-			// stale by the time it lands. There is no admitted/resync case on this side
-			// - a client never spawns anything, so nothing is ever forgotten and
-			// re-sent in full.
-			context.Transport().Send(kInvalidConnection, kChannelSnapshot, false,
-			        NetworkContext::Frame(NetMessage::Snapshot, snapshot));
+			// Unreliable between resyncs for the same reason the host's diffs are: a
+			// dropped upload is superseded by the next one 50 ms later, and a
+			// retransmitted position is stale by the time it lands.
+			context.Transport().Send(kInvalidConnection, periodicResync ? kChannelReliable : kChannelSnapshot,
+			        periodicResync, NetworkContext::Frame(NetMessage::Snapshot, snapshot));
 		}
 
 		if (const ScriptFieldBridge* bridge = context.FieldBridge())
@@ -872,34 +949,33 @@ namespace aether::net
 		return kept;
 	}
 
-	bool NetworkSendSystem::UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
-	        const std::vector<Entity>& relevant, SnapshotCache& cache)
+bool NetworkSendSystem::UpdateRelevancyMembership(World& world, NetworkContext& context, ConnectionId connection,
+        const glm::vec3 viewerPos, std::vector<Entity>& relevant, SnapshotCache& cache)
+{
+	std::unordered_set<std::uint32_t> currentIds;
+	currentIds.reserve(relevant.size());
+	for (const Entity entity: relevant)
 	{
-		std::unordered_set<std::uint32_t> currentIds;
-		currentIds.reserve(relevant.size());
-		for (const Entity entity: relevant)
+		const std::uint32_t netId = context.Session().NetIdFor(entity);
+		if (netId != 0)
 		{
-			const std::uint32_t netId = context.Session().NetIdFor(entity);
-			if (netId != 0)
-			{
-				currentIds.insert(netId);
-			}
+			currentIds.insert(netId);
 		}
+	}
 
-		// No first-tick special case. A connection starts with an empty "previous"
-		// set, which is exactly true: OnConnected's replay is filtered through the
-		// SAME relevancy call this tick makes, so the only entities the joiner has are
-		// ones the re-entry loop below would send anyway - and ApplySpawn on a net id
-		// the client is already bound to is a documented no-op. The alternative, a
-		// suppressed first tick, only holds while the replay and the tick agree about
-		// what is relevant, and they stop agreeing the moment the joiner acquires an
-		// owned entity between the two (its viewer position moves, so the sets differ)
-		// - at which point the difference is silently never sent.
-		std::unordered_set<std::uint32_t>& previousIds = m_relevantNetIds[connection];
+	std::unordered_set<std::uint32_t>& previousIds = m_relevantNetIds[connection];
 
-		// Left: still bound (alive), but no longer in this connection's current set. A
-		// netId no longer bound at all was destroyed outright - Despawn already told
-		// this connection about that, so there is nothing left to say here.
+	// HYSTERESIS, before the leave loop runs: an entity that dropped out of the
+	// hard `radius` but is still within `radius * (1 + exitMargin)` is re-admitted
+	// - membership and state keep flowing, so an entity (or viewer) oscillating
+	// across the boundary is not destroyed and re-Spawned client-side on every
+	// crossing. Entry stays at `radius`; only the exit moves. Re-admitted ids are
+	// in both sets, so the enter loop below skips them (no Spawn - the client
+	// still has the entity) and the leave loop skips them (no destroy).
+	if (context.Relevancy().exitMargin > 0.f)
+	{
+		const float exit = context.Relevancy().radius * (1.f + context.Relevancy().exitMargin);
+		const float exitSq = exit * exit;
 		for (const std::uint32_t netId: previousIds)
 		{
 			if (currentIds.contains(netId))
@@ -909,8 +985,43 @@ namespace aether::net
 			const Entity entity = context.Session().EntityFor(netId);
 			if (!entity.IsValid())
 			{
-				continue;
+				continue; // destroyed outright; Despawn or the prune sweep owns it
 			}
+			const auto* transform = world.TryGet<TransformComponent>(entity);
+			if (transform == nullptr)
+			{
+				continue; // transformless: never leaves by distance in the first place
+			}
+			const glm::vec3 d = glm::vec3(transform->localToWorld[3]) - viewerPos;
+			if (glm::dot(d, d) > exitSq)
+			{
+				continue; // genuinely out: the leave loop below handles it
+			}
+			currentIds.insert(netId);
+			relevant.push_back(entity);
+		}
+	}
+
+	// No first-tick special case: a connection starts with an empty "previous"
+	// set, which is exactly true - OnConnected's replay is filtered through the
+	// SAME relevancy call this tick makes.
+	//
+	// Left: still bound (alive), but no longer in this connection's current set -
+	// and, after the hysteresis pass above, beyond the exit radius. A netId no
+	// longer bound at all was destroyed outright - Despawn already told this
+	// connection about that (or the prune sweep just did), so there is nothing
+	// left to say here.
+	for (const std::uint32_t netId: previousIds)
+	{
+		if (currentIds.contains(netId))
+		{
+			continue;
+		}
+		const Entity entity = context.Session().EntityFor(netId);
+		if (!entity.IsValid())
+		{
+			continue;
+		}
 			const auto* identity = world.TryGet<NetworkIdentity>(entity);
 			if (identity == nullptr || !ClientCanRecreate(*identity))
 			{

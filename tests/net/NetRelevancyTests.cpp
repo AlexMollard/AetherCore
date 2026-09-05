@@ -127,3 +127,40 @@ TEST_CASE("Transformless entities bypass relevancy even at zero radius")
 	// there is no distance at which shared game state stops mattering.
 	CHECK(Contains(net::RelevantWithTransformless(w, 9, glm::vec3{1000.f}, settings), gameState));
 }
+
+TEST_CASE("ViewerPosition anchors deterministically, whatever order the pool is walked in")
+{
+	// A connection owning several positioned entities must view from ONE of them
+	// every frame: "whichever the view yields first" flaps when ECS iteration
+	// order shifts, and a flapping anchor is leave/re-enter churn for boundary
+	// entities on every flip. Identities are emplaced in the OPPOSITE order to
+	// entity creation here, so pool order and id order disagree.
+	//
+	// The rule is the lowest Entity::id, which is NOT creation order: an id carries
+	// entt's version bits, and World's constructor retires slot 0, so the first
+	// entity created recycles that slot with a bumped version and outranks the
+	// second numerically. Asserting "the first one created" would pin that
+	// incidental layout; what the anchor owes its callers is that the SAME entity
+	// wins every call regardless of walk order, so that is what this pins.
+	World w;
+	const Entity a = w.Create();
+	const Entity b = w.Create();
+	w.Emplace<TransformComponent>(a).localToWorld
+	        = aether::ComposeTransform({10.f, 0.f, 0.f}, glm::vec3{0.f}, glm::vec3{1.f});
+	w.Emplace<TransformComponent>(b).localToWorld
+	        = aether::ComposeTransform({90.f, 0.f, 0.f}, glm::vec3{0.f}, glm::vec3{1.f});
+	auto& later = w.Emplace<net::NetworkIdentity>(b); // pool-first, whichever id it holds
+	later.owner = 7;
+	auto& earlier = w.Emplace<net::NetworkIdentity>(a);
+	earlier.owner = 7;
+
+	const float expected = a.id < b.id ? 10.f : 90.f;
+	const glm::vec3 view = net::ViewerPosition(w, 7);
+	CHECK(view.x == doctest::Approx(expected)); // the lower id, not the pool-first
+	CHECK(view.y == doctest::Approx(0.f));
+	CHECK(view.z == doctest::Approx(0.f));
+
+	// Same answer on a second call: the anchor cannot drift between the join replay
+	// and the send tick, which is the churn this function exists to prevent.
+	CHECK(net::ViewerPosition(w, 7).x == doctest::Approx(expected));
+}

@@ -19,6 +19,7 @@
 #include "net/NetworkContext.hpp"
 #include "net/NetworkSystems.hpp"
 #include "scene/Components.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
@@ -620,4 +621,96 @@ TEST_CASE("A newly joined connection's first send is not blocked by another conn
 	        },
 	        500);
 	CHECK(moved);
+}
+
+TEST_CASE("A host entity destroyed outside Net.Despawn is still despawned on the client")
+{
+	// THE GHOST. ReleaseForDespawn was the only Despawn broadcaster, so a host entity
+	// destroyed by any other route - a scene load, a script's Entity.Destroy, a bare
+	// DestroyHierarchy, as here - told nobody: PruneDeadBindings quietly dropped the
+	// binding and every client kept a frozen replica until it disconnected. The sweep
+	// is the one point all of those routes funnel through, so the despawn belongs
+	// there; Net.Despawn itself already unbinds before the entity dies and never
+	// reaches it.
+	const PrefabFixture prefabs;
+	Pair p(24738);
+
+	const Entity hostEntity = p.host.context.SpawnPrefab(p.host.world, kPrefab, {3.f, 0.f, 0.f},
+	        aether::net::kInvalidConnection);
+	REQUIRE(hostEntity.IsValid());
+	const std::uint32_t netId = p.host.world.TryGet<aether::net::NetworkIdentity>(hostEntity)->netId;
+
+	REQUIRE(PumpUntil({&p.host, &p.client}, [&] { return p.client.context.Session().EntityFor(netId).IsValid(); }));
+	const Entity clientEntity = p.client.context.Session().EntityFor(netId);
+	REQUIRE(p.client.world.GetRegistry().valid(World::ToEntt(clientEntity)));
+
+	// Destruction by a route Net.Despawn never sees. The host's receive Update is
+	// what sweeps the dead binding, and pumping both ends is what delivers whatever
+	// it broadcasts to the real client on the other side of the socket.
+	ecs::DestroyHierarchy(p.host.world, hostEntity);
+
+	REQUIRE(PumpUntil({&p.host, &p.client},
+	        [&] { return !p.client.world.GetRegistry().valid(World::ToEntt(clientEntity)); }));
+	CHECK_FALSE(p.client.context.Session().EntityFor(netId).IsValid());
+	CHECK(aether::net::test::CountIdentities(p.client.world) == 0);
+}
+
+TEST_CASE("A client periodically resends its full state to the host reliably")
+{
+	// The upload path's own failure model: diffs go unreliably and BuildSnapshot
+	// records every value as sent, so dropping the LAST update before an owned
+	// entity goes idle desyncs the host's copy of it forever - the host's
+	// per-connection loop already bounds exactly that with a periodic full resend,
+	// and a client's upload is the same machinery pointed the other way. Observable
+	// on the wire as a Snapshot arriving on the RELIABLE channel once per interval
+	// while the entity sits perfectly still: between resyncs a still entity sends
+	// nothing at all, and nothing else this peer emits is a reliable Snapshot.
+	constexpr std::uint16_t kPort = 24740;
+	const PrefabFixture prefabs;
+
+	Node host;
+	Node client;
+	REQUIRE(host.context.StartHost(host.world, kPort, 4));
+	REQUIRE(client.context.StartClient(client.world, "127.0.0.1", kPort));
+	REQUIRE(PumpUntil({&host, &client}, [&] { return client.context.IsConnected(); }));
+
+	aether::net::ConnectionId peer = aether::net::kInvalidConnection;
+	for (const aether::net::ConnectionId conn: host.context.Session().Connections())
+	{
+		peer = conn;
+	}
+	REQUIRE(peer != aether::net::kInvalidConnection);
+
+	// The client's own entity: host-spawned (so both ends bind the same id), owned
+	// by the joiner, and then never touched again.
+	const Entity player = host.context.SpawnPrefab(host.world, kPrefab, {0.f, 0.f, 0.f}, peer);
+	REQUIRE(player.IsValid());
+	const std::uint32_t netId = host.world.TryGet<aether::net::NetworkIdentity>(player)->netId;
+	REQUIRE(PumpUntil({&host, &client}, [&] { return client.context.Session().EntityFor(netId).IsValid(); }));
+
+	aether::net::NetworkSendSystem clientSend(client.context);
+	client.context.SetSendRateHz(1'000'000.f); // pacing is not what this case tests
+
+	// Two reliable Snapshots - the first send (the cache starts empty) and the first
+	// periodic resend a second later - inside a window that cannot contain a third
+	// interval by accident.
+	int reliableSnapshots = 0;
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(1300);
+	while (std::chrono::steady_clock::now() < deadline && reliableSnapshots < 2)
+	{
+		clientSend.Update(client.world, 0.f);
+		host.receive.Update(host.world, 0.f);
+		client.receive.Update(client.world, 0.f);
+		for (const aether::net::NetEvent& event: host.context.Transport().Events())
+		{
+			if (event.kind == aether::net::NetEvent::Kind::Data && event.channel == aether::net::kChannelReliable
+			        && !event.data.empty()
+			        && event.data[0] == std::byte{static_cast<std::uint8_t>(aether::net::NetMessage::Snapshot)})
+			{
+				++reliableSnapshots;
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	CHECK(reliableSnapshots >= 2);
 }

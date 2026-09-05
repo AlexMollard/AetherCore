@@ -5,6 +5,20 @@
 
 using namespace aether;
 
+namespace aether::net
+{
+	// The friend NetSession names: stages the private allocator counters for the
+	// exhaustion cases, which the public API would need ~4.3 billion calls to
+	// reach. Test-only by design - a public "set the counter" would be a footgun.
+	struct NetSessionTestPeer
+	{
+		static void SetNextNetId(NetSession& session, std::uint32_t value)
+		{
+			session.m_nextNetId = value;
+		}
+	};
+} // namespace aether::net
+
 TEST_CASE("NetSession allocates monotonic ids and maps them both ways")
 {
 	net::NetSession session;
@@ -57,6 +71,49 @@ TEST_CASE("Unbinding removes both directions")
 
 	CHECK_FALSE(session.EntityFor(id).IsValid());
 	CHECK(session.NetIdFor(e) == 0);
+}
+
+TEST_CASE("The spawn id space refuses to wrap")
+{
+	// The mirror of AllocateSceneNetId's exhaustion guard, for the spawn half: past
+	// UINT32_MAX the counter would wrap into 0 - which every decoder reads as "no
+	// id" - and then walk up through the scene-placed space the split exists to
+	// keep disjoint. The staged counter stands in for the ~4.3 billion allocations
+	// the genuine article would take.
+	net::NetSession session;
+	aether::net::NetSessionTestPeer::SetNextNetId(session, 0xFFFF'FFFFu);
+
+	CHECK(session.AllocateNetId() == 0xFFFF'FFFFu); // the last real id is still handed out
+	CHECK(session.AllocateNetId() == 0u); // past the ceiling: refuse, do not wrap
+	CHECK(session.AllocateNetId() == 0u); // and never "recover" into the scene-placed space
+}
+
+TEST_CASE("Rebinding an id or an entity replaces the old pair rather than stranding it")
+{
+	// Bind is public API; a second binding for an id that already names another
+	// entity (or an entity that already carries another id) used to leave the
+	// loser's reverse entry live - NetIdFor then answered with an id EntityFor
+	// resolved to somebody else.
+	net::NetSession session;
+	World w;
+	const Entity a = w.Create();
+	const Entity b = w.Create();
+
+	// Same id, new entity: `a` must stop carrying net id 1.
+	session.Bind(1, a);
+	session.Bind(1, b);
+	CHECK(session.EntityFor(1) == b);
+	CHECK(session.NetIdFor(a) == 0u);
+
+	// Same entity, new id: id 1 must stop resolving to `b`.
+	session.Bind(2, b);
+	CHECK(session.EntityFor(1).IsValid() == false);
+	CHECK(session.NetIdFor(b) == 2u);
+
+	// Rebinding the identical pair is a no-op, not an erase of itself.
+	session.Bind(2, b);
+	CHECK(session.EntityFor(2) == b);
+	CHECK(session.NetIdFor(b) == 2u);
 }
 
 TEST_CASE("An unknown net id resolves to an invalid entity rather than a stale one")

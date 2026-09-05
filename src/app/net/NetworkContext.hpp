@@ -40,6 +40,16 @@ namespace aether::net
 	inline constexpr std::string_view kReasonServerFull = "Server is full";
 	inline constexpr std::string_view kReasonHostClosed = "Host closed the session";
 
+	// How long a peer may hold a stale value for an entity that has stopped
+	// changing, when the diff carrying its last update was dropped: long enough that
+	// the extra full state send is negligible beside the per-tick diffs, short enough
+	// that a desync is not something a player experiences. Bounds BOTH directions -
+	// the host's per-connection periodic resend and a client's upload of what it owns
+	// (see NetworkSendSystem) - and is also the floor on how often a connection may
+	// ASK for a resync, so a ClientReady looped at line rate cannot pin the host into
+	// replaying the whole world every send tick (see RequestResync).
+	inline constexpr float kResyncIntervalSeconds = 1.0f;
+
 	// The one live networking object in a running app: the transport, the session,
 	// the replication schema they share, and the tuning both network systems read.
 	//
@@ -285,6 +295,7 @@ namespace aether::net
 		{
 			m_caches.erase(connection);
 			m_resyncRequests.erase(connection);
+			m_lastResyncAt.erase(connection);
 		}
 
 		// Net ids are never reused, so a stale entry is only wasted memory - but a
@@ -554,6 +565,13 @@ namespace aether::net
 		// on either peer, precisely so there is nothing that can grow or be applied to
 		// the wrong world later.
 		std::unordered_set<ConnectionId> m_resyncRequests;
+
+		// When each connection last had a ClientReady HONOURED, so the request set
+		// cannot be repopulated faster than the resyncs it triggers can be worth -
+		// see RequestResync. Same lifetime as m_resyncRequests: dropped per
+		// connection and emptied by Stop, because a Stop/StartHost cycle can hand a
+		// reused peer id a stale floor.
+		std::unordered_map<ConnectionId, float> m_lastResyncAt;
 
 		std::chrono::steady_clock::time_point m_epoch = std::chrono::steady_clock::now();
 

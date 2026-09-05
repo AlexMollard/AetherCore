@@ -228,6 +228,8 @@ namespace aether::net
 		m_session.Clear();
 		m_caches.clear();
 		m_resyncRequests.clear();
+		m_lastResyncAt.clear();
+		m_traversalHostSetupPending = false;
 	}
 
 	void NetworkContext::ConfigureTraversalFromSettings()
@@ -344,6 +346,30 @@ namespace aether::net
 		AE_INFO(LogCategory::App, "Net: ready for replication - asked the host for the world");
 	}
 
+	bool NetworkContext::ConsumeResyncRequest(ConnectionId connection)
+	{
+		return m_resyncRequests.erase(connection) != 0;
+	}
+
+	void NetworkContext::RefuseConnection(ConnectionId peer, std::string_view reason)
+	{
+		if (!IsHost())
+		{
+			return;
+		}
+		// Reliable, and DisconnectPeer defers the drop until everything already queued
+		// for that peer has left the socket (enet_peer_disconnect_later). Dropping
+		// first, or dropping now, would tear the link down on top of the very message
+		// that explains it, and the joiner would see an anonymous failure - which is
+		// what DisconnectReason exists to prevent: a refusal must be tellable apart
+		// from a timeout or a crashed host, because a game retries one and not the
+		// other.
+		m_transport.Send(peer, kChannelReliable, true, EncodeDisconnect(reason));
+		m_transport.DisconnectPeer(peer);
+		// Never added to the session: a refused joiner was never a member, so there is
+		// no binding, cache or roster entry to clean up here.
+	}
+
 	void NetworkContext::RequestResync(ConnectionId connection)
 	{
 		// The ROLE gate is not repeated here: it lives with every other one, at the top of
@@ -354,27 +380,22 @@ namespace aether::net
 		{
 			return; // never a client's id - it is how the transport spells "the host"
 		}
-		m_resyncRequests.insert(connection);
-	}
-
-	bool NetworkContext::ConsumeResyncRequest(ConnectionId connection)
-	{
-		return m_resyncRequests.erase(connection) != 0;
-	}
-
-	void NetworkContext::RefuseConnection(ConnectionId peer, std::string_view reason)
-	{
-		if (!IsHost() || peer == kInvalidConnection)
+		// A resync costs a full reliable state send plus a Spawn per newly relevant
+		// entity, and ClientReady is one byte a peer may loop at line rate - the send
+		// tick consumes a queued request every paced tick, so an unthrottled request
+		// set pins this host into streaming the whole replicated world at SendRateHz
+		// to that one peer. One honoured request per resync interval bounds the cost to
+		// what the periodic full resend already spends, while the genuine handshake -
+		// a client that has just arrived in the scene - sends exactly one and never
+		// notices the floor.
+		const float now = Now();
+		if (const auto it = m_lastResyncAt.find(connection); it != m_lastResyncAt.end()
+		        && now - it->second < kResyncIntervalSeconds)
 		{
 			return;
 		}
-		// Reliable, then a DEFERRED drop: enet_peer_disconnect_later sends everything
-		// already queued for that peer before it tears the link down, which is the only
-		// ordering in which the joiner ever sees why. Dropping it immediately would
-		// deliver a bare disconnect and the client could not tell a full server from a
-		// crashed one.
-		m_transport.Send(peer, kChannelReliable, true, EncodeDisconnect(reason));
-		m_transport.DisconnectPeer(peer);
+		m_lastResyncAt[connection] = now;
+		m_resyncRequests.insert(connection);
 	}
 
 	void NetworkContext::ForgetNetId(std::uint32_t netId)
@@ -435,6 +456,16 @@ namespace aether::net
 
 		NetworkIdentity identity{};
 		identity.netId = m_session.AllocateNetId();
+		if (identity.netId == 0)
+		{
+			// The spawn id space is exhausted (~4.3 billion allocations in one
+			// session). The entity stays local and unreplicated - the same shape
+			// AssignScenePlacedNetIds leaves on scene-space exhaustion - rather than
+			// binding net id 0, which every decoder treats as "no id", or
+			// broadcasting a spawn no receiver can apply.
+			AE_ERROR(LogCategory::App, "Net: spawn id space exhausted - '{}' stays local to this peer", prefab);
+			return root;
+		}
 		identity.owner = owner;
 		identity.spawnPrefab = prefab;
 		identity.scenePlaced = false;
@@ -459,6 +490,24 @@ namespace aether::net
 		// purely local entities are still destroyable through Net.Despawn.
 		if (IsClient() && !IsOwner(world, entity))
 		{
+			return false;
+		}
+		// A scene-placed entity is not this session's to destroy, on either role. The
+		// broadcast would delete it on today's clients while the NEXT joiner re-derives
+		// it from the scene file - permanent divergence (the exact hazard every other
+		// scenePlaced-sensitive path - Stop, OnDisconnected, ClientCanRecreate - already
+		// refuses); and a client destroying only its own copy strands a frozen entity on
+		// every peer, since ExceptOwnedBy stops the host relaying state the owner no
+		// longer sends and re-entry cannot rebuild something with no prefab. Refusing is
+		// convergent: every peer keeps it, and a game that wants it gone despawns a
+		// framework-spawned replacement instead. Offline the refusal is lifted - there
+		// is no session to diverge, and single-player Despawn must keep working.
+		const auto* identity = world.TryGet<NetworkIdentity>(entity);
+		if (identity != nullptr && identity->scenePlaced && m_session.Role() != NetRole::Offline)
+		{
+			AE_WARN(LogCategory::App,
+			        "Net: refusing to despawn scene-placed entity {} - its existence belongs to the scene file, not the session; despawn a framework-spawned entity instead",
+			        m_session.NetIdFor(entity));
 			return false;
 		}
 		const std::uint32_t netId = m_session.NetIdFor(entity);

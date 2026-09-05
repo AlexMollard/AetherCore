@@ -24,6 +24,7 @@
 #include "net/NetScriptFields.hpp"
 #include "net/NetSpawn.hpp"
 #include "net/NetworkContext.hpp"
+#include "net/RoomCode.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -528,6 +529,123 @@ TEST_CASE("ReleaseForDespawn refuses a client an entity it does not own, and lea
 	CHECK(world.GetRegistry().valid(World::ToEntt(hostOwned)));
 
 	context.Stop(world);
+}
+
+TEST_CASE("Net.Despawn of a scene-placed entity is refused while a session is live")
+{
+	// The divergence the refusal prevents: a host despawning a scene-placed entity
+	// broadcasts its deletion to every connected client, but the next joiner
+	// re-derives it from the scene file - so the peers permanently disagree about
+	// whether it exists. Every other scenePlaced-sensitive path (Stop,
+	// OnDisconnected, relevancy) already refuses; Despawn was the one that did not.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	const Entity sceneEntity = MakeScenePlaced(world, 7);
+	REQUIRE(context.StartHost(world, kHostPort, 4));
+	REQUIRE(world.TryGet<aether::net::NetworkIdentity>(sceneEntity)->scenePlaced);
+	const std::uint32_t netId = world.TryGet<aether::net::NetworkIdentity>(sceneEntity)->netId;
+	REQUIRE(netId != 0);
+
+	// Refused outright: bound, alive, untouched - through both the split entry
+	// point and the whole Despawn.
+	CHECK_FALSE(context.ReleaseForDespawn(world, sceneEntity));
+	CHECK(context.Session().EntityFor(netId) == sceneEntity);
+	context.Despawn(world, sceneEntity);
+	CHECK(world.GetRegistry().valid(World::ToEntt(sceneEntity)));
+	CHECK(context.Session().EntityFor(netId) == sceneEntity);
+
+	// Offline the refusal is lifted: with the session gone there is no peer left
+	// to diverge, and single-player Despawn must keep working through every path.
+	context.Stop(world);
+	context.Despawn(world, sceneEntity);
+	CHECK_FALSE(world.GetRegistry().valid(World::ToEntt(sceneEntity)));
+}
+
+TEST_CASE("A client's Net.Despawn of a scene-placed entity it owns is refused")
+{
+	// The mirror of the host-side refusal. A client destroying its own copy of a
+	// scene-placed entity is a permanent local delete: the host and every other
+	// client keep it, ExceptOwnedBy stops its state being relayed (it is owned
+	// here), and nothing can ever rebuild it for this peer - ClientCanRecreate's
+	// "a leave here is a permanent delete" hazard with the client holding the
+	// trigger.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(2);
+
+	const Entity owned = world.Create();
+	world.Emplace<TransformComponent>(owned);
+	auto& identity = world.Emplace<aether::net::NetworkIdentity>(owned);
+	identity.netId = 12;
+	identity.owner = 2; // this client's own - the ownership check passes
+	identity.scenePlaced = true;
+	context.Session().Bind(12, owned);
+
+	CHECK_FALSE(context.ReleaseForDespawn(world, owned));
+	CHECK(context.Session().EntityFor(12) == owned);
+	CHECK(world.GetRegistry().valid(World::ToEntt(owned)));
+
+	context.Stop(world);
+}
+
+TEST_CASE("A resync request from one connection is honoured at most once per interval")
+{
+	// ClientReady is one byte a peer may loop at line rate, and the send tick
+	// consumes a queued request every paced tick - unthrottled, that pins the host
+	// into replaying the whole replicated world at SendRateHz to that one peer (the
+	// amplification DoS). The floor is the same interval the periodic full resend
+	// already pays, and the genuine handshake - a client that has just arrived -
+	// sends exactly one and never notices it.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+	REQUIRE(context.StartHost(world, kHostPort, 4));
+	context.Session().AddConnection(5);
+
+	context.RequestResync(5);
+	CHECK(context.ConsumeResyncRequest(5)); // the one a real arrival sends: honoured
+
+	// The same connection asking again inside the interval changes nothing, however
+	// often it asks.
+	for (int i = 0; i < 50; ++i)
+	{
+		context.RequestResync(5);
+	}
+	CHECK_FALSE(context.ConsumeResyncRequest(5));
+
+	// The floor is per connection: a different peer's request is unaffected.
+	context.Session().AddConnection(6);
+	context.RequestResync(6);
+	CHECK(context.ConsumeResyncRequest(6));
+
+	context.Stop(world);
+}
+
+TEST_CASE("Stop cancels a pending traversal host setup before it can fire")
+{
+	// HostWithCode defers the host-side scene numbering to the next TickTraversal
+	// (it has no World of its own). A game that cancels the host attempt in between
+	// - the user backs out of hosting the same frame - must not have that deferred
+	// block fire afterwards against a session that no longer exists: it would zero
+	// every NetworkIdentity's net id and bind scene-placed ids into a cleared
+	// NetSession while nothing is listening.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	const Entity sceneEntity = MakeScenePlaced(world, 7);
+	REQUIRE(context.HostWithCode(aether::net::NewRoomCode(), 24703, 4));
+
+	context.Stop(world);
+	context.TickTraversal(world, 0.f); // the frame after the cancel
+
+	CHECK(ScenePlacedNetIds(world).empty()); // nothing was numbered with no session
+	CHECK_FALSE(context.Session().EntityFor(1).IsValid()); // and nothing was bound
 }
 
 TEST_CASE("ApplySpawn refuses a prefab name that could leave the prefab folder")

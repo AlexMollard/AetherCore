@@ -311,6 +311,51 @@ TEST_CASE("A client that changes scene between joining and arriving still agrees
 	        [&] { return glm::distance(PositionOf(p.client.world, arenaEntity), glm::vec3(40.f, 0.f, 0.f)) < 0.01f; }));
 }
 
+TEST_CASE("A client holding replication ignores Despawn and Relevancy, like Snapshot")
+{
+	// The gate Snapshot and ScriptFields have always had, extended to the two kinds
+	// that DESTROY. A held client still carries the bindings its Welcome derived -
+	// against whatever scene it was standing in - so a despawn or a leave naming
+	// one of those ids destroys an entity in a world the session does not own (a
+	// menu). Refusing is lossless: the host replays everything this client missed
+	// the moment it says it has arrived.
+	const auto seed = [](World& world)
+	{
+		aether::net::test::MakeScenePlaced(world, 7);
+		aether::net::test::MakeScenePlaced(world, 8);
+	};
+
+	Pair held(24768, /*holdClient=*/true, seed, seed);
+	const std::vector<std::uint32_t> hostIds = aether::net::test::ScenePlacedNetIds(held.host.world);
+	REQUIRE(hostIds.size() == 2);
+
+	// A despawn for one id and a relevancy leave for the other, straight from the
+	// host the way its own systems would send them.
+	held.host.context.Transport().Send(held.peer, aether::net::kChannelReliable, true,
+	        aether::net::EncodeDespawn(hostIds.front()));
+	held.host.context.Transport().Send(held.peer, aether::net::kChannelReliable, true,
+	        aether::net::EncodeRelevancyLeave(hostIds.back()));
+	PumpFor(held, 300);
+
+	// Both entities the client derived are still there, and still bound.
+	CHECK(aether::net::test::CountIdentities(held.client.world) == 2);
+	CHECK(held.client.context.Session().EntityFor(hostIds.front()).IsValid());
+	CHECK(held.client.context.Session().EntityFor(hostIds.back()).IsValid());
+
+	// Positive control: the very same bytes on a client that IS standing in the
+	// session's scene destroy both - one as a despawn, one as a leave.
+	Pair ready(24769, /*holdClient=*/false, seed, seed);
+	const std::vector<std::uint32_t> readyIds = aether::net::test::ScenePlacedNetIds(ready.host.world);
+	REQUIRE(readyIds.size() == 2);
+	ready.host.context.Transport().Send(ready.peer, aether::net::kChannelReliable, true,
+	        aether::net::EncodeDespawn(readyIds.front()));
+	ready.host.context.Transport().Send(ready.peer, aether::net::kChannelReliable, true,
+	        aether::net::EncodeRelevancyLeave(readyIds.back()));
+	PumpFor(ready, 300);
+
+	CHECK(aether::net::test::CountIdentities(ready.client.world) == 0);
+}
+
 TEST_CASE("A client that gives up before arriving leaves nothing behind on either peer")
 {
 	// The other end of the same story: a player who starts a join, waits on the menu and

@@ -2,6 +2,7 @@
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <limits>
 
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
@@ -56,17 +57,30 @@ namespace aether::net
 
 	glm::vec3 ViewerPosition(World& world, ConnectionId viewer)
 	{
+		// Deterministic on purpose: "the first owned entity the view happens to
+		// yield" is a different anchor on consecutive frames - and between the join
+		// replay and the send tick - whenever a connection owns more than one
+		// positioned entity, because ECS iteration order is unspecified. A jumping
+		// anchor is relevancy churn: entities near either anchor's radius boundary
+		// leave and re-enter, and every crossing destroys the client's copy and re
+		// -Spawns it with a reliable full-state send. The lowest entity id is stable
+		// whatever order the pool is walked in.
 		glm::vec3 position{0.f};
-		bool found = false;
+		std::uint32_t anchorId = std::numeric_limits<std::uint32_t>::max();
 		world.View<NetworkIdentity, TransformComponent>().each(
-		        [&](entt::entity, NetworkIdentity& identity, TransformComponent& transform)
+		        [&](entt::entity ent, NetworkIdentity& identity, TransformComponent& transform)
 		        {
-			        if (found || identity.owner != viewer)
+			        if (identity.owner != viewer)
 			        {
 				        return;
 			        }
+			        const Entity entity = World::FromEntt(ent);
+			        if (entity.id >= anchorId)
+			        {
+				        return;
+			        }
+			        anchorId = entity.id;
 			        position = glm::vec3(transform.localToWorld[3]);
-			        found = true;
 		        });
 		return position;
 	}

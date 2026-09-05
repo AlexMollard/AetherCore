@@ -47,6 +47,16 @@ namespace aether::net
 		// to nothing rather than to whatever entity happened to reuse the id.
 		std::uint32_t AllocateNetId()
 		{
+			// The exhaustion guard AllocateSceneNetId has always had, for the spawn
+			// half: past UINT32_MAX the counter wraps to 0 - which every decoder reads
+			// as "no id" - and then walks up through the scene-placed space the split
+			// below exists to keep disjoint, colliding with ids clients derive from
+			// their scene files. Return 0 and let the caller leave the entity unbound,
+			// exactly as scene-space exhaustion does.
+			if (m_nextNetId < kSpawnNetIdBase) // wrapped past UINT32_MAX
+			{
+				return 0;
+			}
 			return m_nextNetId++;
 		}
 
@@ -113,6 +123,9 @@ namespace aether::net
 		void Clear();
 
 	private:
+		// Stages allocator states the public API cannot reach (id-space
+		// exhaustion); see NetSessionTests.cpp.
+		friend struct NetSessionTestPeer;
 		NetRole m_role = NetRole::Offline;
 		ConnectionId m_localConnection = kInvalidConnection;
 		std::uint32_t m_nextNetId = kSpawnNetIdBase; // spawned ids only - never the scene-placed space

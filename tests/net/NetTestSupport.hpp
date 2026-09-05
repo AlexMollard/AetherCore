@@ -142,6 +142,16 @@ namespace aether::net::test
 	class FakeRpcCounter final : public RpcBridge
 	{
 	public:
+		// What FindMethod reports every method as declaring. ApplyRpc's declaration
+		// gate drops a wire call whose target byte disagrees with the declaration,
+		// so a case proving a Client/Multicast-target packet dispatches on a client
+		// needs a counter that declares that target; Server keeps the default
+		// behaviour every Server-target case already relies on.
+		explicit FakeRpcCounter(NetRpcTarget declaredTarget = NetRpcTarget::Server)
+		  : m_declaredTarget(declaredTarget)
+		{
+		}
+
 		[[nodiscard]] int Invocations() const
 		{
 			return m_invocations;
@@ -149,7 +159,7 @@ namespace aether::net::test
 
 		[[nodiscard]] RpcMethod FindMethod(const std::string&, const std::string&) const override
 		{
-			return RpcMethod{.index = 0, .target = NetRpcTarget::Server};
+			return RpcMethod{.index = 0, .target = m_declaredTarget};
 		}
 
 		void Invoke(Entity, std::uint32_t, std::uint16_t, std::span<const std::byte>) const override
@@ -158,6 +168,8 @@ namespace aether::net::test
 		}
 
 	private:
+		NetRpcTarget m_declaredTarget = NetRpcTarget::Server;
 		mutable int m_invocations = 0;
 	};
+
 } // namespace aether::net::test

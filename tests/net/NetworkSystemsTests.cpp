@@ -495,7 +495,7 @@ TEST_CASE("An RPC is dispatched only for the connection that owns the target")
 	        aether::net::NetworkIdentity{.netId = 8, .owner = kPeer});
 	host.context.Session().Bind(8, entity);
 
-	const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+	const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), "Say",
 	        aether::net::NetRpcTarget::Server, {});
 
 	// A different connection asking to run a method on someone else's entity.
@@ -512,7 +512,8 @@ namespace
 	// Gives `endpoint` a scripted, replicated entity on `netId` owned by `owner`, plus
 	// the counting bridge that would be asked to dispatch a call aimed at it. The
 	// bridge is owned by the context, so the raw pointer lives as long as the endpoint.
-	FakeRpcCounter* AttachRpcTarget(Endpoint& endpoint, std::uint32_t netId, aether::net::ConnectionId owner)
+	FakeRpcCounter* AttachRpcTarget(Endpoint& endpoint, std::uint32_t netId, aether::net::ConnectionId owner,
+	        aether::net::NetRpcTarget declared = aether::net::NetRpcTarget::Server)
 	{
 		const Entity entity = endpoint.world.Create();
 		endpoint.world.Emplace<ScriptComponent>(entity).scripts.push_back(ScriptEntry{.path = "Chat"});
@@ -520,7 +521,7 @@ namespace
 		        aether::net::NetworkIdentity{.netId = netId, .owner = owner});
 		endpoint.context.Session().Bind(netId, entity);
 
-		auto bridge = std::make_unique<FakeRpcCounter>();
+		auto bridge = std::make_unique<FakeRpcCounter>(declared);
 		auto* raw = bridge.get();
 		endpoint.context.SetRpcBridge(std::move(bridge));
 		return raw;
@@ -537,7 +538,7 @@ TEST_CASE("A host-to-client RPC inbound on the host is dropped")
 	for (const aether::net::NetRpcTarget target:
 	        {aether::net::NetRpcTarget::Client, aether::net::NetRpcTarget::Multicast})
 	{
-		const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+		const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), "Say",
 		        target, {});
 
 		{
@@ -550,11 +551,13 @@ TEST_CASE("A host-to-client RPC inbound on the host is dropped")
 		}
 
 		// Positive control: the very same bytes DO dispatch on a client, so the drop
-		// above is the direction gate and not a malformed packet.
+		// above is the direction gate and not a malformed packet. The counter declares
+		// the same target the packet carries - a method's declared target is part of
+		// its contract, and the declaration gate must not be what drops this control.
 		{
 			Endpoint client;
 			client.BecomeClient();
-			FakeRpcCounter* bridge = AttachRpcTarget(client, 8, kPeer);
+			FakeRpcCounter* bridge = AttachRpcTarget(client, 8, kPeer, target);
 
 			client.receive.OnData(client.world, kPeer, packet);
 			CHECK(bridge->Invocations() == 1);
@@ -578,9 +581,9 @@ TEST_CASE("On the host the direction gate and the ownership gate each refuse on 
 	host.BecomeHost();
 	FakeRpcCounter* bridge = AttachRpcTarget(host, 8, kPeer);
 
-	const std::vector<std::byte> serverCall = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+	const std::vector<std::byte> serverCall = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), "Say",
 	        aether::net::NetRpcTarget::Server, {});
-	const std::vector<std::byte> clientCall = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+	const std::vector<std::byte> clientCall = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), "Say",
 	        aether::net::NetRpcTarget::Client, {});
 
 	host.receive.OnData(host.world, kPeer, serverCall);
@@ -595,11 +598,53 @@ TEST_CASE("On the host the direction gate and the ownership gate each refuse on 
 	CHECK(bridge->Invocations() == 1); // unchanged: the ownership gate alone refused
 }
 
+TEST_CASE("Inbound Server RPCs from one connection are budgeted per second")
+{
+	// The cost asymmetry the budget brakes: every accepted Server RPC spends a
+	// host-side reflection dispatch (and a relay fan-out if the handler multicasts)
+	// while the sender spends almost nothing, and a client's own entities all pass
+	// the ownership gate - ownership cannot be the brake. The window's last call
+	// drops exactly like a role-gated one: nothing happens, silently.
+	Endpoint host;
+	host.BecomeHost();
+	FakeRpcCounter* bridge = AttachRpcTarget(host, 8, kPeer);
+
+	const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), "Say",
+	        aether::net::NetRpcTarget::Server, {});
+
+	for (int i = 0; i < aether::net::kMaxInboundRpcsPerSecond; ++i)
+	{
+		host.receive.OnData(host.world, kPeer, packet);
+	}
+	CHECK(bridge->Invocations() == aether::net::kMaxInboundRpcsPerSecond);
+
+	// The window is spent; more calls from this connection change nothing.
+	for (int i = 0; i < 10; ++i)
+	{
+		host.receive.OnData(host.world, kPeer, packet);
+	}
+	CHECK(bridge->Invocations() == aether::net::kMaxInboundRpcsPerSecond);
+
+	// The budget is per connection. A second entity owned by a different peer,
+	// through the SAME bridge (a second AttachRpcTarget would replace it and dangle
+	// the raw pointer above).
+	const Entity second = host.world.Create();
+	host.world.Emplace<ScriptComponent>(second).scripts.push_back(ScriptEntry{.path = "Chat"});
+	host.world.Emplace<aether::net::NetworkIdentity>(second,
+	        aether::net::NetworkIdentity{.netId = 9, .owner = kPeer + 1});
+	host.context.Session().Bind(9, second);
+
+	host.receive.OnData(host.world, kPeer + 1,
+	        aether::net::EncodeRpc(9, aether::net::ScriptTypeHash("Chat"), "Say",
+	                aether::net::NetRpcTarget::Server, {}));
+	CHECK(bridge->Invocations() == aether::net::kMaxInboundRpcsPerSecond + 1);
+}
+
 TEST_CASE("A Server-target RPC inbound on a client is dropped")
 {
 	// The other direction. A Server call is one a client sends, never one it
 	// receives - accepting it would run server-authoritative logic on a client.
-	const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), 0,
+	const std::vector<std::byte> packet = aether::net::EncodeRpc(8, aether::net::ScriptTypeHash("Chat"), "Say",
 	        aether::net::NetRpcTarget::Server, {});
 
 	{
