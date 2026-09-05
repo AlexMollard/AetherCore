@@ -81,7 +81,7 @@ public enum NetTraversalState
 /// rather than failing silently or crossing the wire malformed.
 /// </para>
 /// </remarks>
-public static class Net
+public static partial class Net
 {
     // ── Session ─────────────────────────────────────────────────────────────────
 

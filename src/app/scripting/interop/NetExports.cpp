@@ -320,6 +320,40 @@ AE_SCRIPT_API std::int32_t aether_net_is_owner(std::uint32_t entityId)
 	});
 }
 
+// Strips a LOCALLY instantiated entity's baked network identity (and its
+// transform tuning, meaningless without one), so it can never be mistaken for
+// anything the host or any other peer knows about.
+//
+// WHY THIS IS THE WHOLE FIX. Scene.Instantiate - unlike Net.Spawn - bakes in
+// whatever NetworkIdentity the prefab authored, typically `owner = 0`, which
+// IS the host's connection id (see aether_net_owner_of below). Left in place,
+// that misattributes the entity to the host on aether_net_owner_of and makes
+// aether_net_has_authority/aether_net_is_owner answer FALSE for it on every
+// client (OwnsIdentity compares that baked owner against this peer's own
+// connection id, and a client's never matches the host's 0). Removing the
+// component is not a second flag layered on top of those checks - it is what
+// makes their EXISTING nullptr branches (see both functions above) already
+// answer "local, unreplicated, mine" for it, so nothing in this file, in
+// NetRpc.cpp ("an entity with no NetworkIdentity is not a replicated entity at
+// all"), or in NetSnapshot/NetworkSystems (every send/receive/ping/relevancy
+// pass is a view keyed on NetworkIdentity) can ever address, replicate, or
+// re-attribute this entity. Safe to call on any entity, predicted or not,
+// offline or online: a component that is not there is simply not removed.
+AE_SCRIPT_API void aether_net_mark_predicted(std::uint32_t entityId)
+{
+	SafeExport([&] -> void
+	{
+	const aether::Entity entity{entityId};
+	auto& world = ActiveWorld();
+	if (!entity.IsValid() || !world.GetRegistry().valid(aether::World::ToEntt(entity)))
+	{
+		return;
+	}
+	world.Remove<aether::net::NetworkIdentity>(entity);
+	world.Remove<aether::net::NetworkTransform>(entity);
+	});
+}
+
 AE_SCRIPT_API void aether_net_set_player_name(std::uint32_t entityId, const char* nameUtf8)
 {
 	SafeExport([&] -> void

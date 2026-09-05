@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Globalization;
 using System.Numerics;
 using AetherCore;
@@ -126,63 +125,16 @@ public sealed class PlayerCombat : EntityScript
 
     // ── Owner-local state ───────────────────────────────────────────────────────
 
-    /// <summary>Directions of shots this peer has asked the host for and has not yet
-    /// been handed a projectile for.</summary>
-    /// <remarks>
-    /// <para>
-    /// <b>Why this exists at all.</b> Only the host may allocate a net id, so a
-    /// client's projectile is created by the host on request - and the Spawn message
-    /// carries a prefab and a position and nothing else. The direction therefore has
-    /// to be recovered on the owner when its copy arrives, and this is where the
-    /// shot it belongs to is kept.
-    /// </para>
-    /// <para>
-    /// <b>Why matching in order is exact.</b> The request and the resulting Spawn both
-    /// travel on the reliable ORDERED channel, so this connection's requests reach the
-    /// host in the order it made them and the spawns come back in the order the host
-    /// made them. First in, first claimed.
-    /// </para>
-    /// <para>
-    /// Entries still expire (<see cref="PendingShotSeconds"/>). A host that REFUSES a
-    /// shot - which in the normal path it never does, because this peer applies the
-    /// same rate limit before asking - would otherwise leave an entry that pairs every
-    /// later projectile with the wrong shot for the rest of the session.
-    /// </para>
-    /// </remarks>
-    private readonly Queue<PendingShot> _pending = new();
+    /// <summary>Requests this peer has sent the host for a projectile and not yet
+    /// been handed a projectile for, in order. See <see cref="PredictedSpawnQueue{T}"/>
+    /// for why order is exact and why an unclaimed entry expires.</summary>
+    private readonly PredictedSpawnQueue<Vector2> _pendingShots = new();
 
-    /// <summary>How long an unclaimed pending shot survives.</summary>
+    /// <summary>How long an unclaimed pending shot survives - the host refused the
+    /// request, or its Spawn reply was lost - before its predicted echo is retired
+    /// rather than left flying forever. Copied onto <see cref="_pendingShots"/>
+    /// every tick, so tuning this live takes effect immediately.</summary>
     public float PendingShotSeconds = 1.0f;
-
-    private readonly struct PendingShot(Vector2 direction, float age, Entity ghost)
-    {
-        public readonly Vector2 Direction = direction;
-        public readonly float Age = age;
-
-        /// <summary>The local, display-only echo of this shot - see
-        /// <see cref="SpawnPredictedShot"/> - or an invalid entity when none was
-        /// spawned (offline, or hosting, where there is no round trip to hide).</summary>
-        public readonly Entity Ghost = ghost;
-
-        public PendingShot Older(float deltaTime) => new(Direction, Age + deltaTime, Ghost);
-    }
-
-    // Shooter and direction handed to a predicted (locally spawned, display-only)
-    // projectile that is currently attaching - see SpawnPredictedShot and
-    // TryTakePredictedShot. STATIC and not per-instance: Scene.Instantiate creates
-    // this entity outside Net.Spawn, so it carries the "bullet" prefab's own baked
-    // NetworkIdentity (an empty table, owner defaulting to the host's id) rather
-    // than one this session bound - Net.OwnerOf(ghost) would therefore resolve to
-    // the HOST's player, not this shooter, which is exactly why the hand-off exists
-    // rather than letting Projectile.OnAttach look the shooter up itself. Set
-    // immediately before Scene.Instantiate and always cleared before that call
-    // returns, so it can only ever be read by the OnAttach it was set for - a
-    // replicated projectile attaches long after this flag is clear, and only one
-    // predicted shot is ever attaching at a time (Scene.Instantiate is synchronous
-    // and this peer drives only its own player).
-    private static Entity s_predictedShooter;
-    private static Vector2 s_predictedDirection;
-    private static bool s_predictedPending;
 
     private float _sinceFire;
     private float _respawnIn;
@@ -277,7 +229,8 @@ public sealed class PlayerCombat : EntityScript
     private void TickOwner(float deltaTime)
     {
         _sinceFire += deltaTime;
-        AgePendingShots(deltaTime);
+        _pendingShots.TimeoutSeconds = PendingShotSeconds;
+        _pendingShots.Age(deltaTime);
 
         // The UI owns the keyboard AND the mouse while anything in it is focused - a
         // chat message being typed, the pause menu being read. Firing at the Disconnect
@@ -367,62 +320,9 @@ public sealed class PlayerCombat : EntityScript
 
         _sinceFire = 0.0f;
         Vector2 muzzle = new(origin.X + aim.X * MuzzleOffset, origin.Y + aim.Y * MuzzleOffset);
-        Entity ghost = SpawnPredictedShot(muzzle, aim);
-        _pending.Enqueue(new PendingShot(aim, 0.0f, ghost));
+        Entity ghost = Net.SpawnPredicted(ProjectilePrefab, new Vector3(muzzle.X, muzzle.Y, 0.0f), (Self, aim));
+        _pendingShots.Expect(aim, ghost);
         Net.CallServer(Self, nameof(RequestFire), $"{Fmt(muzzle.X)}|{Fmt(muzzle.Y)}");
-    }
-
-    /// <summary>
-    /// Show this shot on THIS screen the instant the trigger is pulled: a purely
-    /// local, non-networked copy of <see cref="ProjectilePrefab"/> that flies the
-    /// same path the authoritative one will. Display-only - see
-    /// <see cref="Projectile.IsPredicted"/> for exactly what that turns off.
-    /// Reconciled by <see cref="TakeShotDirection"/> (destroyed the instant the real
-    /// projectile lands, so nobody sees two bullets) and bounded by
-    /// <see cref="AgePendingShots"/> (destroyed if the shot is never claimed - the
-    /// same <see cref="PendingShotSeconds"/> bound an unclaimed request already used,
-    /// so a refused shot's echo does not fly on forever).
-    /// </summary>
-    /// <remarks>
-    /// Only worth doing when there is a round trip to hide. On the host - and
-    /// offline, where <see cref="Net.IsClient"/> is also false - the RequestFire
-    /// call above already runs locally with nothing crossing the wire, so
-    /// <see cref="Net.Spawn"/>'s result reaches this screen the same frame; a
-    /// second, local shot on top of that would be the doubled projectile this
-    /// feature must never introduce.
-    /// </remarks>
-    private Entity SpawnPredictedShot(Vector2 muzzle, Vector2 direction)
-    {
-        if (!Net.IsClient)
-        {
-            return default;
-        }
-        s_predictedShooter = Self;
-        s_predictedDirection = direction;
-        s_predictedPending = true;
-        Entity ghost = Scene.Instantiate(ProjectilePrefab, new Vector3(muzzle.X, muzzle.Y, 0.0f));
-        s_predictedPending = false; // consumed by Projectile.OnAttach above; harmless if it was not
-        return ghost;
-    }
-
-    private void AgePendingShots(float deltaTime)
-    {
-        int count = _pending.Count;
-        for (int i = 0; i < count; i++)
-        {
-            PendingShot shot = _pending.Dequeue().Older(deltaTime);
-            if (shot.Age <= PendingShotSeconds)
-            {
-                _pending.Enqueue(shot);
-            }
-            else if (shot.Ghost.IsValid)
-            {
-                // Nothing ever claimed this shot - refused by the host, or lost -
-                // so its predicted echo must not fly on forever. See
-                // SpawnPredictedShot.
-                shot.Ghost.Destroy();
-            }
-        }
     }
 
     /// <summary>
@@ -432,17 +332,9 @@ public sealed class PlayerCombat : EntityScript
     /// </summary>
     internal Vector2 TakeShotDirection()
     {
-        if (_pending.Count > 0)
+        if (_pendingShots.TryReconcile(out Vector2 direction))
         {
-            PendingShot shot = _pending.Dequeue();
-            if (shot.Ghost.IsValid)
-            {
-                // The real, host-authorised projectile just landed: the local
-                // echo's job is done, and leaving it up would show two bullets
-                // at once.
-                shot.Ghost.Destroy();
-            }
-            return shot.Direction;
+            return direction;
         }
         Log.Warn("[Whisper] PlayerCombat: a projectile arrived with no shot waiting for it; aiming it at the cursor");
         Vector3 origin = Self.Position;
@@ -450,27 +342,6 @@ public sealed class PlayerCombat : EntityScript
         Vector2 aim = new(cursor.X - origin.X, cursor.Y - origin.Y);
         float distance = aim.Length();
         return distance < 0.0001f ? new Vector2(1.0f, 0.0f) : aim / distance;
-    }
-
-    /// <summary>
-    /// Projectile.OnAttach's half of predicted spawning: the shooter and direction to
-    /// fly, exactly once, for the predicted ghost the current <see cref="Scene.Instantiate"/>
-    /// call is for. Never true for a replicated projectile - those attach long after
-    /// this is cleared. Static because the ghost's own <see cref="Net.OwnerOf"/> does
-    /// not name the real shooter - see the field remarks above.
-    /// </summary>
-    internal static bool TryTakePredictedShot(out Entity shooter, out Vector2 direction)
-    {
-        if (s_predictedPending)
-        {
-            shooter = s_predictedShooter;
-            direction = s_predictedDirection;
-            s_predictedPending = false;
-            return true;
-        }
-        shooter = default;
-        direction = default;
-        return false;
     }
 
     // ── Host ────────────────────────────────────────────────────────────────────
@@ -699,14 +570,7 @@ public sealed class PlayerCombat : EntityScript
         // player's own machine.
         Deaths++;
         _respawnIn = RespawnSeconds;
-        foreach (PendingShot shot in _pending)
-        {
-            if (shot.Ghost.IsValid)
-            {
-                shot.Ghost.Destroy();
-            }
-        }
-        _pending.Clear();
+        _pendingShots.Clear();
         Net.CallServer(Self, nameof(ReportKill), killerConnection);
     }
 

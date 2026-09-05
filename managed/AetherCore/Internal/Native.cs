@@ -984,6 +984,14 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial int aether_net_is_owner(uint entityId);
 
+    // Strips a locally-instantiated entity's baked NetworkIdentity/NetworkTransform,
+    // so it reads as local/mine everywhere (aether_net_has_authority/is_owner/
+    // owner_of) and is invisible to every replication and RPC path - see
+    // Net.SpawnPredicted and the native comment on this export. Touches world
+    // state, so no SuppressGCTransition.
+    [LibraryImport(Lib)]
+    internal static partial void aether_net_mark_predicted(uint entityId);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_net_set_player_name(uint entityId, string name);
 

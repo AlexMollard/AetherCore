@@ -94,11 +94,15 @@ public sealed class Projectile : EntityScript
 
     /// <summary>
     /// True for a local, display-only echo of this peer's own shot - see
-    /// <see cref="PlayerCombat.TryTakePredictedShot"/> - spawned instantly
-    /// instead of waiting on <see cref="PlayerCombat.RequestFire"/>'s round trip.
-    /// It is not the entity the host or any other peer knows about, so it must
-    /// never damage anyone, never report a hit, and never ask the host for
-    /// anything: see every other use of this flag below.
+    /// <see cref="Net.SpawnPredicted{T}"/> - spawned instantly instead of waiting
+    /// on <see cref="PlayerCombat.RequestFire"/>'s round trip. The framework
+    /// already keeps it from damaging anyone or reporting anything real - it
+    /// carries no network id, so <see cref="Net.CallServer"/> against it is
+    /// refused exactly like it would be for any other unreplicated entity (see
+    /// <see cref="Resolve"/> and <see cref="Net.SpawnPredicted{T}"/>'s remarks).
+    /// This flag is only for the one thing the framework cannot know on its own:
+    /// how this entity cleans ITSELF up when nobody is ever going to send a
+    /// despawn for it - see <see cref="Expire"/>.
     /// </summary>
     internal bool IsPredicted { get; private set; }
 
@@ -107,44 +111,40 @@ public sealed class Projectile : EntityScript
     {
         _hostSpawn = Self.Position;
 
-        if (PlayerCombat.TryTakePredictedShot(out Entity predictedShooter, out Vector2 predictedDirection))
+        if (Net.TryTakePredictedSpawn(out (Entity Shooter, Vector2 Direction) predicted))
         {
             // A local, display-only echo of this peer's own shot, shown instantly
             // instead of waiting on RequestFire's round trip - see IsPredicted for
-            // what that turns off below. The shooter comes from the static hand-off
-            // rather than Net.OwnerOf(Self): this entity was made by
-            // Scene.Instantiate, not Net.Spawn, so it carries the "bullet" prefab's
-            // own baked Network Identity (an empty table, authored with no owner)
-            // as-is - reading it back here would resolve to the HOST's player and
-            // tint, whoever actually fired this.
-            _shooter = predictedShooter;
-            _direction = predictedDirection;
+            // what that turns off. The shooter/direction come from the side-channel
+            // payload rather than Net.OwnerOf(Self): Net.SpawnPredicted's fix-up
+            // (see its remarks) only runs once Scene.Instantiate RETURNS, so for
+            // the rest of THIS call Self still carries the "bullet" prefab's own
+            // baked NetworkIdentity and would resolve to the HOST, not whoever
+            // actually fired this.
+            _shooter = predicted.Shooter;
+            _direction = predicted.Direction;
             IsPredicted = true;
-            if (_shooter.GetScript<NetPlayerSync>() is { } predictedSync)
+        }
+        else
+        {
+            // Resolved on every peer: the tint below needs it, and the owner needs
+            // it as the one body its own shot may never report a hit on.
+            _shooter = PlayerCombat.PlayerOwnedBy(Net.OwnerOf(Self));
+            if (Net.HasAuthority(Self) && _shooter.GetScript<PlayerCombat>() is { } combat)
             {
-                SpriteRenderer.SetTint(Self, predictedSync.Color);
+                // The Spawn message carries a prefab and a position; the direction
+                // is recovered here from the shot this projectile belongs to. See
+                // PlayerCombat's pending-shot queue for why that is exact.
+                _direction = combat.TakeShotDirection();
             }
-            return;
         }
 
-        // Resolved on every peer: the tint below needs it, and the owner needs it as
-        // the one body its own shot may never report a hit on.
-        _shooter = PlayerCombat.PlayerOwnedBy(Net.OwnerOf(Self));
-
         // Wearing the shooter's colour, from the same PlayerPalette entry as that
-        // player's character, name tag and roster row - so who is shooting is legible
-        // without reading anything.
+        // player's character, name tag and roster row - so who is shooting is
+        // legible without reading anything.
         if (_shooter.GetScript<NetPlayerSync>() is { } sync)
         {
             SpriteRenderer.SetTint(Self, sync.Color);
-        }
-
-        if (Net.HasAuthority(Self) && _shooter.GetScript<PlayerCombat>() is { } combat)
-        {
-            // The Spawn message carries a prefab and a position; the direction is
-            // recovered here from the shot this projectile belongs to. See
-            // PlayerCombat's pending-shot queue for why that is exact.
-            _direction = combat.TakeShotDirection();
         }
     }
 
@@ -162,14 +162,12 @@ public sealed class Projectile : EntityScript
             return;
         }
 
-        // IsPredicted stands in for Net.HasAuthority(Self) here: this entity was
-        // made by Scene.Instantiate rather than Net.Spawn, so it carries the
-        // "bullet" prefab's own unbound Network Identity, and that reads as
-        // owned by the HOST (see OnAttach) rather than by this peer - the one
-        // case Net.HasAuthority answers wrong for an entity that is not actually
-        // replicated anywhere. IsPredicted, set from this peer's own bookkeeping,
-        // is the correct answer for it.
-        if (_spent || !(IsPredicted || Net.HasAuthority(Self)) || Time.IsPaused)
+        // By now Net.SpawnPredicted's native fix-up has already run - it happens
+        // the instant Scene.Instantiate returns, well before this, the entity's
+        // first OnUpdate - so Net.HasAuthority(Self) already reads true for a
+        // predicted echo exactly like it does for the real thing; no separate
+        // test is needed here any more.
+        if (_spent || !Net.HasAuthority(Self) || Time.IsPaused)
         {
             return;
         }
@@ -243,10 +241,12 @@ public sealed class Projectile : EntityScript
     {
         // Alive is read off the victim's REPLICATED health, so a corpse cannot be
         // shot again - and its collider is a sensor by then, so this branch is
-        // usually not even reached. IsPredicted is checked first and unconditionally:
-        // a local echo is not the entity the host knows about and must never claim a
-        // hit, whatever it appears to touch.
-        if (!IsPredicted && struck != _shooter && struck.GetScript<PlayerCombat>() is { IsAlive: true })
+        // usually not even reached. No IsPredicted test is needed here any more: a
+        // predicted echo carries no network id (see Net.SpawnPredicted), so
+        // Net.CallServer below is already refused for it exactly like it would be
+        // for any other unreplicated entity, rather than something this method has
+        // to remember to check.
+        if (struck != _shooter && struck.GetScript<PlayerCombat>() is { IsAlive: true })
         {
             // Addressed to THIS projectile, which this peer owns. The host refuses a
             // server RPC aimed at anything the sender does not own, so the hit cannot
