@@ -93,6 +93,25 @@ public sealed class NetPlayerSync : EntityScript
         ApplyColor(ColorIndex);
     }
 
+    /// <summary>
+    /// Seeds <see cref="ColorIndex"/> from the owning connection exactly once, the
+    /// moment this peer is confirmed to own the player. Replaces re-deriving it
+    /// every frame in <see cref="OnUpdate"/>: that used to be necessary only because
+    /// on a client <see cref="Net.IsOwner"/> answers false for everything until the
+    /// host's Welcome lands, so ownership was not knowable in <see cref="OnAttach"/> -
+    /// this hook IS that knowable moment, offline, on the host, and on a welcomed
+    /// client alike, so there is nothing left to re-derive on the frames after it.
+    /// </summary>
+    public override void OnOwnershipChanged(uint owner, bool isOwner)
+    {
+        if (!isOwner)
+        {
+            return;
+        }
+        ColorIndex = (int) (owner % (uint) PlayerPalette.Count);
+        ApplyColor(ColorIndex);
+    }
+
     public override void OnUpdate(float deltaTime)
     {
         // Looked up per frame rather than cached in OnAttach: scripts on an entity
@@ -107,11 +126,6 @@ public sealed class NetPlayerSync : EntityScript
         {
             AnimState = controller.AnimIndex;
             FacingLeft = controller.FacingLeft;
-            // Written every frame rather than once in OnAttach: on a client the owner is
-            // not knowable at attach time (Net.IsOwner answers false for everything until
-            // the host's Welcome lands), and the connection id this derives from arrives
-            // with it. Re-deriving costs a field write and settles as soon as it can.
-            ColorIndex = (int) (Net.OwnerOf(Self) % (uint) PlayerPalette.Count);
         }
         ApplyAnim(AnimState);
         ApplyFacing(FacingLeft);

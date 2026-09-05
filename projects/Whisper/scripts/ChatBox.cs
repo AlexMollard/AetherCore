@@ -26,9 +26,11 @@ namespace AetherGame;
 /// </para>
 /// <list type="bullet">
 /// <item>Only the instance on the LOCALLY OWNED player builds the UI, and it does so
-/// lazily from <see cref="OnUpdate"/> rather than <c>OnAttach</c>: on a client
-/// <see cref="Net.IsOwner"/> answers false for everything until the host's Welcome
-/// lands, so ownership is not yet knowable at attach time.</item>
+/// from <see cref="EntityScript.OnOwnershipChanged"/> rather than <c>OnAttach</c>: on
+/// a client <see cref="Net.IsOwner"/> answers false for everything until the host's
+/// Welcome lands, so ownership is not yet knowable at attach time - this hook is the
+/// moment it becomes knowable, offline, on the host, and on a welcomed client
+/// alike.</item>
 /// <item>The transcript is <b>static</b>. A multicast arrives on the SENDER's player
 /// entity on every peer - which, on everyone but the sender, is not the entity holding
 /// the UI. Collecting the lines in one process-wide list is what lets any instance's
@@ -179,20 +181,40 @@ public sealed class ChatBox : EntityScript
     /// </remarks>
     public bool IsTyping => _input.IsValid && Ui.IsEditing(_input);
 
+    /// <summary>True once ownership of this player is known to belong to THIS peer -
+    /// latched once by <see cref="OnOwnershipChanged"/> instead of asking
+    /// <see cref="Net.IsOwner"/> every frame forever. Only that peer types as this
+    /// player.</summary>
+    private bool _isLocalPlayer;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The UI is built HERE, once, instead of lazily the first frame
+    /// <see cref="OnUpdate"/> finds <see cref="Net.IsOwner"/> true: this hook's
+    /// <paramref name="isOwner"/> is never a stale guess, because it fires exactly
+    /// when the answer becomes decided - offline and on the host that is
+    /// immediately, on a client the moment the host's Welcome lands. A remote
+    /// player's instance sees <c>isOwner == false</c> here once and never builds
+    /// anything.
+    /// </remarks>
+    public override void OnOwnershipChanged(uint owner, bool isOwner)
+    {
+        _isLocalPlayer = isOwner;
+        if (isOwner && !_input.IsValid)
+        {
+            BuildUi();
+        }
+    }
+
     /// <inheritdoc/>
     public override void OnUpdate(float deltaTime)
     {
-        // Remote players run this script too (it is on the prefab); only the peer that
-        // owns a player gets to type as them. Net.IsOwner is true offline, so a solo
-        // editor session still gets a working chat box.
-        if (!Net.IsOwner(Self))
+        // Remote players run this script too (it is on the prefab); only the local
+        // owner - latched once in OnOwnershipChanged, true offline too - ever gets
+        // past this.
+        if (!_isLocalPlayer)
         {
             return;
-        }
-
-        if (!_input.IsValid)
-        {
-            BuildUi();
         }
 
         PumpInput();

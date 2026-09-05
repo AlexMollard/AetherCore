@@ -37,6 +37,36 @@ public abstract class EntityScript
 
     public virtual void OnDetach() { }
 
+    /// <summary>
+    /// Fires once ownership of <see cref="Self"/> becomes knowable, and again every
+    /// time it changes hands afterward - the one place to do owner-dependent setup
+    /// that <see cref="OnAttach"/> cannot.
+    /// </summary>
+    /// <remarks>
+    /// On a client, <see cref="Net.IsOwner"/> answers false for EVERYTHING until the
+    /// host's Welcome lands, so ownership is not knowable at attach time - and games
+    /// used to work around that by re-deriving owner-dependent state every frame in
+    /// <see cref="OnUpdate"/> "just in case it just became true", each occurrence
+    /// carrying its own paragraph explaining why. This hook is that moment instead:
+    /// the runtime calls it exactly when the answer is decided, so owner-dependent
+    /// setup runs once, here, rather than being polled forever.
+    /// <para>
+    /// Fires on the SAME frame as <see cref="OnAttach"/>, right after it, when the
+    /// entity is not networked at all, when this process is offline, and when this
+    /// process is the host - all three know their ownership from the very first
+    /// frame. On a client behind a replicated <c>NetworkIdentity</c> it fires the
+    /// first frame the host's Welcome has landed, and again if the owning connection
+    /// ever changes (e.g. that connection disconnecting hands the entity to the
+    /// host) - never per frame otherwise. A script does not need to know which of
+    /// these cases it is in.
+    /// </para>
+    /// </remarks>
+    /// <param name="owner">The connection id that owns <see cref="Self"/> (the host's
+    /// id for a host-owned or unreplicated entity).</param>
+    /// <param name="isOwner">The same answer <see cref="Net.IsOwner"/> would give right
+    /// now, delivered once instead of polled.</param>
+    public virtual void OnOwnershipChanged(uint owner, bool isOwner) { }
+
     // ── Physics callbacks (Unity-style) ───────────────────────────────────────────
     // Override any of these and the runtime auto-enables collision events on this
     // entity and dispatches them each frame - no polling needed.

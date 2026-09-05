@@ -97,6 +97,18 @@ namespace aether::scripting
 		// asking it to build on a machine that has only that produces "a compatible .NET SDK
 		// was not found" - which reached one user as their script failing to compile.
 		std::int32_t (*CompileScripts)(const char* scriptDirUtf8, const char* outputPathUtf8, const char* referenceDirUtf8, std::int32_t optimize, char* diagBuf, std::int32_t diagLen) = nullptr;
+
+		// Networking: ownership. Called whenever ownership of a scripted entity becomes
+		// KNOWN (offline and on the host that is immediately; on a client it waits for
+		// the host's Welcome) or CHANGES HANDS thereafter (e.g. the owning connection
+		// disconnecting hands the entity to the host) - see
+		// ScriptComponentSystem::DispatchOwnershipChanged for the native half and
+		// EntityScript.OnOwnershipChanged for the managed hook this reaches. `owner` is
+		// the connection id that owns the entity; `isOwner` is nonzero when the peer
+		// running this call is that owner. Appended at the end, like every ABI addition
+		// here - reordering an existing slot would desync every already-built managed
+		// build from this header without either side's size check noticing why.
+		void (*InvokeOwnershipChanged)(std::uint64_t handle, std::uint32_t owner, std::int32_t isOwner) = nullptr;
 	};
 
 	// Returns 0 on success; nonzero signals an ABI/version mismatch (the sizes

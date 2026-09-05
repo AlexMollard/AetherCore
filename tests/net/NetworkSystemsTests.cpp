@@ -1188,3 +1188,86 @@ TEST_CASE("A remote body that was never dynamic is left exactly as authored")
 	CHECK_FALSE(client.world.Has<aether::net::NetSimulationOverride>(platform));
 	CHECK_FALSE(client.world.Has<aether::net::NetSimulationOverride>(lift));
 }
+
+// ── QueryOwnership: the "is this even decidable yet" question ─────────────────────
+// ScriptComponentSystem::DispatchOwnershipChanged needs this because Net.IsOwner
+// alone folds "not yet knowable" (a client before its Welcome) and a real "known
+// and not mine" into the same `false` - see the declaration in NetworkSystems.hpp.
+
+TEST_CASE("QueryOwnership is undecidable only for a replicated entity on a client before its Welcome")
+{
+	Endpoint client;
+	client.BecomeClient();
+	const Entity entity = client.Replicate(1, {0.f, 0.f, 0.f}, kPeer);
+
+	const aether::net::OwnershipQuery before = aether::net::QueryOwnership(client.world, &client.context, entity);
+	CHECK_FALSE(before.known);
+
+	// The host's Welcome lands, giving this peer connection id 5 - kPeer (3) still
+	// owns the entity.
+	client.context.Session().SetLocalConnection(5);
+
+	const aether::net::OwnershipQuery after = aether::net::QueryOwnership(client.world, &client.context, entity);
+	CHECK(after.known);
+	CHECK_FALSE(after.isOwner);
+	CHECK(after.owner == kPeer);
+}
+
+TEST_CASE("QueryOwnership is decided immediately offline, on the host, and for an unreplicated entity")
+{
+	// Offline: Endpoint's context starts in NetRole::Offline before BecomeHost/
+	// BecomeClient is ever called - the same state every single-player game runs in.
+	{
+		Endpoint offline;
+		const Entity entity = offline.Replicate(1, {0.f, 0.f, 0.f}, kPeer);
+
+		const aether::net::OwnershipQuery query = aether::net::QueryOwnership(offline.world, &offline.context, entity);
+
+		CHECK(query.known);
+		CHECK(query.isOwner); // offline: everything is this peer's, whatever the identity says
+	}
+
+	// Host: decidable from the moment it starts, never waits for anything.
+	{
+		Endpoint host;
+		host.BecomeHost();
+		const Entity mine = host.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+		const Entity theirs = host.Replicate(2, {0.f, 0.f, 0.f}, kPeer);
+
+		CHECK(aether::net::QueryOwnership(host.world, &host.context, mine).isOwner);
+		CHECK_FALSE(aether::net::QueryOwnership(host.world, &host.context, theirs).isOwner);
+	}
+
+	// Unreplicated: no NetworkIdentity at all, decidable regardless of role - even
+	// on a client that has not been welcomed yet, matching Net.IsOwner's own
+	// "not a replicated entity, so it's mine" branch.
+	{
+		Endpoint client;
+		client.BecomeClient();
+		const Entity local = client.world.Create();
+
+		const aether::net::OwnershipQuery query = aether::net::QueryOwnership(client.world, &client.context, local);
+
+		CHECK(query.known);
+		CHECK(query.isOwner);
+		CHECK_FALSE(query.replicated);
+	}
+}
+
+TEST_CASE("QueryOwnership with no NetworkContext at all reads as offline")
+{
+	// A headless/no-networking build never registers a NetworkContext service.
+	// Every Net.* export treats that as offline; this must too, verbatim - a
+	// baked NetworkIdentity (e.g. a prefab authored with one) still names its
+	// owner even with no session to look it up against.
+	World world;
+	const Entity entity = world.Create();
+	world.Emplace<aether::net::NetworkIdentity>(entity, aether::net::NetworkIdentity{.netId = 1, .owner = kPeer});
+
+	const aether::net::OwnershipQuery query = aether::net::QueryOwnership(world, nullptr, entity);
+
+	CHECK(query.known);
+	CHECK(query.isOwner);
+	CHECK(query.owner == kPeer);
+	CHECK(query.replicated);
+}

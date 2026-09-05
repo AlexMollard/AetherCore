@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "IEngineRuntime.hpp"
+#include "net/NetworkContext.hpp"
+#include "net/NetworkSystems.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -71,6 +73,53 @@ namespace aether::app
 	{
 		const auto it = m_instances.find(InstanceKey(entityId, scriptIndex));
 		return it != m_instances.end() ? it->second.handle : 0;
+	}
+
+	// See the header for the known/settled state each Instance tracks. The actual
+	// "what does this entity's ownership read as right now" question is
+	// net::QueryOwnership's - kept there (and unit-tested there, in
+	// tests/net/NetworkSystemsTests.cpp) rather than reimplemented here, so this
+	// function is only ever the state-machine/dispatch half: did that answer just
+	// become decidable, or change, and if so, call the appended
+	// ManagedScriptApi::InvokeOwnershipChanged slot.
+	//
+	// `instance.settled` retires an unreplicated entity's instance after its first
+	// (necessarily unconditional, per QueryOwnership) firing: it has no `owner`
+	// field to ever change, so there is nothing left to check again. That is every
+	// non-networked script in a project - the per-frame cost this hook adds for
+	// them is one bool check, forever, the same "a hook nobody uses costs nothing
+	// ongoing" property DispatchPhysicsEvents gives EntityScript.
+	void ScriptComponentSystem::DispatchOwnershipChanged(World& world, Entity entity,
+	        const ::aether::scripting::ManagedScriptApi& api, std::uint64_t handle, Instance& instance)
+	{
+		if (instance.settled)
+		{
+			return;
+		}
+
+		auto* context = m_services.TryGet<net::NetworkContext>();
+		const net::OwnershipQuery query = net::QueryOwnership(world, context, entity);
+		if (!query.known)
+		{
+			return;
+		}
+
+		const bool firstFire = !instance.known;
+		if (firstFire || instance.isOwner != query.isOwner || instance.owner != query.owner)
+		{
+			instance.known = true;
+			instance.isOwner = query.isOwner;
+			instance.owner = query.owner;
+			if (api.InvokeOwnershipChanged != nullptr)
+			{
+				api.InvokeOwnershipChanged(handle, query.owner, query.isOwner ? 1 : 0);
+			}
+		}
+
+		if (!query.replicated)
+		{
+			instance.settled = true; // no `owner` field left that could ever change this again
+		}
 	}
 
 	bool ScriptComponentSystem::UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt)
@@ -148,6 +197,11 @@ namespace aether::app
 				api->InvokeAttach(handle);
 			}
 		}
+
+		// Every frame, not just on attach: this is also how a later Welcome landing
+		// or an ownership hand-off (see NetworkSystems.cpp's PruneDisconnected) gets
+		// noticed on an instance that has been live for a while.
+		DispatchOwnershipChanged(*ctx.world, entity, *api, handle, m_instances[key]);
 
 		if (api->InvokeUpdate != nullptr)
 		{

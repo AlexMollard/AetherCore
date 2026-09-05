@@ -28,6 +28,34 @@ namespace aether::net
 	class NetworkContext;
 	class SnapshotCache;
 
+	// What `entity`'s ownership currently reads as, and whether that answer is
+	// decidable yet - see NetworkContext::IsOwner for the underlying rule this
+	// extends. `IsOwner` alone cannot express the difference this exists for: on a
+	// client whose Welcome has not landed, it reports `false` for a replicated
+	// entity, and that `false` is indistinguishable from a real "known and not
+	// mine" at the call site. `known` names the window explicitly so a caller that
+	// must not act on a premature guess - see
+	// ScriptComponentSystem::DispatchOwnershipChanged, which fires
+	// EntityScript.OnOwnershipChanged only once this is true - does not have to
+	// reconstruct it from context->IsClient()/LocalConnectionId() itself.
+	//
+	// `context` may be null (no networking subsystem registered at all, e.g. a
+	// headless build with no NetworkContext service) - offline rules apply, the
+	// same convention every Net.* export uses.
+	struct OwnershipQuery
+	{
+		bool known = true;
+		bool isOwner = true;
+		ConnectionId owner = kInvalidConnection;
+		// Whether `entity` carries a NetworkIdentity at all. An entity that does not
+		// can never change hands later (there is no `owner` field to change), which
+		// is what lets a caller retire an unreplicated entity's check permanently
+		// instead of re-querying it every frame for the rest of its life - see
+		// ScriptComponentSystem::Instance::settled.
+		bool replicated = false;
+	};
+	[[nodiscard]] OwnershipQuery QueryOwnership(World& world, NetworkContext* context, Entity entity);
+
 	// Drains the transport and lands inbound authoritative state on the world.
 	//
 	// Registered FIRST, ahead of animation, physics and scripts: everything

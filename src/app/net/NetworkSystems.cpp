@@ -93,6 +93,38 @@ namespace aether::net
 		}
 	} // namespace
 
+	OwnershipQuery QueryOwnership(World& world, NetworkContext* context, Entity entity)
+	{
+		const auto* identity = world.TryGet<NetworkIdentity>(entity);
+		if (identity == nullptr)
+		{
+			// Not replicated. Offline, on the host, and on a client this is always
+			// this peer's - the same nullptr branch NetworkContext::IsOwner takes -
+			// and there is no session-less "owner" for it beyond this peer's own id.
+			return OwnershipQuery{.known = true, .isOwner = true,
+			        .owner = context != nullptr ? context->LocalConnectionId() : kInvalidConnection};
+		}
+		if (context == nullptr)
+		{
+			// A leftover identity with no session running (Stop() clears the net id,
+			// not this component). Verbatim, matching Net.OwnerOf: `owner` is
+			// whatever this identity says even with no session to look it up
+			// against - a baked, never-bound identity (e.g. a prefab's own
+			// NetworkIdentity spawned via Scene.Instantiate rather than Net.Spawn)
+			// still names a real connection id. `isOwner` keeps the offline
+			// "everything is mine" default.
+			return OwnershipQuery{.known = true, .isOwner = true, .owner = identity->owner, .replicated = true};
+		}
+		if (context->IsClient() && context->LocalConnectionId() == kInvalidConnection)
+		{
+			// The host's Welcome has not landed - see NetworkContext::IsOwner's own
+			// comment on this exact guard. Not decidable yet.
+			return OwnershipQuery{.known = false, .isOwner = false, .owner = kInvalidConnection, .replicated = true};
+		}
+		return OwnershipQuery{
+		        .known = true, .isOwner = context->IsOwner(world, entity), .owner = identity->owner, .replicated = true};
+	}
+
 	// ── Receive ─────────────────────────────────────────────────────────────────
 
 	void NetworkReceiveSystem::Update(World& world, float dt)
