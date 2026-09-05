@@ -99,6 +99,12 @@ internal static unsafe class ScriptRegistry
     private static readonly Dictionary<string, bool> s_editorWindowVisible = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, EntityScript> s_defaults = new(StringComparer.Ordinal);
 
+    // Names ("TypeName.FieldName") already warned about in SetProperty's default
+    // case, so an unsupported property type is reported once ever rather than once
+    // per call - a replicated field re-set every network tick would otherwise spam
+    // the log for a condition that never changes.
+    private static readonly HashSet<string> s_warnedUnsupportedProperties = new(StringComparer.Ordinal);
+
     // Scratch for returning a string property across the boundary. GetProperty is
     // called synchronously by the inspector, so a single pending buffer suffices.
     private static IntPtr s_stringScratch = IntPtr.Zero;
@@ -956,7 +962,22 @@ internal static unsafe class ScriptRegistry
                     // entity id via its public T(Entity) ctor.
                     p.Field.SetValue(script, Activator.CreateInstance(p.Field.FieldType, new Entity((uint)value->I64)));
                     break;
+                case PropertyType.Entity:
+                    // Mirrors GetProperty's Entity case in reverse: the id crosses as
+                    // I64 either way, so round-tripping it through the inspector or a
+                    // scene-authored `t = 'entity'` reference reads back the same value.
+                    p.Field.SetValue(script, new Entity((uint)value->I64));
+                    break;
                 default:
+                    // A property that silently never gets written is invisible until
+                    // someone notices the field reads back at its default - this is
+                    // exactly that failure, named once per (type, property) rather than
+                    // once per call so a replicated field re-set every tick does not
+                    // spam the log.
+                    if (s_warnedUnsupportedProperties.Add($"{script.GetType().Name}.{p.Name}"))
+                    {
+                        Bootstrap.ReportError($"SetProperty({p.Name}): unsupported property type {p.Type} - value not applied.");
+                    }
                     return 0;
             }
         }
