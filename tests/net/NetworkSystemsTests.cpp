@@ -1271,3 +1271,32 @@ TEST_CASE("QueryOwnership with no NetworkContext at all reads as offline")
 	CHECK(query.owner == kPeer);
 	CHECK(query.replicated);
 }
+
+// ── FindRemoteBuffer: the read-only seam a hit-validation rewind reaches through ──
+//
+// Additive accessor: exposes the InterpolationBuffer NetworkReceiveSystem already
+// keeps per remote net id, with no change to Push()/Sample()'s own behaviour. A
+// RemoteState (and its buffer) is created the first tick ResolveTransforms
+// processes a non-owned, NetworkTransform-tagged replicated entity - see
+// ResolveTransforms' unconditional try_emplace - so one Update() is enough to
+// populate it, with no snapshot content needed.
+
+TEST_CASE("FindRemoteBuffer exposes a remote entity's interpolation buffer by net id")
+{
+	Endpoint client;
+	client.BecomeClient();
+
+	// Nothing tracked yet: must not manufacture an entry for a netId nobody has
+	// ever been resolved for.
+	CHECK(client.receive.FindRemoteBuffer(1) == nullptr);
+
+	const Entity remote = client.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+	client.world.Emplace<aether::net::NetworkTransform>(remote);
+
+	client.receive.Update(client.world, 1.f / 60.f);
+
+	CHECK(client.receive.FindRemoteBuffer(1) != nullptr);
+	// A netId this peer has never bound anything to remains untracked, even
+	// after other entities have populated the map.
+	CHECK(client.receive.FindRemoteBuffer(99) == nullptr);
+}

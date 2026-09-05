@@ -87,6 +87,21 @@ namespace aether::net
 		void OnDisconnected(World& world, ConnectionId peer);
 		void OnData(World& world, ConnectionId peer, std::span<const std::byte> data);
 
+		// Read-only access to a remote entity's own interpolation buffer, keyed by
+		// net id - the same object ResolveTransforms samples every frame. Additive:
+		// exposes what was already private without changing Push()/Sample()'s
+		// signature or meaning, so a hit-validation rewind (NetRewind) can query
+		// Sample(pastTime)/RecommendedDelaySeconds() for a netId's history without
+		// this system tracking a second copy of the same data. Null for a netId
+		// this peer has no remote state for - not yet received, owned locally (no
+		// RemoteState is ever created for an owned entity - see ResolveTransforms),
+		// or already gone.
+		[[nodiscard]] const InterpolationBuffer* FindRemoteBuffer(std::uint32_t netId) const
+		{
+			const auto it = m_remote.find(netId);
+			return it != m_remote.end() ? &it->second.buffer : nullptr;
+		}
+
 	private:
 		// Drops bindings whose entity no longer exists. A net id whose entity died by
 		// a route replication never sees - a scene load, a script's Entity.Destroy -

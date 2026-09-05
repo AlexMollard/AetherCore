@@ -49,6 +49,89 @@ namespace aether::net
 		// synced to a broadcast delay) can still ask for one.
 		float interpolationDelaySeconds = 0.1f;
 		bool autoInterpolationDelay = true;
+
+		// Dead-reckons this entity forward using the velocity between its last two
+		// arrivals instead of only ever showing confirmed data - see
+		// InterpolationBuffer::SampleForward. The guess is wrong the instant the
+		// entity changes direction; a bounded, decaying correction (also
+		// SampleForward) turns that into a brief smooth slide onto the right
+		// position rather than a visible snap - it is still a GUESS, never a claim
+		// anything trusts: NetworkReceiveSystem::ResolveTransforms applies zero
+		// correction of any kind to a locally-owned entity, and this setting only
+		// ever touches how someone ELSE's entity is drawn.
+		//
+		// Defaults ON for the same reason auto-delay defaults on: freshness is the
+		// common case worth having without asking for it, and the guess is bounded
+		// and self-correcting rather than free-running. Turn it off per entity for
+		// anything whose exact recent position matters more than its freshness -
+		// something that changes direction erratically at close range, or a replay
+		// /spectator feed that would rather hold the last real sample than guess.
+		bool extrapolate = true;
+
+		// How much of the render delay to spend as a PROACTIVE guess every frame,
+		// shrinking how far in the past this entity is rendered instead of only
+		// projecting forward when a packet happens to be late - see
+		// NetworkReceiveSystem::ResolveTransforms, which computes
+		// `effectiveDelay = delay - min(delay, budget)` and renders at
+		// `now - effectiveDelay`, `budget` itself computed below according to
+		// `autoExtrapolationBudget`.
+		//
+		// The delay this spends from is roughly (smoothed interval + 4x jitter) -
+		// see InterpolationBuffer::RecommendedDelaySeconds. The INTERVAL term exists
+		// purely because samples arrive discretely, and extrapolation substitutes
+		// for it cleanly on ordinary, roughly-steady motion; the JITTER term exists
+		// to protect against a genuinely late packet, and spending it too means a
+		// real hiccup more often falls back on the cap/freeze instead of a full
+		// margin's worth of real buffered slack. The cost of spending EITHER is
+		// CONTINUOUS, not occasional: every frame a budget is spent, a chance of an
+		// actual direction change since the last sample is on screen as a
+		// (bounded, corrected) guess rather than confirmed data.
+		//
+		// With `autoExtrapolationBudget` on (the default), the budget is
+		// SELF-TUNING: `extrapolationBudgetFraction` (default 1.0, i.e. all of it)
+		// times InterpolationBuffer::MeasuredIntervalSeconds() - the entity's own
+		// observed spacing, not a guessed constant. Spending exactly the interval
+		// and leaving the jitter term untouched is principled and self-correcting
+		// regardless of link or send rate: on a tight, low-jitter 60Hz LAN link the
+		// interval is tiny and the render ends up close to the present with a small
+		// residual jitter margin; on a bad link the (large) jitter term stays fully
+		// protected either way. In both cases the render floor this converges to is
+		// exactly the jitter margin (delay - interval = 4*jitter, algebraically),
+		// which is the real, physical bound on how fresh a display-only guess can
+		// responsibly be - see the send-rate/staleness numbers in the report for
+		// this batch. Lower `extrapolationBudgetFraction` to spend less than the
+		// full interval and keep some of it as buffered margin too, at the cost of
+		// a smaller freshness gain.
+		//
+		// Set `autoExtrapolationBudget` to false to PIN the budget to
+		// `extrapolationBudgetSeconds` instead (default 0.f - extrapolation then
+		// only ever covers a packet that is actually late, its original, most
+		// conservative shape) - a game with its own reason to want a fixed,
+		// deterministic number rather than one that moves with the measured
+		// interval can still ask for one. Either way the budget is clamped to
+		// `maxExtrapolationSeconds` below before it is spent, so it can never ask
+		// the projection to exceed its own cap, and can never drive the effective
+		// delay negative.
+		bool autoExtrapolationBudget = true;
+		float extrapolationBudgetFraction = 1.0f;
+		float extrapolationBudgetSeconds = 0.f;
+
+		// How far past the newest sample this entity may ever be projected, in
+		// seconds - the hard ceiling on ANY single projection, whether it comes
+		// from the proactive budget above, a genuinely late packet, or both at
+		// once. Past this it FREEZES at the position the projection had reached AT
+		// the cap - it does not keep sliding further from the last real
+		// observation, and it does not jump back to the raw last sample either,
+		// which would be its own visible pop the instant the cap is crossed.
+		//
+		// 0.15s is three send intervals at the framework's default 20Hz
+		// (NetworkContext::SendRateHz): enough to bridge one dropped packet plus
+		// ordinary jitter without a visible stutter, short enough that a genuinely
+		// stopped-sending entity freezes within a third of a second rather than
+		// coasting off into the distance. A fast, mostly-straight-line mover (a
+		// thrown projectile) can afford a larger cap than a player character that
+		// jukes - hence per-entity rather than a single framework-wide constant.
+		float maxExtrapolationSeconds = 0.15f;
 	};
 
 	// A connected player's display name and link quality. Framework-level rather than

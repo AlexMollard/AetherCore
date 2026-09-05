@@ -726,20 +726,52 @@ namespace aether::net
 				        });
 			        }
 
-			        // Render the remote entity in the past, where there is a sample on both
-			        // sides of the render time to interpolate between. This is what makes
-			        // OTHER players look smooth between snapshots, and it is untouched by the
-			        // move to client authority - only where the samples originate changed.
+			        // `delay` bounds how far in the past the sample pair for interpolation
+			        // comes from - the anchor is `interpolationDelaySeconds` either way: with
+			        // auto-delay off it IS the delay, verbatim, because that is what "pin it"
+			        // means; with auto-delay on (the default) it is only the seed
+			        // RecommendedDelaySeconds falls back to before this entity's buffer has
+			        // measured an interval of its own - see
+			        // InterpolationBuffer::RecommendedDelaySeconds.
 			        //
-			        // The anchor is `interpolationDelaySeconds` either way: with auto-delay
-			        // off it IS the delay, verbatim, because that is what "pin it" means; with
-			        // auto-delay on (the default) it is only the seed RecommendedDelaySeconds
-			        // falls back to before this entity's buffer has measured an interval of
-			        // its own - see InterpolationBuffer::RecommendedDelaySeconds.
+			        // `tuning->extrapolate` (on by default - see NetworkTransform) does two
+			        // things together, not one: it spends a BUDGET of `delay` proactively -
+			        // shrinking the actual render time toward the present, not merely
+			        // surviving a late packet without moving it - and it picks SampleForward
+			        // over the plain Sample() this used unconditionally before, so whatever
+			        // gap that shrink (or a genuinely late packet) opens up past the newest
+			        // sample is dead-reckoned from the entity's own recent velocity instead of
+			        // freezing, capped at `maxExtrapolationSeconds` regardless of which of the
+			        // two opened the gap, and smoothly correcting any misprediction - see
+			        // SampleForward's own doc for both bounds. This is a DISPLAY decision
+			        // only: the value written here never feeds back into what
+			        // ApplySnapshot/ResolveTransforms believe is authoritative, so a wrong
+			        // guess can only ever be seen, never acted on.
+			        //
+			        // The budget itself is SELF-TUNING with `autoExtrapolationBudget` on (the
+			        // default): `extrapolationBudgetFraction` of the buffer's OWN measured
+			        // interval - see InterpolationBuffer::MeasuredIntervalSeconds - rather than
+			        // a guessed constant, so it moves with the actual link/send rate instead of
+			        // assuming one. Off, it is pinned to `extrapolationBudgetSeconds` verbatim.
 			        const float anchor = std::max(0.f, tuning->interpolationDelaySeconds);
 			        const float delay = tuning->autoInterpolationDelay ? state.buffer.RecommendedDelaySeconds(anchor)
 			                                                            : anchor;
-			        const std::optional<TransformSample> sample = state.buffer.Sample(now - delay);
+
+			        std::optional<TransformSample> sample;
+			        if (tuning->extrapolate)
+			        {
+				        const float cap = std::max(0.f, tuning->maxExtrapolationSeconds);
+				        const float rawBudget = tuning->autoExtrapolationBudget
+				                ? state.buffer.MeasuredIntervalSeconds() * std::max(0.f, tuning->extrapolationBudgetFraction)
+				                : tuning->extrapolationBudgetSeconds;
+				        const float budget = std::clamp(rawBudget, 0.f, cap);
+				        const float effectiveDelay = delay - std::min(delay, budget);
+				        sample = state.buffer.SampleForward(now - effectiveDelay, cap);
+			        }
+			        else
+			        {
+				        sample = state.buffer.Sample(now - delay);
+			        }
 			        if (!sample.has_value())
 			        {
 				        // Nothing authoritative yet: keep what was on screen rather than
