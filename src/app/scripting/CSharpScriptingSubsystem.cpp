@@ -2,7 +2,7 @@
 
 #include <array>
 #include <atomic>
-#include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <string>
 #include <thread>
@@ -37,6 +37,20 @@ namespace aether::app::scripting
 				}
 			}
 			return candidates[0];
+		}
+
+		// A PropertyValue string crosses as explicit UTF-8 bytes with the byte count
+		// in `reserved` (managed FillValue writes it): a replicated string field may
+		// contain embedded NULs, which a plain C-string copy would silently truncate
+		// at the first one. The pointer is NUL-terminated as well, so a negative
+		// length (a writer that predates the explicit count) falls back to strlen.
+		[[nodiscard]] std::size_t PropertyStrLen(const aether::scripting::PropertyValue& pv)
+		{
+			if (pv.str == nullptr)
+			{
+				return 0;
+			}
+			return pv.reserved >= 0 ? static_cast<std::size_t>(pv.reserved) : std::strlen(pv.str);
 		}
 	} // namespace
 
@@ -649,7 +663,7 @@ namespace aether::app::scripting
 		out.f4[2] = pv.f4[2];
 		out.f4[3] = pv.f4[3];
 		out.i64 = pv.i64;
-		out.str = pv.str != nullptr ? pv.str : "";
+		out.str.assign(pv.str != nullptr ? pv.str : "", PropertyStrLen(pv));
 		return true;
 	}
 
@@ -668,6 +682,9 @@ namespace aether::app::scripting
 		pv.f4[3] = value.f4[3];
 		pv.i64 = value.i64;
 		pv.str = value.str.c_str();
+		// Explicit byte length so an embedded NUL in a replicated string field
+		// reaches managed code intact; PtrToStringUTF8 alone stops at the first one.
+		pv.reserved = static_cast<std::int32_t>(value.str.size());
 		api->SetProperty(handle, index, &pv);
 	}
 
@@ -689,7 +706,7 @@ namespace aether::app::scripting
 		out.f4[2] = pv.f4[2];
 		out.f4[3] = pv.f4[3];
 		out.i64 = pv.i64;
-		out.str = pv.str != nullptr ? pv.str : "";
+		out.str.assign(pv.str != nullptr ? pv.str : "", PropertyStrLen(pv));
 		return true;
 	}
 

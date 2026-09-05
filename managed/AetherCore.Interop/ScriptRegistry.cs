@@ -81,8 +81,11 @@ internal static unsafe class ScriptRegistry
     private static readonly Dictionary<string, int[]> s_replicated = new(StringComparer.Ordinal);
 
     // One [NetRpc] method table per script type (built once at load, alongside
-    // s_props/s_replicated so the three tables cannot drift). The array index is
-    // what travels on the wire (NetRpc.hpp's methodIndex), in declaration order.
+    // s_props/s_replicated so the three tables cannot drift). The wire carries the
+    // method NAME, never a position: two peers built from different source have
+    // different declaration-order tables, so an index would name a different method
+    // on each. The array position is this process's LOCAL dispatch index, resolved
+    // from the name by GetNetRpcMethod on both the send and the receive side.
     private static readonly Dictionary<string, MethodInfo[]> s_rpcMethods = new(StringComparer.Ordinal);
 
     // A default-constructed instance per type, so the inspector can show default
@@ -547,18 +550,20 @@ internal static unsafe class ScriptRegistry
         return indices.Length;
     }
 
-    // ── Networking: RPCs ────────────────────────────────────────────────────
-
     /// <summary>
-    /// Resolves a [NetRpc] method by name - the encode side, mirroring
-    /// GetReplicatedPropertyIndices: a caller building an outbound call (Net.Call, or
-    /// the native CSharpRpcBridge) turns a method name into the index that goes on
-    /// the wire, which is the type's declaration-order [NetRpc] table built alongside
-    /// s_props/s_replicated. <paramref name="outTarget"/> receives the
-    /// <see cref="NetRpcTarget"/> the attribute declared, so the direction of a call
-    /// is stated once, on the method, and never at the call site. Returns -1 - leaving
-    /// <paramref name="outTarget"/> untouched - if the type is unknown or declares no
-    /// such RPC.
+    /// Resolves a [NetRpc] method by name in the type's declaration-order table,
+    /// mirroring GetReplicatedPropertyIndices. Both wire sides call it: an
+    /// outbound call (Net.Call, via the native CSharpRpcBridge) turns the name
+    /// into this process's dispatch index, and ApplyRpc on the receiving peer
+    /// turns the name that arrived into that peer's index. The method NAME - not
+    /// this index - is what travels on the wire, so a peer with a different
+    /// assembly drops an unknown name instead of invoking whatever sits at some
+    /// position of its own table. <paramref name="outTarget"/> receives the
+    /// <see cref="NetRpcTarget"/> the attribute declared, so the direction of a
+    /// call is stated once, on the method, and never at the call site - nor in a
+    /// wire byte that disagrees with it. Returns -1 - leaving
+    /// <paramref name="outTarget"/> untouched - if the type is unknown or declares
+    /// no such RPC.
     /// </summary>
     /// <remarks>
     /// Reflection over a custom attribute can throw (a torn assembly load, a missing
@@ -704,6 +709,41 @@ internal static unsafe class ScriptRegistry
         }
     }
 
+    // Marshals `value` into s_stringScratch as explicit UTF-8 bytes plus a
+    // trailing NUL, and returns the byte count (which the caller stores in
+    // Reserved). The terminator alone is NOT enough: a replicated string field
+    // may contain embedded NULs and the wire is length-prefixed, but the native
+    // side copies Str as a std::string - without the explicit length it would stop
+    // at the first NUL and silently truncate the value on its way to the wire.
+    // The NUL is still written so readers that predate Reserved (or ignore it)
+    // keep seeing a valid prefix rather than over-reading.
+    private static int WriteScratchString(string value)
+    {
+        if (s_stringScratch != IntPtr.Zero)
+        {
+            Marshal.FreeCoTaskMem(s_stringScratch);
+        }
+        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        s_stringScratch = Marshal.AllocCoTaskMem(bytes.Length + 1);
+        Marshal.Copy(bytes, 0, s_stringScratch, bytes.Length);
+        Marshal.WriteByte(s_stringScratch, bytes.Length, 0);
+        return bytes.Length;
+    }
+
+    // The inverse contract: `reserved` carries the byte length when >= 0, and the
+    // pointer is NUL-terminated regardless, so a negative length (a writer that
+    // predates the explicit length) falls back to the terminator.
+    private static string ReadNativeString(byte* ptr, int reserved)
+    {
+        if (ptr == null)
+        {
+            return string.Empty;
+        }
+        return reserved >= 0
+            ? System.Text.Encoding.UTF8.GetString(ptr, reserved)
+            : Utf8.ToString(ptr);
+    }
+
     private static int FillValue(object script, Prop p, PropertyValue* outValue)
     {
         object? value = p.Field.GetValue(script);
@@ -729,11 +769,7 @@ internal static unsafe class ScriptRegistry
                 outValue->F4[2] = v.Z;
                 break;
             case PropertyType.String:
-                if (s_stringScratch != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(s_stringScratch);
-                }
-                s_stringScratch = Marshal.StringToCoTaskMemUTF8((string?)value ?? string.Empty);
+                outValue->Reserved = WriteScratchString((string?)value ?? string.Empty);
                 outValue->Str = (byte*)s_stringScratch;
                 break;
             case PropertyType.Entity:
@@ -743,11 +779,7 @@ internal static unsafe class ScriptRegistry
                 // Entity id in I64 (like Entity), required component name in Str so
                 // the inspector can validate drops without a metadata round-trip.
                 outValue->I64 = value is IComponentRef cref ? cref.Owner.Id : 0;
-                if (s_stringScratch != IntPtr.Zero)
-                {
-                    Marshal.FreeCoTaskMem(s_stringScratch);
-                }
-                s_stringScratch = Marshal.StringToCoTaskMemUTF8(p.ComponentType ?? string.Empty);
+                outValue->Reserved = WriteScratchString(p.ComponentType ?? string.Empty);
                 outValue->Str = (byte*)s_stringScratch;
                 break;
             default:
@@ -789,10 +821,7 @@ internal static unsafe class ScriptRegistry
                     p.Field.SetValue(script, new System.Numerics.Vector3(value->F4[0], value->F4[1], value->F4[2]));
                     break;
                 case PropertyType.String:
-                    p.Field.SetValue(script, Utf8.ToString(value->Str));
-                    break;
-                case PropertyType.Entity:
-                    p.Field.SetValue(script, new Entity((uint)value->I64));
+                    p.Field.SetValue(script, ReadNativeString(value->Str, value->Reserved));
                     break;
                 case PropertyType.Component:
                     // Reconstruct the wrapper (RigidBodyRef, ...) from the linked

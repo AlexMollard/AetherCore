@@ -45,10 +45,12 @@ namespace aether::net
 		{
 		}
 
-		// `methodName`'s wire index in `typeName`'s [NetRpc] method table plus the
-		// target it declared, or index -1 if the type is unknown or declares no such
-		// RPC. Used by the encode side (a caller building an outbound call, e.g.
-		// Net.Call's native half) to turn a method name into what goes on the wire.
+		// `methodName`'s dispatch index in `typeName`'s [NetRpc] method table plus
+		// the target it declared, or index -1 if the type is unknown or declares no
+		// such RPC. Used on BOTH sides of the wire: Net.Call's native half builds an
+		// outbound call with it, and ApplyRpc resolves the name a packet carried
+		// against this peer's own table - including the declared target the wire
+		// target byte is gated against.
 		[[nodiscard]] RpcMethod FindMethod(const std::string& typeName, const std::string& methodName) const override;
 
 		// Invokes RPC method `methodIndex` on the live instance of

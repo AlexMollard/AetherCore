@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <span>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "net/NetComponents.hpp"
@@ -16,7 +18,7 @@ using namespace aether;
 TEST_CASE("An RPC round-trips with its argument blob intact")
 {
 	const std::vector<std::byte> args{std::byte{1}, std::byte{2}, std::byte{3}};
-	const std::vector<std::byte> bytes = net::EncodeRpc(11, 0xABCDEF01u, 2, net::NetRpcTarget::Server, args);
+	const std::vector<std::byte> bytes = net::EncodeRpc(11, 0xABCDEF01u, "Say", net::NetRpcTarget::Server, args);
 
 	net::ByteReader r{bytes};
 	CHECK(static_cast<net::NetMessage>(r.U8()) == net::NetMessage::Rpc);
@@ -25,7 +27,7 @@ TEST_CASE("An RPC round-trips with its argument blob intact")
 	REQUIRE(msg.has_value());
 	CHECK(msg->netId == 11);
 	CHECK(msg->scriptTypeHash == 0xABCDEF01u);
-	CHECK(msg->methodIndex == 2);
+	CHECK(msg->methodName == "Say");
 	CHECK(msg->target == net::NetRpcTarget::Server);
 	REQUIRE(msg->args.size() == 3);
 	CHECK(msg->args[2] == std::byte{3});
@@ -38,7 +40,7 @@ TEST_CASE("Every RPC target survives the wire")
 	for (const net::NetRpcTarget target:
 	        {net::NetRpcTarget::Server, net::NetRpcTarget::Client, net::NetRpcTarget::Multicast})
 	{
-		const std::vector<std::byte> bytes = net::EncodeRpc(4, 0x1234u, 1, target, {});
+		const std::vector<std::byte> bytes = net::EncodeRpc(4, 0x1234u, "Say", target, {});
 		net::ByteReader r{bytes};
 		REQUIRE(static_cast<net::NetMessage>(r.U8()) == net::NetMessage::Rpc);
 		const auto msg = net::DecodeRpc(r);
@@ -57,7 +59,7 @@ TEST_CASE("An RPC carrying an out-of-range target byte is dropped, not defaulted
 		w.U8(static_cast<std::uint8_t>(net::NetMessage::Rpc));
 		w.U32(1);
 		w.U32(1);
-		w.U16(0);
+		w.Str("Say");
 		w.U8(target);
 		w.U32(0);
 		const std::vector<std::byte> bytes = w.Take();
@@ -73,7 +75,7 @@ TEST_CASE("An RPC carrying an out-of-range target byte is dropped, not defaulted
 	w.U8(static_cast<std::uint8_t>(net::NetMessage::Rpc));
 	w.U32(1);
 	w.U32(1);
-	w.U16(0);
+	w.Str("Say");
 	w.U8(static_cast<std::uint8_t>(net::NetRpcTarget::Multicast));
 	w.U32(0);
 	const std::vector<std::byte> bytes = w.Take();
@@ -82,13 +84,31 @@ TEST_CASE("An RPC carrying an out-of-range target byte is dropped, not defaulted
 	CHECK(net::DecodeRpc(r).has_value());
 }
 
+TEST_CASE("An RPC whose method name is empty is rejected")
+{
+	// No [NetRpc] method on any assembly has an empty name, so an empty name is a
+	// malformed frame, not a lookup some bridge should have to reject.
+	net::ByteWriter w;
+	w.U8(static_cast<std::uint8_t>(net::NetMessage::Rpc));
+	w.U32(1);
+	w.U32(1);
+	w.Str("");
+	w.U8(static_cast<std::uint8_t>(net::NetRpcTarget::Server));
+	w.U32(0);
+	const std::vector<std::byte> bytes = w.Take();
+
+	net::ByteReader r{bytes};
+	r.U8();
+	CHECK_FALSE(net::DecodeRpc(r).has_value());
+}
+
 TEST_CASE("An RPC claiming more argument bytes than it carries is rejected")
 {
 	net::ByteWriter w;
 	w.U8(static_cast<std::uint8_t>(net::NetMessage::Rpc));
 	w.U32(1);
 	w.U32(1);
-	w.U16(0);
+	w.Str("Say");
 	w.U8(static_cast<std::uint8_t>(net::NetRpcTarget::Server));
 	w.U32(1000); // claims 1000 argument bytes
 	const std::vector<std::byte> bytes = w.Take();
@@ -102,7 +122,7 @@ TEST_CASE("An RPC truncated before its target byte is rejected")
 {
 	// The target read must be bounds-checked like every other field: a packet that
 	// ends mid-record must fail the reader rather than yield target 0.
-	const std::vector<std::byte> full = net::EncodeRpc(1, 0x99u, 0, net::NetRpcTarget::Multicast, {});
+	const std::vector<std::byte> full = net::EncodeRpc(1, 0x99u, "Say", net::NetRpcTarget::Multicast, {});
 	for (std::size_t len = 1; len < full.size(); ++len)
 	{
 		net::ByteReader r{std::span<const std::byte>(full.data(), len)};
@@ -126,9 +146,26 @@ namespace
 			std::vector<std::byte> args;
 		};
 
-		[[nodiscard]] net::RpcMethod FindMethod(const std::string&, const std::string&) const override
+		// The [NetRpc] table ApplyRpc resolves a wire name against: name -> this
+		// peer's dispatch index plus the target the attribute declared. An absent
+		// name models a type that declares no such RPC (or a build-skewed peer
+		// whose table simply does not hold it).
+		void Declare(std::string name, net::RpcMethod method)
 		{
-			return net::RpcMethod{}; // encode side; ApplyRpc never calls it
+			methods.push_back({std::move(name), method});
+		}
+
+		[[nodiscard]] net::RpcMethod FindMethod(const std::string& /*typeName*/,
+		        const std::string& methodName) const override
+		{
+			for (const auto& [name, method]: methods)
+			{
+				if (name == methodName)
+				{
+					return method;
+				}
+			}
+			return net::RpcMethod{};
 		}
 
 		void Invoke(Entity entity, std::uint32_t scriptIndex, std::uint16_t methodIndex,
@@ -138,6 +175,7 @@ namespace
 		}
 
 		mutable std::vector<Call> calls;
+		std::vector<std::pair<std::string, net::RpcMethod>> methods;
 	};
 
 	// The connection id used for "the client that owns the entity" throughout. The
@@ -158,15 +196,16 @@ namespace
 	}
 } // namespace
 
-TEST_CASE("ApplyRpc invokes the bridge when the net id and script type hash resolve")
+TEST_CASE("ApplyRpc invokes the bridge when the net id, script type hash and method name resolve")
 {
 	World world;
 	net::NetSession session;
 	const Entity entity = MakeReplicated(world, session, 1, kOwner);
 
 	FakeRpcBridge bridge;
+	bridge.Declare("Say", net::RpcMethod{.index = 3, .target = net::NetRpcTarget::Server});
 	const net::RpcMessage msg{
-	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodIndex = 3, .args = {std::byte{9}}};
+	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {std::byte{9}}};
 	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
 
 	REQUIRE(bridge.calls.size() == 1);
@@ -182,7 +221,8 @@ TEST_CASE("ApplyRpc drops a call whose net id is unknown")
 	World world;
 	net::NetSession session;
 	FakeRpcBridge bridge;
-	const net::RpcMessage msg{.netId = 42, .scriptTypeHash = 0, .methodIndex = 0, .args = {}};
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{.netId = 42, .scriptTypeHash = 0, .methodName = "Say", .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
 	CHECK(bridge.calls.empty());
 }
@@ -194,7 +234,8 @@ TEST_CASE("ApplyRpc drops a call whose script type hash matches no script on the
 	MakeReplicated(world, session, 7, kOwner);
 
 	FakeRpcBridge bridge;
-	const net::RpcMessage msg{.netId = 7, .scriptTypeHash = 0xDEADBEEFu, .methodIndex = 0, .args = {}};
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{.netId = 7, .scriptTypeHash = 0xDEADBEEFu, .methodName = "Say", .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
 	CHECK(bridge.calls.empty());
 }
@@ -208,8 +249,49 @@ TEST_CASE("ApplyRpc drops a call for an entity with no ScriptComponent")
 	session.Bind(3, entity);
 
 	FakeRpcBridge bridge;
-	const net::RpcMessage msg{.netId = 3, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodIndex = 0, .args = {}};
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{.netId = 3, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
+	CHECK(bridge.calls.empty());
+}
+
+TEST_CASE("ApplyRpc drops a call naming a method the receiver's own table does not declare")
+{
+	// Version skew, made safe by name resolution: the sender's assembly held this
+	// name at some position; the receiver's does not hold the name at all (a hot
+	// reload on one side, an older client build). The call drops rather than
+	// running whatever method happens to sit at any index of the receiver's table
+	// - which is exactly what index-based resolution would have done.
+	World world;
+	net::NetSession session;
+	MakeReplicated(world, session, 1, kOwner);
+
+	FakeRpcBridge bridge;
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{.netId = 1,
+	        .scriptTypeHash = net::ScriptTypeHash("Chat"),
+	        .methodName = "Kick", // the skew: this peer's table has no such method
+	        .args = {}};
+	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
+
+	CHECK(bridge.calls.empty());
+}
+
+TEST_CASE("ApplyRpc drops a call whose resolved dispatch index overflows the u16 invoke field")
+{
+	// FindMethod reports this peer's own table position and Invoke takes it as
+	// u16; a truncating cast would silently run a DIFFERENT local method, so the
+	// index is bounds-checked before dispatch exactly as the send side checks it.
+	World world;
+	net::NetSession session;
+	MakeReplicated(world, session, 1, kOwner);
+
+	FakeRpcBridge bridge;
+	bridge.Declare("Say", net::RpcMethod{.index = 0x10000, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{
+	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {}};
+	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
+
 	CHECK(bridge.calls.empty());
 }
 
@@ -226,7 +308,9 @@ TEST_CASE("A client may invoke an RPC on the entity it owns")
 	const Entity entity = MakeReplicated(world, session, 1, kOwner);
 
 	FakeRpcBridge bridge;
-	const net::RpcMessage msg{.netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodIndex = 0, .args = {}};
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{
+	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
 
 	REQUIRE(bridge.calls.size() == 1);
@@ -240,7 +324,9 @@ TEST_CASE("The host rejects a client RPC aimed at an entity owned by someone els
 	MakeReplicated(world, session, 1, kOwner);
 
 	FakeRpcBridge bridge;
-	const net::RpcMessage msg{.netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodIndex = 0, .args = {}};
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{
+	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, kOtherClient, /*localIsHost=*/true);
 
 	CHECK(bridge.calls.empty());
@@ -255,7 +341,9 @@ TEST_CASE("The host rejects a client RPC aimed at one of its own entities")
 	MakeReplicated(world, session, 1, net::kInvalidConnection);
 
 	FakeRpcBridge bridge;
-	const net::RpcMessage msg{.netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodIndex = 0, .args = {}};
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{
+	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
 
 	CHECK(bridge.calls.empty());
@@ -271,7 +359,9 @@ TEST_CASE("The host rejects a client RPC aimed at an entity with no NetworkIdent
 	session.Bind(1, entity);
 
 	FakeRpcBridge bridge;
-	const net::RpcMessage msg{.netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodIndex = 0, .args = {}};
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{
+	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Say", .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
 
 	CHECK(bridge.calls.empty());
@@ -286,9 +376,10 @@ TEST_CASE("A host-originated RPC applied on a client is not owner-checked")
 	const Entity entity = MakeReplicated(world, session, 1, kOtherClient);
 
 	FakeRpcBridge bridge;
+	bridge.Declare("Boom", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Multicast});
 	const net::RpcMessage msg{.netId = 1,
 	        .scriptTypeHash = net::ScriptTypeHash("Chat"),
-	        .methodIndex = 0,
+	        .methodName = "Boom",
 	        .target = net::NetRpcTarget::Multicast,
 	        .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, net::kInvalidConnection, /*localIsHost=*/false);
@@ -315,9 +406,10 @@ TEST_CASE("The host drops an inbound RPC whose target is not Server")
 		MakeReplicated(world, session, 1, kOwner);
 
 		FakeRpcBridge bridge;
+		bridge.Declare("Say", net::RpcMethod{.index = 0, .target = target});
 		const net::RpcMessage msg{.netId = 1,
 		        .scriptTypeHash = net::ScriptTypeHash("Chat"),
-		        .methodIndex = 0,
+		        .methodName = "Say",
 		        .target = target,
 		        .args = {}};
 		net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
@@ -332,9 +424,10 @@ TEST_CASE("The host drops an inbound RPC whose target is not Server")
 	MakeReplicated(world, session, 1, kOwner);
 
 	FakeRpcBridge bridge;
+	bridge.Declare("Say", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Server});
 	const net::RpcMessage msg{.netId = 1,
 	        .scriptTypeHash = net::ScriptTypeHash("Chat"),
-	        .methodIndex = 0,
+	        .methodName = "Say",
 	        .target = net::NetRpcTarget::Server,
 	        .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
@@ -350,18 +443,96 @@ TEST_CASE("A client drops an inbound RPC whose target is Server")
 	MakeReplicated(world, session, 1, kOtherClient);
 
 	FakeRpcBridge bridge;
-	const net::RpcMessage msg{.netId = 1,
-	        .scriptTypeHash = net::ScriptTypeHash("Chat"),
-	        .methodIndex = 0,
-	        .target = net::NetRpcTarget::Server,
-	        .args = {}};
+	bridge.Declare("Hush", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Client});
+	const net::RpcMessage msg{
+	        .netId = 1, .scriptTypeHash = net::ScriptTypeHash("Chat"), .methodName = "Hush", .args = {}};
 	net::ApplyRpc(world, session, bridge, msg, net::kInvalidConnection, /*localIsHost=*/false);
 	CHECK(bridge.calls.empty());
 
 	// Positive control: the same packet with a host-to-client target applies.
 	const net::RpcMessage allowed{.netId = 1,
 	        .scriptTypeHash = net::ScriptTypeHash("Chat"),
-	        .methodIndex = 0,
+	        .methodName = "Hush",
+	        .target = net::NetRpcTarget::Client,
+	        .args = {}};
+	net::ApplyRpc(world, session, bridge, allowed, net::kInvalidConnection, /*localIsHost=*/false);
+	CHECK(bridge.calls.size() == 1);
+}
+
+// ── Declaration gate ─────────────────────────────────────────────────────────
+// The direction gate measures the packet's target byte against the receiving
+// ROLE; this gate measures it against the [NetRpc] attribute - the only statement
+// of where a method may run. Direction and ownership both pass for an owning
+// client sending target=Server at a Client- or Multicast-declared method, so the
+// declaration is the one thing standing between that client and executing a
+// host-side method body on the host.
+
+TEST_CASE("A Server-target packet cannot run a Client- or Multicast-declared method on the host")
+{
+	// THE authority hole this gate closes. The sender owns the entity (ownership
+	// passes), the packet travels client-to-host (direction passes), and it names
+	// a method the host's table does hold - only the declaration contradicts it.
+	for (const net::NetRpcTarget declared:
+	        {net::NetRpcTarget::Client, net::NetRpcTarget::Multicast})
+	{
+		World world;
+		net::NetSession session;
+		MakeReplicated(world, session, 1, kOwner);
+
+		FakeRpcBridge bridge;
+		bridge.Declare("ServerOnlyEffect", net::RpcMethod{.index = 2, .target = declared});
+		const net::RpcMessage msg{.netId = 1,
+		        .scriptTypeHash = net::ScriptTypeHash("Chat"),
+		        .methodName = "ServerOnlyEffect",
+		        .target = net::NetRpcTarget::Server,
+		        .args = {std::byte{9}}};
+		net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
+
+		CHECK(bridge.calls.empty());
+	}
+
+	// Positive control: the same sender, entity and name - declared Server this
+	// time - DOES run, so the drop above is the declaration gate and not name
+	// resolution or ownership.
+	World world;
+	net::NetSession session;
+	MakeReplicated(world, session, 1, kOwner);
+
+	FakeRpcBridge bridge;
+	bridge.Declare("ServerOnlyEffect", net::RpcMethod{.index = 2, .target = net::NetRpcTarget::Server});
+	const net::RpcMessage msg{.netId = 1,
+	        .scriptTypeHash = net::ScriptTypeHash("Chat"),
+	        .methodName = "ServerOnlyEffect",
+	        .target = net::NetRpcTarget::Server,
+	        .args = {}};
+	net::ApplyRpc(world, session, bridge, msg, kOwner, /*localIsHost=*/true);
+	CHECK(bridge.calls.size() == 1);
+}
+
+TEST_CASE("A client drops a host-originated call whose target contradicts the declaration")
+{
+	// The gate is not host-only: [NetRpc] states where a method runs on every peer,
+	// so a compromised or buggy host cannot push a Client-targeted packet at a
+	// Multicast-declared method (or vice versa) either.
+	World world;
+	net::NetSession session;
+	MakeReplicated(world, session, 1, kOtherClient);
+
+	FakeRpcBridge bridge;
+	bridge.Declare("Boom", net::RpcMethod{.index = 0, .target = net::NetRpcTarget::Multicast});
+	const net::RpcMessage msg{.netId = 1,
+	        .scriptTypeHash = net::ScriptTypeHash("Chat"),
+	        .methodName = "Boom",
+	        .target = net::NetRpcTarget::Client,
+	        .args = {}};
+	net::ApplyRpc(world, session, bridge, msg, net::kInvalidConnection, /*localIsHost=*/false);
+	CHECK(bridge.calls.empty());
+
+	// Positive control: a matching declaration applies on the client.
+	bridge.Declare("Hush", net::RpcMethod{.index = 1, .target = net::NetRpcTarget::Client});
+	const net::RpcMessage allowed{.netId = 1,
+	        .scriptTypeHash = net::ScriptTypeHash("Chat"),
+	        .methodName = "Hush",
 	        .target = net::NetRpcTarget::Client,
 	        .args = {}};
 	net::ApplyRpc(world, session, bridge, allowed, net::kInvalidConnection, /*localIsHost=*/false);

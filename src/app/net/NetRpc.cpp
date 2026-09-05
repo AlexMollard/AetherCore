@@ -27,14 +27,14 @@ namespace aether::net
 		}
 	} // namespace
 
-	std::vector<std::byte> EncodeRpc(std::uint32_t netId, std::uint32_t scriptTypeHash, std::uint16_t methodIndex,
+	std::vector<std::byte> EncodeRpc(std::uint32_t netId, std::uint32_t scriptTypeHash, std::string_view methodName,
 	        NetRpcTarget target, std::span<const std::byte> args)
 	{
 		ByteWriter w;
 		w.U8(static_cast<std::uint8_t>(NetMessage::Rpc));
 		w.U32(netId);
 		w.U32(scriptTypeHash);
-		w.U16(methodIndex);
+		w.Str(methodName);
 		w.U8(static_cast<std::uint8_t>(target));
 		w.U32(static_cast<std::uint32_t>(args.size()));
 		w.Bytes(args);
@@ -46,7 +46,7 @@ namespace aether::net
 		RpcMessage msg;
 		msg.netId = r.U32();
 		msg.scriptTypeHash = r.U32();
-		msg.methodIndex = r.U16();
+		msg.methodName = r.Str();
 		const std::uint8_t target = r.U8();
 		const std::uint32_t argBytes = r.U32();
 		if (!r.Ok())
@@ -64,7 +64,10 @@ namespace aether::net
 		// Bytes() is bounds-checked, so a hostile length yields an empty vector and
 		// a failed reader rather than an over-read.
 		msg.args = r.Bytes(argBytes);
-		if (!r.Ok() || msg.netId == 0)
+		// An empty method name names no [NetRpc] method on any assembly; rejecting
+		// it here keeps DecodeRpc's "structurally valid" contract honest rather
+		// than relying on every FindMethod to reject "".
+		if (!r.Ok() || msg.netId == 0 || msg.methodName.empty())
 		{
 			return std::nullopt;
 		}
@@ -110,7 +113,33 @@ namespace aether::net
 		{
 			return; // unknown type hash: no script on this entity matches
 		}
-		bridge.Invoke(entity, *scriptIndex, msg.methodIndex, msg.args);
+
+		// Resolve the wire name against THIS peer's table. A name it does not hold
+		// is either a peer naming anything or a build-skewed assembly - either way
+		// the call drops, because the one thing it must not do is run whatever
+		// method happens to sit at some index in the local table.
+		const std::string& typeName = scripts->scripts[*scriptIndex].path;
+		const RpcMethod method = bridge.FindMethod(typeName, msg.methodName);
+		if (!method.Found())
+		{
+			return;
+		}
+		if (method.target != msg.target)
+		{
+			// DECLARATION GATE. Direction and ownership both pass for an owning
+			// client sending target=Server at a [NetRpc(Client)]- or
+			// [NetRpc(Multicast)]-declared method; only the declaration contradicts
+			// that packet. The attribute is the single statement of where a method
+			// may run, so a wire byte that disagrees with it loses.
+			return;
+		}
+		if (method.index > 0xFFFF)
+		{
+			// Invoke takes the dispatch index as u16; truncating an index above it
+			// would silently run a DIFFERENT method of this peer's own table.
+			return;
+		}
+		bridge.Invoke(entity, *scriptIndex, static_cast<std::uint16_t>(method.index), msg.args);
 	}
 
 	bool RpcTargetMismatch(std::int32_t expectedTarget, NetRpcTarget declared)

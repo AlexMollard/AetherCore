@@ -51,21 +51,28 @@ namespace aether::net
 	{
 		std::uint32_t netId = 0;
 		std::uint32_t scriptTypeHash = 0;
-		std::uint16_t methodIndex = 0;
+		// The method travels by NAME, never by table index: two peers built from
+		// different source (a hot reload on one side, a client on an older build)
+		// have different declaration-order tables, so the same index names a
+		// DIFFERENT method on each. A name either resolves against the receiver's
+		// own table or the call is dropped - it cannot silently land on the wrong
+		// method.
+		std::string methodName;
 		NetRpcTarget target = NetRpcTarget::Server;
 		std::vector<std::byte> args;
 	};
 
 	[[nodiscard]] std::vector<std::byte> EncodeRpc(std::uint32_t netId, std::uint32_t scriptTypeHash,
-	        std::uint16_t methodIndex, NetRpcTarget target, std::span<const std::byte> args);
+	        std::string_view methodName, NetRpcTarget target, std::span<const std::byte> args);
 	[[nodiscard]] std::optional<RpcMessage> DecodeRpc(ByteReader& r);
 
 	// ScriptTypeHash itself lives in NetScriptFields.hpp (Task 9) and is reused here
 	// unchanged - see that header for the FNV-1a definition. A second definition in
 	// this header would be a silent divergence risk the moment either one changes.
 
-	// A [NetRpc] method resolved by name: the index that goes on the wire and the
-	// target its attribute declared.
+	// A [NetRpc] method resolved by name: the index the RESOLVING peer's own
+	// table assigns it (used for local dispatch only - the wire carries the name)
+	// and the target its attribute declared.
 	struct RpcMethod
 	{
 		int index = -1; // < 0 = the type is unknown or declares no such RPC
@@ -91,15 +98,17 @@ namespace aether::net
 		RpcBridge(RpcBridge&&) = delete;
 		RpcBridge& operator=(RpcBridge&&) = delete;
 
-		// Resolves `methodName` in `typeName`'s [NetRpc] method table. The encode
-		// side: turns a method name into the index that goes on the wire, AND reports
-		// the target the method declared. Part of the interface so a caller building
-		// an outbound call can use the cached bridge (NetworkContext::Rpcs) instead of
-		// constructing a concrete one.
+		// Resolves `methodName` in `typeName`'s [NetRpc] method table. Used by BOTH
+		// sides of the wire: an outbound call turns the script's method name into
+		// the local index it dispatches at (via NetworkContext::Rpcs, the cached
+		// bridge, rather than a per-call temporary), and ApplyRpc turns the name
+		// that ARRIVED into this peer's index plus the declaration the wire target
+		// is checked against.
 		//
 		// The target comes from the declaration rather than from the call site on
 		// purpose: [NetRpc(...)] is the single place a method's direction is stated,
-		// so a call site cannot disagree with it. See Net.Call in Net.cs.
+		// so a call site - or a wire packet - cannot disagree with it. See Net.Call
+		// in Net.cs and ApplyRpc's declaration gate.
 		[[nodiscard]] virtual RpcMethod FindMethod(const std::string& typeName, const std::string& methodName) const = 0;
 
 		// Invokes RPC method `methodIndex` on the live instance of
@@ -111,12 +120,13 @@ namespace aether::net
 
 	// Host or client. Resolves msg.netId to an entity via `session` and
 	// msg.scriptTypeHash to a script index on that entity's ScriptComponent (the
-	// same match NetScriptFields uses), then invokes msg.methodIndex there through
-	// `bridge`. Drops the call silently - a peer can name anything - when the net id
-	// is unknown, the entity carries no ScriptComponent, or no script on it hashes
-	// to scriptTypeHash. An out-of-range methodIndex is bounds-checked on the other
-	// side of `bridge` (the managed dispatch), since only the CLR side can see a
-	// script assembly that reloaded with a shorter [NetRpc] table.
+	// same match NetScriptFields uses), then resolves msg.methodName through
+	// `bridge`.FindMethod against THAT script's table and invokes the local index
+	// it names. Drops the call silently - a peer can name anything - when the net
+	// id is unknown, the entity carries no ScriptComponent, no script on it hashes
+	// to scriptTypeHash, or the method name resolves to no [NetRpc] method this
+	// peer knows (a build-skewed peer drops rather than running whatever its table
+	// happens to hold).
 	//
 	// DIRECTION GATE, checked first. A host accepts ONLY NetRpcTarget::Server and a
 	// client accepts ONLY Client/Multicast, because those are the only directions
@@ -133,6 +143,14 @@ namespace aether::net
 	// TakeDamage, Respawn, whatever the project marks up. `localIsHost` selects the
 	// gate: a client applying a host-sent call is not owner-checked (the host is
 	// authoritative over everything), and `sender` is ignored there.
+	//
+	// DECLARATION GATE, checked last because it needs the bridge's table. The wire
+	// target byte is a claim the sender wrote; the [NetRpc] attribute is the only
+	// statement of where a method may run. The call is dropped unless the target the
+	// resolved method DECLARED equals the target on the wire. Direction and ownership
+	// both pass for an owning client sending target=Server at a [NetRpc(Client)] or
+	// [NetRpc(Multicast)] method - only the declaration contradicts that packet, so
+	// without this gate the client executes a host-side method body on the host.
 	void ApplyRpc(World& world, NetSession& session, const RpcBridge& bridge, const RpcMessage& msg,
 	        ConnectionId sender, bool localIsHost);
 
