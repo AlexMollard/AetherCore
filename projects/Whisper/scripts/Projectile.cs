@@ -62,17 +62,26 @@ public sealed class Projectile : EntityScript
     /// by this so a shot grazing a body still connects.</summary>
     public float Radius = 0.18f;
 
-    /// <summary>How much further from the projectile's start than its own flight
-    /// can explain a claimed victim may be before the host refuses the hit.</summary>
+    /// <summary>How much further from the victim position the host judges the claim
+    /// against than the projectile's own flight can explain may be before the host
+    /// refuses the hit.</summary>
     /// <remarks>
     /// Not a physics check - a bound, like <c>PlayerCombat.MaxMuzzleDistance</c>.
-    /// The host's copy of the victim trails the victim by about a round trip and a
-    /// player runs at 7 units/s, so 4 units covers what replication lag can add to
-    /// an honest hit's distance plus the body's half-width, while still refusing a
-    /// shot that claims somebody further away than it can have travelled in the
-    /// time it has been alive.
+    /// <see cref="ReportHit"/> judges the claim against where <see cref="Net.TryRewind"/>
+    /// reconstructs the victim as having been on the SHOOTER's own screen, which already
+    /// absorbs the round trip's worth of replication lag this slack used to cover by
+    /// itself (it used to be 4 units for exactly that reason). What is left for this to
+    /// cover is narrower: the victim's own collider half-width - a shot grazing the edge
+    /// of a body should still connect - and the residual error in TryRewind's own
+    /// estimate, which is a capped approximation, not a measurement (see
+    /// <c>NetRewind.hpp</c>), and is deliberately biased toward under- rather than
+    /// over-compensating the shooter's claim. When TryRewind has no history to rewind
+    /// (the victim is host-owned, in which case its live position already IS the
+    /// ground truth with no lag to compensate for - see <see cref="ReportHit"/>) this
+    /// is compared against the victim's LIVE position instead, which is exactly as
+    /// accurate as the rewound case for a host-owned victim, not a weaker fallback.
     /// </remarks>
-    public float HitClaimSlack = 4.0f;
+    public float HitClaimSlack = 1.0f;
 
     private Vector2 _direction;
     private Entity _shooter;
@@ -292,12 +301,18 @@ public sealed class Projectile : EntityScript
     /// the things that are its own to know: that the named player exists, is not the
     /// shooter, and is still alive; that this projectile has not already resolved
     /// (one hit per shot, the same rule the owner's <c>_spent</c> enforces on the
-    /// shooter's machine); that the claimed victim is somewhere the projectile could
-    /// physically have reached by now; and that this shooter is not landing hits
-    /// faster than the fire gate lets projectiles leave the barrel. What the host
-    /// still takes on trust is the geometry of the hit itself - without host-side
-    /// re-simulation there is no way to know the shot was ever aimed at the victim,
-    /// only that it could have been.
+    /// shooter's machine); that the claimed victim was, from the SHOOTER's own point
+    /// of view (<see cref="Net.TryRewind"/> - see its remarks and <c>NetRewind.hpp</c>
+    /// for the honesty boundary on the rewind time), somewhere the projectile could
+    /// physically have reached; and that this shooter is not landing hits faster than
+    /// the fire gate lets projectiles leave the barrel. What the host still takes on
+    /// trust is the geometry of the hit itself - without host-side re-simulation there
+    /// is no way to know the shot was ever aimed at the victim, only that it could have
+    /// been. <b>The accepted cost of the rewind:</b> a victim can be judged as having
+    /// been hit up to 300ms (<c>kMaxRewindSeconds</c>) after their own screen already
+    /// showed them clear of it - "shot behind cover" - which is the trade every
+    /// lag-compensated shooter game makes, bounded to 300ms of the past rather than
+    /// an unbounded one.
     /// </remarks>
     [NetRpc(NetRpcTarget.Server)]
     public void ReportHit(string victimConnection)
@@ -338,7 +353,20 @@ public sealed class Projectile : EntityScript
         {
             return; // past any flight its owner could still be reporting; the reap is due
         }
-        Vector3 victimPosition = victim.Position;
+        // Judged against where the shooter's OWN screen showed this victim, not
+        // where the host's copy of them is right now - that is the entire point of
+        // Net.TryRewind (see its remarks and NetRewind.hpp for the honesty
+        // boundary: the rewind time comes only from this host's own estimate of
+        // the shooter's view delay, hard-capped, never a number either peer
+        // supplies). TryRewind has nothing to rewind - and this falls back to the
+        // LIVE position, exactly as before TryRewind existed - when the victim is
+        // host-owned (its live position already IS this host's own truth, with no
+        // network leg to compensate for), not yet interpolated (just spawned), or
+        // not replicated at all; none of those are a weaker check, they are cases
+        // where "now" and "as the shooter saw it" already agree.
+        Vector3 victimPosition = Net.TryRewind(victim, shooter, out Vector3 rewound, out _, out _)
+            ? rewound
+            : victim.Position;
         Vector2 fromSpawn = new(victimPosition.X - _hostSpawn.X, victimPosition.Y - _hostSpawn.Y);
         float reach = Speed * System.Math.Min(_age, MaxLifetime) + Radius + HitClaimSlack;
         if (fromSpawn.Length() > reach)
