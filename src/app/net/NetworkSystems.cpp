@@ -698,7 +698,15 @@ namespace aether::net
 			        // sides of the render time to interpolate between. This is what makes
 			        // OTHER players look smooth between snapshots, and it is untouched by the
 			        // move to client authority - only where the samples originate changed.
-			        const float delay = std::max(0.f, tuning->interpolationDelaySeconds);
+			        //
+			        // The anchor is `interpolationDelaySeconds` either way: with auto-delay
+			        // off it IS the delay, verbatim, because that is what "pin it" means; with
+			        // auto-delay on (the default) it is only the seed RecommendedDelaySeconds
+			        // falls back to before this entity's buffer has measured an interval of
+			        // its own - see InterpolationBuffer::RecommendedDelaySeconds.
+			        const float anchor = std::max(0.f, tuning->interpolationDelaySeconds);
+			        const float delay = tuning->autoInterpolationDelay ? state.buffer.RecommendedDelaySeconds(anchor)
+			                                                            : anchor;
 			        const std::optional<TransformSample> sample = state.buffer.Sample(now - delay);
 			        if (!sample.has_value())
 			        {

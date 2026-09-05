@@ -22,9 +22,10 @@ namespace aether::net
 	};
 
 	// Smoothing for a replicated entity's transform, and it applies to REMOTE
-	// entities only: their buffer is rendered `interpolationDelaySeconds` in the
-	// past, so there is a sample on both sides of the render time to interpolate
-	// between and motion is smooth between packets.
+	// entities only: their buffer is rendered some delay in the past, so there is a
+	// sample on both sides of the render time to interpolate between and motion is
+	// smooth between packets - see NetworkReceiveSystem::ResolveTransforms and
+	// InterpolationBuffer::RecommendedDelaySeconds for how that delay is chosen.
 	//
 	// There is deliberately nothing here for the locally-owned entity. The owner of
 	// an entity is authoritative for it, so its own simulation IS the truth and
@@ -34,7 +35,20 @@ namespace aether::net
 	// reads is worse than none.
 	struct NetworkTransform
 	{
+		// With `autoInterpolationDelay` on (the default), this is read only before
+		// any interval has been measured for this entity - the first sample of a
+		// session, or the first one after a detected stall - and the delay actually
+		// rendered with is derived from the observed spacing and jitter of samples
+		// as they arrive instead: fresher than a fixed guess on a tight, steady
+		// link, and wider than one on a jittery link that needs the margin. See
+		// InterpolationBuffer::RecommendedDelaySeconds.
+		//
+		// Set `autoInterpolationDelay` to false to pin the delay to exactly this
+		// value instead, ignoring measurement entirely - a game mode with its own
+		// reason to want a fixed, deterministic lag (a replay, a spectator feed
+		// synced to a broadcast delay) can still ask for one.
 		float interpolationDelaySeconds = 0.1f;
+		bool autoInterpolationDelay = true;
 	};
 
 	// A connected player's display name and link quality. Framework-level rather than

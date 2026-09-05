@@ -265,6 +265,18 @@ namespace aether::net
 		// upstream retransmitting sub-millimetre motion no receiver can show. Both
 		// directions use it - the host's per-connection cadence and a client's upload
 		// of what it owns.
+		//
+		// This is the OTHER half of the interpolation-delay budget
+		// (InterpolationBuffer::RecommendedDelaySeconds): the auto-derived delay
+		// settles toward roughly one send interval plus a jitter margin, so raising
+		// this lowers how fresh remote motion can ever render, floor included.
+		// Raising it is not free, which is why it stays a per-project call rather
+		// than a bigger built-in default: bandwidth scales linearly with it (every
+		// changed field, times every relevant entity, times every connection, times
+		// this many times a second) and so does the per-connection, per-entity
+		// change-detection scan NetworkSendSystem runs to decide what changed.
+		// A twitch game that wants tighter default latency should raise this
+		// explicitly and account for both costs, not get them silently.
 		[[nodiscard]] float SendRateHz() const
 		{
 			return m_sendRateHz;

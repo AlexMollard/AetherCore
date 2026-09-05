@@ -1,5 +1,8 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <vector>
+
 #include "net/NetInterpolation.hpp"
 
 using namespace aether;
@@ -92,4 +95,172 @@ TEST_CASE("A sample sharing a timestamp with the newest still becomes the newest
 	const auto sample = buf.Sample(5.f);
 	REQUIRE(sample.has_value());
 	CHECK(sample->position.x == doctest::Approx(100.f));
+}
+
+// ── RecommendedDelaySeconds ───────────────────────────────────────────────────
+//
+// The fixed 0.1s `interpolationDelaySeconds` guess is right for SOME 20Hz link
+// and wrong for every other one: too slow for a tight LAN connection, and not
+// necessarily wide enough for a jittery one. These drive the buffer with real
+// timings - not a mocked clock - and check the delay it derives from them.
+// Every case here is new behaviour: none of it compiles against the pre-change
+// InterpolationBuffer, which had no RecommendedDelaySeconds at all.
+
+TEST_CASE("Before any interval is measured, the recommended delay is the anchor")
+{
+	net::InterpolationBuffer buf;
+	// No samples at all: nothing has been observed yet.
+	CHECK(buf.RecommendedDelaySeconds(0.1f) == doctest::Approx(0.1f));
+
+	// One sample is a point, not an interval - still nothing to derive from.
+	buf.Push({.time = 0.f, .position = {0.f, 0.f, 0.f}});
+	CHECK(buf.RecommendedDelaySeconds(0.1f) == doctest::Approx(0.1f));
+
+	// A different anchor is honoured live, proving this is a genuine fallback
+	// and not a cached copy of the first value ever passed in.
+	CHECK(buf.RecommendedDelaySeconds(0.25f) == doctest::Approx(0.25f));
+}
+
+TEST_CASE("A tight, steady link settles far below the fixed 100 ms guess")
+{
+	// A 100Hz link - tighter than the 20Hz the 0.1s anchor was sized for. Every
+	// other player on a connection this good should render close to what just
+	// arrived, not a tenth of a second behind it.
+	net::InterpolationBuffer buf;
+	float t = 0.f;
+	for (int i = 0; i < 20; ++i)
+	{
+		t += 0.01f;
+		buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+	}
+
+	const float delay = buf.RecommendedDelaySeconds(0.1f);
+	CHECK(delay > 0.f);
+	CHECK(delay < 0.05f); // well under half the fixed guess
+}
+
+TEST_CASE("The recommended delay never collapses to zero even on a near-instant link")
+{
+	// Floored: an interpolation delay of (near) zero leaves no slack at all, so
+	// the buffer starves the instant one packet is a fraction of a millisecond
+	// late - which is the ordinary case, not the exceptional one.
+	net::InterpolationBuffer buf;
+	float t = 0.f;
+	for (int i = 0; i < 30; ++i)
+	{
+		t += 0.0005f; // 2000 Hz - far tighter than any real send rate
+		buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+	}
+
+	const float delay = buf.RecommendedDelaySeconds(0.1f);
+	CHECK(delay >= 0.015f); // a real floor, not merely "greater than zero"
+	CHECK(delay < 0.05f);   // and still nowhere near the fixed 100 ms guess
+}
+
+TEST_CASE("A jittery link widens the delay and settles instead of chasing every spike")
+{
+	// Interval alternating 30ms/70ms - a real 20Hz-ish link with real jitter, not
+	// the fixed spacing every other case in this file uses. The average interval
+	// (50ms) alone would justify a delay near the old fixed guess; the point of
+	// this case is that the MARGIN added for the jitter is bounded and settles.
+	net::InterpolationBuffer buf;
+	float t = 0.f;
+	std::vector<float> recent;
+	for (int i = 0; i < 40; ++i)
+	{
+		t += (i % 2 == 0) ? 0.03f : 0.07f;
+		buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+		if (i >= 30)
+		{
+			recent.push_back(buf.RecommendedDelaySeconds(0.1f));
+		}
+	}
+
+	// Wider than the anchor - the jitter margin is doing real work - but nowhere
+	// near the ceiling: this is a real but ordinary link, not a pathological one.
+	for (const float delay: recent)
+	{
+		CHECK(delay > 0.1f);
+		CHECK(delay < 0.3f);
+	}
+
+	// Settled, not oscillating without bound: across the tail end, once the
+	// smoothing has had time to warm up, consecutive values stay within a tight
+	// band rather than swinging across the whole [0.1, 0.3] range checked above.
+	const auto [minIt, maxIt] = std::minmax_element(recent.begin(), recent.end());
+	CHECK(*maxIt - *minIt < 0.01f);
+}
+
+TEST_CASE("A pathological, wildly variable link is capped rather than growing without bound")
+{
+	// Interval alternating 10ms/600ms - loss-and-burst behaviour far outside
+	// anything a jitter margin should try to fully cover. Ceilinged so this
+	// cannot push the render delay somewhere absurd.
+	net::InterpolationBuffer buf;
+	float t = 0.f;
+	for (int i = 0; i < 60; ++i)
+	{
+		t += (i % 2 == 0) ? 0.01f : 0.6f;
+		buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+	}
+
+	const float delay = buf.RecommendedDelaySeconds(0.1f);
+	CHECK(delay <= 0.5f);
+	CHECK(delay > 0.1f); // still wider than the anchor - this link really is bad
+}
+
+TEST_CASE("A stall does not poison the estimate, and recovery does not inherit it")
+{
+	// A steady 20Hz rhythm, then a multi-second gap - a paused game, a scene
+	// load, or simply an idle entity that stopped changing for a while - then
+	// the same rhythm resumes. The gap must not be read as "the link is now this
+	// slow": that would spike the delay for a long time afterward at
+	// kIntervalSmoothingAlpha's crawl rate.
+	net::InterpolationBuffer buf;
+	float t = 0.f;
+	for (int i = 0; i < 20; ++i)
+	{
+		t += 0.05f;
+		buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+	}
+	const float beforeStall = buf.RecommendedDelaySeconds(0.1f);
+	CHECK(beforeStall < 0.1f); // already settled tighter than the anchor
+
+	t += 3.f; // the stall
+	buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+	// Nothing to measure the gap against yet - the arrival right after a stall is
+	// treated like the first sample of a session, not like a 3-second interval.
+	CHECK(buf.RecommendedDelaySeconds(0.1f) == doctest::Approx(0.1f));
+
+	// The rhythm resumes: the estimate rebuilds from here, not from the stall.
+	for (int i = 0; i < 20; ++i)
+	{
+		t += 0.05f;
+		buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+	}
+	const float afterStall = buf.RecommendedDelaySeconds(0.1f);
+	CHECK(afterStall < 0.1f);
+	CHECK(afterStall == doctest::Approx(beforeStall).epsilon(0.05));
+}
+
+TEST_CASE("Out-of-order and duplicate arrivals do not perturb the settled estimate")
+{
+	net::InterpolationBuffer buf;
+	float t = 0.f;
+	for (int i = 0; i < 20; ++i)
+	{
+		t += 0.01f;
+		buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+	}
+	const float settled = buf.RecommendedDelaySeconds(0.1f);
+
+	// A stale packet, delivered late (UDP), naming an earlier point in time than
+	// the newest arrival already on record.
+	buf.Push({.time = t - 0.5f, .position = {-1.f, 0.f, 0.f}});
+	CHECK(buf.RecommendedDelaySeconds(0.1f) == doctest::Approx(settled));
+
+	// A duplicate of the newest timestamp - two channels landing on the same
+	// tick, or the collision ResolveTransforms itself can produce.
+	buf.Push({.time = t, .position = {t, 0.f, 0.f}});
+	CHECK(buf.RecommendedDelaySeconds(0.1f) == doctest::Approx(settled));
 }
