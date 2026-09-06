@@ -942,30 +942,6 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
-name = 'Spawn1'
-node = -87033464216808325
-parent = -1
-position = [ -1.5, 0.0, 9.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Spawn2'
-node = 2570938043533416510
-parent = -1
-position = [ 1.5, 0.0, 9.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
-name = 'Spawn3'
-node = -7513317512215128899
-parent = -1
-position = [ 4.5, 0.0, 9.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-[[entities]]
-euler = [ 0.0, 0.0, 0.0 ]
 name = 'NetSession'
 node = 8357770601688250850
 parent = -1
