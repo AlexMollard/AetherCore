@@ -8,6 +8,7 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <unordered_map>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -45,6 +46,25 @@ namespace aether::assetpipeline
 			std::string SafeStr(const char* s)
 			{
 				return s ? s : "";
+			}
+
+			// glTF/FBX animation clip names are free-form authoring strings - Blender's
+			// "Armature|Action" convention (seen on the Quaternius CC0 rig) puts a literal
+			// '|' in one, which Windows refuses in a filename ("cannot open ... for write").
+			// Replaces every character CreateFile rejects (plus the other reserved ones,
+			// so this holds for whatever the next asset's authoring tool does too) with
+			// '_' rather than failing the whole bake over one clip's name.
+			std::string SanitizeFileNameComponent(const std::string& name)
+			{
+				std::string out = name;
+				for (char& c: out)
+				{
+					if (c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*' || static_cast<unsigned char>(c) < 0x20)
+					{
+						c = '_';
+					}
+				}
+				return out;
 			}
 
 			std::string StripBonePrefix(const std::string& name)
@@ -902,11 +922,27 @@ namespace aether::assetpipeline
 				const bool hasBoneNames = nameBased && !virtualRemap.empty();
 				const auto& activeRemap = virtualRemap.empty() ? remapTable : virtualRemap;
 
+				std::unordered_map<std::string, std::string> claimedFileNames; // fileName -> the first clip name that claimed it
 				for (cgltf_size ai = 0; ai < data->animations_count; ++ai)
 				{
 					const cgltf_animation& anim = data->animations[ai];
 					const std::string animName = SafeStr(anim.name);
-					const std::string fileName = Stem(sourcePath) + "_" + (animName.empty() ? std::to_string(ai) : animName) + ".anim";
+					std::string fileName = Stem(sourcePath) + "_" + (animName.empty() ? std::to_string(ai) : SanitizeFileNameComponent(animName)) + ".anim";
+					if (const auto claim = claimedFileNames.find(fileName); claim != claimedFileNames.end())
+					{
+						// Two distinct clip names sanitized to the same filename (e.g. "A|B"
+						// and "A_B" both becoming "A_B") - deterministic disambiguation by
+						// clip index, not a hash, because the point is the warning: whoever
+						// authored this rig has two clips that collide after sanitization and
+						// should rename them at the source, not have the importer silently
+						// paper over it. Without this, the second clip's bake would overwrite
+						// the first's .anim file on disk - silent data loss, not a naming
+						// inconvenience.
+						std::cerr << "  WARNING: animation clip '" << animName << "' sanitizes to the same filename '" << fileName
+						          << "' as clip '" << claim->second << "' - renaming this one to avoid overwriting it; rename the source clips to fix properly\n";
+						fileName = Stem(sourcePath) + "_" + (animName.empty() ? std::to_string(ai) : SanitizeFileNameComponent(animName)) + "_" + std::to_string(ai) + ".anim";
+					}
+					claimedFileNames[fileName] = animName;
 
 					std::vector<std::byte> animData;
 
