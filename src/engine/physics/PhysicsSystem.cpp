@@ -846,6 +846,14 @@ namespace aether
 		}
 		if (const auto it = cache.find(key); it != cache.end())
 		{
+			// A cached nullptr is a REMEMBERED FAILURE, not "not cached yet" - see
+			// every failure path below. Returning it here (instead of falling through
+			// to retry) is the whole fix: FlushPendingBodies runs every physics tick
+			// for any entity that never got a valid body, so without this a broken
+			// mesh_source re-attempted its file load and re-logged its warning 60
+			// times a second, forever, for as long as the entity existed - drowning
+			// out every other log line, including the render-mesh load failure for
+			// the SAME broken asset (see PropSpawner.cs's own LoadModel call).
 			return it->second;
 		}
 
@@ -869,7 +877,8 @@ namespace aether
 				const std::optional<MeshSourceGeometry> geo = LoadMeshSourceGeometry(c.meshSource);
 				if (!geo.has_value())
 				{
-					return {};
+					cache.emplace(key, nullptr);
+					return nullptr;
 				}
 				result = JPH::ConvexHullShapeSettings{geo->positions}.Create();
 				break;
@@ -879,12 +888,14 @@ namespace aether
 				const std::optional<MeshSourceGeometry> geo = LoadMeshSourceGeometry(c.meshSource);
 				if (!geo.has_value())
 				{
-					return {};
+					cache.emplace(key, nullptr);
+					return nullptr;
 				}
 				if (geo->triangles.empty())
 				{
 					AE_WARN(LogCategory::Engine, "PhysicsSystem: collider mesh_source '{}' produced no triangles (unindexed or fully-degenerate mesh)", c.meshSource);
-					return {};
+					cache.emplace(key, nullptr);
+					return nullptr;
 				}
 				result = JPH::MeshShapeSettings{geo->triangleVertices, geo->triangles}.Create();
 				break;
@@ -893,7 +904,8 @@ namespace aether
 		if (result.HasError())
 		{
 			AE_WARN(LogCategory::Engine, "PhysicsSystem: collider shape error: {}", result.GetError().c_str());
-			return {};
+			cache.emplace(key, nullptr);
+			return nullptr;
 		}
 		return cache.emplace(key, result.Get()).first->second;
 	}
