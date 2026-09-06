@@ -1,12 +1,15 @@
 #include <charconv>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <string>
 
 #include <nlohmann/json.hpp>
 
+#include "MeshProcessor.hpp"
 #include "AssetPipeline.hpp"
 #include "FontProcessor.hpp"
 #include "KenneyImport.hpp"
@@ -257,7 +260,19 @@ namespace
 			request.requestedShape = *shape;
 			request.cacheDir = argc > argOffset + 9 ? fs::path(argv[argOffset + 9]) : fs::path(".temp/kenney-cache");
 
+			// MeshProcessor/MaterialImporter print human-readable progress straight to
+			// stdout (e.g. "+ auto-generated .material for 'x'") - fine for AssetPacker's
+			// normal pack command run in a terminal, but this subcommand's contract is
+			// exactly one JSON line on stdout. Capture and relay it to stderr instead of
+			// discarding it, so a failure still has that context on hand.
+			std::ostringstream suppressed;
+			std::streambuf* const prevStdout = std::cout.rdbuf(suppressed.rdbuf());
 			const kenney::ImportResult result = kenney::ImportModel(request);
+			std::cout.rdbuf(prevStdout);
+			if (!suppressed.str().empty())
+			{
+				std::cerr << suppressed.str();
+			}
 			if (!result.ok)
 			{
 				std::cout << nlohmann::json{{"ok", false}, {"error", result.error}}.dump() << "\n";
@@ -297,11 +312,76 @@ namespace
 	}
 } // namespace
 
+static int RunBakeCommand(int argc, char* argv[])
+{
+	if (argc < 4)
+	{
+		std::cerr << "Usage: AssetPacker bake <gltf-or-glb-path> <project-root>\n";
+		return 1;
+	}
+	const fs::path modelPath = argv[2];
+	const fs::path projectRoot = argv[3];
+	std::error_code ec;
+	const auto size = fs::file_size(modelPath, ec);
+	if (ec)
+	{
+		std::cerr << "AssetPacker bake: cannot stat '" << modelPath.string() << "'\n";
+		return 1;
+	}
+	std::vector<std::byte> raw(size);
+	{
+		std::ifstream in(modelPath, std::ios::binary);
+		if (!in || !in.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(size)))
+		{
+			std::cerr << "AssetPacker bake: cannot read '" << modelPath.string() << "'\n";
+			return 1;
+		}
+	}
+	const fs::path rel = fs::relative(modelPath, projectRoot);
+	const auto result = MeshProcessor::Process(std::span<const std::byte>(raw.data(), raw.size()), modelPath, rel.generic_string(), projectRoot);
+	if (result.meshData.empty())
+	{
+		std::cerr << "AssetPacker bake: no mesh geometry produced from '" << modelPath.string() << "'\n";
+		return 1;
+	}
+	const std::string stem = modelPath.stem().generic_string();
+	const fs::path modelDir = modelPath.parent_path();
+	auto writeOut = [](const fs::path& outPath, const ByteBuffer& data)
+	{
+		if (data.empty())
+		{
+			return;
+		}
+		std::ofstream out(outPath, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+		std::cout << "wrote " << outPath.string() << " (" << data.size() << " bytes)\n";
+	};
+	writeOut(modelDir / (stem + ".mesh"), result.meshData);
+	writeOut(modelDir / (stem + ".skel"), result.skelData);
+	writeOut(modelDir / (stem + ".animset"), result.animsetData);
+	for (const auto& [fileName, animData]: result.animFiles)
+	{
+		fs::create_directories(projectRoot / "animations");
+		writeOut(projectRoot / "animations" / fileName, animData);
+	}
+	for (const auto& [matVfsPath, matData]: result.materialFiles)
+	{
+		const fs::path matDisk = projectRoot / matVfsPath;
+		fs::create_directories(matDisk.parent_path());
+		writeOut(matDisk, matData);
+	}
+	return 0;
+}
+
 int main(int argc, char* argv[])
 {
 	if (argc >= 2 && std::string(argv[1]) == "kenney")
 	{
 		return RunKenneyCommand(argc, argv, 2);
+	}
+	if (argc >= 2 && std::string(argv[1]) == "bake")
+	{
+		return RunBakeCommand(argc, argv);
 	}
 	const auto args = ParseArgs(argc, argv);
 	if (!args)
