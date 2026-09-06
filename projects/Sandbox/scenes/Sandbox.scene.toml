@@ -1448,7 +1448,22 @@ scale = [ 1.0, 1.0, 1.0 ]
     type = 'Emitter'
 
 [[entities]]
-name = 'Wire Lever Out to Lamp Enable'
+name = 'Test Lever 2'
+node = 4915038608097850717
+euler = [ 0.0, 0.0, 0.0 ]
+position = [ -1.5, 1.6, 11.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.collider]
+    half_extents = [ 0.354, 0.238, 0.17 ]
+    offset = [ 0.0, 0.238, 0.0 ]
+
+    [[entities.scripts]]
+    type = 'Lever'
+
+# 3) truth-table wires: Lever -> Gate.A, Lever2 -> Gate.B, Gate.Out -> Lamp.Enable
+[[entities]]
+name = 'Wire Lever to Gate A'
 euler = [ 0.0, 0.0, 0.0 ]
 position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
@@ -1458,7 +1473,7 @@ scale = [ 1.0, 1.0, 1.0 ]
 
         [entities.scripts.properties.Source]
         t = 'entity'
-        v = 30
+        v = 27
         v_node = 4915038608097850716
 
         [entities.scripts.properties.OutputField]
@@ -1467,9 +1482,64 @@ scale = [ 1.0, 1.0, 1.0 ]
 
         [entities.scripts.properties.Target]
         t = 'entity'
-        v = 29
+        v = 25
+        v_node = -3387294131286030584
+
+        [entities.scripts.properties.InputField]
+        t = 'string'
+        v = 'A'
+
+[[entities]]
+name = 'Wire Lever2 to Gate B'
+euler = [ 0.0, 0.0, 0.0 ]
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'WireLink'
+
+        [entities.scripts.properties.Source]
+        t = 'entity'
+        v = 33
+        v_node = 4915038608097850717
+
+        [entities.scripts.properties.OutputField]
+        t = 'string'
+        v = 'Out'
+
+        [entities.scripts.properties.Target]
+        t = 'entity'
+        v = 25
+        v_node = -3387294131286030584
+
+        [entities.scripts.properties.InputField]
+        t = 'string'
+        v = 'B'
+
+[[entities]]
+name = 'Wire Gate to Lamp'
+euler = [ 0.0, 0.0, 0.0 ]
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'WireLink'
+
+        [entities.scripts.properties.Source]
+        t = 'entity'
+        v = 25
+        v_node = -3387294131286030584
+
+        [entities.scripts.properties.OutputField]
+        t = 'string'
+        v = 'Out'
+
+        [entities.scripts.properties.Target]
+        t = 'entity'
+        v = 26
         v_node = -6797105497565857181
 
         [entities.scripts.properties.InputField]
         t = 'string'
         v = 'Enable'
+
