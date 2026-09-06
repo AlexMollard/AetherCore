@@ -101,26 +101,64 @@ namespace aether::net
 			return;
 		}
 
+		// REUSEADDR must be set on THIS socket BEFORE this socket's own bind() call -
+		// that is the only point at which the OS decides whether this bind may share
+		// a port another socket already holds, so setting it any later is a no-op for
+		// the very case it exists for. (This used to be set after bind, inside one
+		// `||` chain with bind and the other options; the second instance on a
+		// machine always failed to bind because ITS OWN REUSEADDR was not yet set
+		// when ITS OWN bind() ran, and a chain whose correctness depends on
+		// evaluation order is exactly how that went unnoticed - split out on
+		// purpose, so nobody can restore the bug by reordering operands.) Not a
+		// hijack vector worth closing: a process that can bind inside this machine
+		// can do far worse to it than eat a broadcast, and dropping reuse would
+		// break the two-instances-on-one-machine case outright.
+		if (enet_socket_set_option(socket, ENET_SOCKOPT_REUSEADDR, 1) != 0)
+		{
+			enet_socket_destroy(socket);
+			ReleaseEnet();
+			Fail("could not set SO_REUSEADDR on the broadcast socket");
+			return;
+		}
+
 		// Bound to ANY:port so this instance RECEIVES the room's broadcasts too, not
-		// only sends them. Non-blocking so Poll() can drain without ever stalling
-		// the frame loop; broadcast-enabled so the send below is even allowed to
-		// leave the interface; reuse-address so a second instance on this same
-		// machine (two local test peers, or a crashed session's process whose socket
-		// the OS has not yet reaped) does not fail to bind for no reason a player
-		// could act on. Not a hijack vector worth closing: a process that can bind
-		// inside this machine can do far worse to it than eat a broadcast, and
-		// dropping reuse would break the two-instances-on-one-machine case outright.
+		// only sends them. REUSEADDR is already set above, before this call, which is
+		// what lets a second instance on this same machine (two local test peers, or
+		// a crashed session's process whose socket the OS has not yet reaped) bind
+		// here too instead of failing for no reason a player could act on.
 		ENetAddress bindAddress{};
 		bindAddress.host = ENET_HOST_ANY;
 		bindAddress.port = m_port;
-		if (enet_socket_bind(socket, &bindAddress) != 0 || enet_socket_set_option(socket, ENET_SOCKOPT_NONBLOCK, 1) != 0 || enet_socket_set_option(socket, ENET_SOCKOPT_BROADCAST, 1) != 0 || enet_socket_set_option(socket, ENET_SOCKOPT_REUSEADDR, 1) != 0)
+		if (enet_socket_bind(socket, &bindAddress) != 0)
 		{
 			enet_socket_destroy(socket);
 			ReleaseEnet();
 			// A firewall blocking the bind and a port already claimed by something
-			// else both land here, and either is something a player can be told -
-			// unlike a crash, which is not.
-			Fail("could not open a broadcast socket on port " + std::to_string(m_port));
+			// else (with no REUSEADDR set on THAT socket, or from a process outside
+			// this engine entirely) both land here, and either is something a
+			// player can be told - unlike a crash, which is not.
+			Fail("could not bind a broadcast socket on port " + std::to_string(m_port));
+			return;
+		}
+
+		// Non-blocking so Poll() can drain without ever stalling the frame loop.
+		// Order relative to bind does not matter for this one - unlike REUSEADDR,
+		// it is not a port-sharing permission the bind syscall itself consults.
+		if (enet_socket_set_option(socket, ENET_SOCKOPT_NONBLOCK, 1) != 0)
+		{
+			enet_socket_destroy(socket);
+			ReleaseEnet();
+			Fail("could not set the broadcast socket non-blocking");
+			return;
+		}
+
+		// Broadcast-enabled so Publish's send is even allowed to leave the
+		// interface. Same as NONBLOCK above: no bind-ordering dependency.
+		if (enet_socket_set_option(socket, ENET_SOCKOPT_BROADCAST, 1) != 0)
+		{
+			enet_socket_destroy(socket);
+			ReleaseEnet();
+			Fail("could not enable broadcast on the socket for port " + std::to_string(m_port));
 			return;
 		}
 
