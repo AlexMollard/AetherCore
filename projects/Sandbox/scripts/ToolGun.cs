@@ -114,21 +114,17 @@ public sealed class ToolGun : EntityScript
 
     /// <summary>Camera-attached first-person model (asset-pipeline's
     /// ToolGunViewmodel.glb - Kenney Blaster Kit, no collider, not a physics prop).
-    /// Repositioned every frame from Self's current forward/right rather than parented
-    /// with a "local" offset, because Entity transform setters in this engine are
-    /// world-space always (SetParent never composes local coordinates on its own - see
-    /// RuntimeContainers' own file comment on why re-parenting never moves anything).
-    /// Vertical offset deliberately omitted: deriving Up from Forward x Right needs a
-    /// sign this session had no live Editor to confirm, and a same-height placement is a
-    /// safe default in the meantime - adjust once someone can see it. Never save-worthy
+    /// Repositioned every frame from Self's current forward/right/up rather than
+    /// parented with a "local" offset, because Entity transform setters in this engine
+    /// are world-space always (SetParent never composes local coordinates on its own -
+    /// see RuntimeContainers' own file comment on why re-parenting never moves
+    /// anything). The up direction comes from <see cref="CameraBasis.Up"/> - this
+    /// file's earlier revision omitted the vertical term because its sign was
+    /// unconfirmed; the derivation in CameraBasis.cs closed that gap. Never save-worthy
     /// (PhysicsGun.EnsureHud's own comment on the same point for its crosshair canvas),
     /// so this is MarkTransient()'d like every other runtime-only visual in this
     /// project.</summary>
     private Entity _viewmodel;
-
-    private const string ViewmodelPath = "project://assets/models/Viewmodels/ToolGunViewmodel.glb";
-    private const float ViewmodelForwardOffset = 0.5f;
-    private const float ViewmodelRightOffset = 0.22f;
 
     /// <summary>Whatever the aim ray is currently over that TryInteract would actually
     /// press or flip - Button or Lever, an invalid entity when nothing qualifies.
@@ -138,6 +134,17 @@ public sealed class ToolGun : EntityScript
     /// interactable - MaxRange already bounds Aim()'s raycast, so any hit here is by
     /// definition in range.</summary>
     public Entity InteractTarget { get; private set; }
+    private const string ViewmodelPath = "project://assets/models/Viewmodels/ToolGunViewmodel.glb";
+    private const float ViewmodelForwardOffset = 0.5f;
+    private const float ViewmodelRightOffset = 0.22f;
+
+    /// <summary>Vertical offset along the camera's own up direction - NEGATIVE holds
+    /// the gun below the view centre, the usual first-person look. The up vector's
+    /// sign is derived from the engine's own basis rather than remembered, in
+    /// <see cref="CameraBasis.Up"/> (the earlier revision of this file omitted the
+    /// vertical term entirely because that sign was unconfirmed - see
+    /// CameraBasis.cs's own header for the derivation and its citations).</summary>
+    private const float ViewmodelUpOffset = -0.15f;
 
     /// <summary>The exact text UiHud shows over InteractTarget - built from InteractKey
     /// rather than a hardcoded "[G]" so it never goes stale if that binding changes.</summary>
@@ -270,7 +277,8 @@ public sealed class ToolGun : EntityScript
         }
         Vector3 forward = Camera.GetForward(Self);
         Vector3 right = Camera.GetRight(Self);
-        Vector3 position = Self.Position + forward * ViewmodelForwardOffset + right * ViewmodelRightOffset;
+        Vector3 up = CameraBasis.Up(Self);
+        Vector3 position = Self.Position + forward * ViewmodelForwardOffset + right * ViewmodelRightOffset + up * ViewmodelUpOffset;
         _viewmodel.SetTransform(position, Self.EulerDegrees, Vector3.One);
     }
 

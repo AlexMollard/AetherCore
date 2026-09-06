@@ -176,14 +176,27 @@ public sealed class PhysicsGun : EntityScript
     private Entity _pauseMenuEntity;
     private Beam? _beam;
 
+    // Camera-following viewmodel - the PhysicsGunViewmodel.glb asset-pipeline handed
+    // over (Kenney Blaster Kit's chunkiest blaster), wired exactly the way ToolGun
+    // wires its own: a dedicated MarkTransient entity repositioned every frame from
+    // the camera's basis, never parented (Entity transform setters are world-space
+    // always - RuntimeContainers' file comment). Vertical offset is NEGATIVE (held
+    // below the view centre) along CameraBasis.Up, whose sign is derived from the
+    // engine's own basis exports - see CameraBasis.cs's header for the derivation.
+    private const string ViewmodelPath = "project://assets/models/Viewmodels/PhysicsGunViewmodel.glb";
+    private const float ViewmodelForwardOffset = 0.5f;
+    private const float ViewmodelRightOffset = 0.26f;
+    private const float ViewmodelUpOffset = -0.17f;
+    private Entity _viewmodel;
+
     /// <summary>Current hold distance in front of the camera, adjusted by scroll and
     /// re-seeded on every new grab from how far away the prop actually was.</summary>
     private float _holdDistance;
 
     /// <summary>Seconds a claim may sit unanswered by the host before TryGrab gives up
     /// on it. Covers both a silent refusal (someone else already owns the prop - see
-    /// TryClaim's own doc comment) and a request that never arrives at all, so a denied
-    /// or lost claim cannot leave the gun waiting forever on nothing.</summary>
+    /// TryClaim) and a dropped/lost claim, so the gun cannot wait forever on
+    /// nothing.</summary>
     public float ClaimTimeoutSeconds = 1.5f;
 
     /// <summary>The candidate a claim was sent for but not yet granted (client only -
@@ -196,6 +209,7 @@ public sealed class PhysicsGun : EntityScript
     {
         _player = Self.Parent;
         _pauseMenuEntity = Scene.Find("NetSession");
+        EnsureViewmodel();
 
         TagId grabbable = Tags.Create("grabbable");
         Entity props = Scene.Find("Props");
@@ -241,6 +255,40 @@ public sealed class PhysicsGun : EntityScript
         Ui.SetImageColor(crosshair, new Vector4(1.0f, 1.0f, 1.0f, 0.85f));
     }
 
+    /// <summary>Spawns the held viewmodel once - same shape as ToolGun.EnsureViewmodel
+    /// (a dedicated MarkTransient sibling entity, never a child of the camera), one
+    /// shared approach rather than a second convention.</summary>
+    private void EnsureViewmodel()
+    {
+        if (_viewmodel.IsValid)
+        {
+            return;
+        }
+        _viewmodel = World.Create();
+        _viewmodel.Name = "Physics Gun Viewmodel";
+        _viewmodel.AddTransform();
+        _viewmodel.LoadModel(ViewmodelPath);
+        _viewmodel.MarkTransient();
+    }
+
+    /// <summary>Repositions the viewmodel from the camera's CURRENT basis every frame -
+    /// forward/right from the camera exports, up from <see cref="CameraBasis.Up"/>'s
+    /// derived +Y (see that file's header for the sign derivation). Runs before the
+    /// menu-open early-return so the gun keeps following the camera while a menu is
+    /// up rather than freezing mid-air.</summary>
+    private void UpdateViewmodel()
+    {
+        if (!_viewmodel.IsValid)
+        {
+            return;
+        }
+        Vector3 position = Self.Position
+                + Camera.GetForward(Self) * ViewmodelForwardOffset
+                + Camera.GetRight(Self) * ViewmodelRightOffset
+                + CameraBasis.Up(Self) * ViewmodelUpOffset;
+        _viewmodel.SetTransform(position, Self.EulerDegrees, Vector3.One);
+    }
+
     public override void OnUpdate(float deltaTime)
     {
         // Owner-only: input, grabbing, holding and throwing must never run for a
@@ -257,6 +305,7 @@ public sealed class PhysicsGun : EntityScript
             return;
         }
         EnsureHud();
+        UpdateViewmodel();
 
         bool menuOpen = GetScript<SpawnMenu>() is { IsOpen: true }
                 || _pauseMenuEntity.GetScript<UiPauseMenu>() is { IsOpen: true };
