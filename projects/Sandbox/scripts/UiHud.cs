@@ -181,8 +181,24 @@ public sealed class UiHud : EntityScript
             return;
         }
         Entity held = gun.Held;
-        Ui.SetText(_heldLabel, held.IsValid ? $"Holding: {held.Name}" : string.Empty);
+        if (held.IsValid)
+        {
+            Ui.SetText(_heldLabel, $"Holding: {held.Name}");
+            return;
+        }
+        // Three states, not two - a claim sent but not yet granted is neither "holding"
+        // nor nothing: the prop is still the replication system's to move until the host
+        // grants it (see PhysicsGun.PendingClaim's own doc comment), and a HUD that
+        // read "Holding" there would be asserting ownership nobody made.
+        Entity pending = gun.PendingClaim;
+        if (pending.IsValid)
+        {
+            Ui.SetText(_heldLabel, $"Claiming: {pending.Name}\u2026");
+            return;
+        }
+        Ui.SetText(_heldLabel, string.Empty);
     }
+
 
     /// <summary>Shows "[key] Use" while ToolGun's own aim ray is over something
     /// Interact() would actually press, and clears it the instant the player looks

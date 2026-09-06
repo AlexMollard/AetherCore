@@ -165,6 +165,15 @@ public sealed class PhysicsGun : EntityScript
     /// read-only window onto the same _held field, not a second way to set it.</summary>
     public Entity Held => _held;
 
+    /// <summary>A claim sent to the host but not yet granted, or an invalid entity -
+    /// surfaced separately from <see cref="Held"/> on purpose: until Net.IsOwner flips
+    /// true the candidate is still the replication system's to move (not tinted, not
+    /// gravity-zeroed, not driven - see _pendingClaim's own field comment), and a HUD
+    /// that said "Holding" here would be claiming a grant nobody made. UiHud renders
+    /// this as its own "Claiming" state so the difference is visible to the player,
+    /// which is the whole reason the delayed-grant path exists.</summary>
+    public Entity PendingClaim => _pendingClaim;
+
     /// <summary>The crosshair's own canvas - UiHud parents its "Holding" label and F/Q
     /// hint row onto this SAME canvas rather than building a second one, so this
     /// script's own menuOpen suppression (below) already hides them for free.</summary>
