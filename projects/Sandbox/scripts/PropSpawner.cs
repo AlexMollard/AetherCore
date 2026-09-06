@@ -12,25 +12,20 @@ namespace AetherGame;
 /// builds its buttons straight off this array and every button calls the same
 /// <see cref="PropSpawner.SpawnProp"/>.
 ///
-/// Model entries' collider params come from measuring each source glTF's own accessor
-/// bounds (see `projects/Sandbox/assets/PropCatalogExtension.md`) - primitives fit
-/// exactly by construction (Size IS the collider size), so they need none of the
-/// collider fields below and leave them at their defaults.
+/// Model-backed entries get a CONVEX HULL collider built from their own baked mesh
+/// vertices (Physics.AddConvexHullBody on the same project:// path LoadModel reads) -
+/// it follows the real silhouette, closing the old hand-fitted-primitive worklist
+/// (Hopper/ThrusterBody/Cone/Table/Chair were shapes a box lies about). The six
+/// built-in primitives keep their exact-by-construction primitive colliders: a convex
+/// hull of a cube IS that cube, and the primitive is cheaper.
 /// </summary>
-public enum PropColliderShape { Box, Sphere, Capsule, Cylinder }
-
 public readonly record struct PropDef(
     string Name,
     bool IsSphere,
     float Size,
     float Mass,
     Vector3 Color,
-    string? ModelPath = null,
-    PropColliderShape ColliderShape = PropColliderShape.Box,
-    Vector3 ColliderHalfExtents = default,
-    float ColliderRadius = 0f,
-    float ColliderHalfHeight = 0f,
-    Vector3 ColliderCenter = default);
+    string? ModelPath = null);
 
 /// <summary>
 /// Owns the actual spawn logic - creating the entity, its mesh/material/body,
@@ -72,10 +67,11 @@ public sealed class PropSpawner : EntityScript
     /// "Block" so they read as deliberately distinct from the modelled crates below,
     /// not near-duplicates), 16 real CC0 models from Kenney's Factory/Furniture Kits
     /// and Quaternius (via Poly Pizza), and 6 self-authored construction-stock props.
-    /// Every model entry's collider is hand-fitted from that model's own glTF
-    /// accessor bounds - see `projects/Sandbox/assets/PropCatalogExtension.md` for the
-    /// full derivation and the primitives-poorly-served list (Cone/Table/Chair/
-    /// Hopper/ThrusterBody - flagged there as convex-hull candidates, not bugs here).
+    /// Every model entry gets a convex-hull collider built from its own baked mesh
+    /// vertices at spawn time (see the class header) - there is no per-entry collider
+    /// data to hand-fit, so the old "shapes a box lies about" worklist in
+    /// `projects/Sandbox/assets/PropCatalogExtension.md` (Hopper/ThrusterBody/Cone/
+    /// Table/Chair) is closed by construction, not by five individual fixes.
     /// Model paths are relative to `project://assets/models/`.</summary>
     public static readonly PropDef[] Catalog =
     {
@@ -89,41 +85,41 @@ public sealed class PropSpawner : EntityScript
 
         // ── Crates (6) - Kenney Factory/Furniture Kit + Quaternius, CC0 ───────────
         new("Small Wooden Crate", IsSphere: false, Size: 1f, Mass: 4f, Color: default,
-            ModelPath: "project://assets/models/Props/CrateSmall.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.298f, 0.275f, 0.250f), ColliderCenter: new Vector3(0f, 0.275f, 0f)),
+            ModelPath: "project://assets/models/Props/CrateSmall.glb"
+        ),
         new("Large Wooden Crate", IsSphere: false, Size: 1f, Mass: 25f, Color: default,
-            ModelPath: "project://assets/models/Props/CrateLarge.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.550f, 0.275f, 0.500f), ColliderCenter: new Vector3(0f, 0.275f, 0f)),
+            ModelPath: "project://assets/models/Props/CrateLarge.glb"
+        ),
         new("Long Wooden Crate", IsSphere: false, Size: 1f, Mass: 15f, Color: default,
-            ModelPath: "project://assets/models/Props/CrateLong.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.298f, 0.275f, 0.500f), ColliderCenter: new Vector3(0f, 0.275f, 0f)),
+            ModelPath: "project://assets/models/Props/CrateLong.glb"
+        ),
         new("Cardboard Box", IsSphere: false, Size: 1f, Mass: 2f, Color: default,
-            ModelPath: "project://assets/models/Props/CardboardBox.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.106f, 0.1405f, 0.106f), ColliderCenter: new Vector3(0.106f, 0.1405f, -0.106f)),
+            ModelPath: "project://assets/models/Props/CardboardBox.glb"
+        ),
         new("Barrel", IsSphere: false, Size: 1f, Mass: 20f, Color: default,
-            ModelPath: "project://assets/models/Props/Barrel.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.352f, ColliderHalfHeight: 0.2205f, ColliderCenter: new Vector3(0f, 0.5725f, 0f)),
+            ModelPath: "project://assets/models/Props/Barrel.glb"
+        ),
         new("Trash Can", IsSphere: false, Size: 1f, Mass: 5f, Color: default,
-            ModelPath: "project://assets/models/Props/TrashCan.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.122f, ColliderHalfHeight: 0.092f, ColliderCenter: new Vector3(-0.005f, 0.214f, 0f)),
+            ModelPath: "project://assets/models/Props/TrashCan.glb"
+        ),
 
         // ── Furniture (3) - Kenney Furniture Kit, CC0. Box colliders fill the leg
         // gap (documented poor fit for Chair/Table; Bench is a solid slab so its box
         // tracks the silhouette closely) ─────────────────────────────────────────
         new("Chair", IsSphere: false, Size: 1f, Mass: 6f, Color: default,
-            ModelPath: "project://assets/models/Props/Chair.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.1f, 0.235f, 0.1f), ColliderCenter: new Vector3(0.1f, 0.235f, -0.1f)),
+            ModelPath: "project://assets/models/Props/Chair.glb"
+        ),
         new("Table", IsSphere: false, Size: 1f, Mass: 12f, Color: default,
-            ModelPath: "project://assets/models/Props/Table.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.4205f, 0.1635f, 0.2235f), ColliderCenter: new Vector3(0.4207f, 0.1634f, -0.2237f)),
+            ModelPath: "project://assets/models/Props/Table.glb"
+        ),
         new("Bench", IsSphere: false, Size: 1f, Mass: 10f, Color: default,
-            ModelPath: "project://assets/models/Props/Bench.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.2f, 0.235f, 0.1f), ColliderCenter: new Vector3(0.2f, 0.235f, -0.1f)),
+            ModelPath: "project://assets/models/Props/Bench.glb"
+        ),
 
         // ── Misc (1) ───────────────────────────────────────────────────────────
         new("Traffic Cone", IsSphere: false, Size: 1f, Mass: 1f, Color: default,
-            ModelPath: "project://assets/models/Props/Cone.glb",
-            ColliderShape: PropColliderShape.Capsule, ColliderRadius: 0.15f, ColliderHalfHeight: 0.075f, ColliderCenter: new Vector3(0f, 0.225f, 0f)),
+            ModelPath: "project://assets/models/Props/Cone.glb"
+        ),
 
         // ── Machinery (8, new) - Kenney Factory Kit, CC0. Large/Medium Cog are the
         // one entry pair in this whole catalogue NOT base-pivoted at y=0 (raw mesh
@@ -131,55 +127,55 @@ public sealed class PropSpawner : EntityScript
         // half_height, confirmed from source bounds, not assumed symmetric with the
         // rest ──────────────────────────────────────────────────────────────────
         new("Large Cog", IsSphere: false, Size: 1f, Mass: 30f, Color: default,
-            ModelPath: "project://assets/models/Props/CogLarge.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.5f, ColliderHalfHeight: 0.1125f, ColliderCenter: new Vector3(0f, -0.0375f, 0f)),
+            ModelPath: "project://assets/models/Props/CogLarge.glb"
+        ),
         new("Medium Cog", IsSphere: false, Size: 1f, Mass: 20f, Color: default,
-            ModelPath: "project://assets/models/Props/CogMedium.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.5f, ColliderHalfHeight: 0.1125f, ColliderCenter: new Vector3(0f, -0.0375f, 0f)),
+            ModelPath: "project://assets/models/Props/CogMedium.glb"
+        ),
         new("Piston", IsSphere: false, Size: 1f, Mass: 35f, Color: default,
-            ModelPath: "project://assets/models/Props/Piston.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.5f, ColliderHalfHeight: 0.5f, ColliderCenter: new Vector3(0f, 0.5f, 0f)),
+            ModelPath: "project://assets/models/Props/Piston.glb"
+        ),
         new("Machine Block", IsSphere: false, Size: 1f, Mass: 60f, Color: default,
-            ModelPath: "project://assets/models/Props/MachineBlock.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.6f, 0.65f, 0.75f), ColliderCenter: new Vector3(0f, 0.65f, 0f)),
+            ModelPath: "project://assets/models/Props/MachineBlock.glb"
+        ),
         new("Hopper", IsSphere: false, Size: 1f, Mass: 15f, Color: default,
-            ModelPath: "project://assets/models/Props/Hopper.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.559f, ColliderHalfHeight: 0.5f, ColliderCenter: new Vector3(0f, 0.5f, 0f)),
+            ModelPath: "project://assets/models/Props/Hopper.glb"
+        ),
         new("Pipe Segment", IsSphere: false, Size: 1f, Mass: 12f, Color: default,
-            ModelPath: "project://assets/models/Props/PipeSegment.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.5f, ColliderHalfHeight: 0.5f, ColliderCenter: new Vector3(0f, 0.5f, 0f)),
+            ModelPath: "project://assets/models/Props/PipeSegment.glb"
+        ),
         new("Arrow Sign", IsSphere: false, Size: 1f, Mass: 3f, Color: default,
-            ModelPath: "project://assets/models/Props/ArrowSign.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.283f, 0.1f, 0.4245f), ColliderCenter: new Vector3(0f, 0.1f, 0.0005f)),
+            ModelPath: "project://assets/models/Props/ArrowSign.glb"
+        ),
         new("Warning Sign", IsSphere: false, Size: 1f, Mass: 8f, Color: default,
-            ModelPath: "project://assets/models/Props/WarningSign.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.2f, ColliderHalfHeight: 0.7755f, ColliderCenter: new Vector3(0f, 0.7755f, 0f)),
+            ModelPath: "project://assets/models/Props/WarningSign.glb"
+        ),
 
         // ── Construction (6, new) - self-authored, NOT downloaded; the "genuinely
         // unique" half of the 30. Exact-collider-by-construction, same as the
         // primitives, since these meshes were generated to these exact dimensions ──
         new("Steel Plate", IsSphere: false, Size: 1f, Mass: 15f, Color: default,
-            ModelPath: "project://assets/models/Props/SteelPlate.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.5f, 0.025f, 0.5f), ColliderCenter: new Vector3(0f, 0.025f, 0f)),
+            ModelPath: "project://assets/models/Props/SteelPlate.glb"
+        ),
         new("Beam", IsSphere: false, Size: 1f, Mass: 10f, Color: default,
-            ModelPath: "project://assets/models/Props/Beam.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.05f, 0.05f, 0.75f), ColliderCenter: new Vector3(0f, 0.05f, 0f)),
+            ModelPath: "project://assets/models/Props/Beam.glb"
+        ),
         new("Wheel", IsSphere: false, Size: 1f, Mass: 12f, Color: default,
-            ModelPath: "project://assets/models/Props/Wheel.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.3f, ColliderHalfHeight: 0.09f, ColliderCenter: new Vector3(0f, 0.09f, 0f)),
+            ModelPath: "project://assets/models/Props/Wheel.glb"
+        ),
         new("Hinge Plate", IsSphere: false, Size: 1f, Mass: 3f, Color: default,
-            ModelPath: "project://assets/models/Props/HingePlate.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.2f, 0.02f, 0.2f), ColliderCenter: new Vector3(0f, 0.02f, 0f)),
+            ModelPath: "project://assets/models/Props/HingePlate.glb"
+        ),
         new("Ball Joint", IsSphere: false, Size: 1f, Mass: 5f, Color: default,
-            ModelPath: "project://assets/models/Props/BallJoint.glb",
-            ColliderShape: PropColliderShape.Sphere, ColliderRadius: 0.15f, ColliderCenter: new Vector3(0f, 0.15f, 0f)),
+            ModelPath: "project://assets/models/Props/BallJoint.glb"
+        ),
         new("Thruster Body", IsSphere: false, Size: 1f, Mass: 18f, Color: default,
-            ModelPath: "project://assets/models/Props/ThrusterBody.glb",
-            ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.32f, ColliderHalfHeight: 0.2f, ColliderCenter: new Vector3(0f, 0.2f, 0f)),
+            ModelPath: "project://assets/models/Props/ThrusterBody.glb"
+        ),
         // ── Kenney import (native, via the AssetPacker `kenney` tool / MCP / Editor Kenney Browser) ──
         new("Machine Fortified", IsSphere: false, Size: 1f, Mass: 60.0000f, Color: default,
-            ModelPath: "project://assets/models/Props/MachineFortified.glb",
-            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.6000f, 0.6752f, 0.8000f), ColliderCenter: new Vector3(0.0000f, 0.6752f, 0.0000f)),
+            ModelPath: "project://assets/models/Props/MachineFortified.glb"
+        ),
     };
 
     public int MaxProps = 24;
@@ -289,28 +285,14 @@ public sealed class PropSpawner : EntityScript
 
         if (def.ModelPath != null)
         {
-            // Real glTF model, native scale - the catalogue's collider fields already
-            // encode the model's own measured bounds, not a Size-derived guess.
+            // Real glTF model, native scale - PropDef carries no collider data at
+            // all for a model entry; the hull below is fit at spawn time instead.
             prop.LoadModel(def.ModelPath);
-            switch (def.ColliderShape)
-            {
-                case PropColliderShape.Sphere:
-                    Physics.AddSphereBody(prop, def.ColliderRadius, dynamic: true);
-                    break;
-                case PropColliderShape.Capsule:
-                    Physics.AddCapsuleBody(prop, def.ColliderHalfHeight, def.ColliderRadius, dynamic: true);
-                    break;
-                case PropColliderShape.Cylinder:
-                    Physics.AddCylinderBody(prop, def.ColliderHalfHeight, def.ColliderRadius, dynamic: true);
-                    break;
-                default:
-                    Physics.AddBoxBody(prop, def.ColliderHalfExtents, dynamic: true);
-                    break;
-            }
-            if (def.ColliderCenter != Vector3.Zero)
-            {
-                prop.Component("Collider").SetVector3("center", def.ColliderCenter);
-            }
+            // Convex hull from the model's own baked vertices - follows the real
+            // silhouette (the Cone's taper, the Hopper's hollow) instead of a box that
+            // lies about it. Same project:// path LoadModel just read, so the hull and
+            // the visual can never disagree about which mesh they describe.
+            Physics.AddConvexHullBody(prop, def.ModelPath, dynamic: true);
         }
         else if (def.IsSphere)
         {

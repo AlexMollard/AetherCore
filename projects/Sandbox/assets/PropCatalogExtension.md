@@ -1,3 +1,21 @@
+# RESOLVED (2026-09-06): every model-backed catalogue entry now uses a convex hull
+
+`PropSpawner.cs` no longer carries any per-entry collider data at all. Every entry with
+a `ModelPath` gets `Physics.AddConvexHullBody(prop, def.ModelPath, dynamic: true)` at
+spawn time, built from the model's own baked vertices against the exact same
+`project://` path `LoadModel` reads - so the collider and the visual mesh can never
+describe different geometry. This closes both convex-hull worklists below (the
+per-prop consequence list and the "primitives poorly served" summary) for all five
+flagged props (Cone, Table, Chair, Hopper, Thruster Body) *and* every other
+model-backed entry, not just those five - a hull is now the only way a model gets a
+collider. The six built-in primitives (cube/sphere family, `ModelPath == null`) keep
+their primitive colliders on purpose: a convex hull of a cube or sphere is that
+shape, so the primitive is exact and cheaper. Live-verified: see PropSpawner.cs's own
+class header for the mechanism; a non-boxy prop (Cone/Hopper/Chair) now rests on its
+true silhouette instead of an invisible box. Everything below this line is the
+historical record of how that worklist was discovered and is kept for context, not a
+live TODO.
+
 # Icon generation status (spawn-menu grid) — FINAL for this session
 
 **10 of 16 icons done and verified, in `projects/Sandbox/assets/Icons/`:** Barrel.png,
