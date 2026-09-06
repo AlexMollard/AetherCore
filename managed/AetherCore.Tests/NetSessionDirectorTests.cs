@@ -623,6 +623,21 @@ public sealed class NetSessionDirectorTests : SdkTestBase
     }
 
     [Fact]
+    public void ConnectTimeoutDefaultExceedsTheNativeLaddersOwnWorstCaseTimeToFailed()
+    {
+        // Same regression, same arithmetic, as NetConnectMenuTests'
+        // JoinTimeoutExceedsTheNativeLaddersOwnWorstCaseTimeToFailed - this is the OTHER
+        // place a UI-layer watchdog can race NatRendezvous.cpp's kPeerTimeout (20s) and
+        // NetTraversalSession.cpp's kConnectingTimeoutSeconds (10s) and win, replacing
+        // TickInitialConnectByCode's own Net.TraversalState==Failed check (which reports
+        // NatRendezvous's specific reason) with the generic ConnectTimedOutMessage. This
+        // is the DEFAULT only - the tests above deliberately override it to 8.0f to keep
+        // their own timing short, which is fine for a test that controls both clocks
+        // itself, not for the value a real join actually runs with.
+        Assert.True(new RecordingDirector().ConnectTimeoutSeconds >= 30.0f);
+    }
+
+    [Fact]
     public void AnUnreachableAddressIsReportedAsUnreachableRatherThanAsATimeout()
     {
         // Nobody is out there to send a reason, so the transport simply giving up is the

@@ -152,6 +152,24 @@ public sealed class NetConnectMenuTests : SdkTestBase
     }
 
     [Fact]
+    public void JoinTimeoutExceedsTheNativeLaddersOwnWorstCaseTimeToFailed()
+    {
+        // Pins the exact regression this value once had: JoinTimeoutSeconds is a UI
+        // watchdog racing native timeouts it does not otherwise know about
+        // (NatRendezvous.cpp's kPeerTimeout=20s and NetTraversalSession.cpp's
+        // kConnectingTimeoutSeconds=10s - mutually exclusive, so ~30s covers the worst
+        // case that still legitimately succeeds: a peer's first candidate arriving right
+        // before the 20s peer-timeout, then the full 10s to finish ENet's handshake). Set
+        // any lower and this watchdog fires before NatRendezvous's own specific "the peer
+        // never offered an address" reason ever reaches TickJoining's Failed check above -
+        // replacing a real diagnosis with this generic one on every slow-but-working join,
+        // not only genuine failures. If either native constant changes, this assertion
+        // (and the matching one in NetSessionDirectorTests) needs re-deriving, not just
+        // bumping - see ConnectTimeoutSeconds's own remarks for the full arithmetic.
+        Assert.True(new NetConnectMenu().JoinTimeoutSeconds >= 30.0f);
+    }
+
+    [Fact]
     public void EscapeCancelsAnInFlightJoinAndRestoresReplicationReady()
     {
         NetConnectMenu menu = NewMenu();

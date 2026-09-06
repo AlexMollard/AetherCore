@@ -118,6 +118,7 @@ public abstract class NetSessionDirector : EntityScript
     /// menu.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Separate from <see cref="ReconnectTimeoutSeconds"/>, and longer, because the two are
     /// different questions. A reconnect is one of several bounded attempts at a host that
     /// answered a moment ago; a first connection is the only attempt there will be, against
@@ -125,8 +126,28 @@ public abstract class NetSessionDirector : EntityScript
     /// there indefinitely - the transport eventually drops the peer, but nothing was
     /// watching for that either, so a mistyped port produced an empty level and no
     /// explanation.
+    /// </para>
+    /// <para>
+    /// MUST exceed the room-code ladder's own worst-case time-to-Failed, not just guess at
+    /// something that feels long enough - <see cref="TickInitialConnectByCode"/> checks
+    /// <see cref="Net.TraversalState"/> for Failed BEFORE this timeout, so whichever fires
+    /// first is the message the player sees. The native ladder's own budget, added up: up
+    /// to 20s waiting for the peer to publish any candidate at all (kPeerTimeout,
+    /// NatRendezvous.cpp) if it never does, OR up to 10s completing ENet's handshake once a
+    /// punched path opens (kConnectingTimeoutSeconds, NetTraversalSession.cpp) if the peer
+    /// answers late - the two are mutually exclusive (candidates-never-arrived ends the
+    /// attempt before Connecting is ever reached), so the worst CASE that still legitimately
+    /// succeeds is candidates arriving right before the 20s peer-timeout, then taking the
+    /// full 10s to finish connecting: ~30s. This used to be 8s - shorter than EITHER native
+    /// timeout alone - which meant this watchdog fired first on every slow-but-working
+    /// connection and on every genuine "peer never joined" case alike, always replacing
+    /// NatRendezvous's specific "the peer never offered an address - it may not have joined
+    /// yet" with this generic message. A live two-instance join that timed out with no
+    /// native-side reason logged is consistent with exactly this - the real answer was
+    /// already computed downstream and never got the chance to reach the player.
+    /// </para>
     /// </remarks>
-    public float ConnectTimeoutSeconds = 8.0f;
+    public float ConnectTimeoutSeconds = 35.0f;
 
     /// <summary>How long "Connected." and "Reconnected." stay on screen. Long enough to
     /// read, short enough not to become part of the HUD.</summary>

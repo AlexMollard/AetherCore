@@ -60,10 +60,16 @@ public class NetConnectMenu : EntityScript
     public string ArenaScene = string.Empty;
 
     /// <summary>How long a join is given before this gives up on it and says so. The
-    /// same reasoning as <see cref="NetSessionDirector.ConnectTimeoutSeconds"/>: without
-    /// a bound, a mistyped or dead code leaves the menu waiting forever with no way to
-    /// tell the player anything went wrong.</summary>
-    public float JoinTimeoutSeconds = 10.0f;
+    /// same reasoning as <see cref="NetSessionDirector.ConnectTimeoutSeconds"/> (see its
+    /// own remarks for the exact native-timeout arithmetic this must exceed - the room-
+    /// code ladder's own worst-case time-to-Failed is roughly 20s waiting for the peer's
+    /// first candidate plus, separately, up to 10s finishing ENet's handshake once a
+    /// punched path opens): without a bound, a mistyped or dead code leaves the menu
+    /// waiting forever with no way to tell the player anything went wrong; WITH one set
+    /// too low, this fires before the native ladder's own more specific failure reason
+    /// ever has a chance to, replacing it with this generic message on every slow-but-
+    /// working join and every genuine no-peer case alike. This used to be 10s.</summary>
+    public float JoinTimeoutSeconds = 35.0f;
 
     /// <summary>True from a successful <see cref="Host"/> until <see cref="EnterArena"/>
     /// runs.</summary>

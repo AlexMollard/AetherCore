@@ -4,6 +4,7 @@
 #include <string>
 #include <thread>
 
+#include "net/BroadcastSignaling.hpp"
 #include "net/NetTraversalSession.hpp"
 #include "net/NetworkSubsystem.hpp"
 #include "net/RoomCode.hpp"
@@ -204,6 +205,62 @@ TEST_CASE("A host and a joiner reach each other through the whole ladder and fin
 	CHECK_FALSE(joinerSession.JoinInProgress());
 	CHECK(hostSession.FailureReason().empty());
 	CHECK(joinerSession.FailureReason().empty());
+}
+
+TEST_CASE("A host and a joiner reach each other over a REAL broadcast socket, not a mocked channel" * doctest::skip())
+{
+	// The test above proves the ladder's STATE MACHINE is correct when signaling
+	// is a direct in-memory pairing (LocalSignalingChannel) - instant, lossless,
+	// same process. It does not touch a single real socket. This test closes
+	// that gap: two REAL BroadcastSignalingChannel instances, on a dedicated
+	// test port so a live production session on the real default (24700) is
+	// never collided with, carrying the SAME room code over an actual OS UDP
+	// broadcast the way two real Editor instances on the same LAN do. Skipped
+	// by default for the same reason BroadcastSignalingTests.cpp's own real-
+	// socket test is: whether a broadcast actually leaves the interface depends
+	// on firewall/network configuration on the machine running it - run with
+	// --test-case="*REAL broadcast socket*" --no-skip.
+	constexpr std::uint16_t kTestBroadcastPort = 24798;
+
+	net::NetworkSubsystem hostTransport;
+	net::NetworkSubsystem joinerTransport;
+	const std::string code = net::NewRoomCode();
+	net::BroadcastSignalingChannel hostChannel(code, kTestBroadcastPort);
+	net::BroadcastSignalingChannel joinerChannel(code, kTestBroadcastPort);
+	REQUIRE(hostChannel.IsUsable());
+	REQUIRE(joinerChannel.IsUsable());
+
+	net::NetTraversalSession hostSession(hostTransport);
+	net::NetTraversalSession joinerSession(joinerTransport);
+	hostSession.ConfigureSignalingChannel(hostChannel);
+	hostSession.SetStunServer("");
+	joinerSession.ConfigureSignalingChannel(joinerChannel);
+	joinerSession.SetStunServer("");
+
+	REQUIRE(hostSession.HostWithCode(code, 24788, 4));
+	REQUIRE(joinerSession.JoinByCode(code));
+
+	PumpOnce(hostSession, hostTransport, 6.0f); // clears the host's mapping window
+	REQUIRE(hostSession.GetState() != State::Mapping);
+
+	bool bothConnected = false;
+	for (int i = 0; i < 800 && !bothConnected; ++i)
+	{
+		PumpOnce(hostSession, hostTransport, 0.05f);
+		PumpOnce(joinerSession, joinerTransport, 0.05f);
+		bothConnected = hostSession.GetState() == State::Connected && joinerSession.GetState() == State::Connected;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+
+	// If this fails while the mocked-channel test above passes, the defect is
+	// specific to the REAL broadcast path (wire encoding, OS delivery, or the
+	// receive-side room/nonce filter in NetTraversalSession::ParseLine) rather
+	// than to the traversal ladder's own state machine.
+	INFO("host state=" << (int)hostSession.GetState() << " reason=" << hostSession.FailureReason());
+	INFO("joiner state=" << (int)joinerSession.GetState() << " reason=" << joinerSession.FailureReason());
+	CHECK(hostSession.GetState() == State::Connected);
+	CHECK(joinerSession.GetState() == State::Connected);
+	CHECK_FALSE(joinerSession.JoinInProgress());
 }
 
 TEST_CASE("Relaying is skipped with no relay configured at all, and the ladder ends at Failed exactly as before")
