@@ -68,6 +68,16 @@ add_executable(EngineTests
     # The one definition of g_activeContext, which ActiveContextScope publishes and
     # every script/RPC callback path depends on.
     "${CMAKE_SOURCE_DIR}/src/app/scripting/SceneContext.cpp"
+    # ScriptSerde.cpp's CaptureScripts now calls ScriptComponentSystem::
+    # SyncPropertiesFromLiveInstance (a save-time live property re-read - see its
+    # own comment), which needs this. Compile/link-only: nethost.dll and the
+    # managed assemblies are never staged next to EngineTests.exe, so
+    # CSharpScriptingSubsystem::IsAvailable() is false at runtime here exactly as
+    # it would be with scripting absent entirely, and the sync is the same no-op
+    # every other headless/no-scripting World already exercises. DotNetHost.cpp
+    # (src/engine/scripting) needs no listing - it is globbed into Engine already.
+    "${CMAKE_SOURCE_DIR}/src/app/systems/ScriptComponentSystem.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scripting/CSharpScriptingSubsystem.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"

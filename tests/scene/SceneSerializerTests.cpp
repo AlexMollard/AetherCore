@@ -22,6 +22,8 @@
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
+#include "systems/ScriptComponentSystem.hpp"
+#include "utils/ServiceContainer.hpp"
 #include "ui/UiComponents.hpp"
 #include "editor/ReflectionJson.hpp"
 #include "../material/FakePipelineFactory.hpp"
@@ -1900,3 +1902,158 @@ TEST_CASE("Moving a prefab instance root does not override its children's transf
     ClearProjectSceneDirectories();
     std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("Script properties survive capture with no ScriptComponentSystem registered at all") {
+    // The AssetPacker / bare-serializer-fixture guarantee: CaptureScripts now looks
+    // up ScriptComponentSystem via world.FindSystem to refresh properties from a
+    // live C# instance, and this world (like MakeWorld() everywhere else in this
+    // file) registers no systems at all. FindSystem must return null gracefully,
+    // and the existing cache - the only value that ever existed here - must still
+    // make it into the record unchanged.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+    Entity e = world.Create();
+    world.Emplace<NameComponent>(e, NameComponent{.name = "Scripted"});
+    world.Emplace<TransformComponent>(e, TransformComponent{});
+
+    ScriptPropertyValue speed;
+    speed.type = ScriptPropertyValue::Type::Float;
+    speed.f4[0] = 3.5f;
+    ScriptEntry entry{.path = "WireLink", .attached = false};
+    entry.properties["Speed"] = speed;
+    world.Emplace<ScriptComponent>(e, ScriptComponent{.scripts = {entry}});
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+    REQUIRE(parsed.has_value());
+    const EntityRecord& rec = RecordOf(*parsed, "Scripted");
+    REQUIRE(rec.scripts.size() == 1);
+    CHECK(rec.scripts[0].type == "WireLink");
+    REQUIRE(rec.scripts[0].properties.contains("Speed"));
+    CHECK(rec.scripts[0].properties.at("Speed").f4[0] == doctest::Approx(3.5f));
+}
+
+TEST_CASE("Script properties survive capture when ScriptComponentSystem exists but has no live instance for this entity") {
+    // A real ScriptComponentSystem this time (world.FindSystem finds it - the
+    // production case), but no CSharpScriptingSubsystem registered on its
+    // services and no instance ever created for this entity, so
+    // GetInstanceHandle reads 0 without touching CoreCLR at all. attached=true
+    // with handle=0 is the one state SyncPropertiesFromLiveInstance calls
+    // genuinely inconsistent and logs a warning for - this proves that warning
+    // path leaves the cache exactly as it found it rather than corrupting or
+    // dropping it.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    ServiceContainer services;
+    World world = MakeWorld();
+    world.RegisterSystem(std::make_unique<app::ScriptComponentSystem>(services));
+    Entity e = world.Create();
+    world.Emplace<NameComponent>(e, NameComponent{.name = "Scripted"});
+    world.Emplace<TransformComponent>(e, TransformComponent{});
+
+    ScriptPropertyValue target;
+    target.type = ScriptPropertyValue::Type::Entity;
+    target.i64 = 0;
+    ScriptEntry entry{.path = "WireLink", .attached = true};
+    entry.properties["Target"] = target;
+    world.Emplace<ScriptComponent>(e, ScriptComponent{.scripts = {entry}});
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+    REQUIRE(parsed.has_value());
+    const EntityRecord& rec = RecordOf(*parsed, "Scripted");
+    REQUIRE(rec.scripts.size() == 1);
+    REQUIRE(rec.scripts[0].properties.contains("Target"));
+    CHECK(rec.scripts[0].properties.at("Target").type == ScriptPropertyValue::Type::Entity);
+}
+
+TEST_CASE("A script's Self entry is never persisted, capture or resave, even after an entity insertion") {
+    // Self used to be reflected and persisted exactly like any other Entity-typed
+    // property - equally vulnerable to the array-position remap, since it read as
+    // tautologically safe but was not. The real fix removes it from the mechanism
+    // entirely (EntityScript.Self is [HideInInspector] and always correct at
+    // construction), so the correct outcome here is not "Self survives the edit via
+    // v_node" but "Self is never written or read back as a property at all" - proven
+    // both immediately after capture and after a hand-inserted-entity resave.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    Entity wire = world.Create();
+    world.Emplace<NameComponent>(wire, NameComponent{.name = "Wire"});
+    world.Emplace<TransformComponent>(wire, TransformComponent{});
+    ScriptPropertyValue self;
+    self.type = ScriptPropertyValue::Type::Entity;
+    self.i64 = wire.id;
+    ScriptEntry entry{.path = "SomeScript", .attached = false};
+    entry.properties["Self"] = self; // simulates a stale cache entry from before this fix
+    world.Emplace<ScriptComponent>(wire, ScriptComponent{.scripts = {entry}});
+
+    const std::string saved = WriteToml(CaptureScene(world, mreg, treg));
+    CHECK(saved.find("properties.Self") == std::string::npos);
+
+    // Hand-insert an entity ahead of it anyway: even if Self had somehow survived
+    // into the file, this proves the edit cannot repoint something that isn't there.
+    const std::size_t insertAt = saved.find("[[entities]]");
+    REQUIRE(insertAt != std::string::npos);
+    const std::string edited = saved.substr(0, insertAt) + "[[entities]]\nname = 'Inserted'\n\n" + saved.substr(insertAt);
+
+    const auto parsed = ParseToml(edited);
+    REQUIRE(parsed.has_value());
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity appliedWire = AppliedOf(*parsed, created, "Wire");
+    REQUIRE(appliedWire.IsValid());
+    const auto* sc = fresh.TryGet<ScriptComponent>(appliedWire);
+    REQUIRE(sc != nullptr);
+    CHECK_FALSE(sc->scripts[0].properties.contains("Self"));
+}
+
+TEST_CASE("A pre-fix scene's wrong Self entry is dropped on load and never reaches the live property cache") {
+    // Self is not a persisted, author-editable property (see EntityScript.Self's
+    // [HideInInspector] in managed code): it has exactly one correct value, the entity
+    // its script instance was constructed for, set unconditionally at construction
+    // (ScriptRegistry.CreateInstance -> EntityScript.Bind). Reflecting/persisting it was
+    // the mechanism behind a real corruption: an entity inserted ahead of a scripted one
+    // repointed its own persisted Self index at a neighbour, and reloading faithfully
+    // re-applied the wrong value into the live instance's own Self field. This entry
+    // ('Self' pointing at 'Decoy', not the entity that owns the script) reproduces
+    // exactly that on-disk shape. Loading it must drop the entry outright - not resolve
+    // it, not warn about it as a dangling ref, just never let it reach ApplyProperties or
+    // the live property cache - and a resave must not write it back out.
+    const std::string authored =
+            "[scene]\nkind = '3d'\nname = 'T'\nversion = 16\n\n"
+            "[[entities]]\nname = 'Decoy'\n\n"
+            "[[entities]]\nname = 'Scripted'\n\n"
+            "    [[entities.scripts]]\n    type = 'WireLink'\n\n"
+            "        [entities.scripts.properties.Self]\n        t = 'entity'\n        v = 0\n";
+
+    const auto parsed = ParseToml(authored);
+    REQUIRE(parsed.has_value());
+
+    World world = MakeWorld();
+    const auto created = ApplyScene(*parsed, world, ApplySceneDeps{});
+    const Entity applied = AppliedOf(*parsed, created, "Scripted");
+    REQUIRE(applied.IsValid());
+    const auto* sc = world.TryGet<ScriptComponent>(applied);
+    REQUIRE(sc != nullptr);
+    REQUIRE(sc->scripts.size() == 1);
+    // Dropped entirely - not resolved to 'Decoy', not resolved to anything.
+    CHECK_FALSE(sc->scripts[0].properties.contains("Self"));
+
+    // A resave must not resurrect it.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    const std::string resaved = WriteToml(CaptureScene(world, mreg, treg));
+    CHECK(resaved.find("Self") == std::string::npos);
+}
+
+

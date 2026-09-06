@@ -55,7 +55,7 @@ internal static unsafe partial class Native
             static (name, _, _) => name == Lib ? NativeLibrary.GetMainProgramHandle() : IntPtr.Zero);
     }
 
-    // ── World / entity / transform ────────────────────────────────────────────
+    // â”€â”€ World / entity / transform â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial uint aether_entity_create();
 
@@ -96,7 +96,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_ui_get_text(uint id, byte* buf, int bufLen);
 
-    // ── Assets (generic data-asset text read/write/list) ────────────────────────
+    // â”€â”€ Assets (generic data-asset text read/write/list) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_assets_read_text(string vpath, byte* buf, int cap);
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
@@ -104,7 +104,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_assets_list(string pattern, byte* buf, int cap);
 
-    // ── EditorGui (editor-only ImGui bridge; resolves lazily, never called in a shipped game) ────
+    // â”€â”€ EditorGui (editor-only ImGui bridge; resolves lazily, never called in a shipped game) â”€â”€â”€â”€
     [LibraryImport(Lib)] internal static partial void aether_editorgui_set_next_window_size(Vector2 size);
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_editorgui_begin(string title, int* open);
@@ -175,7 +175,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)] internal static partial int aether_editorgui_is_mouse_down();
     [LibraryImport(Lib)] internal static partial float aether_editorgui_mouse_wheel();
 
-    // ── UI toolkit (Module 02) ──────────────────────────────────────────────────
+    // â”€â”€ UI toolkit (Module 02) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial uint aether_ui_create_canvas();
 
@@ -254,7 +254,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_ui_set_interactable(uint id, int value);
 
-    // ── Widgets ──────────────────────────────────────────────────────────────────
+    // â”€â”€ Widgets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial float aether_ui_get_slider_value(uint id);
 
@@ -282,11 +282,11 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_ui_was_changed(uint id);
 
-    // ── Button ───────────────────────────────────────────────────────────────────
+    // â”€â”€ Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial uint aether_ui_create_button(uint canvasId);
 
-    // ── Text box ─────────────────────────────────────────────────────────────────
+    // â”€â”€ Text box â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial uint aether_ui_create_text_box(uint canvasId);
 
@@ -317,7 +317,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_ui_begin_edit(uint id);
 
-    // ── Custom-shader effects ────────────────────────────────────────────────────
+    // â”€â”€ Custom-shader effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint aether_ui_create_effect(uint canvas, string shader);
 
@@ -339,7 +339,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_ui_set_material_colors(uint id, Vector4 color0, Vector4 color1);
 
-    // ── Debug draw (Module 08) ──────────────────────────────────────────────────
+    // â”€â”€ Debug draw (Module 08) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial void aether_debug_set_enabled(int enabled);
 
@@ -358,8 +358,8 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_debug_draw_box(Vector3 center, Vector3 halfExtents, Vector4 color);
 
-    // ── Time (Module 05) ────────────────────────────────────────────────────────
-    // ── Project custom render passes ───────────────────────────────────────────────
+    // â”€â”€ Time (Module 05) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€ Project custom render passes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_custompass_register(string name, string shader, int stage);
 
@@ -369,7 +369,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_custompass_submit(string name, Vector4* data, int count, Vector4 param, Vector4 color0, Vector4 color1);
 
-    // ── Transient 2D lights / shadow occluders ─────────────────────────────────────
+    // â”€â”€ Transient 2D lights / shadow occluders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial void aether_light2d_submit_light(float x, float y, float radius, Vector3 color, float intensity, int castsShadow);
 
@@ -394,7 +394,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial float aether_time_get_scale();
 
-    // ── Mouse input (Module 03) ─────────────────────────────────────────────────
+    // â”€â”€ Mouse input (Module 03) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial int aether_input_mouse_down(int btn);
 
@@ -413,7 +413,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial Vector2 aether_input_scroll_delta();
 
-    // ── Gamepad input ───────────────────────────────────────────────────────────
+    // â”€â”€ Gamepad input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial int aether_input_gamepad_connected(int pad);
 
@@ -468,14 +468,14 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_input_get_os_cursor_visible();
 
-    // ── Clipboard ────────────────────────────────────────────────────────────────
+    // â”€â”€ Clipboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial int aether_input_get_clipboard(byte* buf, int bufLen);
 
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_input_set_clipboard(string text);
 
-    // ── Entity & scene (Module 01) ──────────────────────────────────────────────
+    // â”€â”€ Entity & scene (Module 01) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial void aether_entity_set_parent(uint child, uint parent);
 
@@ -532,7 +532,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_set_transform(uint id, Vector3 pos, Vector3 euler, Vector3 scale);
 
-    // ── Input ─────────────────────────────────────────────────────────────────
+    // â”€â”€ Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     [SuppressGCTransition]
     internal static partial int aether_input_key_down(int keyCode);
@@ -549,7 +549,7 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial float aether_input_delta_time();
 
-    // ── Camera ────────────────────────────────────────────────────────────────
+    // â”€â”€ Camera â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial uint aether_camera_create_orbit(Vector3 pos, Vector3 target, float fovDeg);
 
@@ -614,7 +614,7 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial Vector2 aether_camera_world_to_screen(Vector3 worldPos);
 
-    // ── Physics ───────────────────────────────────────────────────────────────
+    // â”€â”€ Physics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial void aether_physics_add_box(uint id, Vector3 halfExtents, int dynamic);
 
@@ -623,6 +623,14 @@ internal static unsafe partial class Native
 
     [LibraryImport(Lib)]
     internal static partial void aether_physics_add_capsule(uint id, float halfHeight, float radius, int dynamic);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_add_cylinder(uint id, float halfHeight, float radius, int dynamic);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_physics_add_convex_hull(uint id, string meshSource, int dynamic);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_physics_add_mesh(uint id, string meshSource, int dynamic);
 
     [LibraryImport(Lib)]
     internal static partial void aether_physics_set_linear_velocity(uint id, Vector3 velocity);
@@ -692,7 +700,38 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial uint aether_physics_event_at(uint id, int kind, int index);
 
-    // ── Physics 2D ────────────────────────────────────────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_add_impulse_at_point(uint id, Vector3 impulse, Vector3 point);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_set_motion_type(uint id, int motionType);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_set_gravity_factor(uint id, float factor);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_set_friction(uint id, float friction);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_set_restitution(uint id, float restitution);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_set_body_active(uint id, int active);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_physics_is_body_active(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_physics_create_weld(uint id, uint targetId);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_physics_create_rope(uint id, uint targetId, Vector3 worldAnchor, float restLength);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_physics_destroy_constraint(uint handle);
+
+    // â”€â”€ Physics 2D â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial void aether_physics2d_add_box(uint id, Vector2 size, int bodyType);
 
@@ -770,14 +809,14 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial uint aether_physics2d_event_at(uint id, int kind, int index);
 
-    // ── Particles ─────────────────────────────────────────────────────────────
+    // â”€â”€ Particles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial void aether_particles_burst(uint id, int count);
 
     [LibraryImport(Lib)]
     internal static partial void aether_particles_set_emitting(uint id, int on);
 
-    // ── Effects ───────────────────────────────────────────────────────────────
+    // â”€â”€ Effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_effect_set(uint id, string name);
 
@@ -793,7 +832,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_effect_set_intensity(uint id, float intensity);
 
-    // ── Renderer / lighting ───────────────────────────────────────────────────
+    // â”€â”€ Renderer / lighting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib)]
     internal static partial void aether_render_set_ambient(Vector3 color);
 
@@ -866,8 +905,8 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial Vector3 aether_daynight_get_sun_direction();
 
-    // ── World: behaviors / scripts / tags / iteration ─────────────────────────
-    // ── Reflected components ──────────────────────────────────────────────────
+    // â”€â”€ World: behaviors / scripts / tags / iteration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€ Reflected components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Generic access to any AE_COMPONENT field by name, over the same reflection table
     // the inspector and scene serializer use. See ComponentExports.cpp.
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
@@ -912,7 +951,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_add_script(uint id, string typeName);
 
-    // ── Networking: RPCs ─────────────────────────────────────────────────────────
+    // â”€â”€ Networking: RPCs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Runs a [NetRpc] method declared on a script attached to `entityId`, routed by
     // the target the attribute declared. `expectedTarget` is -1 for "whatever the
     // method declares" or a NetRpcTarget value the declaration must match. Returns 0
@@ -924,7 +963,7 @@ internal static unsafe partial class Native
     internal static unsafe partial int aether_net_call_rpc(uint entityId, string methodName, byte* argBlob, int argLen,
         int expectedTarget);
 
-    // ── Networking: session ──────────────────────────────────────────────────────
+    // â”€â”€ Networking: session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Every one of these is safe with no session and no NetworkContext registered:
     // they report 0/false rather than failing, so a title screen can ask before
     // anything has connected.
@@ -1039,7 +1078,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static unsafe partial int aether_net_last_error(byte* buffer, int capacity);
 
-    // ── Networking: lag-compensated hit validation ─────────────────────────────────
+    // â”€â”€ Networking: lag-compensated hit validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Reconstructs an entity's position/rotation from a specific connection's own
     // point of view (see NetRewind.hpp for the full design). Returns 0 when there is
     // no interpolation history to rewind: position/rotation are then zeroed and
@@ -1050,7 +1089,7 @@ internal static unsafe partial class Native
     internal static unsafe partial int aether_net_rewind_transform(uint entityId, uint viewerConnection,
         Vector3* position, Vector3* rotation, float* appliedDelaySeconds);
 
-    // ── Networking: NAT traversal ─────────────────────────────────────────────────
+    // â”€â”€ Networking: NAT traversal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Every one of these is safe with no session and no NetworkContext registered,
     // matching the session exports above - TraversalState in particular has to read
     // Idle on a title screen that has never called Host/JoinByCode.
@@ -1121,7 +1160,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial int aether_tag_get_entities(uint tagId, uint* buf, int cap);
 
-    // ── World: model / mesh / material ────────────────────────────────────────
+    // â”€â”€ World: model / mesh / material â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_load_model(uint id, string path);
 
@@ -1170,7 +1209,7 @@ internal static unsafe partial class Native
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_set_material_texture(uint entityId, string path);
 
-    // ── Animation ─────────────────────────────────────────────────────────────
+    // â”€â”€ Animation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_anim_add(uint id, string animPath, int lockRoot);
 
