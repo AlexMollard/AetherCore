@@ -599,6 +599,19 @@ namespace aether
 		void PlayInputSequence(std::vector<InputSequenceEvent> events);
 		void StopInputSequence();
 
+		// Parses the engine.play_input_sequence text format: lines of
+		// "<seconds> <op> [keys...]"; op is hold (keys stay down), press/tap
+		// (down now, auto-released ~0.1s later - a real key edge every time),
+		// release/up, or clear. Sets 'error' and returns {} on a bad line.
+		// Static so the control endpoint and the test suite share one definition
+		// of the format - the press-vs-hold distinction is semantics, not syntax.
+		static std::vector<InputSequenceEvent> ParseInputSequence(const std::string& text, std::string& error);
+
+		// GLFW key code for a key name (same vocabulary as engine.send_input):
+		// a-z, 0-9, or left/right/up/down/space/enter/escape/tab/shift/ctrl/alt.
+		// -1 if unknown.
+		static int KeyCodeFromName(std::string name);
+
 		[[nodiscard]] bool IsInputSequenceActive() const
 		{
 			return m_inputSequenceActive;

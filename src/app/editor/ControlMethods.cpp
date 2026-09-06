@@ -107,199 +107,6 @@ namespace aether::editor
 			return job;
 		}
 
-		// GLFW key code for a key name (same vocabulary as engine.send_input): a-z,
-		// 0-9, or left/right/up/down/space/enter/escape/tab/shift/ctrl/alt. -1 if unknown.
-		int KeyCodeFromName(std::string name)
-		{
-			for (char& c: name)
-			{
-				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-			}
-			if (name.size() == 1 && name[0] >= 'a' && name[0] <= 'z')
-			{
-				return 65 + (name[0] - 'a');
-			}
-			if (name.size() == 1 && name[0] >= '0' && name[0] <= '9')
-			{
-				return 48 + (name[0] - '0');
-			}
-			if (name == "left")
-			{
-				return 263;
-			}
-			if (name == "right")
-			{
-				return 262;
-			}
-			if (name == "up")
-			{
-				return 265;
-			}
-			if (name == "down")
-			{
-				return 264;
-			}
-			if (name == "space")
-			{
-				return 32;
-			}
-			if (name == "enter" || name == "return")
-			{
-				return 257;
-			}
-			if (name == "escape" || name == "esc")
-			{
-				return 256;
-			}
-			if (name == "tab")
-			{
-				return 258;
-			}
-			if (name == "shift" || name == "lshift")
-			{
-				return 340;
-			}
-			if (name == "ctrl" || name == "lctrl")
-			{
-				return 341;
-			}
-			if (name == "alt" || name == "lalt")
-			{
-				return 342;
-			}
-			// Text-editing keys. send_input {text} can type into a UI Text Box, but a playtest
-			// also has to be able to correct and navigate what it typed - without these it can
-			// only ever append.
-			if (name == "backspace")
-			{
-				return 259;
-			}
-			if (name == "delete" || name == "del")
-			{
-				return 261;
-			}
-			if (name == "home")
-			{
-				return 268;
-			}
-			if (name == "end")
-			{
-				return 269;
-			}
-			// Paging. A game is free to put anything on these - a chat scrollback, a log,
-			// an inventory page - and without them here that feature is unreachable from a
-			// headless test however the game is driven.
-			if (name == "pageup" || name == "pgup")
-			{
-				return 266;
-			}
-			if (name == "pagedown" || name == "pgdn")
-			{
-				return 267;
-			}
-			// Function keys. The editor puts its own reload/pause/step on F5-F7 and a game is
-			// free to put a quicksave or a debug overlay anywhere along the row; without them
-			// none of it can be reached from a headless test, including the "F5 rebuilds and
-			// hot-reloads while Play is running" that the starter script promises.
-			if (name.size() >= 2 && (name[0] == 'f' || name[0] == 'F'))
-			{
-				int number = 0;
-				bool digitsOnly = true;
-				for (std::size_t i = 1; i < name.size(); ++i)
-				{
-					if (name[i] < '0' || name[i] > '9')
-					{
-						digitsOnly = false;
-						break;
-					}
-					number = number * 10 + (name[i] - '0');
-				}
-				if (digitsOnly && number >= 1 && number <= 12)
-				{
-					return 290 + number - 1; // GLFW_KEY_F1 .. GLFW_KEY_F12
-				}
-			}
-			return -1;
-		}
-
-		// Parse the auto-test input sequence text into timed events. Each non-empty,
-		// non-comment line is "<time_seconds> <op> [keys...]"; op is hold/press (hold
-		// keys down), release/up (release keys; "release all" clears everything), tap
-		// (press then auto-release ~0.1s later), or clear. Sets 'error' on a bad line.
-		std::vector<Input::InputSequenceEvent> ParseInputSequence(const std::string& text, std::string& error)
-		{
-			std::vector<Input::InputSequenceEvent> events;
-			std::istringstream stream(text);
-			std::string line;
-			int lineNo = 0;
-			while (std::getline(stream, line))
-			{
-				++lineNo;
-				if (const auto hash = line.find('#'); hash != std::string::npos)
-				{
-					line.erase(hash);
-				}
-				std::istringstream ls(line);
-				std::string timeTok;
-				if (!(ls >> timeTok))
-				{
-					continue; // blank / comment-only line
-				}
-				float t = 0.0f;
-				try
-				{
-					t = std::stof(timeTok);
-				}
-				catch (...)
-				{
-					error = "line " + std::to_string(lineNo) + ": expected a time, got '" + timeTok + "'";
-					return {};
-				}
-				std::string op;
-				if (!(ls >> op))
-				{
-					continue;
-				}
-				for (char& c: op)
-				{
-					c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-				}
-				std::vector<std::string> keys;
-				for (std::string k; ls >> k;)
-				{
-					keys.push_back(k);
-				}
-
-				if (op == "clear" || (op == "release" && keys.size() == 1 && keys[0] == "all"))
-				{
-					events.push_back({t, -1, false});
-					continue;
-				}
-				const bool down = (op == "hold" || op == "press" || op == "tap");
-				const bool release = (op == "release" || op == "up");
-				const bool tap = (op == "tap");
-				if (!down && !release)
-				{
-					error = "line " + std::to_string(lineNo) + ": unknown op '" + op + "' (use hold/release/tap/clear)";
-					return {};
-				}
-				for (const std::string& key: keys)
-				{
-					const int code = KeyCodeFromName(key);
-					if (code < 0)
-					{
-						error = "line " + std::to_string(lineNo) + ": unknown key '" + key + "'";
-						return {};
-					}
-					events.push_back({t, code, !release});
-					if (tap)
-					{
-						events.push_back({t + 0.1f, code, false});
-					}
-				}
-			}
-			return events;
-		}
 
 		json BatchSchema(const json& itemSchema)
 		{
@@ -1955,7 +1762,7 @@ namespace aether::editor
 						        continue;
 					        }
 					        const std::string name = entry.get<std::string>();
-					        const int code = KeyCodeFromName(name);
+					        const int code = Input::KeyCodeFromName(name);
 					        if (code >= 0)
 					        {
 						        input->SetSyntheticKey(code, down);
@@ -2148,8 +1955,9 @@ namespace aether::editor
 
 		methods.push_back({"engine.play_input_sequence",
 		        "play_input_sequence",
-		        "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold/press (hold keys), "
-		        "release/up (release keys; 'release all' clears everything), tap (press then auto-release), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a "
+		        "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold (keys stay down until a "
+		        "later release/clear), press/tap (a real key edge every time: down now, auto-released ~0.1s later - use this for repeated presses in one sequence), release/up (release keys; 'release all' clears everything), or clear; keys use the "
+		        "same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a "
 		        "running sequence. Returns {events, duration}.",
 		        true,
 		        Obj({{"text", StrProp()}, {"file", StrProp()}, {"stop", json{{"type", "boolean"}}}}),
@@ -2186,7 +1994,7 @@ namespace aether::editor
 			        }
 
 			        std::string error;
-			        std::vector<Input::InputSequenceEvent> events = ParseInputSequence(text, error);
+			        std::vector<Input::InputSequenceEvent> events = Input::ParseInputSequence(text, error);
 			        if (!error.empty())
 			        {
 				        return json{{"ok", false}, {"error", error}};

@@ -4,6 +4,8 @@
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
+#include <cctype>
+#include <sstream>
 
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
@@ -90,6 +92,148 @@ namespace aether
 		m_inputSequence.clear();
 		m_inputSequenceNext = 0;
 		ClearSyntheticKeys();
+	}
+
+	int Input::KeyCodeFromName(std::string name)
+	{
+		for (char& c: name)
+		{
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		}
+		if (name.size() == 1 && name[0] >= 'a' && name[0] <= 'z')
+		{
+			return 65 + (name[0] - 'a');
+		}
+		if (name.size() == 1 && name[0] >= '0' && name[0] <= '9')
+		{
+			return 48 + (name[0] - '0');
+		}
+		if (name == "left")
+		{
+			return 263;
+		}
+		if (name == "right")
+		{
+			return 262;
+		}
+		if (name == "up")
+		{
+			return 265;
+		}
+		if (name == "down")
+		{
+			return 264;
+		}
+		if (name == "space")
+		{
+			return 32;
+		}
+		if (name == "enter" || name == "return")
+		{
+			return 257;
+		}
+		if (name == "escape" || name == "esc")
+		{
+			return 256;
+		}
+		if (name == "tab")
+		{
+			return 258;
+		}
+		if (name == "shift" || name == "lshift")
+		{
+			return 340;
+		}
+		if (name == "ctrl" || name == "lctrl")
+		{
+			return 341;
+		}
+		if (name == "alt" || name == "lalt")
+		{
+			return 342;
+		}
+		return -1;
+	}
+
+	std::vector<Input::InputSequenceEvent> Input::ParseInputSequence(const std::string& text, std::string& error)
+	{
+		std::vector<InputSequenceEvent> events;
+		std::istringstream stream(text);
+		std::string line;
+		int lineNo = 0;
+		while (std::getline(stream, line))
+		{
+			++lineNo;
+			if (const auto hash = line.find('#'); hash != std::string::npos)
+			{
+				line.erase(hash);
+			}
+			std::istringstream ls(line);
+			std::string timeTok;
+			if (!(ls >> timeTok))
+			{
+				continue; // blank / comment-only line
+			}
+			float t = 0.0f;
+			try
+			{
+				t = std::stof(timeTok);
+			}
+			catch (...)
+			{
+				error = "line " + std::to_string(lineNo) + ": expected a time, got '" + timeTok + "'";
+				return {};
+			}
+			std::string op;
+			if (!(ls >> op))
+			{
+				continue;
+			}
+			for (char& c: op)
+			{
+				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			}
+			std::vector<std::string> keys;
+			for (std::string k; ls >> k;)
+			{
+				keys.push_back(k);
+			}
+
+			if (op == "clear" || (op == "release" && keys.size() == 1 && keys[0] == "all"))
+			{
+				events.push_back({t, -1, false});
+				continue;
+			}
+			// "press" and "tap" both produce a REAL key edge every time: down now,
+			// auto-released ~0.1s later. (press used to be a synonym of hold, which
+			// made every press after the first a silent no-op - an already-down key
+			// re-set never produces a second IsKeyPressed edge, so a stateful device
+			// flipped once and then ignored every later press while reporting
+			// events:1/ok:true. hold is the op that keeps keys down; use it for that.)
+			const bool down = (op == "hold" || op == "press" || op == "tap");
+			const bool release = (op == "release" || op == "up");
+			const bool autoRelease = (op == "press" || op == "tap");
+			if (!down && !release)
+			{
+				error = "line " + std::to_string(lineNo) + ": unknown op '" + op + "' (use hold/press/tap/release/up/clear)";
+				return {};
+			}
+			for (const std::string& key: keys)
+			{
+				const int code = KeyCodeFromName(key);
+				if (code < 0)
+				{
+					error = "line " + std::to_string(lineNo) + ": unknown key '" + key + "'";
+					return {};
+				}
+				events.push_back({t, code, !release});
+				if (autoRelease)
+				{
+					events.push_back({t + 0.1f, code, false});
+				}
+			}
+		}
+		return events;
 	}
 
 	void Input::TickInputSequence()
