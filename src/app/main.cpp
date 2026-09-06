@@ -45,6 +45,32 @@ namespace
 
 int main(int argc, char** argv)
 {
+#if defined(AETHERCORE_EDITOR_APP) && defined(_WIN32)
+	// MUST run before anything boots CoreCLR (the CSharpScriptingSubsystem service
+	// below hosts the CLR): CoreCLR reads COMPlus_* configuration once, at CLR
+	// startup, and CrashHandler::Install's unhandled-exception filter runs far too
+	// late to matter for it - CoreCLR fail-fasts interop access violations through
+	// its own vectored handler and calls TerminateProcess directly, so the filter
+	// never sees them. That ordering IS the bug from commit f110d153: the Door
+	// OnAttach segfault killed the process with zero minidump and zero handler log
+	// (every dump in %LOCALAPPDATA%/AetherCore/crashes predated it), and the crash
+	// was only diagnosed after enabling these same variables by hand. A silent
+	// regression of this placement is indistinguishable from that blindness.
+	//
+	// Small dumps (type 1): native stacks + the exception context are the evidence
+	// that matters; the full-heap variant captured ~190 MB for the crash above and
+	// could not be opened by any tooling on the dev machine. Gated to editor builds
+	// - interop crashes are a development-time phenomenon, and a published game
+	// wants telemetry, not local dumps. An explicit COMPlus_DbgEnableMiniDump in the
+	// environment is honoured, never stomped - that is the escape hatch (set =0 to
+	// disable, or =2 for a full-heap dump when chasing heap state).
+	if (std::getenv("COMPlus_DbgEnableMiniDump") == nullptr)
+	{
+		_putenv_s("COMPlus_DbgEnableMiniDump", "1");
+		_putenv_s("COMPlus_DbgMiniDumpType", "1");
+	}
+#endif
+
 	// mount already read - so nothing has to thread through the engine config.
 	const std::string project = aether::app::ParseProjectArg(argc, argv);
 	const std::string readyEvent = aether::app::ParseOptionArg(argc, argv, "--ready-event");
