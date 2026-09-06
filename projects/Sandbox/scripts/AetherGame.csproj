@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Project-owned game scripts. The editor builds this assembly at runtime
+    from the open project, then loads AetherGame.dll through the collectible
+    scripting context.
+
+    AetherCore is compile-only because the engine already loads the SDK assembly.
+    The path below is absolute so a project created outside the engine checkout
+    still compiles - but an absolute path is machine-specific, so it is only the
+    DEFAULT. Set the AETHERCORE_SDK environment variable to another checkout's
+    AetherCore.csproj and that wins instead, which is what makes this project
+    shareable with someone whose engine lives somewhere else.
+  -->
+  <PropertyGroup>
+    <AssemblyName>AetherGame</AssemblyName>
+    <RootNamespace>AetherGame</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- MSBuild surfaces environment variables as properties, so AETHERCORE_SDK
+       needs no other plumbing. -->
+  <PropertyGroup>
+    <AetherCoreSdkProject Condition="'$(AetherCoreSdkProject)' == ''">$(AETHERCORE_SDK)</AetherCoreSdkProject>
+    <AetherCoreSdkProject Condition="'$(AetherCoreSdkProject)' == ''">C:/Users/alexm/source/repos/AetherCore/managed/AetherCore/AetherCore.csproj</AetherCoreSdkProject>
+  </PropertyGroup>
+
+  <Target Name="AetherCoreSdkPresent" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(AetherCoreSdkProject)')"
+           Text="AetherCore SDK not found at '$(AetherCoreSdkProject)'. This project was created against an engine checkout at a different path; set the AETHERCORE_SDK environment variable to this machine's managed/AetherCore/AetherCore.csproj." />
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="$(AetherCoreSdkProject)"
+                      Private="false"
+                      ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>
