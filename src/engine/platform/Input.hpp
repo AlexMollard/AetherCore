@@ -701,6 +701,15 @@ namespace aether
 		std::string m_clipboardFallback;
 
 		bool m_firstUpdate = true;
+		// Set whenever SetCursorLocked actually flips the lock state (see its own
+		// comment): the raw GLFW cursor position lives in one coordinate space in
+		// NORMAL mode and a separately-integrated virtual one in DISABLED mode, so
+		// m_prevMousePos from just before a transition is not comparable to
+		// m_mousePos just after one - the mismatch alone reads as a huge delta,
+		// on top of whatever real motion happened while a menu had the cursor
+		// unlocked. Consumed by Update() exactly like m_firstUpdate: resync once,
+		// then get out of the way.
+		bool m_mouseNeedsResync = false;
 		bool m_mouseCaptured = false;
 		bool m_mouseViewportInputActive = false;
 

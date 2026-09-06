@@ -304,14 +304,37 @@ namespace aether
 		}
 
 		m_prevMousePos = m_mousePos;
-		double cx = 0.0, cy = 0.0;
-		glfwGetCursorPos(m_window, &cx, &cy);
-		m_mousePos = {static_cast<float>(cx), static_cast<float>(cy)};
+		if (focused)
+		{
+			double cx = 0.0, cy = 0.0;
+			glfwGetCursorPos(m_window, &cx, &cy);
+			m_mousePos = {static_cast<float>(cx), static_cast<float>(cy)};
+		}
+		else
+		{
+			// GLFW keeps reporting the REAL OS cursor position for an unfocused
+			// window - unlike glfwGetKey/glfwGetMouseButton above, there is no
+			// per-call focus check built in. Left ungated, any unrelated cursor
+			// movement on the desktop (another window, another automated agent)
+			// accumulates into m_mousePos while this window sits idle, and the
+			// next real Update() call - however much later - computes ONE huge
+			// delta between that stale m_prevMousePos and wherever the cursor
+			// has since wandered to. GetMouseDelta() feeds that straight into
+			// FirstPersonPlayer.ApplyLook()'s Pitch += delta.Y * sensitivity,
+			// clamped to +-89 deg - which is exactly what "player spawns looking
+			// straight at the floor" turned out to be: not a spawn-rotation bug,
+			// a one-frame mouse-delta spike consumed the instant OnAttach's
+			// Pitch = 0 first got a chance to run. Freezing m_mousePos here,
+			// mirroring the keys/buttons gate above, makes that delta exactly
+			// zero instead of merely small.
+			m_mousePos = m_prevMousePos;
+		}
 
-		if (m_firstUpdate)
+		if (m_firstUpdate || m_mouseNeedsResync)
 		{
 			m_prevMousePos = m_mousePos;
 			m_firstUpdate = false;
+			m_mouseNeedsResync = false;
 		}
 
 		m_scrollDelta = m_pendingScroll;
@@ -618,6 +641,13 @@ namespace aether
 			return;
 		}
 		m_cursorLocked = locked;
+		// See m_mouseNeedsResync's own comment: NORMAL and DISABLED cursor modes
+		// use different coordinate spaces, so whatever m_prevMousePos held from
+		// before this transition cannot be compared against a position sampled
+		// after it without producing a coordinate-space-mismatch delta on top of
+		// any real motion - exactly what "camera snaps after closing a menu"
+		// turned out to be.
+		m_mouseNeedsResync = true;
 		ApplyCursorMode();
 	}
 
