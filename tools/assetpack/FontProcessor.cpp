@@ -437,8 +437,15 @@ namespace aether::assetpipeline
 					}
 				}
 			};
-			collect(0x20, 0x7E);
-			collect(0xA0, 0xFF);
+			collect(0x20, 0x7E); // ASCII printable
+			collect(0xA0, 0xFF); // Latin-1 supplement
+			// Private Use Area: unassigned by the Unicode standard by design, which is
+			// exactly why icon fonts (Kenney's Input Prompts among them) map their glyphs
+			// here instead of colliding with real text. LoadGlyph already no-ops any
+			// codepoint the font doesn't actually map (FT_Get_Char_Index returns 0), so
+			// scanning the whole block costs nothing for a text-only font - it simply
+			// contributes zero glyphs, same as before this line existed.
+			collect(0xE000, 0xF8FF);
 
 			if (glyphs.empty())
 			{
