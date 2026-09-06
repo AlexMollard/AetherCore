@@ -23,22 +23,21 @@ namespace AetherGame;
 /// PhysicsGun/BotGrabber use, so a stray click can never remove world geometry, a wiring
 /// device, or the player).
 ///
-/// WELD AND ROPE ARE DELIBERATELY NOT IN <see cref="ToolMode"/> YET. Both need a fixed or
-/// distance physics constraint, and there is no constraint API exposed to C# today
-/// (grepped managed/AetherCore/Physics.cs - AddBoxBody/AddSphereBody/impulses/velocity
-/// only, nothing joint-shaped). Do not stub a mode that silently does nothing when fired -
-/// add the enum value and its branch together, the moment the engine side lands. THE
-/// PERSISTENCE SHAPE FOR THEM IS ALREADY SPECIFIED, so whoever adds them does not have to
-/// re-derive it: follow <see cref="WireLink"/> exactly - a small marker entity per
-/// weld/rope holding Entity references to both attachment points (Source/Target-shaped
-/// fields, not a list - see WireLink's own file comment on why), parented under
-/// <c>RuntimeContainers.Get("Welds", transient: false)</c> / <c>"Ropes"</c>
-/// (transient: false, like "Wires" and unlike "Beams" - a weld/rope must survive save the
-/// same way a wire does), never MarkTransient()'d itself. A rope's visible segment is
-/// exactly a <see cref="Beam"/>-shaped problem (a curve between two live points) but
-/// Beam.cs itself is transient-only by design (see its own file comment) - a persisted
-/// rope's visual should reuse <see cref="SegmentVisual"/> directly the way WireLink does,
-/// not reuse the transient Beam class.
+/// WELD AND ROPE ARE BACKED. This file's earlier revision deferred both modes because
+/// no constraint API existed; Physics.CreateWeld/CreateRope/DestroyConstraint have since
+/// landed (with save/reload serde - PhysicsSystem mints fresh handles on load), so both
+/// modes follow exactly the persistence shape that revision specified: a two-click flow
+/// spawning a <see cref="WeldLink"/>/<see cref="RopeLink"/> marker entity per
+/// weld/rope - Entity endpoint fields, parented under
+/// <c>RuntimeContainers.Get("Welds"/"Ropes", transient: false)</c>, never
+/// MarkTransient()'d - so save/load serialises the endpoints and the marker's own
+/// OnUpdate rebuilds the constraint from them. A rope's visible segment reuses
+/// <see cref="SegmentVisual"/> directly the way WireLink does (Beam.cs itself is
+/// transient-only by design - see its own file comment). A hit without a Rigid Body
+/// flash-rejects in both modes, and a refused constraint (dead endpoint, or CanControl
+/// says it is not this caller's - the 0 return both Create* calls document) flashes the
+/// endpoints red from the marker script itself, which owns the refusal because it only
+/// becomes known a frame after the second click, once the marker's fields are set.
 ///
 /// LIGHT AND COLOUR NEED NO NEW PERSISTENCE WORK. A Point Light added to an entity, or a
 /// material colour changed on one, are ordinary reflected-component writes - the scene
@@ -64,19 +63,21 @@ namespace AetherGame;
 /// </summary>
 public sealed class ToolGun : EntityScript
 {
+    public float MaxRange = 10.0f;
+    public float RayStartOffset = 0.35f;
+    public Vector3 PendingTint = new(0.85f, 0.75f, 0.15f);
+    public Vector3 RejectTint = new(0.85f, 0.15f, 0.15f);
+    public float RejectFlashSeconds = 0.25f;
+
     public enum ToolMode
     {
         Wire,
         Light,
         Colour,
         Remove,
+        Weld,
+        Rope,
     }
-
-    public float MaxRange = 10.0f;
-    public float RayStartOffset = 0.35f;
-    public Vector3 PendingTint = new(0.85f, 0.75f, 0.15f);
-    public Vector3 RejectTint = new(0.85f, 0.15f, 0.15f);
-    public float RejectFlashSeconds = 0.25f;
 
     /// <summary>The key that presses a Button or flips a Lever dead ahead - the same
     /// key InteractPromptText names, so a rebind here never leaves the HUD prompt
@@ -152,6 +153,17 @@ public sealed class ToolGun : EntityScript
     private string _pendingWireOutput = "";
     private Entity _pendingWireTarget;
     private string _pendingWireInput = "";
+    // Weld/Rope pendings, same shape and same late-attach reasoning as the wire ones
+    // above: the marker entity's script does not exist the frame CreateWeldMarker/
+    // CreateRopeMarker calls AddScript, so its endpoint fields are applied once it does.
+    private Entity _pendingWeldEntity;
+    private Entity _pendingWeldSource;
+    private Entity _pendingWeldTarget;
+    private Entity _pendingRopeEntity;
+    private Entity _pendingRopeSource;
+    private Entity _pendingRopeTarget;
+    private Vector3 _pendingRopeAnchorA;
+    private Vector3 _pendingRopeAnchorB;
 
     public override void OnAttach()
     {
@@ -173,6 +185,8 @@ public sealed class ToolGun : EntityScript
             return;
         }
         PollPendingWire();
+        PollPendingWeld();
+        PollPendingRope();
         if (GetScript<SpawnMenu>() is { IsOpen: true })
         {
             if (_pendingSource.IsValid)
@@ -266,6 +280,12 @@ public sealed class ToolGun : EntityScript
         {
             case ToolMode.Wire:
                 TryWireStep();
+                break;
+            case ToolMode.Weld:
+                TryWeldStep();
+                break;
+            case ToolMode.Rope:
+                TryRopeStep();
                 break;
             case ToolMode.Light:
                 TryAttachLight();
@@ -460,6 +480,20 @@ public sealed class ToolGun : EntityScript
         }
         _pendingSource = default;
         _pendingField = "";
+
+        // Weld/Rope pendings clear with the same keypress (mode switch, spawn menu
+        // opening) so a half-finished link never sits tinted forever.
+        if (_pendingWeldSource.IsValid)
+        {
+            _pendingWeldSource.Material.SetEmissive(Vector3.Zero);
+        }
+        _pendingWeldSource = default;
+        if (_pendingRopeSource.IsValid)
+        {
+            _pendingRopeSource.Material.SetEmissive(Vector3.Zero);
+        }
+        _pendingRopeSource = default;
+        _pendingRopeAnchorA = default;
     }
 
     private void FlashReject(Entity target)
@@ -488,6 +522,168 @@ public sealed class ToolGun : EntityScript
         link.Target = _pendingWireTarget;
         link.InputField = _pendingWireInput;
         _pendingWireEntity = default;
+    }
+
+    /// <summary>Applies a pending weld marker's endpoints the first frame its WeldLink
+    /// instance actually exists - same late-attach reasoning as PollPendingWire.</summary>
+    private void PollPendingWeld()
+    {
+        if (!_pendingWeldEntity.IsValid)
+        {
+            return;
+        }
+        WeldLink? link = _pendingWeldEntity.GetScript<WeldLink>();
+        if (link == null)
+        {
+            return;
+        }
+        link.Source = _pendingWeldSource;
+        link.Target = _pendingWeldTarget;
+        _pendingWeldEntity = default;
+    }
+
+    /// <summary>Applies a pending rope marker's endpoints and anchors the first frame
+    /// its RopeLink instance actually exists - same late-attach reasoning as
+    /// PollPendingWire.</summary>
+    private void PollPendingRope()
+    {
+        if (!_pendingRopeEntity.IsValid)
+        {
+            return;
+        }
+        RopeLink? link = _pendingRopeEntity.GetScript<RopeLink>();
+        if (link == null)
+        {
+            return;
+        }
+        link.Source = _pendingRopeSource;
+        link.Target = _pendingRopeTarget;
+        link.AnchorA = _pendingRopeAnchorA;
+        link.AnchorB = _pendingRopeAnchorB;
+        link.RestLength = Vector3.Distance(_pendingRopeAnchorA, _pendingRopeAnchorB);
+        _pendingRopeEntity = default;
+    }
+
+    // ── Weld mode ───────────────────────────────────────────────────────────────
+
+    /// <summary>Two clicks: body A, body B, rigid. Both endpoints must carry a Rigid
+    /// Body - a hit without one flash-rejects (welding to a body-less decorative mesh
+    /// is meaningless, and a miss is always visible, never silent, in every mode).
+    /// Clicking the pending source again cancels, same as Wire.</summary>
+    private void TryWeldStep()
+    {
+        RaycastHit hit = Aim();
+        if (!hit.DidHit || !hit.Entity.IsValid)
+        {
+            return;
+        }
+
+        if (!_pendingWeldSource.IsValid)
+        {
+            if (!HasRigidBody(hit.Entity))
+            {
+                FlashReject(hit.Entity);
+                return;
+            }
+            _pendingWeldSource = hit.Entity;
+            _pendingWeldSource.Material.SetEmissive(PendingTint);
+            return;
+        }
+
+        if (hit.Entity == _pendingWeldSource)
+        {
+            CancelPending();
+            return;
+        }
+        if (!HasRigidBody(hit.Entity))
+        {
+            FlashReject(hit.Entity);
+            return;
+        }
+
+        CreateWeldMarker(_pendingWeldSource, hit.Entity);
+        CancelPending();
+    }
+
+    // ── Rope mode ───────────────────────────────────────────────────────────────
+
+    /// <summary>Two clicks, each capturing the exact world point under the crosshair:
+    /// anchor A on the first body, anchor B on the second. Rest length is the actual
+    /// distance between those two points at creation - the rope is born exactly taut.
+    /// Same Rigid Body gate and same click-the-source-to-cancel rule as Weld.</summary>
+    private void TryRopeStep()
+    {
+        RaycastHit hit = Aim();
+        if (!hit.DidHit || !hit.Entity.IsValid)
+        {
+            return;
+        }
+
+        if (!_pendingRopeSource.IsValid)
+        {
+            if (!HasRigidBody(hit.Entity))
+            {
+                FlashReject(hit.Entity);
+                return;
+            }
+            _pendingRopeSource = hit.Entity;
+            _pendingRopeAnchorA = hit.Position;
+            _pendingRopeSource.Material.SetEmissive(PendingTint);
+            return;
+        }
+
+        if (hit.Entity == _pendingRopeSource)
+        {
+            CancelPending();
+            return;
+        }
+        if (!HasRigidBody(hit.Entity))
+        {
+            FlashReject(hit.Entity);
+            return;
+        }
+
+        CreateRopeMarker(_pendingRopeSource, _pendingRopeAnchorA, hit.Entity, hit.Position);
+        CancelPending();
+    }
+
+    private static bool HasRigidBody(Entity e) => e.Component("Rigid Body").Exists;
+
+    private void CreateWeldMarker(Entity source, Entity target)
+    {
+        // Deliberately NOT MarkTransient() - a weld must survive save/load exactly like
+        // a wire does; the marker persists the endpoints and WeldLink's own OnUpdate
+        // rebuilds the constraint from them, because handles are meaningless across a
+        // reload. Under the non-transient "Welds" container for the same reason the
+        // Wires container is non-transient (RuntimeContainers' own file comment on
+        // ecs::HasSceneTransientAncestor - a transient parent would silently exclude
+        // every marker under it from the save).
+        Entity weldEntity = World.Create();
+        weldEntity.Name = "Weld";
+        weldEntity.AddTransform();
+        weldEntity.SetParent(RuntimeContainers.Get("Welds", transient: false));
+        weldEntity.AddScript("WeldLink");
+        _pendingWeldEntity = weldEntity;
+        _pendingWeldSource = source;
+        _pendingWeldTarget = target;
+    }
+
+    private void CreateRopeMarker(Entity source, Vector3 anchorA, Entity target, Vector3 anchorB)
+    {
+        // Same persistence shape as CreateWeldMarker, plus the two world anchors and a
+        // rest length equal to their current separation - the rope is born exactly
+        // taut, never pre-stretched or pre-slack (RopeLink re-derives RestLength from
+        // the anchors when its instance appears, so there is exactly one formula).
+        Entity ropeEntity = World.Create();
+        ropeEntity.Name = "Rope";
+        ropeEntity.AddTransform();
+        ropeEntity.SetParent(RuntimeContainers.Get("Ropes", transient: false));
+        ropeEntity.AddScript("RopeLink");
+        _pendingRopeEntity = ropeEntity;
+        _pendingRopeSource = source;
+        _pendingRopeTarget = target;
+        _pendingRopeAnchorA = anchorA;
+        _pendingRopeAnchorB = anchorB;
     }
 
     private void CreateWire(Entity source, string outputField, Entity target, string inputField)
