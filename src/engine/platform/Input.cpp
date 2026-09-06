@@ -214,6 +214,21 @@ namespace aether
 		return m_currKeys[k] && !m_prevKeys[k] && !m_consumedKeys[k];
 	}
 
+	Key Input::GetKeyPressedThisFrame() const
+	{
+		for (int i = 0; i < kMaxKeys; ++i)
+		{
+			if (m_currKeys[i] && !m_prevKeys[i] && !m_consumedKeys[i])
+			{
+				return static_cast<Key>(i);
+			}
+		}
+		// -1 is already the "no key" sentinel every range check above treats as invalid
+		// (IsKeyDown/IsKeyPressed/IsKeyReleased all reject k < 0), matching managed
+		// Key.None.
+		return static_cast<Key>(-1);
+	}
+
 	// Deliberately NOT gated on consumption. A consumer takes the key's MEANING for
 	// this frame - "Escape closed the field" - and a release is the end of a press
 	// somebody may have been tracking since before the consume existed. Muting it
@@ -292,6 +307,14 @@ namespace aether
 
 	glm::vec2 Input::GetMouseDelta() const
 	{
+		if (m_cursorLocked)
+		{
+			// GLFW_CURSOR_DISABLED reports an unbounded virtual position built exactly for
+			// this, and there is no absolute on-screen position for a viewport transform to
+			// map into pixel space anyway while the pointer is hidden and confined - the raw
+			// window-space delta IS the answer (see SetCursorLocked/ApplyCursorMode).
+			return m_mousePos - m_prevMousePos;
+		}
 		const glm::vec2 current = TransformMousePos(m_mousePos);
 		const glm::vec2 previous = TransformMousePos(m_prevMousePos);
 		if (current.x <= kOutsideViewport || previous.x <= kOutsideViewport)
@@ -436,12 +459,80 @@ namespace aether
 	}
 	void Input::SetOsCursorVisible(bool visible)
 	{
-		if (m_window == nullptr || visible == m_osCursorVisible)
+		if (visible == m_osCursorVisible)
 		{
 			return;
 		}
 		m_osCursorVisible = visible;
-		glfwSetInputMode(m_window, GLFW_CURSOR, visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+		ApplyCursorMode();
+	}
+
+	void Input::SetCursorLocked(bool locked)
+	{
+		if (locked == m_cursorLocked)
+		{
+			return;
+		}
+		m_cursorLocked = locked;
+		ApplyCursorMode();
+	}
+
+	// A locked cursor always wins over whatever custom-cursor visibility the game
+	// separately asked for via SetOsCursorVisible, and is restored to exactly that the
+	// moment it unlocks - so the two settings never fight over which GLFW call runs last.
+	void Input::ApplyCursorMode()
+	{
+		if (m_window == nullptr)
+		{
+			return;
+		}
+		if (m_cursorLocked)
+		{
+			glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			// Checked rather than assumed - not every platform/backend reports raw motion
+			// support, and asking for it anyway is a GLFW error, not a silent fallback.
+			if (glfwRawMouseMotionSupported())
+			{
+				glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+			}
+		}
+		else
+		{
+			glfwSetInputMode(m_window, GLFW_CURSOR, m_osCursorVisible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+			if (glfwRawMouseMotionSupported())
+			{
+				glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+			}
+		}
+	}
+
+	void Input::UpdateCursorLock(bool windowFocused)
+	{
+		if (!m_cursorLockRequested)
+		{
+			m_cursorLockEscaped = false;
+		}
+		else if (m_cursorLocked && IsKeyPressed(Key::Escape))
+		{
+			// The editor's own safety net: a captured cursor with no way out would strand
+			// the user unable to reach the inspector, the toolbar or the window controls,
+			// regardless of what the game's own script does with Escape. NOT consumed (see
+			// this method's own doc comment in Input.hpp): a script's own Escape-driven UI
+			// must see this exact press in this exact frame, or it waits for a second one
+			// while the game silently re-requests the lock it was just released from.
+			m_cursorLockEscaped = true;
+		}
+		SetCursorLocked(m_cursorLockRequested && windowFocused && !m_cursorLockEscaped);
+
+		// Input ownership (see GameOwnsInput's own doc comment for why this is independent
+		// of cursor lock): released by the identical Escape press, but NOT gated on
+		// m_cursorLocked - a menu-driven game that never locks the cursor at all still
+		// needs an escape hatch back to the editor's own panels, and gating this on lock
+		// state would leave that whole class of game with no way back in at all.
+		if (m_gameOwnsInput && windowFocused && IsKeyPressed(Key::Escape))
+		{
+			m_gameOwnsInput = false;
+		}
 	}
 
 	// -- Gamepads -------------------------------------------------------------

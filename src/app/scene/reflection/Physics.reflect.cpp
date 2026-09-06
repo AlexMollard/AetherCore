@@ -4,11 +4,30 @@
 
 #include "debug/Icons.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsSystem.hpp"
+#include "scene/World.hpp"
 
 using namespace aether;
 
 namespace
 {
+	// Inspector/MCP field edits recreate the backing Jolt body so authored state is
+	// always what simulates - the 3D counterpart of Physics2D.reflect.cpp's own
+	// RebuildBody2D. Before this hook existed, half_extents/radius/shape/motion
+	// (or anything else on RigidBody/Collider) written after the body was already
+	// baked took effect on the reflected FIELD but never reached the live Jolt
+	// shape: PhysicsSystem::FlushPendingBodies only ever reads a collider's fields
+	// ONCE, at creation, and nothing else revisited them - a script (or the
+	// Inspector, or the control protocol) could set half_extents, read it back
+	// correctly, and get a body that ignored it forever. RebuildBody destroys and
+	// re-queues the body, preserving its current velocity across the rebuild.
+	void RebuildBody3D(World& world, Entity entity)
+	{
+		if (auto* physics = static_cast<PhysicsSystem*>(world.FindSystem("PhysicsSystem")))
+		{
+			physics->RebuildBody(world, entity);
+		}
+	}
 	const reflect::EnumTable& MotionTypeEnum()
 	{
 		static const reflect::EnumTable t{{{"static", static_cast<int>(PhysicsMotionType::Static)}, {"kinematic", static_cast<int>(PhysicsMotionType::Kinematic)}, {"dynamic", static_cast<int>(PhysicsMotionType::Dynamic)}}};
@@ -18,7 +37,7 @@ namespace
 	const reflect::EnumTable& ShapeTypeEnum()
 	{
 		static const reflect::EnumTable t{
-		        {{"box", static_cast<int>(PhysicsShapeType::Box)}, {"sphere", static_cast<int>(PhysicsShapeType::Sphere)}, {"capsule", static_cast<int>(PhysicsShapeType::Capsule)}, {"cylinder", static_cast<int>(PhysicsShapeType::Cylinder)}}};
+		        {{"box", static_cast<int>(PhysicsShapeType::Box)}, {"sphere", static_cast<int>(PhysicsShapeType::Sphere)}, {"capsule", static_cast<int>(PhysicsShapeType::Capsule)}, {"cylinder", static_cast<int>(PhysicsShapeType::Cylinder)}, {"convex_hull", static_cast<int>(PhysicsShapeType::ConvexHull)}, {"mesh", static_cast<int>(PhysicsShapeType::Mesh)}}};
 		return t;
 	}
 
@@ -28,7 +47,8 @@ namespace
 		        {"point", static_cast<int>(JointType::Point)},
 		        {"hinge", static_cast<int>(JointType::Hinge)},
 		        {"distance", static_cast<int>(JointType::Distance)},
-		        {"slider", static_cast<int>(JointType::Slider)}}};
+		        {"slider", static_cast<int>(JointType::Slider)},
+		        {"swing_twist", static_cast<int>(JointType::SwingTwist)}}};
 		return t;
 	}
 } // namespace
@@ -44,6 +64,7 @@ AE_FIELD_NT("max_angular_velocity", maxAngularVelocity, Float, "The same clamp f
 AE_FIELD_NT("continuous_collision", continuousCollision, Bool, "Sweep this body between frames instead of testing where it lands, so something fast cannot pass through a thin wall. Costs more, so it is worth it for bullets and not for crates.")
 AE_FIELD_NT("allow_sleeping", allowSleeping, Bool, "Let the body stop simulating once it settles. Worth knowing: a sleeping body ignores velocity you set from script until something wakes it, which reads exactly like the write being lost.")
 AE_FIELD_NT("start_active", startActive, Bool, "Whether the body begins awake. Off means it waits to be touched, pushed or woken before it simulates at all.")
+b.PostSet(&RebuildBody3D);
 AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 
@@ -56,6 +77,8 @@ AE_FIELD_NT("center", center, Vec3, "Offsets the shape from the entity's origin 
 AE_FIELD_NT("friction", friction, Float, "How much sliding contact resists. 0 is ice, 1 is rubber; the pair in contact is combined, so one slippery surface is enough to slide.")
 AE_FIELD_NT("restitution", restitution, Float, "Bounciness. 0 lands dead, 1 returns all the energy it arrived with.")
 AE_FIELD_NT("is_sensor", isSensor, Bool, "Report overlaps without pushing anything: things pass straight through while collision events still fire. This is how a trigger volume is made.")
+AE_FIELD_NT("mesh_source", meshSource, String, "convex_hull/mesh shapes only: a project:// path to the model whose baked vertices become the collision shape. Ignored by every other shape.")
+b.PostSet(&RebuildBody3D);
 AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
@@ -64,8 +87,9 @@ AE_FIELD_ENUM("type", type, JointTypeEnum())
 AE_FIELD_NT("target", target, EntityRef, "The other body this one is joined to. Leave it empty to pin against the world instead, which is how a door hinges on nothing.")
 AE_FIELD_NT("anchor", anchor, Vec3, "The pivot point, in WORLD space rather than relative to either body - move an anchored entity and the anchor does not follow it.")
 AE_FIELD_NT("axis", axis, Vec3, "Which way the hinge turns or the slider travels. A door swinging about the vertical wants 0,1,0.")
-AE_FIELD_NT("min_limit", minLimit, Float, "Lower end of the joint's travel - radians for a hinge (a right angle is about 1.57), metres for a slider. Limits only apply when min is genuinely less than max: leave them equal and the joint runs free, with nothing to say they were ignored.")
-AE_FIELD_NT("max_limit", maxLimit, Float, "Upper end of the travel - radians for a hinge, metres for a slider. Must be greater than min_limit or both are discarded and the joint is unlimited.")
+AE_FIELD_NT("min_limit", minLimit, Float, "Lower end of the joint's travel - radians for a hinge or a Swing Twist's twist range (a right angle is about 1.57), metres for a slider. Limits only apply when min is genuinely less than max: leave them equal and the joint runs free, with nothing to say they were ignored.")
+AE_FIELD_NT("max_limit", maxLimit, Float, "Upper end of the travel - radians for a hinge or a Swing Twist's twist range, metres for a slider. Must be greater than min_limit or both are discarded and the joint is unlimited.")
+AE_FIELD_NT("swing_limit", swingLimit, Float, "Swing Twist only: half-angle of the cone the joint can swing through, radians. Ignored by every other joint type.")
 AE_FIELD_N("distance", distance, Float)
 AE_FIELD_NT("collide_connected", collideConnected, Bool, "Let the two joined bodies collide with each other. Usually off: chain links and limbs overlap by design, and colliding them fights the joint.")
 AE_HAND_AUTHORED_CATALOG()

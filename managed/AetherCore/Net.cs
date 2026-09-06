@@ -430,6 +430,41 @@ public static partial class Net
     /// test for "is this my player". True offline.</summary>
     public static bool IsOwner(Entity entity) => Native.aether_net_is_owner(entity.Id) != 0;
 
+    /// <summary>
+    /// Ask to become the owner of <paramref name="entity"/> - the physics-gun-grab
+    /// case: "this prop is mine now." Offline, or if this peer already owns it, the
+    /// change is immediate. Otherwise this SENDS a request to the host and returns
+    /// once that send completes, not once the host has decided - watch
+    /// <see cref="OwnerOf"/> (or override <see cref="EntityScript.OnOwnershipChanged"/>)
+    /// for the actual answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE HOST DECIDES. A request is granted only when <paramref name="entity"/> is
+    /// currently unowned (owned by the host) or already owned by this peer - claiming
+    /// something another CONNECTED player currently holds is refused; they must drop
+    /// it (<see cref="ReleaseOwnership"/>) or disconnect first. See
+    /// <c>ValidateOwnershipRequest</c> (<c>net/NetOwnership.hpp</c>) for the exact
+    /// rule and why a proximity check or an unconditional "host always wins" were not
+    /// picked for a CLIENT's own request - the host's own calls are unconditional,
+    /// a client's are not.
+    /// </para>
+    /// <para>
+    /// Returns <c>false</c> only when <paramref name="entity"/> is not a live handle;
+    /// a refusal decided later by the host is silent, the same as every other inbound
+    /// refusal this framework makes (see the RPC ownership gate).
+    /// </para>
+    /// </remarks>
+    public static bool RequestOwnership(Entity entity) => Native.aether_net_request_ownership(entity.Id) != 0;
+
+    /// <summary>
+    /// Let go of <paramref name="entity"/>, handing it back to the host (connection 0)
+    /// - the physics-gun-drop case. Only the entity's CURRENT owner may release it;
+    /// see <see cref="RequestOwnership"/> for the shared validation rule and the same
+    /// "sent, not yet granted" caveat on a client.
+    /// </summary>
+    public static bool ReleaseOwnership(Entity entity) => Native.aether_net_release_ownership(entity.Id) != 0;
+
     // ── Players ─────────────────────────────────────────────────────────────────
 
     /// <summary>

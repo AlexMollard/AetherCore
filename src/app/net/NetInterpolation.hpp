@@ -13,6 +13,21 @@ namespace aether::net
 		float time = 0.f;
 		glm::vec3 position{0.f};
 		glm::vec3 rotation{0.f};
+
+		// Authoritative linear/angular velocity at the moment this sample was
+		// captured, read directly from the sender's physics body (NetVelocity.hpp)
+		// rather than derived from position history. False for every replicated
+		// entity that never receives a NetMessage::VelocitySnapshot - a character,
+		// a Kinematic door, anything with no RigidBodyComponent at all - which
+		// leaves UpdateMotion's existing finite-difference estimate exactly as it
+		// always was; see UpdateMotion's own comment for how the two are blended.
+		bool hasVelocity = false;
+		glm::vec3 linearVelocity{0.f};
+		// Radians/second, world space - Jolt's own convention. NOT degrees/second
+		// despite `rotation` above being Euler degrees; see UpdateMotion for the
+		// conversion and the precision this framework's own linear-Euler
+		// interpolation (Sample()'s glm::mix) already accepts.
+		glm::vec3 angularVelocity{0.f};
 	};
 
 	// Holds recent authoritative samples for one remote entity so it can be rendered

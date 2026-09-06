@@ -72,6 +72,20 @@ namespace aether::app::scripting::interop
 		return {v.x, v.y, v.z, v.w};
 	}
 
+	// World-space forward from a local-to-world matrix: -Z, normalized (this engine's
+	// forward convention - matches glTF/OpenGL). Shared by CameraExports.cpp's
+	// aether_camera_get_forward and WorldExports.cpp's generic aether_get_forward, so a
+	// non-camera entity's "forward" (a turret, an emitter) is never a second,
+	// independently-derived definition that can silently disagree with the camera's -
+	// exactly the failure mode a hand-rolled yaw/pitch trig forward already caused once
+	// in this codebase (see FirstPersonPlayer.cs's own file history).
+	[[nodiscard]] inline glm::vec3 ForwardOf(const glm::mat4& m) noexcept
+	{
+		const glm::vec3 fwd = -glm::vec3(m[2]);
+		const float len = glm::length(fwd);
+		return len > 1e-6f ? fwd / len : glm::vec3(0.0f, 0.0f, -1.0f);
+	}
+
 	[[nodiscard]] inline aether::World& ActiveWorld() noexcept
 	{
 		return *ActiveContext().world;

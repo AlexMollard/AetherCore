@@ -2126,7 +2126,23 @@ namespace aether
 		}
 		WaitForStep();
 		const JPH::BodyID id = ToJolt(rb->body);
-		m_impl->physics->GetBodyInterfaceNoLock().SetMotionType(id, ToJoltMotionType(motionType), JPH::EActivation::Activate);
+		auto& bodyInterface = m_impl->physics->GetBodyInterfaceNoLock();
+		// rb->body.IsValid() only means "not our own kInvalidValue sentinel" - it says
+		// nothing about whether THIS index+sequence number currently names a body Jolt
+		// actually has registered. A live crash (0xC0000005 inside Jolt's own
+		// SetMotionType, entity=35, body.value=16777239, id.IsInvalid()==false) proved
+		// a handle can pass every check above and still not correspond to a real body -
+		// confirmed live via debug logging that the crash happens exactly at this call,
+		// on a BodyID neither our own sentinel nor Jolt's own IsInvalid() ever catches.
+		// IsAdded() is Jolt's own "does this BodyID currently belong to a live body"
+		// check - the guard that closes it, regardless of how a handle in this state
+		// arises.
+		if (!bodyInterface.IsAdded(id))
+		{
+			AE_WARN(LogCategory::Engine, "PhysicsSystem: SetBodyMotionType on entity {} refused - its body handle does not name a body Jolt currently has registered (deferred/never baked, or a stale handle). No effect; rb->motionType is still updated for whenever a real body exists.", entity.id);
+			return;
+		}
+		bodyInterface.SetMotionType(id, ToJoltMotionType(motionType), JPH::EActivation::Activate);
 	}
 
 	void PhysicsSystem::WaitForStepIdle()

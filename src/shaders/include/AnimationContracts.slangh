@@ -46,6 +46,17 @@ struct GpuClip
     [[vk::offset(20)]] uint padding0;
 };
 
+// One driving bone's current pose, uploaded once a frame for a ragdoll-driven mesh
+// instance. `transform` is already in the mesh's own model space (NOT world space) -
+// node_flatten.slang writes it into globalTransforms verbatim, and every non-driving
+// descendant (fingers, toes, ...) still inherits it through the shader's ordinary
+// recursive walk.
+struct RagdollOverrideEntry
+{
+    [[vk::offset(0)]]  uint    nodeIndex;
+    [[vk::offset(16)]] float4x4 transform;
+};
+
 struct AnimatorSampleJob
 {
     [[vk::offset(0)]]  uint                          animClipIndex;
@@ -57,7 +68,10 @@ struct AnimatorSampleJob
     [[vk::offset(32)]] DevicePtr<float>              times;
     [[vk::offset(40)]] DevicePtr<float4>             values; // translation/rotation/scale stream, laid out as float4
     [[vk::offset(48)]] uint                          clipCount;
-    [[vk::offset(52)]] uint                          _pad0;
+    // Ragdoll skin-drive seam: 0 for every ordinary animated draw. See
+    // RagdollOverrideEntry and node_flatten.slang's own use of this field.
+    [[vk::offset(52)]] uint                          overrideCount;
+    [[vk::offset(56)]] DevicePtr<RagdollOverrideEntry> overrides;
 };
 
 struct SampledNodePose

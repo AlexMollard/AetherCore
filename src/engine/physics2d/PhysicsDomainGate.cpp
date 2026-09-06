@@ -18,6 +18,9 @@ namespace aether::physics_gate
 
 	bool EntityHas3DPhysics(const World& world, Entity entity)
 	{
-		return world.Has<RigidBodyComponent>(entity);
+		// A character controller commits an entity to the 3D domain exactly the way a
+		// rigid body does - see CharacterControllerComponent - even though it is not
+		// itself a Jolt Body.
+		return world.Has<RigidBodyComponent>(entity) || world.Has<CharacterControllerComponent>(entity);
 	}
 } // namespace aether::physics_gate

@@ -255,6 +255,11 @@ namespace aether::editor
 		// result is only readable once that frame has been through the graph.
 		std::string m_bakeInFlight;
 		int m_bakeStartedFrame = 0;
+		// The generation SetBakeSlot handed back for m_bakeInFlight's request - compared
+		// against the baker's LastDrawnGeneration(), not just LastDrawnSlot(), because
+		// atlas slot numbers are reused across unrelated bakes (see ModelPreviewService::
+		// SetBakeSlot's own comment on why the slot number alone is not enough).
+		std::uint64_t m_bakeInFlightGeneration = 0;
 		int m_nextAtlasSlot = 0;
 		// The baker's atlas, registered with ImGui once and shared by every tile.
 		std::uint64_t m_atlasImGuiId = 0;

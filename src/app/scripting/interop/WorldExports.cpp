@@ -116,6 +116,32 @@ AE_SCRIPT_API void aether_mark_transient(std::uint32_t id)
 	});
 }
 
+// Scene-transient WITHOUT DontDestroyOnLoad, unlike aether_mark_transient above. Entity.
+// MarkTransient's own doc promises only "excluded from scene serialization" - nothing
+// about surviving a Scene.Load - but aether_mark_transient unconditionally adds
+// DontDestroyOnLoadComponent too, which made a scene-scoped canvas (built fresh in
+// OnAttach, e.g. UiMainMenu/UiSettingsScreen/UiPauseMenu/UiSpawnCatalog) survive into
+// the NEXT scene and render stacked on top of that scene's own UI - confirmed live: a
+// MainMenu canvas persisted, doubled, into SandboxMenu after Scene.Load. Entity.
+// MarkTransient now calls this instead; Entity.DontDestroyOnLoad keeps calling
+// aether_mark_transient above, since a persistent actor correctly wants both.
+AE_SCRIPT_API void aether_mark_scene_transient(std::uint32_t id)
+{
+	SafeExport([&] -> void
+	{
+	auto& reg = ActiveWorld().GetRegistry();
+	const auto e = aether::World::ToEntt(aether::Entity{id});
+	if (!reg.valid(e))
+	{
+		return;
+	}
+	if (!reg.all_of<aether::SceneTransientComponent>(e))
+	{
+		reg.emplace<aether::SceneTransientComponent>(e);
+	}
+	});
+}
+
 AE_SCRIPT_API void aether_set_name(std::uint32_t id, const char* name)
 {
 	SafeExport([&] -> void
@@ -224,6 +250,22 @@ AE_SCRIPT_API void aether_set_euler(std::uint32_t id, Vec3 euler)
 	aether::DecomposeTRS(tc->localToWorld, pos, curEuler, scale);
 	aether::ecs::SetWorldTransform(w, e, aether::ComposeTransform(pos, ToGlm(euler), scale));
 	TeleportBodyToTransform(w, e);
+	});
+}
+
+// Generic entity-level equivalent of CameraExports.cpp's aether_camera_get_forward,
+// for scripts that need "this entity's own facing" without being a camera (a turret,
+// a directional emitter) - see ForwardOf's own comment in InteropCommon.hpp for why it
+// is the exact same helper rather than a second, independently-derived definition of
+// forward. No orbit-camera special case here: a plain TransformComponent (or its
+// absence, which reads as the identity pose's forward) is all a non-camera entity ever
+// has.
+AE_SCRIPT_API Vec3 aether_get_forward(std::uint32_t id)
+{
+	return SafeExport([&] -> Vec3
+	{
+	const auto* tc = ActiveWorld().TryGet<aether::TransformComponent>(aether::Entity{id});
+	return FromGlm(ForwardOf(tc != nullptr ? tc->localToWorld : glm::mat4(1.0f)));
 	});
 }
 

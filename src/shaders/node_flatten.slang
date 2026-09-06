@@ -72,6 +72,28 @@ void main(uint3 dtid : SV_DispatchThreadID)
     uint nodeIdx = pc.depthSortedNodes.Load(pc.depthOffset + localNodeIdx);
     uint globalNodeIdx = poseBase + nodeIdx;
 
+    // Ragdoll skin-drive seam: overrideCount is 0 for every ordinary animated draw
+    // (the overwhelming common case), so this costs one branch on a field already
+    // loaded above - no extra buffer, no extra dispatch. For a ragdoll-driven mesh
+    // instance, a handful of "driving" bones already have their world pose computed
+    // by the physics ragdoll this frame (see RagdollSkinDrive.hpp); substituting it
+    // here, before this node's normal composition, means every non-driving
+    // descendant (fingers, toes, ...) still inherits it correctly through the
+    // ordinary depth-level walk below - no second pass, no separate compute
+    // dispatch.
+    if (job.overrideCount > 0)
+    {
+        RagdollOverrideEntry* overrides = job.overrides.Ptr();
+        for (uint i = 0; i < job.overrideCount; ++i)
+        {
+            if (overrides[i].nodeIndex == nodeIdx)
+            {
+                pc.globalTransforms.Ptr()[globalNodeIdx] = overrides[i].transform;
+                return;
+            }
+        }
+    }
+
     SampledNodePose* sampled = pc.sampledPoses.Ptr();
     int* nodeParents = pc.nodeParents.Ptr();
     float4x4* globalTransforms = pc.globalTransforms.Ptr();

@@ -70,6 +70,19 @@ public static class Ui
 
     /// <summary>Place a <paramref name="width"/> x <paramref name="height"/> box at
     /// anchored position (<paramref name="x"/>, <paramref name="y"/>), honouring the pivot.</summary>
+    /// <remarks>
+    /// Y is DOWN, at every layer - anchors (<see cref="SetAnchors"/>: anchor.y = 0 is the
+    /// TOP of the parent, 1.0 is the BOTTOM) and this offset both. For the common
+    /// <c>pivot = (_, 1.0)</c> (used by every title/button/label in this codebase's own
+    /// screens), a MORE NEGATIVE <paramref name="y"/> renders HIGHER on screen - the
+    /// offset is the box's bottom edge, extending upward by <paramref name="height"/>.
+    /// Confirmed at the pixel (native ResolveRect's anchor math, plus
+    /// ui_shapes.slang's vertex shader through an unflipped Vulkan viewport), not
+    /// merely inferred from another screen's numbers - see UiLayoutSystem.hpp's own
+    /// comment on <c>ResolveRect</c> for the full trace. This has already been
+    /// re-derived from scratch three times by three different people in one session;
+    /// read this before a fourth.
+    /// </remarks>
     public static void SetRect(Entity e, float x, float y, float width, float height)
         => Native.aether_ui_set_rect(e.Id, x, y, width, height);
 
@@ -208,10 +221,35 @@ public static class Ui
     /// <summary>Enable/disable navigation to this selectable (locked items set false).</summary>
     public static void SetInteractable(Entity e, bool interactable) => Native.aether_ui_set_interactable(e.Id, interactable ? 1 : 0);
 
+    /// <summary>Clip this element's draws and its whole subtree to its own rect (Unity's
+    /// RectMask2D) - the primitive a scrollable list needs. Combine with a "content"
+    /// child positioned via <see cref="SetOffsets"/> and driven by
+    /// <see cref="Input.ScrollDelta"/> to build an actual scroll view; nested clips
+    /// intersect. <paramref name="padding"/> shrinks the clip inward on every side.
+    /// Idempotent in both directions.</summary>
+    public static void SetClip(Entity e, bool enabled, float padding = 0f) => Native.aether_ui_set_clip(e.Id, enabled ? 1 : 0, padding);
+
     // ── Widgets (engine-drawn UISlider / UIToggle / UIButton / UIProgressBar) ──────
     // These components render themselves and are driven by the engine's UiWidgetSystem
     // (keyboard adjust when focused, mouse drag, toggle flip). Scripts just read/seed the
     // value and poll WasChanged to persist.
+
+    /// <summary>Create a slider under <paramref name="canvas"/>, driven by the engine's
+    /// UiWidgetSystem (keyboard when focused, mouse drag). Defaults to range 0..1, step
+    /// 0.05 - call <see cref="SetSliderRange"/> for anything else (volume, FOV, ...).</summary>
+    public static Entity CreateSlider(Entity canvas = default) => new(Native.aether_ui_create_slider(canvas.Id));
+
+    /// <summary>Set a slider's value range and step (0 = continuous). Clamps its current
+    /// value into the new range.</summary>
+    public static void SetSliderRange(Entity e, float minValue, float maxValue, float step = 0.05f)
+        => Native.aether_ui_set_slider_range(e.Id, minValue, maxValue, step);
+
+    /// <summary>Create a toggle under <paramref name="canvas"/>.</summary>
+    public static Entity CreateToggle(Entity canvas = default) => new(Native.aether_ui_create_toggle(canvas.Id));
+
+    /// <summary>Create a read-only progress bar under <paramref name="canvas"/>. No
+    /// UISelectable, no focus, no WasChanged - script-driven only.</summary>
+    public static Entity CreateProgressBar(Entity canvas = default) => new(Native.aether_ui_create_progress_bar(canvas.Id));
 
     /// <summary>Current slider value in its own units (min..max).</summary>
     public static float GetSliderValue(Entity e) => Native.aether_ui_get_slider_value(e.Id);

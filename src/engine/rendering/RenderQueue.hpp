@@ -48,6 +48,11 @@ namespace aether
 		std::uint32_t animClipIndex = 0;
 		float animTime = 0.0f;
 		glm::vec4 worldBoundingSphere{};
+		// Ragdoll skin-drive seam (see RagdollSkinDrive.hpp). Empty for every ordinary
+		// draw - the default-constructed vector allocates nothing, so an unragdolled
+		// instance pays for this field only in DrawCommand's own sizeof, the same as
+		// any other scalar field above.
+		std::vector<AnimationContracts::RagdollOverrideEntry> ragdollOverrides;
 		const AnimationDatabase* animDb = nullptr;
 		std::uint32_t animDbGeneration = 0;
 		std::uint32_t meshGeneration = 0;
@@ -63,6 +68,11 @@ namespace aether
 		std::uint32_t maxDraws = 8192;
 		std::uint32_t maxBatches = 1024;
 		std::uint32_t maxAnimationDraws = UINT32_MAX;
+		// A ragdoll's driving bones only, capped at kRagdollBoneDefs' own size (11) per
+		// instance - this default comfortably covers dozens of simultaneously-ragdolled
+		// characters. Allocated lazily alongside the rest of the animation pools (see
+		// EnsureAnimationBuffers), so a scene with no ragdolls never pays for it.
+		std::uint32_t maxRagdollOverrides = 2048;
 		std::uint32_t outputDrawCapacity = 0;
 		const char* debugName = "RenderQueue";
 	};
@@ -251,6 +261,7 @@ namespace aether
 		std::array<MappedPerFrame, kFramesInFlight> m_batchDesc;
 		std::array<MappedPerFrame, kFramesInFlight> m_skinCopyJobs;
 		std::array<MappedPerFrame, kFramesInFlight> m_animationSampleJobs;
+		std::array<MappedPerFrame, kFramesInFlight> m_ragdollOverrides;
 
 		struct DevicePerFrame
 		{
@@ -268,6 +279,7 @@ namespace aether
 		CullContracts::Batch* m_batchDescMapped = nullptr;
 		AnimationContracts::SkinCopyJob* m_skinCopyJobsMapped = nullptr;
 		AnimationContracts::AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
+		AnimationContracts::RagdollOverrideEntry* m_ragdollOverridesMapped = nullptr;
 
 		std::uint32_t m_maxDraws = 0;
 		std::uint32_t m_outputDrawCapacity = 0;
@@ -275,6 +287,7 @@ namespace aether
 		std::uint32_t m_maxAnimationDraws = 0;
 		std::uint32_t m_maxSkinJoints = 0;
 		std::uint32_t m_maxSampledPoses = 0;
+		std::uint32_t m_maxRagdollOverrides = 0;
 		bool m_animationBuffersReady = false;
 		std::string m_debugName = "RenderQueue";
 

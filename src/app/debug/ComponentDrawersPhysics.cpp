@@ -125,11 +125,11 @@ namespace aether::editor
 			}
 			if (open)
 			{
-				const char* const kShapes[] = {"Box", "Sphere", "Capsule", "Cylinder"};
+				const char* const kShapes[] = {"Box", "Sphere", "Capsule", "Cylinder", "Convex Hull", "Mesh"};
 				int shapeIdx = static_cast<int>(collider->shape);
 				if (PropCombo("Shape", &shapeIdx, kShapes, IM_ARRAYSIZE(kShapes)))
 				{
-					collider->shape = static_cast<PhysicsShapeType>(std::clamp(shapeIdx, 0, 3));
+					collider->shape = static_cast<PhysicsShapeType>(std::clamp(shapeIdx, 0, 5));
 					rebuild = true;
 				}
 				switch (collider->shape)
@@ -149,6 +149,15 @@ namespace aether::editor
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
 						PropFloat("Half height", &collider->halfHeight, 0.02f, 0.01f, 1000.0f, "%.3f", FieldTip("Collider", "half_height"));
 						rebuild |= ImGui::IsItemDeactivatedAfterEdit();
+						break;
+					case PhysicsShapeType::ConvexHull:
+					case PhysicsShapeType::Mesh:
+						rebuild |= PropInputText("Mesh source", collider->meshSource, "project://assets/models/...");
+						if (collider->shape == PhysicsShapeType::Mesh)
+						{
+							ImGui::TextDisabled("Mesh requires a Static Rigid Body - Jolt cannot simulate");
+							ImGui::TextDisabled("a moving triangle mesh. Use Convex Hull instead.");
+						}
 						break;
 				}
 				iw::PropLabel("Center");

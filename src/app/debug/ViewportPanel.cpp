@@ -2384,6 +2384,16 @@ namespace aether::editor
 		// should only lose the mouse while a control/popup/gizmo is actually active.
 		context.Get<Input>().SetMouseViewportInputActive(editorViewportInteractive && mouseOverImage && !gizmoActive && !toolbarControlActive);
 
+		// Reclaiming input ownership: a click into the game's own image is how a
+		// developer hands the mouse/keyboard back to the game after the editor's own
+		// Escape hatch took it (see Input::GameOwnsInput's own doc comment) - the
+		// mirror image of that hatch. Checked here rather than in Input itself because
+		// only this panel knows where its own image sits on screen this frame.
+		if (viewportPlayState != nullptr && viewportPlayState->IsPlaying() && mouseOverImage && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			context.Get<Input>().SetGameOwnsInput(true);
+		}
+
 		// The game's pointer belongs to the game: it exists inside a live play session, over the game
 		// image, and nowhere else. Decided here because this is the only place that knows both facts -
 		// the engine cannot tell "hosted in an editor" from "running for real", and guessing it from the

@@ -2526,13 +2526,27 @@ namespace aether::editor
 			maxPanelSize.y = std::max(maxPanelSize.y, monitor.WorkSize.y);
 		}
 		const ImVec2 defaultPanelSize(std::min(720.0f, maxPanelSize.x * 0.6f), std::min(560.0f, maxPanelSize.y * 0.6f));
+		// While the game owns input (see Input::GameOwnsInput's own doc comment), every
+		// panel except the Viewport itself is disabled - BeginDisabled blocks item-level
+		// interaction (button clicks, selectable rows, drag-drop) exactly like every other
+		// disabled-state gate already in this codebase, so a real OS click that lands on
+		// File Explorer or any other docked panel during Play does nothing until the user
+		// deliberately hands input back (Escape) or the game does. The Viewport is excluded
+		// because it is the ONLY way to hand ownership back to the game (see its own
+		// reclaim-on-click) and because edit-mode camera navigation/gizmos still need it
+		// live whenever the game does not currently own input.
+		const auto* panelPlayState = context.TryGet<app::PlayState>();
+		const bool blockOtherPanels = panelPlayState != nullptr && panelPlayState->IsPlaying() && context.Get<Input>().GameOwnsInput();
 		for (auto& panel: m_panels)
 		{
 			if (panel->IsVisible())
 			{
 				ImGui::SetNextWindowSize(defaultPanelSize, ImGuiCond_FirstUseEver);
 				ImGui::SetNextWindowSizeConstraints(ImVec2(220.0f, 120.0f), maxPanelSize);
+				const bool disableThisPanel = blockOtherPanels && panel->GetName() != "Viewport";
+				ImGui::BeginDisabled(disableThisPanel);
 				panel->OnImGui(context);
+				ImGui::EndDisabled();
 			}
 		}
 

@@ -53,6 +53,14 @@ namespace aether::app
 			{
 				playState.tileStopSnapshot = tiles->SnapshotTileMaps();
 			}
+			// The game owns mouse/keyboard input for the editor's own panels from the first
+			// frame of Play - see Input::GameOwnsInput's own doc comment. Independent of
+			// cursor lock: a menu-driven game that never locks still needs this, or its
+			// menus are competing with File Explorer for the same click from frame one.
+			if (auto* input = context.TryGet<Input>())
+			{
+				input->SetGameOwnsInput(true);
+			}
 			playState.SetMode(PlayState::Mode::Playing);
 		}
 	} // namespace
@@ -155,11 +163,19 @@ namespace aether::app
 		}
 
 		// Drop any synthetic keys/mouse a headless playtest was holding so they don't
-		// leak into edit mode.
+		// leak into edit mode. The cursor lock goes with them: a script's request must not
+		// survive into edit mode or leak into the very first frame of the next Play
+		// session before that session's own OnStart has a chance to ask again. Input
+		// ownership goes with them too, for the identical reason - the editor must own
+		// its own panels the instant Play stops, not whatever GameOwnsInput happened to
+		// be at the moment Stop was pressed.
 		if (auto* input = context.TryGet<Input>())
 		{
 			input->ClearSyntheticKeys();
 			input->ClearSyntheticMouse();
+			input->RequestCursorLock(false);
+			input->SetCursorLocked(false);
+			input->SetGameOwnsInput(false);
 		}
 
 		World& world = context.Get<World>();

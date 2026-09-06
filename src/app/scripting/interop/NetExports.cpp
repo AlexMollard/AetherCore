@@ -7,6 +7,7 @@
 #include <entt/entt.hpp>
 
 #include "net/NetComponents.hpp"
+#include "net/NetOwnership.hpp"
 #include "net/NetworkContext.hpp"
 #include "net/NetRewind.hpp"
 #include "net/NetRpc.hpp"
@@ -318,6 +319,50 @@ AE_SCRIPT_API std::int32_t aether_net_is_owner(std::uint32_t entityId)
 		return 1;
 	}
 	return context->IsOwner(ActiveWorld(), aether::Entity{entityId}) ? 1 : 0;
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_request_ownership(std::uint32_t entityId)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	const aether::Entity entity{entityId};
+	auto& world = ActiveWorld();
+	if (!entity.IsValid() || !world.GetRegistry().valid(aether::World::ToEntt(entity)))
+	{
+		return 0;
+	}
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr)
+	{
+		return 1; // offline: this process already owns everything (see IsOwner)
+	}
+	// The caller's OWN connection id - a claim, never a hijack of somebody else's.
+	// ReleaseOwnership below is the only other newOwner Net.* ever sends.
+	const aether::net::OwnershipTransferOutcome outcome
+	        = context->RequestOwnershipTransfer(world, entity, context->LocalConnectionId());
+	return outcome != aether::net::OwnershipTransferOutcome::Refused ? 1 : 0;
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_net_release_ownership(std::uint32_t entityId)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	const aether::Entity entity{entityId};
+	auto& world = ActiveWorld();
+	if (!entity.IsValid() || !world.GetRegistry().valid(aether::World::ToEntt(entity)))
+	{
+		return 0;
+	}
+	aether::net::NetworkContext* context = Context();
+	if (context == nullptr)
+	{
+		return 1;
+	}
+	const aether::net::OwnershipTransferOutcome outcome
+	        = context->RequestOwnershipTransfer(world, entity, aether::net::kInvalidConnection);
+	return outcome != aether::net::OwnershipTransferOutcome::Refused ? 1 : 0;
 	});
 }
 

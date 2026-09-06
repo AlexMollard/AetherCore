@@ -1775,21 +1775,28 @@ namespace aether::editor
 		{
 			const auto it = m_thumbnails.find(m_bakeInFlight);
 			const int slot = it != m_thumbnails.end() ? it->second.atlasSlot : -1;
-			// Wait for the PASS to say it drew this slot. Counting frames is not enough: a
-			// frame where the preview had nothing to submit draws nothing, and showing the
-			// slot anyway displays undefined memory as a black square.
-			if (slot >= 0 && baker.LastDrawnSlot() == slot)
+			// Wait for the PASS to say it drew THIS request, not just this slot NUMBER.
+			// Counting frames is not enough: a frame where the preview had nothing to
+			// submit draws nothing, and showing the slot anyway displays undefined memory
+			// as a black square. Matching the slot number alone is not enough either: slot
+			// numbers are reused across unrelated bakes once ReleaseThumbnails resets
+			// m_nextAtlasSlot, and LastDrawnSlot() answers "was slot N EVER drawn", not "was
+			// slot N drawn FOR THIS REQUEST" - traced (by code reading) as the mechanism
+			// behind a model tile showing a completely different, earlier-baked model's
+			// content under its own correct filename (see ModelPreviewService::SetBakeSlot's
+			// own comment). LastDrawnGeneration() is what actually answers that.
+			if (slot >= 0 && baker.LastDrawnSlot() == slot && baker.LastDrawnGeneration() == m_bakeInFlightGeneration)
 			{
 				it->second.bakeReady = true;
 				// Idle until the next material is picked, so nothing is drawn over it.
-				baker.SetBakeSlot(-1);
+				(void) baker.SetBakeSlot(-1);
 				m_bakeInFlight.clear();
 			}
 			else if (ImGui::GetFrameCount() > m_bakeStartedFrame + kBakeTimeoutFrames)
 			{
 				// It never drew. Leave bakeReady false so the tile keeps its icon or colour
 				// rather than showing whatever happens to be in that square.
-				baker.SetBakeSlot(-1);
+				(void) baker.SetBakeSlot(-1);
 				m_bakeInFlight.clear();
 			}
 			else
@@ -1853,7 +1860,7 @@ namespace aether::editor
 				{
 					thumb.atlasSlot = m_nextAtlasSlot++;
 				}
-				baker.SetBakeSlot(thumb.atlasSlot);
+				m_bakeInFlightGeneration = baker.SetBakeSlot(thumb.atlasSlot);
 				m_bakeInFlight = key;
 				m_bakeStartedFrame = ImGui::GetFrameCount();
 				return;
@@ -1912,7 +1919,7 @@ namespace aether::editor
 			{
 				thumb.atlasSlot = m_nextAtlasSlot++;
 			}
-			baker.SetBakeSlot(thumb.atlasSlot);
+			m_bakeInFlightGeneration = baker.SetBakeSlot(thumb.atlasSlot);
 			m_bakeInFlight = key;
 			m_bakeStartedFrame = ImGui::GetFrameCount();
 			// This frame started it; without this the editor could idle before the next one.
@@ -2013,7 +2020,7 @@ namespace aether::editor
 		m_nextAtlasSlot = 0;
 		if (auto* rendering = context.TryGet<aether::RenderingSubsystem>())
 		{
-			rendering->GetMaterialThumbnailBaker().SetBakeSlot(-1);
+			(void) rendering->GetMaterialThumbnailBaker().SetBakeSlot(-1);
 		}
 		m_bakeInFlight.clear();
 	}

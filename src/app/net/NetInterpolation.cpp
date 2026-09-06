@@ -173,8 +173,28 @@ namespace aether::net
 			m_hasCorrection = true;
 		}
 
-		m_velocityPosition = (sample.position - previous.position) / dt;
-		m_velocityRotation = (sample.rotation - previous.rotation) / dt;
+		if (sample.hasVelocity)
+		{
+			// Authoritative, not derived: the sender's own physics body already
+			// knows this, more precisely and with none of the noise two position
+			// samples a send-interval apart carry. `rotation` is Euler degrees;
+			// `angularVelocity` is radians/second axis-angle, which the linear
+			// extrapolation below (predictedRotation = previous.rotation + rate *
+			// dt) already treats as a small-angle rate - the same precision
+			// Sample()'s plain glm::mix interpolation already accepts elsewhere in
+			// this class, and bounded the same way every other imperfect trend
+			// here is: SampleForward's extrapolation cap, plus this very
+			// correction mechanism healing the gap against the next real arrival.
+			// See TransformSample::angularVelocity's own comment for why a full
+			// quaternion conversion was not done instead.
+			m_velocityPosition = sample.linearVelocity;
+			m_velocityRotation = glm::degrees(sample.angularVelocity);
+		}
+		else
+		{
+			m_velocityPosition = (sample.position - previous.position) / dt;
+			m_velocityRotation = (sample.rotation - previous.rotation) / dt;
+		}
 		m_hasVelocity = true;
 	}
 

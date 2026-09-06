@@ -35,6 +35,7 @@ namespace aether
 		m_maxAnimationDraws = (config.maxAnimationDraws == UINT32_MAX) ? std::min(config.maxDraws, kDefaultMaxAnimationDraws) : config.maxAnimationDraws;
 		m_maxSkinJoints = m_maxAnimationDraws * 128u;
 		m_maxSampledPoses = m_maxSkinJoints * 2u;
+		m_maxRagdollOverrides = config.maxRagdollOverrides;
 		m_debugName = config.debugName != nullptr ? config.debugName : "RenderQueue";
 		m_slotConsumed.fill(true);
 		AE_INFO(LogCategory::Render, "RenderQueue::Initialize({}): maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", m_debugName, m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
@@ -175,6 +176,24 @@ namespace aether
 
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
+			const gpu::MappedBufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(m_maxRagdollOverrides) * sizeof(AnimationContracts::RagdollOverrideEntry),
+			        .usage = kSsboFlags,
+			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+			        .debugName = "RenderQueue.RagdollOverrides",
+			};
+			m_ragdollOverrides[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!m_ragdollOverrides[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: RagdollOverrides CreateMappedBuffer failed"));
+			}
+			const auto ragdollView = gpu::ResourceRegistry::ResolveMappedBuffer(m_ragdollOverrides[i].handle);
+			m_ragdollOverrides[i].mapped = ragdollView.mappedPtr;
+			m_ragdollOverrides[i].address = ragdollView.deviceAddress;
+		}
+
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
 			const gpu::BufferDesc desc{
 			        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
 			        .usage = kAnimationSsboFlags,
@@ -264,9 +283,11 @@ namespace aether
 		DestroyAll(m_sampledPoses);
 		DestroyAll(m_nodeGlobalTransforms);
 		DestroyAll(m_skinPalette);
+		DestroyAll(m_ragdollOverrides);
 
 		m_skinCopyJobsMapped = nullptr;
 		m_animationSampleJobsMapped = nullptr;
+		m_ragdollOverridesMapped = nullptr;
 		// The addresses these frames were prepared against are gone; a stale one handed to
 		// a shader would be a dangling device pointer.
 		for (PreparedFrame& prepared: m_preparedFrames)
@@ -306,12 +327,14 @@ namespace aether
 		DestroyAll(m_sampledPoses);
 		DestroyAll(m_nodeGlobalTransforms);
 		DestroyAll(m_skinPalette);
+		DestroyAll(m_ragdollOverrides);
 
 		m_instanceDataMapped = nullptr;
 		m_cullInputMapped = nullptr;
 		m_batchDescMapped = nullptr;
 		m_skinCopyJobsMapped = nullptr;
 		m_animationSampleJobsMapped = nullptr;
+		m_ragdollOverridesMapped = nullptr;
 		for (PreparedFrame& prepared: m_preparedFrames)
 		{
 			prepared.Reset();
@@ -323,6 +346,7 @@ namespace aether
 		m_maxAnimationDraws = 0;
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
+		m_maxRagdollOverrides = 0;
 		m_animationSlotCleared = {};
 		m_animationInputHash = {};
 		m_animationBuffersReady = false;
@@ -377,6 +401,7 @@ namespace aether
 		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDesc[frameSlot].mapped);
 		m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobs[frameSlot].mapped);
 		m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobs[frameSlot].mapped);
+		m_ragdollOverridesMapped = static_cast<AnimationContracts::RagdollOverrideEntry*>(m_ragdollOverrides[frameSlot].mapped);
 
 		if (!m_animationSlotCleared[frameSlot])
 		{
@@ -404,12 +429,14 @@ namespace aether
 		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPalette[frameSlot].address : 0;
 		const gpu::DeviceAddress currSampledPosesAddr = (m_maxSampledPoses > 0u) ? m_sampledPoses[frameSlot].address : 0;
 		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransforms[frameSlot].address : 0;
+		const gpu::DeviceAddress currRagdollOverridesAddr = (m_maxRagdollOverrides > 0u) ? m_ragdollOverrides[frameSlot].address : 0;
 		prepared.nodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
 		prepared.skinPaletteAddr = currSkinPaletteAddr;
 		const bool gpuSamplingEnabled = m_animationSampleJobsMapped != nullptr && m_skinCopyJobsMapped != nullptr && m_maxAnimationDraws > 0u;
 
 		std::uint32_t skinJointCursor = 0;
 		std::uint32_t nodePoseCursor = 0;
+		std::uint32_t ragdollOverrideCursor = 0;
 		std::uint64_t animationInputHash = 0ull;
 		std::uint32_t skinJobCount = 0;
 		std::uint32_t sampleJobsThisFrame = 0;
@@ -541,6 +568,29 @@ namespace aether
 						animJob.valuesAddr = drawAnimDb->GetValuesAddr();
 						animJob.clipCount = drawClipCount;
 
+						// Ragdoll skin-drive seam: dc.ragdollOverrides is empty for every
+						// ordinary animated draw (see RagdollSkinDrive.hpp for who fills it).
+						if (!dc.ragdollOverrides.empty())
+						{
+							if (ragdollOverrideCursor + dc.ragdollOverrides.size() > m_maxRagdollOverrides)
+							{
+								AE_WARN(LogCategory::Animation,
+								        "RenderQueue: ragdoll override pool overflow (needed {}, cap {}) - this instance renders its last sampled animation pose instead of tracking its ragdoll this frame.",
+								        ragdollOverrideCursor + dc.ragdollOverrides.size(),
+								        m_maxRagdollOverrides);
+							}
+							else if (m_ragdollOverridesMapped != nullptr)
+							{
+								for (std::size_t k = 0; k < dc.ragdollOverrides.size(); ++k)
+								{
+									m_ragdollOverridesMapped[ragdollOverrideCursor + k] = dc.ragdollOverrides[k];
+								}
+								animJob.overrideCount = static_cast<std::uint32_t>(dc.ragdollOverrides.size());
+								animJob.overridesAddr = currRagdollOverridesAddr + static_cast<gpu::DeviceSize>(ragdollOverrideCursor) * sizeof(AnimationContracts::RagdollOverrideEntry);
+								ragdollOverrideCursor += static_cast<std::uint32_t>(dc.ragdollOverrides.size());
+							}
+						}
+
 						m_animationSampleJobsMapped[animJobBase + sampleJobsThisFrame] = animJob;
 
 						m_skinCopyJobsMapped[animJobBase + skinJobCount] = AnimationContracts::SkinCopyJob{
@@ -586,6 +636,18 @@ namespace aether
 						mix(static_cast<std::uint64_t>(dc.skinIndex));
 						mix((static_cast<std::uint64_t>(skinPaletteOffset) << 32) | dc.skinJointCount);
 						mix((static_cast<std::uint64_t>(nodePoseCursor) << 32) | drawNodeCount);
+						// A ragdoll's bones move every physics step, so its override data
+						// must count toward "did the pose change" - otherwise a moving
+						// ragdoll could be mistaken for one that settled, and NodeFlatten's
+						// dispatch below would be skipped while the mesh kept rendering
+						// last frame's pose.
+						for (const AnimationContracts::RagdollOverrideEntry& ov: dc.ragdollOverrides)
+						{
+							mix(static_cast<std::uint64_t>(ov.nodeIndex));
+							mix(std::bit_cast<std::uint32_t>(ov.transform[3].x));
+							mix(std::bit_cast<std::uint32_t>(ov.transform[3].y));
+							mix(std::bit_cast<std::uint32_t>(ov.transform[3].z));
+						}
 
 						++sampleJobsThisFrame;
 						++skinJobCount;
@@ -647,6 +709,10 @@ namespace aether
 		if (sampleJobsThisFrame > 0)
 		{
 			gpu::ResourceRegistry::FlushMappedBuffer(m_animationSampleJobs[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(sampleJobsThisFrame) * sizeof(AnimationContracts::AnimatorSampleJob));
+		}
+		if (ragdollOverrideCursor > 0)
+		{
+			gpu::ResourceRegistry::FlushMappedBuffer(m_ragdollOverrides[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(ragdollOverrideCursor) * sizeof(AnimationContracts::RagdollOverrideEntry));
 		}
 
 		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);

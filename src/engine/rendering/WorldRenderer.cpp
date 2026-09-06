@@ -2,6 +2,9 @@
 
 #include <algorithm>
 
+#include "physics/PhysicsComponents.hpp"
+#include "rendering/GpuContracts.hpp"
+#include "rendering/RagdollSkinDrive.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
@@ -80,6 +83,19 @@ namespace aether
 				}
 			}
 
+			// Ragdoll skin-drive seam: RagdollSkinDriveComponent is absent for every
+			// ordinary skinned mesh (the overwhelming common case), so this is one
+			// try_get plus one bool check - the same cost this loop already pays for
+			// MaterialComponent/EffectParamsComponent above.
+			std::vector<AnimationContracts::RagdollOverrideEntry> ragdollOverrides;
+			if (animDb != nullptr)
+			{
+				if (const auto* const drive = world.GetRegistry().try_get<RagdollSkinDriveComponent>(enttEntity))
+				{
+					ragdollOverrides = BuildRagdollSkinOverrides(world, drive->ragdollRoot, animDb->GetNodeNames(), glm::inverse(transformComp.localToWorld));
+				}
+			}
+
 			constexpr float kSkinnedMeshSphereMargin = 2.0f;
 			glm::vec4 localSphere = meshComp.mesh->GetBoundingSphere();
 			if (world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity) && localSphere.w > 0.0f)
@@ -100,6 +116,7 @@ namespace aether
 			        .animClipIndex = animClipIndex,
 			        .animTime = animTime,
 			        .worldBoundingSphere = worldSphere,
+			        .ragdollOverrides = std::move(ragdollOverrides),
 			        .animDb = animDb,
 			        .animDbGeneration = animDb ? animDb->GetGeneration() : 0,
 			        .meshGeneration = meshComp.mesh ? meshComp.mesh->GetGeneration() : 0,

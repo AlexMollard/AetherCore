@@ -90,7 +90,14 @@ namespace aether
 		        .extent = {m_size * m_atlasCols, m_size * m_atlasCols},
 		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
 		        .aspect = gpu::ImageAspect::Color,
-		        .debugName = "ModelPreview.ColorLdr",
+		        // Was a shared literal ("ModelPreview.ColorLdr") - two instances (the small
+		        // interactive preview and the thumbnail-baker atlas) then shared one debug
+		        // name. ResourceRegistry::ListDebugTextures walks slots by index and
+		        // ControlMethods.cpp's capture_texture takes the FIRST name match, so
+		        // whichever instance initialised first (the interactive preview, per
+		        // RenderingSubsystem.cpp's own init order) silently ate every lookup meant
+		        // for the other - a guaranteed wrong-texture capture, not a coin flip.
+		        .debugName = (m_passPrefix + ".ColorLdr").c_str(),
 		});
 		if (m_colorLdrHandle.IsValid())
 		{
@@ -190,7 +197,16 @@ namespace aether
 			haveBounds = true;
 		}
 
-		// texture refs now so ClearModel never has to reason about them.
+		// texture refs now so ClearModel never has to reason about them. TexturesResident
+		// needs to check residency AFTER this point (called by the caller right after
+		// ShowModel returns), so the handles are snapshotted into m_previewTextures FIRST -
+		// checking m_model.primitives here instead would find every one of them already
+		// zeroed by this same loop, which is exactly the bug this snapshot fixes (see
+		// m_previewTextures' own field comment). The snapshotted handle values stay valid
+		// to query even after Release below: AssignMaterial above already took the ECS's
+		// OWN independent reference, which is what actually keeps the texture resident -
+		// this loop only ever drops the LOADED MODEL's copy of that same reference.
+		m_previewTextures.clear();
 		auto& textures = assets.GetTextureRegistry();
 		for (LoadedModelPrimitive& primitive: m_model.primitives)
 		{
@@ -202,6 +218,7 @@ namespace aether
 			{
 				if (handle.IsValid())
 				{
+					m_previewTextures.push_back(handle);
 					textures.Release(handle);
 				}
 			}
@@ -240,16 +257,19 @@ namespace aether
 
 	bool ModelPreviewService::TexturesResident(const TextureRegistry& textures) const
 	{
+		// m_model.primitives[i].material is deliberately empty by the time this is ever
+		// called - ShowModel zeroes it right after use (see its own comment) - so this
+		// checks m_previewTextures, the snapshot taken before that happened. Checking
+		// m_model.primitives here (the original bug) always finds zero handles and always
+		// returns true, which silently skipped the residency wait for every model bake:
+		// a thumbnail could capture the instant ShowModel returned, before its own
+		// textures had actually streamed in.
 		const std::uint32_t fallback = textures.ResolveSlot(textures.DefaultHandle());
-		for (const LoadedModelPrimitive& primitive: m_model.primitives)
+		for (const TextureHandle handle: m_previewTextures)
 		{
-			const MaterialAsset& material = primitive.material;
-			for (const TextureHandle handle: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
+			if (textures.ResolveSlot(handle) == fallback)
 			{
-				if (handle.IsValid() && textures.ResolveSlot(handle) == fallback)
-				{
-					return false;
-				}
+				return false;
 			}
 		}
 		return true;
@@ -260,6 +280,7 @@ namespace aether
 		m_hasModel.store(false, std::memory_order_release);
 		DestroyModelEntities(assets);
 		m_model = LoadedModel{};
+		m_previewTextures.clear();
 		m_bounds = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
@@ -271,9 +292,11 @@ namespace aether
 		}
 		// Latch this frame's bake slot alongside its draws, so the pass reads what was true
 		// when the frame was assembled rather than whatever is current when it is recorded.
+		// The generation travels with it for the same reason - see SetBakeSlot's own comment.
 		if (drawSlot < m_bakeSlotForFrame.size())
 		{
 			m_bakeSlotForFrame[drawSlot].store(m_bakeSlot.load(std::memory_order_relaxed), std::memory_order_relaxed);
+			m_bakeGenerationForFrame[drawSlot].store(m_bakeGeneration.load(std::memory_order_relaxed), std::memory_order_relaxed);
 		}
 		m_queue.SetWriteSlot(drawSlot);
 		m_queue.Clear(drawSlot);
@@ -455,8 +478,12 @@ namespace aether
 				                cmd.SetViewport(gpu::Viewport{.x = static_cast<float>(originX), .y = static_cast<float>(originY), .width = static_cast<float>(m_size), .height = static_cast<float>(m_size)});
 				                cmd.SetScissor(gpu::Rect2D{.x = static_cast<std::int32_t>(originX), .y = static_cast<std::int32_t>(originY), .width = m_size, .height = m_size});
 				                // Recorded only once the draw is actually issued, which is what lets
-				                // a caller tell a baked slot from an untouched one.
+				                // a caller tell a baked slot from an untouched one. The generation
+				                // travels with it so a caller can tell THIS draw apart from an
+				                // unrelated earlier one that happened to reuse the same slot number
+				                // (see SetBakeSlot's own comment).
 				                m_drawnSlot.store(slot, std::memory_order_relaxed);
+				                m_drawnGeneration.store(ctx.frameSlot < m_bakeGenerationForFrame.size() ? m_bakeGenerationForFrame[ctx.frameSlot].load(std::memory_order_relaxed) : 0, std::memory_order_relaxed);
 			                }
 			                else
 			                {

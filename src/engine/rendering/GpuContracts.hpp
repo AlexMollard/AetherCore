@@ -258,10 +258,17 @@ namespace CullContracts
 			gpu::DeviceAddress timesAddr = 0;
 			gpu::DeviceAddress valuesAddr = 0;
 			std::uint32_t clipCount = 0;
-			std::uint32_t _pad0 = 0;
+			// Ragdoll skin-drive seam. 0 for every ordinary animated draw (the
+			// overwhelming common case) - node_flatten.slang's inner loop takes one
+			// branch on this already-loaded field and falls through to its normal
+			// parent*local composition unchanged. Non-zero only for a mesh instance
+			// RagdollSkinDriveComponent currently drives; see RagdollSkinDrive.hpp for
+			// who fills overridesAddr and when.
+			std::uint32_t overrideCount = 0;
+			gpu::DeviceAddress overridesAddr = 0;
 		};
 
-		static_assert(sizeof(AnimatorSampleJob) == 56, "AnimatorSampleJob layout changed - update shaders/include/AnimationContracts.slangh.");
+		static_assert(sizeof(AnimatorSampleJob) == 64, "AnimatorSampleJob layout changed - update shaders/include/AnimationContracts.slangh.");
 		static_assert(offsetof(AnimatorSampleJob, animClipIndex) == 0);
 		static_assert(offsetof(AnimatorSampleJob, animTime) == 4);
 		static_assert(offsetof(AnimatorSampleJob, nodePoseOffset) == 8);
@@ -271,7 +278,26 @@ namespace CullContracts
 		static_assert(offsetof(AnimatorSampleJob, timesAddr) == 32);
 		static_assert(offsetof(AnimatorSampleJob, valuesAddr) == 40);
 		static_assert(offsetof(AnimatorSampleJob, clipCount) == 48);
-		static_assert(offsetof(AnimatorSampleJob, _pad0) == 52);
+		static_assert(offsetof(AnimatorSampleJob, overrideCount) == 52);
+		static_assert(offsetof(AnimatorSampleJob, overridesAddr) == 56);
+
+		// One driving bone's current pose, uploaded once a frame for a ragdoll-driven
+		// mesh instance - see RagdollSkinDrive.hpp. `transform` is already in the
+		// mesh's own model space (NOT world space): node_flatten.slang writes it into
+		// globalTransforms verbatim, and every non-driving descendant (fingers, toes,
+		// ...) still inherits it through the shader's ordinary recursive walk.
+		struct RagdollOverrideEntry
+		{
+			std::uint32_t nodeIndex = 0;
+			std::uint32_t _pad0 = 0;
+			std::uint32_t _pad1 = 0;
+			std::uint32_t _pad2 = 0;
+			glm::mat4 transform{1.0f};
+		};
+
+		static_assert(sizeof(RagdollOverrideEntry) == 80, "RagdollOverrideEntry layout changed - update shaders/include/AnimationContracts.slangh.");
+		static_assert(offsetof(RagdollOverrideEntry, nodeIndex) == 0);
+		static_assert(offsetof(RagdollOverrideEntry, transform) == 16);
 
 		struct SampledNodePose
 		{

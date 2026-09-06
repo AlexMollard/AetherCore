@@ -4,6 +4,7 @@
 #include <string>
 
 #include "net/NetTypes.hpp"
+#include "physics/PhysicsComponents.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 
 namespace aether::net
@@ -170,5 +171,47 @@ namespace aether::net
 	struct NetSimulationOverride
 	{
 		Body2DType authoredBodyType = Body2DType::Dynamic;
+	};
+
+	// The 3D counterpart of NetSimulationOverride - present on a replicated entity
+	// whose 3D RigidBodyComponent this peer has forced Kinematic because it is not
+	// authoritative for it. Same reasoning, same lifetime rules; a separate struct
+	// because the 2D and 3D body-type enums are different types.
+	//
+	// A ragdoll's non-root bones are NOT covered by this component: only the root
+	// (pelvis) bone carries NetworkIdentity, so only it is ever found by the
+	// NetworkIdentity+RigidBodyComponent view SyncSimulationAuthority walks. See
+	// SyncSimulationAuthority's own comment for how the OTHER bones are still
+	// frozen - together with the root, as a group, via RagdollComponent::bones -
+	// without needing a NetSimulationOverride3D of their own.
+	struct NetSimulationOverride3D
+	{
+		PhysicsMotionType authoredMotionType = PhysicsMotionType::Dynamic;
+	};
+
+	// The last authoritative linear/angular velocity a NetMessage::VelocitySnapshot
+	// told this peer about an entity it does NOT itself own. Runtime-only and
+	// deliberately unreflected, exactly like NetSimulationOverride(3D): never
+	// authored, never serialized, and never replicated as a component in its own
+	// right - VelocitySnapshot is its own dedicated wire message (NetVelocity.hpp),
+	// not a generic reflected field, because a scene/reflection edit was out of
+	// reach for this feature.
+	//
+	// WHY THIS EXISTS: BuildVelocitySnapshot's own velocity for an entity THIS peer
+	// owns comes straight from a live Jolt query - the ground truth. But a HOST
+	// relaying a CLIENT-owned entity has no live query to make: that body is frozen
+	// Kinematic locally (SyncSimulationAuthority), so Jolt would report whatever a
+	// kinematic body's velocity defaults to, not the true owner's velocity. Without
+	// somewhere to hold the value the owner already sent, the host would relay
+	// nothing for it and every OTHER client would fall back to the plain
+	// finite-difference estimate for a peer-thrown prop - not wrong, just the exact
+	// gap this feature exists to close. Position/rotation need no equivalent: they
+	// already flow through the world-visible TransformComponent every peer already
+	// writes and re-reads, which is what makes Snapshot relay automatic; velocity
+	// has no such field to piggyback on, so it gets this one instead.
+	struct NetReceivedVelocity
+	{
+		glm::vec3 linear{0.f};
+		glm::vec3 angular{0.f};
 	};
 } // namespace aether::net

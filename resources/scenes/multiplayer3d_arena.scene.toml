@@ -12,7 +12,7 @@
 # The camera is fixed rather than following either player - there is no single "the"
 # player to follow once there can be two - and framed wide enough to hold both spawn
 # points without either character walking off the edge. Ground and Key Light match the
-# Blank 3D template's own values: a kinematic body still wants a floor to read against,
+# Blank 3D template's own values: a Character Controller still needs a floor to stand on,
 # and a PBR material with no light on it renders black.
 [environment]
 ambient = [ 0.12, 0.12, 0.13 ]

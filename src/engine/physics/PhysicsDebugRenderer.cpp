@@ -63,6 +63,11 @@ namespace aether
 					return glm::vec3(c.radius * 2.0f, c.halfHeight * 2.0f + c.radius * 2.0f, c.radius * 2.0f);
 				case PhysicsShapeType::Cylinder:
 					return glm::vec3(c.radius * 2.0f, c.halfHeight * 2.0f, c.radius * 2.0f);
+				case PhysicsShapeType::ConvexHull:
+				case PhysicsShapeType::Mesh:
+					// Mesh-sourced shapes have no single box/capsule dimension to report -
+					// the fallback below is what an unhandled case already returned.
+					break;
 			}
 			return glm::vec3(1.0f);
 		}
@@ -662,6 +667,12 @@ namespace aether
 				case PhysicsShapeType::Cylinder:
 					vertexHandle = m_cylinderVertexHandle;
 					vertexCount = m_cylinderVertexCount;
+					break;
+				case PhysicsShapeType::ConvexHull:
+				case PhysicsShapeType::Mesh:
+					// No baked gizmo mesh for a mesh-sourced shape yet - vertexHandle stays
+					// invalid, so the IsValid() check below skips drawing it, same as any
+					// other unhandled case would have before this switch became exhaustive.
 					break;
 			}
 

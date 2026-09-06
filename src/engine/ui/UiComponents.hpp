@@ -125,9 +125,26 @@ namespace aether::ui
 		float pixelSize = 24.f;
 		UIText::HAlign hAlign = UIText::HAlign::Center;
 		UIText::VAlign vAlign = UIText::VAlign::Middle;
-		glm::vec4 bgColor{0.07f, 0.08f, 0.10f, 1.f};
+		// Confirmed live against Sandbox's MainMenu: at the old {0.07,0.08,0.10} this was
+		// only ~0.02-0.03 per channel off a typical dark panel background - imperceptible,
+		// so every runtime-created button (no scene-authored override) read as bare
+		// floating text with no button "chrome" at all, focused or not. Raised both tiers
+		// together, same neutral hue, so unfocused still reads as "a raised, clickable
+		// chip" and focused reads as clearly brighter than that baseline rather than only
+		// marginally so. Scene-authored buttons elsewhere (Hollowtide/INKBOUND/Whisper)
+		// bake their own explicit bg_color/bg_color_focused and are unaffected - see
+		// bgColorFocused's own note below for why that is safe to confirm, not assume.
+		glm::vec4 bgColor{0.13f, 0.14f, 0.18f, 1.f};
 		glm::vec4 textColor{0.70f, 0.75f, 0.85f, 1.f};
-		glm::vec4 bgColorFocused{0.07f, 0.08f, 0.10f, 1.f};
+		// Was identical to bgColor - a focused button had zero background/border
+		// differentiation anywhere in the engine, only textColorFocused's cyan. Lightened
+		// (not re-hued) so a script that never touches these fields still shows a visible
+		// selection at a glance without reading as a different widget. Any scene-authored
+		// button already has an explicit bg_color_focused baked in its .scene.toml (see
+		// Hollowtide/INKBOUND/Whisper) and is unaffected - this only reaches runtime-created
+		// buttons (Ui.CreateButton, which has no color override at all) and future
+		// Inspector-added buttons left at default.
+		glm::vec4 bgColorFocused{0.24f, 0.28f, 0.36f, 1.f};
 		glm::vec4 textColorFocused{0.30f, 0.85f, 1.f, 1.f};
 		float cornerRadius = 4.f;
 	};

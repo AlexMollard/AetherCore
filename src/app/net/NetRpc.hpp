@@ -135,9 +135,12 @@ namespace aether::net
 	// byte it likes in a packet, but the host drops everything that is not Server, so
 	// the authoritative broadcast can only ever start on the host.
 	//
-	// OWNERSHIP GATE. RPC is the ONLY channel by which a client can affect host state
-	// (every other inbound message is dropped by a role guard), so on the host the
-	// call is additionally rejected unless the target entity carries a
+	// OWNERSHIP GATE. RPC is one of two channels by which a client can affect host
+	// state - the other is NetMessage::OwnershipRequest (NetOwnership.hpp), which
+	// exists precisely because this gate makes RPC unusable for "give me an entity
+	// I do not yet own" (every other inbound message is dropped by a role guard) -
+	// so on the host the call is additionally rejected unless the target entity
+	// carries a
 	// NetworkIdentity whose `owner` is `sender`. Without it any connected client
 	// could invoke any [NetRpc] method on any replicated entity - another player's
 	// TakeDamage, Respawn, whatever the project marks up. `localIsHost` selects the

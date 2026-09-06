@@ -501,9 +501,17 @@ namespace aether::app
 				ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));
 				m_playState.RecordSimulatedFrame(gameDt);
 			}
+			// Outside TakeSimulationStep on purpose: Escape must still free the cursor,
+			// and losing focus must still release it, even while paused (no simulation
+			// step, but the session - and the captured pointer - is still live).
+			ctx.Get<Input>().UpdateCursorLock(m_engine.IsWindowFocused());
 		}
 		else
 		{
+			// Never captured in edit mode, however a script may have last left the
+			// request - a game that never asks for capture is unaffected either way.
+			ctx.Get<Input>().SetCursorLocked(false);
+
 			// Edit-mode previews mirror play mode: every system participates in
 			// every scene (Unity-style); each skips cheaply when it has nothing.
 			World& editWorld = ctx.Get<World>();

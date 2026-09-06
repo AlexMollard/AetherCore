@@ -208,6 +208,20 @@ namespace aether
 
 		[[nodiscard]] bool IsKeyPressed(Key key) const;
 
+		// The (lowest-numbered) key that transitioned down THIS frame, or Key::None if
+		// none did - the primitive a "press any key to rebind" prompt actually needs.
+		// Without this, the only way to find out was a per-frame IsKeyPressed scan over
+		// every value of the Key enum from script, which works but is the exact kind of
+		// thing this class should answer directly: the per-key edge state
+		// (m_currKeys/m_prevKeys) already exists here, so scanning it once, natively, is
+		// strictly cheaper than kMaxKeys individual calls across the FFI boundary every
+		// frame a rebind prompt is open. Ties (two keys land on the same frame - a fast
+		// chord, or a synthetic multi-key test injection) resolve to whichever has the
+		// lower Key value; there is no principled way to prefer one over the other
+		// without knowing what the prompt considers a "real" key versus a modifier, and
+		// the scan-based workaround this replaces had the exact same ambiguity.
+		[[nodiscard]] Key GetKeyPressedThisFrame() const;
+
 		[[nodiscard]] bool IsKeyReleased(Key key) const;
 
 		// ── Key consumption ──────────────────────────────────────────────────
@@ -301,6 +315,76 @@ namespace aether
 		[[nodiscard]] bool IsMouseCaptured() const
 		{
 			return m_mouseCaptured;
+		}
+
+		// -- Cursor lock (FPS-style pointer lock) --------------------------------
+		// Distinct from SetMouseCaptured/IsMouseCaptured above (an unrelated flag: "something
+		// else consumed this frame's mouse", e.g. an ImGui widget being dragged) and from
+		// SetOsCursorVisible (HIDDEN keeps the pointer's real absolute screen position and
+		// just stops painting it). Locked switches GLFW to CURSOR_DISABLED: the pointer is
+		// hidden, confined to the window, and GetMouseDelta() reports unbounded relative
+		// motion instead of an absolute position that stops dead at the screen edge - what a
+		// first-person camera needs and what a custom-drawn (HIDDEN) pointer very much does
+		// not. See UpdateCursorLock for how a request actually becomes the applied state.
+
+		// What the current game/script wants (persists across frames until changed). Does
+		// not by itself touch GLFW - see UpdateCursorLock, the only thing that applies it,
+		// and only when its caller says Play is actually active (see Application::OnUpdate).
+		void RequestCursorLock(bool requested)
+		{
+			m_cursorLockRequested = requested;
+		}
+
+		[[nodiscard]] bool IsCursorLockRequested() const
+		{
+			return m_cursorLockRequested;
+		}
+
+		// Called once per frame by the app layer while Play is active, never outside it - a
+		// game that requests capture has zero effect in edit mode. Combines the request with
+		// window focus and the escape hatch (Escape) into the actual lock state, and also
+		// updates GameOwnsInput below off the same key press - see that method's own doc
+		// comment for why the two are handled together but are not the same flag. A request
+		// that goes false clears the escape latch, so the next fresh request locks again
+		// rather than staying silently vetoed forever.
+		//
+		// Escape is NOT consumed here: a script's own Escape-driven UI (a pause menu) must
+		// see the identical press in the identical frame this unlocks the cursor, or it
+		// waits for a second press while the game silently re-requests the lock it was
+		// just released from (FirstPersonPlayer-style scripts gate their re-request on
+		// their own menu's IsOpen, which needs this exact press to become true at all).
+		void UpdateCursorLock(bool windowFocused);
+
+		void SetCursorLocked(bool locked);
+
+		[[nodiscard]] bool IsCursorLocked() const
+		{
+			return m_cursorLocked;
+		}
+
+		// -- Input ownership (game vs. editor panels) ----------------------------
+		// A THIRD, independent concept alongside cursor lock (FPS relative motion) and OS
+		// cursor visibility (SetOsCursorVisible) - none of the three implies either of the
+		// others. A paused game with its own menu open wants exactly: owns input (so the
+		// editor's docked panels - File Explorer, Console, anything else - do not receive
+		// the click meant for the menu's own Resume button), lock OFF, cursor VISIBLE. That
+		// combination is unrepresentable through lock/visibility alone, which is what let a
+		// free OS cursor sit over live editor panels with nothing asking for it - the whole
+		// point of adding this rather than widening RequestCursorLock to cover it (that
+		// would re-conflate two of the three states this exists to keep apart).
+		//
+		// Granted when Play starts and by clicking into the viewport (see ViewportPanel);
+		// released by Escape - see UpdateCursorLock, which updates both flags off the same
+		// press. The editor's own panel loop (DebugLayer) is what actually enforces this,
+		// by disabling every panel except the viewport while IsPlaying() && GameOwnsInput().
+		void SetGameOwnsInput(bool owns)
+		{
+			m_gameOwnsInput = owns;
+		}
+
+		[[nodiscard]] bool GameOwnsInput() const
+		{
+			return m_gameOwnsInput;
 		}
 
 		// Synthetic key injection (headless playtesting via the control server). A
@@ -569,6 +653,15 @@ namespace aether
 
 		GLFWwindow* m_window = nullptr;
 		bool m_osCursorVisible = true;
+		bool m_cursorLockRequested = false;
+		bool m_cursorLocked = false;
+		// Set when Escape releases an active lock; cleared the moment the request itself
+		// goes false (see UpdateCursorLock) so a fresh request is never silently vetoed.
+		bool m_cursorLockEscaped = false;
+		// See GameOwnsInput's own doc comment. Defaults false: nothing owns the panels
+		// until Play actually starts (EnterPlayingMode grants it), so edit mode is
+		// unaffected and a stray true can never survive into it (StopPlaySession clears it).
+		bool m_gameOwnsInput = false;
 
 		std::array<bool, kMaxKeys> m_currKeys{};
 		std::array<bool, kMaxKeys> m_prevKeys{};
@@ -609,5 +702,9 @@ namespace aether
 		glm::vec2 m_mouseViewportTargetSize{};
 
 		[[nodiscard]] glm::vec2 TransformMousePos(glm::vec2 windowMousePos) const;
+
+		// Shared by SetOsCursorVisible and SetCursorLocked so the two never race over which
+		// GLFW cursor-mode call ran last - see SetCursorLocked's comment.
+		void ApplyCursorMode();
 	};
 } // namespace aether

@@ -1306,6 +1306,15 @@ namespace aether::editor
 				{
 					return json{{"error", "'" + type + "' is reference-only and cannot be added/removed as a component (e.g. UI Text is authored as a UI entity)"}};
 				}
+				// The catalog gate above only covers palette entries - a component reached
+				// through the reflection fallback (e.g. Collider, AE_NOT_ADDABLE because it
+				// must be added alongside a Rigid Body via the catalog's own bespoke entry)
+				// was never checked here at all, so scene.add_component could add it directly
+				// and skip whatever invariant the catalog entry exists to enforce.
+				if (reflected != nullptr && !reflected->addable)
+				{
+					return json{{"error", "'" + type + "' is reference-only and cannot be added/removed as a component"}};
+				}
 				// Report what actually happened. Claiming an add or a remove that did not occur
 				// is not only a misleading answer - the undo entry recorded below would be for
 				// a change that never happened, so the next undo appears to do nothing.

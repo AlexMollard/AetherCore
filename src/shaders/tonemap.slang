@@ -569,13 +569,21 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // Approximate sRGB gamma (linear -> display).
     float3 outColor = pow(max(mapped, float3(0.0f)), float3(1.0f / 2.2f));
 
+    // The HDR target's own alpha channel: 1.0 where the forward pass actually put
+    // geometry, 0.0 where it left the pixel untouched. Read unconditionally (not just
+    // inside the background-composite branch below) so a render with NO background
+    // compositing - a transparent icon/thumbnail bake, the exact case an alpha-capable
+    // output target like ModelPreview.ColorLdr (R8G8B8A8Unorm) exists for - gets a real
+    // per-pixel cutout instead of the flat opaque 1.0 this pass used to hardcode
+    // regardless of what the scene actually covered.
+    const float coverage = g_textures[pc.hdrSlot].Load(int3(coord, 0)).a;
+
     // WYSIWYG background composite: fill pixels the scene did not cover (HDR
     // alpha) with the camera background, evaluated directly in display space so
     // it matches the authored swatch. Disabled (addr 0) for the sky mode.
     if (pc.backgroundParamsAddr != 0ull)
     {
         GpuBackgroundParams* bg = (GpuBackgroundParams*)pc.backgroundParamsAddr;
-        const float  coverage = g_textures[pc.hdrSlot].Load(int3(coord, 0)).a;
         const float2 uv = (float2(coord) + 0.5f) / float2(max(pc.screenWidth, 1u), max(pc.screenHeight, 1u));
         // The vignette dims the background too. It is a LENS effect, so it darkens
         // everything the lens sees - leaving the backdrop at full brightness puts a bright
@@ -620,5 +628,11 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // background composite, is a candidate for banding.
     outColor += DitherTriangular(float2(coord));
 
-    return float4(outColor, 1.0f);
+    // Opaque once a background has been composited in (it fills every gap the scene
+    // itself did not cover, so the whole frame is visually solid); otherwise the real
+    // per-pixel coverage, so a render with no background composite - a transparent
+    // icon/thumbnail bake onto an alpha-capable target - gets a genuine cutout instead
+    // of an alpha channel that can never be anything but 1.0.
+    const float outAlpha = pc.backgroundParamsAddr != 0ull ? 1.0f : coverage;
+    return float4(outColor, outAlpha);
 }

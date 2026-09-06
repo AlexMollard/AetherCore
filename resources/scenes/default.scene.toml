@@ -9,10 +9,16 @@
 # project attached to nothing, Play did visibly nothing, and the starter script explained
 # how to attach itself in a comment nobody had a reason to open.
 #
-# The Player is KINEMATIC and the Crate is DYNAMIC, and the difference matters. A script
-# that writes Self.Position every frame is telling the body where to be, which is what a
-# kinematic body is for; a dynamic body is owned by the solver, so writing its transform
-# fights whatever the simulation just decided.
+# The Player carries a Character Controller, not a Rigid Body/Collider: a Jolt
+# CharacterVirtual, driven by scripts/Player.cs through CharacterController.Move every
+# frame rather than by writing Self.Position directly. A raw transform write lands after
+# physics has already finished its step for the frame (physics runs before scripts), so it
+# teleports the body into whatever is standing there; the controller instead moves through
+# the same collision sweep everything else in the scene is subject to, so it stops at a
+# wall or a crate instead of sinking into it. Its own position tracks its FEET, not its
+# centre, which is why the mesh lives one level down on 'Player Visual' rather than
+# directly on 'Player' - offset up by half the controller's total height so it renders
+# standing on the ground instead of sunk into it up to its waist.
 #
 # There is also a Main Camera, which this template did without for a long time. Without one
 # the editor opens on the engine's implicit default pose rather than on the scene, and
@@ -119,6 +125,29 @@ parent = -1
 position = [ -1.25, 0.75, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
+    [entities.character_controller]
+    gravity_scale = 1.0
+    ground_snap_distance = 0.3
+    half_height = 0.6
+    mass = 80.0
+    max_push_force = 500.0
+    max_slope_angle = 0.7853982
+    radius = 0.3
+    step_height = 0.3
+
+    [[entities.scripts]]
+    type = 'Player'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+mesh_renderer = true
+name = 'Player Visual'
+node = -8815015453282458222
+parent = 2
+parent_node = 5211485563892258367
+position = [ 0.0, 0.9, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
     [entities.material]
     alpha_blend = false
     alpha_cutoff = 0.5
@@ -136,30 +165,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     index = 0
     kind = 'primitive'
     path = 'cube'
-
-    [entities.physics]
-    allow_sleeping = true
-    angular_damping = 0.05
-    ccd = false
-    center = [ 0.0, 0.0, 0.0 ]
-    friction = 0.5
-    gravity_factor = 1.0
-    half_extents = [ 0.5, 0.5, 0.5 ]
-    half_height = 0.5
-    linear_damping = 0.05
-    lock_position = [ 0.0, 0.0, 0.0 ]
-    lock_rotation = [ 0.0, 0.0, 0.0 ]
-    mass = 0.0
-    max_angular_vel = 47.124
-    max_linear_vel = 500.0
-    motion = 'kinematic'
-    radius = 0.5
-    restitution = 0.0
-    sensor = false
-    shape = 'box'
-
-    [[entities.scripts]]
-    type = 'Player'
 
 [[entities]]
 euler = [ -15.8866005, 34.6952, 0.0 ]

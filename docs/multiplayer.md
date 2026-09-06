@@ -85,6 +85,22 @@ against `NetworkIdentity.owner` before it will invoke anything
   *client* owns — its own player, its own projectile — which then calls into
   whatever host-side logic it needs.
 
+**The one exception: claiming an entity you do not own yet.** The RPC rule above
+means a client can never ask the host for something through an entity it does not
+already own — which is exactly the shape of "pick up this prop," since the prop is
+the very thing not owned yet. `Net.RequestOwnership(entity)` /
+`Net.ReleaseOwnership(entity)` are a second, narrowly-scoped channel for this one
+case: a client sends `NetMessage::OwnershipRequest` (`NetOwnership.hpp`) naming the
+target entity and the owner it wants (itself, or the host to release), the host
+decides, and `NetMessage::OwnershipTransfer` broadcasts the result to everyone so
+`NetworkIdentity.owner` — and therefore `Net.IsOwner`/`OnOwnershipChanged` — agree
+on every peer. The host's own rule is "currently unowned (host-owned) or already
+yours" for a claim, and "you must be the current owner" for a release; naming a
+*third* connection as the new owner is refused outright, request or not — a client
+may only ask for itself or hand back to the host, never reassign someone else's
+entity. The host's own calls skip this gate entirely, the same as every other
+host-authoritative mutation (Spawn, Despawn).
+
 ## The latency budget
 
 **Your own input is never delayed.** There is no round trip between pressing a key

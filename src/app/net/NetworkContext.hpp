@@ -13,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include "net/NetComponents.hpp"
+#include "net/NetOwnership.hpp"
 #include "net/NetRelevancy.hpp"
 #include "net/NetSession.hpp"
 #include "net/NetSnapshot.hpp"
@@ -463,6 +464,40 @@ namespace aether::net
 		// cutover across every deployed client.
 		void ApplyRelevancyLeave(World& world, std::uint32_t netId);
 
+		// ── Ownership transfer ───────────────────────────────────────────────
+		// Hands `entity`'s NetworkIdentity::owner to `newOwner` - the only way an
+		// already-spawned entity's owner ever changes outside of Spawn (its initial
+		// value) and a disconnect's release (NetworkReceiveSystem::OnDisconnected).
+		// `newOwner` is usually the caller's own LocalConnectionId() (claim) or
+		// kInvalidConnection (release back to the host); see Net.RequestOwnership/
+		// Net.ReleaseOwnership.
+		//
+		// A no-op success (OwnershipTransferOutcome::Applied, nothing sent) for an
+		// entity with no NetworkIdentity or one not yet part of a session
+		// (netId == 0) - there is no owner field for anyone to disagree about, so
+		// this process already IS the owner, the same nullptr rule IsOwner uses.
+		//
+		// OFFLINE AND ON THE HOST this is synchronous: the field changes on this
+		// call, and a host also broadcasts NetMessage::OwnershipTransfer so every
+		// connection agrees. THE HOST'S OWN CALL IS NEVER VALIDATED - see
+		// OwnershipTransferRefusal's comment for why "host always wins" is half of
+		// this feature's rule, the other half (ValidateOwnershipRequest) being what
+		// gates a CLIENT's request once it arrives over the wire.
+		//
+		// ON A CLIENT this only SENDS NetMessage::OwnershipRequest and returns
+		// Requested - `entity`'s owner does not change here. It changes when (and
+		// only when) the host's broadcast lands, through ApplyOwnershipTransfer
+		// below - the same "ask, then wait for the authoritative answer" shape
+		// Spawn/Despawn already give every other piece of session state.
+		[[nodiscard]] OwnershipTransferOutcome RequestOwnershipTransfer(World& world, Entity entity,
+		        ConnectionId newOwner);
+
+		// Client-side application of a host-approved NetMessage::OwnershipTransfer -
+		// the ApplySpawn/ApplyDespawn counterpart for this message kind. A no-op for
+		// a net id this peer has no binding for (already gone, or never held here);
+		// nothing here can create an entity, only re-own one that already exists.
+		void ApplyOwnershipTransfer(World& world, std::uint32_t netId, ConnectionId newOwner);
+
 		// ── Authority ────────────────────────────────────────────────────────
 		// THE OWNER OF AN ENTITY IS AUTHORITATIVE FOR IT. That is the whole model:
 		// the owning peer simulates its own entity and replicates the result, the
@@ -513,21 +548,42 @@ namespace aether::net
 		[[nodiscard]] bool OwnsIdentity(const NetworkIdentity& identity) const;
 
 		// ── Simulation authority ─────────────────────────────────────────────
-		// Aligns every replicated entity's 2D body with who is allowed to simulate
-		// it, and is the reason a client can see a remote character move at all.
+		// Aligns every replicated entity's body with who is allowed to simulate it,
+		// and is the reason a client can see a remote character move at all. Covers
+		// three shapes of "simulated by physics": a 2D RigidBody2DComponent, a 3D
+		// RigidBodyComponent, and a 3D CharacterControllerComponent - a ragdoll is
+		// several 3D RigidBodyComponents (see below), not a fourth shape.
 		//
 		// NetworkReceiveSystem runs FIRST in the frame and writes the replicated
-		// transform; Physics2DSystem runs later and, for a DYNAMIC body, writes the
-		// transform again from its own integration of a body this peer has no
-		// authority over. The network's answer loses every frame, so a remotely
+		// transform; the physics system runs later and, for a DYNAMIC/Dynamic body,
+		// writes the transform again from its own integration of a body this peer has
+		// no authority over. The network's answer loses every frame, so a remotely
 		// owned character stands still while its snapshots arrive perfectly.
 		//
-		// The fix is the body type the engine already has for exactly this: a
-		// Kinematic 2D body is TRANSFORM-DRIVEN - Physics2DSystem::PushKinematicTargets
-		// pushes the ECS pose into Box2D each frame and SyncTransforms writes back
-		// only for Dynamic bodies - which is precisely replication's semantics. So a
-		// body this peer does not own becomes Kinematic, and goes back to what it was
-		// authored as the moment this peer does own it.
+		// The fix is the body type both physics engines already have for exactly
+		// this: a Kinematic body is TRANSFORM-DRIVEN - Physics2DSystem::
+		// PushKinematicTargets / PhysicsSystem::PushKinematicTargets push the ECS
+		// pose into Box2D/Jolt each frame, and each engine's SyncTransforms writes
+		// back only for a Dynamic body - which is precisely replication's semantics.
+		// So a body this peer does not own becomes Kinematic, and goes back to what
+		// it was authored as the moment this peer does own it.
+		//
+		// A Character Controller has no body-type concept at all - it is not a Jolt
+		// Body - so it uses the seam CharacterControllerComponent::locallySimulated
+		// was built for: false makes StepCharacters a passive shadow that mirrors
+		// whatever TransformComponent replication already wrote, instead of running
+		// a second independent simulation of the same character. No marker/restore
+		// bookkeeping needed for it - see the .cpp.
+		//
+		// A RAGDOLL IS FROZEN AND THAWED AS A UNIT, every bone together, never one
+		// bone at a time. Only the ragdoll's root carries NetworkIdentity, so the
+		// naive per-entity walk below can only ever find that one - but a ragdoll's
+		// bones are jointed to each other, and a Hinge/Swing Twist constraint between
+		// a teleporting Kinematic root and a still-Dynamic limb is exactly the
+		// mixed-authority case a constraint solver was never asked to make sense of
+		// (jitter at best, an explosion at worst). So handing over or reclaiming the
+		// root walks RagdollComponent::bones and applies the same operation to every
+		// other bone too - see the .cpp for exactly how.
 		//
 		// THE HOST HANDS OVER TOO, and that is the change client authority makes here.
 		// Under host authority the host simulated the whole world, so it kept every
@@ -546,9 +602,11 @@ namespace aether::net
 		// a reconcile that only acts on divergence costs one view walk and cannot be.
 		void SyncSimulationAuthority(World& world);
 
-		// Undoes every handover SyncSimulationAuthority made, restoring the authored
-		// body type. Called from Stop, so a player leaving a session and returning to
-		// single-player does not find a character that no longer falls.
+		// Undoes every handover SyncSimulationAuthority made - 2D, 3D, ragdoll bones,
+		// and Character Controllers alike - restoring whatever each was authored as.
+		// Called from Stop, so a player leaving a session and returning to
+		// single-player does not find a character (or a crate, or a ragdoll) that no
+		// longer falls.
 		static void RestoreSimulationAuthority(World& world);
 
 	private:

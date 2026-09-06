@@ -145,6 +145,17 @@ namespace aether::net
 			InterpolationBuffer buffer;
 			glm::vec3 authoritativePosition{0.f};
 			glm::vec3 authoritativeEuler{0.f};
+
+			// Staged by an inbound NetMessage::VelocitySnapshot (see NetVelocity.hpp)
+			// for ResolveTransforms to fold into the NEXT TransformSample it pushes
+			// this frame - the two arrive as separate packets and this decouples
+			// their order. Left at its last value once set: a body that stops
+			// sending new velocity (no longer relevant, ownership released) simply
+			// keeps reporting its last known one, exactly as authoritativePosition/
+			// Euler above already do until a real change overwrites them.
+			bool hasVelocity = false;
+			glm::vec3 linearVelocity{0.f};
+			glm::vec3 angularVelocity{0.f};
 		};
 
 		struct Pose

@@ -146,7 +146,18 @@ namespace aether::app::project
 				src += "\t\tfloat z = Input.GetAxisRaw(Key.S, Key.W) + Input.GetAxisRaw(Key.Down, Key.Up);\n";
 				src += "\t\tVector3 move = new(x, 0.0f, z);\n";
 			}
-			src += "\t\tSelf.Position += move * Speed * deltaTime;\n";
+			if (is2D)
+			{
+				src += "\t\tSelf.Position += move * Speed * deltaTime;\n";
+			}
+			else
+			{
+				// A Character Controller is a physics body: Move sets the velocity the physics
+				// substep loop integrates, so this must not also be scaled by deltaTime - doing
+				// both would double-apply frame time the way Self.Position += ... * deltaTime
+				// used to (and would still race the solver, since that write bypassed it).
+				src += "\t\tCharacterController.Move(Self, move, Speed);\n";
+			}
 			src += "\t}\n";
 			src += "}\n";
 			return src;
@@ -243,7 +254,9 @@ namespace aether::app::project
 			{
 				src += "\t\t\tfloat z = Input.GetAxisRaw(Key.S, Key.W) + Input.GetAxisRaw(Key.Down, Key.Up);\n";
 				src += "\t\t\tfloat speed = Boosting ? Speed * BoostSpeedMultiplier : Speed;\n";
-				src += "\t\t\tSelf.Position += new Vector3(x, 0.0f, z) * speed * deltaTime;\n\n";
+				// Move sets the velocity CharacterVirtual integrates on its own physics substep -
+				// this if already gates on Net.HasAuthority, so only the owner's copy ever calls it.
+				src += "\t\t\tCharacterController.Move(Self, new Vector3(x, 0.0f, z), speed);\n\n";
 			}
 			src += "\t\t\tif (Input.IsKeyPressed(Key.E))\n";
 			src += "\t\t\t{\n";
@@ -259,7 +272,10 @@ namespace aether::app::project
 			}
 			else
 			{
-				src += "\t\tSelf.SetMaterialColor(Boosting ? _boostColor : _normalColor);\n";
+				// Player itself is the Character Controller now; the mesh (and its material)
+				// live on the 'Player Visual' child - see MakePlayerPrefabTomlText - so the
+				// tint has to reach it there instead of on Self.
+				src += "\t\tSelf.GetChild(0).SetMaterialColor(Boosting ? _boostColor : _normalColor);\n";
 			}
 			src += "\t\tTickWave(deltaTime);\n";
 			src += "\t}\n\n";
@@ -366,7 +382,8 @@ namespace aether::app::project
 			src += "\t}\n\n";
 			src += "\tpublic override void OnAttach()\n";
 			src += "\t{\n";
-			src += "\t\tEntity canvas = Ui.CreateCanvas();\n\n";
+			src += "\t\tEntity canvas = Ui.CreateCanvas();\n";
+			src += "\t\tcanvas.MarkTransient(); // runtime UI, never save-worthy\n\n";
 			src += "\t\tEntity title = Ui.CreateText(canvas, \"AetherCore Multiplayer Template\");\n";
 			src += "\t\tUi.SetAnchors(title, new(0.5f, 0.0f), new(0.5f, 0.0f));\n";
 			src += "\t\tUi.SetPivot(title, new(0.5f, 0.0f));\n";
@@ -594,6 +611,7 @@ namespace aether::app::project
 			src += "\t\t// A small corner label, not a banner across the middle - this is a HUD detail for\n";
 			src += "\t\t// the host to glance at while inviting a second friend, not the main event.\n";
 			src += "\t\tEntity canvas = Ui.CreateCanvas();\n";
+			src += "\t\tcanvas.MarkTransient(); // runtime UI, never save-worthy\n";
 			src += "\t\t_hostCodeLabel = Ui.CreateText(canvas, string.Empty);\n";
 			src += "\t\tUi.SetAnchors(_hostCodeLabel, new(0.0f, 0.0f), new(0.0f, 0.0f));\n";
 			src += "\t\tUi.SetPivot(_hostCodeLabel, new(0.0f, 0.0f));\n";
@@ -667,10 +685,43 @@ namespace aether::app::project
 			}
 			else
 			{
-				// Mesh + material + a KINEMATIC physics body, matching the Blank 3D template's
-				// own Player: a script that writes Self.Position every frame is telling the body
-				// where to be, which is what a kinematic body is for - a dynamic one is owned by
-				// the solver and fights it instead.
+				// A Character Controller, not a Rigid Body/Collider: a Jolt CharacterVirtual,
+				// driven by Player.cs through CharacterController.Move rather than by writing
+				// Self.Position directly - see MakeMultiplayerPlayerScriptText's own remarks.
+				// Its own position tracks its FEET, not its centre, so the mesh (and its
+				// material) live on the 'Player Visual' entity appended below, offset up by
+				// half the controller's total height - the same shape the Blank 3D template's
+				// own scene uses for its Player.
+				toml += "    [entities.character_controller]\n";
+				toml += "    gravity_scale = 1.0\n";
+				toml += "    ground_snap_distance = 0.3\n";
+				toml += "    half_height = 0.6\n";
+				toml += "    mass = 80.0\n";
+				toml += "    max_push_force = 500.0\n";
+				toml += "    max_slope_angle = 0.7853982\n";
+				toml += "    radius = 0.3\n";
+				toml += "    step_height = 0.3\n\n";
+			}
+			toml += "    [entities.net_player]\n";
+			toml += "    display_name = ''\n\n";
+			toml += "    [entities.network_identity]\n\n";
+			toml += "    # A REMOTE copy of this entity is projected toward the present by default\n";
+			toml += "    # (extrapolated, capped at maxExtrapolationSeconds = 0.15s past the newest real\n";
+			toml += "    # sample) - lower that cap for a fast-turning entity, since a turn mid-flight is\n";
+			toml += "    # exactly what extrapolation undershoots on until the next real sample corrects it.\n";
+			toml += "    [entities.network_transform]\n";
+			toml += "    interpolation_delay = 0.1\n\n";
+			toml += "    [[entities.scripts]]\n";
+			toml += "    type = 'Player'\n";
+			if (!is2D)
+			{
+				toml += "\n[[entities]]\n";
+				toml += "name = 'Player Visual'\n";
+				toml += "parent = 0\n";
+				toml += "position = [ 0.0, 0.9, 0.0 ]\n";
+				toml += "euler = [ 0.0, 0.0, 0.0 ]\n";
+				toml += "scale = [ 1.0, 1.0, 1.0 ]\n";
+				toml += "mesh_renderer = true\n\n";
 				toml += "    [entities.material]\n";
 				toml += "    alpha_blend = false\n";
 				toml += "    alpha_cutoff = 0.5\n";
@@ -686,39 +737,8 @@ namespace aether::app::project
 				toml += "    [entities.mesh]\n";
 				toml += "    index = 0\n";
 				toml += "    kind = 'primitive'\n";
-				toml += "    path = 'cube'\n\n";
-				toml += "    [entities.physics]\n";
-				toml += "    allow_sleeping = true\n";
-				toml += "    angular_damping = 0.05\n";
-				toml += "    ccd = false\n";
-				toml += "    center = [ 0.0, 0.0, 0.0 ]\n";
-				toml += "    friction = 0.5\n";
-				toml += "    gravity_factor = 1.0\n";
-				toml += "    half_extents = [ 0.5, 0.5, 0.5 ]\n";
-				toml += "    half_height = 0.5\n";
-				toml += "    linear_damping = 0.05\n";
-				toml += "    lock_position = [ 0.0, 0.0, 0.0 ]\n";
-				toml += "    lock_rotation = [ 0.0, 0.0, 0.0 ]\n";
-				toml += "    mass = 0.0\n";
-				toml += "    max_angular_vel = 47.124\n";
-				toml += "    max_linear_vel = 500.0\n";
-				toml += "    motion = 'kinematic'\n";
-				toml += "    radius = 0.5\n";
-				toml += "    restitution = 0.0\n";
-				toml += "    sensor = false\n";
-				toml += "    shape = 'box'\n\n";
+				toml += "    path = 'cube'\n";
 			}
-			toml += "    [entities.net_player]\n";
-			toml += "    display_name = ''\n\n";
-			toml += "    [entities.network_identity]\n\n";
-			toml += "    # A REMOTE copy of this entity is projected toward the present by default\n";
-			toml += "    # (extrapolated, capped at maxExtrapolationSeconds = 0.15s past the newest real\n";
-			toml += "    # sample) - lower that cap for a fast-turning entity, since a turn mid-flight is\n";
-			toml += "    # exactly what extrapolation undershoots on until the next real sample corrects it.\n";
-			toml += "    [entities.network_transform]\n";
-			toml += "    interpolation_delay = 0.1\n\n";
-			toml += "    [[entities.scripts]]\n";
-			toml += "    type = 'Player'\n";
 			return toml;
 		}
 

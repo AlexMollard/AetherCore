@@ -18,7 +18,21 @@ public abstract class EntityScript
     /// The entity this script instance drives. Assigned by the runtime before
     /// OnAttach. A field (not a property) so scripts can write through it, e.g.
     /// <c>Self.Position = ...</c>.
+    ///
+    /// <see cref="HideInInspectorAttribute"/>: this has exactly one correct value,
+    /// the entity <see cref="Bind"/> was constructed with, and never a second
+    /// legitimate one - unlike a genuine cross-entity reference (e.g.
+    /// WireLink.Source/Target), which must stay author-editable and persisted.
+    /// Reflecting it turned every entity insertion/deletion/reorder into a
+    /// potential silent mis-wire: the array-position remap that scene refs used
+    /// to go through could point a script's own Self field at a different entity
+    /// after a save/load, and a live instance would keep running with the wrong
+    /// one until destroyed. Excluding it from BuildProps removes it from the
+    /// Inspector, from scene capture, and from ApplyProperties entirely, so a
+    /// stale or wrong persisted Self value can never reach a live instance again -
+    /// Self is authoritative-at-construction, full stop.
     /// </summary>
+    [HideInInspector]
     public Entity Self;
 
     internal void Bind(Entity self) => Self = self;

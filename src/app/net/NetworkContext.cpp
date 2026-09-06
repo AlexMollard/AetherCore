@@ -11,6 +11,8 @@
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
 #include "net/NetSerialize.hpp"
+#include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsSystem.hpp"
 #include "physics2d/Physics2DSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
@@ -107,6 +109,100 @@ namespace aether::net
 				rigid->bodyType = authored;
 				RebuildBody2D(world, entity);
 			}
+		}
+
+		// The 3D counterpart of RebuildBody2D. Jolt supports changing an existing
+		// body's motion type live (BodyInterface::SetMotionType) - unlike Box2D there
+		// is no destroy/rebuild step, but the "found by name through the world, so
+		// PhysicsSystem never has to know networking exists" shape is the same, and
+		// so is the "no physics system registered is not an error" fallback.
+		void SetMotionType3D(World& world, Entity entity, PhysicsMotionType motionType)
+		{
+			if (auto* physics = static_cast<PhysicsSystem*>(world.FindSystem("PhysicsSystem")))
+			{
+				physics->SetBodyMotionType(world, entity, motionType);
+			}
+			else if (auto* rigid = world.TryGet<RigidBodyComponent>(entity))
+			{
+				rigid->motionType = motionType;
+			}
+		}
+
+		// Seeds a body's real Jolt velocity from whatever the network last told this
+		// peer about it (NetReceivedVelocity), applied only on reclaim - see that
+		// call site's own comment for the bug this closes. Absent NetReceivedVelocity
+		// (nothing has arrived yet, or this body was never non-owned in the first
+		// place) is not an error: the body simply keeps whatever velocity it already
+		// has, exactly as before this seam existed.
+		void SeedVelocity3D(World& world, Entity entity, glm::vec3 linear, glm::vec3 angular)
+		{
+			auto* physics = static_cast<PhysicsSystem*>(world.FindSystem("PhysicsSystem"));
+			const auto* rigid = world.TryGet<RigidBodyComponent>(entity);
+			if (physics == nullptr || rigid == nullptr)
+			{
+				return;
+			}
+			physics->SetLinearVelocity(rigid->body, linear);
+			physics->SetAngularVelocity(rigid->body, angular);
+		}
+
+		// The 3D counterpart of ReclaimBody. Called per-entity - once for a ragdoll's
+		// root, and once more for each of its OTHER bones, each with its own marker -
+		// see SyncSimulationAuthority's own comment for why a ragdoll needs every bone
+		// frozen and thawed together rather than just its NetworkIdentity-carrying root.
+		void ReclaimBody3D(World& world, Entity entity)
+		{
+			const auto* marker = world.TryGet<NetSimulationOverride3D>(entity);
+			if (marker == nullptr)
+			{
+				return;
+			}
+			const PhysicsMotionType authored = marker->authoredMotionType;
+			world.Remove<NetSimulationOverride3D>(entity);
+			SetMotionType3D(world, entity, authored);
+
+			// BUG THIS CLOSES: PushKinematicTargets (PhysicsSystem.cpp) drives a frozen
+			// Kinematic body with BodyInterface::SetPositionAndRotation - a direct
+			// teleport with no Jolt-side velocity implication, unlike Jolt's own
+			// MoveKinematic, which would derive one from the position delta. So while
+			// this body was non-owned, its real Jolt velocity sat wherever it was the
+			// moment it froze (or wherever SetMotionType(...,Kinematic) itself reset it
+			// to - empirically zero), NOT what NetVelocity's wire messages said it was
+			// doing. Reclaiming to Dynamic with no further action would resume
+			// simulating from that stale/zero velocity - a thrown prop that stops dead
+			// in mid-air and drops the instant its owner changes. NetReceivedVelocity is
+			// exactly the value ApplyVelocitySnapshot already wrote for relaying
+			// purposes (see NetVelocity.hpp); reusing it here to seed the resumed body
+			// costs nothing new on the wire.
+			if (authored == PhysicsMotionType::Dynamic)
+			{
+				if (const auto* velocity = world.TryGet<NetReceivedVelocity>(entity))
+				{
+					SeedVelocity3D(world, entity, velocity->linear, velocity->angular);
+				}
+			}
+		}
+
+		// Ownership is per-RAGDOLL, not per-bone: only the root carries
+		// NetworkIdentity (see RagdollBoneComponent's own comment), so a physics
+		// gun that grabbed a LIMB has no netId of its own to claim, and without
+		// this redirect RequestOwnershipTransfer's own "no NetworkIdentity ->
+		// already mine" fallback would silently treat grabbing an arm as an
+		// instant, meaningless local success - the entity would report "yours"
+		// while SyncSimulationAuthority keeps it frozen Kinematic for everyone
+		// but the ragdoll's ACTUAL owner. Redirecting to the root is the same
+		// grouping SyncSimulationAuthority already freezes and thaws as a unit
+		// (RagdollComponent::bones on the root) - claiming a limb claims the body
+		// because the root's NetworkIdentity is the only ownership record that
+		// exists for either. A non-bone entity (everything else) is returned
+		// unchanged.
+		Entity ResolveOwnershipEntity(World& world, Entity entity)
+		{
+			if (const auto* bone = world.TryGet<RagdollBoneComponent>(entity))
+			{
+				return bone->root;
+			}
+			return entity;
 		}
 	} // namespace
 
@@ -439,7 +535,7 @@ namespace aether::net
 
 		const glm::mat4 xform = glm::translate(glm::mat4(1.0f), position);
 		const Entity root = aether::app::scene::InstantiatePrefab(*description, world,
-		        aether::app::scene::MakeApplySceneDeps(m_services), xform);
+		        aether::app::scene::MakeApplySceneDeps(m_services), xform, nullptr, /*markTransient=*/true);
 		if (!root.IsValid())
 		{
 			return {};
@@ -585,7 +681,7 @@ namespace aether::net
 
 		const glm::mat4 xform = glm::translate(glm::mat4(1.0f), msg.position);
 		const Entity root = aether::app::scene::InstantiatePrefab(*description, world,
-		        aether::app::scene::MakeApplySceneDeps(m_services), xform);
+		        aether::app::scene::MakeApplySceneDeps(m_services), xform, nullptr, /*markTransient=*/true);
 		if (!root.IsValid())
 		{
 			return;
@@ -621,6 +717,59 @@ namespace aether::net
 		ApplyDespawn(world, netId);
 	}
 
+	OwnershipTransferOutcome NetworkContext::RequestOwnershipTransfer(World& world, Entity entity, ConnectionId newOwner)
+	{
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+		{
+			return OwnershipTransferOutcome::Refused;
+		}
+		// A grabbed ragdoll LIMB redirects to its root - see ResolveOwnershipEntity's
+		// own comment for why "claiming a limb claims the body" has to happen here.
+		entity = ResolveOwnershipEntity(world, entity);
+		auto* identity = world.TryGet<NetworkIdentity>(entity);
+		if (identity == nullptr || identity->netId == 0)
+		{
+			// Not a replicated entity, or not yet part of a session (a client before
+			// its Welcome derives no ids at all) - there is no owner field to change,
+			// so this process already IS the owner, exactly as IsOwner's own nullptr
+			// branch already answers. Nothing to send, nothing to apply.
+			return OwnershipTransferOutcome::Applied;
+		}
+
+		if (m_session.Role() == NetRole::Offline)
+		{
+			identity->owner = newOwner;
+			return OwnershipTransferOutcome::Applied;
+		}
+
+		if (IsHost())
+		{
+			// The host's own decision needs no validation against
+			// ValidateOwnershipRequest - that gate exists for an inbound CLIENT
+			// request; the host is this session's authority for every other mutation
+			// (Spawn, Despawn, a disconnect's release reason) and ownership is no
+			// different.
+			identity->owner = newOwner;
+			m_transport.Broadcast(kChannelReliable, true, EncodeOwnershipTransfer(identity->netId, newOwner));
+			return OwnershipTransferOutcome::Applied;
+		}
+
+		// Client: ask, and wait. `identity->owner` changes only once the host's
+		// broadcast lands - see ApplyOwnershipTransfer.
+		m_transport.Send(kInvalidConnection, kChannelReliable, true,
+		        EncodeOwnershipRequest(identity->netId, newOwner));
+		return OwnershipTransferOutcome::Requested;
+	}
+
+	void NetworkContext::ApplyOwnershipTransfer(World& world, std::uint32_t netId, ConnectionId newOwner)
+	{
+		const Entity entity = m_session.EntityFor(netId);
+		if (auto* identity = entity.IsValid() ? world.TryGet<NetworkIdentity>(entity) : nullptr)
+		{
+			identity->owner = newOwner;
+		}
+	}
+
 	// Deliberately IsOwner verbatim, not "the host decides everything" - see the note
 	// on the declaration. Under client authority the two questions have one answer.
 	bool NetworkContext::HasAuthority(World& world, Entity entity) const
@@ -643,6 +792,7 @@ namespace aether::net
 		{
 			return false;
 		}
+		entity = ResolveOwnershipEntity(world, entity);
 		const auto* identity = world.TryGet<NetworkIdentity>(entity);
 		if (identity == nullptr)
 		{
@@ -833,6 +983,114 @@ namespace aether::net
 		{
 			ReclaimBody(world, entity);
 		}
+
+		// ── 3D ────────────────────────────────────────────────────────────────
+		// Same shape as the 2D walk above (see its own comments for the reasoning
+		// behind every branch) - a non-owned Dynamic RigidBodyComponent becomes
+		// Kinematic via PhysicsSystem::SetBodyMotionType, and PhysicsSystem's own
+		// PushKinematicTargets/SyncTransforms give a Kinematic body exactly the same
+		// transform-driven semantics Physics2DSystem already has.
+		std::vector<Entity> handover3D;
+		std::vector<Entity> reclaim3D;
+		world.View<NetworkIdentity, RigidBodyComponent>().each(
+		        [&](entt::entity ent, NetworkIdentity& identity, RigidBodyComponent& rigid)
+		        {
+			        if (identity.netId == 0)
+			        {
+				        return;
+			        }
+			        const Entity entity = World::FromEntt(ent);
+			        const bool handedOver = world.Has<NetSimulationOverride3D>(entity);
+			        if (OwnsIdentity(identity))
+			        {
+				        if (handedOver)
+				        {
+					        reclaim3D.push_back(entity);
+				        }
+				        return;
+			        }
+			        if (handedOver)
+			        {
+				        return;
+			        }
+			        if (rigid.motionType != PhysicsMotionType::Dynamic)
+			        {
+				        return;
+			        }
+			        handover3D.push_back(entity);
+		        });
+
+		// A ragdoll is many jointed bodies, and only its root carries NetworkIdentity
+		// - the view above can only ever find that one. Freezing the root alone would
+		// leave its OTHER bones fully Dynamic and jointed to a body that now teleports
+		// to wherever the network says every tick: a Hinge/Swing Twist constraint
+		// between a teleporting Kinematic body and a live Dynamic one is exactly the
+		// mixed-authority case a constraint solver was never asked to make sense of,
+		// and the failure mode is jitter or an outright explosion, not a stale pose.
+		// So a ragdoll is frozen and thawed AS A UNIT: every bone in
+		// RagdollComponent::bones gets its own NetSimulationOverride3D and its own
+		// Kinematic/Dynamic flip, driven from the root's ownership. This does not by
+		// itself give a non-owner an accurate view of a ragdoll's POSE - only the
+		// root has a NetworkTransform to receive one - it only guarantees the frozen
+		// state is safe rather than fighting itself; full per-bone ragdoll
+		// replication is a separate, larger feature this does not attempt.
+		for (const Entity entity: handover3D)
+		{
+			auto* rigid = world.TryGet<RigidBodyComponent>(entity);
+			if (rigid == nullptr)
+			{
+				continue;
+			}
+			world.EmplaceOrReplace<NetSimulationOverride3D>(entity, NetSimulationOverride3D{.authoredMotionType = rigid->motionType});
+			SetMotionType3D(world, entity, PhysicsMotionType::Kinematic);
+			if (const auto* ragdoll = world.TryGet<RagdollComponent>(entity))
+			{
+				for (const Entity bone: ragdoll->bones)
+				{
+					if (bone == entity)
+					{
+						continue;
+					}
+					auto* boneRigid = world.TryGet<RigidBodyComponent>(bone);
+					if (boneRigid == nullptr || boneRigid->motionType != PhysicsMotionType::Dynamic)
+					{
+						continue;
+					}
+					world.EmplaceOrReplace<NetSimulationOverride3D>(bone, NetSimulationOverride3D{.authoredMotionType = boneRigid->motionType});
+					SetMotionType3D(world, bone, PhysicsMotionType::Kinematic);
+				}
+			}
+		}
+		for (const Entity entity: reclaim3D)
+		{
+			if (const auto* ragdoll = world.TryGet<RagdollComponent>(entity))
+			{
+				for (const Entity bone: ragdoll->bones)
+				{
+					if (bone != entity)
+					{
+						ReclaimBody3D(world, bone);
+					}
+				}
+			}
+			ReclaimBody3D(world, entity);
+		}
+
+		// ── Character Controller ────────────────────────────────────────────────
+		// No marker component needed: locallySimulated is a plain, harmless-to-set
+		// -every-frame boolean (see its own declaration) - StepCharacters already
+		// treats false as "mirror TransformComponent instead of integrating", so
+		// flipping it is the whole change, unlike the Rigid Body path above which
+		// has to remember an authored type to give back.
+		world.View<NetworkIdentity, CharacterControllerComponent>().each(
+		        [&](entt::entity, NetworkIdentity& identity, CharacterControllerComponent& cc)
+		        {
+			        if (identity.netId == 0)
+			        {
+				        return;
+			        }
+			        cc.locallySimulated = OwnsIdentity(identity);
+		        });
 	}
 
 	void NetworkContext::RestoreSimulationAuthority(World& world)
@@ -844,5 +1102,22 @@ namespace aether::net
 		{
 			ReclaimBody(world, entity);
 		}
+
+		// 3D: every marked entity - a ragdoll's root AND each of its other bones
+		// alike, since SyncSimulationAuthority gives each its own marker - is
+		// reclaimed individually. No ragdoll-aware grouping needed here: each
+		// marker already carries its own entity's own authored type.
+		std::vector<Entity> handedOver3D;
+		world.View<NetSimulationOverride3D>().each(
+		        [&](entt::entity ent, NetSimulationOverride3D&) { handedOver3D.push_back(World::FromEntt(ent)); });
+		for (const Entity entity: handedOver3D)
+		{
+			ReclaimBody3D(world, entity);
+		}
+
+		// Every character controller goes back to simulating itself locally -
+		// offline, there is no other authority to defer to.
+		world.View<CharacterControllerComponent>().each(
+		        [](CharacterControllerComponent& cc) { cc.locallySimulated = true; });
 	}
 } // namespace aether::net

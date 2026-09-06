@@ -37,6 +37,7 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/MoreComponents.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics2D.reflect.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CharacterController.reflect.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetSerialize.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/ReplicationSchema.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetSession.cpp"
@@ -44,6 +45,9 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/net/NetRelevancy.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetInterpolation.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/net/NetSpawn.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetOwnership.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetRagdoll.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/net/NetVelocity.cpp"
     # NetScriptFields only, NOT CSharpScriptFieldBridge.cpp: the packet logic goes
     # through the abstract ScriptFieldBridge so it links without the CoreCLR host.
     "${CMAKE_SOURCE_DIR}/src/app/net/NetScriptFields.cpp"
@@ -100,6 +104,9 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/app/debug/UndoStack.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/debug/EditorCommand.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/ComponentCatalog.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scripting/interop/PhysicsExports.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scripting/interop/CharacterExports.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/scripting/interop/UiExports.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/ComponentFields.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")

@@ -26,18 +26,21 @@ namespace aether::net
 	// WHO WRITES THE KIND BYTE is not uniform, and it is load-bearing - adding a
 	// kind without matching one of these two conventions produces a packet the
 	// receiver misparses with no error:
-	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome, Relevancy.
-	//     Their encoders lead with w.U8(kind), so the sender passes the result
-	//     straight to Send/Broadcast.
-	//   WRAPPED (the sender writes it): Snapshot, ScriptFields. BuildSnapshot and
-	//     BuildScriptFieldPacket emit a bare body, which the sender must pass through
-	//     FrameMessage below.
+	//   SELF-FRAMING (the encoder writes it): Spawn, Despawn, Rpc, Welcome, Relevancy,
+	//     Disconnect, ClientReady, OwnershipRequest, OwnershipTransfer. Their encoders
+	//     lead with w.U8(kind), so the sender passes the result straight to
+	//     Send/Broadcast.
+	//   WRAPPED (the sender writes it): Snapshot, ScriptFields, RagdollPose,
+	//     VelocitySnapshot. BuildSnapshot, BuildScriptFieldPacket, BuildRagdollPoseSnapshot
+	//     and BuildVelocitySnapshot all emit a bare body, which the sender must pass
+	//     through FrameMessage below.
 	//
-	// Snapshot and ScriptFields travel in BOTH directions: this framework is
-	// client-authoritative, so the peer that OWNS an entity replicates it and the
-	// host relays. Which direction a kind is legal in is therefore no longer a
-	// property of the kind alone - see the ownership gate in NetSnapshot.hpp, which
-	// is what makes the inbound half safe on the host.
+	// Snapshot, ScriptFields, RagdollPose and VelocitySnapshot all travel in BOTH
+	// directions: this framework is client-authoritative, so the peer that OWNS an
+	// entity replicates it and the host relays. Which direction a kind is legal in
+	// is therefore no longer a property of the kind alone - see the ownership gate
+	// in NetSnapshot.hpp (StateWriteGate), which every one of these four reuses,
+	// and is what makes the inbound half safe on the host.
 	enum class NetMessage : std::uint8_t
 	{
 		Snapshot = 1,
@@ -49,6 +52,10 @@ namespace aether::net
 		Relevancy = 7,
 		Disconnect = 8,
 		ClientReady = 9,
+		OwnershipRequest = 10,
+		OwnershipTransfer = 11,
+		RagdollPose = 12,
+		VelocitySnapshot = 13,
 	};
 
 	// The largest value the enum defines - the direct mirror of kNetRpcTargetMax in
@@ -64,7 +71,7 @@ namespace aether::net
 	// the BUILD, which is the only version of that promise worth making - and so does
 	// REMOVING one, which is how the retired Input kind was caught. Keep this on the
 	// last enumerator.
-	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::ClientReady);
+	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::VelocitySnapshot);
 
 	// The longest reason string a peer is allowed to put on the wire, and the longest
 	// one this peer will keep. A reason is rendered by the game, so an unbounded

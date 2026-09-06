@@ -138,6 +138,9 @@ AE_SCRIPT_API std::uint32_t aether_scene_create_entity(const char* name, Vec3 po
 	const aether::Entity e = world.Create();
 	world.Emplace<aether::NameComponent>(e, aether::NameComponent{.name = name != nullptr ? name : "Entity"});
 	world.Emplace<aether::TransformComponent>(e, aether::TransformComponent{.localToWorld = glm::translate(glm::mat4(1.0f), ToGlm(pos))});
+	// Scene.Create is a runtime-only script API (no editor authoring path reaches it),
+	// so a save mid-Play must never bake it in - see Entity.MarkTransient's own doc.
+	world.Emplace<aether::SceneTransientComponent>(e);
 	return e.id;
 	});
 }
@@ -161,7 +164,9 @@ AE_SCRIPT_API std::uint32_t aether_scene_instantiate_prefab(const char* name, Ve
 		return 0;
 	}
 	const glm::mat4 xform = glm::translate(glm::mat4(1.0f), ToGlm(pos));
-	const aether::Entity root = aether::app::scene::InstantiatePrefab(*prefab, ActiveWorld(), aether::app::scene::MakeApplySceneDeps(*services), xform);
+	// Scene.Instantiate is a runtime-only script API (no editor authoring path reaches
+	// it), so a save mid-Play must never bake the spawn in.
+	const aether::Entity root = aether::app::scene::InstantiatePrefab(*prefab, ActiveWorld(), aether::app::scene::MakeApplySceneDeps(*services), xform, nullptr, /*markTransient=*/true);
 	return root.id;
 	});
 }

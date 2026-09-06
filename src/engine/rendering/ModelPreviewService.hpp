@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -54,19 +55,51 @@ namespace aether
 		// RECTANGLE of one fixed target is not, and it costs a single allocation rather than one
 		// per material. The tonemap loads rather than clears, so finished slots survive.
 		//
-		// -1 renders nothing, which is what an idle baker does between bakes.
-		void SetBakeSlot(const int slot) noexcept
+		// -1 renders nothing, which is what an idle baker does between bakes. A real slot
+		// (>= 0) is assigned a fresh GENERATION token and returns it: slot NUMBERS are
+		// reused across unrelated bakes on purpose (see the atlas-slot comment above and
+		// ReleaseThumbnails' own reasoning - "every slot is free again once the thumbnails
+		// referencing them are gone"), but a caller waiting for ITS OWN request to land
+		// cannot tell a fresh draw of slot N apart from a STALE one left over from a
+		// completely different, earlier request that happened to reuse the same number -
+		// LastDrawnSlot() alone answers "was slot N EVER drawn", not "was slot N drawn FOR
+		// ME". This is the root cause traced (by code reading, not yet re-observed live)
+		// for a File Explorer model tile showing a completely different, earlier-baked
+		// model under its own correct filename: FileExplorerPanel re-baking a model right
+		// after ReleaseThumbnails reset the atlas slot counter to 0 could see
+		// LastDrawnSlot() already reading 0 from an unrelated bake many folders ago, mark
+		// the brand-new request "ready" before the render pass had drawn a single frame of
+		// it, and move on to the NEXT thumbnail - which then overwrote the shared preview
+		// scene before the first request's draw ever executed, so the slot kept showing
+		// whatever the OTHER, later-processed model looked like. A caller MUST compare
+		// LastDrawnGeneration() against the token this call returned, not just the slot
+		// number, before treating a bake as complete.
+		[[nodiscard]] std::uint64_t SetBakeSlot(const int slot) noexcept
 		{
+			const std::uint64_t generation = slot >= 0 ? m_bakeGeneration.fetch_add(1, std::memory_order_relaxed) + 1 : 0;
 			m_bakeSlot.store(slot, std::memory_order_relaxed);
+			return generation;
 		}
 
 		// The last atlas slot actually DRAWN, as reported by the pass itself. A caller cannot
 		// infer this from elapsed frames: if the preview had nothing to submit, the pass draws
 		// nothing and the slot keeps whatever undefined contents it had. Showing a slot on a
 		// frame count alone is how an unrendered thumbnail appears as a black square.
+		//
+		// NOT SUFFICIENT ON ITS OWN to tell a bake is done - see SetBakeSlot's own comment.
+		// Pair with LastDrawnGeneration().
 		[[nodiscard]] int LastDrawnSlot() const noexcept
 		{
 			return m_drawnSlot.load(std::memory_order_relaxed);
+		}
+
+		// The generation token of whatever LastDrawnSlot() reflects. A caller's bake is
+		// actually complete only once THIS equals the token SetBakeSlot() handed back for
+		// its own request - matching the slot number alone is not enough, because slot
+		// numbers are reused across unrelated bakes (see SetBakeSlot's own comment).
+		[[nodiscard]] std::uint64_t LastDrawnGeneration() const noexcept
+		{
+			return m_drawnGeneration.load(std::memory_order_relaxed);
 		}
 
 		[[nodiscard]] std::uint32_t GetAtlasColumns() const noexcept
@@ -173,13 +206,19 @@ namespace aether
 		gpu::ImageView m_colorLdrView = nullptr;
 		// Which atlas slot the next render writes into, as requested on the game thread.
 		std::atomic<int> m_bakeSlot{-1};
+		// Bumped every time SetBakeSlot is handed a real (>= 0) slot - see SetBakeSlot's
+		// own comment for why a slot number alone cannot tell one bake's draw apart from
+		// an unrelated earlier one that reused the same number.
+		std::atomic<std::uint64_t> m_bakeGeneration{0};
 		// Written by the pass on the render thread once it has issued the draw.
 		std::atomic<int> m_drawnSlot{-1};
+		std::atomic<std::uint64_t> m_drawnGeneration{0};
 		// ...and that request LATCHED PER FRAME. The render thread records a frame well after
 		// the game thread has moved on, so reading the live request in the pass drew most bakes
 		// into whatever slot was current by then - usually -1, which skipped the draw and left
 		// the slot undefined. Every other piece of per-frame state here travels the same way.
 		std::array<std::atomic<int>, kMaxFramesInFlight> m_bakeSlotForFrame{};
+		std::array<std::atomic<std::uint64_t>, kMaxFramesInFlight> m_bakeGenerationForFrame{};
 		std::uint32_t m_atlasCols = 1;
 		std::uint32_t m_size = kSize;
 		std::string m_passPrefix = "$ModelPreview";
@@ -202,6 +241,15 @@ namespace aether
 		// The isolated model scene (game thread only).
 		World m_world;
 		LoadedModel m_model;
+		// The texture handles m_model's materials actually used, captured in ShowModel
+		// BEFORE it releases and zeroes m_model.primitives[i].material (done there so
+		// ClearModel never has to reason about them - see ShowModel's own comment).
+		// TexturesResident checks THIS, not m_model.primitives: reading the latter after
+		// ShowModel returns always finds it empty and always reports "resident", which
+		// silently defeated the residency wait for every model bake (materials-only
+		// bakes via ShowMaterialOnMesh were never affected - PumpMaterialThumbnailBakes
+		// checks their handles itself, from its own still-live MaterialAsset).
+		std::vector<TextureHandle> m_previewTextures;
 		glm::vec4 m_bounds{0.0f, 0.0f, 0.0f, 1.0f};
 		float m_turntableAngle = 0.0f;
 		std::atomic<bool> m_turntable{true};

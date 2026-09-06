@@ -16,6 +16,13 @@ AE_SCRIPT_API std::int32_t aether_input_key_down(std::int32_t keyCode)
 AE_SCRIPT_API std::int32_t aether_input_key_pressed(std::int32_t keyCode)
 { return SafeExport([&] -> std::int32_t { return ActiveContext().input->IsKeyPressed(static_cast<aether::Key>(keyCode)) ? 1 : 0; }); }
 
+// The primitive a "press any key to rebind" prompt needs - the alternative was a
+// per-frame IsKeyPressed scan over every Key enum value from script, which works but
+// costs kMaxKeys FFI calls a frame while the prompt is open. Returns Key.None (-1)
+// when nothing was pressed - never mistaken for a real key, since the lowest real Key value (Space) is 32.
+AE_SCRIPT_API std::int32_t aether_input_next_key_pressed()
+{ return SafeExport([&] -> std::int32_t { return static_cast<std::int32_t>(ActiveContext().input->GetKeyPressedThisFrame()); }); }
+
 AE_SCRIPT_API std::int32_t aether_input_key_released(std::int32_t keyCode)
 { return SafeExport([&] -> std::int32_t { return ActiveContext().input->IsKeyReleased(static_cast<aether::Key>(keyCode)) ? 1 : 0; }); }
 
@@ -57,6 +64,26 @@ AE_SCRIPT_API void aether_input_set_os_cursor_visible(std::int32_t visible)
 
 AE_SCRIPT_API std::int32_t aether_input_get_os_cursor_visible()
 { return SafeExport([&] -> std::int32_t { return ActiveContext().input->IsOsCursorVisible() ? 1 : 0; }); }
+
+// -- Cursor lock (FPS-style pointer lock) ------------------------------------------
+// Distinct from SetOsCursorVisible above: a locked cursor is hidden AND confined to the
+// window, with aether_input_mouse_delta reporting unbounded relative motion instead of
+// an absolute position that stops at the screen edge. Only takes effect while the game
+// is actually playing and the window is focused (see Input::UpdateCursorLock /
+// Application::OnUpdate) - a request made in edit mode, or one still standing when Play
+// stops, has no effect. Released automatically on losing focus, on Stop, or when the
+// user presses Escape; request it again to lock back up.
+AE_SCRIPT_API void aether_input_request_cursor_lock(std::int32_t requested)
+{ SafeExport([&] -> void { ActiveContext().input->RequestCursorLock(requested != 0); }); }
+
+AE_SCRIPT_API std::int32_t aether_input_get_cursor_lock_requested()
+{ return SafeExport([&] -> std::int32_t { return ActiveContext().input->IsCursorLockRequested() ? 1 : 0; }); }
+
+// Whether the pointer is actually locked right now - the request AND focus AND not
+// escaped. What a script should check before trusting aether_input_mouse_delta as
+// unbounded look input.
+AE_SCRIPT_API std::int32_t aether_input_is_cursor_locked()
+{ return SafeExport([&] -> std::int32_t { return ActiveContext().input->IsCursorLocked() ? 1 : 0; }); }
 
 AE_SCRIPT_API Vec2 aether_input_scroll_delta()
 {

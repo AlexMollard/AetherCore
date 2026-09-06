@@ -345,3 +345,37 @@ TEST_CASE_FIXTURE(PhysicsFixture, "One entity can hold more than one weld at onc
 	CHECK(PositionOf(left).y < 7.5f); // dragged down despite its own zero gravity
 	CHECK(PositionOf(right).y < 7.5f); // both neighbours, not just whichever welded last
 }
+
+TEST_CASE_FIXTURE(PhysicsFixture, "SetBodyMotionType refuses a body handle that is not actually registered in Jolt")
+{
+	// Reproduces a live segfault (0xC0000005 inside Jolt's own BodyInterface::
+	// SetMotionType), caught with debug logging at the exact call site: a Door
+	// script's OnAttach called Physics.SetMotionType on an entity whose
+	// RigidBodyComponent::body passed EVERY guard SetBodyMotionType had - not our
+	// own kInvalidValue sentinel, and not Jolt's own BodyID::IsInvalid() either -
+	// while naming a BodyID Jolt had never actually added. Reproduced here without
+	// a live scene: an entity gets a RigidBodyComponent whose body handle is a
+	// plausible-looking index that was never baked through FlushPendingBodies (no
+	// Collider is even attached, so it never will be) - exactly the "handle exists,
+	// body does not" state the crash needs, without depending on however the real
+	// repro's handle came to look that way.
+	const aether::Entity e = world.Create();
+	world.Emplace<aether::TransformComponent>(e, aether::TransformComponent{});
+	auto& rb = world.Emplace<aether::RigidBodyComponent>(e, aether::RigidBodyComponent{});
+	rb.body = aether::PhysicsBodyHandle{.value = 23}; // looks valid; Jolt never added it
+	REQUIRE(rb.body.IsValid());
+
+	// The crash IS the failure mode here - reaching either CHECK below without
+	// terminating the process is the entire test.
+	physics->SetBodyMotionType(world, e, aether::PhysicsMotionType::Kinematic);
+	CHECK(world.Get<aether::RigidBodyComponent>(e).motionType == aether::PhysicsMotionType::Kinematic);
+
+	// Refused, not silently "succeeded": a real body created afterward must still
+	// pick up the requested motion type (RigidBodyComponent::motionType is what
+	// FlushPendingBodies reads to decide the newly-created body's initial state),
+	// so this is deferred, not dropped.
+	world.Emplace<aether::ColliderComponent>(e, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Box, .halfExtents = {0.5f, 0.5f, 0.5f}});
+	world.Get<aether::RigidBodyComponent>(e).body = {};
+	StepSeconds(0.1f);
+	CHECK(world.Get<aether::RigidBodyComponent>(e).body.IsValid());
+}

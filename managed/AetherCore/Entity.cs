@@ -33,6 +33,14 @@ public readonly struct Entity : IEquatable<Entity>
         set => Native.aether_set_euler(Id, value);
     }
 
+    /// <summary>World-space forward direction (-Z of this entity's local-to-world
+    /// matrix, normalized) - the generic, non-camera equivalent of
+    /// <see cref="Camera.GetForward"/>, for anything that needs its own facing without
+    /// being a camera (a turret, a directional emitter). Read-only: there is no
+    /// meaningful inverse of "point this way" without also picking a roll, so aim by
+    /// setting <see cref="EulerDegrees"/> instead.</summary>
+    public Vector3 Forward => Native.aether_get_forward(Id);
+
     /// <summary>World-space scale.</summary>
     public Vector3 Scale
     {
@@ -107,8 +115,12 @@ public readonly struct Entity : IEquatable<Entity>
     /// </remarks>
     public T? GetScript<T>() where T : EntityScript => ScriptInstances.Find<T>(Id);
 
-    /// <summary>Exclude this entity (and subtree) from scene serialization.</summary>
-    public void MarkTransient() => Native.aether_mark_transient(Id);
+    /// <summary>Exclude this entity (and subtree) from scene serialization. Does NOT make
+    /// it survive a <see cref="Scene.Load"/> - a scene-scoped canvas built fresh in
+    /// OnAttach should not still be alive in the NEXT scene. Want that too, for a
+    /// genuinely persistent actor? Use <see cref="DontDestroyOnLoad"/> instead, which
+    /// implies this on top of it - not both calls together.</summary>
+    public void MarkTransient() => Native.aether_mark_scene_transient(Id);
 
     /// <summary>
     /// Unity-style persistence: this entity (and its subtree) survives

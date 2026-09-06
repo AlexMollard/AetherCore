@@ -389,6 +389,45 @@ AE_SCRIPT_API void aether_ui_set_selectable(std::uint32_t id, std::int32_t selec
 	});
 }
 
+// UIMask exists and is fully consumed by UiDrawBuilder (clips this element's draws and
+// its whole subtree to its UIRect, nested masks intersect) but had no script entry
+// point at all - a scrollable list can already be built entirely from EXISTING pieces
+// (this call for the clip, Ui.SetOffsets on a "content" child driven by Input.
+// ScrollDelta for the scroll itself), this was the one missing piece making that
+// unreachable. Idempotent in both directions, same convention as SetSelectable.
+AE_SCRIPT_API void aether_ui_set_clip(std::uint32_t id, std::int32_t enabled, float padding)
+{
+	SafeExport([&] -> void
+	{
+	auto& world = ActiveWorld();
+	const aether::Entity e{id};
+	if (!EntityAlive(id))
+	{
+		return;
+	}
+	// UiDrawBuilder reads the clip rect off THIS entity's own UIRect (maskRect above) -
+	// a mask with no UIRect would clip against nothing, so require the same
+	// precondition SetSelectable does.
+	if (world.TryGet<aether::ui::UIRect>(e) == nullptr)
+	{
+		return;
+	}
+	auto* mask = world.TryGet<aether::ui::UIMask>(e);
+	if (enabled != 0)
+	{
+		if (mask == nullptr)
+		{
+			mask = &world.Emplace<aether::ui::UIMask>(e);
+		}
+		mask->padding = padding;
+	}
+	else if (mask != nullptr)
+	{
+		world.Remove<aether::ui::UIMask>(e);
+	}
+	});
+}
+
 AE_SCRIPT_API void aether_ui_set_focus(std::uint32_t id)
 {
 	SafeExport([&] -> void
@@ -479,6 +518,50 @@ AE_SCRIPT_API void aether_ui_set_progress(std::uint32_t id, float value)
 	{
 		p->value = std::clamp(value, 0.f, 1.f);
 	}
+	});
+}
+
+// Create functions for the three widgets above. The value/range accessors already
+// existed - CreateSlider/CreateToggle/CreateProgressBar were the missing piece with no
+// way to spawn one at runtime at all, mirroring CreateButton/CreateTextBox exactly.
+AE_SCRIPT_API std::uint32_t aether_ui_create_slider(std::uint32_t canvasId)
+{
+	return SafeExport([&] -> std::uint32_t
+	{
+	auto& world = ActiveWorld();
+	return aether::ui::CreateSliderEntity(world, ResolveCanvas(world, canvasId)).id;
+	});
+}
+
+AE_SCRIPT_API void aether_ui_set_slider_range(std::uint32_t id, float minValue, float maxValue, float step)
+{
+	SafeExport([&] -> void
+	{
+	if (auto* s = ActiveWorld().TryGet<aether::ui::UISlider>(aether::Entity{id}))
+	{
+		s->minValue = minValue;
+		s->maxValue = maxValue;
+		s->step = step;
+		s->value = std::clamp(s->value, s->minValue, s->maxValue);
+	}
+	});
+}
+
+AE_SCRIPT_API std::uint32_t aether_ui_create_toggle(std::uint32_t canvasId)
+{
+	return SafeExport([&] -> std::uint32_t
+	{
+	auto& world = ActiveWorld();
+	return aether::ui::CreateToggleEntity(world, ResolveCanvas(world, canvasId)).id;
+	});
+}
+
+AE_SCRIPT_API std::uint32_t aether_ui_create_progress_bar(std::uint32_t canvasId)
+{
+	return SafeExport([&] -> std::uint32_t
+	{
+	auto& world = ActiveWorld();
+	return aether::ui::CreateProgressBarEntity(world, ResolveCanvas(world, canvasId)).id;
 	});
 }
 

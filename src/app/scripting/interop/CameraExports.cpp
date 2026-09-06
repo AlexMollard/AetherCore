@@ -12,16 +12,6 @@
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
 
-namespace
-{
-	glm::vec3 ForwardOf(const glm::mat4& m)
-	{
-		const glm::vec3 fwd = -glm::vec3(m[2]);
-		const float len = glm::length(fwd);
-		return len > 1e-6f ? fwd / len : glm::vec3(0.0f, 0.0f, -1.0f);
-	}
-} // namespace
-
 AE_SCRIPT_API std::uint32_t aether_camera_create_orbit(Vec3 pos, Vec3 target, float fovDeg)
 {
 	return SafeExport([&] -> std::uint32_t

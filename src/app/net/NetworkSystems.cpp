@@ -9,12 +9,15 @@
 #include <entt/entt.hpp>
 
 #include "net/NetComponents.hpp"
+#include "net/NetOwnership.hpp"
+#include "net/NetRagdoll.hpp"
 #include "net/NetRelevancy.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
 #include "net/NetSerialize.hpp"
 #include "net/NetSnapshot.hpp"
 #include "net/NetSpawn.hpp"
+#include "net/NetVelocity.hpp"
 #include "net/NetworkContext.hpp"
 #include "scene/Components.hpp"
 #include "scene/TransformUtils.hpp"
@@ -498,8 +501,9 @@ namespace aether::net
 			// checked at this level. ApplyRpc checks it instead, against the target
 			// the packet carries, because "which direction is legal" is a property of
 			// the call and not of the message kind. Its two gates (direction, then
-			// ownership) are what make the inbound half safe: this is the only route
-			// by which a client can affect host state at all.
+			// ownership) are what make the inbound half safe: this is one of two
+			// routes by which a client can affect host state at all - see
+			// NetMessage::OwnershipRequest below for the other.
 			//
 			// Bounded BEFORE any of that work runs: each accepted Server call costs
 			// the host a reflection dispatch (and a relay fan-out if the handler
@@ -520,6 +524,80 @@ namespace aether::net
 			if (const RpcBridge* bridge = context.Rpcs())
 			{
 				ApplyRpc(world, context.Session(), *bridge, *msg, peer, context.IsHost());
+			}
+			return;
+		}
+
+		case NetMessage::OwnershipRequest:
+		{
+			// Client-to-host only - see NetOwnership.hpp's own comment on why a
+			// dedicated message exists here beside Rpc's Server target: claiming an
+			// entity the caller does not yet own has no owned entity to attach a
+			// [NetRpc(Server)] call to.
+			if (!context.IsHost())
+			{
+				return;
+			}
+			const std::vector<ConnectionId>& live = context.Session().Connections();
+			if (std::find(live.begin(), live.end(), peer) == live.end())
+			{
+				// Not (or no longer) part of this session - the same guard
+				// ClientReady makes below, for the same reason: a refused or
+				// departed peer must not be able to queue work against a connection
+				// the session does not have.
+				return;
+			}
+			// Same per-connection budget as an inbound Rpc (kMaxInboundRpcsPerSecond):
+			// cheap for the sender, and a granted request costs a Broadcast to every
+			// connection - exactly the amplification shape that budget exists to
+			// bound.
+			if (!AdmitInboundRpc(peer))
+			{
+				return;
+			}
+			ByteReader reader{payload};
+			const std::optional<OwnershipTransferMessage> msg = DecodeOwnershipRequest(reader);
+			if (!msg.has_value())
+			{
+				return;
+			}
+			const Entity entity = context.Session().EntityFor(msg->netId);
+			auto* identity = entity.IsValid() ? world.TryGet<NetworkIdentity>(entity) : nullptr;
+			if (identity == nullptr)
+			{
+				// Unknown, already-destroyed, or a net id that never carried a
+				// NetworkIdentity at all - there is no owner field this peer can
+				// grant.
+				return;
+			}
+			if (ValidateOwnershipRequest(identity->owner, peer, msg->newOwner) != OwnershipTransferRefusal::None)
+			{
+				// Silent, like every other inbound refusal in this switch - a drop
+				// reason is a response a flooder would only read as "keep going".
+				return;
+			}
+			identity->owner = msg->newOwner;
+			context.Transport().Broadcast(kChannelReliable, true,
+			        EncodeOwnershipTransfer(msg->netId, msg->newOwner));
+			return;
+		}
+
+		case NetMessage::OwnershipTransfer:
+		{
+			// Host-to-everyone only - a client (or a compromised host) claiming to
+			// have decided ownership is not this host's authority to defer to.
+			if (context.IsHost())
+			{
+				return;
+			}
+			if (HoldingReplication(context))
+			{
+				return; // same reason as Spawn/Despawn/Relevancy above
+			}
+			ByteReader reader{payload};
+			if (const std::optional<OwnershipTransferMessage> msg = DecodeOwnershipTransfer(reader))
+			{
+				context.ApplyOwnershipTransfer(world, msg->netId, msg->newOwner);
 			}
 			return;
 		}
@@ -572,6 +650,37 @@ namespace aether::net
 			}
 			context.RequestResync(peer);
 			AE_INFO(LogCategory::App, "Net: connection {} is in the session's scene - resending the world", peer);
+			return;
+		}
+
+		case NetMessage::RagdollPose:
+			if (HoldingReplication(context))
+			{
+				return; // same reason as Snapshot/ScriptFields above
+			}
+			ApplyRagdollPoses(world, context.Session(), payload, InboundGate(context, peer));
+			return;
+
+		case NetMessage::VelocitySnapshot:
+		{
+			if (HoldingReplication(context))
+			{
+				return;
+			}
+			// ApplyVelocitySnapshot writes NetReceivedVelocity (so a host can relay
+			// this onward) and hands back what it accepted; staging it into m_remote
+			// is done here rather than in NetVelocity.cpp because that map is this
+			// system's own private state - see RemoteState's own comment on why the
+			// two arrive as separate packets and how ResolveTransforms consumes this.
+			const std::vector<VelocityEntry> applied = ApplyVelocitySnapshot(world, context.Session(), payload,
+			        InboundGate(context, peer));
+			for (const VelocityEntry& entry: applied)
+			{
+				RemoteState& state = m_remote[entry.netId];
+				state.hasVelocity = true;
+				state.linearVelocity = entry.linear;
+				state.angularVelocity = entry.angular;
+			}
 			return;
 		}
 
@@ -719,11 +828,18 @@ namespace aether::net
 
 			        if (changed)
 			        {
-				        state.buffer.Push(TransformSample{
+				        TransformSample sample{
 				                .time = now,
 				                .position = state.authoritativePosition,
 				                .rotation = state.authoritativeEuler,
-				        });
+				        };
+				        if (state.hasVelocity)
+				        {
+					        sample.hasVelocity = true;
+					        sample.linearVelocity = state.linearVelocity;
+					        sample.angularVelocity = state.angularVelocity;
+				        }
+				        state.buffer.Push(sample);
 			        }
 
 			        // `delay` bounds how far in the past the sample pair for interpolation
@@ -906,6 +1022,25 @@ namespace aether::net
 					        NetworkContext::Frame(NetMessage::ScriptFields, fields));
 				}
 			}
+
+			// Both unreliable, on the snapshot channel, exactly like the position/
+			// rotation Snapshot above: a dropped one is superseded by the next tick's
+			// send, and neither has a resync concept of its own to preserve across a
+			// reliable/unreliable split - see NetRagdoll.hpp/NetVelocity.hpp for why
+			// each is its own dedicated message instead of riding the generic one.
+			const std::vector<std::byte> ragdollPoses = BuildRagdollPoseSnapshot(world, replicated);
+			if (!ragdollPoses.empty())
+			{
+				context.Transport().Send(connection, kChannelSnapshot, false,
+				        NetworkContext::Frame(NetMessage::RagdollPose, ragdollPoses));
+			}
+
+			const std::vector<std::byte> velocities = BuildVelocitySnapshot(world, context, replicated);
+			if (!velocities.empty())
+			{
+				context.Transport().Send(connection, kChannelSnapshot, false,
+				        NetworkContext::Frame(NetMessage::VelocitySnapshot, velocities));
+			}
 		}
 	}
 
@@ -986,6 +1121,20 @@ namespace aether::net
 				context.Transport().Send(kInvalidConnection, kChannelReliable, true,
 				        NetworkContext::Frame(NetMessage::ScriptFields, fields));
 			}
+		}
+
+		const std::vector<std::byte> ragdollPoses = BuildRagdollPoseSnapshot(world, owned);
+		if (!ragdollPoses.empty())
+		{
+			context.Transport().Send(kInvalidConnection, kChannelSnapshot, false,
+			        NetworkContext::Frame(NetMessage::RagdollPose, ragdollPoses));
+		}
+
+		const std::vector<std::byte> velocities = BuildVelocitySnapshot(world, context, owned);
+		if (!velocities.empty())
+		{
+			context.Transport().Send(kInvalidConnection, kChannelSnapshot, false,
+			        NetworkContext::Frame(NetMessage::VelocitySnapshot, velocities));
 		}
 	}
 
