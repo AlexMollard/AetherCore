@@ -63,3 +63,52 @@ set_target_properties(AssetPacker PROPERTIES
 )
 
 aethercore_enable_dead_strip_report(AssetPacker)
+
+# ── Automatic per-project asset baking ───────────────────────────────────────
+# Keeps every project's assets/models/*.glb|*.gltf baked automatically, so "a fresh
+# clone has zero baked meshes" (every gitignored .mesh/.material/etc - see .gitignore's
+# baked-artifact comment) is fixed by `cmake --build` itself rather than a manual step
+# someone has to remember. One custom command per discovered project (a directory under
+# projects/ with a ProjectSettings.toml), each producing a stamp file so Ninja/Make only
+# reruns `AssetPacker bake-all` for a project whose model SOURCE files actually changed -
+# not on every build, and not because the project's OWN baked outputs (.mesh/.material/
+# etc, written alongside the source by BakeOutputs.hpp) changed. That second exclusion is
+# why the DEPENDS glob below is a source-extension allowlist rather than "every file
+# under assets/models/": including the generated outputs would make each bake retrigger
+# the next build forever, since running the command is what changes their mtimes.
+file(GLOB _aethercore_project_settings CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/projects/*/ProjectSettings.toml")
+
+set(_aethercore_bake_stamps "")
+foreach(_aethercore_settings ${_aethercore_project_settings})
+    get_filename_component(_aethercore_project_dir "${_aethercore_settings}" DIRECTORY)
+    get_filename_component(_aethercore_project_name "${_aethercore_project_dir}" NAME)
+    set(_aethercore_models_dir "${_aethercore_project_dir}/assets/models")
+    if(EXISTS "${_aethercore_models_dir}")
+        file(GLOB_RECURSE _aethercore_model_sources CONFIGURE_DEPENDS
+            "${_aethercore_models_dir}/*.glb"
+            "${_aethercore_models_dir}/*.gltf"
+            "${_aethercore_models_dir}/*.bin"
+            "${_aethercore_models_dir}/*.png"
+            "${_aethercore_models_dir}/*.jpg"
+            "${_aethercore_models_dir}/*.jpeg"
+            "${_aethercore_models_dir}/*.tga"
+            "${_aethercore_models_dir}/*.hdr"
+            "${_aethercore_models_dir}/*.ktx2"
+        )
+        set(_aethercore_stamp "${CMAKE_BINARY_DIR}/bake-stamps/${_aethercore_project_name}.stamp")
+        add_custom_command(
+            OUTPUT "${_aethercore_stamp}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/bake-stamps"
+            COMMAND "$<TARGET_FILE:AssetPacker>" bake-all "${_aethercore_project_dir}"
+            COMMAND "${CMAKE_COMMAND}" -E touch "${_aethercore_stamp}"
+            DEPENDS AssetPacker ${_aethercore_model_sources}
+            COMMENT "Baking ${_aethercore_project_name}'s models (AssetPacker bake-all)"
+            VERBATIM
+        )
+        list(APPEND _aethercore_bake_stamps "${_aethercore_stamp}")
+    endif()
+endforeach()
+
+if(_aethercore_bake_stamps)
+    add_custom_target(BakeProjectAssets ALL DEPENDS ${_aethercore_bake_stamps})
+endif()
