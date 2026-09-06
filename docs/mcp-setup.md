@@ -49,3 +49,60 @@ You can also use the editor's **Control Server** panel to start or stop its
 endpoint and choose its port. `run_gauntlet` needs no live app. The complete
 tool catalog, manual registration examples, and environment variables are in
 [tools/mcp/README.md](../tools/mcp/README.md).
+
+## Synthetic input reachability from an agent session
+
+A prior version of this section claimed real window focus is required for
+"in-game keystroke/hold-state gameplay... interact prompts, WASD movement" and
+similar. That was too broad and is corrected here with the precise matrix,
+each row read from source rather than assumed - most gameplay input turns out
+to be reachable without focus at all; only cursor lock itself is not.
+
+**Reachable without real OS focus** - `engine.send_input`'s `down`/`up` keys
+and `mouse_pos`/`mouse_down`/`mouse_up` write straight into
+`Input::m_syntheticKeys`/`m_syntheticMouseButtons`/`m_syntheticMousePos`
+(`Input.hpp:396-397`, `:456-469`). Both are OR'd into the real per-frame state
+with no focus check at all - `Input.cpp:152`:
+`m_currKeys[i] = (focused && glfwGetKey(...)) || m_syntheticKeys[i]`, and
+`Input.cpp:159`: `m_currMouseButtons[i] = (focused && glfwGetMouseButton(...))
+|| m_syntheticMouseButtons[i]` - the synthetic half sits outside the
+`focused &&` term in both expressions. That is the exact same `IsKeyDown`/
+`IsKeyPressed`/`IsMouseButtonDown`/`IsMouseDown`/`GetMousePos` state gameplay
+scripts, `UiNavigationSystem`, and every `Ui.IsHovered`/`WasClicked`/
+`WasActivated` hit-test read from - so WASD movement, interact prompts, menu
+navigation, and clicking a game-rendered `UIButton` by its `ui.layout`
+resolved-rect centre are all genuinely testable headlessly. Confirmed live,
+not just read: `engine.send_input` `mouse_pos`→`mouse_down`→`mouse_up` hit
+Sandbox's Host/Join/codeBox buttons on the first try across two separate
+Editor builds.
+
+**Not reachable without real OS focus** - cursor lock itself and its Escape
+release, because `UpdateCursorLock` (`Input.cpp:509-527`) explicitly ANDs
+`windowFocused` into `SetCursorLocked(m_cursorLockRequested && windowFocused
+&& !m_cursorLockEscaped)`. A synthetic session can request the lock, but it
+will never actually engage, so `Input.MouseDelta`'s locked-relative-motion
+mode and anything gated on `IsCursorLocked()` cannot be exercised this way.
+`computer`'s `delivery: "foreground"` mode exists to force real focus for
+exactly this case, but fails outright (`SetForegroundWindow` error) whenever
+the desktop session is locked or otherwise not the active foreground
+session - the normal state for an unattended agent run.
+
+**Never reaches game UI, focus irrelevant** - `ui.click`'s raw `{x,y}` mode
+(and `ui.hover`/`ui.drag`). `UiInputScript::QueueClick` (`UiInputScript.cpp:61`),
+drained in `UiAutomation.cpp:112-116`, injects via `ImGuiIO::AddMousePosEvent`/
+`AddMouseButtonEvent` - these populate only ImGui's own `io.MousePos`/
+`io.MouseDown[]`, read exclusively by ImGui widget hit-testing (the editor's
+own panels; `UiAutomationMethods.cpp` lives under `src/app/imgui/`). There is
+no wiring from ImGui's `io` to the engine's `Input` class at all, so a
+`ui.click` at a game UI button's exact screen coordinate does nothing, on any
+machine, focused or not - it is architecturally scoped to ImGui, not a focus
+limitation. Use `ui.click`/`ui.query` for editor panels and dialogs (File
+Explorer, "Recover Unsaved Work", Inspector); use `engine.send_input`'s mouse
+path for anything the game itself renders.
+
+**Implication:** verify cursor-lock-dependent behavior by asserting on
+resulting state through the control protocol, or hand that one check to a
+human with a real, unlocked, focused session - do not conclude "cursor lock
+works" from a synthetic session that never had focus, since the lock silently
+never engages. Everything else - keyboard gameplay, menu navigation, and
+clicking game-rendered UI - is fair game for `engine.send_input` headlessly.
