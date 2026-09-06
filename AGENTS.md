@@ -44,7 +44,7 @@ Running the Editor/Launcher:
 
 - **CWD must be the build-tree root.** `shaders://` resolves relative to CWD; the wrong CWD segfaults at pipeline creation.
 - In agent context, never launch it as a blocking foreground command — start it detached and drive it over the AetherCore MCP (see "Driving the live app" below). Headless agent contexts have no display at all.
-- Crashes write a minidump, all-thread stacks, and a log tail to `%LOCALAPPDATA%/AetherCore/crashes/<exe>/` — check there before re-running.
+- Crashes write a minidump, all-thread stacks, and a log tail to `%LOCALAPPDATA%/AetherCore/crashes/<exe>/` — check there before re-running. **Caveat: this does not hold for crashes reached through C# script interop** (e.g. an access violation inside a P/Invoke'd export) — CoreCLR fail-fasts through its own vectored handler and calls `TerminateProcess` before the `SetUnhandledExceptionFilter` in `CrashHandler.cpp` is ever consulted, so nothing is written. For that class, set `COMPlus_DbgEnableMiniDump=1` and `COMPlus_DbgMiniDumpName` before launching (CoreCLR's own minidump knob) and see [docs/mcp-setup.md](docs/mcp-setup.md)'s interop-crash section for the debugging technique. An empty `crashes/` folder after a reproducible crash means this caveat, not that the crash didn't happen.
 
 LSP: run `/sync-lsp` (equivalently `cmake --preset clangd`) after adding, removing, or renaming `.cpp`/`.hpp`/`.h` files, or after changing any `CMakeLists.txt`. It regenerates `build/ninja-clang/compile_commands.json`; never edit that file by hand.
 
