@@ -175,6 +175,12 @@ target_compile_definitions(Editor PRIVATE
     AETHER_GAME_RUNTIME_EXE_NAME="$<TARGET_FILE_NAME:GameRuntime>"
     # So the publish verifier can reject a package that bundles the editor exe.
     AETHER_EDITOR_EXE_NAME="$<TARGET_FILE_NAME:Editor>"
+    # The Editor's CWD is the build-tree root (see AGENTS.md), not the repo root, so a
+    # plain relative path from CWD would resolve to the wrong place - the same problem
+    # AETHER_SHADER_INCLUDE_DIR below already solves for shaders. Read by
+    # debug/KenneyBrowserPanel.cpp.
+    AETHERCORE_KENNEY_MANIFEST="${CMAKE_SOURCE_DIR}/tools/assetpack/kenney_packs.toml"
+    AETHERCORE_KENNEY_CACHE_DIR="${CMAKE_SOURCE_DIR}/.temp/kenney-cache"
 )
 
 # Dev-only project shader compilation (ShaderCompiler, src/app/editor). Defined only when

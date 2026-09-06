@@ -44,6 +44,7 @@ using namespace std::string_view_literals;
 #include "debug/Icons.hpp"
 #include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
+#include "debug/KenneyBrowserPanel.hpp"
 #include "debug/MaterialGraphPanel.hpp"
 #include "debug/PerformancePanel.hpp"
 #include "debug/BuildPanel.hpp"
@@ -571,6 +572,7 @@ namespace aether::editor
 		m_panels.push_back(std::move(hierarchyPanel));
 		m_panels.push_back(std::make_unique<ProjectPanel>());
 		m_panels.push_back(std::make_unique<FileExplorerPanel>());
+		m_panels.push_back(std::make_unique<KenneyBrowserPanel>());
 		m_panels.push_back(std::make_unique<InspectorPanel>());
 		m_panels.push_back(std::make_unique<MaterialGraphPanel>());
 		m_panels.push_back(std::make_unique<UiCanvasPanel>());
