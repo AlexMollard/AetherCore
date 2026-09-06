@@ -7,6 +7,7 @@
 #include "scene/SceneComponentSerde.hpp"
 
 #include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsSystem.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "scene/World.hpp"
 
@@ -26,6 +27,7 @@ namespace aether::app::scene
 			pr.friction = col->friction;
 			pr.restitution = col->restitution;
 			pr.isSensor = col->isSensor;
+			pr.meshSource = col->meshSource;
 			if (const auto* rb = c.world.TryGet<RigidBodyComponent>(c.entity))
 			{
 				pr.motionType = rb->motionType;
@@ -66,6 +68,7 @@ namespace aether::app::scene
 			                .restitution = phys.restitution,
 			                .isSensor = phys.isSensor,
 			                .layer = phys.isSensor ? PhysicsLayer::Sensor : PhysicsLayer::Moving,
+			                .meshSource = phys.meshSource,
 			        });
 			c.world.Emplace<RigidBodyComponent>(c.entity,
 			        RigidBodyComponent{
@@ -135,6 +138,76 @@ namespace aether::app::scene
 		}
 
 		AE_SCENE_SERDE(Joint, "Joint", 35, CaptureJoint, ApplyJoint)
+
+		void CaptureScriptJoints(SceneCaptureContext& c)
+		{
+			const auto* comp = c.world.TryGet<ScriptJointsComponent>(c.entity);
+			if (comp == nullptr || comp->joints.empty())
+			{
+				return;
+			}
+			c.rec.scriptJoints.reserve(comp->joints.size());
+			for (const JointEntry& entry: comp->joints)
+			{
+				ScriptJointRecord sjr;
+				sjr.type = entry.type;
+				if (entry.target.IsValid())
+				{
+					const auto it = c.indexOf.find(entry.target.id);
+					sjr.targetIndex = it != c.indexOf.end() ? it->second : -1;
+				}
+				sjr.anchor = entry.anchor;
+				sjr.axis = entry.axis;
+				sjr.minLimit = entry.minLimit;
+				sjr.maxLimit = entry.maxLimit;
+				sjr.distance = entry.distance;
+				sjr.swingLimit = entry.swingLimit;
+				sjr.collideConnected = entry.collideConnected;
+				c.rec.scriptJoints.push_back(sjr);
+			}
+		}
+
+		// Restores each entry through PhysicsSystem::AddScriptJoint - the SAME path
+		// CreateFixedConstraint/CreateDistanceConstraint use - so a reloaded
+		// contraption's welds/ropes get freshly minted handles and owner bookkeeping
+		// exactly as if script had just created them, rather than resurrecting the
+		// pre-save handles (meaningless after a reload - nothing on the C# side holds
+		// them across one). No PhysicsSystem registered (headless/no-scripting World,
+		// same graceful-absence idiom as ScriptSerde.cpp) means no constraints - not
+		// an error, there is nothing else that could apply them.
+		void ApplyScriptJoints(SceneApplyContext& c)
+		{
+			if (c.rec.scriptJoints.empty() || !c.apply3DPhysics)
+			{
+				return;
+			}
+			auto* physics = static_cast<PhysicsSystem*>(c.world.FindSystem("PhysicsSystem"));
+			if (physics == nullptr)
+			{
+				return;
+			}
+			for (const ScriptJointRecord& sjr: c.rec.scriptJoints)
+			{
+				Entity targetEntity{};
+				if (sjr.targetIndex >= 0 && sjr.targetIndex < static_cast<int>(c.created.size()))
+				{
+					targetEntity = c.created[static_cast<std::size_t>(sjr.targetIndex)];
+				}
+				JointEntry entry;
+				entry.type = sjr.type;
+				entry.target = targetEntity;
+				entry.anchor = sjr.anchor;
+				entry.axis = sjr.axis;
+				entry.minLimit = sjr.minLimit;
+				entry.maxLimit = sjr.maxLimit;
+				entry.distance = sjr.distance;
+				entry.swingLimit = sjr.swingLimit;
+				entry.collideConnected = sjr.collideConnected;
+				physics->AddScriptJoint(c.world, c.entity, entry);
+			}
+		}
+
+		AE_SCENE_SERDE(ScriptJoints, "Script Joints", 36, CaptureScriptJoints, ApplyScriptJoints)
 
 		void CaptureJoint2D(SceneCaptureContext& c)
 		{

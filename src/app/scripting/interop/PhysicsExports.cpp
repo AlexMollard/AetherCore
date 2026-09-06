@@ -1,9 +1,11 @@
 #include "scripting/interop/InteropCommon.hpp"
 
+#include "net/NetworkContext.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "scene/World.hpp"
+#include "utils/ServiceContainer.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -22,13 +24,59 @@ struct RaycastHit
 
 namespace
 {
-	aether::PhysicsBodyHandle BodyOf(std::uint32_t id)
+	aether::RigidBodyComponent* RigidBodyOf(std::uint32_t id)
 	{
-		if (const auto* rb = ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id}))
+		return ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id});
+	}
+
+	aether::net::NetworkContext* Context()
+	{
+		const auto& ctx = ActiveContext();
+		if (ctx.services == nullptr)
 		{
-			return rb->body;
+			return nullptr;
 		}
-		return {};
+		return ctx.services->TryGet<aether::net::NetworkContext>();
+	}
+
+	// Same reasoning and shape as CharacterExports.cpp's CanControl: velocity/force/
+	// impulse/activation writes on an existing body must not be drivable by a peer
+	// that does not own the entity - SyncSimulationAuthority already forces a
+	// non-owned RigidBody Kinematic, but that stops the SOLVER from acting on it, not
+	// a script from writing to it, and this is the export layer's own guard rather
+	// than trusting every caller (a grab controller, an RPC handler, ...) to check
+	// ownership itself first. Verified against the physics gun's own script: it
+	// splits claim (Net.RequestOwnership) from drive (Physics.SetLinearVelocity/
+	// AddImpulseAtPoint) and only starts driving once Net.IsOwner is confirmed - so
+	// this never rejects a write the existing grab flow makes, only a write nobody's
+	// authority flow made in the first place.
+	bool CanControl(std::uint32_t id)
+	{
+		const aether::net::NetworkContext* context = Context();
+		return context == nullptr || context->HasAuthority(ActiveWorld(), aether::Entity{id});
+	}
+
+	// A no-op that must not pass silently: `what` landed on an entity whose Jolt body has
+	// not been created yet (queued this frame by AddBoxBody/AddSphereBody/AddCapsuleBody,
+	// baked next frame by PhysicsSystem::FlushPendingBodies) and had nothing to act on -
+	// unlike a velocity, a force/torque/impulse has no persisted "initial" state to seed.
+	// Warns exactly once per RigidBodyComponent instance (see
+	// RigidBodyComponent::deferredCallWarned) so a script calling this every OnUpdate
+	// before the body bakes warns once, not every frame; a warning that keeps recurring
+	// means the body never baked at all (see FlushPendingBodies' own warning for why).
+	void WarnDeferredNoOp(aether::RigidBodyComponent& rb, std::uint32_t id, const char* what)
+	{
+		if (rb.deferredCallWarned)
+		{
+			return;
+		}
+		rb.deferredCallWarned = true;
+		AE_WARN(aether::LogCategory::Engine,
+		        "Physics.{} on entity {} had no effect: its body has not been created yet "
+		        "(queued this frame, baked next). If this keeps recurring for the same "
+		        "entity, the body failed to create - look for FlushPendingBodies' own "
+		        "warning naming it.",
+		        what, id);
 	}
 } // namespace
 
@@ -64,18 +112,62 @@ AE_SCRIPT_API void aether_physics_add_sphere(std::uint32_t id, float radius, std
 AE_SCRIPT_API void aether_physics_add_capsule(std::uint32_t id, float halfHeight, float radius, std::int32_t dynamic)
 { SafeExport([&] -> void { AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Capsule, .radius = radius, .halfHeight = halfHeight}, dynamic); }); }
 
+AE_SCRIPT_API void aether_physics_add_cylinder(std::uint32_t id, float halfHeight, float radius, std::int32_t dynamic)
+{ SafeExport([&] -> void { AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Cylinder, .radius = radius, .halfHeight = halfHeight}, dynamic); }); }
+
+AE_SCRIPT_API void aether_physics_add_convex_hull(std::uint32_t id, const char* meshSourceC, std::int32_t dynamic)
+{ SafeExport([&] -> void { AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::ConvexHull, .meshSource = meshSourceC != nullptr ? meshSourceC : ""}, dynamic); }); }
+
+// Static only - PhysicsSystem::FlushPendingBodies rejects (with a warning) a Mesh
+// collider on anything else, since Jolt's own MeshShape::MustBeStatic() is advisory
+// and not self-enforced. Still takes `dynamic` so a caller who gets this wrong sees
+// that warning instead of a silently different signature to remember.
+AE_SCRIPT_API void aether_physics_add_mesh(std::uint32_t id, const char* meshSourceC, std::int32_t dynamic)
+{ SafeExport([&] -> void { AddCollider(id, aether::ColliderComponent{.shape = aether::PhysicsShapeType::Mesh, .meshSource = meshSourceC != nullptr ? meshSourceC : ""}, dynamic); }); }
+
+// The one script path to a Kinematic body: every Add*Box/Sphere/Capsule/Cylinder/
+// ConvexHull/Mesh body above only ever takes Static or Dynamic (see the MotionType()
+// helper just above AddCollider). PhysicsSystem::SetBodyMotionType already existed and
+// already handles Kinematic in place (Jolt's own BodyInterface::SetMotionType, no
+// destroy/rebuild) - NetworkContext::SyncSimulationAuthority was its only caller. This
+// just surfaces the same method to script. Gated by CanControl for the same reason
+// SetLinearVelocity/AddForce/... are just below: a motion-type flip on a body this
+// caller does not own is exactly the write that gate exists to stop - letting a
+// non-owner silently freeze/unfreeze a peer's own body out from under that peer's
+// authority would be a networking bug, not a feature.
+AE_SCRIPT_API void aether_physics_set_motion_type(std::uint32_t id, std::int32_t motionType)
+{
+	SafeExport([&] -> void
+	{
+	auto* phys = ActiveContext().physics;
+	if (phys == nullptr || !EntityAlive(id) || !CanControl(id))
+	{
+		return;
+	}
+	phys->SetBodyMotionType(ActiveWorld(), aether::Entity{id}, static_cast<aether::PhysicsMotionType>(motionType));
+	});
+}
+
 AE_SCRIPT_API void aether_physics_set_linear_velocity(std::uint32_t id, Vec3 velocity)
 {
 	SafeExport([&] -> void
 	{
 	auto* phys = ActiveContext().physics;
-	if (phys == nullptr)
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
 	{
 		return;
 	}
-	if (const auto* rb = ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id}))
+	if (rb->body.IsValid())
 	{
 		phys->SetLinearVelocity(rb->body, ToGlm(velocity));
+	}
+	else
+	{
+		// Body not baked yet (queued this frame by AddBoxBody/... , created next frame
+		// by FlushPendingBodies) - seed the value creation itself applies, so "add a
+		// body, then set its velocity" works the same whether or not the body exists.
+		rb->initialVelocity = ToGlm(velocity);
 	}
 	});
 }
@@ -84,14 +176,19 @@ AE_SCRIPT_API Vec3 aether_physics_get_linear_velocity(std::uint32_t id)
 {
 	return SafeExport([&] -> Vec3
 	{
-	if (auto* phys = ActiveContext().physics)
+	auto* phys = ActiveContext().physics;
+	const auto* rb = RigidBodyOf(id);
+	if (rb == nullptr)
 	{
-		if (const auto* rb = ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id}))
-		{
-			return FromGlm(phys->GetLinearVelocity(rb->body));
-		}
+		return {};
 	}
-	return {};
+	if (rb->body.IsValid() && phys != nullptr)
+	{
+		return FromGlm(phys->GetLinearVelocity(rb->body));
+	}
+	// Mirrors the setter: before the body exists, its velocity IS whatever was seeded,
+	// so a script that sets then immediately reads back sees its own write.
+	return FromGlm(rb->initialVelocity);
 	});
 }
 
@@ -123,9 +220,19 @@ AE_SCRIPT_API void aether_physics_set_angular_velocity(std::uint32_t id, Vec3 ve
 {
 	SafeExport([&] -> void
 	{
-	if (auto* phys = ActiveContext().physics)
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
 	{
-		phys->SetAngularVelocity(BodyOf(id), ToGlm(velocity));
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->SetAngularVelocity(rb->body, ToGlm(velocity));
+	}
+	else
+	{
+		rb->initialAngularVelocity = ToGlm(velocity);
 	}
 	});
 }
@@ -134,11 +241,17 @@ AE_SCRIPT_API Vec3 aether_physics_get_angular_velocity(std::uint32_t id)
 {
 	return SafeExport([&] -> Vec3
 	{
-	if (auto* phys = ActiveContext().physics)
+	auto* phys = ActiveContext().physics;
+	const auto* rb = RigidBodyOf(id);
+	if (rb == nullptr)
 	{
-		return FromGlm(phys->GetAngularVelocity(BodyOf(id)));
+		return {};
 	}
-	return {};
+	if (rb->body.IsValid() && phys != nullptr)
+	{
+		return FromGlm(phys->GetAngularVelocity(rb->body));
+	}
+	return FromGlm(rb->initialAngularVelocity);
 	});
 }
 
@@ -146,9 +259,22 @@ AE_SCRIPT_API void aether_physics_add_force(std::uint32_t id, Vec3 force)
 {
 	SafeExport([&] -> void
 	{
-	if (auto* phys = ActiveContext().physics)
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
 	{
-		phys->AddForce(BodyOf(id), ToGlm(force));
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->AddForce(rb->body, ToGlm(force));
+	}
+	else
+	{
+		// A continuous per-step force has no persisted "initial" state to seed - Jolt
+		// itself only ever applies AddForce for the step it was called in, so there is
+		// nothing here for FlushPendingBodies to apply later even in principle.
+		WarnDeferredNoOp(*rb, id, "AddForce");
 	}
 	});
 }
@@ -157,9 +283,23 @@ AE_SCRIPT_API void aether_physics_add_impulse(std::uint32_t id, Vec3 impulse)
 {
 	SafeExport([&] -> void
 	{
-	if (auto* phys = ActiveContext().physics)
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
 	{
-		phys->AddImpulse(BodyOf(id), ToGlm(impulse));
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->AddImpulse(rb->body, ToGlm(impulse));
+	}
+	else
+	{
+		// An impulse divides by mass, which is not resolved until the body is created
+		// (shape + density decide it unless RigidBodyComponent.mass overrides) - there is
+		// no correct velocity to seed without duplicating that computation, so this is
+		// genuinely lost rather than deferred. Say so instead of silently discarding it.
+		WarnDeferredNoOp(*rb, id, "AddImpulse");
 	}
 	});
 }
@@ -168,9 +308,19 @@ AE_SCRIPT_API void aether_physics_add_torque(std::uint32_t id, Vec3 torque)
 {
 	SafeExport([&] -> void
 	{
-	if (auto* phys = ActiveContext().physics)
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
 	{
-		phys->AddTorque(BodyOf(id), ToGlm(torque));
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->AddTorque(rb->body, ToGlm(torque));
+	}
+	else
+	{
+		WarnDeferredNoOp(*rb, id, "AddTorque");
 	}
 	});
 }
@@ -179,10 +329,159 @@ AE_SCRIPT_API void aether_physics_add_angular_impulse(std::uint32_t id, Vec3 imp
 {
 	SafeExport([&] -> void
 	{
-	if (auto* phys = ActiveContext().physics)
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
 	{
-		phys->AddAngularImpulse(BodyOf(id), ToGlm(impulse));
+		return;
 	}
+	if (rb->body.IsValid())
+	{
+		phys->AddAngularImpulse(rb->body, ToGlm(impulse));
+	}
+	else
+	{
+		// Depends on the body's inertia tensor, resolved at the same point as mass -
+		// same reasoning as AddImpulse above.
+		WarnDeferredNoOp(*rb, id, "AddAngularImpulse");
+	}
+	});
+}
+
+// Applied at a WORLD POINT rather than the centre of mass, so it imparts spin - what makes
+// a thrown prop tumble instead of sliding flat. The physics gun's primary "throw" primitive.
+AE_SCRIPT_API void aether_physics_add_impulse_at_point(std::uint32_t id, Vec3 impulse, Vec3 point)
+{
+	SafeExport([&] -> void
+	{
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
+	{
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->AddImpulseAtPoint(rb->body, ToGlm(impulse), ToGlm(point));
+	}
+	else
+	{
+		// Same reasoning as AddImpulse: depends on mass (and here also on the point's
+		// offset from the centre of mass, via the inertia tensor), neither resolved until
+		// the body exists.
+		WarnDeferredNoOp(*rb, id, "AddImpulseAtPoint");
+	}
+	});
+}
+
+// A grab controller's other primitives: zero a held prop's gravity, wake a sleeping one
+// the instant it is picked up, and dial in per-pickup friction/restitution. Unlike the
+// impulses above, all three have an authored field FlushPendingBodies already applies at
+// creation (ColliderComponent::friction/restitution, RigidBodyComponent::gravityFactor/
+// startActive) - so a call landing before the body exists seeds that field instead of
+// warning: "add a body, then configure it" works the same whether or not it has been
+// baked yet, exactly like Physics.SetLinearVelocity.
+AE_SCRIPT_API void aether_physics_set_gravity_factor(std::uint32_t id, float factor)
+{
+	SafeExport([&] -> void
+	{
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
+	{
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->SetGravityFactor(rb->body, factor);
+	}
+	else
+	{
+		rb->gravityFactor = factor;
+	}
+	});
+}
+
+AE_SCRIPT_API void aether_physics_set_friction(std::uint32_t id, float friction)
+{
+	SafeExport([&] -> void
+	{
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
+	{
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->SetFriction(rb->body, friction);
+	}
+	else if (auto* collider = ActiveWorld().TryGet<aether::ColliderComponent>(aether::Entity{id}))
+	{
+		collider->friction = friction;
+	}
+	});
+}
+
+AE_SCRIPT_API void aether_physics_set_restitution(std::uint32_t id, float restitution)
+{
+	SafeExport([&] -> void
+	{
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
+	{
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->SetRestitution(rb->body, restitution);
+	}
+	else if (auto* collider = ActiveWorld().TryGet<aether::ColliderComponent>(aether::Entity{id}))
+	{
+		collider->restitution = restitution;
+	}
+	});
+}
+
+AE_SCRIPT_API void aether_physics_set_body_active(std::uint32_t id, std::int32_t active)
+{
+	SafeExport([&] -> void
+	{
+	auto* phys = ActiveContext().physics;
+	auto* rb = RigidBodyOf(id);
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
+	{
+		return;
+	}
+	if (rb->body.IsValid())
+	{
+		phys->SetBodyActive(rb->body, active != 0);
+	}
+	else
+	{
+		// Seeds the field FlushPendingBodies reads to decide whether to activate the
+		// body the moment it is created (bi.AddBody(..., startActive ? Activate : ...)).
+		rb->startActive = active != 0;
+	}
+	});
+}
+
+AE_SCRIPT_API std::int32_t aether_physics_is_body_active(std::uint32_t id)
+{
+	return SafeExport([&] -> std::int32_t
+	{
+	auto* phys = ActiveContext().physics;
+	const auto* rb = RigidBodyOf(id);
+	if (rb == nullptr)
+	{
+		return 0;
+	}
+	if (rb->body.IsValid() && phys != nullptr)
+	{
+		return phys->IsBodyActive(rb->body) ? 1 : 0;
+	}
+	return rb->startActive ? 1 : 0;
 	});
 }
 
@@ -192,7 +491,7 @@ AE_SCRIPT_API void aether_physics_freeze_rotation(std::uint32_t id, std::int32_t
 	{
 	auto* phys = ActiveContext().physics;
 	auto* rb = ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id});
-	if (phys == nullptr || rb == nullptr)
+	if (phys == nullptr || rb == nullptr || !CanControl(id))
 	{
 		return;
 	}
@@ -333,5 +632,63 @@ AE_SCRIPT_API std::uint32_t aether_physics_event_at(std::uint32_t id, std::int32
 		return 0;
 	}
 	return (*list)[static_cast<std::size_t>(index)].id;
+	});
+}
+
+// -- Constraints (weld/rope tool-gun modes) -------------------------------------
+// Both take the "self" entity as the constraint's OWN owner (matches JointComponent's
+// convention: the entity holding the joint is body A, target is body B) and gate on
+// CanControl the same way every other body-mutating export above does - welding a
+// peer's prop out from under their authority is the identical class of bug as
+// driving their velocity would be. targetId == 0 pins to the world, exactly like
+// JointComponent leaving `target` at its default Entity{}.
+AE_SCRIPT_API std::uint32_t aether_physics_create_weld(std::uint32_t id, std::uint32_t targetId)
+{
+	return SafeExport([&] -> std::uint32_t
+	{
+	auto* phys = ActiveContext().physics;
+	if (phys == nullptr || !EntityAlive(id) || !CanControl(id))
+	{
+		return 0;
+	}
+	if (targetId != 0 && !EntityAlive(targetId))
+	{
+		return 0;
+	}
+	return phys->CreateFixedConstraint(ActiveWorld(), aether::Entity{id}, aether::Entity{targetId});
+	});
+}
+
+AE_SCRIPT_API std::uint32_t aether_physics_create_rope(std::uint32_t id, std::uint32_t targetId, Vec3 worldAnchor, float restLength)
+{
+	return SafeExport([&] -> std::uint32_t
+	{
+	auto* phys = ActiveContext().physics;
+	if (phys == nullptr || !EntityAlive(id) || !CanControl(id))
+	{
+		return 0;
+	}
+	if (targetId != 0 && !EntityAlive(targetId))
+	{
+		return 0;
+	}
+	return phys->CreateDistanceConstraint(ActiveWorld(), aether::Entity{id}, aether::Entity{targetId}, ToGlm(worldAnchor), restLength);
+	});
+}
+
+// Ownership is not re-checked here: a handle is meaningless to anyone who was not
+// handed it in the first place (there is no discoverable "list of constraint
+// handles" a hostile caller could enumerate), and DestroyConstraint on an unknown or
+// already-cleaned-up handle is already a documented no-op - see PhysicsSystem.hpp.
+AE_SCRIPT_API void aether_physics_destroy_constraint(std::uint32_t handle)
+{
+	SafeExport([&] -> void
+	{
+	auto* phys = ActiveContext().physics;
+	if (phys == nullptr)
+	{
+		return;
+	}
+	phys->DestroyConstraint(ActiveWorld(), handle);
 	});
 }

@@ -12,10 +12,13 @@
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyLock.h>
 #include <Jolt/Physics/Body/BodyLockMulti.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/ShapeCast.h>
@@ -29,17 +32,22 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/Collision/GroupFilterTable.h>
 #include <Jolt/Physics/Collision/CollisionGroup.h>
-
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/packing.hpp>
+#include <glm/gtc/constants.hpp>
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <mutex>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -53,6 +61,8 @@
 #endif
 
 #include "physics/PhysicsSystem.hpp"
+#include "assets/GltfAsset.hpp"
+#include "physics/ColliderMeshSource.hpp"
 #include "physics2d/PhysicsDomainGate.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
@@ -251,6 +261,16 @@ namespace aether
 		return (uint64_t(h) << 16) | uint64_t(r) | (uint64_t(3) << 61);
 	}
 
+	// ConvexHull and Mesh both key off the SAME path but must never alias each other -
+	// a hull and the exact triangle mesh of the same source file are different shapes.
+	// A shared cache means a scene with fifty copies of the same prop only loads and
+	// hulls/triangulates its source mesh once.
+	static uint64_t MeshSourceKey(std::string_view path, uint64_t discriminant)
+	{
+		const uint64_t hashed = std::hash<std::string_view>{}(path);
+		return (hashed & ((uint64_t(1) << 61) - 1)) | (discriminant << 61);
+	}
+
 	class JoltRuntime final
 	{
 	public:
@@ -355,12 +375,45 @@ namespace aether
 		std::unordered_map<std::uint32_t, LiveConstraint> constraints;
 		std::uint32_t nextConstraintId = 1;
 
+		// Which entity's ScriptJointsComponent a given handle's JointEntry lives on -
+		// CreateFixedConstraint/CreateDistanceConstraint populate this the moment a
+		// handle is minted (before the entry is even flushed to Jolt), so
+		// DestroyConstraint can find it by handle alone without a registry-wide scan.
+		std::unordered_map<std::uint32_t, Entity> scriptJointOwners;
+
 		// Bodies pulled out of the simulation because their hierarchy was disabled,
 		// keyed by entity id; SyncTransforms re-activates exactly these on re-enable.
 		std::unordered_set<std::uint32_t> suspendedByDisable;
 
 		std::vector<ContactCollector::Added> addedScratch;
 		std::vector<ContactCollector::Removed> removedScratch;
+
+		// One JPH::CharacterVirtual per CharacterControllerComponent entity, keyed by
+		// Entity::id. A CharacterVirtual is never added to the physics system's own body
+		// list (see the class comment on CharacterVirtual), so unlike rigid bodies it has
+		// no PhysicsBodyHandle - this map IS its storage.
+		//
+		// `io` is a full copy of the ECS component: the ONLY channel between
+		// FlushPendingCharacters/SyncTransforms (game thread) and StepCharacters (physics
+		// thread) - see StepCharacters' declaration for why it never touches entt
+		// directly. FlushPendingCharacters refreshes io's authored/input fields from the
+		// live ECS component once per Update(); StepCharacters reads/writes it freely
+		// while the physics thread exclusively owns it; SyncTransforms pulls its output
+		// fields back out once the physics thread is idle again.
+		//
+		// builtRadius/builtHalfHeight are the dimensions the live Jolt shape was actually
+		// BUILT with (as opposed to io.radius/io.halfHeight, which may already hold a
+		// newer authored value), so StepCharacters can detect an inspector/MCP edit and
+		// rebuild the shape without diffing every field every step.
+		struct LiveCharacter
+		{
+			JPH::Ref<JPH::CharacterVirtual> character;
+			float builtRadius = 0.0f;
+			float builtHalfHeight = 0.0f;
+			CharacterControllerComponent io;
+		};
+
+		std::unordered_map<std::uint32_t, LiveCharacter> characters;
 	};
 
 	PhysicsSystem::PhysicsSystem()
@@ -475,6 +528,8 @@ namespace aether
 
 		m_rigidBodyDestroyConn = world.GetRegistry().on_destroy<RigidBodyComponent>().connect<&PhysicsSystem::OnRigidBodyDestroyed>(this);
 		m_jointDestroyConn = world.GetRegistry().on_destroy<JointComponent>().connect<&PhysicsSystem::OnJointDestroyed>(this);
+		m_scriptJointsDestroyConn = world.GetRegistry().on_destroy<ScriptJointsComponent>().connect<&PhysicsSystem::OnScriptJointsDestroyed>(this);
+		m_characterDestroyConn = world.GetRegistry().on_destroy<CharacterControllerComponent>().connect<&PhysicsSystem::OnCharacterControllerDestroyed>(this);
 
 		AE_INFO(LogCategory::Engine, "PhysicsSystem initialised (Jolt, {} worker threads, fixed dt = {:.4f} s, dedicated physics thread)", workerThreads, kFixedTimestep);
 
@@ -487,6 +542,7 @@ namespace aether
 		StopPhysicsThread();
 
 		m_impl->constraints.clear();
+		m_impl->characters.clear();
 		m_impl->groupFilter = nullptr;
 		m_impl->physics.reset();
 		m_impl->contactCollector.reset();
@@ -511,6 +567,9 @@ namespace aether
 
 		FlushPendingBodies(world);
 		FlushPendingJoints(world);
+		FlushPendingScriptJoints(world);
+		FlushPendingCharacters(world);
+		PushKinematicTargets(world);
 
 		// 4. Accumulate time and kick step(s) to the physics thread.
 		m_accumulator += dt;
@@ -553,6 +612,11 @@ namespace aether
 	void PhysicsSystem::StepPhysics()
 	{
 		AE_PROFILE_ZONE_N("Phys.Step");
+		// Before the Jolt body step, in lockstep with it - see the class comment on
+		// Impl::LiveCharacter for why this touches no ECS state, and CharacterVirtual.h's
+		// own class comment for why a virtual character must be driven by hand rather than
+		// tracked automatically by JPH::PhysicsSystem::Update below.
+		StepCharacters(kFixedTimestep);
 		AE_PROFILE_PLOT("Phys.TotalBodies", static_cast<int64_t>(m_impl->physics->GetNumBodies()));
 		AE_PROFILE_PLOT("Phys.ActiveBodies", static_cast<int64_t>(m_impl->physics->GetNumActiveBodies(JPH::EBodyType::RigidBody)));
 		m_impl->physics->Update(kFixedTimestep, /*collision_steps*/ 1, m_impl->tempAllocator.get(), m_impl->jobSystem.get());
@@ -595,6 +659,17 @@ namespace aether
 				continue;
 			}
 
+			// A Kinematic body is transform-driven (scripts, or network replication
+			// via NetworkContext::SyncSimulationAuthority forcing a non-owned body
+			// Kinematic) - PushKinematicTargets pushes its ECS pose into Jolt, and
+			// reading it back here would just overwrite that authored pose with
+			// itself one frame late. A Static body never moves either. Only a
+			// Dynamic body's position is actually decided by Jolt's own integration.
+			if (rigid.motionType != PhysicsMotionType::Dynamic)
+			{
+				continue;
+			}
+
 			JPH::RVec3 pos;
 			JPH::Quat rot;
 			bi.GetPositionAndRotation(id, pos, rot);
@@ -609,6 +684,43 @@ namespace aether
 		}
 
 		AE_PROFILE_PLOT("Phys.SyncedBodies", synced);
+
+		// Character controllers: same interpolation, but the physics-thread state lives in
+		// Impl::LiveCharacter (see StepCharacters) rather than a Jolt Body, so this pulls
+		// position/rotation/output straight from there instead of a BodyInterface. Safe to
+		// read live.character here (this runs right after WaitForStep() at the top of
+		// Update(), so the physics thread is guaranteed idle - the same guarantee the rigid
+		// body loop above relies on).
+		int64_t syncedCharacters = 0;
+		for (const auto& [entity, cc, state, transform]: world.View<CharacterControllerComponent, PhysicsStateComponent, TransformComponent>().each())
+		{
+			(void) transform;
+			const Entity handle = World::FromEntt(entity);
+			const auto it = m_impl->characters.find(handle.id);
+			if (it == m_impl->characters.end())
+			{
+				continue; // not yet baked by FlushPendingCharacters
+			}
+			const Impl::LiveCharacter& live = it->second;
+			cc.isGrounded = live.io.isGrounded;
+			cc.groundNormal = live.io.groundNormal;
+			cc.velocity = live.io.velocity;
+
+			if (ecs::HasDisabledAncestor(world, handle))
+			{
+				continue;
+			}
+
+			state.currPosition = FromJolt(live.character->GetPosition());
+			state.currRotation = FromJolt(live.character->GetRotation());
+
+			const glm::vec3 renderPos = glm::mix(state.prevPosition, state.currPosition, alpha);
+			const glm::quat renderRot = glm::slerp(state.prevRotation, state.currRotation, alpha);
+
+			ecs::SetWorldTransform(world, handle, ToTransform(renderPos, renderRot, state.scale));
+			++syncedCharacters;
+		}
+		AE_PROFILE_PLOT("Phys.SyncedCharacters", syncedCharacters);
 	}
 
 	static glm::vec3 ExtractPosition(const TransformComponent& t)
@@ -623,6 +735,89 @@ namespace aether
 		rot[1] = glm::normalize(rot[1]);
 		rot[2] = glm::normalize(rot[2]);
 		return glm::quat_cast(rot);
+	}
+
+	void PhysicsSystem::PushKinematicTargets(World& world)
+	{
+		AE_PROFILE_ZONE_N("Phys.PushKinematicTargets");
+		auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
+		for (const auto& [enttEntity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
+		{
+			if (rigid.motionType != PhysicsMotionType::Kinematic)
+			{
+				continue;
+			}
+			const JPH::BodyID id = ToJolt(rigid.body);
+			if (id.IsInvalid())
+			{
+				continue;
+			}
+			const glm::vec3 pos = ExtractPosition(transform);
+			const glm::quat rot = ExtractRotation(transform);
+			// MoveKinematic, not a teleport: it sets the body's velocity such that Jolt's
+			// OWN solver carries it from its current pose to (pos, rot) over kFixedTimestep,
+			// so a network-driven crate sliding through a stack of props actually shoves
+			// them - a straight SetPositionAndRotation places the body silently and imparts
+			// no motion to anything it touches, which is indistinguishable from every other
+			// body simply teleporting through it. This is the authoritative pose every
+			// Kinematic body here follows (SyncSimulationAuthority forces non-owned bodies
+			// Kinematic precisely so a peer's own transform replication drives them this
+			// way), so it deserves the same real-motion treatment an owned Dynamic body gets.
+			bi.MoveKinematic(id, JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), kFixedTimestep);
+			state.prevPosition = state.currPosition = pos;
+			state.prevRotation = state.currRotation = rot;
+		}
+	}
+
+	struct MeshSourceGeometry
+	{
+		JPH::Array<JPH::Vec3> positions;       // hull input
+		JPH::VertexList triangleVertices;      // same positions as Float3 - MeshShapeSettings input
+		JPH::IndexedTriangleList triangles;    // indices offset per-primitive, winding as authored
+	};
+
+	// Loads a mesh asset's raw CPU-side vertex positions (and, for a triangle-mesh
+	// shape, its indices) through the SAME glTF/.mesh loader RagdollBuilder already
+	// uses for skeleton data (assets::GltfAsset::LoadFromVfsPath) - this is CPU-only
+	// baked-asset data and never touches the GPU-resident Mesh/AssetManager path
+	// (engine::Mesh only stores GPU buffer handles once uploaded; there is no CPU copy
+	// left to read back from there). Runs once per UNIQUE meshSource path per process:
+	// GetOrCreateColliderShape's own shape cache means a scene with fifty copies of the
+	// same prop only pays this cost once, and it happens at body-creation time (a
+	// one-shot event per spawned entity), not once per frame. The actual vertex/index
+	// gathering and vertex-count cap live in ColliderMeshSource.cpp, pure and free of
+	// Jolt types, so they are unit-testable against a hand-built GltfAsset without
+	// loading a real file - this function only adds the file load and Jolt-type
+	// conversion around that.
+	std::optional<MeshSourceGeometry> LoadMeshSourceGeometry(std::string_view path)
+	{
+		const auto asset = assets::GltfAsset::LoadFromVfsPath(path);
+		if (!asset.has_value())
+		{
+			AE_WARN(LogCategory::Engine, "PhysicsSystem: collider mesh_source '{}' failed to load: {}", path, asset.error());
+			return std::nullopt;
+		}
+		const std::optional<ColliderMeshGeometry> geo = BuildColliderMeshGeometry(*asset);
+		if (!geo.has_value())
+		{
+			AE_WARN(LogCategory::Engine, "PhysicsSystem: collider mesh_source '{}' has no vertices, or exceeds the {}-vertex collider limit - use a simpler mesh or a primitive shape", path, kMaxColliderMeshVertices);
+			return std::nullopt;
+		}
+
+		MeshSourceGeometry out;
+		out.positions.reserve(geo->positions.size());
+		out.triangleVertices.reserve(geo->positions.size());
+		for (const glm::vec3& p: geo->positions)
+		{
+			out.positions.emplace_back(p.x, p.y, p.z);
+			out.triangleVertices.emplace_back(p.x, p.y, p.z);
+		}
+		out.triangles.reserve(geo->indices.size() / 3);
+		for (std::size_t i = 0; i + 2 < geo->indices.size(); i += 3)
+		{
+			out.triangles.emplace_back(geo->indices[i], geo->indices[i + 1], geo->indices[i + 2], 0);
+		}
+		return out;
 	}
 
 	static JPH::ShapeRefC GetOrCreateColliderShape(std::unordered_map<uint64_t, JPH::ShapeRefC>& cache, const ColliderComponent& c)
@@ -641,6 +836,12 @@ namespace aether
 				break;
 			case PhysicsShapeType::Cylinder:
 				key = CylinderKey(c.halfHeight, c.radius);
+				break;
+			case PhysicsShapeType::ConvexHull:
+				key = MeshSourceKey(c.meshSource, 4);
+				break;
+			case PhysicsShapeType::Mesh:
+				key = MeshSourceKey(c.meshSource, 5);
 				break;
 		}
 		if (const auto it = cache.find(key); it != cache.end())
@@ -663,6 +864,31 @@ namespace aether
 			case PhysicsShapeType::Cylinder:
 				result = JPH::CylinderShapeSettings{c.halfHeight, c.radius}.Create();
 				break;
+			case PhysicsShapeType::ConvexHull:
+			{
+				const std::optional<MeshSourceGeometry> geo = LoadMeshSourceGeometry(c.meshSource);
+				if (!geo.has_value())
+				{
+					return {};
+				}
+				result = JPH::ConvexHullShapeSettings{geo->positions}.Create();
+				break;
+			}
+			case PhysicsShapeType::Mesh:
+			{
+				const std::optional<MeshSourceGeometry> geo = LoadMeshSourceGeometry(c.meshSource);
+				if (!geo.has_value())
+				{
+					return {};
+				}
+				if (geo->triangles.empty())
+				{
+					AE_WARN(LogCategory::Engine, "PhysicsSystem: collider mesh_source '{}' produced no triangles (unindexed or fully-degenerate mesh)", c.meshSource);
+					return {};
+				}
+				result = JPH::MeshShapeSettings{geo->triangleVertices, geo->triangles}.Create();
+				break;
+			}
 		}
 		if (result.HasError())
 		{
@@ -670,6 +896,32 @@ namespace aether
 			return {};
 		}
 		return cache.emplace(key, result.Get()).first->second;
+	}
+
+	// Character capsules are not cached like collider shapes: they change per-entity via
+	// live inspector edits (StepCharacters rebuilds on a radius/halfHeight change) far more
+	// often than collider dimensions do, so the cache would mostly hold one-shot entries.
+	static JPH::ShapeRefC MakeCharacterCapsuleShape(float halfHeight, float radius)
+	{
+		JPH::CapsuleShapeSettings capsuleSettings{halfHeight, radius};
+		const JPH::ShapeSettings::ShapeResult capsuleResult = capsuleSettings.Create();
+		if (capsuleResult.HasError())
+		{
+			AE_WARN(LogCategory::Engine, "PhysicsSystem: character capsule shape error: {}", capsuleResult.GetError().c_str());
+			return {};
+		}
+		// CharacterVirtual expects the shape's bottom at local (0,0,0) - its mPosition
+		// tracks the character's FEET, not its centre - but CapsuleShape is centred on its
+		// own middle, so lift it by half-height + radius, exactly like Jolt's own character
+		// samples (CharacterBaseTest::sCreateCapsuleShape).
+		const JPH::RotatedTranslatedShapeSettings offsetSettings{JPH::Vec3(0.0f, halfHeight + radius, 0.0f), JPH::Quat::sIdentity(), capsuleResult.Get()};
+		const JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
+		if (offsetResult.HasError())
+		{
+			AE_WARN(LogCategory::Engine, "PhysicsSystem: character capsule offset error: {}", offsetResult.GetError().c_str());
+			return {};
+		}
+		return offsetResult.Get();
 	}
 
 	static void ApplyRigidBodyTunables(JPH::BodyCreationSettings& bcs, const RigidBodyComponent& rb)
@@ -717,7 +969,13 @@ namespace aether
 	}
 
 
-	static JPH::Constraint* CreateJointConstraint(const JointComponent& j, JPH::Body& b1, JPH::Body& b2)
+	// Templated so both JointComponent (one authored joint per entity) and JointEntry
+	// (many script-created joints per entity - see JointEntry's own comment) drive the
+	// same Jolt constraint construction from the same field shape without duplicating
+	// this switch. Requires only that JointLike exposes type/anchor/axis/minLimit/
+	// maxLimit/distance/swingLimit, which both do.
+	template<typename JointLike>
+	static JPH::Constraint* CreateJointConstraint(const JointLike& j, JPH::Body& b1, JPH::Body& b2)
 	{
 		const JPH::RVec3 anchor(j.anchor.x, j.anchor.y, j.anchor.z);
 		const glm::vec3 axisGlm = glm::length(j.axis) > 1e-6f ? glm::normalize(j.axis) : glm::vec3(0.0f, 1.0f, 0.0f);
@@ -783,6 +1041,25 @@ namespace aether
 				}
 				return s.Create(b1, b2);
 			}
+			case JointType::SwingTwist:
+			{
+				JPH::SwingTwistConstraintSettings s;
+				s.mSpace = JPH::EConstraintSpace::WorldSpace;
+				s.mPosition1 = anchor;
+				s.mPosition2 = anchor;
+				s.mTwistAxis1 = axis;
+				s.mTwistAxis2 = axis;
+				s.mPlaneAxis1 = axis.GetNormalizedPerpendicular();
+				s.mPlaneAxis2 = axis.GetNormalizedPerpendicular();
+				s.mNormalHalfConeAngle = j.swingLimit;
+				s.mPlaneHalfConeAngle = j.swingLimit;
+				// Jolt's own default twist range is [0, 0] (fully locked) - unlike Hinge's
+				// own default of [-pi, pi], so "unspecified" has to be filled in by hand here
+				// to keep the same "equal limits means free" convention every other joint uses.
+				s.mTwistMinAngle = j.minLimit < j.maxLimit ? j.minLimit : -glm::pi<float>();
+				s.mTwistMaxAngle = j.minLimit < j.maxLimit ? j.maxLimit : glm::pi<float>();
+				return s.Create(b1, b2);
+			}
 		}
 		return nullptr;
 	}
@@ -809,6 +1086,28 @@ namespace aether
 				AE_WARN(LogCategory::Engine, "Entity {} has both 3D and 2D physics components; skipping its 3D body (remove one set)", World::FromEntt(enttEntity).id);
 				continue;
 			}
+			// A character controller shape-owns its entity the same way a rigid body does
+			// (see CharacterControllerComponent) - the two must never both try to sync
+			// PhysicsStateComponent for the same entity.
+			if (reg.any_of<CharacterControllerComponent>(enttEntity))
+			{
+				AE_WARN(LogCategory::Engine, "Entity {} has both a Rigid Body/Collider and a Character Controller; skipping its rigid body (remove one set)", World::FromEntt(enttEntity).id);
+				continue;
+			}
+
+			const PhysicsMotionType motion = rb != nullptr ? rb->motionType : PhysicsMotionType::Static;
+			// Jolt's own MeshShape::MustBeStatic() is advisory only - nothing in Jolt's
+			// body-creation path enforces it, so this engine must reject the mismatch
+			// itself rather than hand Jolt a triangle-mesh shape on a moving body (per
+			// MeshShape's own doc comment, undefined mass/behaviour would follow).
+			// ConvexHull has no such restriction (Jolt reduces it to a genuine convex
+			// surface, usable on any motion type) - only the exact-triangle Mesh shape
+			// needs this guard.
+			if (collider.shape == PhysicsShapeType::Mesh && motion != PhysicsMotionType::Static)
+			{
+				AE_WARN(LogCategory::Engine, "Entity {} has a Mesh collider on a non-Static body - Jolt requires MeshShape bodies to be Static. Use ConvexHull for a moving mesh-sourced collider, or set motion to Static. Skipping its body.", World::FromEntt(enttEntity).id);
+				continue;
+			}
 
 			JPH::ShapeRefC shape = GetOrCreateColliderShape(m_impl->shapeCache, collider);
 			if (shape == nullptr)
@@ -829,7 +1128,6 @@ namespace aether
 			const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
 			const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
 
-			const PhysicsMotionType motion = rb != nullptr ? rb->motionType : PhysicsMotionType::Static;
 			// Statics belong in the non-moving broad-phase tree: Jolt keeps that tree separate
 			// precisely so it is not rebuilt every frame, and leaving them on Moving also pairs
 			// every static against every other static in the broad phase for nothing.
@@ -885,12 +1183,228 @@ namespace aether
 			{
 				bi.SetLinearVelocity(id, ToJolt(rb->initialVelocity));
 			}
+			if (rb != nullptr && glm::dot(rb->initialAngularVelocity, rb->initialAngularVelocity) > 0.f)
+			{
+				bi.SetAngularVelocity(id, ToJolt(rb->initialAngularVelocity));
+			}
 		}
 
 		if (addedStatic)
 		{
 			AE_PROFILE_ZONE_N("Phys.OptimizeBroadPhase");
 			m_impl->physics->OptimizeBroadPhase();
+		}
+	}
+
+	void PhysicsSystem::FlushPendingCharacters(World& world)
+	{
+		AE_PROFILE_ZONE_N("Phys.FlushPendingCharacters");
+		auto& reg = world.GetRegistry();
+		AE_PROFILE_PLOT("Phys.CharacterControllers", static_cast<int64_t>(world.View<CharacterControllerComponent>().size()));
+
+		for (auto&& [enttEntity, cc]: world.View<CharacterControllerComponent>().each())
+		{
+			const Entity entity = World::FromEntt(enttEntity);
+			const auto existing = m_impl->characters.find(entity.id);
+			if (existing != m_impl->characters.end())
+			{
+				// Refresh the physics-thread-owned snapshot with this frame's authored
+				// tunables and script input - see Impl::LiveCharacter. The one-shot jump
+				// request is consumed here (not inside StepCharacters), so however many
+				// fixed substeps run this frame, the jump is armed for exactly one of them.
+				Impl::LiveCharacter& live = existing->second;
+				CharacterControllerComponent& io = live.io;
+				io.radius = cc.radius;
+				io.halfHeight = cc.halfHeight;
+				io.maxSlopeAngle = cc.maxSlopeAngle;
+				io.stepHeight = cc.stepHeight;
+				io.groundSnapDistance = cc.groundSnapDistance;
+				io.mass = cc.mass;
+				io.maxPushForce = cc.maxPushForce;
+				io.gravityScale = cc.gravityScale;
+				io.locallySimulated = cc.locallySimulated;
+				io.desiredVelocity = cc.desiredVelocity;
+				io.velocityOverride = cc.velocityOverride;
+				io.pendingJumpSpeed = cc.pendingJumpSpeed;
+				cc.pendingJumpSpeed = 0.0f;
+
+				if (!cc.locallySimulated)
+				{
+					// Non-owner shadow (see CharacterControllerComponent::locallySimulated):
+					// mirror whatever already wrote TransformComponent (replication) into the
+					// Jolt-side character now, on the game thread, while the physics thread is
+					// idle. StepCharacters sees locallySimulated == false and leaves it here
+					// rather than integrating input/gravity against it.
+					if (const auto* tc = reg.try_get<TransformComponent>(enttEntity))
+					{
+						live.character->SetPosition(ToJolt(ExtractPosition(*tc)));
+						live.character->SetRotation(ToJolt(ExtractRotation(*tc)));
+					}
+				}
+				continue;
+			}
+
+			if (reg.any_of<RigidBodyComponent, ColliderComponent>(enttEntity))
+			{
+				AE_WARN(LogCategory::Engine, "Entity {} has both a Character Controller and a Rigid Body/Collider; skipping its character body (remove one set)", entity.id);
+				continue;
+			}
+
+			const JPH::ShapeRefC shape = MakeCharacterCapsuleShape(cc.halfHeight, cc.radius);
+			if (shape == nullptr)
+			{
+				continue;
+			}
+
+			auto* const tc = reg.try_get<TransformComponent>(enttEntity);
+			const glm::vec3 pos = tc != nullptr ? ExtractPosition(*tc) : glm::vec3(0.f);
+			const glm::quat rot = tc != nullptr ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
+
+			JPH::CharacterVirtualSettings settings;
+			settings.mShape = shape;
+			settings.mUp = JPH::Vec3::sAxisY();
+			settings.mMaxSlopeAngle = cc.maxSlopeAngle;
+			settings.mMass = cc.mass;
+			settings.mMaxStrength = cc.maxPushForce;
+			// Inner rigid body: gives the character presence in the world outside its own
+			// collision queries - see the class comment on CharacterControllerComponent for
+			// what this costs and CharacterVirtual's own class comment for why a virtual
+			// character needs one at all (it is never added to the broad phase itself).
+			// Kinematic, created and destroyed automatically by CharacterVirtual's own
+			// constructor/destructor, and kept in sync automatically too: Jolt calls
+			// UpdateInnerBodyTransform() from inside SetPosition/SetRotation and at the end
+			// of every Update()/ExtendedUpdate() call, so nothing here has to remember to
+			// push a transform - only StepCharacters' shape-rebuild path has to remember to
+			// call SetInnerBodyShape after SetShape (Jolt does not do that half itself).
+			settings.mInnerBodyShape = shape;
+			settings.mInnerBodyLayer = Layers::kMoving;
+
+			Impl::LiveCharacter live;
+			live.character = new JPH::CharacterVirtual(&settings, JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), static_cast<JPH::uint64>(entity.id), m_impl->physics.get());
+			live.builtRadius = cc.radius;
+			live.builtHalfHeight = cc.halfHeight;
+			live.io = cc;
+			// A jump requested before the body even existed has nothing to act on yet.
+			live.io.pendingJumpSpeed = 0.0f;
+			cc.pendingJumpSpeed = 0.0f;
+			m_impl->characters.emplace(entity.id, std::move(live));
+
+			const glm::vec3 authoredScale = tc != nullptr ? ExtractScale(tc->localToWorld) : glm::vec3(1.0f);
+			reg.emplace_or_replace<PhysicsStateComponent>(enttEntity, pos, rot, pos, rot, authoredScale);
+		}
+	}
+
+	void PhysicsSystem::StepCharacters(float dt)
+	{
+		if (m_impl->characters.empty())
+		{
+			return;
+		}
+		AE_PROFILE_ZONE_N("Phys.StepCharacters");
+
+		for (auto& [entityId, live]: m_impl->characters)
+		{
+			(void) entityId;
+			JPH::CharacterVirtual* const character = live.character.GetPtr();
+			CharacterControllerComponent& io = live.io;
+
+			// Shape rebuild on an authored radius/halfHeight change (inspector/MCP edit).
+			// FLT_MAX skips the post-switch penetration check: the new capsule is never
+			// smaller everywhere than the old one in a way that matters for this game, and
+			// refusing the switch would leave the character on a shape that no longer
+			// matches what FlushPendingCharacters just told the caller it has.
+			if (live.builtRadius != io.radius || live.builtHalfHeight != io.halfHeight)
+			{
+				if (const JPH::ShapeRefC shape = MakeCharacterCapsuleShape(io.halfHeight, io.radius))
+				{
+					character->SetShape(shape, FLT_MAX, m_impl->physics->GetDefaultBroadPhaseLayerFilter(Layers::kMoving), m_impl->physics->GetDefaultLayerFilter(Layers::kMoving), {}, {}, *m_impl->tempAllocator);
+					// SetShape does not update the inner rigid body's shape by itself
+					// (see SetInnerBodyShape's own doc comment) - without this the
+					// character's own collision and the inner body's presence for
+					// everyone else silently drift apart on a live radius/halfHeight edit.
+					character->SetInnerBodyShape(shape);
+					live.builtRadius = io.radius;
+					live.builtHalfHeight = io.halfHeight;
+				}
+			}
+
+			character->SetMaxSlopeAngle(io.maxSlopeAngle);
+			character->SetMass(io.mass);
+			character->SetMaxStrength(io.maxPushForce);
+
+			if (!io.locallySimulated)
+			{
+				// Position already mirrored from the replicated transform by
+				// FlushPendingCharacters this frame - nothing to integrate.
+				io.isGrounded = false;
+				io.groundNormal = glm::vec3(0.0f, 1.0f, 0.0f);
+				io.velocity = glm::vec3(0.0f);
+				continue;
+			}
+
+			const JPH::Vec3 up = character->GetUp();
+			const JPH::Vec3 gravity = m_impl->physics->GetGravity() * io.gravityScale;
+			const JPH::Vec3 currentVelocity = character->GetLinearVelocity();
+			const JPH::Vec3 verticalVelocity = up * currentVelocity.Dot(up);
+			const JPH::Vec3 groundVelocity = character->GetGroundVelocity();
+			const bool onGround = character->GetGroundState() == JPH::CharacterBase::EGroundState::OnGround;
+			// Matches Jolt's own CharacterVirtual sample: 0.1 m/s of tolerance so ordinary
+			// floating-point noise in the ground velocity estimate doesn't flicker the
+			// character between "assume ground velocity" and "keep falling" every frame.
+			const bool movingTowardsGround = (currentVelocity - groundVelocity).Dot(up) < 0.1f;
+
+			JPH::Vec3 newVelocity;
+			if (onGround && movingTowardsGround)
+			{
+				newVelocity = groundVelocity;
+				if (io.pendingJumpSpeed > 0.0f)
+				{
+					newVelocity += up * io.pendingJumpSpeed;
+				}
+			}
+			else
+			{
+				newVelocity = verticalVelocity;
+			}
+			// Consumed whether or not it was actually grounded to catch it: no jump
+			// buffering / coyote time. A jump requested a frame too early is simply lost,
+			// same as walking into a wall a frame too early does not queue the walk.
+			io.pendingJumpSpeed = 0.0f;
+
+			newVelocity += gravity * dt;
+
+			if (io.velocityOverride)
+			{
+				// Script asked to fully own velocity this step (Physics-style SetVelocity) -
+				// replaces the gravity/ground-follow velocity computed above outright.
+				newVelocity = ToJolt(io.desiredVelocity);
+			}
+			else
+			{
+				// Move()-style horizontal input: strip any vertical component the caller
+				// supplied (by mistake or otherwise) so it can never fight the vertical
+				// velocity gravity/jump/ground-follow just computed.
+				JPH::Vec3 desired = ToJolt(io.desiredVelocity);
+				desired -= up * desired.Dot(up);
+				newVelocity += desired;
+			}
+
+			character->SetLinearVelocity(newVelocity);
+
+			JPH::CharacterVirtual::ExtendedUpdateSettings updateSettings;
+			updateSettings.mStickToFloorStepDown = -up * io.groundSnapDistance;
+			updateSettings.mWalkStairsStepUp = up * io.stepHeight;
+
+			character->ExtendedUpdate(dt, gravity, updateSettings,
+			        m_impl->physics->GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
+			        m_impl->physics->GetDefaultLayerFilter(Layers::kMoving),
+			        {},
+			        {},
+			        *m_impl->tempAllocator);
+
+			io.isGrounded = character->GetGroundState() == JPH::CharacterBase::EGroundState::OnGround;
+			io.groundNormal = FromJolt(character->GetGroundNormal());
+			io.velocity = FromJolt(character->GetLinearVelocity());
 		}
 	}
 
@@ -976,6 +1490,98 @@ namespace aether
 			live.collisionDisabled = collisionDisabled;
 			m_impl->constraints.emplace(id, std::move(live));
 			joint.constraintId = id;
+		}
+	}
+
+	// Same body-lookup/creation logic as FlushPendingJoints, over ScriptJointsComponent's
+	// vector instead of JointComponent's single field set, and keyed by the handle
+	// CreateFixedConstraint/CreateDistanceConstraint already minted (via `entry.created`,
+	// not `entry.handle != 0`, since the handle exists from the moment script asked for
+	// it - see JointEntry's own comment).
+	void PhysicsSystem::FlushPendingScriptJoints(World& world)
+	{
+		AE_PROFILE_ZONE_N("Phys.FlushScriptJoints");
+		auto& reg = world.GetRegistry();
+		auto& physics = *m_impl->physics;
+		const JPH::BodyLockInterface& bli = physics.GetBodyLockInterface();
+
+		for (auto&& [enttE, comp]: reg.view<ScriptJointsComponent>().each())
+		{
+			for (JointEntry& entry: comp.joints)
+			{
+				if (entry.created)
+				{
+					continue;
+				}
+				const auto* rbSelf = reg.try_get<RigidBodyComponent>(enttE);
+				if (rbSelf == nullptr || !rbSelf->body.IsValid())
+				{
+					continue;
+				}
+				const JPH::BodyID selfId = ToJolt(rbSelf->body);
+
+				JPH::BodyID otherId;
+				if (entry.target.IsValid() && reg.valid(World::ToEntt(entry.target)))
+				{
+					const auto* rbOther = reg.try_get<RigidBodyComponent>(World::ToEntt(entry.target));
+					if (rbOther == nullptr || !rbOther->body.IsValid())
+					{
+						continue;
+					}
+					otherId = ToJolt(rbOther->body);
+				}
+
+				auto joinGroup = [&](JPH::Body& body)
+				{
+					if (body.GetCollisionGroup().GetGroupFilter() != m_impl->groupFilter.GetPtr())
+					{
+						body.SetCollisionGroup(JPH::CollisionGroup(m_impl->groupFilter.GetPtr(), 0, body.GetID().GetIndex()));
+					}
+				};
+
+				JPH::Constraint* created = nullptr;
+				bool collisionDisabled = false;
+				if (otherId.IsInvalid())
+				{
+					const JPH::BodyLockWrite lock(bli, selfId);
+					if (lock.Succeeded())
+					{
+						created = CreateJointConstraint(entry, lock.GetBody(), JPH::Body::sFixedToWorld);
+					}
+				}
+				else
+				{
+					const JPH::BodyID ids[2] = {selfId, otherId};
+					const JPH::BodyLockMultiWrite locks(bli, ids, 2);
+					JPH::Body* b1 = locks.GetBody(0);
+					JPH::Body* b2 = locks.GetBody(1);
+					if (b1 != nullptr && b2 != nullptr)
+					{
+						created = CreateJointConstraint(entry, *b1, *b2);
+						if (created != nullptr && !entry.collideConnected)
+						{
+							joinGroup(*b1);
+							joinGroup(*b2);
+							m_impl->groupFilter->DisableCollision(b1->GetID().GetIndex(), b2->GetID().GetIndex());
+							collisionDisabled = true;
+						}
+					}
+				}
+				if (created == nullptr)
+				{
+					continue;
+				}
+				created->SetEnabled(true);
+
+				physics.AddConstraint(created);
+				Impl::LiveConstraint live;
+				live.constraint = created;
+				live.bodyA = selfId.GetIndex();
+				live.bodyB = otherId.IsInvalid() ? 0u : otherId.GetIndex();
+				live.collisionDisabled = collisionDisabled;
+				m_impl->constraints.emplace(entry.handle, std::move(live));
+				entry.created = true;
+			}
 		}
 	}
 
@@ -1139,23 +1745,128 @@ namespace aether
 
 	void PhysicsSystem::DestroyJointsTouching(entt::registry& registry, entt::entity enttEntity)
 	{
-		if (m_impl->constraints.empty())
+		if (!m_impl->constraints.empty())
+		{
+			for (auto&& [je, joint]: registry.view<JointComponent>().each())
+			{
+				if (joint.constraintId == 0)
+				{
+					continue;
+				}
+				const bool touches = je == enttEntity || (joint.target.IsValid() && World::ToEntt(joint.target) == enttEntity);
+				if (!touches)
+				{
+					continue;
+				}
+				RemoveJointConstraint(joint.constraintId);
+				joint.constraintId = 0;
+			}
+		}
+
+		// ScriptJointsComponent entries must be ERASED, not merely zeroed, or
+		// FlushPendingScriptJoints would try forever to build a joint against a body
+		// that no longer exists. Runs regardless of whether anything has actually
+		// been created in Jolt yet - a still-PENDING entry naming a dying target is
+		// exactly as wrong to leave behind as a live one, and a script holding that
+		// entry's handle must see DestroyConstraint on it as the documented no-op
+		// rather than reach a stale owner.
+		for (auto&& [je, comp]: registry.view<ScriptJointsComponent>().each())
+		{
+			std::erase_if(comp.joints,
+			        [&](const JointEntry& entry)
+			        {
+				        const bool touches = je == enttEntity || (entry.target.IsValid() && World::ToEntt(entry.target) == enttEntity);
+				        if (!touches)
+				        {
+					        return false;
+				        }
+				        if (entry.created)
+				        {
+					        RemoveJointConstraint(entry.handle);
+				        }
+				        m_impl->scriptJointOwners.erase(entry.handle);
+				        return true;
+			        });
+		}
+	}
+
+	// Belt-and-suspenders alongside DestroyJointsTouching's own scan: covers this
+	// entity's OWN entries the moment ScriptJointsComponent itself is removed or the
+	// entity dies, independent of whichever component's on_destroy signal entt
+	// happens to fire first during whole-entity destruction.
+	void PhysicsSystem::OnScriptJointsDestroyed(entt::registry& registry, entt::entity enttEntity)
+	{
+		WaitForStep();
+		auto* comp = registry.try_get<ScriptJointsComponent>(enttEntity);
+		if (comp == nullptr)
 		{
 			return;
 		}
-		for (auto&& [je, joint]: registry.view<JointComponent>().each())
+		for (const JointEntry& entry: comp->joints)
 		{
-			if (joint.constraintId == 0)
+			if (entry.created)
 			{
-				continue;
+				RemoveJointConstraint(entry.handle);
 			}
-			const bool touches = je == enttEntity || (joint.target.IsValid() && World::ToEntt(joint.target) == enttEntity);
-			if (!touches)
-			{
-				continue;
-			}
-			RemoveJointConstraint(joint.constraintId);
-			joint.constraintId = 0;
+			m_impl->scriptJointOwners.erase(entry.handle);
+		}
+	}
+
+	std::uint32_t PhysicsSystem::AddScriptJoint(World& world, Entity self, JointEntry entry)
+	{
+		if (!self.IsValid() || !world.GetRegistry().valid(World::ToEntt(self)))
+		{
+			return 0;
+		}
+		entry.handle = m_impl->nextConstraintId++;
+		entry.created = false;
+		world.GetRegistry().get_or_emplace<ScriptJointsComponent>(World::ToEntt(self)).joints.push_back(entry);
+		m_impl->scriptJointOwners.emplace(entry.handle, self);
+		return entry.handle;
+	}
+
+	std::uint32_t PhysicsSystem::CreateFixedConstraint(World& world, Entity self, Entity target)
+	{
+		JointEntry entry;
+		entry.type = JointType::Fixed;
+		entry.target = target;
+		return AddScriptJoint(world, self, entry);
+	}
+
+	std::uint32_t PhysicsSystem::CreateDistanceConstraint(World& world, Entity self, Entity target, glm::vec3 worldAnchor, float restLength)
+	{
+		JointEntry entry;
+		entry.type = JointType::Distance;
+		entry.target = target;
+		entry.anchor = worldAnchor;
+		entry.distance = std::max(restLength, 0.0f);
+		return AddScriptJoint(world, self, entry);
+	}
+
+	void PhysicsSystem::DestroyConstraint(World& world, std::uint32_t handle)
+	{
+		const auto ownerIt = m_impl->scriptJointOwners.find(handle);
+		if (ownerIt == m_impl->scriptJointOwners.end())
+		{
+			return; // unknown or already-destroyed handle - documented no-op, see the header
+		}
+		const Entity owner = ownerIt->second;
+		WaitForStep();
+		RemoveJointConstraint(handle); // no-op if FlushPendingScriptJoints never actually created it
+		m_impl->scriptJointOwners.erase(ownerIt);
+		if (!world.GetRegistry().valid(World::ToEntt(owner)))
+		{
+			return;
+		}
+		auto* comp = world.TryGet<ScriptJointsComponent>(owner);
+		if (comp == nullptr)
+		{
+			return;
+		}
+		std::erase_if(comp->joints, [handle](const JointEntry& e) { return e.handle == handle; });
+		if (comp->joints.empty())
+		{
+			world.Remove<ScriptJointsComponent>(owner);
 		}
 	}
 
@@ -1183,6 +1894,12 @@ namespace aether
 		const JPH::BodyID id = ToJolt(rigid->body);
 		bodyInterface.RemoveBody(id);
 		bodyInterface.DestroyBody(id);
+	}
+
+	void PhysicsSystem::OnCharacterControllerDestroyed([[maybe_unused]] entt::registry& registry, entt::entity enttEntity)
+	{
+		WaitForStep();
+		m_impl->characters.erase(World::FromEntt(enttEntity).id);
 	}
 
 	void PhysicsSystem::SetLinearVelocity(PhysicsBodyHandle body, glm::vec3 v)
@@ -1238,6 +1955,17 @@ namespace aether
 			return;
 		}
 		m_impl->physics->GetBodyInterfaceNoLock().AddImpulse(id, ToJolt(impulse));
+	}
+
+	void PhysicsSystem::AddImpulseAtPoint(PhysicsBodyHandle body, glm::vec3 impulse, glm::vec3 worldPoint)
+	{
+		WaitForStep();
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return;
+		}
+		m_impl->physics->GetBodyInterfaceNoLock().AddImpulse(id, ToJolt(impulse), JPH::RVec3(worldPoint.x, worldPoint.y, worldPoint.z));
 	}
 
 	void PhysicsSystem::AddForce(PhysicsBodyHandle body, glm::vec3 force)
@@ -1384,6 +2112,23 @@ namespace aether
 		world.Remove<PhysicsStateComponent>(entity);
 	}
 
+	void PhysicsSystem::SetBodyMotionType(World& world, Entity entity, PhysicsMotionType motionType)
+	{
+		auto* rb = world.TryGet<RigidBodyComponent>(entity);
+		if (rb == nullptr)
+		{
+			return;
+		}
+		rb->motionType = motionType;
+		if (!rb->body.IsValid())
+		{
+			return;
+		}
+		WaitForStep();
+		const JPH::BodyID id = ToJolt(rb->body);
+		m_impl->physics->GetBodyInterfaceNoLock().SetMotionType(id, ToJoltMotionType(motionType), JPH::EActivation::Activate);
+	}
+
 	void PhysicsSystem::WaitForStepIdle()
 	{
 		WaitForStep();
@@ -1396,6 +2141,8 @@ namespace aether
 		WaitForStep();
 		FlushPendingBodies(world);
 		FlushPendingJoints(world);
+		FlushPendingScriptJoints(world);
+		FlushPendingCharacters(world);
 	}
 
 	PhysicsSystem::RaycastResult PhysicsSystem::CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance)

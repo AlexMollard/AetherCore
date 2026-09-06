@@ -99,6 +99,9 @@ namespace aether::app::scene
 		bool startActive = true;
 		glm::bvec3 lockPosition{false};
 		glm::bvec3 lockRotation{false};
+		// ConvexHull/Mesh shapes only: a project:// path to the source model. Empty
+		// for every other shape.
+		std::string meshSource;
 	};
 
 	struct JointRecord
@@ -110,6 +113,22 @@ namespace aether::app::scene
 		float minLimit = 0.0f;
 		float maxLimit = 0.0f;
 		float distance = -1.0f;
+		bool collideConnected = false;
+	};
+
+	// One ScriptJointsComponent entry (see PhysicsComponents.hpp's JointEntry) - a
+	// welded/roped contraption reloads still connected. Handle/created are runtime-
+	// only, same as JointRecord omitting JointComponent's own constraintId.
+	struct ScriptJointRecord
+	{
+		JointType type = JointType::Fixed;
+		int targetIndex = -1;
+		glm::vec3 anchor{0.0f};
+		glm::vec3 axis{0.0f, 1.0f, 0.0f};
+		float minLimit = 0.0f;
+		float maxLimit = 0.0f;
+		float distance = -1.0f;
+		float swingLimit = 0.0f;
 		bool collideConnected = false;
 	};
 
@@ -191,6 +210,7 @@ namespace aether::app::scene
 		bool mainCamera = false;
 		std::vector<ScriptRecord> scripts;
 		std::optional<JointRecord> joint;
+		std::vector<ScriptJointRecord> scriptJoints;
 		// 2D physics: authored fields only (runtime body/shape/joint handles are
 		// stripped at capture so play-stop restore never resurrects stale ids).
 		std::optional<Joint2DComponent> joint2D;
@@ -414,7 +434,11 @@ std::vector<std::string> ListSceneFiles();
 
 	// outCreated (optional) receives the created entities aligned with prefab.entities
 	// by index, so callers can map each spawned entity back to its source prefab entry.
-	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld, std::vector<Entity>* outCreated = nullptr);
+	// markTransient stamps the returned root SceneTransient (see Entity.MarkTransient):
+	// callers instantiating for authoring (the editor's Duplicate command) leave this
+	// false so the copy saves normally; callers spawning at runtime (Net.Spawn,
+	// Scene.Instantiate) pass true so a save mid-Play never bakes the spawn in.
+	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld, std::vector<Entity>* outCreated = nullptr, bool markTransient = false);
 
 	// Create a LINKED prefab instance (unlike InstantiatePrefab, which copies): the
 	// root is tagged (PrefabInstance + SceneTransient + PrefabLink subtree) so the
