@@ -1,0 +1,65 @@
+# AetherCore scene - Sandbox project lobby.
+#
+# The room-code screen a player sees before the arena loads (NetSandboxConnectMenu.cs).
+# A separate scene from the arena, not a canvas overlaid on it, because NetSessionDirector's
+# offline fallback evaluates from the first frame it attaches: sharing one scene would spawn
+# a solo local player on frame 1, before either button was ever pressed, and clicking Host
+# afterward would then spawn a SECOND, properly networked player - one orphaned
+# non-networked body left behind. The scene split removes that ambiguity outright; a
+# successful host or join does Api.SceneLoad('Sandbox'), which tears this whole canvas
+# down for free, so there is no hide-on-success bookkeeping to get wrong either
+# (see NetSandboxConnectMenu.cs's own remarks).
+#
+# Lobby Camera is included deliberately, not left out to see if UI renders without one -
+# PublishVerify.cpp warns on a startup scene with no main camera, so a scene that might
+# ever be the one Play/publish starts from should always carry one regardless.
+[environment]
+ambient = [ 0.05, 0.05, 0.06 ]
+sky_horizon = [ 0.1, 0.1, 0.13 ]
+sky_void = [ 0.0, 0.0, 0.0 ]
+sky_zenith = [ 0.02, 0.02, 0.03 ]
+sun_color = [ 1.0, 1.0, 1.0 ]
+sun_direction = [ 0.0, 1.0, 0.0 ]
+sun_intensity = 0.0
+
+[scene]
+features = [ 'meshes_3d', 'lighting_3d' ]
+kind = '3d'
+name = ''
+version = 16
+
+# --- index 0: Lobby Camera - plain perspective camera, no gameplay features needed
+# (no physics, no character controller: this scene never spawns a body). ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Lobby Camera'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 2.0
+    background = 'solid_color'
+    clear_color = [ 0.05, 0.05, 0.06 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 10.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+# --- index 1: ConnectMenu - room-code lobby UI (builds its own canvas entirely from
+# script; no scene-authored UI needed). ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'ConnectMenu'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'NetSandboxConnectMenu'

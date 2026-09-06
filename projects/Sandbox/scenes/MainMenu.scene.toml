@@ -1,0 +1,73 @@
+# AetherCore scene - Sandbox project front door.
+#
+# Today (before this scene existed) ProjectSettings.toml's startupscene pointed straight
+# at the arena ("Sandbox"), so a published build dropped a player into solo play with no
+# in-game path to SandboxMenu's Host/Join screen at all - this scene, once startupscene is
+# repointed here, is what restores that path, not merely a nicer front end for one that
+# already worked. See UiMainMenu.cs's own file comment for the fuller reasoning.
+#
+# Pure chrome: no networking, no session, no player. "Play" -> Scene.Load("SandboxMenu")
+# (the existing connect ceremony, untouched). "Play Solo" -> Scene.Load("Sandbox") directly,
+# skipping the lobby - NetSessionDirector's own no-session fallback spawns one local player
+# exactly as it does when that scene is opened directly in the editor.
+#
+# Camera included deliberately, not left out to see if UI renders without one -
+# PublishVerify.cpp warns on a startup scene with no main camera (see SandboxMenu.scene.toml's
+# own comment for the same reasoning), and this may now be exactly that scene.
+[environment]
+ambient = [ 0.05, 0.05, 0.06 ]
+sky_horizon = [ 0.1, 0.1, 0.13 ]
+sky_void = [ 0.0, 0.0, 0.0 ]
+sky_zenith = [ 0.02, 0.02, 0.03 ]
+sun_color = [ 1.0, 1.0, 1.0 ]
+sun_direction = [ 0.0, 1.0, 0.0 ]
+sun_intensity = 0.0
+
+[scene]
+features = [ 'meshes_3d', 'lighting_3d' ]
+kind = '3d'
+name = ''
+version = 16
+
+# --- index 0: Menu Camera - plain perspective camera, no gameplay features needed (no
+# physics, no character controller: this scene never spawns a body). ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Menu Camera'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 2.0
+    background = 'solid_color'
+    clear_color = [ 0.05, 0.05, 0.06 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 10.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+# --- index 1: MainMenuRoot - title/Play/Play Solo/Settings/Quit UI, built entirely from
+# script (UiMainMenu), plus the shared Settings screen (UiSettingsScreen) it shows and
+# hides. Same entity, two scripts, in this order: UiMainMenu only ever looks its sibling
+# up in OnUpdate (see that file's own comment), so attach order here does not matter, but
+# listing UiMainMenu first matches "the thing this entity is mainly for" reading top to
+# bottom. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'MainMenuRoot'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'UiMainMenu'
+
+    [[entities.scripts]]
+    type = 'UiSettingsScreen'

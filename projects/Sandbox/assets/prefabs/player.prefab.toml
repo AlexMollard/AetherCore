@@ -1,0 +1,78 @@
+# Networked Sandbox player: the same Character Controller body authored on the
+# scene-placed 'Player' in Sandbox.scene.toml (copied verbatim - see that entity's
+# own comment for why these particular values), plus the two networking components
+# every replicated player needs, plus NetPlayerRig.
+#
+# `network_identity` and `network_transform` are deliberately empty tables - their
+# fields (netId/owner/spawnPrefab for the former; interpolation_delay etc. for the
+# latter) are either runtime state the host assigns at Net.Spawn or fine at their
+# compiled-in defaults, and the table's PRESENCE is what marks this entity as
+# replicated (see Whisper's own player.prefab.toml, which documents the same
+# convention for network_identity). Table keys verified against the actual
+# generic-serialize key derivation (SceneSerializerToml.cpp's ComponentTomlKey:
+# lower-case the display name, spaces to underscores - "Network Identity" ->
+# "network_identity", "Network Transform" -> "network_transform"; neither
+# component overrides it with a SerializeKey), not inferred from name similarity.
+#
+# Deliberately does NOT carry FirstPersonPlayer, PhysicsGun, SpawnMenu or
+# PropSpawner - NetPlayerRig attaches those four itself, and only on the owning
+# peer's copy, once ownership is confirmed. That containment is the whole point:
+# a prefab that baked them in directly would run every peer's local input and
+# build every peer's UI on every other peer's screen.
+[[entities]]
+name = 'Player'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+euler = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.character_controller]
+    gravity_scale = 2.0
+    ground_snap_distance = 0.3
+    half_height = 0.6
+    mass = 80.0
+    max_push_force = 600.0
+    max_slope_angle = 0.7853982
+    radius = 0.3
+    step_height = 0.3
+
+    [entities.network_identity]
+
+    [entities.network_transform]
+
+    [[entities.scripts]]
+    type = 'NetPlayerRig'
+
+# Main Camera - child of Player (index 0 in this file). main = false: unlike the
+# scene-placed camera this replaces, a freshly spawned copy must NOT pre-claim
+# the main camera slot for every peer at once - NetPlayerRig calls Camera.SetMain
+# itself, once, only after this specific copy's ownership is confirmed.
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Main Camera'
+parent = 0
+position = [ 0.0, 1.6, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 2.0
+    background = 'sky_gradient'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 18.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = false
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.05, 0.06, 0.1 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.03 ]
+        position = 1.0

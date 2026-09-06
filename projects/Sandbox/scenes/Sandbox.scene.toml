@@ -345,7 +345,7 @@ position = [ 0.0, 0.0, 0.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
-euler = [ 0.06345138, -0.021305813, 0.018616103 ]
+euler = [ 0.06345138, -0.021305816, 0.018616106 ]
 name = 'Stack Cube 1'
 node = 6927664850119593375
 parent = 8
@@ -394,13 +394,13 @@ tags = [ 'grabbable' ]
     shape = 'box'
 
 [[entities]]
-euler = [ 0.07177798, -0.015106394, 0.10789352 ]
+euler = [ 0.07177798, -0.015106398, 0.107893534 ]
 name = 'Stack Cube 2'
 node = 1513776108133627882
 parent = 8
 parent_node = 958683842504170339
 position = [ 2.99716, 0.8964431, 3.0016809 ]
-scale = [ 0.59999985, 0.6, 0.5999997 ]
+scale = [ 0.5999998, 0.6, 0.5999997 ]
 tags = [ 'grabbable' ]
 
     [entities.material]
@@ -443,13 +443,13 @@ tags = [ 'grabbable' ]
     shape = 'box'
 
 [[entities]]
-euler = [ 0.1971369, -0.013336277, 0.10569086 ]
+euler = [ 0.19713691, -0.013336277, 0.10569086 ]
 name = 'Stack Cube 3'
 node = 8731521832774725225
 parent = 8
 parent_node = 958683842504170339
 position = [ 2.9975104, 1.4946721, 3.003215 ]
-scale = [ 0.60000026, 0.6000001, 0.6000002 ]
+scale = [ 0.60000026, 0.6000001, 0.60000026 ]
 tags = [ 'grabbable' ]
 
     [entities.material]
@@ -492,13 +492,13 @@ tags = [ 'grabbable' ]
     shape = 'box'
 
 [[entities]]
-euler = [ 0.19340703, -0.012244551, -0.02434976 ]
+euler = [ 0.19340703, -0.012244551, -0.024349762 ]
 name = 'Stack Cube 4'
 node = -7599129434174199485
 parent = 8
 parent_node = 958683842504170339
 position = [ 3.0001054, 2.0798159, 3.003988 ]
-scale = [ 0.60000014, 0.5999997, 0.59999996 ]
+scale = [ 0.60000014, 0.59999967, 0.59999996 ]
 tags = [ 'grabbable' ]
 
     [entities.material]
@@ -1404,9 +1404,6 @@ scale = [ 1.0, 1.0, 1.0 ]
     restitution = 0.0
     sensor = false
     shape = 'box'
-
-    [[entities.scripts]]
-    type = 'Door'
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
