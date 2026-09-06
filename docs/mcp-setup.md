@@ -107,6 +107,16 @@ works" from a synthetic session that never had focus, since the lock silently
 never engages. Everything else - keyboard gameplay, menu navigation, and
 clicking game-rendered UI - is fair game for `engine.send_input` headlessly.
 
+**Gamepad caveat (contamination risk):** a physically connected controller is
+read for real alongside the synthetic state, and a stick resting even slightly
+off-centre injects continuous look/aim deltas into the game - observed live as
+a camera silently drifting to pitch 89/yaw 135 between captures with nobody
+touching it. Any "the view didn't change" observation from this machine is
+suspect unless the capture pair was taken close together with the stick
+verified centred. `engine.send_input`'s `pad_axis` is also a genuine
+*synthetic aim authority* (right-stick deltas drive the same look path
+mouse-look would), which mouse-look itself is not.
+
 ## Debugging a native crash reached through C# script
 
 AGENTS.md's crash-section promise (minidump + stacks + log tail under
