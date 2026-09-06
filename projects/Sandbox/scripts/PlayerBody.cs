@@ -76,6 +76,27 @@ public sealed class PlayerBody : EntityScript
 {
     public string ModelPath = "project://assets/models/Human/Human.gltf";
 
+    /// <summary>Uniform scale applied to the spawned "Body" root after LoadModel.
+    /// REQUIRED, not cosmetic: Entity.LoadModel calls AssetManager::SpawnModel with its
+    /// scale parameter defaulting to 1.0 - there is no way to pass a different one
+    /// through the script API (checked Entity.cs and aether_load_model directly). This
+    /// rig's raw glTF units are centimetres (its Hips bone sits at translation.y ~104
+    /// in the raw buffer - confirmed by reading the accessor bytes - which only reads
+    /// as a real adult hip height once scaled by 0.01 to metres). HumanDemo's own scene
+    /// only looks right because its mesh entities were hand-scaled 0.01 through the
+    /// editor's add-to-scene flow, a path this script never goes through - confirmed
+    /// live: without this, the body rendered roughly 100x too large.</summary>
+    public float ModelScale = 0.01f;
+
+    /// <summary>Extra yaw added on top of the computed facing (owner camera yaw or the
+    /// position-delta fallback) to correct for whichever way this rig's own bind pose
+    /// happens to face - Beta_Surface/Beta_Joints/FBX_Root all carry an identity
+    /// rotation in the source glTF (checked directly), so nothing here says which axis
+    /// "forward" is for this specific asset until it's actually seen on screen. Left at
+    /// 0 until proven wrong; a single 90/180/-90 correction here is the whole fix if the
+    /// body turns out to face sideways or backwards relative to the camera.</summary>
+    public float ModelForwardOffsetDegrees = 0.0f;
+
     public const string IdleClipName = "mixamo.com";
     public const string WalkClipName = "Walk";
 
@@ -114,6 +135,7 @@ public sealed class PlayerBody : EntityScript
         _bodyRoot.Position = Self.Position;
         _bodyRoot.SetParent(Self);
         _bodyRoot.LoadModel(ModelPath);
+        _bodyRoot.Scale = new Vector3(ModelScale, ModelScale, ModelScale);
 
         if (_bodyRoot.ChildCount < 2)
         {
@@ -184,7 +206,7 @@ public sealed class PlayerBody : EntityScript
 
         if (_bodyRoot.IsValid)
         {
-            _bodyRoot.EulerDegrees = new Vector3(0.0f, yaw, 0.0f);
+            _bodyRoot.EulerDegrees = new Vector3(0.0f, yaw + ModelForwardOffsetDegrees, 0.0f);
         }
     }
 
