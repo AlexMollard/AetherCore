@@ -21,6 +21,7 @@
 #endif
 
 #include "BakeOutputs.hpp"
+#include "FontProcessor.hpp"
 #include "MeshProcessor.hpp"
 
 namespace aether::assetpipeline::kenney
@@ -294,7 +295,7 @@ namespace aether::assetpipeline::kenney
 
 	// ── Pack listing ────────────────────────────────────────────────────────────────────
 
-	std::vector<PackEntry> ListPackModels(const fs::path& zipPath, const std::string& modelDir, std::string& error)
+	std::vector<PackEntry> ListPackModels(const fs::path& zipPath, const std::string& subDir, std::string& error, const std::vector<std::string>& extensions)
 	{
 		std::vector<PackEntry> entries;
 		std::string output;
@@ -305,7 +306,7 @@ namespace aether::assetpipeline::kenney
 			return entries;
 		}
 
-		const std::string prefix = modelDir + "/";
+		const std::string prefix = subDir + "/";
 		std::istringstream lines(output);
 		std::string line;
 		while (std::getline(lines, line))
@@ -324,7 +325,7 @@ namespace aether::assetpipeline::kenney
 				continue; // a subfolder (e.g. this pack's shared Textures/) - not a model itself
 			}
 			const std::string ext = ToLower(fs::path(rest).extension().generic_string());
-			if (ext != ".glb" && ext != ".gltf")
+			if (std::find(extensions.begin(), extensions.end(), ext) == extensions.end())
 			{
 				continue;
 			}
@@ -705,6 +706,10 @@ namespace aether::assetpipeline::kenney
 				return {false, true};
 			}
 
+			// Search on name only (no version): robust to a pack bumping its version later -
+			// re-finds the SAME section instead of creating a duplicate one for the new
+			// version. The version is still recorded, just in the heading text created
+			// below, not in what this call searches for.
 			const std::string heading = "## Kenney " + std::string(kEmDash) + " " + pack.name;
 			const std::size_t headingPos = text.find(heading);
 
@@ -714,11 +719,14 @@ namespace aether::assetpipeline::kenney
 				{
 					text += "\n";
 				}
-				text += "\n" + heading + "\n";
+				text += "\n" + heading + (pack.version.empty() ? "" : " (v" + pack.version + ")") + "\n";
 				text += "- Source: " + pack.pageUrl + "\n";
 				text += "- Author: " + pack.author + "\n";
 				text += "- Licence: " + pack.license + " (" + pack.licenseUrl + ")\n";
-				text += "- Files used (copied from `" + pack.modelDir + "/`):\n";
+				// modelDir names one shared folder every model in the pack was copied from -
+				// meaningless for a non-model pack (e.g. Input Prompts' fonts each come from
+				// their own per-family folder), so it is only mentioned when set.
+				text += (pack.modelDir.empty() ? std::string("- Files used:") : "- Files used (copied from `" + pack.modelDir + "/`):") + "\n";
 				text += "  " + bulletLine + "\n";
 			}
 			else
@@ -1048,6 +1056,105 @@ namespace aether::assetpipeline::kenney
 				result.warnings.push_back("could not locate 'PropDef[] Catalog' in " + catalogPath.generic_string() + " - catalogue entry NOT written, register it by hand:\n" + result.catalogEntry);
 			}
 		}
+
+		result.ok = true;
+		return result;
+	}
+
+	FontImportResult ImportFont(const FontImportRequest& request)
+	{
+		FontImportResult result;
+
+		if (request.fontName.empty())
+		{
+			result.error = "fontName is required";
+			return result;
+		}
+
+		const CacheResult cache = EnsurePackCached(request.pack, request.cacheDir);
+		if (!cache.ok)
+		{
+			result.error = cache.error;
+			return result;
+		}
+
+		const fs::path fontsDir = request.projectRoot / "assets" / "fonts";
+		const std::string sourceExt = ToLower(fs::path(request.zipMemberPath).extension().generic_string());
+		result.fontPath = fontsDir / (request.fontName + sourceExt);
+
+		std::error_code ec;
+		if (fs::exists(result.fontPath, ec))
+		{
+			result.fontAlreadyPresent = true;
+		}
+		else
+		{
+			const fs::path scratch = request.cacheDir / "_extract_font";
+			std::string extractError;
+			const fs::path extracted = ExtractMember(cache.zipPath, request.zipMemberPath, scratch, extractError);
+			if (extracted.empty())
+			{
+				result.error = extractError;
+				return result;
+			}
+			fs::create_directories(fontsDir, ec);
+			fs::copy_file(extracted, result.fontPath, fs::copy_options::overwrite_existing, ec);
+			if (ec)
+			{
+				result.error = "could not place font at " + result.fontPath.generic_string() + ": " + ec.message();
+				return result;
+			}
+		}
+
+		// The glyph-name -> codepoint reference text is not consumed by the engine at all -
+		// it exists so a script author knows which \uE0xx escape draws which key/button icon.
+		// Best-effort: its absence never fails the import.
+		if (!request.charMapZipMemberPath.empty())
+		{
+			result.charMapPath = fontsDir / (request.fontName + ".charmap.txt");
+			if (!fs::exists(result.charMapPath, ec))
+			{
+				const fs::path scratch = request.cacheDir / "_extract_font_map";
+				std::string extractError;
+				const fs::path extracted = ExtractMember(cache.zipPath, request.charMapZipMemberPath, scratch, extractError);
+				if (extracted.empty())
+				{
+					result.warnings.push_back("could not extract glyph map '" + request.charMapZipMemberPath + "': " + extractError);
+					result.charMapPath.clear();
+				}
+				else
+				{
+					fs::copy_file(extracted, result.charMapPath, fs::copy_options::overwrite_existing, ec);
+					if (ec)
+					{
+						result.warnings.push_back("could not place glyph map at " + result.charMapPath.generic_string() + ": " + ec.message());
+						result.charMapPath.clear();
+					}
+				}
+			}
+		}
+
+		// Same baker `AssetPacker bake-font` calls (FontProcessor.hpp) - not a subprocess to
+		// that CLI, a direct call to the library function it and this share.
+		result.curvesPath = fontsDir / (request.fontName + ".fontcurves");
+		if (!fs::exists(result.curvesPath, ec))
+		{
+			const FontProcessor::BakeResult baked = FontProcessor::BakeFont(result.fontPath, fontsDir);
+			if (!baked.success)
+			{
+				result.error = "font bake failed for '" + result.fontPath.generic_string() + "': " + baked.error;
+				return result;
+			}
+			result.bakedNow = true;
+			result.glyphCount = baked.glyphCount;
+		}
+
+		const std::string sourceFileName = fs::path(request.zipMemberPath).filename().generic_string();
+		result.creditsLine = "- `" + sourceFileName + "` -> `assets/fonts/" + request.fontName + sourceExt + "`" + (result.charMapPath.empty() ? std::string() : " (+ glyph map `" + request.fontName + ".charmap.txt`)");
+		const fs::path creditsPath = request.projectRoot / fs::path(request.creditsRelPath);
+		const auto [creditsAppended, creditsAlready] = AppendCreditsLine(creditsPath, request.pack, result.creditsLine);
+		result.creditsAppended = creditsAppended;
+		result.creditsAlreadyPresent = creditsAlready;
 
 		result.ok = true;
 		return result;

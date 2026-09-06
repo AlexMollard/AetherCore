@@ -60,11 +60,16 @@ namespace aether::assetpipeline::kenney
 		// was actually imported.
 	};
 
-	// Lists every `.glb`/`.gltf` file directly under pack.modelDir inside the cached zip (via
-	// a `tar -tf` subprocess - bsdtar/libarchive reads zip natively on Windows 10+ and most
-	// Linux distros; see EnsurePackCached's own comment on why a subprocess at all). Excludes
-	// the shared Textures/ subfolder and anything outside modelDir.
-	[[nodiscard]] std::vector<PackEntry> ListPackModels(const std::filesystem::path& zipPath, const std::string& modelDir, std::string& error);
+	// Lists every file matching one of `extensions` (lowercase, with the dot, e.g.
+	// {".glb", ".gltf"} or {".png"}) directly under `subDir` inside the cached zip - via a
+	// `tar -tf` subprocess (bsdtar/libarchive reads zip natively on Windows 10+ and most
+	// Linux distros; see EnsurePackCached's own comment on why a subprocess at all).
+	// Excludes nested subfolders (e.g. a shared Textures/ next to the models) and anything
+	// outside `subDir`. `extensions` defaults to the model formats this importer targets;
+	// pass e.g. {".png"} to list a texture-only pack instead - same pack cache, same zip
+	// listing, just a different filter, since a Kenney pack's directory layout doesn't care
+	// what ends up consuming its contents.
+	[[nodiscard]] std::vector<PackEntry> ListPackModels(const std::filesystem::path& zipPath, const std::string& subDir, std::string& error, const std::vector<std::string>& extensions = {".glb", ".gltf"});
 
 	enum class ColliderShape
 	{
@@ -151,4 +156,53 @@ namespace aether::assetpipeline::kenney
 	// overwrites a shared texture that already exists with DIFFERENT content (fails loudly
 	// instead - see the doc comment on the write-tracking in the .cpp).
 	[[nodiscard]] ImportResult ImportModel(const ImportRequest& request);
+
+	// A genuinely different pipeline, not a parameter on ImportModel: some Kenney packs
+	// (Input Prompts among them) are icon FONTS, not meshes - FontProcessor::BakeFont
+	// (glyph-outline curves, see FontProcessor.hpp) is the correct baker, the same one
+	// `AssetPacker bake-font` and every hand-authored project font in this repo already
+	// go through. There is no collider, no PropSpawner.cs entry, no MeshProcessor
+	// involved at all - a baked font is consumed by name via Ui.SetFont, nothing else.
+	struct FontImportRequest
+	{
+		PackInfo pack;
+		std::string zipMemberPath;     // the .ttf/.otf inside the zip
+		std::string charMapZipMemberPath; // optional glyph-name -> codepoint reference text file; empty = skip
+		std::filesystem::path projectRoot;
+		std::filesystem::path cacheDir;
+		std::string fontName; // output stem: assets/fonts/<fontName>.ttf/.fontcurves, and the exact
+		                       // string a script passes to Ui.SetFont(entity, fontName)
+		// Relative to projectRoot; matches ImportRequest's own default and every prior
+		// manual import in this project.
+		std::string creditsRelPath = "assets/CREDITS.md";
+	};
+
+	struct FontImportResult
+	{
+		bool ok = false;
+		std::string error;
+
+		std::filesystem::path fontPath;    // written .ttf/.otf on disk (source, committed - matches
+		                                    // this project's existing font convention, unlike models'
+		                                    // gitignored .mesh)
+		bool fontAlreadyPresent = false;
+		std::filesystem::path charMapPath; // written glyph-name reference text, if requested; empty if not
+		std::filesystem::path curvesPath;  // baked .fontcurves on disk (also committed, same convention)
+		bool bakedNow = false;
+		std::uint32_t glyphCount = 0;
+
+		std::string creditsLine;
+		bool creditsAppended = false;
+		bool creditsAlreadyPresent = false;
+
+		std::vector<std::string> warnings;
+	};
+
+	// Ensures the pack is cached -> extracts the requested font (plus its glyph-map
+	// reference text, if given) into assets/fonts/ -> bakes it (FontProcessor::BakeFont,
+	// the same function `AssetPacker bake-font` calls - not a subprocess to that CLI, a
+	// direct call to the same library function, exactly like the mesh path's relationship
+	// to `AssetPacker bake`) -> appends a CREDITS.md provenance line. Idempotent like
+	// ImportModel: a second call with the same fontName reports what already exists.
+	[[nodiscard]] FontImportResult ImportFont(const FontImportRequest& request);
 } // namespace aether::assetpipeline::kenney

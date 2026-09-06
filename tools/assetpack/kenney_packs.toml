@@ -61,3 +61,36 @@ modelDir = "Models/GLB format"
 license = "CC0 1.0 Universal"
 licenseUrl = "https://creativecommons.org/publicdomain/zero/1.0/"
 author = "Kenney (www.kenney.nl)"
+
+[[pack]]
+slug = "input-prompts"
+name = "Input Prompts"
+version = "1.5a"
+pageUrl = "https://kenney.nl/assets/input-prompts"
+zipUrl = "https://kenney.nl/media/pages/assets/input-prompts/8de120163f-1783763952/kenney_input-prompts_1.5.zip"
+previewImageUrl = "https://kenney.nl/media/pages/assets/input-prompts/f48afcd2a1-1777890401/preview-keyboard-mouse.png"
+# Not a model pack - an icon FONT pack (plus PNG spritesheets this importer does not use).
+# Every control family ships its own "<Family>/Fonts/<name>.ttf" with a
+# "<name>_map.txt" glyph-name -> U+E0xx codepoint reference; ImportFont (KenneyImport.hpp)
+# extracts a specific family's .ttf directly by zip member path rather than listing this
+# field, so it is left empty.
+modelDir = ""
+license = "CC0 1.0 Universal"
+licenseUrl = "https://creativecommons.org/publicdomain/zero/1.0/"
+author = "Kenney (www.kenney.nl)"
+
+[[pack]]
+slug = "prototype-textures"
+name = "Prototype Textures"
+version = "1.0"
+pageUrl = "https://kenney.nl/assets/prototype-textures"
+zipUrl = "https://kenney.nl/media/pages/assets/prototype-textures/a88c69fa18-1677578307/kenney_prototype-textures.zip"
+previewImageUrl = "https://kenney.nl/media/pages/assets/prototype-textures/f2ebc51899-1677578302/sample.png"
+# Not a model pack - plain greybox PNGs under "PNG/<Colour>/texture_NN.png" (six
+# colour folders x 13 textures), plus Vector/ SVG/SWF originals this importer does
+# not use. No single modelDir applies; textures are picked by explicit zip member
+# path (see resources/CREDITS.md), same as Input Prompts' fonts above.
+modelDir = ""
+license = "CC0 1.0 Universal"
+licenseUrl = "https://creativecommons.org/publicdomain/zero/1.0/"
+author = "Kenney (www.kenney.nl)"

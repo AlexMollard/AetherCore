@@ -122,6 +122,7 @@ namespace
 		std::cerr << "Usage: AssetPacker kenney list-packs <manifest.toml>\n";
 		std::cerr << "       AssetPacker kenney list-models <manifest.toml> <slug> <cacheDir>\n";
 		std::cerr << "       AssetPacker kenney import <manifest.toml> <slug> <zipMemberPath> <projectRoot> <category> <propName> <displayName> <mass> <colliderShape> [cacheDir]\n";
+		std::cerr << "       AssetPacker kenney import-font <manifest.toml> <slug> <ttfZipMemberPath> <charMapZipMemberPath|-> <projectRoot> <fontName> [cacheDir]\n";
 	}
 
 	// One JSON object (or array) per invocation on stdout, via nlohmann::json - the
@@ -302,6 +303,59 @@ namespace
 			        {"catalogAppended", result.catalogAppended},
 			        {"catalogAlreadyPresent", result.catalogAlreadyPresent},
 			        {"catalogSkippedNoCollider", result.catalogSkippedNoCollider},
+			        {"warnings", result.warnings},
+			};
+			std::cout << out.dump() << "\n";
+			return 0;
+		}
+
+		if (sub == "import-font")
+		{
+			if (argc < argOffset + 6)
+			{
+				PrintKenneyUsage();
+				return 1;
+			}
+			std::string error;
+			const auto packs = kenney::LoadManifest(fs::path(argv[argOffset]), error);
+			if (!error.empty())
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", error}}.dump() << "\n";
+				return 1;
+			}
+			const auto pack = kenney::FindPack(packs, argv[argOffset + 1]);
+			if (!pack)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", "unknown pack slug '" + std::string(argv[argOffset + 1]) + "'"}}.dump() << "\n";
+				return 1;
+			}
+
+			kenney::FontImportRequest request;
+			request.pack = *pack;
+			request.zipMemberPath = argv[argOffset + 2];
+			const std::string charMapArg = argv[argOffset + 3];
+			request.charMapZipMemberPath = charMapArg == "-" ? std::string() : charMapArg;
+			request.projectRoot = fs::path(argv[argOffset + 4]);
+			request.fontName = argv[argOffset + 5];
+			request.cacheDir = argc > argOffset + 6 ? fs::path(argv[argOffset + 6]) : fs::path(".temp/kenney-cache");
+
+			const kenney::FontImportResult result = kenney::ImportFont(request);
+			if (!result.ok)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", result.error}}.dump() << "\n";
+				return 1;
+			}
+			const nlohmann::json out = {
+			        {"ok", true},
+			        {"fontPath", result.fontPath.generic_string()},
+			        {"fontAlreadyPresent", result.fontAlreadyPresent},
+			        {"charMapPath", result.charMapPath.generic_string()},
+			        {"curvesPath", result.curvesPath.generic_string()},
+			        {"bakedNow", result.bakedNow},
+			        {"glyphCount", result.glyphCount},
+			        {"creditsLine", result.creditsLine},
+			        {"creditsAppended", result.creditsAppended},
+			        {"creditsAlreadyPresent", result.creditsAlreadyPresent},
 			        {"warnings", result.warnings},
 			};
 			std::cout << out.dump() << "\n";
