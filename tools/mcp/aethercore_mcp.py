@@ -86,7 +86,34 @@ def _ctl_path() -> str:
     return str(fallback)
 
 
+def _assetpacker_path() -> str:
+    """Locate AssetPacker. Same lazy/newest-mtime resolution as _ctl_path(): resolved
+    per call (not at import) so a client built after the server started is picked up
+    without restarting the MCP, preferring the NEWEST (by mtime) exe across every
+    candidate build dir / config. AssetPacker's own RUNTIME_OUTPUT_DIRECTORY is
+    <buildDir>/tools directly - one level up from aether-ctl's tools/control-client -
+    and single-config generators (e.g. the clangd/Ninja preset) put the exe straight
+    there with no <Config> subfolder at all, so that bare path is tried too."""
+    exe = "AssetPacker.exe" if os.name == "nt" else "AssetPacker"
+    build_env = os.environ.get("AETHER_BUILD_DIR")
+    names = ([build_env] if build_env else []) + list(_BUILD_DIR_NAMES)
+    fallback: Path | None = None
+    existing: list[Path] = []
+    for name in names:
+        base = Path(name) if os.path.isabs(name) else (REPO / name)
+        for cfg in ("RelWithDebInfo", "Debug", "Release", None):
+            cand = base / "tools" / cfg / exe if cfg else base / "tools" / exe
+            fallback = fallback or cand
+            if cand.exists():
+                existing.append(cand)
+    if existing:
+        return str(max(existing, key=lambda p: p.stat().st_mtime))
+    return str(fallback)
+
+
 GAUNTLET = REPO / "scripts" / "Run-DebugGauntlet.ps1"
+KENNEY_MANIFEST = REPO / "tools" / "assetpack" / "kenney_packs.toml"
+KENNEY_CACHE_DIR = REPO / ".temp" / "kenney-cache"
 
 
 # ── Subprocess bridges ───────────────────────────────────────────────────────
@@ -116,6 +143,28 @@ def _ctl(method: str, params: dict | None = None) -> dict:
         return {"result": json.loads(out) if out else {}}
     except json.JSONDecodeError:
         return {"result": out}
+
+
+def _kenney(args: list[str]) -> dict:
+    """Invoke `AssetPacker kenney <args>`; return a result dict ({"result": ...} on
+    success, {"error": ...} on failure). Every invocation prints exactly one line of
+    JSON to stdout regardless of exit code, so it's parsed either way rather than
+    gated on the return code (mirrors AssetPacker's kenney CLI contract)."""
+    assetpacker = _assetpacker_path()
+    if not Path(assetpacker).exists():
+        return {"error": f"AssetPacker not found (searched build dirs under {REPO}); build it: cmake --build {BUILD_DIR} --target AssetPacker"}
+    try:
+        # Generous: a cold pack download can take a few seconds.
+        proc = subprocess.run([assetpacker, "kenney", *args], capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"error": f"AssetPacker failed to run: {exc}"}
+    try:
+        parsed = json.loads(proc.stdout.strip())
+    except json.JSONDecodeError:
+        return {"error": (proc.stderr or proc.stdout or "AssetPacker kenney failed").strip()}
+    if parsed.get("ok"):
+        return {"result": parsed}
+    return {"error": parsed.get("error", proc.stderr.strip() or "AssetPacker kenney failed")}
 
 
 def _run_gauntlet(mode: str, config: str) -> dict:
@@ -148,6 +197,52 @@ RUN_GAUNTLET = {
             "mode": {"type": "string", "enum": ["full", "ci"], "default": "ci", "description": "'ci' = build + unit only; 'full' = also GPU validation smokes."},
             "config": {"type": "string", "enum": ["Debug", "Release"], "default": "Debug"},
         },
+    },
+}
+
+
+KENNEY_LIST_PACKS = {
+    "name": "kenney_list_packs",
+    "description": "List the Kenney CC0 asset packs available for import, from the checked-in tools/assetpack/kenney_packs.toml manifest. Does not need the editor running.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {},
+    },
+}
+
+KENNEY_LIST_MODELS = {
+    "name": "kenney_list_models",
+    "description": "List the .glb/.gltf models directly under one Kenney pack's model directory, by slug (from kenney_list_packs). The first call for a pack downloads and caches its zip (a few seconds); every later call for the same pack/version is instant. Does not need the editor running.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "slug": {"type": "string", "description": "Pack slug from kenney_list_packs, e.g. 'factory-kit'."},
+        },
+        "required": ["slug"],
+    },
+}
+
+KENNEY_IMPORT = {
+    "name": "kenney_import",
+    "description": "Import one CC0 Kenney model into a project as a spawnable prop: fetches/caches the pack, bakes the model, fits a collider, appends a CREDITS.md attribution line, and registers the prop in PropSpawner.cs - all in one call. Idempotent: importing the same model twice reports it already present instead of duplicating anything. Does not need the editor running.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "slug": {"type": "string", "description": "Pack slug from kenney_list_packs, e.g. 'factory-kit'."},
+            "zipMemberPath": {"type": "string", "description": "Model path inside the pack zip, from kenney_list_models."},
+            "project": {"type": "string", "description": "Folder name under projects/, e.g. 'Sandbox'."},
+            "category": {"type": "string", "description": "Prop category, e.g. 'Props'."},
+            "propName": {"type": "string", "description": "PascalCase file stem for the imported prop."},
+            "displayName": {"type": "string", "description": "Human-readable name shown in the prop spawner."},
+            "mass": {"type": "number", "description": "Rigid-body mass in kg."},
+            "colliderShape": {
+                "type": "string",
+                "enum": ["auto", "box", "sphere", "capsule", "cylinder", "none"],
+                "default": "auto",
+                "description": "Collider shape to fit. 'auto' resolves to a safe enclosing box unless you have visually judged a rounder shape correct (e.g. cylinder for an obviously round barrel).",
+            },
+        },
+        "required": ["slug", "zipMemberPath", "project", "category", "propName", "displayName", "mass"],
     },
 }
 
@@ -199,12 +294,24 @@ def _engine_tools() -> list:
 
 
 def _list_tools() -> list:
-    return [RUN_GAUNTLET] + _engine_tools()
+    return [RUN_GAUNTLET, KENNEY_LIST_PACKS, KENNEY_LIST_MODELS, KENNEY_IMPORT] + _engine_tools()
 
 
 def _call_tool(name: str, arguments: dict) -> dict:
     if name == "run_gauntlet":
         return _run_gauntlet(arguments.get("mode", "ci"), arguments.get("config", "Debug"))
+    if name == "kenney_list_packs":
+        return _kenney(["list-packs", str(KENNEY_MANIFEST)])
+    if name == "kenney_list_models":
+        return _kenney(["list-models", str(KENNEY_MANIFEST), arguments.get("slug", ""), str(KENNEY_CACHE_DIR)])
+    if name == "kenney_import":
+        project_root = REPO / "projects" / arguments.get("project", "")
+        return _kenney([
+            "import", str(KENNEY_MANIFEST), arguments.get("slug", ""), arguments.get("zipMemberPath", ""),
+            str(project_root), arguments.get("category", ""), arguments.get("propName", ""),
+            arguments.get("displayName", ""), str(arguments.get("mass", 0)), arguments.get("colliderShape", "auto"),
+            str(KENNEY_CACHE_DIR),
+        ])
     for tool in _engine_tools():
         if tool["name"] == name:
             return _ctl(tool["wire"], arguments)

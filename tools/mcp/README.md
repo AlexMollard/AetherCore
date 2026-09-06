@@ -36,6 +36,9 @@ aether-ctl describe        # every method, with parameters and descriptions
 | Tool | Needs editor running? | Purpose |
 |------|:---:|---------|
 | `run_gauntlet` | no | Build Editor/GameRuntime/EngineTests, run the unit suite; `mode:"full"` also runs the GPU validation smokes. Returns `gauntlet-report.json`. |
+| `kenney_list_packs` | no | List the Kenney CC0 asset packs available for import, from the checked-in `tools/assetpack/kenney_packs.toml` manifest. |
+| `kenney_list_models` | no | List the `.glb`/`.gltf` models in one Kenney pack, by `slug`. First call for a pack downloads/caches its zip (a few seconds); later calls for the same pack/version are instant. |
+| `kenney_import` | no | Import one CC0 Kenney model into a project as a spawnable prop: fetch/cache the pack, bake the model, fit a collider, append a `CREDITS.md` line, and register it in `PropSpawner.cs` - one call, idempotent. |
 | `launcher_info` / `list_projects` | Launcher | Inspect hub and recent-project state before handoff. |
 | `open_project` / `create_project` | Launcher | Open an existing project or create a `blank_2d` / `blank_3d` project, then hand the same control port to the Editor. |
 | `engine_info` | yes | Scene name and 2D/3D kind, entity count, frame index, fps. |
