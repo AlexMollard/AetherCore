@@ -1273,4 +1273,91 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     [SuppressGCTransition]
     internal static partial Vector3 aether_anim_get_root_motion_delta(uint id);
+
+    // ── Restored: dropped from a prior partial commit of this file (still referenced
+    // by already-committed CharacterController.cs/Entity.cs/Input.cs/MeshRenderer.cs/
+    // Ragdoll.cs/Net.cs/Ui.cs) - signatures matched directly against the existing
+    // AE_SCRIPT_API exports, not guessed.
+    [LibraryImport(Lib)]
+    internal static partial void aether_character_add(uint id, float radius, float halfHeight);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_character_move(uint id, Vector3 direction, float speed);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_character_set_velocity(uint id, Vector3 velocity);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial Vector3 aether_character_get_velocity(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_character_jump(uint id, float speed);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_character_is_grounded(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial Vector3 aether_character_get_ground_normal(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial Vector3 aether_get_forward(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_input_next_key_pressed();
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_input_get_cursor_lock_requested();
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_input_request_cursor_lock(int requested);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_input_is_cursor_locked();
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_mark_scene_transient(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_mesh_renderer_get_visible(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_mesh_renderer_set_visible(uint id, int visible);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_ragdoll_spawn(uint id, string skeletonPath);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ragdoll_spawn_bone_at(int index);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ragdoll_drive_skin(uint meshEntityId, uint ragdollRootId);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_net_request_ownership(uint entityId);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_net_release_ownership(uint entityId);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_clip(uint id, int enabled, float padding);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ui_create_slider(uint canvasId);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_ui_set_slider_range(uint id, float minValue, float maxValue, float step);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ui_create_toggle(uint canvasId);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_ui_create_progress_bar(uint canvasId);
 }
