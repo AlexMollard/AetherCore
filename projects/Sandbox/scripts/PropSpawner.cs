@@ -176,6 +176,10 @@ public sealed class PropSpawner : EntityScript
         new("Thruster Body", IsSphere: false, Size: 1f, Mass: 18f, Color: default,
             ModelPath: "project://assets/models/Props/ThrusterBody.glb",
             ColliderShape: PropColliderShape.Cylinder, ColliderRadius: 0.32f, ColliderHalfHeight: 0.2f, ColliderCenter: new Vector3(0f, 0.2f, 0f)),
+        // ── Kenney import (native, via the AssetPacker `kenney` tool / MCP / Editor Kenney Browser) ──
+        new("Machine Fortified", IsSphere: false, Size: 1f, Mass: 60.0000f, Color: default,
+            ModelPath: "project://assets/models/Props/MachineFortified.glb",
+            ColliderShape: PropColliderShape.Box, ColliderHalfExtents: new Vector3(0.6000f, 0.6752f, 0.8000f), ColliderCenter: new Vector3(0.0000f, 0.6752f, 0.0000f)),
     };
 
     public int MaxProps = 24;

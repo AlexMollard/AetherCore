@@ -31,6 +31,7 @@ any of these licences but is recorded here per project convention.
   - `arrow-basic.glb` -> `Props/ArrowSign.glb`
   - `warning-traffic.glb` -> `Props/WarningSign.glb`
   - (these 8 also reference `Props/Textures/colormap.png` above, same shared atlas)
+  - `machine-fortified.glb` -> `Props/MachineFortified.glb`
 
 ## Kenney — Furniture Kit (v2.0)
 - Source: https://kenney.nl/assets/furniture-kit
