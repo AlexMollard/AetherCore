@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using AetherCore;
 
@@ -35,5 +36,18 @@ public static class CameraBasis
     public static Vector3 Up(Entity camera)
     {
         return Vector3.Cross(Camera.GetRight(camera), Camera.GetForward(camera));
+    }
+
+    /// <summary>Rotates a model-local offset by an entity's current Euler angles and
+    /// returns it in world space - how a point measured in a model's own glTF bounds
+    /// (e.g. a viewmodel muzzle, from the POSITION accessor min/max) tracks the entity
+    /// as it moves and turns. Same Euler order the camera writes (X pitch, Y yaw,
+    /// Z roll, degrees); ignores entity scale, which every consumer here keeps at
+    /// unit.</summary>
+    public static Vector3 TransformOffset(Entity entity, Vector3 local)
+    {
+        Vector3 euler = entity.EulerDegrees;
+        Quaternion rotation = Quaternion.CreateFromYawPitchRoll(euler.Y * (MathF.PI / 180.0f), euler.X * (MathF.PI / 180.0f), euler.Z * (MathF.PI / 180.0f));
+        return entity.Position + Vector3.Transform(local, rotation);
     }
 }

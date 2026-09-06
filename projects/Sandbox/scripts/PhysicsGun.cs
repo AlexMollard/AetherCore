@@ -187,6 +187,16 @@ public sealed class PhysicsGun : EntityScript
     private const float ViewmodelForwardOffset = 0.5f;
     private const float ViewmodelRightOffset = 0.26f;
     private const float ViewmodelUpOffset = -0.17f;
+
+    /// <summary>The barrel's muzzle in the VIEWMODEL's own local space, measured from
+    /// PhysicsGunViewmodel.glb's POSITION accessor bounds (same glTF-bounds technique
+    /// the prop catalogue's colliders were fitted with): Z spans -0.275..+0.275, X and
+    /// Y symmetric about 0 - the kit's longest axis is Z, so the muzzle is a Z extreme.
+    /// +Z chosen on the Blaster Kit's authored facing (the ToolGunViewmodel's bounds
+    /// run 0..+1.39 along Z from its origin, i.e. barrel toward +Z); if the on-screen
+    /// pass shows barrels pointing backwards, the fix is one 180-degree placement yaw
+    /// per gun plus flipping this offset's Z sign - all in this one place.</summary>
+    private static readonly Vector3 ViewmodelMuzzleLocal = new(0.0f, 0.0f, 0.275f);
     private Entity _viewmodel;
 
     /// <summary>Current hold distance in front of the camera, adjusted by scroll and
@@ -254,7 +264,14 @@ public sealed class PhysicsGun : EntityScript
         Ui.SetRect(crosshair, 0.0f, 0.0f, CrosshairSize, CrosshairSize);
         Ui.SetImageColor(crosshair, new Vector4(1.0f, 1.0f, 1.0f, 0.85f));
     }
+    /// <summary>The beam's drawn start: the viewmodel's muzzle in world space (the
+    /// placement offset transformed by the viewmodel's current angles - see
+    /// ViewmodelMuzzleLocal for the measured local offset). The AIM ray still starts at
+    /// the camera - aim from the eye, draw from the gun; moving the ray instead would
+    /// make close-range aiming wrong and the crosshair lie.</summary>
+    private Vector3 MuzzleWorld() => CameraBasis.TransformOffset(_viewmodel, ViewmodelMuzzleLocal);
 
+    private Beam EnsureBeam() => _beam ??= Beam.Create("PhysicsGun Beam");
     /// <summary>Spawns the held viewmodel once - same shape as ToolGun.EnsureViewmodel
     /// (a dedicated MarkTransient sibling entity, never a child of the camera), one
     /// shared approach rather than a second convention.</summary>
@@ -370,14 +387,6 @@ public sealed class PhysicsGun : EntityScript
         if (Input.IsKeyDown(Key.E))
         {
             IsRotatingProp = true;
-            Vector2 delta = Input.MouseDelta;
-            Vector3 angularVelocity = Vector3.UnitY * (delta.X * RotateSensitivity)
-                    + Camera.GetRight(Self) * (delta.Y * RotateSensitivity);
-            Physics.SetAngularVelocity(_held, angularVelocity);
-        }
-        else
-        {
-            IsRotatingProp = false;
             // Don't leave it spinning the instant E is released.
             Physics.SetAngularVelocity(_held, Vector3.Zero);
         }
@@ -385,9 +394,10 @@ public sealed class PhysicsGun : EntityScript
         DriveHeldProp(deltaTime);
         // Beam follows the held prop itself (the Entity-target overload re-reads its
         // live position every call), not the aim ray - once grabbed, the laser is
-        // "attached to what you're holding", not "still searching".
+        // "attached to what you're holding", not "still searching". Drawn from the
+        // muzzle like every other beam; the aim/hold logic is unchanged.
         Beam beam = EnsureBeam();
-        beam.Show(Self.Position + Camera.GetForward(Self) * RayStartOffset, _held, deltaTime);
+        beam.Show(MuzzleWorld(), _held, deltaTime);
     }
 
     private void DriveHeldProp(float deltaTime)
@@ -408,15 +418,6 @@ public sealed class PhysicsGun : EntityScript
 
         Physics.SetLinearVelocity(_held, newVelocity);
     }
-
-    private Beam EnsureBeam() => _beam ??= Beam.Create("PhysicsGun Beam");
-
-    /// <summary>Casts every frame the trigger is held (see OnUpdate's own comment on why
-    /// this is not IsMousePressed) and draws the beam from muzzle to whatever it is
-    /// currently aimed at - a fixed point past MaxGrabDistance when nothing is hit, the
-    /// hit point when something is, grabbable or not (so aiming at a wall still shows
-    /// the beam stopping there, not passing through). Only actually GRABS when the hit
-    /// is tagged "grabbable" - the beam sliding across a wall or the player's own
     /// capsule never claims anything.</summary>
     private void TryGrab(float deltaTime)
     {
@@ -424,15 +425,13 @@ public sealed class PhysicsGun : EntityScript
         Vector3 origin = Self.Position + forward * RayStartOffset;
         RaycastHit hit = Physics.Raycast(origin, forward, MaxGrabDistance);
 
+        // Aim ray stays camera-originated (aim from the eye, so the crosshair tells
+        // the truth); only the beam's DRAWN START moves to the viewmodel muzzle.
         Beam beam = EnsureBeam();
         Vector3 beamEnd = hit.DidHit ? hit.Position : origin + forward * MaxGrabDistance;
-        beam.Show(origin, beamEnd, deltaTime);
+        beam.Show(MuzzleWorld(), beamEnd, deltaTime);
 
         if (!hit.DidHit || !hit.Entity.IsValid || hit.Entity == _player)
-        {
-            return;
-        }
-        if (!Tags.Has(hit.Entity, Tags.Create("grabbable")))
         {
             return;
         }
