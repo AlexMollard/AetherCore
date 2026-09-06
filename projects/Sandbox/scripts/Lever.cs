@@ -67,6 +67,18 @@ public sealed class Lever : EntityScript
 
     public override void OnAttach()
     {
+        // _on is not itself persisted (a private field carries no reflected/serialized
+        // surface), but Out - the public field it derives from - is: a level authored
+        // with a lever already flipped on, or a scene saved mid-session while one was
+        // toggled, both restore Out at its non-zero value on the next load. Without this
+        // line _on silently resets to its C# default (false) regardless, so the FIRST
+        // Interact() after such a load computes _on=true, Out=1.0f - unchanged, since
+        // Out was already 1.0 - and only the SECOND press produces an observable flip.
+        // That looked exactly like a broken interact pipeline from the outside (one
+        // press, no visible change) until read against a lever authored/saved OFF,
+        // where the first press behaves normally - the give-away that this was a
+        // resync-vs-toggle distinction, not a missing key edge.
+        _on = Out > 0.5f;
         _clipOn = Animation.Find(Self, "toggle-on");
         _clipOff = Animation.Find(Self, "toggle-off");
         ApplyTint();
