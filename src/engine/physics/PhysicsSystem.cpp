@@ -2119,6 +2119,11 @@ namespace aether
 		{
 			return;
 		}
+		// Update the component FIRST: FlushPendingBodies reads rb->motionType when it
+		// bakes a body, so a call that arrives before the body exists (a Door script's
+		// OnAttach, which runs the same frame the body is first queued) is DEFERRED
+		// through the component rather than dropped - the body is created directly in
+		// the requested state on the next flush.
 		rb->motionType = motionType;
 		if (!rb->body.IsValid())
 		{
@@ -2127,22 +2132,55 @@ namespace aether
 		WaitForStep();
 		const JPH::BodyID id = ToJolt(rb->body);
 		auto& bodyInterface = m_impl->physics->GetBodyInterfaceNoLock();
-		// rb->body.IsValid() only means "not our own kInvalidValue sentinel" - it says
-		// nothing about whether THIS index+sequence number currently names a body Jolt
-		// actually has registered. A live crash (0xC0000005 inside Jolt's own
-		// SetMotionType, entity=35, body.value=16777239, id.IsInvalid()==false) proved
-		// a handle can pass every check above and still not correspond to a real body -
-		// confirmed live via debug logging that the crash happens exactly at this call,
-		// on a BodyID neither our own sentinel nor Jolt's own IsInvalid() ever catches.
-		// IsAdded() is Jolt's own "does this BodyID currently belong to a live body"
-		// check - the guard that closes it, regardless of how a handle in this state
-		// arises.
-		if (!bodyInterface.IsAdded(id))
+		// rb->body.IsValid() only means "not our own kInvalidValue sentinel". It does
+		// NOT mean the handle names a live body: a body can be destroyed and recreated
+		// within a frame (RebuildBody on collider field change -> immediate re-bake),
+		// and a component that dodged one of those writes keeps the OLD handle - same
+		// index, STALE sequence number. BodyInterface::IsAdded() only checks that the
+		// INDEX is registered - the recreated body occupies it - so it passes while
+		// the handle is still wrong, and handing Jolt a sequence-stale BodyID crashed
+		// (0xC0000005 inside BodyInterface::SetMotionType, live-reproduced). A
+		// BodyLock validates index AND sequence: Succeeded() is the actual "this
+		// handle names the body that is really there" check.
+		// A scope, because BodyLockRead is non-assignable and the lock must be
+		// released before anything below touches the body or the broadphase.
+		JPH::EMotionType currentMotion = JPH::EMotionType::Static;
 		{
-			AE_WARN(LogCategory::Engine, "PhysicsSystem: SetBodyMotionType on entity {} refused - its body handle does not name a body Jolt currently has registered (deferred/never baked, or a stale handle). No effect; rb->motionType is still updated for whenever a real body exists.", entity.id);
+			JPH::BodyLockRead lock(m_impl->physics->GetBodyLockInterface(), id);
+			if (!lock.Succeeded())
+			{
+				// Self-heal rather than just refuse: drop the stale handle so the next
+				// FlushPendingBodies re-bakes a real body directly from rb->motionType
+				// (already updated above). Refusing alone would leave the component
+				// pointing at a dead body forever, and PushKinematicTargets would keep
+				// driving the corpse.
+				AE_WARN(LogCategory::Engine,
+				        "PhysicsSystem: SetBodyMotionType on entity {} found a stale body handle (index {} sequence-mismatched or never baked); dropped it - a fresh body will be baked from the requested motion type on the next flush",
+				        entity.id, id.GetIndex());
+				rb->body = {};
+				return;
+			}
+			currentMotion = lock.GetBody().GetMotionType();
+		}
+		const JPH::EMotionType requestedMotion = ToJoltMotionType(motionType);
+		if (currentMotion == JPH::EMotionType::Static && requestedMotion != JPH::EMotionType::Static)
+		{
+			// Static→Dynamic/Kinematic CANNOT be done in place on a body that was
+			// baked as Static: static bodies carry no MotionProperties, and Jolt's own
+			// SetMotionType activates the body on this transition before motion
+			// properties exist - ActivateBodies -> Body::ResetSleepTimer ->
+			// MotionProperties::ResetSleepTestSpheres dereferences null and AVs
+			// (0xC0000005, live-verified under a debugger on this exact stack). Route
+			// the transition through a full rebuild instead: destroy the body here;
+			// rb->motionType is already the requested one, so the next
+			// FlushPendingBodies bakes a fresh body with real motion properties in the
+			// requested state - the same mechanism a collider-field edit already uses.
+			bodyInterface.RemoveBody(id);
+			bodyInterface.DestroyBody(id);
+			rb->body = {};
 			return;
 		}
-		bodyInterface.SetMotionType(id, ToJoltMotionType(motionType), JPH::EActivation::Activate);
+		bodyInterface.SetMotionType(id, requestedMotion, JPH::EActivation::Activate);
 	}
 
 	void PhysicsSystem::WaitForStepIdle()

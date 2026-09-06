@@ -379,3 +379,33 @@ TEST_CASE_FIXTURE(PhysicsFixture, "SetBodyMotionType refuses a body handle that 
 	StepSeconds(0.1f);
 	CHECK(world.Get<aether::RigidBodyComponent>(e).body.IsValid());
 }
+
+TEST_CASE_FIXTURE(PhysicsFixture, "SetBodyMotionType reroutes a Static body's transition to Kinematic through a re-bake instead of Jolt's in-place path")
+{
+	// The actual Door.OnAttach crash (0xC0000005 inside BodyInterface::SetMotionType
+	// -> ActivateBodies -> MotionProperties::ResetSleepTestSpheres, native stack
+	// captured under a debugger): a body baked as STATIC has no MotionProperties,
+	// and Jolt's in-place Static->non-Static transition activates it before any
+	// exist. The fix routes the transition through destroy + re-bake; this pins the
+	// observable contract - the request is honoured, via a NEW body, without
+	// touching Jolt's crashing path.
+	const aether::Entity e = MakeBody({0.0f, 5.0f, 0.0f}, aether::PhysicsMotionType::Static, {0.5f, 0.5f, 0.5f});
+	StepSeconds(0.1f);
+	const aether::PhysicsBodyHandle staticBody = world.Get<aether::RigidBodyComponent>(e).body;
+	REQUIRE(staticBody.IsValid());
+
+	physics->SetBodyMotionType(world, e, aether::PhysicsMotionType::Kinematic);
+	CHECK(world.Get<aether::RigidBodyComponent>(e).motionType == aether::PhysicsMotionType::Kinematic);
+
+	StepSeconds(0.1f);
+	const aether::PhysicsBodyHandle rebakedBody = world.Get<aether::RigidBodyComponent>(e).body;
+	CHECK(rebakedBody.IsValid());
+	CHECK(rebakedBody.value != staticBody.value); // genuinely a NEW body, not the crashed-in-place one
+
+	// The re-baked body is kinematic: PushKinematicTargets drives it from its
+	// TransformComponent without Jolt's solver fighting the write.
+	world.Get<aether::TransformComponent>(e).localToWorld =
+	        aether::ComposeTransform({0.0f, 6.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f});
+	StepSeconds(0.2f);
+	CHECK(PositionOf(e).y == doctest::Approx(6.0f).epsilon(0.05));
+}
