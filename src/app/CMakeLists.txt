@@ -276,6 +276,15 @@ add_custom_target(EngineAssetsPak
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/branding/aethercore-icon-white.png"
         "${CMAKE_BINARY_DIR}/engine_assets/branding/aethercore-icon-white.png"
+    # Prototype greybox textures (Kenney CC0 "Prototype Textures", see
+    # resources/textures/prototype/CREDITS.md): the default material every
+    # newly-added primitive wears until a real one is assigned, so it needs to
+    # ship in engine.pak the same way fonts/branding do.
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${CMAKE_BINARY_DIR}/engine_assets/textures/prototype"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/textures/prototype"
+        "${CMAKE_BINARY_DIR}/engine_assets/textures/prototype"
     # .spv ship inside engine.pak (shaders://, see FileSystem::InitializeDefaultMounts). The
     # make_directory keeps this working when shader compilation was skipped (no slangc / no
     # .slang) - copy_directory would otherwise hard-fail on a missing source.

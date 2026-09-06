@@ -9,6 +9,7 @@
 #include "assets/AssetManager.hpp"
 #include "debug/Icons.hpp"
 #include "material/MaterialSystem.hpp"
+#include "material/TextureRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
@@ -53,6 +54,14 @@ namespace aether::editor
 			}
 		}
 
+		// Default material for a freshly-added primitive that has none of its own yet:
+		// a prototype grid (Kenney CC0 "Prototype Textures", see resources/CREDITS.md)
+		// instead of a flat colour - the standard greybox affordance, so a cube or
+		// sphere's scale and orientation read at a glance instead of everything looking
+		// like the same grey blob. "engine://" so it resolves from data/engine.pak in a
+		// published build the same as a loose dev tree (see EngineAssetsPak).
+		constexpr const char* kDefaultPrimitiveTexturePath = "engine://textures/prototype/grid_light.texture";
+
 		void AddMeshPrimitive(World& w, Entity e, ServiceContainer& s, PrimitiveMesh kind, const char* pathName)
 		{
 			auto* prims = s.TryGet<PrimitiveMeshes>();
@@ -64,13 +73,24 @@ namespace aether::editor
 			EnsureTransform(w, e);
 			w.EmplaceOrReplace<MeshComponent>(e, MeshComponent{.mesh = &prims->Get(kind)});
 			w.EmplaceOrReplace<MeshSourceComponent>(e, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = pathName, .primitiveIndex = 0});
+			// Guarded exactly like the flat colour it replaces: an entity that already
+			// carries a MaterialComponent (scene-authored, or a second "Add" over a prop
+			// someone already textured) never reaches this branch, so this only restyles
+			// entities with no material of their own.
 			if (!w.Has<MaterialComponent>(e))
 			{
+				TextureRegistry& textures = assets->GetTextureRegistry();
+				const TextureHandle grid = textures.Acquire(kDefaultPrimitiveTexturePath, TextureColorSpace::Srgb);
 				MaterialAsset asset{};
 				asset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.0f);
 				asset.roughnessFactor = 0.6f;
 				asset.doubleSided = true;
+				asset.albedoTex = grid;
 				MaterialSystem::AssignMaterial(w, e, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
+				if (grid.IsValid())
+				{
+					textures.Release(grid);
+				}
 			}
 			w.EmplaceOrReplace<MeshRendererComponent>(e);
 		}
