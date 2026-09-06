@@ -24,6 +24,11 @@ public static class InputActions
         Actions[name] = (primary, secondary, gamepad);
     }
 
+    /// <summary>The action's current primary key, or <see cref="Key.None"/> if it was
+    /// never registered - for a HUD hint or a settings screen to show what is currently
+    /// bound without duplicating the binding as a separate field somewhere else.</summary>
+    public static Key GetPrimary(string name) => Actions.TryGetValue(name, out var a) ? a.Primary : Key.None;
+
     public static bool IsPressed(string name)
     {
         if (!Actions.TryGetValue(name, out var a))

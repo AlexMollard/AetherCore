@@ -3,7 +3,8 @@ using AetherCore;
 namespace AetherGame;
 
 /// <summary>
-/// GMod-style spawn menu toggle: Q opens/closes it. The panel itself - category tabs,
+/// GMod-style spawn menu toggle: the "open_menu" InputActions binding (Q by default,
+/// rebindable in Settings) opens/closes it. The panel itself - category tabs,
 /// the prop grid, click-to-spawn - is owned by <see cref="UiSpawnCatalog"/>, a sibling
 /// script on this same camera entity that reads <see cref="IsOpen"/> below and calls
 /// <see cref="PropSpawner.SpawnProp"/> directly, so there is still exactly one way a
@@ -27,6 +28,12 @@ public sealed class SpawnMenu : EntityScript
     public override void OnAttach()
     {
         _player = Self.Parent;
+        // Register every attach, not just the first - an idempotent upsert (InputActions'
+        // own doc comment), and the fix for the exact bug PropSpawner's own file comment
+        // documents for "spawn_prop": a fresh per-connection script re-hardcoding the
+        // compiled-in default would silently undo a saved rebind on every reconnect.
+        SandboxSettings.EnsureLoaded();
+        InputActions.Register("open_menu", SandboxSettings.BoundKeys["open_menu"]);
     }
 
     public override void OnDetach()
@@ -53,14 +60,14 @@ public sealed class SpawnMenu : EntityScript
 
         if (IsOpen)
         {
-            if (Input.IsKeyPressed(Key.Q))
+            if (InputActions.IsPressed("open_menu"))
             {
                 Close();
             }
             return;
         }
 
-        if (Input.IsKeyPressed(Key.Q))
+        if (InputActions.IsPressed("open_menu"))
         {
             Open();
         }

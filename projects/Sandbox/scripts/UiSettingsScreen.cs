@@ -5,11 +5,14 @@ using AetherCore;
 namespace AetherGame;
 
 /// <summary>
-/// The Settings screen: look sensitivity, invert-Y, field of view, and a Controls section
-/// with the one key binding actually rebindable today. Shared by two hosts - Main Menu and
-/// the in-arena Pause Menu - as two independent instances of this same class, one per
-/// scene; see this class's own <see cref="Open"/>/<see cref="IsOpen"/> for how a host talks
-/// to it without either side needing to know about the other.
+/// The Settings screen: look sensitivity, invert-Y, field of view, and a full Controls
+/// section - one row per <see cref="SandboxSettings.Bindings"/> entry, each showing its
+/// current key as an icon-font glyph (falling back to bracket text for a key this pack has
+/// no icon for - see <see cref="InputGlyphs.GetGlyph"/>) and rebindable by clicking it.
+/// Shared by two hosts - Main Menu and the in-arena Pause Menu - as two independent
+/// instances of this same class, one per scene; see this class's own
+/// <see cref="Open"/>/<see cref="IsOpen"/> for how a host talks to it without either side
+/// needing to know about the other.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -27,13 +30,23 @@ namespace AetherGame;
 /// factory for.
 /// </para>
 /// <para>
-/// <b>Why the Controls section is one row, not a full keybinding table.</b>
-/// <see cref="PropSpawner"/> is the only Sandbox script that reads its key through
-/// <see cref="InputActions"/> ("spawn_prop"). Movement, jump, sprint, the spawn-menu
-/// toggle and the physgun's rotate-hold are all raw <c>Input.IsKeyDown</c>/<c>IsKeyPressed</c>
-/// calls baked directly into <c>FirstPersonPlayer.cs</c>/<c>SpawnMenu.cs</c>/<c>PhysicsGun.cs</c>.
-/// A row that looked reboundable but silently did nothing when rebound would be worse than
-/// no row at all, so only the one binding that is genuinely live is offered.
+/// <b>One row per <see cref="SandboxSettings.Bindings"/> entry, generically.</b> This used
+/// to hand-build exactly one row ("Spawn Prop") because it was the only action that
+/// actually flowed through <see cref="InputActions"/> - a row that looked rebindable but
+/// silently did nothing when rebound would have been worse than no row at all. That
+/// blocker is gone: <see cref="SandboxSettings.Bindings"/> is now the single source of
+/// truth for every rebindable action, so this loops over it instead of hand-writing one
+/// block per row. As of this pass, "spawn_prop" and "open_menu" are consumed live
+/// (PropSpawner/SpawnMenu read them through InputActions); "interact"/"tool_fire"/
+/// "rotate_prop"/"jump"/"sprint" are registered and rebindable here and persist correctly,
+/// but ToolGun/PhysicsGun/FirstPersonPlayer have not yet been migrated off their raw
+/// Input.IsKeyDown checks to consume them (a separate, coordinated change owned by
+/// whoever's file that migration touches) - rebinding one of those five updates
+/// SandboxSettings.BoundKeys and InputActions' own table correctly, it just has no visible
+/// gameplay effect until that migration lands. WASD movement is deliberately not offered:
+/// it is a continuous two-axis <c>Input.GetAxisRaw</c> read, not a boolean action
+/// <see cref="InputActions"/> models, and this sandbox's design never asked for movement
+/// to be rebindable away from WASD.
 /// </para>
 /// </remarks>
 public sealed class UiSettingsScreen : EntityScript
@@ -56,24 +69,48 @@ public sealed class UiSettingsScreen : EntityScript
         }
     }
 
+    /// <summary>One Controls row: the rebind button (click target + background) and the
+    /// icon-font/ordinary-font text pair overlaid on it - two widgets, not one, for the
+    /// same reason <see cref="UiHud"/>'s own key-hint pair is two widgets (see
+    /// <see cref="InputGlyphs"/>'s own file comment: the icon font is Private-Use-Area
+    /// glyphs only and cannot share a string with ordinary text).</summary>
+    private readonly struct BindingRow
+    {
+        public readonly Entity Button;
+        public readonly Entity Icon;
+        public readonly Entity Text;
+
+        public BindingRow(Entity button, Entity icon, Entity text)
+        {
+            Button = button;
+            Icon = icon;
+            Text = text;
+        }
+    }
+
     // Shared geometry for every stepper's fill bar/track (see CreateStepper and SetFill).
     private const float FillX = -160.0f;
     private const float FillWidth = 144.0f;
     private const float FillHeight = 6.0f;
 
-    // Keys already meaningful elsewhere in this project - never offered as a rebind target,
-    // so a player can't silently double-bind "spawn_prop" onto, say, W and make every
-    // forward step also cycle-spawn a prop.
-    // Up/Down/Left/Right/Tab are never consumed by UiNavigationSystem the way Enter/Space
-    // are (see its own source - only Enter/Space call Input::ConsumeKey on activation), so
-    // without reserving them here, pressing an arrow key or Tab while "Press a key..." is
-    // up would both move the settings screen's own focus AND get captured as the new
-    // Spawn Prop binding - silently overwriting F with a key every other menu already
-    // depends on for navigation. Confirmed against UiNavigationSystem.cpp, not guessed.
+    private const float ControlsStartY = 130.0f;
+    private const float RowHeight = 36.0f;
+
+    // Never assignable to a rebindable action. Movement (W/A/S/D) is fixed by design (see
+    // this class's own remarks); Escape/Tab/the arrows are UiNavigationSystem's own
+    // reserved navigation keys - Up/Down/Left/Right/Tab are never consumed by
+    // UiNavigationSystem the way Enter/Space are (only Enter/Space call Input::ConsumeKey
+    // on activation, confirmed against UiNavigationSystem.cpp, not guessed), so without
+    // reserving them here, pressing an arrow key or Tab while "Press a key..." is up would
+    // both move this screen's own focus AND get captured as the new binding. Q/E/Space/
+    // Shift are deliberately NOT in this list any more - they are now the default keys of
+    // OTHER rebindable actions (open_menu/interact-or-rotate_prop/jump/sprint), and
+    // whether a candidate collides with one of THOSE is the separate per-action duplicate
+    // check in TickCapture, which self-updates as those actions get rebound instead of
+    // needing to be hand-maintained here.
     private static readonly Key[] ReservedKeys =
     {
-        Key.W, Key.A, Key.S, Key.D, Key.Space, Key.LeftShift, Key.Q, Key.E, Key.Escape,
-        Key.Up, Key.Down, Key.Left, Key.Right, Key.Tab,
+        Key.W, Key.A, Key.S, Key.D, Key.Escape, Key.Up, Key.Down, Key.Left, Key.Right, Key.Tab,
     };
 
     private Entity _canvas;
@@ -81,11 +118,12 @@ public sealed class UiSettingsScreen : EntityScript
     private Stepper _sensitivity;
     private Stepper _fov;
     private Entity _invertYButton;
-    private Entity _rebindButton;
+    private BindingRow[] _bindingRows = Array.Empty<BindingRow>();
     private Entity _rebindHint;
     private Entity _backButton;
 
     private bool _capturingRebind;
+    private int _rebindIndex = -1;
 
     public bool IsOpen { get; private set; }
 
@@ -126,18 +164,11 @@ public sealed class UiSettingsScreen : EntityScript
         Ui.SetFontSize(controlsLabel, UiTheme.FontSizeHint);
         Ui.SetTextColor(controlsLabel, UiTheme.TextMuted);
 
-        Entity spawnLabel = Ui.CreateText(_canvas, "Spawn Prop");
-        PlaceCentered(spawnLabel, 130.0f, 300.0f, 28.0f, UiHAlign.Left);
-        Ui.SetFontSize(spawnLabel, UiTheme.FontSizeBody);
-        Ui.SetTextColor(spawnLabel, UiTheme.TextColor);
+        CreateBindingRows();
 
-        _rebindButton = Ui.CreateButton(_canvas);
-        Ui.SetAnchors(_rebindButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        Ui.SetPivot(_rebindButton, new Vector2(0.0f, 1.0f));
-        Ui.SetRect(_rebindButton, 100.0f, 130.0f, 100.0f, 32.0f);
-
+        float hintY = ControlsStartY + SandboxSettings.Bindings.Length * RowHeight + 10.0f;
         _rebindHint = Ui.CreateText(_canvas, string.Empty);
-        PlaceCentered(_rebindHint, 175.0f, 320.0f, 24.0f);
+        PlaceCentered(_rebindHint, hintY, 320.0f, 24.0f);
         Ui.SetTextAlign(_rebindHint, UiHAlign.Center, UiVAlign.Middle);
         Ui.SetFontSize(_rebindHint, UiTheme.FontSizeHint);
         Ui.SetTextColor(_rebindHint, UiTheme.TextMuted);
@@ -145,10 +176,53 @@ public sealed class UiSettingsScreen : EntityScript
         _backButton = Ui.CreateButton(_canvas);
         Ui.SetAnchors(_backButton, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
         Ui.SetPivot(_backButton, new Vector2(0.5f, 0.0f));
-        Ui.SetRect(_backButton, 0.0f, 210.0f, UiTheme.ButtonWidth, UiTheme.ButtonHeight);
+        Ui.SetRect(_backButton, 0.0f, hintY + 40.0f, UiTheme.ButtonWidth, UiTheme.ButtonHeight);
         Ui.SetButtonLabel(_backButton, "Back");
 
         Close();
+    }
+
+    /// <summary>Builds one row per <see cref="SandboxSettings.Bindings"/> entry: a label
+    /// on the left, a rebind button on the right showing the current key as an icon glyph
+    /// (or bracket text where this pack has no icon for it).</summary>
+    private void CreateBindingRows()
+    {
+        _bindingRows = new BindingRow[SandboxSettings.Bindings.Length];
+        for (int i = 0; i < SandboxSettings.Bindings.Length; ++i)
+        {
+            float y = ControlsStartY + i * RowHeight;
+            string label = SandboxSettings.Bindings[i].Label;
+
+            Entity labelEntity = Ui.CreateText(_canvas, label);
+            PlaceCentered(labelEntity, y, 300.0f, 28.0f, UiHAlign.Left);
+            Ui.SetFontSize(labelEntity, UiTheme.FontSizeBody);
+            Ui.SetTextColor(labelEntity, UiTheme.TextColor);
+
+            Entity button = Ui.CreateButton(_canvas);
+            Ui.SetAnchors(button, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            Ui.SetPivot(button, new Vector2(0.0f, 1.0f));
+            Ui.SetRect(button, 100.0f, y, 100.0f, 32.0f);
+            Ui.SetButtonLabel(button, string.Empty); // the icon/text overlay below is the button's visible content
+
+            Entity icon = Ui.CreateText(_canvas, string.Empty);
+            Ui.SetAnchors(icon, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            Ui.SetPivot(icon, new Vector2(0.0f, 1.0f));
+            Ui.SetRect(icon, 100.0f, y, 100.0f, 32.0f);
+            Ui.SetTextAlign(icon, UiHAlign.Center, UiVAlign.Middle);
+            Ui.SetFont(icon, InputGlyphs.FontName);
+            Ui.SetFontSize(icon, UiTheme.FontSizeBody);
+            Ui.SetTextColor(icon, UiTheme.TextColor);
+
+            Entity text = Ui.CreateText(_canvas, string.Empty);
+            Ui.SetAnchors(text, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            Ui.SetPivot(text, new Vector2(0.0f, 1.0f));
+            Ui.SetRect(text, 100.0f, y, 100.0f, 32.0f);
+            Ui.SetTextAlign(text, UiHAlign.Center, UiVAlign.Middle);
+            Ui.SetFontSize(text, UiTheme.FontSizeBody);
+            Ui.SetTextColor(text, UiTheme.TextColor);
+
+            _bindingRows[i] = new BindingRow(button, icon, text);
+        }
     }
 
     /// <summary>Builds one "label above, [-]  value  [+] / fill bar below" row. The label
@@ -214,11 +288,12 @@ public sealed class UiSettingsScreen : EntityScript
     {
         IsOpen = true;
         _capturingRebind = false;
+        _rebindIndex = -1;
         _canvas.SetActive(true);
         RefreshSensitivity();
         RefreshFov();
         RefreshInvertY();
-        RefreshRebind();
+        RefreshAllBindings();
         Ui.SetFocus(_sensitivity.Dec);
     }
 
@@ -226,6 +301,7 @@ public sealed class UiSettingsScreen : EntityScript
     {
         IsOpen = false;
         _capturingRebind = false;
+        _rebindIndex = -1;
         _canvas.SetActive(false);
         Ui.ClearFocus();
     }
@@ -279,10 +355,19 @@ public sealed class UiSettingsScreen : EntityScript
             RefreshInvertY();
             SandboxSettings.Save();
         }
-        else if (Ui.WasActivated(_rebindButton))
+        else
         {
-            _capturingRebind = true;
-            Ui.SetText(_rebindHint, "Press a key... (Esc to cancel)");
+            for (int i = 0; i < _bindingRows.Length; ++i)
+            {
+                if (!Ui.WasActivated(_bindingRows[i].Button))
+                {
+                    continue;
+                }
+                _capturingRebind = true;
+                _rebindIndex = i;
+                Ui.SetText(_rebindHint, "Press a key... (Esc to cancel)");
+                break;
+            }
         }
     }
 
@@ -296,9 +381,12 @@ public sealed class UiSettingsScreen : EntityScript
         if (Input.IsKeyPressed(Key.Escape))
         {
             _capturingRebind = false;
-            RefreshRebind();
+            _rebindIndex = -1;
+            Ui.SetText(_rebindHint, string.Empty);
             return;
         }
+
+        string action = SandboxSettings.Bindings[_rebindIndex].Action;
 
         foreach (Key candidate in Enum.GetValues<Key>())
         {
@@ -308,14 +396,34 @@ public sealed class UiSettingsScreen : EntityScript
             }
             if (Array.IndexOf(ReservedKeys, candidate) >= 0)
             {
-                Ui.SetText(_rebindHint, $"{candidate} is already used elsewhere - press another key.");
+                Ui.SetText(_rebindHint, $"{candidate} is reserved for movement/menu navigation - press another key.");
                 continue;
             }
-            SandboxSettings.SpawnPropKey = candidate;
-            InputActions.Register("spawn_prop", candidate);
+
+            // Self-updating duplicate check: reject a candidate already bound to a
+            // DIFFERENT action, so rebinding one action away from its default frees that
+            // key up for another - a static reserved-key list could not express that.
+            string? conflict = null;
+            foreach ((string otherAction, string otherLabel, _) in SandboxSettings.Bindings)
+            {
+                if (otherAction != action && SandboxSettings.BoundKeys[otherAction] == candidate)
+                {
+                    conflict = otherLabel;
+                    break;
+                }
+            }
+            if (conflict != null)
+            {
+                Ui.SetText(_rebindHint, $"{candidate} is already bound to {conflict} - press another key.");
+                continue;
+            }
+
+            SandboxSettings.BoundKeys[action] = candidate;
+            InputActions.Register(action, candidate);
             SandboxSettings.Save();
             _capturingRebind = false;
-            RefreshRebind();
+            _rebindIndex = -1;
+            RefreshAllBindings();
             return;
         }
     }
@@ -337,10 +445,24 @@ public sealed class UiSettingsScreen : EntityScript
         Ui.SetButtonLabel(_invertYButton, SandboxSettings.InvertY ? "ON" : "OFF");
     }
 
-    private void RefreshRebind()
+    private void RefreshAllBindings()
     {
-        Ui.SetButtonLabel(_rebindButton, SandboxSettings.SpawnPropKey.ToString());
         Ui.SetText(_rebindHint, string.Empty);
+        for (int i = 0; i < _bindingRows.Length; ++i)
+        {
+            Key key = SandboxSettings.BoundKeys[SandboxSettings.Bindings[i].Action];
+            char? glyph = InputGlyphs.GetGlyph(key);
+            if (glyph.HasValue)
+            {
+                Ui.SetText(_bindingRows[i].Icon, glyph.Value.ToString());
+                Ui.SetText(_bindingRows[i].Text, string.Empty);
+            }
+            else
+            {
+                Ui.SetText(_bindingRows[i].Icon, string.Empty);
+                Ui.SetText(_bindingRows[i].Text, $"[{key}]");
+            }
+        }
     }
 
     private static float Unit(float value, float min, float max) => max > min ? Math.Clamp((value - min) / (max - min), 0.0f, 1.0f) : 0.0f;

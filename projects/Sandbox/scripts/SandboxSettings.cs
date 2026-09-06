@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using AetherCore;
@@ -6,11 +7,10 @@ using AetherCore;
 namespace AetherGame;
 
 /// <summary>
-/// Player-facing Sandbox settings: look sensitivity, invert-Y, field of view, and
-/// whichever key binding actually flows through <see cref="InputActions"/> today.
-/// Persisted to LocalAppData, mirroring INKBOUND's <c>GameSettings.cs</c> and Whisper's
-/// <c>WhisperPrefs.cs</c> - the established pattern in this repo for a per-project player
-/// preference.
+/// Player-facing Sandbox settings: look sensitivity, invert-Y, field of view, and every
+/// key binding that flows through <see cref="InputActions"/>. Persisted to LocalAppData,
+/// mirroring INKBOUND's <c>GameSettings.cs</c> and Whisper's <c>WhisperPrefs.cs</c> - the
+/// established pattern in this repo for a per-project player preference.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -27,6 +27,21 @@ namespace AetherGame;
 /// discards whatever screen collected the values (Main Menu's Settings screen and the
 /// in-arena Pause Menu's Settings screen are two different scenes' worth of UI), so this
 /// has to survive <see cref="Scene.Load"/> on its own rather than living on an entity.
+/// </para>
+/// <para>
+/// <b>One binding table, not one field per action.</b> <see cref="Bindings"/> is the single
+/// source of truth for every rebindable action's <see cref="InputActions"/> name, its
+/// settings-screen label, and its compiled-in default key; <see cref="BoundKeys"/> holds
+/// the live value per action. Adding a new rebindable action is one row in
+/// <see cref="Bindings"/> plus that action's own script calling
+/// <c>InputActions.Register(action, SandboxSettings.BoundKeys[action])</c> on attach (see
+/// <see cref="PropSpawner"/>'s own file comment for why that call belongs in EVERY attach,
+/// not just the first) - never a change to this file's load/save machinery, which is
+/// generic over whatever <see cref="Bindings"/> lists. WASD movement is deliberately not
+/// in this table: it is a continuous two-axis read (<c>Input.GetAxisRaw</c>), not a
+/// boolean action <see cref="InputActions"/> models, and letting a player rebind movement
+/// away from WASD is not something this sandbox's design asked for - see the settings
+/// screen's own file comment for the full reasoning.
 /// </para>
 /// </remarks>
 public static class SandboxSettings
@@ -48,12 +63,32 @@ public static class SandboxSettings
     /// <summary>Matches the player prefab's authored camera FOV (player.prefab.toml).</summary>
     public static float FovDegrees = 60.0f;
 
-    /// <summary>Key bound to PropSpawner's "spawn_prop" InputAction - the only binding
-    /// actually rebindable today. See UiSettingsScreen's own file comment for why the rest
-    /// (WASD, jump, sprint, Q, E) are not offered: they are raw Input.IsKeyDown calls, not
-    /// InputActions entries, so rebinding them would need to change nothing here and
-    /// everything in those scripts instead.</summary>
-    public static Key SpawnPropKey = Key.F;
+    /// <summary>Every rebindable action, in the order the Settings screen lists them:
+    /// the <see cref="InputActions"/> name a script registers/reads, the label the
+    /// Controls section shows next to it, and the compiled-in default key. "Interact"/
+    /// "Tool Fire" match ToolGun's own former <c>InteractKey</c>/<c>ToolFireKey</c> public
+    /// fields (now routed through here instead, so <see cref="UiHud"/> and this screen
+    /// agree on the current key from one place); "Jump"/"Sprint" match FirstPersonPlayer's
+    /// former raw <c>Key.Space</c>/<c>Key.LeftShift</c> checks; "Spawn Menu" matches
+    /// SpawnMenu's former raw <c>Key.Q</c> check; "Rotate Held Prop" matches PhysicsGun's
+    /// former raw <c>Key.E</c> check.</summary>
+    public static readonly (string Action, string Label, Key Default)[] Bindings =
+    {
+        ("spawn_prop", "Spawn Prop", Key.F),
+        ("open_menu", "Spawn Menu", Key.Q),
+        ("interact", "Interact", Key.G),
+        ("tool_fire", "Tool Fire", Key.T),
+        ("rotate_prop", "Rotate Held Prop", Key.E),
+        ("jump", "Jump", Key.Space),
+        ("sprint", "Sprint", Key.LeftShift),
+    };
+
+    /// <summary>Current key per action, keyed by <see cref="Bindings"/>' action name.
+    /// Seeded with every default in <see cref="EnsureLoaded"/> before the on-disk file (if
+    /// any) overrides individual entries - a binding added to <see cref="Bindings"/> after
+    /// a player's last save still gets its compiled-in default instead of silently missing
+    /// from the dictionary.</summary>
+    public static readonly Dictionary<string, Key> BoundKeys = new();
 
     private static bool s_loaded;
 
@@ -68,6 +103,10 @@ public static class SandboxSettings
             return;
         }
         s_loaded = true; // set FIRST: a failed read must not be retried every frame
+        foreach ((string action, _, Key def) in Bindings)
+        {
+            BoundKeys[action] = def;
+        }
         try
         {
             string path = PathOnDisk();
@@ -83,9 +122,19 @@ public static class SandboxSettings
             LookSensitivity = Math.Clamp(dto.Sensitivity, MinSensitivity, MaxSensitivity);
             InvertY = dto.InvertY;
             FovDegrees = Math.Clamp(dto.Fov, MinFov, MaxFov);
-            if (Enum.IsDefined(typeof(Key), dto.SpawnPropKey))
+            if (dto.Bindings != null)
             {
-                SpawnPropKey = (Key)dto.SpawnPropKey;
+                foreach ((string action, int keyValue) in dto.Bindings)
+                {
+                    // Only apply to an action this build still knows about, and only a
+                    // value that is still a real Key - either guards against a settings
+                    // file written by a future/older build carrying an action this build
+                    // removed, or a key value this build's Key enum no longer defines.
+                    if (BoundKeys.ContainsKey(action) && Enum.IsDefined(typeof(Key), keyValue))
+                    {
+                        BoundKeys[action] = (Key)keyValue;
+                    }
+                }
             }
         }
         catch (Exception e)
@@ -103,12 +152,17 @@ public static class SandboxSettings
     {
         try
         {
+            Dictionary<string, int> bindings = new();
+            foreach ((string action, _, _) in Bindings)
+            {
+                bindings[action] = (int)BoundKeys[action];
+            }
             Dto dto = new()
             {
                 Sensitivity = LookSensitivity,
                 InvertY = InvertY,
                 Fov = FovDegrees,
-                SpawnPropKey = (int)SpawnPropKey,
+                Bindings = bindings,
             };
             File.WriteAllText(PathOnDisk(), JsonSerializer.Serialize(dto));
         }
@@ -134,6 +188,6 @@ public static class SandboxSettings
         public float Sensitivity { get; set; }
         public bool InvertY { get; set; }
         public float Fov { get; set; }
-        public int SpawnPropKey { get; set; }
+        public Dictionary<string, int>? Bindings { get; set; }
     }
 }

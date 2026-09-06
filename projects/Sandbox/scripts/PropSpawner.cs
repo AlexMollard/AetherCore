@@ -250,11 +250,14 @@ public sealed class PropSpawner : EntityScript
         _sphere = World.CreateMesh("sphere");
         // Bug found while building: this used to hardcode Key.F unconditionally, so a
         // player who rebinds Spawn Prop in Settings has that saved to
-        // SandboxSettings.SpawnPropKey, but the NEXT attach (every reconnect, every new
+        // SandboxSettings.BoundKeys, but the NEXT attach (every reconnect, every new
         // session - PropSpawner is added fresh per connection) silently re-registered
-        // Key.F and undid the rebind.
+        // Key.F and undid the rebind. Register is an idempotent upsert (InputActions'
+        // own doc comment), so calling it every attach is exactly the fix, not a
+        // workaround - every other rebindable action in this project follows the same
+        // pattern (see SandboxSettings.Bindings' own file comment).
         SandboxSettings.EnsureLoaded();
-        InputActions.Register("spawn_prop", SandboxSettings.SpawnPropKey);
+        InputActions.Register("spawn_prop", SandboxSettings.BoundKeys["spawn_prop"]);
         _pauseMenuEntity = Scene.Find("NetSession");
     }
 
