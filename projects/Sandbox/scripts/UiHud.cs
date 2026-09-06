@@ -55,7 +55,9 @@ public sealed class UiHud : EntityScript
     private Entity _hudRoot;
     private Entity _heldLabel;
     private Entity _hintLabel;
+    private Entity _interactIcon;
     private Entity _interactLabel;
+    private Entity _toolModeIcon;
     private Entity _toolModeLabel;
 
     public override void OnUpdate(float deltaTime)
@@ -135,11 +137,29 @@ public sealed class UiHud : EntityScript
         // (see Ui.SetRect's own doc remarks) - pivot (0.5, 0.0) with a POSITIVE offset
         // is what actually renders below the anchor; a screenshot caught this and
         // _heldLabel swapped the two before this comment matched the code.
+        //
+        // Two widgets, not one string: an icon glyph from the baked
+        // "InputPromptsKeyboardMouse" font and this project's ordinary UI font cannot
+        // mix within a single string (that font is icon glyphs ONLY - see InputGlyphs'
+        // own file comment for why), so the key portion is a narrow icon-font Text
+        // right-pivoted onto the row's horizontal centre, and the rest of the sentence
+        // is an ordinary-font Text left-pivoted onto that same centre point - the pair
+        // always meets exactly at centre regardless of how long "Use"/the mode name is,
+        // with no text-measurement call needed (this UI has none).
+        _interactIcon = Ui.CreateText(hud, string.Empty);
+        Ui.SetAnchors(_interactIcon, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        Ui.SetPivot(_interactIcon, new Vector2(1.0f, 0.0f));
+        Ui.SetRect(_interactIcon, -2.0f, 40.0f, 22.0f, 24.0f);
+        Ui.SetTextAlign(_interactIcon, UiHAlign.Right, UiVAlign.Middle);
+        Ui.SetFont(_interactIcon, InputGlyphs.FontName);
+        Ui.SetFontSize(_interactIcon, UiTheme.FontSizeHint);
+        Ui.SetTextColor(_interactIcon, UiTheme.TextColor);
+
         _interactLabel = Ui.CreateText(hud, string.Empty);
         Ui.SetAnchors(_interactLabel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        Ui.SetPivot(_interactLabel, new Vector2(0.5f, 0.0f));
-        Ui.SetRect(_interactLabel, 0.0f, 40.0f, 260.0f, 24.0f);
-        Ui.SetTextAlign(_interactLabel, UiHAlign.Center, UiVAlign.Middle);
+        Ui.SetPivot(_interactLabel, new Vector2(0.0f, 0.0f));
+        Ui.SetRect(_interactLabel, 2.0f, 40.0f, 256.0f, 24.0f);
+        Ui.SetTextAlign(_interactLabel, UiHAlign.Left, UiVAlign.Middle);
         Ui.SetFontSize(_interactLabel, UiTheme.FontSizeHint);
         Ui.SetTextColor(_interactLabel, UiTheme.TextColor);
 
@@ -159,12 +179,22 @@ public sealed class UiHud : EntityScript
         // Directly above the F/Q hint row, same anchor/pivot convention - one more
         // static-position readout, always visible while the gun is present rather than
         // show/hide like _interactLabel, so scrolling to a new mode is confirmed
-        // immediately without needing to fire it first.
+        // immediately without needing to fire it first. Icon/text split, same reasoning
+        // and same centre-meeting layout as _interactIcon/_interactLabel above.
+        _toolModeIcon = Ui.CreateText(hud, string.Empty);
+        Ui.SetAnchors(_toolModeIcon, new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f));
+        Ui.SetPivot(_toolModeIcon, new Vector2(1.0f, 1.0f));
+        Ui.SetRect(_toolModeIcon, -2.0f, -48.0f, 22.0f, 18.0f);
+        Ui.SetTextAlign(_toolModeIcon, UiHAlign.Right, UiVAlign.Middle);
+        Ui.SetFont(_toolModeIcon, InputGlyphs.FontName);
+        Ui.SetFontSize(_toolModeIcon, UiTheme.FontSizeHint);
+        Ui.SetTextColor(_toolModeIcon, UiTheme.TextMuted);
+
         _toolModeLabel = Ui.CreateText(hud, string.Empty);
         Ui.SetAnchors(_toolModeLabel, new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f));
-        Ui.SetPivot(_toolModeLabel, new Vector2(0.5f, 1.0f));
-        Ui.SetRect(_toolModeLabel, 0.0f, -48.0f, 320.0f, 18.0f);
-        Ui.SetTextAlign(_toolModeLabel, UiHAlign.Center, UiVAlign.Middle);
+        Ui.SetPivot(_toolModeLabel, new Vector2(0.0f, 1.0f));
+        Ui.SetRect(_toolModeLabel, 2.0f, -48.0f, 256.0f, 18.0f);
+        Ui.SetTextAlign(_toolModeLabel, UiHAlign.Left, UiVAlign.Middle);
         Ui.SetFontSize(_toolModeLabel, UiTheme.FontSizeHint);
         Ui.SetTextColor(_toolModeLabel, UiTheme.TextMuted);
 
@@ -200,23 +230,51 @@ public sealed class UiHud : EntityScript
     }
 
 
-    /// <summary>Shows "[key] Use" while ToolGun's own aim ray is over something
-    /// Interact() would actually press, and clears it the instant the player looks
-    /// away or steps out of range - both collapse to the one InteractTarget check,
-    /// since ToolGun bounds its raycast to MaxRange itself (see InteractTarget's
-    /// own field comment on ToolGun). Also shows the tool gun's current mode
-    /// (Wire/Light/Colour/Remove) on its own line whenever the gun is present, so a
-    /// scroll-cycled mode never has to be guessed from the last click's effect.</summary>
+    /// <summary>Shows an icon for InteractKey plus "Use" while ToolGun's own aim ray is
+    /// over something Interact() would actually press, and clears it the instant the
+    /// player looks away or steps out of range - both collapse to the one
+    /// InteractTarget check, since ToolGun bounds its raycast to MaxRange itself (see
+    /// InteractTarget's own field comment on ToolGun). Also shows an icon for
+    /// ToolFireKey plus the tool gun's current mode (Wire/Light/Colour/Remove/Weld/
+    /// Rope) on its own line whenever the gun is present, so a scroll-cycled mode
+    /// never has to be guessed from the last click's effect.</summary>
     private void RefreshInteractPrompt(Entity camera)
     {
         ToolGun? tool = camera.GetScript<ToolGun>();
-        if (_interactLabel.IsValid)
+        bool showInteract = tool != null && tool.InteractTarget.IsValid;
+        SetKeyHint(_interactIcon, _interactLabel, showInteract ? tool!.InteractKey : null, tool?.InteractPromptSuffix ?? string.Empty);
+        SetKeyHint(_toolModeIcon, _toolModeLabel, tool?.ToolFireKey, tool?.ModeLabelSuffix ?? string.Empty);
+    }
+
+    /// <summary>Drives one icon-widget/text-widget pair (see EnsureHudChildren's own
+    /// comment on why they are two widgets, not one string): the icon widget gets
+    /// InputGlyphs.GetGlyph(key) when this pack has one for it, the text widget gets
+    /// just <paramref name="suffix"/>; a key with no icon falls back to the icon widget
+    /// empty and the OLD "[KeyName] suffix" bracket text in the text widget instead, so
+    /// an unmapped rebind is never silently blank. A null <paramref name="key"/> (the
+    /// gun/target is absent) clears both widgets.</summary>
+    private static void SetKeyHint(Entity icon, Entity text, Key? key, string suffix)
+    {
+        if (!icon.IsValid || !text.IsValid)
         {
-            Ui.SetText(_interactLabel, tool != null && tool.InteractTarget.IsValid ? tool.InteractPromptText : string.Empty);
+            return;
         }
-        if (_toolModeLabel.IsValid)
+        if (key is not { } k)
         {
-            Ui.SetText(_toolModeLabel, tool != null ? tool.ModeLabel : string.Empty);
+            Ui.SetText(icon, string.Empty);
+            Ui.SetText(text, string.Empty);
+            return;
+        }
+        char? glyph = InputGlyphs.GetGlyph(k);
+        if (glyph.HasValue)
+        {
+            Ui.SetText(icon, glyph.Value.ToString());
+            Ui.SetText(text, suffix);
+        }
+        else
+        {
+            Ui.SetText(icon, string.Empty);
+            Ui.SetText(text, $"[{k}] {suffix}");
         }
     }
 

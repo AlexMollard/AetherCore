@@ -80,9 +80,10 @@ public sealed class ToolGun : EntityScript
     }
 
     /// <summary>The key that presses a Button or flips a Lever dead ahead - the same
-    /// key InteractPromptText names, so a rebind here never leaves the HUD prompt
-    /// showing a stale letter. Independent of the tool gun's own mode/fire key below;
-    /// "use whatever is directly ahead" is ordinary gameplay, not a tool action.</summary>
+    /// key InteractPromptSuffix's prompt shows an icon/bracket for, so a rebind here
+    /// never leaves the HUD prompt showing a stale letter. Independent of the tool
+    /// gun's own mode/fire key below; "use whatever is directly ahead" is ordinary
+    /// gameplay, not a tool action.</summary>
     public Key InteractKey = Key.G;
 
     /// <summary>Fires the current mode's action - was "wire_tool"/T when this script was
@@ -101,10 +102,13 @@ public sealed class ToolGun : EntityScript
     private int _modeIndex;
     public ToolMode Mode => Modes[_modeIndex];
 
-    /// <summary>What UiHud shows for the current mode - built from the enum name and
-    /// ToolFireKey rather than a hardcoded string, so neither a rebind nor a renamed
-    /// mode can leave this stale.</summary>
-    public string ModeLabel => $"[{ToolFireKey}] {Mode} tool (scroll to change)";
+    /// <summary>What UiHud shows for the current mode, minus the leading key - UiHud
+    /// prepends an icon glyph (or "[ToolFireKey]" bracket text where this pack has no
+    /// icon for that key - see InputGlyphs.GetGlyph) for the key itself, since an icon
+    /// font and this project's ordinary UI font cannot mix within one string (see
+    /// InputGlyphs' own file comment). Built from the enum name rather than a
+    /// hardcoded string, so a renamed mode can never leave this stale.</summary>
+    public string ModeLabelSuffix => $"{Mode} tool (scroll to change)";
 
     private Entity _player;
     private Entity _pendingSource;
@@ -146,9 +150,10 @@ public sealed class ToolGun : EntityScript
     /// CameraBasis.cs's own header for the derivation and its citations).</summary>
     private const float ViewmodelUpOffset = -0.15f;
 
-    /// <summary>The exact text UiHud shows over InteractTarget - built from InteractKey
-    /// rather than a hardcoded "[G]" so it never goes stale if that binding changes.</summary>
-    public string InteractPromptText => $"[{InteractKey}] Use";
+    /// <summary>The rest of the text UiHud shows over InteractTarget, after the icon/
+    /// bracket UiHud prepends for InteractKey (see ModeLabelSuffix's comment on why
+    /// the key portion is a separate widget, not part of this string).</summary>
+    public string InteractPromptSuffix => "Use";
 
     // AddScript only queues a ScriptEntry for the script-component system to pick up on
     // a later pass (confirmed by reading aether_add_script's native implementation - it
