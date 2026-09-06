@@ -74,25 +74,6 @@ public sealed class FirstPersonPlayer : EntityScript
     /// after live feedback that the view sat too low.</summary>
     public float EyeHeight = 1.75f;
 
-    /// <summary>Near-clip distance for THIS camera specifically, in metres. The camera
-    /// sits at EyeHeight inside the character's own head, and this engine has no
-    /// per-bone visibility to hide the head mesh outright - checked directly:
-    /// SkinnedMeshComponent (Components.hpp) carries no bone-visibility field, and
-    /// Human.gltf's two primitives (body, joint overlays) each span the WHOLE
-    /// skeleton, so there is no single MeshRenderer.visible a script could toggle to
-    /// isolate just the head. The one lever this engine actually exposes per-camera is
-    /// CameraComponent's reflected "near" field (CoreComponents.reflect.cpp) - hence
-    /// the generic Self.Component("Camera").SetFloat("near", ...) call below; there is
-    /// no dedicated Camera.SetNearPlane in the SDK. 0.15m (the skull's own ~8-10cm
-    /// forward profile) was NOT enough in practice - live testing still showed head
-    /// geometry (reported as "AO looking stuff": the inside/near surface of a mesh
-    /// this close to the lens reads as blotchy dark occlusion rather than a clean
-    /// clip). Raised well past that so the whole head silhouette clips regardless of
-    /// the exact eye-to-skull-surface distance, not just its closest point -
-    /// chest/arms/legs are still comfortably further than this in the bind pose.
-    /// </summary>
-    public float FirstPersonNearPlane = 0.35f;
-
     // ── Speed ────────────────────────────────────────────────────────────────────
     /// <summary>Top ground speed while walking, in m/s. A brisk human walk (a real
     /// comfortable pace is closer to 1.4 m/s) traded up for a sandbox that should not
@@ -148,10 +129,6 @@ public sealed class FirstPersonPlayer : EntityScript
         if (!_camera.IsValid)
         {
             Log.Warn("[Sandbox] FirstPersonPlayer: no camera child on the Player entity; look will do nothing.");
-        }
-        else
-        {
-            _camera.Component("Camera").SetFloat("near", FirstPersonNearPlane);
         }
         _pauseMenuEntity = Scene.Find("NetSession");
 

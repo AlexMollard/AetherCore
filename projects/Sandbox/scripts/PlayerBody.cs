@@ -21,11 +21,22 @@ namespace AetherGame;
 /// hierarchy, and it ships two primitives (root child 0 = "Beta_Surface", the skinned body;
 /// child 1 = "Beta_Joints", a separate skinned mesh of ball-joint overlays at every hinge) -
 /// both spawned as children of a fresh "Body" entity by <see cref="Entity.LoadModel"/>, which
-/// is why this script drives BOTH mesh entities' clips together rather than one.
+/// is why this script drives BOTH mesh entities' clips together rather than one. The owner's
+/// own copy loads <see cref="ModelPathHeadless"/> instead - see that field's own comment on
+/// why a first-person camera needs a head-less body, not a near-plane trick.
 ///
 /// CLIPS: the source glTF originally shipped exactly one baked clip, Mixamo's own unrenamed
-/// take name "mixamo.com" (idle - it does move a little, but returns to itself in a loop, per
-/// a frame-by-frame read of the Hips translation channel). A second clip, "Walk", has since
+/// take name "mixamo.com" (idle). ITS HIPS TRANSLATION CHANNEL CARRIED BAKED ROOT MOTION -
+/// found by sampling it directly: the Hips drifted out to roughly (10.7, -, 3.1) raw units
+/// and back over the clip's 16.6s loop, which a stationary camera (anchored to the capsule,
+/// never to this mesh) reads as the head visibly wandering away and back while "standing
+/// still". The grafted "Walk" clip had the same problem in the other direction - forward
+/// root motion baked in (Hips.z: 1.3 -> 163.4 raw units over under a second), which would
+/// have fought this project's own CharacterController-driven translation instead of just
+/// looking wrong standing still. Both clips' Hips translation X/Z were neutralized at the
+/// binary level (pinned to each clip's own first-keyframe value; Y - the natural vertical
+/// bob - was left untouched) so the rig now animates in place, the same convention an
+/// "in-place" Mixamo export would have shipped with. A second clip, "Walk", has since
 /// been grafted in from this project's HumanDemo sibling (same rig, byte-identical shared
 /// buffer.bin, additional walk.bin holding just the new keyframes) - see this project's own
 /// Human.gltf for the merged JSON. THERE IS NO RUN CYCLE in this asset; sprinting still plays
@@ -33,15 +44,15 @@ namespace AetherGame;
 /// would visibly slide the feet. That is a real sourcing gap, not something this script papers
 /// over.
 ///
-/// BAKE CAVEAT, findable only by reading the runtime loader end to end: script-driven
-/// <see cref="Entity.LoadModel"/> calls AssetManager::LoadModel, which goes straight to
-/// GltfAsset::LoadFromVfsPath - and THAT never parses raw .gltf/.glb at all, it requires an
-/// already-baked companion .mesh/.skel/.animset next to it (EnsureModelBaked in the editor's
-/// own ModelBake.cpp is the only thing that produces those, via drag-drop/Inspector re-import/
-/// Publish - the editor was off-limits this session). Sandbox's existing bake predates the
-/// "Walk" clip addition above, so <see cref="Animation.Find"/> will not find it until someone
-/// with editor access re-imports this model once. Until then this script logs that specific
-/// gap once and simply never leaves the idle clip - it does not crash or spin.
+/// BAKE CAVEAT: script-driven <see cref="Entity.LoadModel"/> calls AssetManager::LoadModel,
+/// which goes straight to GltfAsset::LoadFromVfsPath - and THAT never parses raw .gltf/.glb at
+/// all, it requires an already-baked companion .mesh/.skel/.animset next to it
+/// (EnsureModelBaked in the editor's own ModelBake.cpp is the only thing that produces those).
+/// EnsureModelBaked's own freshness check only tests whether the .mesh file exists, not
+/// whether it postdates its source - so a source edit (the Walk graft, the root-motion fix
+/// above) needs its stale .mesh/.skel/.animset deleted before the next load re-bakes it; a
+/// re-import through the Editor UI achieves the same thing. Human.gltf's own bake was cleared
+/// this way after both fixes above landed.
 ///
 /// FACING: a player entity's own rotation is otherwise never written (see
 /// <see cref="FirstPersonPlayer"/>'s own file comment on why), so nothing turns this mesh to
@@ -75,6 +86,17 @@ namespace AetherGame;
 public sealed class PlayerBody : EntityScript
 {
     public string ModelPath = "project://assets/models/Human/Human.gltf";
+
+    /// <summary>The same rig with head/neck geometry (mixamorig_Head/Neck/HeadTop_End -
+    /// dominant triangles) removed from both Beta_Surface and Beta_Joints, used ONLY for
+    /// the local owner's own body - see <see cref="OnAttach"/>'s model-path selection.
+    /// A first-person camera sitting at eye height is necessarily a few centimetres from
+    /// the inside of the skull; no near-plane distance clips that without also clipping
+    /// the player's own hands and anything they walk up to (measured and confirmed live -
+    /// see the routed diff notes), so the honest fix is a model that has no head to be
+    /// inside of. Remote players still need to see this owner's real head, so their
+    /// copies keep loading <see cref="ModelPath"/> unchanged.</summary>
+    public string ModelPathHeadless = "project://assets/models/Human/HumanHeadless.gltf";
 
     /// <summary>Uniform scale applied to the spawned "Body" root after LoadModel.
     /// REQUIRED, not cosmetic: Entity.LoadModel calls AssetManager::SpawnModel with its
@@ -134,12 +156,20 @@ public sealed class PlayerBody : EntityScript
         // "Body" would spawn its meshes at the world origin instead of at the player.
         _bodyRoot.Position = Self.Position;
         _bodyRoot.SetParent(Self);
-        _bodyRoot.LoadModel(ModelPath);
+        // The local owner's own first-person view must never render its own head (see
+        // ModelPathHeadless's own field comment) - every OTHER player watching this one
+        // needs the real head, so only the copy this peer actually controls swaps model.
+        // Net.HasAuthority(Self) is already the exact check FirstPersonPlayer/PhysicsGun/
+        // PropSpawner gate their own per-frame input on (true immediately offline and for
+        // the host, per Net.HasAuthority's own doc comment - not a callback race), so
+        // reading it here at attach time is the same authority answer those already trust.
+        string modelPath = Net.HasAuthority(Self) ? ModelPathHeadless : ModelPath;
+        _bodyRoot.LoadModel(modelPath);
         _bodyRoot.Scale = new Vector3(ModelScale, ModelScale, ModelScale);
 
         if (_bodyRoot.ChildCount < 2)
         {
-            Log.Warn($"[Sandbox] PlayerBody ({Self.Name}): '{ModelPath}' spawned {_bodyRoot.ChildCount} mesh child(ren), expected 2 (Human.gltf's body + joint-overlay primitives) - no visible player model this run.");
+            Log.Warn($"[Sandbox] PlayerBody ({Self.Name}): '{modelPath}' spawned {_bodyRoot.ChildCount} mesh child(ren), expected 2 (Human.gltf's body + joint-overlay primitives) - no visible player model this run.");
             return;
         }
 
@@ -154,7 +184,7 @@ public sealed class PlayerBody : EntityScript
         _clipsUsable = _idleClip0 >= 0 && _idleClip1 >= 0;
         if (!_clipsUsable)
         {
-            Log.Warn($"[Sandbox] PlayerBody ({Self.Name}): idle clip '{IdleClipName}' not found on '{ModelPath}' - the model will render in its default bind pose with no locomotion animation.");
+            Log.Warn($"[Sandbox] PlayerBody ({Self.Name}): idle clip '{IdleClipName}' not found on '{modelPath}' - the model will render in its default bind pose with no locomotion animation.");
         }
         else if (_walkClip0 < 0 || _walkClip1 < 0)
         {
@@ -162,7 +192,7 @@ public sealed class PlayerBody : EntityScript
             // before anyone with editor access re-imports it - see this class's own
             // BAKE CAVEAT. Not a code bug: Animation.Find reads the baked .animset, and
             // the stale one predates the new clip.
-            Log.Warn($"[Sandbox] PlayerBody ({Self.Name}): walk clip '{WalkClipName}' not found on '{ModelPath}' - it exists in the source glTF but Sandbox's baked .mesh/.animset predates it (Entity.LoadModel never parses raw glTF, only its baked cache). Re-import this model once (Inspector re-import, or drag it into the Hierarchy again) to pick it up; until then this body stays on idle regardless of movement.");
+            Log.Warn($"[Sandbox] PlayerBody ({Self.Name}): walk clip '{WalkClipName}' not found on '{modelPath}' - it exists in the source glTF but Sandbox's baked .mesh/.animset predates it (Entity.LoadModel never parses raw glTF, only its baked cache). Re-import this model once (Inspector re-import, or drag it into the Hierarchy again) to pick it up; until then this body stays on idle regardless of movement.");
         }
 
         ApplyClip(walking: false);
