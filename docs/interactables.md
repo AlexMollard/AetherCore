@@ -220,13 +220,15 @@ that needs a script-driven Kinematic body can call it the same way.
 
 `ToolGun` is attached to the Main Camera alongside `PhysicsGun`/`SpawnMenu`/
 `PropSpawner`, and shares their forward-ray-from-eye-height aim. Wiring is one
-of its modes (`ToolGun.ToolMode.Wire`) - Light/Colour/Remove are the others,
-cycled with the mouse wheel; see the tool gun's own file header for the full
-mode list. Weld and Rope - deferred for as long as no constraint API existed -
-are backed now: each is a two-click flow spawning a WeldLink/RopeLink marker
-entity (the persistence shape the tool gun's header specified back when they
-were deferred), whose endpoints survive save/load and whose constraint is
-rebuilt fresh from them on load.
+of its modes (`ToolGun.ToolMode.Wire`; Light/Colour/Remove/Weld/Rope are the
+others). Mode selection accepts two inputs: mouse-wheel cycles, and number
+keys `1`-`6` select a mode directly (in enum order); both run the same
+cancel-pending path, and the number keys work while the physics gun is holding
+a prop (they do not share its scroll use). Weld and Rope - deferred for as
+long as no constraint API existed - are backed now: each is a two-click flow
+spawning a WeldLink/RopeLink marker entity (the persistence shape the tool
+gun's header specified back when they were deferred), whose endpoints survive
+save/load and whose constraint is rebuilt fresh from them on load.
 
 - **`G` (`ToolGun.InteractKey`) presses whatever `Button` is directly ahead, or
   flips whatever `Lever` is directly ahead.** This is ordinary gameplay use and

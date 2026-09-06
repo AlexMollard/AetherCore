@@ -219,12 +219,41 @@ public sealed class ToolGun : EntityScript
         }
     }
 
-    /// <summary>Scroll cycles the mode, yielding to PhysicsGun's own use of scroll
-    /// (push/pull distance) while it has something held - checked by reading its public
-    /// Held property, not by contesting the input, since there is no ownership
-    /// arbitration between two scripts on the same entity in this engine.</summary>
+    /// <summary>Direct mode selection - number keys 1-6 map onto the enum in order
+    /// (Wire, Light, Colour, Remove, Weld, Rope). Complements the scroll cycle rather
+    /// than replacing it: six modes is past where wheel-through-everything stays
+    /// usable, and a key select is one press instead of up to five scrolls.</summary>
+    private static readonly Key[] ModeSelectKeys =
+    {
+        Key.Num1, Key.Num2, Key.Num3, Key.Num4, Key.Num5, Key.Num6,
+    };
+
+    /// <summary>Mode selection: number keys select directly; the scroll wheel cycles.
+    /// Scroll yields to PhysicsGun's own use of the wheel (push/pull distance) while it
+    /// has something held - checked by reading its public Held property, not by
+    /// contesting the input, since there is no ownership arbitration between two
+    /// scripts on the same entity in this engine. The number keys are independent of
+    /// the physgun's scroll use, so they work while a prop is held.</summary>
     private void HandleModeCycle()
     {
+        for (int i = 0; i < ModeSelectKeys.Length; ++i)
+        {
+            if (!Input.IsKeyPressed(ModeSelectKeys[i]))
+            {
+                continue;
+            }
+            if (i != _modeIndex)
+            {
+                _modeIndex = i;
+                // Same mid-weld hygiene as the wheel path below: a pending source from
+                // the mode just left behind must not sit tinted forever. Pressing the
+                // CURRENT mode's number is a no-op, not a cancel - re-clicking the same
+                // mode's pending source should stay possible.
+                CancelPending();
+            }
+            return;
+        }
+
         if (GetScript<PhysicsGun>() is { Held.IsValid: true })
         {
             return;
