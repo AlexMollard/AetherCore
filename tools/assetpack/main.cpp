@@ -9,11 +9,12 @@
 
 #include <nlohmann/json.hpp>
 
-#include "MeshProcessor.hpp"
 #include "AssetPipeline.hpp"
+#include "BakeOutputs.hpp"
 #include "FontProcessor.hpp"
 #include "KenneyImport.hpp"
 #include "MaterialImporter.hpp"
+#include "MeshProcessor.hpp"
 
 using namespace aether::assetpipeline;
 
@@ -344,31 +345,19 @@ static int RunBakeCommand(int argc, char* argv[])
 		std::cerr << "AssetPacker bake: no mesh geometry produced from '" << modelPath.string() << "'\n";
 		return 1;
 	}
-	const std::string stem = modelPath.stem().generic_string();
-	const fs::path modelDir = modelPath.parent_path();
-	auto writeOut = [](const fs::path& outPath, const ByteBuffer& data)
+	// Same output writer the Kenney importer uses (BakeOutputs.hpp) - tracked-write with
+	// rollback-on-partial-failure, so a bake that dies partway never leaves a stale ".mesh
+	// exists" signal for the next EnsureModelBaked/bake call to trust.
+	const BakeWriteResult write = WriteBakedOutputs(result, modelPath, projectRoot);
+	if (!write.ok)
 	{
-		if (data.empty())
-		{
-			return;
-		}
-		std::ofstream out(outPath, std::ios::binary);
-		out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
-		std::cout << "wrote " << outPath.string() << " (" << data.size() << " bytes)\n";
-	};
-	writeOut(modelDir / (stem + ".mesh"), result.meshData);
-	writeOut(modelDir / (stem + ".skel"), result.skelData);
-	writeOut(modelDir / (stem + ".animset"), result.animsetData);
-	for (const auto& [fileName, animData]: result.animFiles)
-	{
-		fs::create_directories(projectRoot / "animations");
-		writeOut(projectRoot / "animations" / fileName, animData);
+		std::cerr << "AssetPacker bake: " << write.error << "\n";
+		return 1;
 	}
-	for (const auto& [matVfsPath, matData]: result.materialFiles)
+	std::cout << "wrote " << write.meshPath.string() << "\n";
+	for (const std::string& w: write.warnings)
 	{
-		const fs::path matDisk = projectRoot / matVfsPath;
-		fs::create_directories(matDisk.parent_path());
-		writeOut(matDisk, matData);
+		std::cerr << "AssetPacker bake: warning: " << w << "\n";
 	}
 	return 0;
 }

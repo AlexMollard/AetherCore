@@ -20,6 +20,7 @@
 #	include <sys/wait.h>
 #endif
 
+#include "BakeOutputs.hpp"
 #include "MeshProcessor.hpp"
 
 namespace aether::assetpipeline::kenney
@@ -129,24 +130,6 @@ namespace aether::assetpipeline::kenney
 			return static_cast<bool>(in);
 		}
 
-		bool WriteFileBytes(const fs::path& path, const void* data, std::size_t size, std::string& error)
-		{
-			std::error_code ec;
-			fs::create_directories(path.parent_path(), ec);
-			std::ofstream out(path, std::ios::binary | std::ios::trunc);
-			if (!out)
-			{
-				error = "cannot open '" + path.generic_string() + "' for write";
-				return false;
-			}
-			out.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
-			if (!out)
-			{
-				error = "failed writing '" + path.generic_string() + "'";
-				return false;
-			}
-			return true;
-		}
 
 		bool FilesIdentical(const fs::path& a, const fs::path& b)
 		{
@@ -1001,10 +984,10 @@ namespace aether::assetpipeline::kenney
 			}
 		}
 
-		// Bake: same MeshProcessor the editor's drag-drop path (EnsureModelBaked) uses, with
-		// the same tracked-write-then-rollback-on-partial-failure discipline, adapted from
-		// io::FileSystem/EditorProjectContext (unavailable in this dependency-light tool
-		// tree) to plain std::filesystem.
+		// Bake: same MeshProcessor the editor's drag-drop path (EnsureModelBaked) and the
+		// standalone `AssetPacker bake` CLI subcommand both use, through the one shared
+		// output writer (BakeOutputs.hpp) rather than a third copy of the tracked-write
+		// discipline.
 		const fs::path meshOutPath = modelDiskPath.parent_path() / (request.propName + ".mesh");
 		if (!fs::exists(meshOutPath, ec))
 		{
@@ -1020,64 +1003,15 @@ namespace aether::assetpipeline::kenney
 				result.error = "no mesh geometry produced from '" + modelDiskPath.generic_string() + "' (animation-only or unsupported glTF)";
 				return result;
 			}
-
-			std::vector<fs::path> written;
-			auto writeTracked = [&](const fs::path& outPath, const ByteBuffer& data) -> bool
+			const BakeWriteResult write = WriteBakedOutputs(baked, modelDiskPath, request.projectRoot);
+			if (!write.ok)
 			{
-				std::string writeError;
-				if (!WriteFileBytes(outPath, data.data(), data.size(), writeError))
-				{
-					for (const fs::path& p: written)
-					{
-						std::error_code rmEc;
-						fs::remove(p, rmEc);
-					}
-					result.error = writeError;
-					return false;
-				}
-				written.push_back(outPath);
-				return true;
-			};
-
-			if (!writeTracked(meshOutPath, baked.meshData))
-			{
+				result.error = write.error;
 				return result;
 			}
-			if (!baked.skelData.empty() && !writeTracked(modelDiskPath.parent_path() / (request.propName + ".skel"), baked.skelData))
+			for (const std::string& w: write.warnings)
 			{
-				return result;
-			}
-			if (!baked.animsetData.empty() && !writeTracked(modelDiskPath.parent_path() / (request.propName + ".animset"), baked.animsetData))
-			{
-				return result;
-			}
-			for (const auto& [fileName, animData]: baked.animFiles)
-			{
-				if (!animData.empty() && !writeTracked(request.projectRoot / "animations" / fileName, animData))
-				{
-					return result;
-				}
-			}
-			for (const auto& [matRelPath, matData]: baked.materialFiles)
-			{
-				if (matData.empty())
-				{
-					continue;
-				}
-				const fs::path matOutPath = request.projectRoot / matRelPath;
-				std::ifstream existing(matOutPath, std::ios::binary);
-				if (existing.good())
-				{
-					const std::vector<char> existingBytes((std::istreambuf_iterator<char>(existing)), std::istreambuf_iterator<char>());
-					if (existingBytes.size() != matData.size() || std::memcmp(existingBytes.data(), matData.data(), matData.size()) != 0)
-					{
-						result.warnings.push_back("model generates a material at '" + matRelPath + "' that already exists with different content - two models in this directory share a glTF material name but not its data; whichever imports last wins");
-					}
-				}
-				if (!writeTracked(matOutPath, matData))
-				{
-					return result;
-				}
+				result.warnings.push_back(w);
 			}
 			result.bakedNow = true;
 		}
