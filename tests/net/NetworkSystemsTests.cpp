@@ -18,13 +18,17 @@
 
 #include "io/FileUtil.hpp"
 #include "net/NetComponents.hpp"
+#include "net/NetOwnership.hpp"
+#include "net/NetRagdoll.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
 #include "net/NetSerialize.hpp"
 #include "net/NetSnapshot.hpp"
 #include "net/NetSpawn.hpp"
+#include "net/NetVelocity.hpp"
 #include "net/NetworkContext.hpp"
 #include "net/NetworkSystems.hpp"
+#include "physics/PhysicsComponents.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -697,6 +701,214 @@ TEST_CASE("An RPC with an unrecognised target byte is dropped on both roles")
 	}
 }
 
+// ── Ownership transfer ────────────────────────────────────────────────────────
+
+TEST_CASE("An OwnershipRequest inbound on a client is dropped")
+{
+	Endpoint client;
+	client.BecomeClient();
+	const Entity entity = client.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+
+	client.receive.OnData(client.world, kPeer, aether::net::EncodeOwnershipRequest(1, kPeer));
+
+	CHECK(client.world.TryGet<aether::net::NetworkIdentity>(entity)->owner == aether::net::kInvalidConnection);
+}
+
+TEST_CASE("An OwnershipTransfer inbound on the host is dropped")
+{
+	Endpoint host;
+	host.BecomeHost();
+	const Entity entity = host.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+
+	host.receive.OnData(host.world, kPeer, aether::net::EncodeOwnershipTransfer(1, kPeer));
+
+	CHECK(host.world.TryGet<aether::net::NetworkIdentity>(entity)->owner == aether::net::kInvalidConnection);
+}
+
+TEST_CASE("A host grants a client's claim on a currently free entity")
+{
+	Endpoint host;
+	host.BecomeHost();
+	host.context.Session().AddConnection(kPeer);
+	const Entity entity = host.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+
+	host.receive.OnData(host.world, kPeer, aether::net::EncodeOwnershipRequest(1, kPeer));
+
+	CHECK(host.world.TryGet<aether::net::NetworkIdentity>(entity)->owner == kPeer);
+}
+
+TEST_CASE("A client's claim on an entity another connected peer owns is refused")
+{
+	// THE validation rule under test: "currently-unowned-or-mine". Ungated, any
+	// client could seize a prop already in another player's hands just by asking.
+	Endpoint host;
+	host.BecomeHost();
+	host.context.Session().AddConnection(kPeer);
+	constexpr aether::net::ConnectionId kCurrentOwner = kPeer + 1;
+	host.context.Session().AddConnection(kCurrentOwner);
+	const Entity entity = host.Replicate(1, {0.f, 0.f, 0.f}, kCurrentOwner);
+
+	host.receive.OnData(host.world, kPeer, aether::net::EncodeOwnershipRequest(1, kPeer));
+
+	CHECK(host.world.TryGet<aether::net::NetworkIdentity>(entity)->owner == kCurrentOwner);
+}
+
+TEST_CASE("A client releasing an entity it does not own is refused")
+{
+	Endpoint host;
+	host.BecomeHost();
+	host.context.Session().AddConnection(kPeer);
+	constexpr aether::net::ConnectionId kCurrentOwner = kPeer + 1;
+	host.context.Session().AddConnection(kCurrentOwner);
+	const Entity entity = host.Replicate(1, {0.f, 0.f, 0.f}, kCurrentOwner);
+
+	// kPeer asks to hand it back to the host, but kPeer never held it.
+	host.receive.OnData(host.world, kPeer, aether::net::EncodeOwnershipRequest(1, aether::net::kInvalidConnection));
+
+	CHECK(host.world.TryGet<aether::net::NetworkIdentity>(entity)->owner == kCurrentOwner);
+}
+
+TEST_CASE("A request naming a third connection as newOwner is refused")
+{
+	// The anti-hijack rule: reassigning an entity to somebody who never asked.
+	Endpoint host;
+	host.BecomeHost();
+	host.context.Session().AddConnection(kPeer);
+	const Entity entity = host.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+
+	host.receive.OnData(host.world, kPeer, aether::net::EncodeOwnershipRequest(1, kPeer + 1000));
+
+	CHECK(host.world.TryGet<aether::net::NetworkIdentity>(entity)->owner == aether::net::kInvalidConnection);
+}
+
+TEST_CASE("An OwnershipRequest for an unknown or already-destroyed entity is dropped without crashing")
+{
+	Endpoint host;
+	host.BecomeHost();
+	host.context.Session().AddConnection(kPeer);
+
+	// Never bound at all.
+	host.receive.OnData(host.world, kPeer, aether::net::EncodeOwnershipRequest(404, kPeer));
+
+	// Bound, then destroyed out from under the binding - the same "silent death"
+	// PruneDeadBindings exists for, hit here before that sweep ever runs.
+	const Entity entity = host.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+	host.world.Destroy(entity);
+	host.receive.OnData(host.world, kPeer, aether::net::EncodeOwnershipRequest(1, kPeer));
+
+	// Getting here at all, with the session otherwise untouched, is the point.
+	CHECK(host.context.Session().Connections().size() == 1);
+}
+
+TEST_CASE("A client applies a host's OwnershipTransfer, updating NetworkIdentity::owner")
+{
+	Endpoint client;
+	client.BecomeClient();
+	const Entity entity = client.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+
+	client.receive.OnData(client.world, kPeer, aether::net::EncodeOwnershipTransfer(1, 7));
+
+	CHECK(client.world.TryGet<aether::net::NetworkIdentity>(entity)->owner == 7);
+}
+
+TEST_CASE("An OwnershipTransfer for an unbound net id is a no-op on a client")
+{
+	Endpoint client;
+	client.BecomeClient();
+
+	client.receive.OnData(client.world, kPeer, aether::net::EncodeOwnershipTransfer(999, 7));
+
+	CHECK_FALSE(client.context.Session().EntityFor(999).IsValid());
+}
+
+TEST_CASE("An OwnershipTransfer is ignored while a client is not standing in the session's scene")
+{
+	Endpoint client;
+	client.BecomeClient();
+	client.context.SetReplicationReady(client.world, false);
+	const Entity entity = client.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+
+	client.receive.OnData(client.world, kPeer, aether::net::EncodeOwnershipTransfer(1, 7));
+
+	CHECK(client.world.TryGet<aether::net::NetworkIdentity>(entity)->owner == aether::net::kInvalidConnection);
+}
+
+// ── Ragdoll pose / velocity replication ────────────────────────────────────────
+
+TEST_CASE("A RagdollPose inbound on a client writes its ragdoll's non-root bone transforms")
+{
+	Endpoint client;
+	client.BecomeClient();
+	const Entity root = client.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+	const Entity limb = client.world.Create();
+	client.world.Emplace<aether::TransformComponent>(limb);
+	client.world.Emplace<aether::RagdollBoneComponent>(limb, aether::RagdollBoneComponent{.root = root});
+	client.world.Emplace<aether::RagdollComponent>(root, aether::RagdollComponent{.bones = {root, limb}});
+
+	const std::vector<aether::net::RagdollPoseEntry> entries{
+	        {.netId = 1, .bones = {{{5.f, 6.f, 7.f}, {0.f, 0.f, 0.f}}}}};
+	client.receive.OnData(client.world, kPeer,
+	        aether::net::NetworkContext::Frame(aether::net::NetMessage::RagdollPose,
+	                aether::net::EncodeRagdollPoses(entries)));
+
+	glm::vec3 pos{}, euler{}, scale{};
+	DecomposeTRS(client.world.TryGet<aether::TransformComponent>(limb)->localToWorld, pos, euler, scale);
+	CHECK(pos == glm::vec3(5.f, 6.f, 7.f));
+}
+
+TEST_CASE("A RagdollPose is ignored while a client is not standing in the session's scene")
+{
+	Endpoint client;
+	client.BecomeClient();
+	client.context.SetReplicationReady(client.world, false);
+	const Entity root = client.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+	const Entity limb = client.world.Create();
+	client.world.Emplace<aether::TransformComponent>(limb);
+	client.world.Emplace<aether::RagdollBoneComponent>(limb, aether::RagdollBoneComponent{.root = root});
+	client.world.Emplace<aether::RagdollComponent>(root, aether::RagdollComponent{.bones = {root, limb}});
+
+	const std::vector<aether::net::RagdollPoseEntry> entries{
+	        {.netId = 1, .bones = {{{5.f, 6.f, 7.f}, {0.f, 0.f, 0.f}}}}};
+	client.receive.OnData(client.world, kPeer,
+	        aether::net::NetworkContext::Frame(aether::net::NetMessage::RagdollPose,
+	                aether::net::EncodeRagdollPoses(entries)));
+
+	CHECK(client.world.TryGet<aether::TransformComponent>(limb)->localToWorld == glm::mat4(1.f));
+}
+
+TEST_CASE("A VelocitySnapshot inbound on a client writes NetReceivedVelocity for the sender to relay onward")
+{
+	Endpoint client;
+	client.BecomeClient();
+	const Entity entity = client.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+
+	const std::vector<aether::net::VelocityEntry> entries{
+	        {.netId = 1, .linear = {2.f, 0.f, 0.f}, .angular = {0.f, 0.f, 0.f}}};
+	client.receive.OnData(client.world, kPeer,
+	        aether::net::NetworkContext::Frame(aether::net::NetMessage::VelocitySnapshot,
+	                aether::net::EncodeVelocitySnapshot(entries)));
+
+	const auto* received = client.world.TryGet<aether::net::NetReceivedVelocity>(entity);
+	REQUIRE(received != nullptr);
+	CHECK(received->linear == glm::vec3(2.f, 0.f, 0.f));
+}
+
+TEST_CASE("A VelocitySnapshot is ignored while a client is not standing in the session's scene")
+{
+	Endpoint client;
+	client.BecomeClient();
+	client.context.SetReplicationReady(client.world, false);
+	const Entity entity = client.Replicate(1, {0.f, 0.f, 0.f}, aether::net::kInvalidConnection);
+
+	const std::vector<aether::net::VelocityEntry> entries{
+	        {.netId = 1, .linear = {2.f, 0.f, 0.f}, .angular = {0.f, 0.f, 0.f}}};
+	client.receive.OnData(client.world, kPeer,
+	        aether::net::NetworkContext::Frame(aether::net::NetMessage::VelocitySnapshot,
+	                aether::net::EncodeVelocitySnapshot(entries)));
+
+	CHECK(client.world.TryGet<aether::net::NetReceivedVelocity>(entity) == nullptr);
+}
+
 // ── Malformed input ─────────────────────────────────────────────────────────────
 
 TEST_CASE("An unknown leading byte is discarded without touching anything")
@@ -948,8 +1160,13 @@ TEST_CASE("A host despawns everything a leaving connection owned, and nothing el
 
 TEST_CASE("A host releases a scene-placed entity's ownership on disconnect instead of destroying it")
 {
-	// Unreachable today - nothing in the framework assigns ownership of a
-	// scene-placed entity to a connection - but latent the moment something does.
+	// This used to be unreachable - nothing in the framework assigned ownership of
+	// a scene-placed entity to a connection - until NetMessage::OwnershipTransfer
+	// (NetOwnership.hpp) made it a real path: a scene-placed prop is exactly the
+	// kind of thing a physics gun claims and drops. Still constructed by hand here
+	// rather than through a live transfer, because what this case pins is
+	// OnDisconnected's own release rule, independent of how ownership got there -
+	// see the test below for the version driven through the real wire path.
 	// Stop() already treats scenePlaced as sacrosanct when the WHOLE session ends;
 	// OnDisconnected must make the same call for a single connection leaving while
 	// the session continues, or a scene-placed entity handed to a connection would
@@ -986,6 +1203,40 @@ TEST_CASE("A host releases a scene-placed entity's ownership on disconnect inste
 	// The session-spawned one is despawned exactly as before this fix.
 	CHECK_FALSE(host.world.GetRegistry().valid(World::ToEntt(sessionSpawned)));
 	CHECK(CountIdentities(host.world) == 1);
+}
+
+TEST_CASE("A scene-placed entity transferred to a connection over the real wire path is released, not destroyed, when that connection disconnects")
+{
+	// Same contract as the test above, but driven end-to-end through the actual
+	// ownership-transfer messages rather than a hand-set owner field - the
+	// composition this feature depends on. OnDisconnected's release path keys
+	// entirely off NetworkIdentity::owner and scenePlaced, neither of which cares
+	// HOW ownership got there, so landing the transfer through the real inbound
+	// packet path needed no change to OnDisconnected at all.
+	Endpoint host;
+	host.BecomeHost();
+	host.context.Session().AddConnection(kPeer);
+
+	const Entity scenePlaced = MakeScenePlaced(host.world, 1);
+	auto* identity = host.world.TryGet<aether::net::NetworkIdentity>(scenePlaced);
+	identity->netId = host.context.Session().AllocateNetId();
+	identity->scenePlaced = true;
+	host.context.Session().Bind(identity->netId, scenePlaced);
+	const std::uint32_t netId = identity->netId;
+
+	// The real path: kPeer asks for it, and the host grants it - currently free.
+	host.receive.OnData(host.world, kPeer, aether::net::EncodeOwnershipRequest(netId, kPeer));
+	REQUIRE(host.world.TryGet<aether::net::NetworkIdentity>(scenePlaced)->owner == kPeer);
+
+	host.receive.OnDisconnected(host.world, kPeer);
+
+	REQUIRE(host.world.GetRegistry().valid(World::ToEntt(scenePlaced)));
+	const auto* afterIdentity = host.world.TryGet<aether::net::NetworkIdentity>(scenePlaced);
+	REQUIRE(afterIdentity != nullptr);
+	CHECK(afterIdentity->owner == aether::net::kInvalidConnection);
+	CHECK(afterIdentity->netId == netId);
+	CHECK(afterIdentity->scenePlaced);
+	CHECK(host.context.Session().EntityFor(netId) == scenePlaced);
 }
 
 TEST_CASE("A host ignores a connect event for the invalid connection id")

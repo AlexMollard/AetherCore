@@ -506,3 +506,59 @@ TEST_CASE("Spending only the measured interval leaves a jittery link's own margi
 	CHECK(effectiveDelay < delay);      // strictly less than spending nothing at all
 	CHECK(budget == doctest::Approx(interval)); // the WHOLE interval was spent, at fraction=1.0
 }
+
+// ── Authoritative velocity: NetMessage::VelocitySnapshot overriding the
+// finite-difference trend (see NetVelocity.hpp and TransformSample's own
+// comment) ───────────────────────────────────────────────────────────────────
+
+TEST_CASE("An authoritative sample drives position extrapolation instead of the finite-difference estimate")
+{
+	net::InterpolationBuffer buf;
+	// Two samples that moved only 1 unit in 50ms (a 20 units/s finite-difference
+	// trend) - but the SECOND one carries an authoritative velocity of 100
+	// units/s. If extrapolation still used the finite-difference estimate, 100ms
+	// past the newest sample would read ~2 + 20*0.1 = 4, not ~2 + 100*0.1 = 12.
+	buf.Push({.time = 0.00f, .position = {0.f, 0.f, 0.f}});
+	buf.Push(net::TransformSample{
+	        .time = 0.05f,
+	        .position = {1.f, 0.f, 0.f},
+	        .hasVelocity = true,
+	        .linearVelocity = {100.f, 0.f, 0.f},
+	});
+
+	const auto forward = buf.SampleForward(0.15f, 0.5f);
+	REQUIRE(forward.has_value());
+	CHECK(forward->position.x == doctest::Approx(1.f + 100.f * 0.1f).epsilon(0.01));
+}
+
+TEST_CASE("An authoritative sample's angular velocity drives rotation extrapolation, converted to degrees/second")
+{
+	net::InterpolationBuffer buf;
+	buf.Push({.time = 0.00f, .position = {0.f, 0.f, 0.f}, .rotation = {0.f, 0.f, 0.f}});
+	buf.Push(net::TransformSample{
+	        .time = 0.05f,
+	        .position = {0.f, 0.f, 0.f},
+	        .rotation = {0.f, 10.f, 0.f},
+	        .hasVelocity = true,
+	        .angularVelocity = {0.f, glm::radians(90.f), 0.f}, // 90 deg/s around Y
+	});
+
+	const auto forward = buf.SampleForward(0.15f, 0.5f);
+	REQUIRE(forward.has_value());
+	// 10 deg at the newest sample, plus 90 deg/s * 0.1s = 9 more degrees.
+	CHECK(forward->rotation.y == doctest::Approx(19.f).epsilon(0.01));
+}
+
+TEST_CASE("A sample with no authoritative velocity keeps using the finite-difference estimate")
+{
+	// Regression guard: every EXISTING TransformSample in this file (and every
+	// entity that never receives a VelocitySnapshot) leaves hasVelocity false by
+	// default, and must extrapolate exactly as before this feature existed.
+	net::InterpolationBuffer buf;
+	buf.Push({.time = 0.00f, .position = {0.f, 0.f, 0.f}});
+	buf.Push({.time = 0.05f, .position = {1.f, 0.f, 0.f}}); // 20 units/s, finite-difference only
+
+	const auto forward = buf.SampleForward(0.15f, 0.5f);
+	REQUIRE(forward.has_value());
+	CHECK(forward->position.x == doctest::Approx(1.f + 20.f * 0.1f).epsilon(0.01));
+}

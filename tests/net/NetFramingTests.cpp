@@ -10,13 +10,15 @@
 #include <utility>
 #include <vector>
 
+#include "net/NetOwnership.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetSpawn.hpp"
 
 using namespace aether;
 
 // Every packet leads with one NetMessage byte, but WHO writes it differs per kind:
-// Spawn/Despawn/Rpc/Welcome/Relevancy are self-framing (their encoder writes it),
+// Spawn/Despawn/Rpc/Welcome/Relevancy/Disconnect/ClientReady/OwnershipRequest/
+// OwnershipTransfer are self-framing (their encoder writes it),
 // while Snapshot/ScriptFields carry a bare body the sender wraps with FrameMessage. A
 // new kind that matches neither convention produces a packet the receive system
 // misparses with no error anywhere, so both halves are pinned here - table-driven so
@@ -59,16 +61,22 @@ namespace
 	//   - a kind in kAllKinds classified in neither table, or in both
 	//   - a kind listed twice, or the enum renumbered off contiguous-from-1
 	//   - a self-framing kind with no actual round-trip row in the test below
-	constexpr std::array<net::NetMessage, 9> kAllKinds{
-	        net::NetMessage::Snapshot, net::NetMessage::Spawn, net::NetMessage::Despawn,
-	        net::NetMessage::Rpc, net::NetMessage::Welcome, net::NetMessage::ScriptFields,
-	        net::NetMessage::Relevancy, net::NetMessage::Disconnect, net::NetMessage::ClientReady,
+	constexpr std::array<net::NetMessage, 13> kAllKinds{
+	        net::NetMessage::Snapshot,      net::NetMessage::Spawn,          net::NetMessage::Despawn,
+	        net::NetMessage::Rpc,           net::NetMessage::Welcome,        net::NetMessage::ScriptFields,
+	        net::NetMessage::Relevancy,     net::NetMessage::Disconnect,     net::NetMessage::ClientReady,
+	        net::NetMessage::OwnershipRequest, net::NetMessage::OwnershipTransfer,
+	        net::NetMessage::RagdollPose, net::NetMessage::VelocitySnapshot,
 	};
-	constexpr std::array<net::NetMessage, 7> kSelfFraming{
+	constexpr std::array<net::NetMessage, 9> kSelfFraming{
 	        net::NetMessage::Spawn, net::NetMessage::Despawn, net::NetMessage::Rpc, net::NetMessage::Welcome,
 	        net::NetMessage::Relevancy, net::NetMessage::Disconnect, net::NetMessage::ClientReady,
+	        net::NetMessage::OwnershipRequest, net::NetMessage::OwnershipTransfer,
 	};
-	constexpr std::array<net::NetMessage, 2> kWrapped{net::NetMessage::Snapshot, net::NetMessage::ScriptFields};
+	constexpr std::array<net::NetMessage, 4> kWrapped{
+	        net::NetMessage::Snapshot, net::NetMessage::ScriptFields, net::NetMessage::RagdollPose,
+	        net::NetMessage::VelocitySnapshot,
+	};
 
 	// True when `kinds` names every wire value in [1, kNetMessageMax] exactly once.
 	template<std::size_t N>
@@ -125,7 +133,7 @@ TEST_CASE("Self-framing encoders lead with their own NetMessage byte")
 	// One row per kind in kSelfFraming, and the static_assert below is what keeps it
 	// that way: Relevancy was a self-framing kind with no row here at all, so its
 	// encoder's leading byte was never checked by anything.
-	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 7> selfFraming{{
+	const std::array<std::pair<net::NetMessage, std::vector<std::byte>>, 9> selfFraming{{
 	        {net::NetMessage::Spawn, net::EncodeSpawn(1, 2, "player", {0.f, 0.f, 0.f})},
 	        {net::NetMessage::Despawn, net::EncodeDespawn(1)},
 	        {net::NetMessage::Rpc, net::EncodeRpc(1, 0xABCDu, "Fire", net::NetRpcTarget::Server, {})},
@@ -133,6 +141,8 @@ TEST_CASE("Self-framing encoders lead with their own NetMessage byte")
 	        {net::NetMessage::Relevancy, net::EncodeRelevancyLeave(1)},
 	        {net::NetMessage::Disconnect, net::EncodeDisconnect("Server is full")},
 	        {net::NetMessage::ClientReady, net::EncodeClientReady()},
+	        {net::NetMessage::OwnershipRequest, net::EncodeOwnershipRequest(1, 2)},
+	        {net::NetMessage::OwnershipTransfer, net::EncodeOwnershipTransfer(1, 2)},
 	}};
 	static_assert(selfFraming.size() == kSelfFraming.size(),
 	        "Every self-framing kind needs a round-trip row here, not just a classification.");
@@ -152,7 +162,8 @@ TEST_CASE("Wrapped payloads are framed byte-for-byte by FrameMessage")
 	// BuildSnapshot/BuildScriptFieldPacket happen to emit.
 	const std::vector<std::byte> body{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}};
 
-	for (const net::NetMessage kind: {net::NetMessage::Snapshot, net::NetMessage::ScriptFields})
+	for (const net::NetMessage kind: {net::NetMessage::Snapshot, net::NetMessage::ScriptFields,
+	             net::NetMessage::RagdollPose, net::NetMessage::VelocitySnapshot})
 	{
 		CAPTURE(static_cast<std::uint32_t>(kind));
 		const std::vector<std::byte> framed = net::FrameMessage(kind, body);
@@ -188,7 +199,11 @@ TEST_CASE("Every NetMessage kind is covered by one of the two framing convention
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::Relevancy) == 7);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::Disconnect) == 8);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::ClientReady) == 9);
-	CHECK(net::kNetMessageMax == 9);
+	CHECK(static_cast<std::uint8_t>(net::NetMessage::OwnershipRequest) == 10);
+	CHECK(static_cast<std::uint8_t>(net::NetMessage::OwnershipTransfer) == 11);
+	CHECK(static_cast<std::uint8_t>(net::NetMessage::RagdollPose) == 12);
+	CHECK(static_cast<std::uint8_t>(net::NetMessage::VelocitySnapshot) == 13);
+	CHECK(net::kNetMessageMax == 13);
 }
 
 TEST_CASE("A disconnect reason round-trips, and a hostile one is cut down to size")

@@ -20,11 +20,13 @@
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
 #include "net/NetComponents.hpp"
+#include "net/NetOwnership.hpp"
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
 #include "net/NetSpawn.hpp"
 #include "net/NetworkContext.hpp"
 #include "net/RoomCode.hpp"
+#include "physics/PhysicsComponents.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -464,6 +466,13 @@ TEST_CASE("SpawnPrefab builds the prefab locally with no session, and still refu
 		CHECK(world.GetRegistry().valid(World::ToEntt(spawned)));
 		// Nothing was allocated and nothing was bound - there is no session to bind in.
 		CHECK(context.Session().NetIdFor(spawned) == 0);
+		// SpawnPrefab backs Net.Spawn, which NetSessionDirector.SpawnPlayerFor uses to
+		// bring up every player - host-online and, via this exact offline branch, the
+		// no-session single-player fallback too. A save mid-Play must never bake that
+		// player permanently into the scene file (the reported corruption: a duplicate
+		// Player + FirstPersonPlayer pair baked into Sandbox.scene.toml), so the spawn
+		// must come back scene-transient.
+		CHECK(world.Has<SceneTransientComponent>(spawned));
 	}
 
 	{
@@ -589,6 +598,104 @@ TEST_CASE("A client's Net.Despawn of a scene-placed entity it owns is refused")
 	CHECK_FALSE(context.ReleaseForDespawn(world, owned));
 	CHECK(context.Session().EntityFor(12) == owned);
 	CHECK(world.GetRegistry().valid(World::ToEntt(owned)));
+
+	context.Stop(world);
+}
+
+TEST_CASE("RequestOwnershipTransfer applies immediately on the host and broadcasts")
+{
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+	REQUIRE(context.StartHost(world, kHostPort, 4));
+
+	const Entity entity = world.Create();
+	auto& identity = world.Emplace<aether::net::NetworkIdentity>(entity);
+	identity.netId = context.Session().AllocateNetId();
+	identity.owner = aether::net::kInvalidConnection;
+	context.Session().Bind(identity.netId, entity);
+
+	constexpr aether::net::ConnectionId kNewOwner = 5;
+	CHECK(context.RequestOwnershipTransfer(world, entity, kNewOwner) == aether::net::OwnershipTransferOutcome::Applied);
+	CHECK(world.TryGet<aether::net::NetworkIdentity>(entity)->owner == kNewOwner);
+
+	context.Stop(world);
+}
+
+TEST_CASE("RequestOwnershipTransfer on a client only sends a request - the owner does not change here")
+{
+	// The broadcast that actually changes it arrives through ApplyOwnershipTransfer,
+	// once (and only once) the host answers - see NetworkSystemsTests.cpp for that
+	// half, driven through the real inbound packet path.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(2);
+
+	const Entity entity = world.Create();
+	auto& identity = world.Emplace<aether::net::NetworkIdentity>(entity);
+	identity.netId = 12;
+	identity.owner = aether::net::kInvalidConnection;
+	context.Session().Bind(12, entity);
+
+	CHECK(context.RequestOwnershipTransfer(world, entity, 2) == aether::net::OwnershipTransferOutcome::Requested);
+	CHECK(world.TryGet<aether::net::NetworkIdentity>(entity)->owner == aether::net::kInvalidConnection);
+
+	context.Stop(world);
+}
+
+TEST_CASE("RequestOwnershipTransfer is a no-op success for an entity with no NetworkIdentity")
+{
+	// Nothing to send, nothing to change - the entity is already "mine", exactly
+	// as IsOwner's own nullptr branch already answers.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+	REQUIRE(context.StartHost(world, kHostPort, 4));
+
+	const Entity plain = world.Create();
+	world.Emplace<TransformComponent>(plain);
+
+	CHECK(context.RequestOwnershipTransfer(world, plain, 9) == aether::net::OwnershipTransferOutcome::Applied);
+	CHECK(world.TryGet<aether::net::NetworkIdentity>(plain) == nullptr);
+
+	context.Stop(world);
+}
+
+TEST_CASE("RequestOwnershipTransfer applies immediately with no session at all")
+{
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services); // Offline: never started
+
+	const Entity entity = world.Create();
+	auto& identity = world.Emplace<aether::net::NetworkIdentity>(entity);
+	identity.netId = 3; // stale/authored - offline behaviour must not depend on it
+	identity.owner = 4;
+	context.Session().Bind(3, entity);
+
+	CHECK(context.RequestOwnershipTransfer(world, entity, aether::net::kInvalidConnection)
+	      == aether::net::OwnershipTransferOutcome::Applied);
+	CHECK(world.TryGet<aether::net::NetworkIdentity>(entity)->owner == aether::net::kInvalidConnection);
+}
+
+TEST_CASE("RequestOwnershipTransfer refuses an invalid or already-destroyed entity handle")
+{
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+	REQUIRE(context.StartHost(world, kHostPort, 4));
+
+	CHECK(context.RequestOwnershipTransfer(world, Entity{}, 5) == aether::net::OwnershipTransferOutcome::Refused);
+
+	const Entity entity = world.Create();
+	auto& identity = world.Emplace<aether::net::NetworkIdentity>(entity);
+	identity.netId = context.Session().AllocateNetId();
+	context.Session().Bind(identity.netId, entity);
+	world.Destroy(entity);
+
+	CHECK(context.RequestOwnershipTransfer(world, entity, 5) == aether::net::OwnershipTransferOutcome::Refused);
 
 	context.Stop(world);
 }
@@ -776,4 +883,144 @@ TEST_CASE("Hosting after a client session leaves nothing kinematic")
 	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride>(entity));
 
 	context.Stop(world);
+}
+
+TEST_CASE("Stop puts every 3D body it took off local simulation back")
+{
+	// The 3D counterpart of "Stop puts every body it took off local simulation
+	// back" - same setup, RigidBodyComponent/PhysicsMotionType/
+	// NetSimulationOverride3D instead of the 2D equivalents.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	const Entity remote = world.Create();
+	world.Emplace<TransformComponent>(remote);
+	world.Emplace<aether::net::NetworkIdentity>(remote,
+	        aether::net::NetworkIdentity{.netId = 7, .owner = aether::net::kInvalidConnection, .scenePlaced = true});
+	world.Emplace<RigidBodyComponent>(remote, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(4);
+
+	context.SyncSimulationAuthority(world);
+	REQUIRE(world.TryGet<RigidBodyComponent>(remote)->motionType == PhysicsMotionType::Kinematic);
+	REQUIRE(world.Has<aether::net::NetSimulationOverride3D>(remote));
+
+	context.Stop(world);
+
+	CHECK(world.TryGet<RigidBodyComponent>(remote)->motionType == PhysicsMotionType::Dynamic);
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride3D>(remote));
+
+	context.SyncSimulationAuthority(world);
+	CHECK(world.TryGet<RigidBodyComponent>(remote)->motionType == PhysicsMotionType::Dynamic);
+}
+
+TEST_CASE("Hosting after a client session leaves no 3D body kinematic")
+{
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	const Entity entity = MakeScenePlaced(world, 11);
+	world.Emplace<RigidBodyComponent>(entity, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(4);
+	auto* identity = world.TryGet<aether::net::NetworkIdentity>(entity);
+	identity->netId = 3;
+	identity->scenePlaced = true;
+	context.SyncSimulationAuthority(world);
+	REQUIRE(world.TryGet<RigidBodyComponent>(entity)->motionType == PhysicsMotionType::Kinematic);
+
+	REQUIRE(context.StartHost(world, kHostPort, 4));
+
+	CHECK(world.TryGet<RigidBodyComponent>(entity)->motionType == PhysicsMotionType::Dynamic);
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride3D>(entity));
+
+	context.SyncSimulationAuthority(world);
+	CHECK(world.TryGet<RigidBodyComponent>(entity)->motionType == PhysicsMotionType::Dynamic);
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride3D>(entity));
+
+	context.Stop(world);
+}
+
+TEST_CASE("A non-owned ragdoll freezes and thaws every bone together, not just its root")
+{
+	// The failure mode this guards: freezing only the NetworkIdentity-carrying root
+	// would leave its jointed limbs fully Dynamic while the root teleports to
+	// wherever the network says every tick - a Hinge/Swing Twist constraint between
+	// a Kinematic and a still-Dynamic body is exactly the mixed-authority case a
+	// solver was never asked to make sense of.
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	const Entity root = world.Create();
+	world.Emplace<TransformComponent>(root);
+	world.Emplace<aether::net::NetworkIdentity>(root,
+	        aether::net::NetworkIdentity{.netId = 7, .owner = aether::net::kInvalidConnection, .scenePlaced = true});
+	world.Emplace<RigidBodyComponent>(root, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
+
+	const Entity limbA = world.Create();
+	world.Emplace<TransformComponent>(limbA);
+	world.Emplace<RigidBodyComponent>(limbA, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
+
+	const Entity limbB = world.Create();
+	world.Emplace<TransformComponent>(limbB);
+	world.Emplace<RigidBodyComponent>(limbB, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic});
+
+	world.Emplace<RagdollComponent>(root, RagdollComponent{.bones = {root, limbA, limbB}});
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(4);
+
+	context.SyncSimulationAuthority(world);
+	CHECK(world.TryGet<RigidBodyComponent>(root)->motionType == PhysicsMotionType::Kinematic);
+	CHECK(world.TryGet<RigidBodyComponent>(limbA)->motionType == PhysicsMotionType::Kinematic);
+	CHECK(world.TryGet<RigidBodyComponent>(limbB)->motionType == PhysicsMotionType::Kinematic);
+	CHECK(world.Has<aether::net::NetSimulationOverride3D>(root));
+	CHECK(world.Has<aether::net::NetSimulationOverride3D>(limbA));
+	CHECK(world.Has<aether::net::NetSimulationOverride3D>(limbB));
+
+	context.Stop(world);
+	CHECK(world.TryGet<RigidBodyComponent>(root)->motionType == PhysicsMotionType::Dynamic);
+	CHECK(world.TryGet<RigidBodyComponent>(limbA)->motionType == PhysicsMotionType::Dynamic);
+	CHECK(world.TryGet<RigidBodyComponent>(limbB)->motionType == PhysicsMotionType::Dynamic);
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride3D>(root));
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride3D>(limbA));
+	CHECK_FALSE(world.Has<aether::net::NetSimulationOverride3D>(limbB));
+}
+
+TEST_CASE("SyncSimulationAuthority wires a Character Controller's locallySimulated to ownership")
+{
+	ServiceContainer services;
+	World world;
+	aether::net::NetworkContext context(services);
+
+	const Entity remote = world.Create();
+	world.Emplace<TransformComponent>(remote);
+	world.Emplace<aether::net::NetworkIdentity>(remote,
+	        aether::net::NetworkIdentity{.netId = 7, .owner = aether::net::kInvalidConnection, .scenePlaced = true});
+	world.Emplace<CharacterControllerComponent>(remote);
+	REQUIRE(world.Get<CharacterControllerComponent>(remote).locallySimulated);
+
+	REQUIRE(context.StartClient(world, "127.0.0.1", kUnreachablePort));
+	context.Session().SetLocalConnection(4);
+
+	context.SyncSimulationAuthority(world);
+	CHECK_FALSE(world.Get<CharacterControllerComponent>(remote).locallySimulated);
+
+	// Ownership changing hands - the identity is now this client's own - flips it
+	// straight back without any restore/marker step, unlike the Rigid Body path.
+	world.Get<aether::net::NetworkIdentity>(remote).owner = 4;
+	context.SyncSimulationAuthority(world);
+	CHECK(world.Get<CharacterControllerComponent>(remote).locallySimulated);
+
+	// And Stop puts it back too, offline having no other authority to defer to.
+	world.Get<aether::net::NetworkIdentity>(remote).owner = aether::net::kInvalidConnection;
+	context.SyncSimulationAuthority(world);
+	REQUIRE_FALSE(world.Get<CharacterControllerComponent>(remote).locallySimulated);
+	context.Stop(world);
+	CHECK(world.Get<CharacterControllerComponent>(remote).locallySimulated);
 }
