@@ -75,6 +75,41 @@ namespace aether::app
 		return it != m_instances.end() ? it->second.handle : 0;
 	}
 
+	// See the header for the full contract (what this closes, what it cannot).
+	void ScriptComponentSystem::SyncPropertiesFromLiveInstance(Entity entity, std::uint32_t scriptIndex, ScriptEntry& entry) const
+	{
+		const std::uint64_t handle = GetInstanceHandle(entity.id, scriptIndex);
+		if (handle == 0)
+		{
+			if (entry.attached)
+			{
+				// Genuinely inconsistent - attached claims a live instance exists.
+				// Not the ordinary "never attached this session" case below, which
+				// is silent because the cache already holds the only value that
+				// ever existed.
+				AE_WARN(LogCategory::App,
+				        "ScriptComponent: '{}' on entity {} is marked attached but has no live instance - saving its last-known property cache instead of current values",
+				        entry.path, entity.id);
+			}
+			return;
+		}
+		auto* csScripting = m_services.TryGet<scripting::CSharpScriptingSubsystem>();
+		if (csScripting == nullptr)
+		{
+			return;
+		}
+		const auto props = csScripting->GetScriptProperties(entry.path);
+		for (std::size_t i = 0; i < props.size(); ++i)
+		{
+			ScriptPropertyValue value;
+			value.type = props[i].type;
+			if (csScripting->GetPropertyValue(handle, static_cast<int>(i), value))
+			{
+				entry.properties[props[i].name] = value;
+			}
+		}
+	}
+
 	// See the header for the known/settled state each Instance tracks. The actual
 	// "what does this entity's ownership read as right now" question is
 	// net::QueryOwnership's - kept there (and unit-tested there, in

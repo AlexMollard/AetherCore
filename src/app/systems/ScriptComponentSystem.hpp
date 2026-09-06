@@ -58,6 +58,28 @@ namespace aether::app
 
 		[[nodiscard]] std::uint64_t GetInstanceHandle(std::uint32_t entityId, std::uint32_t scriptIndex) const;
 
+		// Refreshes `entry.properties` (the native cache scene capture reads) from
+		// the live C# instance's CURRENT field values - the exact live read the
+		// Inspector already performs every frame it is open
+		// (ComponentDrawersScripts.cpp's GetPropertyValue call), just invoked once
+		// here instead of continuously. Closes the gap where a script assigns its
+		// OWN field in C# (`link.Source = source;`): that write lands only in the
+		// managed object, never through ScriptRegistry.SetProperty (the Inspector's
+		// write path), so the cache never learns about it on its own - a runtime
+		// spawner's whole configured setup would otherwise save empty.
+		//
+		// A no-op, not an error, whenever there is no live instance to read from
+		// (never attached this session, or scripting unavailable): the cache
+		// already holds the only value that ever existed. That includes the one
+		// case this CANNOT recover - a field set during Play and then Stop without
+		// saving first. Stop destroys the C# instance and restores the pre-Play
+		// world snapshot, so by the time anything could read it, there is nothing
+		// left to read from by ANY mechanism, live or cached. That is the same
+		// contract every other kind of Play-session mutation (transform, physics
+		// velocity) already has - not a gap this leaves open, a boundary it cannot
+		// cross by design.
+		void SyncPropertiesFromLiveInstance(Entity entity, std::uint32_t scriptIndex, ScriptEntry& entry) const;
+
 	private:
 		bool UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt);
 		void PurgeStaleCSharpInstances(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);
