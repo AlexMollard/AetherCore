@@ -28,7 +28,7 @@ namespace AetherGame;
 /// own rotation is deliberately never written. "Yaw turns the player, pitch tilts the camera
 /// only" is implemented entirely by tracking yaw/pitch in this script and writing only the
 /// camera's world transform every frame. ApplyMovement does NOT recompute a direction from
-/// _yaw either - it reads Camera.GetForward/GetRight (the actual rendered look vectors) and
+/// Yaw either - it reads Camera.GetForward/GetRight (the actual rendered look vectors) and
 /// flattens them to the horizontal plane, so movement always matches wherever the camera
 /// visually points, by construction, rather than by two independent formulas agreeing.
 ///
@@ -42,7 +42,7 @@ namespace AetherGame;
 /// Player's transform; this surfaced as "opening the spawn menu snaps the camera to a fixed
 /// direction" (physics's drag winning once ApplyLook stopped running). (2) Yaw accumulated
 /// with the wrong sign (mouse right visibly turned the view left). (3) Movement direction was
-/// hand-derived from _yaw with a sin/cos formula that silently did not match the camera's
+/// hand-derived from Yaw with a sin/cos formula that silently did not match the camera's
 /// actual rendered forward, so WASD tracked look but never actually aligned with it. Fixed,
 /// respectively, by: never writing the Player's own rotation at all; flipping the yaw sign;
 /// and reading Camera.GetForward/GetRight directly instead of re-deriving the same vectors by
@@ -114,8 +114,16 @@ public sealed class FirstPersonPlayer : EntityScript
 
     private Entity _camera;
     private Entity _pauseMenuEntity;
-    private float _yaw;
-    private float _pitch;
+    /// <summary>Where the player is looking, in degrees - THE AIM AUTHORITY. Mouse-look
+    /// accumulates into these exact fields every active frame and ApplyLook writes the
+    /// camera transform FROM them, so an external write (a persisted script property
+    /// applied at attach, a spawn-facing rule, a cutscene) sets where the player looks
+    /// by construction: OnUpdate reads back these fields, not the camera, so a write
+    /// cannot be clobbered the way a raw camera set_transform is. Public by design -
+    /// the same reflected-script-property surface every device field uses - not as a
+    /// test hook.</summary>
+    public float Yaw;
+    public float Pitch;
 
     /// <summary>Current horizontal (Y always 0) ground-relative velocity this script is
     /// easing toward the input's target every frame. The Character Controller itself
@@ -144,8 +152,8 @@ public sealed class FirstPersonPlayer : EntityScript
         }
 
         Vector3 euler = Self.EulerDegrees;
-        _yaw = euler.Y;
-        _pitch = 0.0f;
+        Yaw = euler.Y;
+        Pitch = 0.0f;
     }
 
     public override void OnUpdate(float deltaTime)
@@ -207,10 +215,10 @@ public sealed class FirstPersonPlayer : EntityScript
         // LEFT. DebugFlyCam has apparently never actually been played interactively
         // either - copying its formula was not verification. This is now the one place
         // yaw sign is decided; ApplyMovement below no longer re-derives a direction from
-        // _yaw at all (see its own comment), so this sign only ever affects look.
-        _yaw -= delta.X * LookSensitivity;
+        // Yaw at all (see its own comment), so this sign only ever affects look.
+        Yaw -= delta.X * LookSensitivity;
         float pitchSign = InvertY ? 1.0f : -1.0f;
-        _pitch = Math.Clamp(_pitch + delta.Y * LookSensitivity * pitchSign, -89.0f, 89.0f);
+        Pitch = Math.Clamp(Pitch + delta.Y * LookSensitivity * pitchSign, -89.0f, 89.0f);
 
         // Deliberately never writes Self.EulerDegrees. ecs::SetWorldTransform (what every
         // Entity.Position/EulerDegrees setter goes through) does not implement ordinary
@@ -224,13 +232,13 @@ public sealed class FirstPersonPlayer : EntityScript
         // of this script's frame. This drag conflict was the menu-opens-snaps-the-camera
         // symptom; the yaw sign above was a second, separate bug live testing also found.
         // A visible body mesh exists now (see PlayerBody), but it is a CHILD entity
-        // with its own independently-written world rotation (driven off _yaw, same as
+        // with its own independently-written world rotation (driven off Yaw, same as
         // the camera two lines below) - never a read of Self.EulerDegrees. Leaving the
         // Player entity's own transform rotation untouched still costs nothing and
         // still removes the drag conflict entirely.
         if (_camera.IsValid)
         {
-            _camera.EulerDegrees = new Vector3(_pitch, _yaw, 0.0f);
+            _camera.EulerDegrees = new Vector3(Pitch, Yaw, 0.0f);
             _camera.Position = Self.Position + new Vector3(0.0f, EyeHeight, 0.0f);
         }
     }
@@ -241,8 +249,8 @@ public sealed class FirstPersonPlayer : EntityScript
         // way the player walks. Derived from the CAMERA's actual forward/right (real
         // engine-computed vectors, via the exact same ForwardOf/RightOf the renderer
         // uses - see Camera.GetForward's own native implementation), flattened to the
-        // horizontal plane, rather than recomputed by hand from _yaw: an earlier version
-        // hand-rolled sin/cos off _yaw and it silently diverged from where the camera
+        // horizontal plane, rather than recomputed by hand from Yaw: an earlier version
+        // hand-rolled sin/cos off Yaw and it silently diverged from where the camera
         // actually rendered - live testing found WASD moving in a direction that changed
         // with look but never actually matched it. Asking the engine what the camera
         // really faces removes that whole class of convention-mismatch bug by
@@ -287,7 +295,7 @@ public sealed class FirstPersonPlayer : EntityScript
         // file comment on why this owner-driven signal beats its position-delta
         // fallback: no physics-jitter false positives, and yaw matches the camera the
         // owner is actually looking through).
-        Self.GetScript<PlayerBody>()?.SetLocomotionState(_yaw, speed);
+        Self.GetScript<PlayerBody>()?.SetLocomotionState(Yaw, speed);
 
         if (Input.IsKeyPressed(Key.Space) && grounded)
         {
