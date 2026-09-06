@@ -204,8 +204,8 @@ public sealed class UiSpawnCatalog : EntityScript
                 Ui.SetPivot(swatch, Vector2.Zero);
                 Ui.SetRect(swatch, x + 8.0f, y + 8.0f, tileW - 16.0f, tileH - 40.0f);
                 Ui.SetImageCornerRadius(swatch, 4.0f);
-                // Once real per-prop icons exist: Ui.SetImageTexture(swatch, iconPath);
-                // in place of / alongside SetImageColor below.
+                // Texture vs. colour fill is decided per-refresh in RefreshPage, keyed off
+                // PropDef.IconPath - see that method's own comment.
 
                 Entity label = Ui.CreateText(_canvas, string.Empty);
                 Ui.SetAnchors(label, Vector2.Zero, Vector2.Zero);
@@ -348,7 +348,20 @@ public sealed class UiSpawnCatalog : EntityScript
             _tiles[slot].Button.SetActive(true);
             _tiles[slot].Swatch.SetActive(true);
             _tiles[slot].Label.SetActive(true);
-            Ui.SetImageColor(_tiles[slot].Swatch, new Vector4(def.Color, 1.0f));
+            if (!string.IsNullOrEmpty(def.IconPath))
+            {
+                // Baked icon drives the tile; the swatch colour underneath never shows.
+                Ui.SetImageTexture(_tiles[slot].Swatch, def.IconPath);
+            }
+            else
+            {
+                // No baked icon yet - fall back to the flat colour swatch, never a blank
+                // or broken-texture tile. Clearing the texture is required, not optional:
+                // tile slots are recycled across pages/categories, so a slot that just
+                // showed CrateSmall's icon must not keep showing it under Bench's label.
+                Ui.SetImageTexture(_tiles[slot].Swatch, string.Empty);
+                Ui.SetImageColor(_tiles[slot].Swatch, new Vector4(def.Color, 1.0f));
+            }
             Ui.SetText(_tiles[slot].Label, $"{def.Name}\n{def.Mass:0.#} kg");
         }
 

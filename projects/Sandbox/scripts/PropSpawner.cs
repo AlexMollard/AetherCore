@@ -25,7 +25,12 @@ public readonly record struct PropDef(
     float Size,
     float Mass,
     Vector3 Color,
-    string? ModelPath = null);
+    string? ModelPath = null,
+    // VFS path to a baked spawn-menu icon (e.g. "project://assets/Icons/Barrel.png"),
+    // or null when none has been baked yet. UiSpawnCatalog falls back to the Color
+    // swatch above whenever this is null - never a blank/broken-texture tile - so an
+    // entry with no icon degrades gracefully instead of needing a placeholder asset.
+    string? IconPath = null);
 
 /// <summary>
 /// Owns the actual spawn logic - creating the entity, its mesh/material/body,
@@ -85,40 +90,50 @@ public sealed class PropSpawner : EntityScript
 
         // ── Crates (6) - Kenney Factory/Furniture Kit + Quaternius, CC0 ───────────
         new("Small Wooden Crate", IsSphere: false, Size: 1f, Mass: 4f, Color: default,
-            ModelPath: "project://assets/models/Props/CrateSmall.glb"
+            ModelPath: "project://assets/models/Props/CrateSmall.glb",
+            IconPath: "project://assets/Icons/SmallWoodenCrate.png"
         ),
         new("Large Wooden Crate", IsSphere: false, Size: 1f, Mass: 25f, Color: default,
-            ModelPath: "project://assets/models/Props/CrateLarge.glb"
+            ModelPath: "project://assets/models/Props/CrateLarge.glb",
+            IconPath: "project://assets/Icons/LargeWoodenCrate.png"
         ),
         new("Long Wooden Crate", IsSphere: false, Size: 1f, Mass: 15f, Color: default,
-            ModelPath: "project://assets/models/Props/CrateLong.glb"
+            ModelPath: "project://assets/models/Props/CrateLong.glb",
+            IconPath: "project://assets/Icons/LongWoodenCrate.png"
         ),
         new("Cardboard Box", IsSphere: false, Size: 1f, Mass: 2f, Color: default,
-            ModelPath: "project://assets/models/Props/CardboardBox.glb"
+            ModelPath: "project://assets/models/Props/CardboardBox.glb",
+            IconPath: "project://assets/Icons/CardboardBox.png"
         ),
         new("Barrel", IsSphere: false, Size: 1f, Mass: 20f, Color: default,
-            ModelPath: "project://assets/models/Props/Barrel.glb"
+            ModelPath: "project://assets/models/Props/Barrel.glb",
+            IconPath: "project://assets/Icons/Barrel.png"
         ),
         new("Trash Can", IsSphere: false, Size: 1f, Mass: 5f, Color: default,
-            ModelPath: "project://assets/models/Props/TrashCan.glb"
+            ModelPath: "project://assets/models/Props/TrashCan.glb",
+            IconPath: "project://assets/Icons/TrashCan.png"
         ),
 
         // ── Furniture (3) - Kenney Furniture Kit, CC0. Box colliders fill the leg
         // gap (documented poor fit for Chair/Table; Bench is a solid slab so its box
         // tracks the silhouette closely) ─────────────────────────────────────────
         new("Chair", IsSphere: false, Size: 1f, Mass: 6f, Color: default,
-            ModelPath: "project://assets/models/Props/Chair.glb"
+            ModelPath: "project://assets/models/Props/Chair.glb",
+            IconPath: "project://assets/Icons/Chair.png"
         ),
         new("Table", IsSphere: false, Size: 1f, Mass: 12f, Color: default,
-            ModelPath: "project://assets/models/Props/Table.glb"
+            ModelPath: "project://assets/models/Props/Table.glb",
+            IconPath: "project://assets/Icons/Table.png"
         ),
         new("Bench", IsSphere: false, Size: 1f, Mass: 10f, Color: default,
-            ModelPath: "project://assets/models/Props/Bench.glb"
+            ModelPath: "project://assets/models/Props/Bench.glb",
+            IconPath: "project://assets/Icons/Bench.png"
         ),
 
         // ── Misc (1) ───────────────────────────────────────────────────────────
         new("Traffic Cone", IsSphere: false, Size: 1f, Mass: 1f, Color: default,
-            ModelPath: "project://assets/models/Props/Cone.glb"
+            ModelPath: "project://assets/models/Props/Cone.glb",
+            IconPath: "project://assets/Icons/TrafficCone.png"
         ),
 
         // ── Machinery (8, new) - Kenney Factory Kit, CC0. Large/Medium Cog are the
