@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "AssetPipeline.hpp"
+#include "BakeAll.hpp"
 #include "BakeOutputs.hpp"
 #include "FontProcessor.hpp"
 #include "KenneyImport.hpp"
@@ -460,52 +461,6 @@ namespace
 	}
 } // namespace
 
-namespace
-{
-	bool ReadModelBytes(const fs::path& modelPath, std::vector<std::byte>& raw)
-	{
-		std::error_code ec;
-		const auto size = fs::file_size(modelPath, ec);
-		if (ec)
-		{
-			return false;
-		}
-		raw.resize(size);
-		std::ifstream in(modelPath, std::ios::binary);
-		return static_cast<bool>(in && in.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(size)));
-	}
-
-	bool IsModelFile(const fs::path& p)
-	{
-		std::string ext = p.extension().string();
-		std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		return ext == ".glb" || ext == ".gltf";
-	}
-
-	// The newest mtime among `modelPath` itself and every EXTERNAL buffer/image it
-	// references (MeshProcessor::CollectExternalSourceFiles) - editing a `.gltf`'s external
-	// `.bin` or texture must be exactly as stale-triggering as editing the model file
-	// itself. This is the failure mode that shipped an invisible animation-clip/root-motion
-	// fix earlier this session until the stale bake was deleted by hand. A missing
-	// dependency is ignored here (best-effort freshness signal only); Process() reports it
-	// properly if the model is actually (re)baked.
-	std::filesystem::file_time_type SourceFreshness(const fs::path& modelPath)
-	{
-		std::error_code ec;
-		auto newest = fs::last_write_time(modelPath, ec);
-		for (const fs::path& dep: MeshProcessor::CollectExternalSourceFiles(modelPath))
-		{
-			std::error_code depEc;
-			const auto depTime = fs::last_write_time(dep, depEc);
-			if (!depEc && depTime > newest)
-			{
-				newest = depTime;
-			}
-		}
-		return newest;
-	}
-} // namespace
-
 static int RunBakeCommand(int argc, char* argv[])
 {
 	if (argc < 4)
@@ -515,8 +470,8 @@ static int RunBakeCommand(int argc, char* argv[])
 	}
 	const fs::path modelPath = argv[2];
 	const fs::path projectRoot = argv[3];
-	std::vector<std::byte> raw;
-	if (!ReadModelBytes(modelPath, raw))
+	ByteBuffer raw;
+	if (!ReadWholeFile(modelPath, raw))
 	{
 		std::cerr << "AssetPacker bake: cannot read '" << modelPath.string() << "'\n";
 		return 1;
@@ -545,19 +500,16 @@ static int RunBakeCommand(int argc, char* argv[])
 	return 0;
 }
 
-// Walks every `.glb`/`.gltf` under `<projectRoot>/assets/models/` and (re)bakes whichever
-// is missing its `.mesh` output or is newer than it (source freshness includes external
-// buffer/image dependencies - see SourceFreshness). Deliberately a directory walk over
-// model FILES rather than a scan for references to them (scene `.toml`, `PropSpawner.cs`'
-// catalogue array, or whatever the next reference format is) - a reference scan reproduces
-// exactly the blind spot that let 14 catalogue models ship with no baked mesh at all this
-// session (PropSpawner.cs's entries are C# string literals, invisible to a `.toml`-only
-// scan). A file that exists gets baked, however it is or isn't referenced.
+// Thin CLI wrapper over the shared aether::assetpipeline::BakeAllModels walk (BakeAll.hpp) -
+// PublishSteps.cpp's publish-time bake step uses the exact same function, so the CLI and a
+// publish share one definition of "what needs baking" and one freshness check.
 //
 // Idempotent (a second run with no source changes bakes nothing) and quiet on a no-op run
 // (no per-file output unless something is actually baked) but never silent: exactly one
-// summary line is always printed, so a build step wiring this in has something to show
-// for having run. Non-zero exit only on an actual bake failure, so it can gate a build.
+// summary line is always printed, so a build step wiring this in has something to show for
+// having run. Non-zero exit only on a genuine read/write failure - a source that legitimately
+// produces no mesh (e.g. an animation-only glTF) is reported but does not fail the run, same
+// reasoning Publish already used for this ambiguity.
 static int RunBakeAllCommand(int argc, char* argv[])
 {
 	if (argc < 3)
@@ -566,88 +518,32 @@ static int RunBakeAllCommand(int argc, char* argv[])
 		return 1;
 	}
 	const fs::path projectRoot = argv[2];
-	const fs::path modelsDir = projectRoot / "assets" / "models";
-	std::error_code dirEc;
-	if (!fs::is_directory(modelsDir, dirEc))
+	const auto result = BakeAllModels(projectRoot);
+
+	for (const std::string& baked: result.bakedModels)
 	{
-		std::cerr << "AssetPacker bake-all: no 'assets/models' directory under '" << projectRoot.string() << "'\n";
-		return 1;
+		std::cout << "AssetPacker bake-all: baked '" << baked << "'\n";
+	}
+	for (const std::string& skip: result.skippedModels)
+	{
+		std::cerr << "AssetPacker bake-all: skipped " << skip << "\n";
+	}
+	for (const std::string& failure: result.failures)
+	{
+		std::cerr << "AssetPacker bake-all: failed " << failure << "\n";
 	}
 
-	int baked = 0;
-	int upToDate = 0;
-	int failed = 0;
-	std::error_code walkEc;
-	for (auto it = fs::recursive_directory_iterator(modelsDir, walkEc); it != fs::recursive_directory_iterator(); it.increment(walkEc))
+	std::cout << "AssetPacker bake-all: " << result.baked << " baked, " << result.upToDate << " up to date";
+	if (result.skipped > 0)
 	{
-		if (walkEc)
-		{
-			std::cerr << "AssetPacker bake-all: " << walkEc.message() << "\n";
-			++failed;
-			walkEc.clear();
-			continue;
-		}
-
-		std::error_code fileEc;
-		if (!it->is_regular_file(fileEc) || fileEc || !IsModelFile(it->path()))
-		{
-			continue;
-		}
-		const fs::path modelPath = it->path();
-
-		const fs::path meshPath = modelPath.parent_path() / (modelPath.stem().string() + ".mesh");
-		const auto sourceTime = SourceFreshness(modelPath);
-		std::error_code meshEc;
-		const bool meshExisted = fs::exists(meshPath, meshEc);
-		bool stale = true;
-		if (meshExisted)
-		{
-			const auto meshTime = fs::last_write_time(meshPath, meshEc);
-			stale = static_cast<bool>(meshEc) || sourceTime > meshTime;
-		}
-		if (!stale)
-		{
-			++upToDate;
-			continue;
-		}
-
-		std::vector<std::byte> raw;
-		if (!ReadModelBytes(modelPath, raw))
-		{
-			std::cerr << "AssetPacker bake-all: cannot read '" << modelPath.string() << "'\n";
-			++failed;
-			continue;
-		}
-		const fs::path rel = fs::relative(modelPath, projectRoot);
-		const auto result = MeshProcessor::Process(std::span<const std::byte>(raw.data(), raw.size()), modelPath, rel.generic_string(), projectRoot);
-		if (result.meshData.empty())
-		{
-			std::cerr << "AssetPacker bake-all: no mesh geometry produced from '" << modelPath.string() << "'\n";
-			++failed;
-			continue;
-		}
-		const BakeWriteResult write = WriteBakedOutputs(result, modelPath, projectRoot);
-		if (!write.ok)
-		{
-			std::cerr << "AssetPacker bake-all: " << write.error << "\n";
-			++failed;
-			continue;
-		}
-		std::cout << "AssetPacker bake-all: baked '" << rel.generic_string() << "' (" << (meshExisted ? "stale" : "missing") << ")\n";
-		for (const std::string& w: write.warnings)
-		{
-			std::cerr << "AssetPacker bake-all: warning: " << w << "\n";
-		}
-		++baked;
+		std::cout << ", " << result.skipped << " skipped (no mesh data)";
 	}
-
-	std::cout << "AssetPacker bake-all: " << baked << " baked, " << upToDate << " up to date";
-	if (failed > 0)
+	if (result.failed > 0)
 	{
-		std::cout << ", " << failed << " failed";
+		std::cout << ", " << result.failed << " failed";
 	}
 	std::cout << "\n";
-	return failed > 0 ? 1 : 0;
+	return result.failed > 0 ? 1 : 0;
 }
 
 int main(int argc, char* argv[])

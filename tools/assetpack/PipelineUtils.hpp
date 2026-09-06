@@ -5,11 +5,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -19,6 +21,24 @@ namespace aether::assetpipeline
 	namespace fs = std::filesystem;
 
 	using ByteBuffer = std::vector<std::byte>;
+
+	// Reads an entire file into a fresh ByteBuffer. Returns false (leaving `out` in an
+	// unspecified but valid state) on any stat/read failure - shared by every caller that
+	// needs a whole model file in memory (AssetPacker's `bake`/`bake-all` CLI subcommands,
+	// BakeAll.cpp's project-wide walk) so the read path has one definition instead of a
+	// copy per caller.
+	inline bool ReadWholeFile(const fs::path& path, ByteBuffer& out)
+	{
+		std::error_code ec;
+		const auto size = fs::file_size(path, ec);
+		if (ec)
+		{
+			return false;
+		}
+		out.resize(size);
+		std::ifstream in(path, std::ios::binary);
+		return static_cast<bool>(in && in.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(size)));
+	}
 
 	inline std::string Stem(const fs::path& p)
 	{

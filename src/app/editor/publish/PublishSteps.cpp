@@ -1,5 +1,6 @@
 #include "editor/publish/PublishSteps.hpp"
-#include "editor/ModelBake.hpp"
+
+#include "BakeAll.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -150,68 +151,42 @@ namespace aether::editor
 			return {};
 		}
 
-		// Every model a project file points at, baked so the pak carries the .mesh the runtime
-		// actually reads. The editor bakes on drop and on scene load, which means a machine
-		// that has not opened the right scenes - a fresh clone, or a build agent - published a
-		// game whose models could not load: GltfAsset only ever reads the baked sibling.
+		// Every model under the project's assets/models/ tree, baked so the pak carries the
+		// .mesh the runtime actually reads. This used to scan scene/prefab .toml files for
+		// "project://...glb" references (EnsureModelBaked, existence-only) - blind to
+		// anything referenced only from a script (e.g. PropSpawner.cs's spawn catalogue
+		// array), which is exactly how models shipped with no baked mesh at all this
+		// session. Now shares aether::assetpipeline::BakeAllModels (tools/assetpack/BakeAll.hpp)
+		// with the `AssetPacker bake-all` CLI subcommand: one directory walk with no
+		// reference-format blind spot, one real mtime freshness check (including a glTF's
+		// EXTERNAL buffer/image dependencies, not just the model file itself).
 		StepResult BakeReferencedModels(const PublishPlan& plan, PublishContext&, const PublishToolchain&)
 		{
-			static constexpr std::string_view kPrefix = "project://";
-			std::vector<std::string> models;
-			std::error_code ec;
-			for (const auto& entry: std::filesystem::recursive_directory_iterator(plan.projectRoot, ec))
+			const assetpipeline::BakeAllResult result = assetpipeline::BakeAllModels(plan.projectRoot);
+			for (const std::string& skip: result.skippedModels)
 			{
-				if (ec)
-				{
-					break;
-				}
-				if (!entry.is_regular_file(ec) || entry.path().extension() != ".toml")
-				{
-					continue;
-				}
-				const auto text = io::file_util::ReadText(entry.path());
-				if (!text)
-				{
-					continue;
-				}
-				for (std::size_t at = text->find(kPrefix); at != std::string::npos; at = text->find(kPrefix, at + kPrefix.size()))
-				{
-					const std::size_t end = text->find_first_of("'\"", at);
-					if (end == std::string::npos)
-					{
-						break;
-					}
-					std::string ref = text->substr(at, end - at);
-					if ((ref.ends_with(".gltf") || ref.ends_with(".glb")) && std::ranges::find(models, ref) == models.end())
-					{
-						models.push_back(std::move(ref));
-					}
-					at = end;
-				}
+				AE_WARN(LogCategory::App, "Publish: skipped {}", skip);
+			}
+			// Unlike a legitimately meshless source, a read/write failure is a real error:
+			// silently shipping a package missing a model's mesh is exactly the failure mode
+			// this whole step exists to prevent, so this fails the publish rather than
+			// downgrading to a warning the way the old .toml scan had to (it could not tell
+			// a genuinely broken model from an animation-only one, so it never failed on
+			// either; BakeAllModels keeps that same non-fatal treatment for "no mesh data",
+			// but a read/write failure is unambiguous).
+			for (const std::string& failure: result.failures)
+			{
+				AE_WARN(LogCategory::App, "Publish: {}", failure);
 			}
 
-			int baked = 0;
-			int skipped = 0;
-			for (const std::string& model: models)
+			std::string summary = result.baked == 0 ? "No models baked." : "Baked " + std::to_string(result.baked) + " model(s).";
+			if (result.skipped > 0)
 			{
-				std::string error;
-				if (EnsureModelBaked(model, plan.projectRoot, error))
-				{
-					++baked;
-					continue;
-				}
-				// Not fatal. A glTF can legitimately carry no mesh - an animation-only clip
-				// source is one - and the same message covers a genuinely broken file, so
-				// there is no way to tell them apart here. Failing the publish would block
-				// shipping over an asset that was never going to contribute a mesh; a model
-				// that really is broken still surfaces, as the runtime's missing-mesh error.
-				AE_WARN(LogCategory::App, "Publish: skipping model '{}': {}", model, error);
-				++skipped;
+				summary += " Skipped " + std::to_string(result.skipped) + " with no mesh data.";
 			}
-			std::string summary = baked == 0 ? "No models baked." : "Baked " + std::to_string(baked) + " referenced model(s).";
-			if (skipped > 0)
+			if (result.failed > 0)
 			{
-				summary += " Skipped " + std::to_string(skipped) + " with no mesh data.";
+				return Failed(summary + " " + std::to_string(result.failed) + " model(s) failed to bake.", "Check the model file(s) named in the log above, then publish again.");
 			}
 			return {.ok = true, .message = std::move(summary)};
 		}
