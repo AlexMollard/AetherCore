@@ -97,7 +97,7 @@ namespace aether::editor
 		char m_propNameBuf[128] = {};
 		char m_displayNameBuf[256] = {};
 		float m_mass = 1.0f;
-		int m_colliderShapeIndex = 0; // index into kColliderShapeOrder (KenneyBrowserPanel.cpp); default Auto
+		bool m_registerInCatalog = true;
 
 		std::optional<PendingImport> m_importing;
 		bool m_hasImportResult = false;

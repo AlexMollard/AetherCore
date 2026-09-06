@@ -1,6 +1,8 @@
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -71,42 +73,6 @@ namespace aether::assetpipeline::kenney
 	// what ends up consuming its contents.
 	[[nodiscard]] std::vector<PackEntry> ListPackModels(const std::filesystem::path& zipPath, const std::string& subDir, std::string& error, const std::vector<std::string>& extensions = {".glb", ".gltf"});
 
-	enum class ColliderShape
-	{
-		Auto,   // ImportModel's own safe default: an enclosing box from the raw AABB.
-		Box,
-		Sphere,
-		Capsule,
-		Cylinder,
-		None, // Not a spawnable physics prop (e.g. a first-person viewmodel) - skip PropSpawner.cs registration entirely.
-	};
-
-	[[nodiscard]] std::string ToString(ColliderShape shape);
-	[[nodiscard]] std::optional<ColliderShape> ParseColliderShape(const std::string& text);
-
-	struct ColliderFit
-	{
-		ColliderShape shape = ColliderShape::Box;
-		Vec3 halfExtents{0.0f, 0.0f, 0.0f}; // Box only
-		float radius = 0.0f;                // Sphere/Capsule/Cylinder
-		float halfHeight = 0.0f;             // Capsule/Cylinder
-		Vec3 center{0.0f, 0.0f, 0.0f};        // entity-local offset, every shape
-		Vec3 nativeSize{0.0f, 0.0f, 0.0f};     // full W x H x D of the raw AABB, for reporting
-		std::vector<std::string> notes;       // caveats: square footprint, name suggests a taper, ...
-	};
-
-	// Derives a collider from the model's OWN glTF accessor bounds - composing each mesh
-	// node's translation and scale (rotation is intentionally ignored, matching the manual
-	// derivation this automates - see PropCatalogExtension.md's TrashCan note on why that is
-	// an acceptable approximation for axis-aligned Kenney assets, not an oversight here).
-	// `requestedShape` other than Auto/Box always succeeds (the caller has judged the model's
-	// real shape, typically by eye against the pack preview image); Auto always resolves to a
-	// safe enclosing Box - never a shape smaller than the mesh - and instead surfaces
-	// uncertainty as `notes` (e.g. a near-square footprint that might actually be round, or a
-	// filename suggesting a taper no primitive fits - see PropCatalogExtension.md's
-	// convex-hull worklist) rather than silently guessing a rounder shape that could be wrong.
-	[[nodiscard]] std::optional<ColliderFit> FitCollider(const std::filesystem::path& glbPath, const std::string& modelNameForHints, ColliderShape requestedShape, std::string& error);
-
 	struct ImportRequest
 	{
 		PackInfo pack;
@@ -117,7 +83,13 @@ namespace aether::assetpipeline::kenney
 		std::string propName;  // PascalCase file stem, e.g. "MachineFortified"
 		std::string displayName; // catalogue display name, e.g. "Machine Fortified"
 		float mass = 1.0f;
-		ColliderShape requestedShape = ColliderShape::Auto;
+		// Colliders are NOT chosen here: the catalogue moved to convex hulls
+		// (Physics.AddConvexHullBody builds the hull from each model's own baked vertices
+		// at spawn time), so a catalogue entry carries no collider geometry at all - which
+		// is also why there is no per-import shape to pick. This flag only decides
+		// whether the model becomes a spawnable catalogue entry at all (false for
+		// viewmodel-style packs that must never appear in the spawn menu).
+		bool registerInCatalog = true;
 		// Relative to projectRoot; default matches every prior manual import in this project.
 		std::string creditsRelPath = "assets/CREDITS.md";
 		std::string catalogRelPath = "scripts/PropSpawner.cs";
@@ -134,7 +106,7 @@ namespace aether::assetpipeline::kenney
 		bool textureAlreadyPresent = false;
 		bool bakedNow = false; // MeshProcessor ran and wrote .mesh/.material this call
 
-		ColliderFit collider;
+		Vec3 nativeSize{0.0f, 0.0f, 0.0f}; // full W x H x D of the model's raw bounds, for display
 
 		std::string creditsLine;
 		bool creditsAppended = false;
@@ -143,18 +115,20 @@ namespace aether::assetpipeline::kenney
 		std::string catalogEntry;
 		bool catalogAppended = false;
 		bool catalogAlreadyPresent = false;
-		bool catalogSkippedNoCollider = false; // requestedShape == None
+		bool catalogSkipped = false; // registerInCatalog == false
 
 		std::vector<std::string> warnings;
 	};
 
 	// The one real operation: ensure the pack is cached -> extract the requested model (plus
 	// its material's shared texture, if any) into the project -> bake it (MeshProcessor,
-	// same as the editor's drag-drop path) -> fit a collider from its own bounds -> append a
-	// CREDITS.md provenance line -> append a PropSpawner.cs catalogue entry. Idempotent: an
-	// identical second call reports what already exists instead of duplicating it, and never
-	// overwrites a shared texture that already exists with DIFFERENT content (fails loudly
-	// instead - see the doc comment on the write-tracking in the .cpp).
+	// same as the editor's drag-drop path) -> append a CREDITS.md provenance line -> append
+	// a PropSpawner.cs catalogue entry (a bare model reference - PropSpawner builds its
+	// collider as a convex hull from the baked mesh itself, not from anything computed
+	// here). Idempotent: an identical second call reports what already exists instead of
+	// duplicating it, and never overwrites a shared texture that already exists with
+	// DIFFERENT content (fails loudly instead - see the doc comment on the write-tracking
+	// in the .cpp).
 	[[nodiscard]] ImportResult ImportModel(const ImportRequest& request);
 
 	// A genuinely different pipeline, not a parameter on ImportModel: some Kenney packs
@@ -205,4 +179,82 @@ namespace aether::assetpipeline::kenney
 	// to `AssetPacker bake`) -> appends a CREDITS.md provenance line. Idempotent like
 	// ImportModel: a second call with the same fontName reports what already exists.
 	[[nodiscard]] FontImportResult ImportFont(const FontImportRequest& request);
+
+	// Deterministic naming for bulk imports, shared by every front end (CLI, MCP, panel)
+	// so they cannot drift apart. These are SUGGESTIONS - a single-model import may
+	// overtype them; a bulk run takes them as-is, suffixing on the rare stem collision.
+	//
+	//   SuggestPropName("machine-fortified.glb")  -> "MachineFortified"
+	//   SuggestDisplayName("MachineFortified")    -> "Machine Fortified"
+	//   SuggestCategory("factory-kit")            -> "FactoryKit"
+	[[nodiscard]] std::string SuggestPropName(const std::string& fileName);
+	[[nodiscard]] std::string SuggestDisplayName(const std::string& propName);
+	[[nodiscard]] std::string SuggestCategory(const std::string& packSlug);
+
+	// Thread-safe progress a UI can poll while an ImportModels run is in flight on a
+	// worker. The worker owns writes (Update); Read() is what a render-thread caller
+	// calls once per frame.
+	struct BulkProgress
+	{
+		struct State
+		{
+			int done = 0;
+			int total = 0;
+			std::string currentFile;
+		};
+		void Update(int done, int total, std::string currentFile);
+		[[nodiscard]] State Read() const;
+
+	private:
+		mutable std::mutex m_mutex;
+		State m_state;
+	};
+
+	struct BulkImportRequest
+	{
+		PackInfo pack;
+		std::filesystem::path projectRoot;
+		std::filesystem::path cacheDir;
+		// One destination folder under assets/models/ for the whole run. Empty means
+		// SuggestCategory(pack.slug) - one category per pack, the deliberate default (a
+		// pack's models share one material atlas and one visual identity).
+		std::string category;
+		// Case-insensitive substring match on the zip member's file name; empty = every
+		// model in the pack. "Import the whole pack" is just the empty filter - the
+		// honest primitive is always "import the current selection set".
+		std::string filter;
+		float mass = 1.0f;
+		bool registerInCatalog = true;
+		// Optional hooks for a UI driving this off the render thread. `progress` is
+		// updated after every item; `cancel` is polled BETWEEN items only - never
+		// mid-item, because each item is atomic (tracked-write with rollback), and a
+		// cancel honoured mid-item would be the one way a bulk run could leave a
+		// partial file behind.
+		BulkProgress* progress = nullptr;
+		const std::atomic_bool* cancel = nullptr;
+	};
+
+	struct BulkImportResult
+	{
+		bool ok = false; // false only when the pack itself could not be prepared/listed
+		bool cancelled = false;
+		std::string error;
+
+		int matched = 0;        // models matching the filter
+		int imported = 0;       // newly landed this run
+		int alreadyPresent = 0; // model file already existed; skipped, nothing duplicated
+		int failed = 0;
+		// One bad model never poisons the batch: every failure is named with its reason
+		// here, and the rest of the run continues.
+		std::vector<std::string> failures; // "<fileName>: <reason>"
+		std::vector<std::string> warnings; // de-duplicated across items
+		std::vector<std::filesystem::path> modelPaths;
+	};
+
+	// Bulk front of the same per-item ImportModel path (not a reimplementation): caches
+	// the pack ONCE, then runs ImportModel per matching entry with deterministic
+	// SuggestPropName/SuggestDisplayName naming (suffixing on the rare stem collision).
+	// Safe to re-run: per-item idempotency composes, so a second run of the same filter
+	// reports everything as alreadyPresent and duplicates nothing.
+	[[nodiscard]] BulkImportResult ImportModels(const BulkImportRequest& request);
 } // namespace aether::assetpipeline::kenney

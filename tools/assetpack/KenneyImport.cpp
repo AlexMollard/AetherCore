@@ -539,7 +539,11 @@ namespace aether::assetpipeline::kenney
 			}
 		}
 
-		ColliderFit FitFromParsed(const cgltf_data& data, const std::string& modelNameForHints, ColliderShape requestedShape)
+		// Every model prop now gets a convex-hull collider built from its own baked
+		// vertices at spawn time (Physics.AddConvexHullBody) - there is no primitive shape
+		// to choose or fit here anymore. This walk exists purely to report the model's
+		// real size to whoever is deciding a display name/mass, not to compute a collider.
+		Vec3 ComputeNativeSize(const cgltf_data& data)
 		{
 			Vec3 mn(0.0f);
 			Vec3 mx(0.0f);
@@ -564,131 +568,75 @@ namespace aether::assetpipeline::kenney
 				}
 			}
 
-			ColliderFit fit;
-			if (!any)
-			{
-				fit.shape = ColliderShape::Box;
-				fit.notes.push_back("no POSITION geometry found at all - collider is a zero-size placeholder, verify manually");
-				return fit;
-			}
-
-			const Vec3 dims = mx - mn;
-			const Vec3 center = (mn + mx) * 0.5f;
-			fit.nativeSize = dims;
-			fit.center = center;
-
-			const ColliderShape shape = requestedShape == ColliderShape::Auto ? ColliderShape::Box : requestedShape;
-			fit.shape = shape;
-
-			switch (shape)
-			{
-				case ColliderShape::Sphere:
-					fit.radius = std::max({dims.x, dims.y, dims.z}) * 0.5f;
-					break;
-				case ColliderShape::Cylinder:
-					fit.radius = (dims.x + dims.z) * 0.25f;
-					fit.halfHeight = dims.y * 0.5f;
-					break;
-				case ColliderShape::Capsule:
-					fit.radius = (dims.x + dims.z) * 0.25f;
-					fit.halfHeight = std::max(0.0f, dims.y * 0.5f - fit.radius);
-					if (dims.y * 0.5f < fit.radius)
-					{
-						fit.notes.push_back("model is wider than it is tall - a capsule degenerates toward a sphere here, verify visually");
-					}
-					break;
-				case ColliderShape::None:
-					break;
-				case ColliderShape::Box:
-				case ColliderShape::Auto:
-				default:
-					fit.halfExtents = dims * 0.5f;
-					break;
-			}
-
-			if (shape == ColliderShape::Box)
-			{
-				const float maxXz = std::max(dims.x, dims.z);
-				if (maxXz > 0.0f && std::abs(dims.x - dims.z) / maxXz < 0.15f)
-				{
-					fit.notes.push_back("footprint is roughly square (" + std::to_string(dims.x) + " x " + std::to_string(dims.z) + ") - if this model is actually round, re-import with an explicit colliderShape of cylinder or capsule instead of trusting this box");
-				}
-			}
-
-			static const std::array<const char*, 6> kTaperHints = {"cone", "wedge", "taper", "pyramid", "spike", "funnel"};
-			const std::string lowerName = ToLower(modelNameForHints);
-			for (const char* hint: kTaperHints)
-			{
-				if (lowerName.find(hint) != std::string::npos)
-				{
-					fit.notes.push_back(std::string("filename suggests tapered geometry ('") + hint + "') - no box/sphere/capsule/cylinder primitive fits a taper well; see PropCatalogExtension.md's convex-hull worklist before trusting this collider");
-					break;
-				}
-			}
-
-			return fit;
+			return any ? (mx - mn) : Vec3(0.0f);
 		}
 	} // namespace
 
-	std::string ToString(ColliderShape shape)
+
+	namespace
 	{
-		switch (shape)
+		// Splits on any of '-', '_', ' ' and capitalizes each non-empty segment's first
+		// letter, lowercasing the rest - "machine-fortified" -> "MachineFortified",
+		// "factory-kit" -> "FactoryKit". Digits pass through untouched as their own
+		// effective segment boundary is already handled by the delimiter split.
+		std::string PascalCaseSegments(const std::string& s)
 		{
-			case ColliderShape::Box:
-				return "box";
-			case ColliderShape::Sphere:
-				return "sphere";
-			case ColliderShape::Capsule:
-				return "capsule";
-			case ColliderShape::Cylinder:
-				return "cylinder";
-			case ColliderShape::None:
-				return "none";
-			case ColliderShape::Auto:
-			default:
-				return "auto";
+			std::string out;
+			std::string segment;
+			const auto flush = [&]
+			{
+				if (segment.empty())
+				{
+					return;
+				}
+				out += static_cast<char>(std::toupper(static_cast<unsigned char>(segment[0])));
+				for (std::size_t i = 1; i < segment.size(); ++i)
+				{
+					out += static_cast<char>(std::tolower(static_cast<unsigned char>(segment[i])));
+				}
+				segment.clear();
+			};
+			for (const char c: s)
+			{
+				if (c == '-' || c == '_' || c == ' ')
+				{
+					flush();
+				}
+				else
+				{
+					segment += c;
+				}
+			}
+			flush();
+			return out;
 		}
+	} // namespace
+
+	std::string SuggestPropName(const std::string& fileName)
+	{
+		return PascalCaseSegments(fs::path(fileName).stem().generic_string());
 	}
 
-	std::optional<ColliderShape> ParseColliderShape(const std::string& text)
+	std::string SuggestDisplayName(const std::string& propName)
 	{
-		const std::string lower = ToLower(text);
-		if (lower == "auto" || lower.empty())
+		std::string out;
+		for (std::size_t i = 0; i < propName.size(); ++i)
 		{
-			return ColliderShape::Auto;
+			const char c = propName[i];
+			if (i > 0 && std::isupper(static_cast<unsigned char>(c)) != 0 && std::islower(static_cast<unsigned char>(propName[i - 1])) != 0)
+			{
+				out += ' ';
+			}
+			out += c;
 		}
-		if (lower == "box")
-		{
-			return ColliderShape::Box;
-		}
-		if (lower == "sphere")
-		{
-			return ColliderShape::Sphere;
-		}
-		if (lower == "capsule")
-		{
-			return ColliderShape::Capsule;
-		}
-		if (lower == "cylinder")
-		{
-			return ColliderShape::Cylinder;
-		}
-		if (lower == "none")
-		{
-			return ColliderShape::None;
-		}
-		return std::nullopt;
+		return out;
 	}
 
-	std::optional<ColliderFit> FitCollider(const fs::path& glbPath, const std::string& modelNameForHints, ColliderShape requestedShape, std::string& error)
+	std::string SuggestCategory(const std::string& packSlug)
 	{
-		ParsedGlb glb;
-		if (!ParseGlbFile(glbPath, glb, error))
-		{
-			return std::nullopt;
-		}
-		return FitFromParsed(*glb.data, modelNameForHints, requestedShape);
+		return PascalCaseSegments(packSlug);
 	}
+
 
 	// ── CREDITS.md ──────────────────────────────────────────────────────────────────────
 
@@ -782,34 +730,18 @@ namespace aether::assetpipeline::kenney
 			return ss.str();
 		}
 
-		std::string FormatVec3(const Vec3& v)
-		{
-			return "new Vector3(" + FormatFloat(v.x) + ", " + FormatFloat(v.y) + ", " + FormatFloat(v.z) + ")";
-		}
 
-		std::string BuildCatalogEntry(const ImportRequest& request, const ColliderFit& fit, const std::string& modelPathVfs)
+		// Bare model reference, matching the current PropDef shape exactly (Name/
+		// IsSphere/Size/Mass/Color/ModelPath - no collider fields at all): PropSpawner's
+		// SpawnProp builds every model prop's collider as a convex hull from the same
+		// baked mesh LoadModel just read, so there is nothing for an importer to compute
+		// or write here.
+		std::string BuildCatalogEntry(const ImportRequest& request, const std::string& modelPathVfs)
 		{
 			std::ostringstream ss;
 			ss << "        new(\"" << request.displayName << "\", IsSphere: false, Size: 1f, Mass: " << FormatFloat(request.mass) << ", Color: default,\n";
-			ss << "            ModelPath: \"" << modelPathVfs << "\",\n";
-			ss << "            ColliderShape: PropColliderShape." << (fit.shape == ColliderShape::Box ? "Box" : fit.shape == ColliderShape::Sphere ? "Sphere" : fit.shape == ColliderShape::Capsule ? "Capsule" : "Cylinder");
-			switch (fit.shape)
-			{
-				case ColliderShape::Sphere:
-					ss << ", ColliderRadius: " << FormatFloat(fit.radius);
-					break;
-				case ColliderShape::Capsule:
-				case ColliderShape::Cylinder:
-					ss << ", ColliderRadius: " << FormatFloat(fit.radius) << ", ColliderHalfHeight: " << FormatFloat(fit.halfHeight);
-					break;
-				case ColliderShape::Box:
-				case ColliderShape::Auto:
-				case ColliderShape::None:
-				default:
-					ss << ", ColliderHalfExtents: " << FormatVec3(fit.halfExtents);
-					break;
-			}
-			ss << ", ColliderCenter: " << FormatVec3(fit.center) << "),\n";
+			ss << "            ModelPath: \"" << modelPathVfs << "\"\n";
+			ss << "        ),\n";
 			return ss.str();
 		}
 
@@ -1024,13 +956,9 @@ namespace aether::assetpipeline::kenney
 			result.bakedNow = true;
 		}
 
-		const std::string sourceFileName = fs::path(request.zipMemberPath).filename().generic_string();
-		result.collider = FitFromParsed(*glb.data, sourceFileName, request.requestedShape);
-		for (const std::string& note: result.collider.notes)
-		{
-			result.warnings.push_back(note);
-		}
+		result.nativeSize = ComputeNativeSize(*glb.data);
 
+		const std::string sourceFileName = fs::path(request.zipMemberPath).filename().generic_string();
 		const std::string destRel = request.category + "/" + request.propName + ".glb";
 		result.creditsLine = "- `" + sourceFileName + "` -> `" + destRel + "`";
 		const fs::path creditsPath = request.projectRoot / fs::path(request.creditsRelPath);
@@ -1038,15 +966,15 @@ namespace aether::assetpipeline::kenney
 		result.creditsAppended = creditsAppended;
 		result.creditsAlreadyPresent = creditsAlready;
 
-		if (request.requestedShape == ColliderShape::None)
+		if (!request.registerInCatalog)
 		{
-			result.catalogSkippedNoCollider = true;
-			result.warnings.push_back("colliderShape=none: not registered in PropSpawner.cs (viewmodel-style import) - wire it in by hand if it should be spawnable");
+			result.catalogSkipped = true;
+			result.warnings.push_back("registerInCatalog=false: not registered in PropSpawner.cs (viewmodel-style import) - wire it in by hand if it should be spawnable");
 		}
 		else
 		{
 			const std::string modelPathVfs = "project://" + modelRel;
-			result.catalogEntry = BuildCatalogEntry(request, result.collider, modelPathVfs);
+			result.catalogEntry = BuildCatalogEntry(request, modelPathVfs);
 			const fs::path catalogPath = request.projectRoot / fs::path(request.catalogRelPath);
 			const auto [catalogAppended, catalogAlready] = AppendCatalogEntry(catalogPath, modelPathVfs, result.catalogEntry);
 			result.catalogAppended = catalogAppended;
@@ -1155,6 +1083,127 @@ namespace aether::assetpipeline::kenney
 		const auto [creditsAppended, creditsAlready] = AppendCreditsLine(creditsPath, request.pack, result.creditsLine);
 		result.creditsAppended = creditsAppended;
 		result.creditsAlreadyPresent = creditsAlready;
+
+		result.ok = true;
+		return result;
+	}
+
+	// ── Bulk import ─────────────────────────────────────────────────────────────────────
+
+	void BulkProgress::Update(int done, int total, std::string currentFile)
+	{
+		const std::lock_guard<std::mutex> lock(m_mutex);
+		m_state.done = done;
+		m_state.total = total;
+		m_state.currentFile = std::move(currentFile);
+	}
+
+	BulkProgress::State BulkProgress::Read() const
+	{
+		const std::lock_guard<std::mutex> lock(m_mutex);
+		return m_state;
+	}
+
+	BulkImportResult ImportModels(const BulkImportRequest& request)
+	{
+		BulkImportResult result;
+
+		const CacheResult cache = EnsurePackCached(request.pack, request.cacheDir);
+		if (!cache.ok)
+		{
+			result.error = cache.error;
+			return result;
+		}
+
+		std::string listError;
+		const std::vector<PackEntry> entries = ListPackModels(cache.zipPath, request.pack.modelDir, listError);
+		if (!listError.empty())
+		{
+			result.error = listError;
+			return result;
+		}
+
+		const std::string lowerFilter = ToLower(request.filter);
+		std::vector<PackEntry> selected;
+		for (const PackEntry& e: entries)
+		{
+			if (lowerFilter.empty() || ToLower(e.fileName).find(lowerFilter) != std::string::npos)
+			{
+				selected.push_back(e);
+			}
+		}
+		result.matched = static_cast<int>(selected.size());
+
+		const std::string category = request.category.empty() ? SuggestCategory(request.pack.slug) : request.category;
+
+		if (request.progress != nullptr)
+		{
+			request.progress->Update(0, result.matched, "");
+		}
+
+		std::unordered_set<std::string> usedPropNames;
+		std::unordered_set<std::string> seenWarnings;
+		int processed = 0;
+		for (const PackEntry& entry: selected)
+		{
+			if (request.cancel != nullptr && request.cancel->load())
+			{
+				result.cancelled = true;
+				break;
+			}
+			if (request.progress != nullptr)
+			{
+				request.progress->Update(processed, result.matched, entry.fileName);
+			}
+
+			const std::string base = SuggestPropName(entry.fileName);
+			std::string propName = base;
+			for (int suffix = 2; !usedPropNames.insert(propName).second; ++suffix)
+			{
+				propName = base + std::to_string(suffix);
+			}
+
+			ImportRequest item;
+			item.pack = request.pack;
+			item.zipMemberPath = entry.zipMemberPath;
+			item.projectRoot = request.projectRoot;
+			item.cacheDir = request.cacheDir;
+			item.category = category;
+			item.propName = propName;
+			item.displayName = SuggestDisplayName(propName);
+			item.mass = request.mass;
+			item.registerInCatalog = request.registerInCatalog;
+
+			const ImportResult itemResult = ImportModel(item);
+			++processed;
+			if (!itemResult.ok)
+			{
+				++result.failed;
+				result.failures.push_back(entry.fileName + ": " + itemResult.error);
+				continue;
+			}
+			if (itemResult.modelAlreadyPresent)
+			{
+				++result.alreadyPresent;
+			}
+			else
+			{
+				++result.imported;
+				result.modelPaths.push_back(itemResult.modelPath);
+			}
+			for (const std::string& w: itemResult.warnings)
+			{
+				if (seenWarnings.insert(w).second)
+				{
+					result.warnings.push_back(w);
+				}
+			}
+		}
+
+		if (request.progress != nullptr)
+		{
+			request.progress->Update(processed, result.matched, "");
+		}
 
 		result.ok = true;
 		return result;

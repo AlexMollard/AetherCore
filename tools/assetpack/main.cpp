@@ -121,7 +121,8 @@ namespace
 	{
 		std::cerr << "Usage: AssetPacker kenney list-packs <manifest.toml>\n";
 		std::cerr << "       AssetPacker kenney list-models <manifest.toml> <slug> <cacheDir>\n";
-		std::cerr << "       AssetPacker kenney import <manifest.toml> <slug> <zipMemberPath> <projectRoot> <category> <propName> <displayName> <mass> <colliderShape> [cacheDir]\n";
+		std::cerr << "       AssetPacker kenney import <manifest.toml> <slug> <zipMemberPath> <projectRoot> <category> <propName> <displayName> <mass> [--no-catalog] [cacheDir]\n";
+		std::cerr << "       AssetPacker kenney import-pack <manifest.toml> <slug> <projectRoot> [--category=X] [--filter=X] [--mass=X] [--no-catalog] [cacheDir]\n";
 		std::cerr << "       AssetPacker kenney import-font <manifest.toml> <slug> <ttfZipMemberPath> <charMapZipMemberPath|-> <projectRoot> <fontName> [cacheDir]\n";
 	}
 
@@ -218,7 +219,7 @@ namespace
 
 		if (sub == "import")
 		{
-			if (argc < argOffset + 9)
+			if (argc < argOffset + 8)
 			{
 				PrintKenneyUsage();
 				return 1;
@@ -253,14 +254,19 @@ namespace
 				std::cout << nlohmann::json{{"ok", false}, {"error", "invalid mass '" + std::string(argv[argOffset + 7]) + "'"}}.dump() << "\n";
 				return 1;
 			}
-			const auto shape = kenney::ParseColliderShape(argv[argOffset + 8]);
-			if (!shape)
+			request.cacheDir = fs::path(".temp/kenney-cache");
+			for (int i = argOffset + 8; i < argc; ++i)
 			{
-				std::cout << nlohmann::json{{"ok", false}, {"error", "invalid colliderShape '" + std::string(argv[argOffset + 8]) + "' (want auto|box|sphere|capsule|cylinder|none)"}}.dump() << "\n";
-				return 1;
+				const std::string arg = argv[i];
+				if (arg == "--no-catalog")
+				{
+					request.registerInCatalog = false;
+				}
+				else
+				{
+					request.cacheDir = fs::path(arg);
+				}
 			}
-			request.requestedShape = *shape;
-			request.cacheDir = argc > argOffset + 9 ? fs::path(argv[argOffset + 9]) : fs::path(".temp/kenney-cache");
 
 			// MeshProcessor/MaterialImporter print human-readable progress straight to
 			// stdout (e.g. "+ auto-generated .material for 'x'") - fine for AssetPacker's
@@ -287,23 +293,106 @@ namespace
 			        {"texturePath", result.texturePath.generic_string()},
 			        {"textureAlreadyPresent", result.textureAlreadyPresent},
 			        {"bakedNow", result.bakedNow},
-			        {"collider",
-			                {
-			                        {"shape", kenney::ToString(result.collider.shape)},
-			                        {"halfExtents", {result.collider.halfExtents.x, result.collider.halfExtents.y, result.collider.halfExtents.z}},
-			                        {"radius", result.collider.radius},
-			                        {"halfHeight", result.collider.halfHeight},
-			                        {"center", {result.collider.center.x, result.collider.center.y, result.collider.center.z}},
-			                        {"nativeSize", {result.collider.nativeSize.x, result.collider.nativeSize.y, result.collider.nativeSize.z}},
-			                }},
+			        {"nativeSize", {result.nativeSize.x, result.nativeSize.y, result.nativeSize.z}},
 			        {"creditsLine", result.creditsLine},
 			        {"creditsAppended", result.creditsAppended},
 			        {"creditsAlreadyPresent", result.creditsAlreadyPresent},
 			        {"catalogEntry", result.catalogEntry},
 			        {"catalogAppended", result.catalogAppended},
 			        {"catalogAlreadyPresent", result.catalogAlreadyPresent},
-			        {"catalogSkippedNoCollider", result.catalogSkippedNoCollider},
+			        {"catalogSkipped", result.catalogSkipped},
 			        {"warnings", result.warnings},
+			};
+			std::cout << out.dump() << "\n";
+			return 0;
+		}
+
+		if (sub == "import-pack")
+		{
+			if (argc < argOffset + 3)
+			{
+				PrintKenneyUsage();
+				return 1;
+			}
+			std::string error;
+			const auto packs = kenney::LoadManifest(fs::path(argv[argOffset]), error);
+			if (!error.empty())
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", error}}.dump() << "\n";
+				return 1;
+			}
+			const auto pack = kenney::FindPack(packs, argv[argOffset + 1]);
+			if (!pack)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", "unknown pack slug '" + std::string(argv[argOffset + 1]) + "'"}}.dump() << "\n";
+				return 1;
+			}
+
+			kenney::BulkImportRequest request;
+			request.pack = *pack;
+			request.projectRoot = fs::path(argv[argOffset + 2]);
+			request.cacheDir = fs::path(".temp/kenney-cache");
+			for (int i = argOffset + 3; i < argc; ++i)
+			{
+				const std::string arg = argv[i];
+				if (arg == "--no-catalog")
+				{
+					request.registerInCatalog = false;
+				}
+				else if (arg.rfind("--category=", 0) == 0)
+				{
+					request.category = arg.substr(std::strlen("--category="));
+				}
+				else if (arg.rfind("--filter=", 0) == 0)
+				{
+					request.filter = arg.substr(std::strlen("--filter="));
+				}
+				else if (arg.rfind("--mass=", 0) == 0)
+				{
+					try
+					{
+						request.mass = std::stof(arg.substr(std::strlen("--mass=")));
+					}
+					catch (const std::exception&)
+					{
+						std::cout << nlohmann::json{{"ok", false}, {"error", "invalid --mass value in '" + arg + "'"}}.dump() << "\n";
+						return 1;
+					}
+				}
+				else
+				{
+					request.cacheDir = fs::path(arg);
+				}
+			}
+
+			std::ostringstream suppressed;
+			std::streambuf* const prevStdout = std::cout.rdbuf(suppressed.rdbuf());
+			const kenney::BulkImportResult result = kenney::ImportModels(request);
+			std::cout.rdbuf(prevStdout);
+			if (!suppressed.str().empty())
+			{
+				std::cerr << suppressed.str();
+			}
+			if (!result.ok)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", result.error}}.dump() << "\n";
+				return 1;
+			}
+			nlohmann::json modelPaths = nlohmann::json::array();
+			for (const auto& p: result.modelPaths)
+			{
+				modelPaths.push_back(p.generic_string());
+			}
+			const nlohmann::json out = {
+			        {"ok", true},
+			        {"cancelled", result.cancelled},
+			        {"matched", result.matched},
+			        {"imported", result.imported},
+			        {"alreadyPresent", result.alreadyPresent},
+			        {"failed", result.failed},
+			        {"failures", result.failures},
+			        {"warnings", result.warnings},
+			        {"modelPaths", modelPaths},
 			};
 			std::cout << out.dump() << "\n";
 			return 0;

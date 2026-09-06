@@ -33,21 +33,6 @@ namespace aether::editor
 {
 	namespace
 	{
-		// The combo/lookup order both the Collider Shape combo and StartImport share, so an
-		// index picked in one is always the shape sent in the other. Labels match
-		// kenney::ToString(shape) exactly (lowercase - the same text the CLI's
-		// ParseColliderShape accepts), so nothing here can drift out of sync with the core.
-		constexpr std::array<kenney::ColliderShape, 6> kColliderShapeOrder = {
-		        kenney::ColliderShape::Auto,
-		        kenney::ColliderShape::Box,
-		        kenney::ColliderShape::Sphere,
-		        kenney::ColliderShape::Capsule,
-		        kenney::ColliderShape::Cylinder,
-		        kenney::ColliderShape::None,
-		};
-
-		const char* const kColliderShapeLabels[] = {"auto", "box", "sphere", "capsule", "cylinder", "none"};
-
 		ImVec4 ToImVec4(const glm::vec4& c) noexcept
 		{
 			return {c.r, c.g, c.b, c.a};
@@ -82,53 +67,6 @@ namespace aether::editor
 			const std::size_t len = std::min(text.size(), N - 1);
 			std::memcpy(buffer, text.data(), len);
 			buffer[len] = '\0';
-		}
-
-		// "machine-fortified.glb" -> "MachineFortified": strip the model extension, then
-		// PascalCase every hyphen/underscore/space-separated word. A human-facing default the
-		// user can overtype in the form, not a hard naming rule.
-		std::string SuggestPropName(std::string_view fileName)
-		{
-			std::string stem(fileName);
-			for (std::string_view ext: {".glb", ".gltf"})
-			{
-				if (stem.size() > ext.size() && ContainsCaseInsensitive(std::string_view(stem).substr(stem.size() - ext.size()), ext))
-				{
-					stem.resize(stem.size() - ext.size());
-					break;
-				}
-			}
-			std::string out;
-			out.reserve(stem.size());
-			bool capitalizeNext = true;
-			for (const char c: stem)
-			{
-				if (c == '-' || c == '_' || c == ' ')
-				{
-					capitalizeNext = true;
-					continue;
-				}
-				out += capitalizeNext ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c;
-				capitalizeNext = false;
-			}
-			return out;
-		}
-
-		// "MachineFortified" -> "Machine Fortified": a space before every internal capital.
-		std::string SuggestDisplayName(std::string_view propName)
-		{
-			std::string out;
-			out.reserve(propName.size() + 4);
-			for (std::size_t i = 0; i < propName.size(); ++i)
-			{
-				const char c = propName[i];
-				if (i > 0 && std::isupper(static_cast<unsigned char>(c)) != 0)
-				{
-					out += ' ';
-				}
-				out += c;
-			}
-			return out;
 		}
 
 		void DrawMetricRowFormatted(const char* label, const std::string& value)
@@ -185,9 +123,9 @@ namespace aether::editor
 		}
 		m_selectedZipMemberPath = entry.zipMemberPath;
 		m_selectedFileName = entry.fileName;
-		const std::string suggestedProp = SuggestPropName(entry.fileName);
+		const std::string suggestedProp = kenney::SuggestPropName(entry.fileName);
 		CopyToBuffer(m_propNameBuf, suggestedProp);
-		CopyToBuffer(m_displayNameBuf, SuggestDisplayName(suggestedProp));
+		CopyToBuffer(m_displayNameBuf, kenney::SuggestDisplayName(suggestedProp));
 	}
 
 	void KenneyBrowserPanel::StartPackLoadIfNeeded(const kenney::PackInfo& pack)
@@ -248,7 +186,7 @@ namespace aether::editor
 		request.propName = m_propNameBuf;
 		request.displayName = m_displayNameBuf;
 		request.mass = m_mass;
-		request.requestedShape = kColliderShapeOrder[static_cast<std::size_t>(m_colliderShapeIndex)];
+		request.registerInCatalog = m_registerInCatalog;
 
 		PendingImport pending;
 		pending.future = std::async(std::launch::async, [request]() { return kenney::ImportModel(request); });
@@ -375,7 +313,7 @@ namespace aether::editor
 		ImGui::InputText("Prop Name", m_propNameBuf, sizeof(m_propNameBuf));
 		ImGui::InputText("Display Name", m_displayNameBuf, sizeof(m_displayNameBuf));
 		ImGui::InputFloat("Mass", &m_mass);
-		ImGui::Combo("Collider Shape", &m_colliderShapeIndex, kColliderShapeLabels, static_cast<int>(std::size(kColliderShapeLabels)));
+		ImGui::Checkbox("Register in spawn catalogue (PropSpawner.cs)", &m_registerInCatalog);
 
 		const auto* project = context.TryGet<app::EditorProjectContext>();
 		const bool hasProject = project != nullptr && project->IsLoaded();
@@ -423,38 +361,14 @@ namespace aether::editor
 			}
 			DrawMetricRow("Baked now", m_importResult.bakedNow ? "yes" : "no");
 
-			const kenney::ColliderFit& collider = m_importResult.collider;
-			DrawMetricRow("Collider shape", kenney::ToString(collider.shape).c_str());
-			switch (collider.shape)
-			{
-				case kenney::ColliderShape::Sphere:
-					DrawMetricRowFormatted("Collider radius", std::format("{:.3f}", collider.radius));
-					break;
-				case kenney::ColliderShape::Capsule:
-				case kenney::ColliderShape::Cylinder:
-					DrawMetricRowFormatted("Collider radius", std::format("{:.3f}", collider.radius));
-					DrawMetricRowFormatted("Collider half height", std::format("{:.3f}", collider.halfHeight));
-					break;
-				case kenney::ColliderShape::None:
-					break;
-				case kenney::ColliderShape::Box:
-				case kenney::ColliderShape::Auto:
-				default:
-					DrawMetricRowFormatted("Collider half extents", std::format("{:.3f}, {:.3f}, {:.3f}", collider.halfExtents.x, collider.halfExtents.y, collider.halfExtents.z));
-					break;
-			}
-			DrawMetricRowFormatted("Collider center", std::format("{:.3f}, {:.3f}, {:.3f}", collider.center.x, collider.center.y, collider.center.z));
-			DrawMetricRowFormatted("Native size", std::format("{:.3f} x {:.3f} x {:.3f}", collider.nativeSize.x, collider.nativeSize.y, collider.nativeSize.z));
+			DrawMetricRowFormatted("Native size", std::format("{:.3f} x {:.3f} x {:.3f}", m_importResult.nativeSize.x, m_importResult.nativeSize.y, m_importResult.nativeSize.z));
 
 			DrawMetricRow("Credits", m_importResult.creditsAlreadyPresent ? "already present" : (m_importResult.creditsAppended ? "appended" : "not written"));
-			DrawMetricRow("Catalog", m_importResult.catalogSkippedNoCollider ? "skipped (no collider)" : (m_importResult.catalogAlreadyPresent ? "already present" : (m_importResult.catalogAppended ? "appended" : "not written")));
+			DrawMetricRow("Catalog", m_importResult.catalogSkipped ? "skipped (not registered)" : (m_importResult.catalogAlreadyPresent ? "already present" : (m_importResult.catalogAppended ? "appended" : "not written")));
 			ImGui::EndTable();
 		}
 
-		for (const std::string& note: m_importResult.collider.notes)
-		{
-			ImGui::TextColored(ToImVec4(colors::Warn), ICON_FA_TRIANGLE_EXCLAMATION "  %s", note.c_str());
-		}
+
 		for (const std::string& warning: m_importResult.warnings)
 		{
 			ImGui::TextColored(ToImVec4(colors::Warn), ICON_FA_TRIANGLE_EXCLAMATION "  %s", warning.c_str());
