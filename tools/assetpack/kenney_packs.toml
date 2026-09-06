@@ -1,0 +1,63 @@
+# Kenney asset-pack manifest for the native Kenney importer: KenneyImport.{hpp,cpp} (this
+# directory), AssetPacker's "kenney" CLI subcommand, the AetherCore MCP kenney_* tools, and
+# the Editor's Kenney Browser panel all read this ONE file - it is the single core the two
+# front ends (agent-facing MCP tool, human-facing panel) both call through.
+#
+# Why checked in rather than fetched: kenney.nl exposes NO machine-readable pack index (no
+# API, no assets.json/RSS/sitemap feed of packs+contents - verified 2026-09-06 by fetching
+# https://kenney.nl/assets/<slug> directly for every pack below). Every asset page is
+# server-rendered HTML, and the actual download link is a per-export content-hashed URL
+# embedded in that HTML, e.g.
+#   .../media/pages/assets/factory-kit/edaac9d4f6-1777639602/kenney_factory-kit_3.0.zip
+# The hash and the version both change whenever Kenney re-exports a pack (factory-kit's own
+# changelog lists "3.0 Completely remade" over "1.0 Released in 2023"), so there is no stable
+# URL to compute from just the slug. Scraping that HTML at import time would work today and
+# break the moment kenney.nl's markup changes, with no compile-time signal that it broke.
+#
+# This manifest is the boring, deliberate alternative: worse ergonomics (a human refreshes an
+# entry by hand instead of it updating itself), identical safety (the tool can never silently
+# start importing from a URL nobody reviewed). To refresh an entry: open pageUrl, copy the
+# "Continue without donating..." link as zipUrl and the og:image meta tag as previewImageUrl,
+# and bump version to whatever the top row of the Updates table says.
+#
+# modelDir is the pack-relative folder holding ready-to-import .glb files (Kenney ships this
+# under different names across pack eras - "Models/GLB format" for current exports, "Models/
+# GLTF format" for older ones; both contain plain .glb regardless of the folder's own name).
+# Every pack below was download-verified (zip fetched, modelDir listed, at least one member
+# extracted and parsed) before being added here.
+
+[[pack]]
+slug = "factory-kit"
+name = "Factory Kit"
+version = "3.0"
+pageUrl = "https://kenney.nl/assets/factory-kit"
+zipUrl = "https://kenney.nl/media/pages/assets/factory-kit/edaac9d4f6-1777639602/kenney_factory-kit_3.0.zip"
+previewImageUrl = "https://kenney.nl/media/pages/assets/factory-kit/7e1e831724-1777639590/sample.png"
+modelDir = "Models/GLB format"
+license = "CC0 1.0 Universal"
+licenseUrl = "https://creativecommons.org/publicdomain/zero/1.0/"
+author = "Kenney (www.kenney.nl)"
+
+[[pack]]
+slug = "furniture-kit"
+name = "Furniture Kit"
+version = "1.0"
+pageUrl = "https://kenney.nl/assets/furniture-kit"
+zipUrl = "https://kenney.nl/media/pages/assets/furniture-kit/440e0608a4-1677580847/kenney_furniture-kit.zip"
+previewImageUrl = "https://kenney.nl/media/pages/assets/furniture-kit/4573c6a40b-1677580842/sample.png"
+modelDir = "Models/GLTF format"
+license = "CC0 1.0 Universal"
+licenseUrl = "https://creativecommons.org/publicdomain/zero/1.0/"
+author = "Kenney (www.kenney.nl)"
+
+[[pack]]
+slug = "blaster-kit"
+name = "Blaster Kit"
+version = "2.1"
+pageUrl = "https://kenney.nl/assets/blaster-kit"
+zipUrl = "https://kenney.nl/media/pages/assets/blaster-kit/261d80a716-1753959510/kenney_blaster-kit_2.1.zip"
+previewImageUrl = "https://kenney.nl/media/pages/assets/blaster-kit/7f0e90a313-1753959516/preview.png"
+modelDir = "Models/GLB format"
+license = "CC0 1.0 Universal"
+licenseUrl = "https://creativecommons.org/publicdomain/zero/1.0/"
+author = "Kenney (www.kenney.nl)"

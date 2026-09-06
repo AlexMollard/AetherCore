@@ -1,11 +1,15 @@
 #include <charconv>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <optional>
 #include <string>
 
+#include <nlohmann/json.hpp>
+
 #include "AssetPipeline.hpp"
 #include "FontProcessor.hpp"
+#include "KenneyImport.hpp"
 #include "MaterialImporter.hpp"
 
 using namespace aether::assetpipeline;
@@ -95,6 +99,7 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 		std::cerr << "Usage: AssetPacker [--project] [--import-materials] [--compress-level N] <source-dir> <output.pak>\n";
 		std::cerr << "       AssetPacker import-materials <source-dir>\n";
 		std::cerr << "       AssetPacker bake-font <ttf> <outDir>\n";
+		std::cerr << "       AssetPacker kenney list-packs|list-models|import ... (see 'AssetPacker kenney' with no args)\n";
 		return std::nullopt;
 	}
 
@@ -104,8 +109,200 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 	return args;
 }
 
+namespace kenney = aether::assetpipeline::kenney;
+
+namespace
+{
+	void PrintKenneyUsage()
+	{
+		std::cerr << "Usage: AssetPacker kenney list-packs <manifest.toml>\n";
+		std::cerr << "       AssetPacker kenney list-models <manifest.toml> <slug> <cacheDir>\n";
+		std::cerr << "       AssetPacker kenney import <manifest.toml> <slug> <zipMemberPath> <projectRoot> <category> <propName> <displayName> <mass> <colliderShape> [cacheDir]\n";
+	}
+
+	// One JSON object (or array) per invocation on stdout, via nlohmann::json - the
+	// established convention for structured data in this codebase (the Editor's own
+	// ControlServer methods and undo commands all speak nlohmann::json; a hand-rolled
+	// delimited text format would be a second, competing convention for no reason once the
+	// library is already a dependency). The AetherCore MCP's Python wrapper parses this
+	// directly with `json.loads`; the Editor panel skips this CLI boundary entirely and
+	// calls the KenneyImport functions in-process, so JSON never touches that path.
+	int RunKenneyCommand(int argc, char* argv[], int argOffset)
+	{
+		if (argc < argOffset + 1)
+		{
+			PrintKenneyUsage();
+			return 1;
+		}
+		const std::string sub = argv[argOffset];
+		++argOffset;
+
+		if (sub == "list-packs")
+		{
+			if (argc < argOffset + 1)
+			{
+				PrintKenneyUsage();
+				return 1;
+			}
+			std::string error;
+			const auto packs = kenney::LoadManifest(fs::path(argv[argOffset]), error);
+			if (!error.empty())
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", error}}.dump() << "\n";
+				return 1;
+			}
+			nlohmann::json arr = nlohmann::json::array();
+			for (const auto& p: packs)
+			{
+				arr.push_back({
+				        {"slug", p.slug},
+				        {"name", p.name},
+				        {"version", p.version},
+				        {"license", p.license},
+				        {"licenseUrl", p.licenseUrl},
+				        {"author", p.author},
+				        {"pageUrl", p.pageUrl},
+				        {"modelDir", p.modelDir},
+				        {"previewImageUrl", p.previewImageUrl},
+				});
+			}
+			std::cout << nlohmann::json{{"ok", true}, {"packs", arr}}.dump() << "\n";
+			return 0;
+		}
+
+		if (sub == "list-models")
+		{
+			if (argc < argOffset + 3)
+			{
+				PrintKenneyUsage();
+				return 1;
+			}
+			std::string error;
+			const auto packs = kenney::LoadManifest(fs::path(argv[argOffset]), error);
+			if (!error.empty())
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", error}}.dump() << "\n";
+				return 1;
+			}
+			const auto pack = kenney::FindPack(packs, argv[argOffset + 1]);
+			if (!pack)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", "unknown pack slug '" + std::string(argv[argOffset + 1]) + "'"}}.dump() << "\n";
+				return 1;
+			}
+			const kenney::CacheResult cache = kenney::EnsurePackCached(*pack, fs::path(argv[argOffset + 2]));
+			if (!cache.ok)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", cache.error}}.dump() << "\n";
+				return 1;
+			}
+			const auto entries = kenney::ListPackModels(cache.zipPath, pack->modelDir, error);
+			if (!error.empty())
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", error}}.dump() << "\n";
+				return 1;
+			}
+			nlohmann::json arr = nlohmann::json::array();
+			for (const auto& e: entries)
+			{
+				arr.push_back({{"zipMemberPath", e.zipMemberPath}, {"fileName", e.fileName}});
+			}
+			std::cout << nlohmann::json{{"ok", true}, {"packCached", cache.wasAlreadyCached}, {"models", arr}}.dump() << "\n";
+			return 0;
+		}
+
+		if (sub == "import")
+		{
+			if (argc < argOffset + 9)
+			{
+				PrintKenneyUsage();
+				return 1;
+			}
+			std::string error;
+			const auto packs = kenney::LoadManifest(fs::path(argv[argOffset]), error);
+			if (!error.empty())
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", error}}.dump() << "\n";
+				return 1;
+			}
+			const auto pack = kenney::FindPack(packs, argv[argOffset + 1]);
+			if (!pack)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", "unknown pack slug '" + std::string(argv[argOffset + 1]) + "'"}}.dump() << "\n";
+				return 1;
+			}
+
+			kenney::ImportRequest request;
+			request.pack = *pack;
+			request.zipMemberPath = argv[argOffset + 2];
+			request.projectRoot = fs::path(argv[argOffset + 3]);
+			request.category = argv[argOffset + 4];
+			request.propName = argv[argOffset + 5];
+			request.displayName = argv[argOffset + 6];
+			try
+			{
+				request.mass = std::stof(argv[argOffset + 7]);
+			}
+			catch (const std::exception&)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", "invalid mass '" + std::string(argv[argOffset + 7]) + "'"}}.dump() << "\n";
+				return 1;
+			}
+			const auto shape = kenney::ParseColliderShape(argv[argOffset + 8]);
+			if (!shape)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", "invalid colliderShape '" + std::string(argv[argOffset + 8]) + "' (want auto|box|sphere|capsule|cylinder|none)"}}.dump() << "\n";
+				return 1;
+			}
+			request.requestedShape = *shape;
+			request.cacheDir = argc > argOffset + 9 ? fs::path(argv[argOffset + 9]) : fs::path(".temp/kenney-cache");
+
+			const kenney::ImportResult result = kenney::ImportModel(request);
+			if (!result.ok)
+			{
+				std::cout << nlohmann::json{{"ok", false}, {"error", result.error}}.dump() << "\n";
+				return 1;
+			}
+			const nlohmann::json out = {
+			        {"ok", true},
+			        {"modelPath", result.modelPath.generic_string()},
+			        {"modelAlreadyPresent", result.modelAlreadyPresent},
+			        {"texturePath", result.texturePath.generic_string()},
+			        {"textureAlreadyPresent", result.textureAlreadyPresent},
+			        {"bakedNow", result.bakedNow},
+			        {"collider",
+			                {
+			                        {"shape", kenney::ToString(result.collider.shape)},
+			                        {"halfExtents", {result.collider.halfExtents.x, result.collider.halfExtents.y, result.collider.halfExtents.z}},
+			                        {"radius", result.collider.radius},
+			                        {"halfHeight", result.collider.halfHeight},
+			                        {"center", {result.collider.center.x, result.collider.center.y, result.collider.center.z}},
+			                        {"nativeSize", {result.collider.nativeSize.x, result.collider.nativeSize.y, result.collider.nativeSize.z}},
+			                }},
+			        {"creditsLine", result.creditsLine},
+			        {"creditsAppended", result.creditsAppended},
+			        {"creditsAlreadyPresent", result.creditsAlreadyPresent},
+			        {"catalogEntry", result.catalogEntry},
+			        {"catalogAppended", result.catalogAppended},
+			        {"catalogAlreadyPresent", result.catalogAlreadyPresent},
+			        {"catalogSkippedNoCollider", result.catalogSkippedNoCollider},
+			        {"warnings", result.warnings},
+			};
+			std::cout << out.dump() << "\n";
+			return 0;
+		}
+
+		PrintKenneyUsage();
+		return 1;
+	}
+} // namespace
+
 int main(int argc, char* argv[])
 {
+	if (argc >= 2 && std::string(argv[1]) == "kenney")
+	{
+		return RunKenneyCommand(argc, argv, 2);
+	}
 	const auto args = ParseArgs(argc, argv);
 	if (!args)
 	{

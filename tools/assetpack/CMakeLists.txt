@@ -49,11 +49,13 @@ add_executable(AssetPacker
     main.cpp
     StbImageImpl.cpp
 )
-target_link_libraries(AssetPacker PRIVATE AssetPipeline)
-target_include_directories(AssetPacker SYSTEM PRIVATE "${stb_SOURCE_DIR}")
+target_link_libraries(AssetPacker PRIVATE AssetPipeline nlohmann_json::nlohmann_json)
+target_include_directories(AssetPacker SYSTEM PRIVATE "${stb_SOURCE_DIR}" "${glm_SOURCE_DIR}")
 
 # main.cpp includes PakWriter.hpp -> PakFormat.hpp, which is PRIVATE on AssetPipeline, so
-# the exe needs its own path to src/include.
+# the exe needs its own path to src/include. It also includes KenneyImport.hpp, whose
+# PipelineUtils.hpp pulls in <glm/glm.hpp> (PRIVATE on AssetPipeline too, hence the
+# SYSTEM include above rather than relying on the library link to propagate it).
 target_include_directories(AssetPacker PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
 
 set_target_properties(AssetPacker PROPERTIES
