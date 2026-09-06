@@ -1,7 +1,9 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
 #include <future>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -68,19 +70,32 @@ namespace aether::editor
 			std::future<kenney::ImportResult> future;
 		};
 
+		// The ImportModels bulk run in flight. `progress` and `cancel` are heap-allocated
+		// (unique_ptr, not by-value) so the worker's captured pointer stays valid no matter
+		// how this struct itself is moved around while the future is in flight.
+		struct PendingBulkImport
+		{
+			std::future<kenney::BulkImportResult> future;
+			std::unique_ptr<kenney::BulkProgress> progress = std::make_unique<kenney::BulkProgress>();
+			std::unique_ptr<std::atomic_bool> cancel = std::make_unique<std::atomic_bool>(false);
+		};
+
 		void EnsureManifestLoaded();
 		void SelectPack(const std::string& slug);
 		void SelectModel(const kenney::PackEntry& entry);
 		void StartPackLoadIfNeeded(const kenney::PackInfo& pack);
 		void StartImport(const kenney::PackInfo& pack, const std::filesystem::path& projectRoot);
+		void StartBulkImport(const kenney::PackInfo& pack, const std::filesystem::path& projectRoot, const std::string& filter);
 		void PollPackLoad(app::LayerContext& context);
 		void PollImport(app::LayerContext& context);
+		void PollBulkImport(app::LayerContext& context);
 		void DrawPackList();
 		void DrawPackDetail(app::LayerContext& context, const kenney::PackInfo& pack);
-		void DrawModelList(const PackModelsResult& loaded);
+		void DrawModelList(app::LayerContext& context, const kenney::PackInfo& pack, const PackModelsResult& loaded);
+		void DrawBulkImportConfirmPopup(const kenney::PackInfo& pack, const std::filesystem::path& projectRoot, int matchCount, const std::string& filter);
 		void DrawImportForm(app::LayerContext& context, const kenney::PackInfo& pack);
 		void DrawImportResult() const;
-
+		void DrawBulkImportResult() const;
 		std::vector<kenney::PackInfo> m_packs;
 		std::string m_manifestError;
 		bool m_manifestLoaded = false;
@@ -102,5 +117,13 @@ namespace aether::editor
 		std::optional<PendingImport> m_importing;
 		bool m_hasImportResult = false;
 		kenney::ImportResult m_importResult;
+
+		char m_bulkCategoryBuf[128] = {};
+		float m_bulkMass = 1.0f;
+		bool m_bulkRegisterInCatalog = true;
+		bool m_showBulkConfirmPopup = false;
+		std::optional<PendingBulkImport> m_bulking;
+		bool m_hasBulkResult = false;
+		kenney::BulkImportResult m_bulkResult;
 	};
 } // namespace aether::editor
