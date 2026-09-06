@@ -937,7 +937,7 @@ euler = [ 0.0, 0.0, 0.0 ]
 name = 'Spawn0'
 node = -6193236729237677662
 parent = -1
-position = [ -4.5, 0.0, 9.0 ]
+position = [ -6.0, 0.1, 9.4 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
 [[entities]]
@@ -1232,6 +1232,14 @@ scale = [ 0.5, 0.5, 0.5 ]
 
     [[entities.scripts]]
     type = 'FirstPersonPlayer'
+
+        [entities.scripts.properties.Yaw]
+        t = 'float'
+        v = 180.0
+
+        [entities.scripts.properties.Pitch]
+        t = 'float'
+        v = -6.0
 
         [entities.scripts.properties.AirControl]
         t = 'float'
