@@ -1951,6 +1951,37 @@ TEST_CASE("Moving a prefab instance root does not override its children's transf
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("Script joints round-trip through capture, TOML and parse") {
+    // The welded-contraption guarantee: Physics.CreateWeld/CreateRope constraints
+    // (ScriptJointsComponent) must survive a save/reload. Capture fills
+    // EntityRecord::scriptJoints, but a version of the writer simply never emitted
+    // them and the parser never read them - the contraption silently saved
+    // unwelded, discovered live when a saved-and-reloaded welded pair stopped
+    // moving together. This pins the full TOML layer, not just the record.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+    Entity a = world.Create();
+    world.Emplace<NameComponent>(a, NameComponent{.name = "Welded"});
+    Entity b = world.Create();
+    world.Emplace<NameComponent>(b, NameComponent{.name = "Anchor"});
+    JointEntry written;
+    written.type = JointType::Fixed;
+    written.target = b; // resolves to "Anchor"'s scene-local index on capture
+    written.collideConnected = true;
+    world.Emplace<ScriptJointsComponent>(a, ScriptJointsComponent{.joints = std::vector<JointEntry>{written}});
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+    REQUIRE(parsed.has_value());
+    const EntityRecord& welded = RecordOf(*parsed, "Welded");
+    REQUIRE(welded.scriptJoints.size() == 1);
+    CHECK(welded.scriptJoints[0].type == JointType::Fixed);
+    CHECK(welded.scriptJoints[0].targetIndex == IndexOf(*parsed, "Anchor"));
+    CHECK(welded.scriptJoints[0].collideConnected);
+}
+
 TEST_CASE("Script properties survive capture with no ScriptComponentSystem registered at all") {
     // The AssetPacker / bare-serializer-fixture guarantee: CaptureScripts now looks
     // up ScriptComponentSystem via world.FindSystem to refresh properties from a
