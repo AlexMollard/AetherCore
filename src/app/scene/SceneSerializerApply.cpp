@@ -743,6 +743,32 @@ namespace aether::app::scene
 				}
 			}
 		}
+		// World::Destroy cascades to the whole subtree (see its own file comment) - a
+		// spared entity (DontDestroyOnLoad, computed above) whose PARENT is an ordinary,
+		// doomed entity would otherwise be swept away the instant that parent is
+		// destroyed below, even though it was just classified as surviving this switch.
+		// Re-parenting is free here (SetParent/InsertChildAt never touch
+		// TransformComponent - see RuntimeContainers.cs's own file comment on the native
+		// implementation), so detaching to root costs nothing and needs no per-entity
+		// transform fixup. Not currently reachable by any script in this project (every
+		// DontDestroyOnLoad call so far marks a root, whose children inherit sparing
+		// through the SAME ancestor check spared/doomed used to classify them - see
+		// HasDontDestroyOnLoadAncestor), but nothing stops a future one from marking a
+		// non-root child instead.
+		std::unordered_set<std::uint32_t> sparedIds;
+		sparedIds.reserve(spared.size());
+		for (const Entity e: spared)
+		{
+			sparedIds.insert(e.id);
+		}
+		for (const Entity e: spared)
+		{
+			const auto* h = reg.try_get<HierarchyComponent>(World::ToEntt(e));
+			if (h != nullptr && h->parent.IsValid() && !sparedIds.contains(h->parent.id))
+			{
+				ecs::DetachFromParent(world, e);
+			}
+		}
 		for (const Entity e: doomed)
 		{
 			if (reg.valid(World::ToEntt(e)))

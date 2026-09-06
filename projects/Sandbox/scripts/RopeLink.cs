@@ -111,7 +111,10 @@ public sealed class RopeLink : EntityScript
 
     public override void OnDetach()
     {
-        // Same as WeldLink.OnDetach: the bead must not outlive the marker, and
+        // Same as WeldLink.OnDetach: the bead must not outlive the marker - not because
+        // World::Destroy fails to cascade (it does), but because OnDetach also fires
+        // when just this script is removed from a surviving entity (scene.remove_script
+        // / the Inspector), which leaves nothing else to clean up _visual.
         // DestroyConstraint no-ops on an unknown/already-cleaned handle.
         Physics.DestroyConstraint(_handle);
         if (_visual.IsValid)

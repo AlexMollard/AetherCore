@@ -88,14 +88,14 @@ public sealed class WireLink : EntityScript
     public override void OnDetach()
     {
         _hub?.Unregister(this);
-        // Entity.Destroy does NOT cascade to children - confirmed by reading
-        // ScriptComponentSystem.cpp's pending-destroy flush: it calls World::Destroy on
-        // exactly the one queued id, never ecs::DestroyHierarchy (that recursive walk is
-        // only ever used for the network despawn path, NetExports.cpp's
-        // QueueHierarchyDestroy). WireHub.PruneDead destroying this entity would
-        // therefore leave the visual an orphaned line to nowhere if nothing else
-        // destroyed it explicitly - this does, so it dies with the wire regardless of
-        // how this entity came to be destroyed (PruneDead, the Inspector, a script).
+        // World::Destroy DOES cascade to children (fixed engine-side, see World.cpp's
+        // own file comment) - so this is not compensating for that. It compensates for
+        // OnDetach's OTHER trigger: scene.remove_script / the Inspector's "Remove
+        // Component" removes just this script from an entity that keeps living
+        // (ScriptComponentSystem.cpp), leaving _visual parented under a survivor with
+        // nothing else to clean it up. Explicit destroy here covers that case
+        // regardless of how the script itself came to be detached (PruneDead removing
+        // the whole entity, the Inspector removing just the script, a future caller).
         if (_visual.IsValid)
         {
             _visual.Destroy();

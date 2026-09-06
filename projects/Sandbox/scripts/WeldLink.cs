@@ -87,11 +87,14 @@ public sealed class WeldLink : EntityScript
 
     public override void OnDetach()
     {
-        // Same reasoning as WireLink.OnDetach: Entity.Destroy does not cascade to
-        // children, so the bead would outlive the marker. DestroyConstraint is a no-op
-        // on an unknown/already-cleaned handle (its own doc comment), so this is safe
-        // both when the marker is removed by hand and when the refusal path never made
-        // one.
+        // Same reasoning as WireLink.OnDetach: World::Destroy DOES cascade to children
+        // now (engine-side fix), so this is not compensating for that. It compensates
+        // for OnDetach's OTHER trigger - scene.remove_script / the Inspector's "Remove
+        // Component" removes just this script from a surviving entity, leaving
+        // _visual orphaned with nothing else to clean it up. DestroyConstraint is a
+        // no-op on an unknown/already-cleaned handle (its own doc comment), so this is
+        // safe both when the marker is removed by hand and when the refusal path
+        // never made one.
         Physics.DestroyConstraint(_handle);
         if (_visual.IsValid)
         {

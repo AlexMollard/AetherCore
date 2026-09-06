@@ -780,6 +780,36 @@ TEST_CASE("ReplaceScene spares transient subtrees during gameplay switches only"
     CHECK(!reg.valid(World::ToEntt(playerMesh)));
 }
 
+TEST_CASE("ReplaceScene detaches a spared child from a doomed parent before destroying it") {
+    // The asymmetric case the test above does not cover: a plain (non-persistent)
+    // container holding a child that is INDIVIDUALLY marked DontDestroyOnLoad, not
+    // via an ancestor. World::Destroy cascades to the whole subtree (see its own
+    // file comment) - without detaching the spared child first, destroying the
+    // doomed container would sweep the child away too, even though it was just
+    // classified as surviving this switch.
+    World world = MakeWorld();
+
+    const Entity container = world.Create();
+    world.Emplace<NameComponent>(container, NameComponent{.name = "Container"});
+    world.Emplace<TransformComponent>(container, TransformComponent{});
+
+    const Entity persistentChild = world.Create();
+    world.Emplace<NameComponent>(persistentChild, NameComponent{.name = "PersistentChild"});
+    world.Emplace<TransformComponent>(persistentChild, TransformComponent{});
+    world.GetRegistry().emplace<DontDestroyOnLoadComponent>(World::ToEntt(persistentChild));
+    REQUIRE(ecs::SetParent(world, persistentChild, container));
+
+    ReplaceScene(SceneDescription{}, world, ApplySceneDeps{}, SceneLoadMode::GameplaySwitch);
+
+    auto& reg = world.GetRegistry();
+    CHECK(!reg.valid(World::ToEntt(container)));
+    CHECK(reg.valid(World::ToEntt(persistentChild)));
+    // Detached to root, not left with a parent handle pointing at the destroyed container.
+    if (const auto* h = world.TryGet<HierarchyComponent>(persistentChild)) {
+        CHECK_FALSE(h->parent.IsValid());
+    }
+}
+
 TEST_CASE("Light entities round-trip through capture, TOML and apply (v3)") {
     FakeSlotSink sink(8);
     FakeTextureSink tsink;

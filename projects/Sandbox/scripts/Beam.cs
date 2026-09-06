@@ -59,10 +59,14 @@ namespace AetherGame;
 /// pollute "Wires" as a Hierarchy-panel grouping of only wires. Separate container,
 /// always.
 ///
-/// Entity.Destroy does NOT cascade to children (confirmed by reading
-/// ScriptComponentSystem.cpp's pending-destroy flush - see WireLink's own file comment on
-/// the same fact), so <see cref="Destroy"/> below destroys every segment explicitly
-/// before the container, exactly like WireLink.OnDetach does for its own single visual.
+/// World::Destroy DOES cascade to children (engine-side fix) - but that would not save
+/// this one anyway: a beam's segments are parented under the shared "Beams" container
+/// above, never under the entity that owns this <see cref="Beam"/> instance (PhysicsGun's
+/// player/viewmodel entity), so cascading from THAT entity's destruction would never
+/// reach them regardless. <see cref="Destroy"/> below destroys every segment explicitly
+/// before the container, exactly like WireLink.OnDetach does for its own single visual
+/// (whose reasoning IS about cascading - see its own file comment for why that one
+/// differs).
 ///
 /// PUBLISHED API for PhysicsGun (laser/grab) and ToolGun (future Rope):
 /// <see cref="Create"/> once per beam a script wants to own; <see cref="Show"/> every
