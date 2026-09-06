@@ -70,7 +70,9 @@ public sealed class FirstPersonPlayer : EntityScript
     /// nothing here reads settings storage directly.</summary>
     public bool InvertY;
 
-    public float EyeHeight = 1.6f;
+    /// <summary>Camera height above the player's feet, in metres. Raised from 1.6
+    /// after live feedback that the view sat too low.</summary>
+    public float EyeHeight = 1.75f;
 
     /// <summary>Near-clip distance for THIS camera specifically, in metres. The camera
     /// sits at EyeHeight inside the character's own head, and this engine has no
@@ -81,11 +83,15 @@ public sealed class FirstPersonPlayer : EntityScript
     /// isolate just the head. The one lever this engine actually exposes per-camera is
     /// CameraComponent's reflected "near" field (CoreComponents.reflect.cpp) - hence
     /// the generic Self.Component("Camera").SetFloat("near", ...) call below; there is
-    /// no dedicated Camera.SetNearPlane in the SDK. 0.15m clips the skull's roughly
-    /// 8-10cm forward profile (nose/chin) from an eye origin near its centre, while
-    /// the chest/arms/legs - all comfortably further than that in this rig's bind
-    /// pose - stay unaffected.</summary>
-    public float FirstPersonNearPlane = 0.15f;
+    /// no dedicated Camera.SetNearPlane in the SDK. 0.15m (the skull's own ~8-10cm
+    /// forward profile) was NOT enough in practice - live testing still showed head
+    /// geometry (reported as "AO looking stuff": the inside/near surface of a mesh
+    /// this close to the lens reads as blotchy dark occlusion rather than a clean
+    /// clip). Raised well past that so the whole head silhouette clips regardless of
+    /// the exact eye-to-skull-surface distance, not just its closest point -
+    /// chest/arms/legs are still comfortably further than this in the bind pose.
+    /// </summary>
+    public float FirstPersonNearPlane = 0.35f;
 
     // ── Speed ────────────────────────────────────────────────────────────────────
     /// <summary>Top ground speed while walking, in m/s. A brisk human walk (a real

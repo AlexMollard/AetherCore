@@ -91,11 +91,11 @@ public sealed class PlayerBody : EntityScript
     /// <summary>Extra yaw added on top of the computed facing (owner camera yaw or the
     /// position-delta fallback) to correct for whichever way this rig's own bind pose
     /// happens to face - Beta_Surface/Beta_Joints/FBX_Root all carry an identity
-    /// rotation in the source glTF (checked directly), so nothing here says which axis
-    /// "forward" is for this specific asset until it's actually seen on screen. Left at
-    /// 0 until proven wrong; a single 90/180/-90 correction here is the whole fix if the
-    /// body turns out to face sideways or backwards relative to the camera.</summary>
-    public float ModelForwardOffsetDegrees = 0.0f;
+    /// rotation in the source glTF (checked directly), so nothing said which axis
+    /// "forward" was for this specific asset until it was actually seen on screen.
+    /// 180 confirmed correct by live feedback: the body faced directly away from the
+    /// camera at 0.</summary>
+    public float ModelForwardOffsetDegrees = 180.0f;
 
     public const string IdleClipName = "mixamo.com";
     public const string WalkClipName = "Walk";
