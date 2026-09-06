@@ -224,25 +224,63 @@ KENNEY_LIST_MODELS = {
 
 KENNEY_IMPORT = {
     "name": "kenney_import",
-    "description": "Import one CC0 Kenney model into a project as a spawnable prop: fetches/caches the pack, bakes the model, fits a collider, appends a CREDITS.md attribution line, and registers the prop in PropSpawner.cs - all in one call. Idempotent: importing the same model twice reports it already present instead of duplicating anything. Does not need the editor running.",
+    "description": "Import one CC0 Kenney model into a project as a spawnable prop: fetches/caches the pack, bakes the model, appends a CREDITS.md attribution line, and registers the prop in PropSpawner.cs (a bare model reference - the engine builds its collider as a convex hull from the baked mesh itself at spawn time, so there is no shape to pick here) - all in one call. Idempotent: importing the same model twice reports it already present instead of duplicating anything. Does not need the editor running.",
     "inputSchema": {
         "type": "object",
         "properties": {
             "slug": {"type": "string", "description": "Pack slug from kenney_list_packs, e.g. 'factory-kit'."},
             "zipMemberPath": {"type": "string", "description": "Model path inside the pack zip, from kenney_list_models."},
             "project": {"type": "string", "description": "Folder name under projects/, e.g. 'Sandbox'."},
-            "category": {"type": "string", "description": "Prop category, e.g. 'Props'."},
+            "category": {"type": "string", "description": "Prop category / models subfolder, e.g. 'Props'."},
             "propName": {"type": "string", "description": "PascalCase file stem for the imported prop."},
             "displayName": {"type": "string", "description": "Human-readable name shown in the prop spawner."},
             "mass": {"type": "number", "description": "Rigid-body mass in kg."},
-            "colliderShape": {
-                "type": "string",
-                "enum": ["auto", "box", "sphere", "capsule", "cylinder", "none"],
-                "default": "auto",
-                "description": "Collider shape to fit. 'auto' resolves to a safe enclosing box unless you have visually judged a rounder shape correct (e.g. cylinder for an obviously round barrel).",
+            "registerInCatalog": {
+                "type": "boolean",
+                "default": True,
+                "description": "Whether to add a PropSpawner.cs catalogue entry. False for viewmodel-style imports that must never appear in the spawn menu.",
             },
         },
         "required": ["slug", "zipMemberPath", "project", "category", "propName", "displayName", "mass"],
+    },
+}
+
+
+KENNEY_IMPORT_PACK = {
+    "name": "kenney_import_pack",
+    "description": "Bulk-import every Kenney model in a pack matching a filter (empty filter = the whole pack) as spawnable props - the same per-item fetch/cache/bake/credit/catalogue operation as kenney_import, run once per matching model, so one bad model never poisons the rest of the batch (failures are reported by name and reason). Always check kenney_list_models first and pass an explicit filter: importing an entire multi-hundred-file pack unfiltered is rarely what you want. Idempotent: re-running the same filter reports everything as already-present instead of duplicating it. Does not need the editor running.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "slug": {"type": "string", "description": "Pack slug from kenney_list_packs, e.g. 'factory-kit'."},
+            "project": {"type": "string", "description": "Folder name under projects/, e.g. 'Sandbox'."},
+            "category": {"type": "string", "description": "Destination folder under assets/models/ for the whole run. Omit for the default: PascalCase(slug), e.g. 'FactoryKit'."},
+            "filter": {"type": "string", "description": "Case-insensitive substring match on each model's file name; omit or empty to import every model in the pack (use deliberately, not as a default)."},
+            "mass": {"type": "number", "default": 1.0, "description": "Rigid-body mass in kg, applied to every imported model."},
+            "registerInCatalog": {
+                "type": "boolean",
+                "default": True,
+                "description": "Whether to add a PropSpawner.cs catalogue entry for each imported model.",
+            },
+        },
+        "required": ["slug", "project"],
+    },
+}
+
+
+KENNEY_IMPORT_FONT = {
+    "name": "kenney_import_font",
+    "description": "Import a Kenney icon/text font into a project's assets/fonts/: fetches/caches the pack, extracts the .ttf (+ an optional glyph-name-to-codepoint reference text file), bakes it with the engine's glyph-outline font pipeline (the same one 'AssetPacker bake-font' and every hand-authored project font use), and appends a CREDITS.md line. A genuinely different pipeline from kenney_import - fonts are not models, get no collider, and are never registered in PropSpawner.cs (they are UI assets). Idempotent. Does not need the editor running.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "slug": {"type": "string", "description": "Pack slug from kenney_list_packs, e.g. 'input-prompts'."},
+            "ttfZipMemberPath": {"type": "string", "description": "Path to the .ttf/.otf inside the pack zip."},
+            "charMapZipMemberPath": {"type": "string", "description": "Path to a glyph-name -> codepoint reference text file inside the pack zip, if the pack ships one. Omit to skip."},
+            "project": {"type": "string", "description": "Folder name under projects/, e.g. 'Sandbox'."},
+            "fontName": {"type": "string", "description": "Output stem: assets/fonts/<fontName>.ttf/.fontcurves, and the exact string a script passes to Ui.SetFont."},
+        },
+        "required": ["slug", "ttfZipMemberPath", "project", "fontName"],
     },
 }
 
@@ -294,7 +332,7 @@ def _engine_tools() -> list:
 
 
 def _list_tools() -> list:
-    return [RUN_GAUNTLET, KENNEY_LIST_PACKS, KENNEY_LIST_MODELS, KENNEY_IMPORT] + _engine_tools()
+    return [RUN_GAUNTLET, KENNEY_LIST_PACKS, KENNEY_LIST_MODELS, KENNEY_IMPORT, KENNEY_IMPORT_PACK, KENNEY_IMPORT_FONT] + _engine_tools()
 
 
 def _call_tool(name: str, arguments: dict) -> dict:
@@ -306,10 +344,33 @@ def _call_tool(name: str, arguments: dict) -> dict:
         return _kenney(["list-models", str(KENNEY_MANIFEST), arguments.get("slug", ""), str(KENNEY_CACHE_DIR)])
     if name == "kenney_import":
         project_root = REPO / "projects" / arguments.get("project", "")
-        return _kenney([
+        args = [
             "import", str(KENNEY_MANIFEST), arguments.get("slug", ""), arguments.get("zipMemberPath", ""),
             str(project_root), arguments.get("category", ""), arguments.get("propName", ""),
-            arguments.get("displayName", ""), str(arguments.get("mass", 0)), arguments.get("colliderShape", "auto"),
+            arguments.get("displayName", ""), str(arguments.get("mass", 0)),
+        ]
+        if not arguments.get("registerInCatalog", True):
+            args.append("--no-catalog")
+        args.append(str(KENNEY_CACHE_DIR))
+        return _kenney(args)
+    if name == "kenney_import_pack":
+        project_root = REPO / "projects" / arguments.get("project", "")
+        args = ["import-pack", str(KENNEY_MANIFEST), arguments.get("slug", ""), str(project_root)]
+        if arguments.get("category"):
+            args.append(f"--category={arguments['category']}")
+        if arguments.get("filter"):
+            args.append(f"--filter={arguments['filter']}")
+        if arguments.get("mass") is not None:
+            args.append(f"--mass={arguments['mass']}")
+        if not arguments.get("registerInCatalog", True):
+            args.append("--no-catalog")
+        args.append(str(KENNEY_CACHE_DIR))
+        return _kenney(args)
+    if name == "kenney_import_font":
+        project_root = REPO / "projects" / arguments.get("project", "")
+        return _kenney([
+            "import-font", str(KENNEY_MANIFEST), arguments.get("slug", ""), arguments.get("ttfZipMemberPath", ""),
+            arguments.get("charMapZipMemberPath") or "-", str(project_root), arguments.get("fontName", ""),
             str(KENNEY_CACHE_DIR),
         ])
     for tool in _engine_tools():

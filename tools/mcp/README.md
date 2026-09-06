@@ -38,7 +38,9 @@ aether-ctl describe        # every method, with parameters and descriptions
 | `run_gauntlet` | no | Build Editor/GameRuntime/EngineTests, run the unit suite; `mode:"full"` also runs the GPU validation smokes. Returns `gauntlet-report.json`. |
 | `kenney_list_packs` | no | List the Kenney CC0 asset packs available for import, from the checked-in `tools/assetpack/kenney_packs.toml` manifest. |
 | `kenney_list_models` | no | List the `.glb`/`.gltf` models in one Kenney pack, by `slug`. First call for a pack downloads/caches its zip (a few seconds); later calls for the same pack/version are instant. |
-| `kenney_import` | no | Import one CC0 Kenney model into a project as a spawnable prop: fetch/cache the pack, bake the model, fit a collider, append a `CREDITS.md` line, and register it in `PropSpawner.cs` - one call, idempotent. |
+| `kenney_import` | no | Import one CC0 Kenney model into a project as a spawnable prop: fetch/cache the pack, bake the model, append a `CREDITS.md` line, and register a bare-model-reference entry in `PropSpawner.cs` (the engine builds its collider as a convex hull from the baked mesh itself) - one call, idempotent. |
+| `kenney_import_pack` | no | Bulk-import every model in a pack matching a filter (empty = whole pack - use deliberately) as spawnable props, one `kenney_import` per match; one bad model never poisons the batch. Idempotent. |
+| `kenney_import_font` | no | Import a Kenney icon/text font (`.ttf` + optional glyph-map reference) into a project's `assets/fonts/`, baked with the engine's glyph-outline font pipeline. Not a model: no collider, never registered in `PropSpawner.cs`. |
 | `launcher_info` / `list_projects` | Launcher | Inspect hub and recent-project state before handoff. |
 | `open_project` / `create_project` | Launcher | Open an existing project or create a `blank_2d` / `blank_3d` project, then hand the same control port to the Editor. |
 | `engine_info` | yes | Scene name and 2D/3D kind, entity count, frame index, fps. |
