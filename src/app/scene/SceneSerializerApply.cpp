@@ -774,7 +774,7 @@ namespace aether::app::scene
 		return true;
 	}
 
-	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld, std::vector<Entity>* outCreated)
+	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld, std::vector<Entity>* outCreated, bool markTransient)
 	{
 		// Instantiating a prefab must NOT redefine the scene's domain. A prefab is
 		// serialised as a mini-scene whose `kind` defaults to Scene3D; ApplyScene
@@ -807,6 +807,10 @@ namespace aether::app::scene
 		if (outCreated != nullptr)
 		{
 			*outCreated = std::move(created);
+		}
+		if (markTransient && root.IsValid())
+		{
+			world.Emplace<SceneTransientComponent>(root);
 		}
 
 		// Applying the prefab's components already built their 2D bodies, but that

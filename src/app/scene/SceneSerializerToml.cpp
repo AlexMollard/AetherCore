@@ -253,6 +253,10 @@ namespace aether::app::scene
 					return "capsule";
 				case PhysicsShapeType::Cylinder:
 					return "cylinder";
+				case PhysicsShapeType::ConvexHull:
+					return "convex_hull";
+				case PhysicsShapeType::Mesh:
+					return "mesh";
 				case PhysicsShapeType::Box:
 				default:
 					return "box";
@@ -272,6 +276,14 @@ namespace aether::app::scene
 			if (s == "cylinder")
 			{
 				return PhysicsShapeType::Cylinder;
+			}
+			if (s == "convex_hull")
+			{
+				return PhysicsShapeType::ConvexHull;
+			}
+			if (s == "mesh")
+			{
+				return PhysicsShapeType::Mesh;
 			}
 			return PhysicsShapeType::Box;
 		}
@@ -699,7 +711,7 @@ namespace aether::app::scene
 			return out;
 		}
 
-		std::map<std::string, ScriptPropertyValue> ScriptPropsFromToml(const toml::table& tbl)
+		std::map<std::string, ScriptPropertyValue> ScriptPropsFromToml(const toml::table& tbl, std::vector<std::pair<std::string, std::uint64_t>>* pendingNodeRefs = nullptr)
 		{
 			std::map<std::string, ScriptPropertyValue> out;
 			for (const auto& [key, node]: tbl)
@@ -722,16 +734,41 @@ namespace aether::app::scene
 					pv.type = tag == "enum" ? ScriptPropertyValue::Type::Enum : ScriptPropertyValue::Type::Int;
 					pv.i64 = value.value_or(std::int64_t{0});
 				}
-				else if (tag == "entity")
+				else if (tag == "entity" || tag == "component")
 				{
-					pv.type = ScriptPropertyValue::Type::Entity;
+					pv.type = tag == "entity" ? ScriptPropertyValue::Type::Entity : ScriptPropertyValue::Type::Component;
 					pv.i64 = value.value_or(std::int64_t{0});
-				}
-				else if (tag == "component")
-				{
-					pv.type = ScriptPropertyValue::Type::Component;
-					pv.i64 = value.value_or(std::int64_t{0});
-					pv.str = (*entry)["c"].value_or(std::string{});
+					if (tag == "component")
+					{
+						pv.str = (*entry)["c"].value_or(std::string{});
+					}
+					// `v` above is a positional index into the scene's entity array - the whole
+					// bug this pairing fixes, since it goes stale the moment an out-of-band edit
+					// inserts/removes/reorders entities. `v_node` is the referenced entity's
+					// stable `node` id, written alongside `v` since the fix landed (see
+					// AttachScriptPropertyNodeRefs); collect it here and let the caller re-derive
+					// the correct index once every entity's own node id is known (that full list
+					// isn't available mid-parse of a single entity - see BuildSceneFromToml).
+					const auto nodeRef = (*entry)["v_node"].value<std::int64_t>();
+					const bool hasNodeRef = nodeRef.has_value() && *nodeRef != 0;
+					if (pv.i64 == 0 && !hasNodeRef)
+					{
+						// Legacy ambiguity: a file saved before this fix used v==0 for BOTH "no
+						// reference assigned" and a genuine reference that happened to resolve to
+						// array index 0 - the two are indistinguishable in that format. Treat it
+						// as unset: an interactable with an unset input is visibly, inertly
+						// broken, which is the correct tie-break over silently binding to
+						// whatever is first in the scene (ScriptPropsFromSceneRefs already treats
+						// any negative i64 as unresolved). A fresh capture never reaches this
+						// branch - ScriptPropsToSceneRefs now encodes "unset" as -1, not 0 - so
+						// this only fires for pre-fix files, and one resave migrates them for
+						// good.
+						pv.i64 = -1;
+					}
+					else if (pendingNodeRefs != nullptr && hasNodeRef)
+					{
+						pendingNodeRefs->push_back({std::string(key.str()), static_cast<std::uint64_t>(*nodeRef)});
+					}
 				}
 				else if (tag == "bool")
 				{
@@ -758,6 +795,65 @@ namespace aether::app::scene
 				out.emplace(std::string(key.str()), std::move(pv));
 			}
 			return out;
+		}
+
+		// Also stamp each Entity/Component-typed script property with the referenced entity's
+		// stable node id (mirrors parent/parent_node below): the positional `v` index captured
+		// above stays for legacy readers, but a fresh load prefers `v_node`, so hand-editing
+		// entity order/membership in the .toml can no longer silently rewire a script's
+		// Entity/Component-typed field to a different entity. `entities` is the just-captured,
+		// already node-id-stamped scene entity list, so `entities[v].nodeId` is always current.
+		void AttachScriptPropertyNodeRefs(toml::table& entityTable, const std::vector<EntityRecord>& entities)
+		{
+			auto* scripts = entityTable["scripts"].as_array();
+			if (scripts == nullptr)
+			{
+				return;
+			}
+			for (toml::node& scriptNode: *scripts)
+			{
+				auto* scriptTable = scriptNode.as_table();
+				if (scriptTable == nullptr)
+				{
+					continue;
+				}
+				auto* props = (*scriptTable)["properties"].as_table();
+				if (props == nullptr)
+				{
+					continue;
+				}
+				for (auto&& [_, propNode]: *props)
+				{
+					auto* propTable = propNode.as_table();
+					if (propTable == nullptr)
+					{
+						continue;
+					}
+					const std::string tag = (*propTable)["t"].value_or(std::string{});
+					if (tag != "entity" && tag != "component")
+					{
+						continue;
+					}
+					const auto index = (*propTable)["v"].value<std::int64_t>();
+					// Node ids are guaranteed non-zero (GenerateSceneNodeId never returns 0), so
+					// stamping one for index 0 is exactly as truthful as for any other index -
+					// this is what lets a real reference to the scene's first entity survive an
+					// entity inserted ahead of it, the same as every other index. This is only
+					// reachable for a genuine reference now: ScriptPropsToSceneRefs encodes
+					// "unset" as -1, not 0 (see SceneSerializerDetail.hpp), so index 0 here can
+					// no longer mean "no reference assigned" for anything captured after that
+					// fix landed.
+					if (!index.has_value() || *index < 0 || static_cast<std::size_t>(*index) >= entities.size())
+					{
+						continue;
+					}
+					const std::uint64_t nodeId = entities[static_cast<std::size_t>(*index)].nodeId;
+					if (nodeId != 0)
+					{
+						propTable->insert("v_node", static_cast<std::int64_t>(nodeId));
+					}
+				}
+			}
 		}
 
 	} // namespace
@@ -969,6 +1065,13 @@ namespace aether::app::scene
 				}
 				p.insert("lock_position", Vec3ToToml(glm::vec3(rec.physics->lockPosition.x ? 1.0f : 0.0f, rec.physics->lockPosition.y ? 1.0f : 0.0f, rec.physics->lockPosition.z ? 1.0f : 0.0f)));
 				p.insert("lock_rotation", Vec3ToToml(glm::vec3(rec.physics->lockRotation.x ? 1.0f : 0.0f, rec.physics->lockRotation.y ? 1.0f : 0.0f, rec.physics->lockRotation.z ? 1.0f : 0.0f)));
+				// Only for convex_hull/mesh shapes - an unconditional write would rewrite
+				// every shipped scene's physics table with an empty key the first time it
+				// was re-saved, which is what the round-trip test guards against.
+				if (!rec.physics->meshSource.empty())
+				{
+					p.insert("mesh_source", rec.physics->meshSource);
+				}
 				t.insert("physics", std::move(p));
 			}
 			if (rec.joint)
@@ -1064,6 +1167,7 @@ namespace aether::app::scene
 		for (const EntityRecord& rec: scene.entities)
 		{
 			toml::table t = buildEntityTable(rec);
+			AttachScriptPropertyNodeRefs(t, scene.entities);
 			// Also reference the parent by its stable node id, so hand-editing entity order or
 			// membership in the .toml can't corrupt parenting; the positional `parent` stays as a
 			// legacy fallback for scenes saved before node ids existed.
@@ -1268,11 +1372,24 @@ namespace aether::app::scene
 			}
 		}
 
+		// Deferred resolution info for one Entity/Component-typed script property whose TOML
+		// entry carried a `v_node` (stable node id) alongside the legacy positional `v` index.
+		// Collected while parsing each entity in isolation - node ids of entities defined later
+		// in the file aren't known yet - and resolved once every entity's own node id is known,
+		// the same two-pass shape already used for `parent_node` -> `parentIndex` below.
+		struct PendingScriptNodeRef
+		{
+			std::size_t entityIndex;
+			std::size_t scriptIndex;
+			std::string propertyName;
+			std::uint64_t nodeId;
+		};
+
 		const auto* entities = root["entities"].as_array();
 
 		// The entity-table parser, reused for scene entities and for the entity
 		// records embedded in prefab-instance overrides.
-		const auto parseEntityTable = [](const toml::table& tbl) -> EntityRecord
+		const auto parseEntityTable = [](const toml::table& tbl, std::size_t entityIndex, std::vector<PendingScriptNodeRef>* pendingScriptNodeRefs) -> EntityRecord
 		{
 			const toml::node_view<const toml::node> tv{tbl};
 
@@ -1419,7 +1536,8 @@ namespace aether::app::scene
 				        .allowSleeping = pv["allow_sleeping"].value_or(true),
 				        .startActive = pv["start_active"].value_or(true),
 				        .lockPosition = glm::bvec3(lockPos.x > 0.5f, lockPos.y > 0.5f, lockPos.z > 0.5f),
-				        .lockRotation = glm::bvec3(lockRot.x > 0.5f, lockRot.y > 0.5f, lockRot.z > 0.5f)};
+				        .lockRotation = glm::bvec3(lockRot.x > 0.5f, lockRot.y > 0.5f, lockRot.z > 0.5f),
+				        .meshSource = pv["mesh_source"].value_or(std::string{})};
 			}
 			if (const auto* j = tv["joint"].as_table())
 			{
@@ -1529,7 +1647,15 @@ namespace aether::app::scene
 					script.type = *type;
 					if (const auto* props = sv["properties"].as_table())
 					{
-						script.properties = ScriptPropsFromToml(*props);
+						std::vector<std::pair<std::string, std::uint64_t>> nodeRefs;
+						script.properties = ScriptPropsFromToml(*props, pendingScriptNodeRefs != nullptr ? &nodeRefs : nullptr);
+						if (pendingScriptNodeRefs != nullptr)
+						{
+							for (auto& [propertyName, nodeId]: nodeRefs)
+							{
+								pendingScriptNodeRefs->push_back(PendingScriptNodeRef{entityIndex, rec.scripts.size(), propertyName, nodeId});
+							}
+						}
 					}
 					rec.scripts.push_back(std::move(script));
 				}
@@ -1540,12 +1666,24 @@ namespace aether::app::scene
 				legacy.type = *script;
 				if (const auto* props = tv["script_properties"].as_table())
 				{
-					legacy.properties = ScriptPropsFromToml(*props);
+					std::vector<std::pair<std::string, std::uint64_t>> nodeRefs;
+					legacy.properties = ScriptPropsFromToml(*props, pendingScriptNodeRefs != nullptr ? &nodeRefs : nullptr);
+					if (pendingScriptNodeRefs != nullptr)
+					{
+						for (auto& [propertyName, nodeId]: nodeRefs)
+						{
+							pendingScriptNodeRefs->push_back(PendingScriptNodeRef{entityIndex, rec.scripts.size(), propertyName, nodeId});
+						}
+					}
 				}
 				rec.scripts.push_back(std::move(legacy));
 			}
 			return rec;
 		};
+
+		// Entity/Component-typed script properties whose TOML carried a `v_node`; resolved
+		// below once every entity's own node id is known (see PendingScriptNodeRef).
+		std::vector<PendingScriptNodeRef> pendingScriptNodeRefs;
 
 		if (entities != nullptr)
 		{
@@ -1553,14 +1691,15 @@ namespace aether::app::scene
 			{
 				if (const auto* t = node.as_table())
 				{
-					scene.entities.push_back(parseEntityTable(*t));
+					scene.entities.push_back(parseEntityTable(*t, scene.entities.size(), &pendingScriptNodeRefs));
 				}
 			}
 		}
 
-		// Resolve stable parent-by-node references to positional parent indices. When present and
-		// resolvable, `parent_node` wins over the legacy `parent` index - so a hand-edited .toml (an
-		// entity block deleted or reordered) keeps correct parenting even though the indices shifted.
+		// Resolve stable node-id references to positional indices. When present and resolvable,
+		// a `_node`/`v_node` stable id wins over its legacy positional counterpart - so a
+		// hand-edited .toml (an entity block inserted, deleted, or reordered) keeps resolving to
+		// the same entity even though the positional indices shifted underneath it.
 		{
 			std::unordered_map<std::uint64_t, int> nodeToIndex;
 			for (std::size_t i = 0; i < scene.entities.size(); ++i)
@@ -1570,6 +1709,7 @@ namespace aether::app::scene
 					nodeToIndex.emplace(scene.entities[i].nodeId, static_cast<int>(i));
 				}
 			}
+			// `parent_node` wins over the legacy `parent` index.
 			for (EntityRecord& rec: scene.entities)
 			{
 				if (rec.parentNodeId != 0)
@@ -1578,6 +1718,47 @@ namespace aether::app::scene
 					{
 						rec.parentIndex = it->second;
 					}
+				}
+			}
+			// `v_node` wins over the legacy `v` index for Entity/Component-typed script
+			// properties. An unresolvable node id means the entity it named is gone - so the
+			// stale positional index no longer denotes what it did, and keeping it would be
+			// exactly the silent rebinding this pairing exists to prevent (falling back to
+			// "whatever now occupies that slot" is not meaningfully different from having no
+			// node id at all). Clear the reference instead: an interactable with an unset
+			// input is inertly, visibly broken; one silently rewired to a different entity is
+			// not. WARN either way, naming the entity/script/property/node id.
+			for (const PendingScriptNodeRef& ref: pendingScriptNodeRefs)
+			{
+				if (ref.entityIndex >= scene.entities.size())
+				{
+					continue;
+				}
+				EntityRecord& entity = scene.entities[ref.entityIndex];
+				if (ref.scriptIndex >= entity.scripts.size())
+				{
+					continue;
+				}
+				ScriptRecord& script = entity.scripts[ref.scriptIndex];
+				const auto propIt = script.properties.find(ref.propertyName);
+				if (propIt == script.properties.end())
+				{
+					continue;
+				}
+				if (const auto it = nodeToIndex.find(ref.nodeId); it != nodeToIndex.end())
+				{
+					propIt->second.i64 = it->second;
+				}
+				else
+				{
+					AE_WARN(LogCategory::App,
+					        "Scene load: entity '{}' script '{}' property '{}' referenced node {} which no longer exists in the scene; clearing the reference (was positional index {})",
+					        entity.name,
+					        script.type,
+					        ref.propertyName,
+					        ref.nodeId,
+					        propIt->second.i64);
+					propIt->second.i64 = 0;
 				}
 			}
 		}
@@ -1631,7 +1812,7 @@ namespace aether::app::scene
 					{
 						if (const auto* at = an.as_table())
 						{
-							pi.addedEntities.push_back(parseEntityTable(*at));
+							pi.addedEntities.push_back(parseEntityTable(*at, 0, nullptr));
 						}
 					}
 				}

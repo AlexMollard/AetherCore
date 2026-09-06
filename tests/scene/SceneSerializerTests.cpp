@@ -906,6 +906,54 @@ TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
     CHECK(fresh.TryGet<SpinComponent>(h->children[0]) != nullptr);
 }
 
+TEST_CASE("InstantiatePrefab defaults to persistent, matching the editor's Duplicate use") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    SceneDescription prefab;
+    EntityRecord record;
+    record.name = "Duplicated";
+    record.hasTransform = true;
+    prefab.entities.push_back(record);
+
+    const Entity root = InstantiatePrefab(prefab, world, ApplySceneDeps{}, glm::mat4(1.0f));
+    REQUIRE(root.IsValid());
+    CHECK_FALSE(world.Has<SceneTransientComponent>(root));
+
+    const auto captured = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+    REQUIRE(captured.has_value());
+    CHECK(IndexOf(*captured, "Duplicated") >= 0);
+}
+
+TEST_CASE("InstantiatePrefab(markTransient=true) excludes a runtime spawn from capture") {
+    // The mechanism behind Net.Spawn and Scene.Instantiate: a save mid-Play must never
+    // bake a runtime-spawned entity permanently into the scene file (the reported
+    // corruption - a duplicate Player + FirstPersonPlayer pair baked into
+    // Sandbox.scene.toml by exactly this gap).
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    SceneDescription prefab;
+    EntityRecord record;
+    record.name = "Spawned Player";
+    record.hasTransform = true;
+    prefab.entities.push_back(record);
+
+    const Entity root = InstantiatePrefab(prefab, world, ApplySceneDeps{}, glm::mat4(1.0f), nullptr, /*markTransient=*/true);
+    REQUIRE(root.IsValid());
+    CHECK(world.Has<SceneTransientComponent>(root));
+
+    const auto captured = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+    REQUIRE(captured.has_value());
+    CHECK(IndexOf(*captured, "Spawned Player") == -1);
+}
+
 TEST_CASE("Float serialization is clean (shortest float32, no -0.0) and lossless") {
     SceneDescription scene;
     scene.version = kSceneFormatVersion;
@@ -1970,6 +2018,119 @@ TEST_CASE("Script properties survive capture when ScriptComponentSystem exists b
     CHECK(rec.scripts[0].properties.at("Target").type == ScriptPropertyValue::Type::Entity);
 }
 
+TEST_CASE("An Entity-typed script property survives an entity hand-inserted ahead of its referenced entities") {
+    // Reproduces the reported defect: WireLink wires Source/Target to two other scene
+    // entities. Both were serialized as ARRAY-POSITION indices, so hand-inserting an
+    // unrelated entity ahead of them in the .toml silently rewired the wire to whatever
+    // now occupies those slots afterwards - no error, no warning. v_node (this fix) pins
+    // the reference to the target's stable node id instead, so it survives the edit.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    // Wire is created first (scene index 0) so Button/Lamp land at indices 1/2, not 0 -
+    // index 0 is a pre-existing, separate ambiguity in this format (shared with "no
+    // reference set") that this fix does not touch.
+    Entity wire = world.Create();
+    world.Emplace<NameComponent>(wire, NameComponent{.name = "Wire"});
+    world.Emplace<TransformComponent>(wire, TransformComponent{});
+
+    Entity button = world.Create();
+    world.Emplace<NameComponent>(button, NameComponent{.name = "Button"});
+    world.Emplace<TransformComponent>(button, TransformComponent{});
+
+    Entity lamp = world.Create();
+    world.Emplace<NameComponent>(lamp, NameComponent{.name = "Lamp"});
+    world.Emplace<TransformComponent>(lamp, TransformComponent{});
+
+    ScriptPropertyValue source;
+    source.type = ScriptPropertyValue::Type::Entity;
+    source.i64 = button.id;
+    ScriptPropertyValue target;
+    target.type = ScriptPropertyValue::Type::Entity;
+    target.i64 = lamp.id;
+    ScriptEntry entry{.path = "WireLink", .attached = false};
+    entry.properties["Source"] = source;
+    entry.properties["Target"] = target;
+    world.Emplace<ScriptComponent>(wire, ScriptComponent{.scripts = {entry}});
+
+    const std::string saved = WriteToml(CaptureScene(world, mreg, treg));
+    REQUIRE(saved.find("v_node") != std::string::npos);
+
+    // Hand-edit: insert a brand-new, unrelated entity block at the very top of the file -
+    // exactly the reported repro - leaving the WireLink block's own text untouched.
+    const std::size_t insertAt = saved.find("[[entities]]");
+    REQUIRE(insertAt != std::string::npos);
+    const std::string edited = saved.substr(0, insertAt) + "[[entities]]\nname = 'Inserted'\n\n" + saved.substr(insertAt);
+
+    const auto parsed = ParseToml(edited);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 4);
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    REQUIRE(created.size() == 4);
+    const Entity appliedWire = AppliedOf(*parsed, created, "Wire");
+    REQUIRE(appliedWire.IsValid());
+    const auto* sc = fresh.TryGet<ScriptComponent>(appliedWire);
+    REQUIRE(sc != nullptr);
+    REQUIRE(sc->scripts.size() == 1);
+    const auto& props = sc->scripts[0].properties;
+    REQUIRE(props.contains("Source"));
+    REQUIRE(props.contains("Target"));
+    CHECK(Entity{static_cast<std::uint32_t>(props.at("Source").i64)} == AppliedOf(*parsed, created, "Button"));
+    CHECK(Entity{static_cast<std::uint32_t>(props.at("Target").i64)} == AppliedOf(*parsed, created, "Lamp"));
+}
+
+TEST_CASE("An Entity-typed script property referencing the entity at scene index 0 survives an entity hand-inserted ahead of it") {
+    // v_node is written for index 0 too (node ids are guaranteed non-zero, so it is exactly
+    // as truthful there as for any other index) - this is the case that would otherwise stay
+    // silently broken: the first entity in the scene is an ordinary thing to reference.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    // Button is created first, so it lands at scene index 0.
+    Entity button = world.Create();
+    world.Emplace<NameComponent>(button, NameComponent{.name = "Button"});
+    world.Emplace<TransformComponent>(button, TransformComponent{});
+
+    Entity wire = world.Create();
+    world.Emplace<NameComponent>(wire, NameComponent{.name = "Wire"});
+    world.Emplace<TransformComponent>(wire, TransformComponent{});
+    ScriptPropertyValue source;
+    source.type = ScriptPropertyValue::Type::Entity;
+    source.i64 = button.id;
+    ScriptEntry entry{.path = "WireLink", .attached = false};
+    entry.properties["Source"] = source;
+    world.Emplace<ScriptComponent>(wire, ScriptComponent{.scripts = {entry}});
+
+    const std::string saved = WriteToml(CaptureScene(world, mreg, treg));
+    REQUIRE(saved.find("v_node") != std::string::npos);
+
+    const std::size_t insertAt = saved.find("[[entities]]");
+    REQUIRE(insertAt != std::string::npos);
+    const std::string edited = saved.substr(0, insertAt) + "[[entities]]\nname = 'Inserted'\n\n" + saved.substr(insertAt);
+
+    const auto parsed = ParseToml(edited);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 3);
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    REQUIRE(created.size() == 3);
+    const Entity appliedWire = AppliedOf(*parsed, created, "Wire");
+    REQUIRE(appliedWire.IsValid());
+    const auto* sc = fresh.TryGet<ScriptComponent>(appliedWire);
+    REQUIRE(sc != nullptr);
+    REQUIRE(sc->scripts[0].properties.contains("Source"));
+    CHECK(Entity{static_cast<std::uint32_t>(sc->scripts[0].properties.at("Source").i64)} == AppliedOf(*parsed, created, "Button"));
+}
+
 TEST_CASE("A script's Self entry is never persisted, capture or resave, even after an entity insertion") {
     // Self used to be reflected and persisted exactly like any other Entity-typed
     // property - equally vulnerable to the array-position remap, since it read as
@@ -2015,6 +2176,151 @@ TEST_CASE("A script's Self entry is never persisted, capture or resave, even aft
     CHECK_FALSE(sc->scripts[0].properties.contains("Self"));
 }
 
+TEST_CASE("A Component-typed script property survives an entity hand-inserted ahead of its referenced entity") {
+    // Component-typed properties (public IComponentRef fields such as RigidBodyRef) share
+    // the identical positional-index remap as Entity-typed ones; cover it explicitly since
+    // no shipped scene exercises it yet.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    Entity holder = world.Create();
+    world.Emplace<NameComponent>(holder, NameComponent{.name = "Holder"});
+    world.Emplace<TransformComponent>(holder, TransformComponent{});
+
+    Entity target = world.Create();
+    world.Emplace<NameComponent>(target, NameComponent{.name = "Target"});
+    world.Emplace<TransformComponent>(target, TransformComponent{});
+
+    ScriptPropertyValue ref;
+    ref.type = ScriptPropertyValue::Type::Component;
+    ref.i64 = target.id;
+    ref.str = "Rigid Body";
+    ScriptEntry entry{.path = "SomeScript", .attached = false};
+    entry.properties["Body"] = ref;
+    world.Emplace<ScriptComponent>(holder, ScriptComponent{.scripts = {entry}});
+
+    const std::string saved = WriteToml(CaptureScene(world, mreg, treg));
+    REQUIRE(saved.find("v_node") != std::string::npos);
+    const std::size_t insertAt = saved.find("[[entities]]");
+    REQUIRE(insertAt != std::string::npos);
+    const std::string edited = saved.substr(0, insertAt) + "[[entities]]\nname = 'Inserted'\n\n" + saved.substr(insertAt);
+
+    const auto parsed = ParseToml(edited);
+    REQUIRE(parsed.has_value());
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity appliedHolder = AppliedOf(*parsed, created, "Holder");
+    REQUIRE(appliedHolder.IsValid());
+    const auto* sc = fresh.TryGet<ScriptComponent>(appliedHolder);
+    REQUIRE(sc != nullptr);
+    REQUIRE(sc->scripts[0].properties.contains("Body"));
+    const ScriptPropertyValue& resolved = sc->scripts[0].properties.at("Body");
+    CHECK(resolved.type == ScriptPropertyValue::Type::Component);
+    CHECK(resolved.str == "Rigid Body");
+    CHECK(Entity{static_cast<std::uint32_t>(resolved.i64)} == AppliedOf(*parsed, created, "Target"));
+}
+
+TEST_CASE("An old-format scene with no v_node still resolves a non-zero-index Entity-typed script property by position") {
+    // Every real scene on disk today predates this fix and carries only the positional
+    // `v` index. A non-zero index is unambiguous (it can only mean "resolved to this
+    // entity"), so loading one must behave exactly as before: no v_node, no crash, just
+    // the legacy positional resolution.
+    const std::string authored =
+            "[scene]\nkind = '3d'\nname = 'T'\nversion = 16\n\n"
+            "[[entities]]\nname = 'Button'\n\n"
+            "[[entities]]\nname = 'Lamp'\n\n"
+            "[[entities]]\nname = 'Wire'\n\n"
+            "    [[entities.scripts]]\n    type = 'WireLink'\n\n"
+            "        [entities.scripts.properties.Target]\n        t = 'entity'\n        v = 1\n";
+
+    const auto parsed = ParseToml(authored);
+    REQUIRE(parsed.has_value());
+    const EntityRecord& wire = RecordOf(*parsed, "Wire");
+    REQUIRE(wire.scripts.size() == 1);
+    REQUIRE(wire.scripts[0].properties.at("Target").i64 == 1);
+    CHECK(parsed->entities[0].name == "Button");
+    CHECK(parsed->entities[1].name == "Lamp");
+}
+
+TEST_CASE("An old-format scene's v==0 with no v_node is treated as unset, not resolved to array index 0") {
+    // Deliberate reinterpretation: a file saved before this fix used v==0 for BOTH "no
+    // reference assigned" and a genuine reference that resolves to array index 0 - the two
+    // are indistinguishable in that format, so there is no interpretation that preserves
+    // both. Treating it as unset (an inert, visibly-absent reference) is the correct
+    // tie-break over silently binding to whatever is first in the scene, which is what
+    // ScriptPropsFromSceneRefs used to do unconditionally. One resave after this fix
+    // removes the ambiguity for good (see ScriptPropsToSceneRefs, which now encodes "unset"
+    // as -1, never 0).
+    const std::string authored =
+            "[scene]\nkind = '3d'\nname = 'T'\nversion = 16\n\n"
+            "[[entities]]\nname = 'Button'\n\n"
+            "[[entities]]\nname = 'Wire'\n\n"
+            "    [[entities.scripts]]\n    type = 'WireLink'\n\n"
+            "        [entities.scripts.properties.Source]\n        t = 'entity'\n        v = 0\n";
+
+    const auto parsed = ParseToml(authored);
+    REQUIRE(parsed.has_value());
+    const EntityRecord& wire = RecordOf(*parsed, "Wire");
+    REQUIRE(wire.scripts.size() == 1);
+    CHECK(wire.scripts[0].properties.at("Source").i64 < 0);
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity appliedWire = AppliedOf(*parsed, created, "Wire");
+    REQUIRE(appliedWire.IsValid());
+    const auto* sc = fresh.TryGet<ScriptComponent>(appliedWire);
+    REQUIRE(sc != nullptr);
+    // Unset (Entity::Invalid), NOT silently bound to 'Button' at array index 0.
+    CHECK(sc->scripts[0].properties.at("Source").i64 == 0);
+}
+
+TEST_CASE("An unset Entity-typed script property stays unset across a full save and load") {
+    // The general case behind the two tests above: a script that never assigns its Entity-
+    // typed field must come back unset after a real capture/write/parse/apply round trip,
+    // not silently bound to the scene's first entity (ScriptPropsFromSceneRefs used to
+    // resolve any i64 in [0, created.size()) unconditionally, and 0 is what an unset
+    // property captured to before this fix).
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    // Button is first (scene index 0) precisely so an accidental resolve-to-index-0 bug
+    // would bind Source to a REAL entity instead of failing loudly.
+    Entity button = world.Create();
+    world.Emplace<NameComponent>(button, NameComponent{.name = "Button"});
+    world.Emplace<TransformComponent>(button, TransformComponent{});
+
+    Entity wire = world.Create();
+    world.Emplace<NameComponent>(wire, NameComponent{.name = "Wire"});
+    world.Emplace<TransformComponent>(wire, TransformComponent{});
+    ScriptPropertyValue unset; // default-constructed: type=Entity, i64=0 (Entity::Invalid)
+    unset.type = ScriptPropertyValue::Type::Entity;
+    ScriptEntry entry{.path = "WireLink", .attached = false};
+    entry.properties["Source"] = unset;
+    world.Emplace<ScriptComponent>(wire, ScriptComponent{.scripts = {entry}});
+
+    const std::string saved = WriteToml(CaptureScene(world, mreg, treg));
+    CHECK(saved.find("v_node") == std::string::npos); // nothing to stamp - there is no reference
+
+    const auto parsed = ParseToml(saved);
+    REQUIRE(parsed.has_value());
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity appliedWire = AppliedOf(*parsed, created, "Wire");
+    REQUIRE(appliedWire.IsValid());
+    const auto* sc = fresh.TryGet<ScriptComponent>(appliedWire);
+    REQUIRE(sc != nullptr);
+    REQUIRE(sc->scripts[0].properties.contains("Source"));
+    CHECK_FALSE(Entity{static_cast<std::uint32_t>(sc->scripts[0].properties.at("Source").i64)}.IsValid());
+}
+
 TEST_CASE("A pre-fix scene's wrong Self entry is dropped on load and never reaches the live property cache") {
     // Self is not a persisted, author-editable property (see EntityScript.Self's
     // [HideInInspector] in managed code): it has exactly one correct value, the entity
@@ -2057,3 +2363,82 @@ TEST_CASE("A pre-fix scene's wrong Self entry is dropped on load and never reach
 }
 
 
+TEST_CASE("A dangling v_node clears the reference instead of keeping a stale, possibly-wrong index") {
+    // The referenced node id no longer exists in the file (the entity it named is gone).
+    // Keeping the stale positional index would resolve to whatever now occupies that slot -
+    // exactly the silent rebinding this pairing exists to prevent - so the reference is
+    // cleared instead. SceneSerializerToml also logs a warning naming the entity/script/
+    // property/node id: an inertly unset reference is visibly broken; a silently rewired
+    // one is not.
+    const std::string authored =
+            "[scene]\nkind = '3d'\nname = 'T'\nversion = 16\n\n"
+            "[[entities]]\nname = 'Holder'\n\n"
+            "    [[entities.scripts]]\n    type = 'WireLink'\n\n"
+            "        [entities.scripts.properties.Ref]\n        t = 'entity'\n        v = 1\n        v_node = 999\n\n"
+            "[[entities]]\nname = 'Other'\nnode = 5\n";
+
+    const auto parsed = ParseToml(authored);
+    REQUIRE(parsed.has_value());
+    const EntityRecord& holder = RecordOf(*parsed, "Holder");
+    REQUIRE(holder.scripts.size() == 1);
+    // Cleared (0), not the stale positional value (1, which would silently point at 'Other').
+    CHECK(holder.scripts[0].properties.at("Ref").i64 == 0);
+}
+
+TEST_CASE("A real Whisper scene's script Entity refs survive a resave-then-insert edit") {
+    // projects/Whisper/scenes/Title.scene.toml is a real, shipping gameplay scene with 8
+    // genuine cross-entity script references (ConnectScreen wiring its own UI widgets),
+    // predating this fix (no v_node). A single resave - what opening the project in the
+    // fixed editor and hitting Save does - must add v_node without changing what anything
+    // resolves to, and the result must then survive the same hand-insertion as the
+    // synthetic tests above.
+    const std::filesystem::path repo = std::filesystem::path(AETHER_TESTS_SOURCE_DIR).parent_path();
+    const auto originalText = io::file_util::ReadText(repo / "projects/Whisper/scenes/Title.scene.toml");
+    REQUIRE(originalText.has_value());
+    REQUIRE(originalText->find("v_node") == std::string::npos);
+
+    const auto originalParsed = ParseToml(*originalText);
+    REQUIRE(originalParsed.has_value());
+
+    const std::string resaved = WriteToml(*originalParsed);
+    CHECK(resaved.find("v_node") != std::string::npos);
+
+    const auto beforeInsert = ParseToml(resaved);
+    REQUIRE(beforeInsert.has_value());
+
+    // (entityName/scriptType/propertyName) -> resolved target entity name, keyed by NAME
+    // so the snapshot survives the index shift the insertion below introduces.
+    const auto snapshotEntityRefs = [](const SceneDescription& scene)
+    {
+        std::map<std::string, std::string> refs;
+        for (const EntityRecord& entity: scene.entities)
+        {
+            for (const ScriptRecord& script: entity.scripts)
+            {
+                for (const auto& [propName, value]: script.properties)
+                {
+                    if (value.type != ScriptPropertyValue::Type::Entity)
+                    {
+                        continue;
+                    }
+                    REQUIRE(value.i64 >= 0);
+                    REQUIRE(static_cast<std::size_t>(value.i64) < scene.entities.size());
+                    refs[entity.name + "/" + script.type + "/" + propName] = scene.entities[static_cast<std::size_t>(value.i64)].name;
+                }
+            }
+        }
+        return refs;
+    };
+
+    const auto expected = snapshotEntityRefs(*beforeInsert);
+    REQUIRE(expected.size() == 8);
+
+    const std::size_t insertAt = resaved.find("[[entities]]");
+    REQUIRE(insertAt != std::string::npos);
+    const std::string edited = resaved.substr(0, insertAt) + "[[entities]]\nname = 'Inserted'\n\n" + resaved.substr(insertAt);
+
+    const auto afterInsert = ParseToml(edited);
+    REQUIRE(afterInsert.has_value());
+    REQUIRE(afterInsert->entities.size() == beforeInsert->entities.size() + 1);
+    CHECK(snapshotEntityRefs(*afterInsert) == expected);
+}

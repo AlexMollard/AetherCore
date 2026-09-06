@@ -44,20 +44,32 @@ namespace aether::app::scene::detail
 		return std::nullopt;
 	}
 
-	// Entity/Component script properties hold live entity ids in memory but
-	// scene-local indices on disk; these convert between the two.
+	// Entity/Component script properties hold live entity ids in memory but scene-local
+	// indices on disk; these convert between the two. -1 is the "no reference" sentinel
+	// (not 0): a live Entity's own id 0 already means "unassigned" (Entity::IsValid() is
+	// id != 0), but 0 is ALSO a valid array index - the first captured entity - so reusing
+	// it as "unset" made a real reference to that entity indistinguishable from having no
+	// reference at all. ScriptPropsFromSceneRefs below already treats any negative i64 as
+	// unresolved, so -1 round-trips through TOML and apply with no further changes there.
 	inline std::map<std::string, ScriptPropertyValue> ScriptPropsToSceneRefs(const std::map<std::string, ScriptPropertyValue>& props, const std::unordered_map<std::uint32_t, int>& indexOf)
 	{
 		std::map<std::string, ScriptPropertyValue> out = props;
 		for (auto& [_, value]: out)
 		{
 			const bool isRef = value.type == ScriptPropertyValue::Type::Entity || value.type == ScriptPropertyValue::Type::Component;
-			if (!isRef || value.i64 == 0)
+			if (!isRef)
 			{
 				continue;
 			}
+			if (value.i64 == 0)
+			{
+				value.i64 = -1;
+				continue;
+			}
 			const auto it = indexOf.find(static_cast<std::uint32_t>(value.i64));
-			value.i64 = it != indexOf.end() ? it->second : 0;
+			// Not found (the live entity isn't part of this capture) is exactly as
+			// unresolvable as no reference at all - same sentinel, same reasoning.
+			value.i64 = it != indexOf.end() ? it->second : -1;
 		}
 		return out;
 	}
