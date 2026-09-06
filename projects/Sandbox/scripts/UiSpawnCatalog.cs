@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using AetherCore;
@@ -5,83 +6,131 @@ using AetherCore;
 namespace AetherGame;
 
 /// <summary>
-/// The spawn menu's actual panel content: category tabs across the top and a fixed-size,
-/// paged grid of tiles below - the replacement for <c>SpawnMenu</c>'s old one-row-per-prop
-/// flat list, which sized itself as <c>100 + Catalog.Length * 48</c>px and had nowhere to
-/// put overflow (<see cref="Ui"/> has no scrollable/clipping container at all). Adding a
-/// prop from here on is purely a new <see cref="PropSpawner.Catalog"/> row; this file's own
-/// construction code (tabs + a grid that never grows) does not change again.
+/// The spawn menu's actual panel content: a Garry's-Mod-style layout - a category list
+/// down the left, a search box, and a scrolling grid of large icon tiles on the right -
+/// replacing the old small fixed 4-tab / 8-tile-paged panel. That panel was hard-capped
+/// at 2 rows x 4 columns with nowhere for overflow to go and a tiny (560x420, a sliver of
+/// a 2560x1440 screen) footprint; this one scrolls its content instead of paging it, so
+/// growing the catalogue is purely a new <see cref="PropSpawner.Catalog"/> row (plus,
+/// optionally, a <see cref="KnownCategories"/> entry) - this file's own construction code
+/// does not change again.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Sibling of <c>SpawnMenu</c>, not its replacement.</b> <c>SpawnMenu</c> keeps owning
 /// the state machine it always has - <see cref="SpawnMenu.IsOpen"/>, the Q-key toggle, the
 /// authority gate - this only reads that public getter to know when to show, and calls
-/// <see cref="PropSpawner.SpawnProp"/> directly on a tile click, the exact call
-/// <c>SpawnMenu</c>'s own (now removed) button handler used to make, preserving
-/// <c>PropSpawner</c>'s "exactly one way a prop comes into the world" invariant. Requires
-/// two small coordinated changes elsewhere - see the routed diff notes: <c>SpawnMenu.cs</c>'s
-/// old panel-building internals need to be gutted (so its flat list does not render
-/// alongside this one), and <c>NetPlayerRig.cs</c> needs one more
-/// <c>camera.AddScript(nameof(UiSpawnCatalog))</c> alongside its existing three, since this
-/// has to live on the same per-connection camera entity <c>SpawnMenu</c>/<c>PropSpawner</c>
-/// already do to reach them with a bare <see cref="EntityScript.GetScript{T}"/>.
+/// <see cref="PropSpawner.SpawnProp"/> directly on a tile click, preserving
+/// <c>PropSpawner</c>'s "exactly one way a prop comes into the world" invariant.
 /// </para>
 /// <para>
-/// <b>Thumbnails are flat colour swatches, not icons.</b> Every catalogue entry already
-/// carries its authored <see cref="PropDef.Color"/> (the exact colour the prop spawns
-/// with); a swatch reuses it directly. A live-rendered physics thumbnail would have been
-/// actively misleading while the Collider-rebuild bug was open - it would have shown the
-/// wrong collision shape - so this deliberately never renders one. Real per-prop icon
-/// textures are a follow-up asset-pipeline deliverable; swapping one in later is a single
-/// <see cref="Ui.SetImageTexture"/> call per tile, left as a comment below rather than
-/// pointed at a texture path that does not exist yet.
+/// <b>Icons vs. colour swatches.</b> <see cref="PropDef.IconPath"/> (added alongside the
+/// icon-baking pass) drives each tile: set, it shows the baked icon texture; unset, it
+/// falls back to the flat <see cref="PropDef.Color"/> swatch, with the name/mass label
+/// always shown either way - an entry with no baked icon yet still reads clearly rather
+/// than showing a blank or broken tile, which is what the user's original "mostly empty
+/// grid" complaint was actually about.
 /// </para>
 /// <para>
-/// <b>Categories are a local lookup, not a new <see cref="PropDef"/> field.</b>
-/// <c>PropSpawner.Catalog</c> is being actively extended elsewhere in this project right
-/// now (see <c>PropCatalogExtension.md</c>); adding a field to the shared
-/// <see cref="PropDef"/> struct risks colliding with that concurrent edit. This keeps its
-/// own name-keyed table instead, pre-populated with both today's six primitive names and
-/// the ten real-model names that document proposes, so the grid categorises them correctly
-/// the moment they land with zero further changes here - anything not recognised falls
+/// <b>No true virtualization.</b> Every catalogue entry currently matching the active
+/// category/search is instantiated as a real tile, capped at <see cref="MaxRenderedTiles"/>
+/// (an overflow entry reports "N more - refine your search" instead of an unbounded
+/// instantiation burst). That is fine at today's 37 entries and comfortably fine at a few
+/// hundred, but a genuine "whole Kenney pack" import (Factory Kit alone enumerates over a
+/// thousand models) would need real virtualization (only instantiate the rows actually
+/// scrolled into view) - ponytail: known ceiling, upgrade path is windowed tile reuse
+/// keyed by scroll offset instead of one tile GameObject per matching entry.
+/// </para>
+/// <para>
+/// <b>Categories are a local lookup, not a new <see cref="PropDef"/> field</b> (same
+/// reasoning as before: <c>PropSpawner.Catalog</c> is shared/contended elsewhere in this
+/// project, so this keeps its own name-keyed table rather than growing the shared struct).
+/// Updated for every current catalogue entry, including the Machinery/Construction/
+/// Kenney-import rows the old table predated entirely - anything still unrecognised falls
 /// back to "Misc" rather than being silently dropped.
 /// </para>
 /// </remarks>
 public sealed class UiSpawnCatalog : EntityScript
 {
-    // Preferred tab order; a tab is only created for a category that at least one
-    // CURRENT Catalog entry actually maps to, so this never shows an empty category.
-    private static readonly string[] CategoryOrder = { "Crates", "Balls", "Furniture", "Containers", "Misc" };
+    // ── Category lookup ──────────────────────────────────────────────────────────
+    private static readonly string[] CategoryOrder =
+    {
+        "Primitives", "Crates", "Containers", "Furniture", "Machinery", "Construction", "Factory", "Misc",
+    };
 
     private const string FallbackCategory = "Misc";
 
-    // Name -> category. Covers today's six primitives AND the ten real-model names
-    // PropCatalogExtension.md proposes handing to PropSpawner.cs's owner, so this needs no
-    // update the moment that catalogue lands - only a genuinely new, unanticipated prop
-    // name would fall through to FallbackCategory.
     private static readonly Dictionary<string, string> KnownCategories = new()
     {
-        ["Small Crate"] = "Crates",
-        ["Medium Crate"] = "Crates",
-        ["Heavy Crate"] = "Crates",
-        ["Large Crate"] = "Crates",
-        ["Long Crate"] = "Crates",
-        ["Marble"] = "Balls",
-        ["Ball"] = "Balls",
-        ["Heavy Ball"] = "Balls",
+        ["Small Block"] = "Primitives",
+        ["Medium Block"] = "Primitives",
+        ["Heavy Block"] = "Primitives",
+        ["Marble"] = "Primitives",
+        ["Ball"] = "Primitives",
+        ["Heavy Ball"] = "Primitives",
+
+        ["Small Wooden Crate"] = "Crates",
+        ["Large Wooden Crate"] = "Crates",
+        ["Long Wooden Crate"] = "Crates",
+        ["Cardboard Box"] = "Crates",
+
+        ["Barrel"] = "Containers",
+        ["Trash Can"] = "Containers",
+
         ["Chair"] = "Furniture",
         ["Table"] = "Furniture",
         ["Bench"] = "Furniture",
-        ["Barrel"] = "Containers",
-        ["Trash Can"] = "Containers",
-        ["Cardboard Box"] = "Containers",
+
+        ["Large Cog"] = "Machinery",
+        ["Medium Cog"] = "Machinery",
+        ["Piston"] = "Machinery",
+        ["Machine Block"] = "Machinery",
+        ["Hopper"] = "Machinery",
+        ["Pipe Segment"] = "Machinery",
+        ["Arrow Sign"] = "Machinery",
+        ["Warning Sign"] = "Machinery",
+
+        ["Steel Plate"] = "Construction",
+        ["Beam"] = "Construction",
+        ["Wheel"] = "Construction",
+        ["Hinge Plate"] = "Construction",
+        ["Ball Joint"] = "Construction",
+        ["Thruster Body"] = "Construction",
+
+        ["Machine Fortified"] = "Factory",
+        ["Catwalk Corner"] = "Factory",
+        ["Catwalk Cross"] = "Factory",
+        ["Catwalk Junction"] = "Factory",
+        ["Catwalk Stairs Loop"] = "Factory",
+        ["Catwalk Stairs"] = "Factory",
+        ["Catwalk Straight"] = "Factory",
+
         ["Traffic Cone"] = "Misc",
     };
 
-    private const int Columns = 4;
-    private const int Rows = 2;
-    private const int PageSize = Columns * Rows;
+    // ── Layout constants (all relative to the panel's own top-left; the panel itself
+    // is anchored to screen CENTRE - see OnAttach - so this is resolution-independent
+    // even though every number below is a literal pixel, matching every other screen
+    // in this project, e.g. UiMainMenu's centre-anchored buttons) ────────────────────
+    private const float PanelW = 1400.0f;
+    private const float PanelH = 860.0f;
+    private const float OriginX = -PanelW / 2.0f;
+    private const float OriginY = -PanelH / 2.0f;
+
+    private const float SidebarW = 220.0f;
+    private const float HeaderH = 56.0f;
+    private const float SearchH = 36.0f;
+    private const float ContentX = SidebarW + UiTheme.SpacingLarge;
+    private const float ContentY = HeaderH + SearchH + UiTheme.SpacingLarge * 2.0f;
+    private const float ContentW = PanelW - ContentX - UiTheme.SpacingLarge;
+    private const float ContentH = PanelH - ContentY - UiTheme.SpacingLarge;
+
+    private const float TileW = 170.0f;
+    private const float TileH = 170.0f;
+    private const float TileGap = 14.0f;
+    private const int Columns = 6; // floor((ContentW + TileGap) / (TileW + TileGap)) at the constants above
+
+    private const int MaxRenderedTiles = 300; // see class remarks: real virtualization is the upgrade path past this
 
     private readonly struct Tile
     {
@@ -98,53 +147,66 @@ public sealed class UiSpawnCatalog : EntityScript
     }
 
     private Entity _canvas;
-    private Entity _panel;
+    private Entity _gridClip;
+    private Entity _searchBox;
+    private Entity _overflowLabel;
     private readonly List<Entity> _tabButtons = new();
     private readonly List<string> _categories = new();
-    private readonly Tile[] _tiles = new Tile[PageSize];
-    private Entity _prevPageButton;
-    private Entity _nextPageButton;
-    private Entity _pageLabel;
-
-    // catalogIndex per tile slot on the CURRENT page; -1 = slot unused this page.
-    private readonly int[] _tileCatalogIndex = new int[PageSize];
+    private readonly List<Tile> _tiles = new(); // pooled, grown/reused across refreshes - never shrunk (cheap idle cost, avoids per-refresh destroy/recreate churn)
+    private readonly List<int> _tileCatalogIndex = new(); // catalogIndex shown by _tiles[i] this refresh, -1 for a pooled-but-unused tile
 
     private int _selectedCategory;
-    private int _page;
-
+    private string _lastSearch = string.Empty;
+    private float _scrollY;
     private bool _wasOpen;
+    private bool _dirty = true; // forces one RefreshLayout on first open even if nothing "changed" yet
 
     public override void OnAttach()
     {
         _canvas = Ui.CreateCanvas();
         _canvas.MarkTransient(); // runtime UI, never save-worthy - see PhysicsGun.EnsureHud's own comment on why
 
-        _panel = Ui.CreateImage(_canvas);
-        Ui.SetAnchors(_panel, Vector2.Zero, Vector2.Zero);
-        Ui.SetPivot(_panel, Vector2.Zero);
-        Ui.SetRect(_panel, 40.0f, 40.0f, 560.0f, 420.0f);
-        Ui.SetImageColor(_panel, UiTheme.PanelBackground);
-        Ui.SetImageCornerRadius(_panel, UiTheme.PanelCornerRadius);
+        Entity dim = Ui.CreateImage(_canvas);
+        Ui.SetAnchors(dim, Vector2.Zero, Vector2.One);
+        Ui.SetOffsets(dim, Vector2.Zero, Vector2.Zero);
+        Ui.SetImageColor(dim, new Vector4(0.0f, 0.0f, 0.0f, 0.45f));
+        _dimOverlay = dim;
+
+        Entity panel = Ui.CreateImage(_canvas);
+        AnchorToPanel(panel, 0.0f, 0.0f, PanelW, PanelH);
+        Ui.SetImageColor(panel, UiTheme.PanelBackground);
+        Ui.SetImageCornerRadius(panel, UiTheme.PanelCornerRadius);
 
         Entity title = Ui.CreateText(_canvas, "Spawn Menu  (Q to close)");
-        Ui.SetAnchors(title, Vector2.Zero, Vector2.Zero);
-        Ui.SetPivot(title, Vector2.Zero);
-        Ui.SetRect(title, 60.0f, 55.0f, 520.0f, 28.0f);
+        AnchorToPanel(title, UiTheme.SpacingLarge, UiTheme.Spacing, PanelW - UiTheme.SpacingLarge * 2.0f, 28.0f);
         Ui.SetFontSize(title, UiTheme.FontSizeBody);
         Ui.SetTextColor(title, UiTheme.TextColor);
 
-        BuildCategoryTabs();
-        BuildGrid();
-        BuildPager();
+        BuildSidebar();
+        BuildSearchBox();
+        BuildGridClip();
 
         Close();
     }
 
-    /// <summary>One tab button per category that at least one current catalogue entry
-    /// actually maps to, in <see cref="CategoryOrder"/>'s preferred order. Built once from
-    /// today's <see cref="PropSpawner.Catalog"/> - a category is rare enough (five, total)
-    /// that adding one is worth touching this method; adding a PROP never is.</summary>
-    private void BuildCategoryTabs()
+    private Entity _dimOverlay;
+
+    /// <summary>Position an element by literal pixel offset from the PANEL's own
+    /// top-left, using the screen-CENTRE point anchor every element here shares - the
+    /// flat (non-nested) Ui system has no real parent/child rects, so every element's
+    /// anchor is this same centre point and layout is simulated by all of them sharing
+    /// <see cref="OriginX"/>/<see cref="OriginY"/> as their common top-left reference.</summary>
+    private static void AnchorToPanel(Entity e, float x, float y, float w, float h)
+    {
+        Ui.SetAnchors(e, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        Ui.SetPivot(e, Vector2.Zero);
+        Ui.SetRect(e, OriginX + x, OriginY + y, w, h);
+    }
+
+    /// <summary>Category list down the left side. Built once from
+    /// <see cref="PropSpawner.Catalog"/> as it exists right now - a category is rare
+    /// enough that adding one is worth touching this file; adding a PROP never is.</summary>
+    private void BuildSidebar()
     {
         HashSet<string> present = new();
         foreach (PropDef def in PropSpawner.Catalog)
@@ -153,97 +215,50 @@ public sealed class UiSpawnCatalog : EntityScript
         }
         foreach (string category in CategoryOrder)
         {
-            if (!present.Contains(category))
+            if (present.Contains(category))
             {
-                continue;
+                _categories.Add(category);
             }
-            _categories.Add(category);
         }
-        // Nothing recognised at all (an empty or fully-unknown catalogue) still needs one
-        // tab to select, so the grid has a category to filter by.
         if (_categories.Count == 0)
         {
             _categories.Add(FallbackCategory);
         }
 
+        const float rowH = 40.0f;
         for (int i = 0; i < _categories.Count; ++i)
         {
             Entity tab = Ui.CreateButton(_canvas);
-            Ui.SetAnchors(tab, Vector2.Zero, Vector2.Zero);
-            Ui.SetPivot(tab, Vector2.Zero);
-            Ui.SetRect(tab, 60.0f + i * 110.0f, 95.0f, 100.0f, 32.0f);
+            AnchorToPanel(tab, 0.0f, HeaderH + i * (rowH + UiTheme.Spacing), SidebarW - UiTheme.SpacingLarge, rowH);
             Ui.SetButtonLabel(tab, _categories[i]);
             _tabButtons.Add(tab);
         }
     }
 
-    private void BuildGrid()
+    private void BuildSearchBox()
     {
-        const float gridX = 60.0f;
-        const float gridY = 140.0f;
-        const float tileW = 120.0f;
-        const float tileH = 110.0f;
-        const float gap = 10.0f;
-
-        for (int row = 0; row < Rows; ++row)
-        {
-            for (int col = 0; col < Columns; ++col)
-            {
-                int slot = row * Columns + col;
-                float x = gridX + col * (tileW + gap);
-                float y = gridY + row * (tileH + gap);
-
-                Entity button = Ui.CreateButton(_canvas);
-                Ui.SetAnchors(button, Vector2.Zero, Vector2.Zero);
-                Ui.SetPivot(button, Vector2.Zero);
-                Ui.SetRect(button, x, y, tileW, tileH);
-                Ui.SetButtonLabel(button, string.Empty);
-
-                Entity swatch = Ui.CreateImage(_canvas);
-                Ui.SetAnchors(swatch, Vector2.Zero, Vector2.Zero);
-                Ui.SetPivot(swatch, Vector2.Zero);
-                Ui.SetRect(swatch, x + 8.0f, y + 8.0f, tileW - 16.0f, tileH - 40.0f);
-                Ui.SetImageCornerRadius(swatch, 4.0f);
-                // Texture vs. colour fill is decided per-refresh in RefreshPage, keyed off
-                // PropDef.IconPath - see that method's own comment.
-
-                Entity label = Ui.CreateText(_canvas, string.Empty);
-                Ui.SetAnchors(label, Vector2.Zero, Vector2.Zero);
-                Ui.SetPivot(label, Vector2.Zero);
-                Ui.SetRect(label, x, y + tileH - 28.0f, tileW, 24.0f);
-                Ui.SetTextAlign(label, UiHAlign.Center, UiVAlign.Middle);
-                Ui.SetFontSize(label, UiTheme.FontSizeHint);
-                Ui.SetTextColor(label, UiTheme.TextColor);
-
-                _tiles[slot] = new Tile(button, swatch, label);
-                _tileCatalogIndex[slot] = -1;
-            }
-        }
+        _searchBox = Ui.CreateTextBox(_canvas);
+        AnchorToPanel(_searchBox, ContentX, HeaderH, ContentW, SearchH);
+        Ui.SetPlaceholder(_searchBox, "Search props...");
+        Ui.SetFontSize(_searchBox, UiTheme.FontSizeBody);
     }
 
-    private void BuildPager()
+    /// <summary>The clipped scroll viewport (<see cref="Ui.SetClip"/>, this project's
+    /// RectMask2D equivalent). Tiles are real ECS children of this entity (see
+    /// CreateTile's own comment) so the clip actually masks them, and are positioned in
+    /// its local space, so scrolling is just moving each tile's local Y by -scrollY -
+    /// see <see cref="RepositionTiles"/>.</summary>
+    private void BuildGridClip()
     {
-        const float y = 140.0f + Rows * (110.0f + 10.0f) + 10.0f;
+        _gridClip = Ui.CreateImage(_canvas);
+        AnchorToPanel(_gridClip, ContentX, ContentY, ContentW, ContentH);
+        Ui.SetImageColor(_gridClip, Vector4.Zero); // invisible - exists only to own the clip rect
+        Ui.SetClip(_gridClip, true);
 
-        _prevPageButton = Ui.CreateButton(_canvas);
-        Ui.SetAnchors(_prevPageButton, Vector2.Zero, Vector2.Zero);
-        Ui.SetPivot(_prevPageButton, Vector2.Zero);
-        Ui.SetRect(_prevPageButton, 60.0f, y, 80.0f, 28.0f);
-        Ui.SetButtonLabel(_prevPageButton, "< Prev");
-
-        _pageLabel = Ui.CreateText(_canvas, string.Empty);
-        Ui.SetAnchors(_pageLabel, Vector2.Zero, Vector2.Zero);
-        Ui.SetPivot(_pageLabel, Vector2.Zero);
-        Ui.SetRect(_pageLabel, 150.0f, y, 340.0f, 28.0f);
-        Ui.SetTextAlign(_pageLabel, UiHAlign.Center, UiVAlign.Middle);
-        Ui.SetFontSize(_pageLabel, UiTheme.FontSizeHint);
-        Ui.SetTextColor(_pageLabel, UiTheme.TextMuted);
-
-        _nextPageButton = Ui.CreateButton(_canvas);
-        Ui.SetAnchors(_nextPageButton, Vector2.Zero, Vector2.Zero);
-        Ui.SetPivot(_nextPageButton, Vector2.Zero);
-        Ui.SetRect(_nextPageButton, 480.0f, y, 80.0f, 28.0f);
-        Ui.SetButtonLabel(_nextPageButton, "Next >");
+        _overflowLabel = Ui.CreateText(_canvas, string.Empty);
+        AnchorToPanel(_overflowLabel, ContentX, ContentY + ContentH + UiTheme.Spacing, ContentW, 22.0f);
+        Ui.SetFontSize(_overflowLabel, UiTheme.FontSizeHint);
+        Ui.SetTextColor(_overflowLabel, UiTheme.TextMuted);
     }
 
     public override void OnUpdate(float deltaTime)
@@ -256,7 +271,11 @@ public sealed class UiSpawnCatalog : EntityScript
             _canvas.SetActive(open);
             if (open)
             {
-                RefreshPage();
+                _selectedCategory = 0;
+                _scrollY = 0.0f;
+                Ui.SetTextBoxText(_searchBox, string.Empty);
+                _lastSearch = string.Empty;
+                _dirty = true;
             }
             _wasOpen = open;
         }
@@ -266,28 +285,39 @@ public sealed class UiSpawnCatalog : EntityScript
             return;
         }
 
+        string search = Ui.GetTextBoxText(_searchBox);
+        if (search != _lastSearch)
+        {
+            _lastSearch = search;
+            _scrollY = 0.0f;
+            _dirty = true;
+        }
+
         for (int i = 0; i < _tabButtons.Count; ++i)
         {
             if (Ui.WasActivated(_tabButtons[i]) && i != _selectedCategory)
             {
                 _selectedCategory = i;
-                _page = 0;
-                RefreshPage();
-                return;
+                _scrollY = 0.0f;
+                _dirty = true;
+                break;
             }
         }
 
-        if (Ui.WasActivated(_prevPageButton))
+        // Scroll only rebuilds offsets (RepositionTiles), never the filtered list itself -
+        // no need to route it through the same _dirty flag as a category/search change.
+        float scrollDelta = Input.ScrollDelta.Y;
+        if (scrollDelta != 0.0f && _lastMaxScroll > 0.0f)
         {
-            _page = System.Math.Max(0, _page - 1);
-            RefreshPage();
-            return;
+            const float scrollSpeed = 48.0f; // px per wheel notch, tuned to move roughly one tile row at a time
+            _scrollY = Math.Clamp(_scrollY - scrollDelta * scrollSpeed, 0.0f, _lastMaxScroll);
+            RepositionTiles();
         }
-        if (Ui.WasActivated(_nextPageButton))
+
+        if (_dirty)
         {
-            _page += 1;
-            RefreshPage();
-            return;
+            _dirty = false;
+            RefreshFilteredTiles();
         }
 
         PropSpawner? spawner = GetScript<PropSpawner>();
@@ -295,79 +325,157 @@ public sealed class UiSpawnCatalog : EntityScript
         {
             return;
         }
-        for (int slot = 0; slot < PageSize; ++slot)
+        for (int i = 0; i < _tileCatalogIndex.Count; ++i)
         {
-            int catalogIndex = _tileCatalogIndex[slot];
+            int catalogIndex = _tileCatalogIndex[i];
             if (catalogIndex < 0)
             {
                 continue;
             }
-            if (Ui.WasActivated(_tiles[slot].Button))
+            if (Ui.WasActivated(_tiles[i].Button))
             {
                 spawner.SpawnProp(catalogIndex);
-                return; // one spawn per click, matching SpawnMenu's own old behaviour
+                return; // one spawn per click, matching the original panel's own behaviour
             }
         }
     }
 
-    /// <summary>Redraws the grid/pager for <see cref="_selectedCategory"/>/<see cref="_page"/>
-    /// from <see cref="PropSpawner.Catalog"/> as it exists RIGHT NOW - never cached, so a
-    /// catalogue that grows between menu opens (e.g. a hot-reloaded script assembly) is
-    /// picked up on the very next Q press with no extra work.</summary>
-    private void RefreshPage()
-    {
-        string category = _categories.Count > 0 ? _categories[_selectedCategory] : FallbackCategory;
+    private float _lastMaxScroll;
 
+    /// <summary>Recomputes which catalogue indices match the active category/search,
+    /// grows the tile pool to fit (never shrinks it - see the pool's own remarks),
+    /// binds each tile's texture/colour/label, and repositions everything for a
+    /// scroll position that just reset to 0 (a fresh filter always scrolls to top).</summary>
+    private void RefreshFilteredTiles()
+    {
         List<int> indices = new();
+        bool searching = !string.IsNullOrWhiteSpace(_lastSearch);
+        string needle = _lastSearch.Trim();
         for (int i = 0; i < PropSpawner.Catalog.Length; ++i)
         {
-            if (CategoryOf(PropSpawner.Catalog[i].Name) == category)
+            PropDef def = PropSpawner.Catalog[i];
+            if (searching)
+            {
+                // A non-empty search spans the WHOLE catalogue, not just the selected
+                // category - the category list is for browsing without a query, exactly
+                // Garry's Mod's own split between category tabs and its search box.
+                if (def.Name.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                {
+                    indices.Add(i);
+                }
+            }
+            else if (CategoryOf(def.Name) == _categories[_selectedCategory])
             {
                 indices.Add(i);
             }
         }
 
-        int pageCount = System.Math.Max(1, (indices.Count + PageSize - 1) / PageSize);
-        _page = System.Math.Clamp(_page, 0, pageCount - 1);
-
-        for (int slot = 0; slot < PageSize; ++slot)
+        int shown = Math.Min(indices.Count, MaxRenderedTiles);
+        while (_tiles.Count < shown)
         {
-            int listIndex = _page * PageSize + slot;
-            if (listIndex >= indices.Count)
+            _tiles.Add(CreateTile());
+            _tileCatalogIndex.Add(-1);
+        }
+
+        for (int i = 0; i < _tiles.Count; ++i)
+        {
+            if (i >= shown)
             {
-                _tileCatalogIndex[slot] = -1;
-                _tiles[slot].Button.SetActive(false);
-                _tiles[slot].Swatch.SetActive(false);
-                _tiles[slot].Label.SetActive(false);
+                _tileCatalogIndex[i] = -1;
+                _tiles[i].Button.SetActive(false);
+                _tiles[i].Swatch.SetActive(false);
+                _tiles[i].Label.SetActive(false);
                 continue;
             }
 
-            int catalogIndex = indices[listIndex];
+            int catalogIndex = indices[i];
             PropDef def = PropSpawner.Catalog[catalogIndex];
-            _tileCatalogIndex[slot] = catalogIndex;
-            _tiles[slot].Button.SetActive(true);
-            _tiles[slot].Swatch.SetActive(true);
-            _tiles[slot].Label.SetActive(true);
+            _tileCatalogIndex[i] = catalogIndex;
+            _tiles[i].Button.SetActive(true);
+            _tiles[i].Swatch.SetActive(true);
+            _tiles[i].Label.SetActive(true);
+
             if (!string.IsNullOrEmpty(def.IconPath))
             {
-                // Baked icon drives the tile; the swatch colour underneath never shows.
-                Ui.SetImageTexture(_tiles[slot].Swatch, def.IconPath);
+                Ui.SetImageTexture(_tiles[i].Swatch, def.IconPath);
             }
             else
             {
                 // No baked icon yet - fall back to the flat colour swatch, never a blank
-                // or broken-texture tile. Clearing the texture is required, not optional:
-                // tile slots are recycled across pages/categories, so a slot that just
-                // showed CrateSmall's icon must not keep showing it under Bench's label.
-                Ui.SetImageTexture(_tiles[slot].Swatch, string.Empty);
-                Ui.SetImageColor(_tiles[slot].Swatch, new Vector4(def.Color, 1.0f));
+                // or broken-texture tile, and always keep the name/mass label legible:
+                // that fallback tile IS the fix for "the grid looks mostly empty".
+                Ui.SetImageTexture(_tiles[i].Swatch, string.Empty);
+                Ui.SetImageColor(_tiles[i].Swatch, new Vector4(def.Color, 1.0f));
             }
-            Ui.SetText(_tiles[slot].Label, $"{def.Name}\n{def.Mass:0.#} kg");
+            Ui.SetText(_tiles[i].Label, $"{def.Name}\n{def.Mass:0.#} kg");
         }
 
-        Ui.SetText(_pageLabel, $"{category}  -  page {_page + 1}/{pageCount}");
-        _prevPageButton.SetActive(pageCount > 1);
-        _nextPageButton.SetActive(pageCount > 1);
+        Ui.SetText(_overflowLabel,
+            indices.Count > MaxRenderedTiles
+                ? $"{indices.Count} matches - showing first {MaxRenderedTiles}, refine your search"
+                : $"{indices.Count} {(indices.Count == 1 ? "match" : "matches")}");
+
+        int rows = (shown + Columns - 1) / Columns;
+        float contentHeight = rows * (TileH + TileGap);
+        _lastMaxScroll = Math.Max(0.0f, contentHeight - ContentH);
+        _scrollY = Math.Clamp(_scrollY, 0.0f, _lastMaxScroll);
+        RepositionTiles();
+    }
+
+    /// <summary>Applies the current scroll offset to every active tile's rect. Split out
+    /// from <see cref="RefreshFilteredTiles"/> so a plain scroll-wheel tick (no filter
+    /// change) is a cheap reposition, not a full rebind of every tile's texture/label.</summary>
+    private void RepositionTiles()
+    {
+        for (int i = 0; i < _tileCatalogIndex.Count; ++i)
+        {
+            if (_tileCatalogIndex[i] < 0)
+            {
+                continue;
+            }
+            int col = i % Columns;
+            int row = i / Columns;
+            // Local to _gridClip (see CreateTile's SetParent) - NOT AnchorToPanel's
+            // screen-centre space, since these are the "content child" SetClip's own
+            // docs describe: a real ECS child of the clip element, scrolled by moving
+            // its rect in the clip's own local space, not the panel's.
+            float x = col * (TileW + TileGap);
+            float y = row * (TileH + TileGap) - _scrollY;
+
+            Tile tile = _tiles[i];
+            Ui.SetRect(tile.Button, x, y, TileW, TileH);
+            Ui.SetRect(tile.Swatch, x + 10.0f, y + 10.0f, TileW - 20.0f, TileH - 52.0f);
+            Ui.SetRect(tile.Label, x, y + TileH - 40.0f, TileW, 36.0f);
+        }
+    }
+
+    private Tile CreateTile()
+    {
+        Entity button = Ui.CreateButton(_canvas);
+        Entity swatch = Ui.CreateImage(_canvas);
+        Entity label = Ui.CreateText(_canvas, string.Empty);
+
+        // Real ECS children of the clip element - SetClip masks "its whole subtree"
+        // (see BuildGridClip's own comment), which requires an actual parent edge, not
+        // just visually-overlapping siblings. Anchored (0,0)-(0,0) pivot (0,0) so each
+        // tile's SetRect below is plain local top-left-relative pixels within the clip,
+        // exactly the "content child positioned via SetOffsets" pattern Ui.SetClip's own
+        // doc comment describes.
+        foreach (Entity e in stackalloc[] { button, swatch, label })
+        {
+            e.SetParent(_gridClip);
+            Ui.SetAnchors(e, Vector2.Zero, Vector2.Zero);
+            Ui.SetPivot(e, Vector2.Zero);
+        }
+
+        Ui.SetButtonLabel(button, string.Empty);
+        Ui.SetImageCornerRadius(swatch, 4.0f);
+        Ui.SetTextAlign(label, UiHAlign.Center, UiVAlign.Middle);
+        Ui.SetFontSize(label, UiTheme.FontSizeHint);
+        Ui.SetTextColor(label, UiTheme.TextColor);
+        Ui.SetTextWrap(label, true);
+
+        return new Tile(button, swatch, label);
     }
 
     private void Close()
