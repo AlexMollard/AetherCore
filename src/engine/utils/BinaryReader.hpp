@@ -35,6 +35,29 @@ namespace aether
 			return val;
 		}
 
+		// Read<T>() returns a default-constructed T{} on truncation - fine for a
+		// plain count/length (a zero fallback is a sane "nothing here"), but WRONG
+		// for any disk-format header struct: every *HeaderDisk type in
+		// BinaryFormats.hpp default-initialises its OWN magic/version fields to the
+		// value its own CheckMagic() expects (so writer code can do `MeshHeaderDisk
+		// hdr{}; hdr.vertexCount = ...;` without re-stating them), which means a
+		// truncated or empty file's "failed" T{} passes its own magic check and is
+		// silently accepted as a valid, empty asset instead of being rejected. Use
+		// this for any header read that will be validated by magic/version;
+		// `out` is left untouched on failure so a caller can never mistake it for
+		// a successful read by inspecting fields that happen to look right.
+		template<typename T>
+		[[nodiscard]] bool TryRead(T& out)
+		{
+			if (!CanRead(sizeof(T)))
+			{
+				return false;
+			}
+			std::memcpy(&out, m_pos, sizeof(T));
+			m_pos += sizeof(T);
+			return true;
+		}
+
 		template<std::size_t N>
 		void ReadArray(float* out)
 		{

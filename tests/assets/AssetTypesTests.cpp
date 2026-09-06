@@ -108,3 +108,78 @@ TEST_CASE("an index referencing a missing vertex is rejected")
 	// Same corruption on the submesh-less path, where indices are uploaded verbatim.
 	CHECK_FALSE(aether::assets::GltfAsset::LoadFromMemory(MakeMeshBytes(2, {0, 1, 7}, {}), "bad-index-raw.mesh").has_value());
 }
+
+TEST_CASE("a mesh blob truncated before the header even finishes is rejected, not read past its end")
+{
+	// Fewer bytes than sizeof(MeshHeaderDisk): BinaryReader::Read<T> returns a
+	// zeroed T rather than reading past the buffer (its own bounds check), so
+	// hdr.magic comes back all-zero and never matches MESH_MAGIC - the existing
+	// magic check is what actually rejects this, proven here rather than assumed.
+	const std::vector<std::byte> truncated(sizeof(MeshHeaderDisk) / 2, std::byte{0});
+	CHECK_FALSE(aether::assets::GltfAsset::LoadFromMemory(truncated, "truncated-header.mesh").has_value());
+}
+
+TEST_CASE("an absurd subMeshCount is rejected by the hard ceiling before any submesh is read")
+{
+	// The header claims far more submeshes than kMaxSubMeshes (1<<13) allows, and
+	// none actually follow in the buffer - a crafted or corrupted count must be
+	// rejected by the ceiling check itself, not by walking off the end trying to
+	// read 0xFFFFFFFF submesh headers that were never written.
+	MeshHeaderDisk hdr{};
+	std::memcpy(hdr.magic, MESH_MAGIC, 4);
+	hdr.version = MESH_VERSION;
+	hdr.vertexCount = 3;
+	hdr.indexCount = 3;
+	hdr.subMeshCount = 0xFFFFFFFFu;
+	hdr.indexType = 1;
+
+	std::vector<std::byte> bytes;
+	const auto append = [&bytes](const void* data, std::size_t size)
+	{
+		const auto* first = static_cast<const std::byte*>(data);
+		bytes.insert(bytes.end(), first, first + size);
+	};
+	append(&hdr, sizeof(hdr));
+	const DiskMeshVertex vert{};
+	for (int v = 0; v < 3; ++v)
+	{
+		append(&vert, sizeof(vert));
+	}
+	const std::vector<std::uint32_t> indices{0, 1, 2};
+	for (const std::uint32_t idx: indices)
+	{
+		append(&idx, sizeof(idx));
+	}
+
+	CHECK_FALSE(aether::assets::GltfAsset::LoadFromMemory(bytes, "absurd-submeshcount.mesh").has_value());
+}
+
+TEST_CASE("a header claiming more indices than the buffer actually holds is rejected")
+{
+	// indexCount (1,000,000) is well under kMaxMeshIndices, so the hard ceiling
+	// would wave it through - this specifically exercises the SEPARATE byte-
+	// accounting check (reader.Remaining() vs the bytes the header's own counts
+	// imply), since no index data at all follows the vertex blob here.
+	MeshHeaderDisk hdr{};
+	std::memcpy(hdr.magic, MESH_MAGIC, 4);
+	hdr.version = MESH_VERSION;
+	hdr.vertexCount = 3;
+	hdr.indexCount = 1000000;
+	hdr.subMeshCount = 0;
+	hdr.indexType = 1;
+
+	std::vector<std::byte> bytes;
+	const auto append = [&bytes](const void* data, std::size_t size)
+	{
+		const auto* first = static_cast<const std::byte*>(data);
+		bytes.insert(bytes.end(), first, first + size);
+	};
+	append(&hdr, sizeof(hdr));
+	const DiskMeshVertex vert{};
+	for (int v = 0; v < 3; ++v)
+	{
+		append(&vert, sizeof(vert));
+	}
+
+	CHECK_FALSE(aether::assets::GltfAsset::LoadFromMemory(bytes, "truncated-indices.mesh").has_value());
+}

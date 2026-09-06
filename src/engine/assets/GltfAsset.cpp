@@ -212,8 +212,10 @@ namespace aether::assets
 			}
 
 			BinaryReader reader(*data);
-			auto hdr = reader.Read<SkelHeaderDisk>();
-			if (!CheckMagic(hdr))
+			SkelHeaderDisk hdr;
+			// TryRead, not Read: see LoadFromMesh's own comment on why - SkelHeaderDisk
+			// also default-initialises magic/version to its own valid values.
+			if (!reader.TryRead(hdr) || !CheckMagic(hdr))
 			{
 				AE_WARN(LogCategory::Engine, "Invalid skeleton magic: {}", skelPath);
 				return false;
@@ -346,7 +348,17 @@ namespace aether::assets
 			};
 
 #pragma pack(pop)
-			auto v1Hdr = reader.Read<V1Header>();
+			V1Header v1Hdr{};
+			// TryRead, not Read: V1Header itself has no default member initialisers
+			// (so today's Read<T>() failure path already zero-inits it, which
+			// correctly fails the magic check below) - made explicit here to match
+			// every other header read in this file rather than relying on that being
+			// true by accident of how V1Header happens to be declared.
+			if (!reader.TryRead(v1Hdr))
+			{
+				AE_WARN(LogCategory::Engine, "Truncated animation header: {}", animPath);
+				return anim;
+			}
 
 			AnimHeaderDisk hdr;
 			std::memcpy(hdr.magic, v1Hdr.magic, 4);
@@ -599,8 +611,11 @@ namespace aether::assets
 			}
 
 			BinaryReader reader(*data);
-			auto hdr = reader.Read<MaterialHeaderDisk>();
-			if (!CheckMagic(hdr))
+			MaterialHeaderDisk hdr;
+			// TryRead, not Read: see LoadFromMesh's own comment on why -
+			// MaterialHeaderDisk also default-initialises magic/version to its own
+			// valid values.
+			if (!reader.TryRead(hdr) || !CheckMagic(hdr))
 			{
 				return false;
 			}
@@ -649,9 +664,11 @@ namespace aether::assets
 		Expected<GltfAsset> LoadFromMesh(const std::vector<std::byte>& data, std::string_view meshVfsPath)
 		{
 			BinaryReader reader(data);
-			auto hdr = reader.Read<MeshHeaderDisk>();
-
-			if (std::memcmp(hdr.magic, MESH_MAGIC, 4) != 0)
+			MeshHeaderDisk hdr;
+			// TryRead, not Read: MeshHeaderDisk default-initialises magic/version to
+			// its OWN valid values (writer convenience), so Read<T>()'s "return T{}
+			// on truncation" would make an empty/truncated file pass this exact check.
+			if (!reader.TryRead(hdr) || std::memcmp(hdr.magic, MESH_MAGIC, 4) != 0)
 			{
 				AE_UNEXPECTED(AetherError::Asset("invalid mesh magic: " + std::string(meshVfsPath)));
 			}
@@ -888,8 +905,11 @@ namespace aether::assets
 				if (animSetData.has_value())
 				{
 					BinaryReader animSetReader(*animSetData);
-					auto asetHdr = animSetReader.Read<AnimSetHeaderDisk>();
-					if (CheckMagic(asetHdr))
+					AnimSetHeaderDisk asetHdr;
+					// TryRead, not Read: see LoadFromMesh's own comment on why -
+					// AnimSetHeaderDisk also default-initialises magic/version to its
+					// own valid values.
+					if (animSetReader.TryRead(asetHdr) && CheckMagic(asetHdr))
 					{
 						AE_VERBOSE(LogCategory::Engine, "  AnimSet: {} animations, skeletonHash={}", asetHdr.animCount, asetHdr.skeletonHash);
 
