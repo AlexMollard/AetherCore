@@ -905,6 +905,29 @@ namespace aether::assets
 						}
 						else
 						{
+							// A skinless-but-animated model (no <skin> at all, so
+							// boneNodeOffset above is always 0) was baked with each
+							// channel's target NODE NAME instead of a real skeleton
+							// index (MeshProcessor's ProcessAnimations, nameBased path) -
+							// there is no skeleton to offset into. Resolve those channels
+							// against this asset's own already-loaded node list, once,
+							// right here, so everything downstream (AnimationDatabase::
+							// Create) sees a real nodeIndex exactly like a skinned model
+							// would. Keep the clip's own name unlike
+							// RemapAnimationByBoneName (used for cross-skeleton ragdoll
+							// retargeting elsewhere in this file, where a "(remapped)"
+							// suffix is the point) - scripts identify a clip by
+							// Animation.Find(name), and this is the SAME model's own
+							// animation, not a borrowed one.
+							std::unordered_map<std::string, uint32_t> ownNodeNames;
+							for (uint32_t ni = 0; ni < asset.nodes.size(); ++ni)
+							{
+								if (!asset.nodes[ni].name.empty())
+								{
+									ownNodeNames.emplace(asset.nodes[ni].name, ni);
+								}
+							}
+
 							for (uint32_t i = 0; i < asetHdr.animCount; ++i)
 							{
 								const std::string animRelPath = animSetReader.ReadString();
@@ -921,6 +944,27 @@ namespace aether::assets
 											{
 												ch.nodeIndex += boneNodeOffset;
 											}
+										}
+										uint32_t unresolvedByName = 0;
+										for (auto& ch: anim.channels)
+										{
+											if (ch.boneName.empty())
+											{
+												continue;
+											}
+											if (const auto it = ownNodeNames.find(ch.boneName); it != ownNodeNames.end())
+											{
+												ch.nodeIndex = it->second;
+											}
+											else
+											{
+												++unresolvedByName;
+											}
+											ch.boneName.clear();
+										}
+										if (unresolvedByName > 0)
+										{
+											AE_WARN(LogCategory::Engine, "  Animation '{}': {} channel(s) named a node this model does not have; those channels keep whatever index was baked (likely wrong)", anim.name, unresolvedByName);
 										}
 										asset.animations.push_back(std::move(anim));
 									}

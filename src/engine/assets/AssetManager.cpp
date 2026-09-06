@@ -536,7 +536,15 @@ namespace aether
 
 		AE_VERBOSE(LogCategory::Engine, "Loaded model '{}': {} primitive(s), {} animation(s).", std::string(path), loaded.primitives.size(), source.animations.size());
 
-		if (!source.skins.empty() && !source.animations.empty())
+		// A skin is NOT required: AnimationDatabase::Create only needs animations+nodes
+		// (it gates on animations.empty() alone, tolerating skins=0 - see its own
+		// comment). Requiring skins here used to silently drop every skinless-but-
+		// animated model (a Kenney-style lever/valve/door - node-TRS animation, no
+		// per-vertex skinning at all) with nothing louder than the "No animation
+		// database" INFO line below; GltfAsset already resolved those channels'
+		// baked bone-name tags against this model's own nodes at load time, so
+		// source.animations[*].nodeIndex is correct here exactly like a skinned model.
+		if (!source.animations.empty())
 		{
 			AE_VERBOSE(LogCategory::Engine, "  Creating animation database: {} skins, {} animations, {} nodes", source.skins.size(), source.animations.size(), source.nodes.size());
 			loaded.animationDb = AnimationDatabase::Create(*m_context, source);

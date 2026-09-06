@@ -8,11 +8,16 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <unordered_map>
 #include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <cgltf.h>
 
@@ -355,6 +360,95 @@ namespace aether::assetpipeline
 				return bones;
 			}
 
+			// Synthesizes a skeleton for an ANIMATED SKINLESS model - a Kenney-style
+			// lever/valve/door: node-TRS animation channels, no <skin> at all, so
+			// there is nothing for CollectBones to collect. One synthetic bone per
+			// node that is either animated or carries a mesh (a mesh needs SOMETHING
+			// to rigidly bind its vertices to - see ExtractMeshes's rigid-binding
+			// fallback below). IBMs are the inverse of each node's BIND-POSE (rest
+			// pose) WORLD matrix - required, not optional: baked vertex data is
+			// authored in world space, and the GPU skinning pass composes IBM with
+			// the LIVE animated world matrix, the same as it does for a real skin.
+			std::vector<BoneInfo> CollectSynthesizedBones(const cgltf_data& data)
+			{
+				std::vector<BoneInfo> bones;
+
+				std::vector<bool> nodeNeeded(data.nodes_count, false);
+				for (cgltf_size ai = 0; ai < data.animations_count; ++ai)
+				{
+					for (cgltf_size ci = 0; ci < data.animations[ai].channels_count; ++ci)
+					{
+						const cgltf_animation_channel& channel = data.animations[ai].channels[ci];
+						if (channel.target_node == nullptr)
+						{
+							continue;
+						}
+						const int32_t nodeIdx = ToIndex(channel.target_node, data);
+						if (nodeIdx >= 0)
+						{
+							nodeNeeded[static_cast<std::size_t>(nodeIdx)] = true;
+						}
+					}
+				}
+				for (cgltf_size ni = 0; ni < data.nodes_count; ++ni)
+				{
+					if (data.nodes[ni].mesh != nullptr)
+					{
+						nodeNeeded[ni] = true;
+					}
+				}
+
+				std::vector<bool> worldComputed(data.nodes_count, false);
+				std::vector<glm::mat4> bindWorld(data.nodes_count, glm::mat4(1.0f));
+				const std::function<glm::mat4(int32_t)> bindWorldOf = [&](int32_t nodeIdx) -> glm::mat4
+				{
+					if (nodeIdx < 0)
+					{
+						return glm::mat4(1.0f);
+					}
+					const auto idx = static_cast<std::size_t>(nodeIdx);
+					if (worldComputed[idx])
+					{
+						return bindWorld[idx];
+					}
+					const cgltf_node& node = data.nodes[idx];
+					glm::mat4 local(1.0f);
+					if (node.has_matrix)
+					{
+						local = glm::make_mat4(node.matrix);
+					}
+					else
+					{
+						const glm::vec3 t = node.has_translation ? glm::vec3(node.translation[0], node.translation[1], node.translation[2]) : glm::vec3(0.0f);
+						const glm::quat r = node.has_rotation ? glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]) : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+						const glm::vec3 s = node.has_scale ? glm::vec3(node.scale[0], node.scale[1], node.scale[2]) : glm::vec3(1.0f);
+						local = glm::translate(glm::mat4(1.0f), t) * glm::mat4_cast(r) * glm::scale(glm::mat4(1.0f), s);
+					}
+					const int32_t parentIdx = node.parent ? ToIndex(node.parent, data) : -1;
+					const glm::mat4 world = bindWorldOf(parentIdx) * local;
+					bindWorld[idx] = world;
+					worldComputed[idx] = true;
+					return world;
+				};
+
+				for (cgltf_size ni = 0; ni < data.nodes_count; ++ni)
+				{
+					if (!nodeNeeded[ni])
+					{
+						continue;
+					}
+					BoneInfo info;
+					info.name = StripBonePrefix(SafeStr(data.nodes[ni].name));
+					info.originalIndex = static_cast<int32_t>(ni);
+					info.parentIndex = data.nodes[ni].parent ? ToIndex(data.nodes[ni].parent, data) : -1;
+					const glm::mat4 inv = glm::inverse(bindWorldOf(static_cast<int32_t>(ni)));
+					std::memcpy(info.ibm.data(), glm::value_ptr(inv), sizeof(float) * 16);
+					bones.push_back(std::move(info));
+				}
+
+				return bones;
+			}
+
 			std::string GetMaterialName(const cgltf_data& data, int32_t materialIndex)
 			{
 				if (materialIndex < 0 || static_cast<std::size_t>(materialIndex) >= data.materials_count)
@@ -379,6 +473,10 @@ namespace aether::assetpipeline
 			{
 				SkeletonResult out;
 				std::vector<BoneInfo> bones = CollectBones(*data);
+				if (bones.empty() && data->animations_count > 0)
+				{
+					bones = CollectSynthesizedBones(*data);
+				}
 				if (bones.empty())
 				{
 					return out;
@@ -738,6 +836,17 @@ namespace aether::assetpipeline
 									}
 									dst.jointIndices[j] = boneIdx;
 								}
+							}
+							else if (!remapTable.empty() && static_cast<std::size_t>(ni) < remapTable.size() && remapTable[static_cast<std::size_t>(ni)] != static_cast<uint32_t>(-1))
+							{
+								// gltf rigid binding: a mesh on a node WITHOUT joint attributes,
+								// in a model that HAS bones (real or synthesized), is bound to
+								// that node's own bone at full weight - the same GPU skinning
+								// pipeline that moves a real skinned mesh then also moves a
+								// plain rigid device part (Kenney's Lever "handle" and similar)
+								// when its node is animated, with no separate render path needed.
+								dst.jointIndices[0] = remapTable[static_cast<std::size_t>(ni)];
+								dst.jointWeights[0] = 1.f;
 							}
 
 							if (weightsAcc)
