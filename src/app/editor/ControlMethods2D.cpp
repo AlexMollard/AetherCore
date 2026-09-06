@@ -33,6 +33,7 @@
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "systems/ScriptComponentSystem.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether::editor
@@ -1039,10 +1040,25 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 				        return json{{"error", "entity not found"}};
 			        }
 			        json scripts = json::array();
-			        if (const auto* sc = world.TryGet<ScriptComponent>(entity))
+			        if (auto* sc = world.TryGet<ScriptComponent>(entity))
 			        {
-				        for (const ScriptEntry& script: sc->scripts)
+				        // Read-through-to-live: sc->scripts holds each ScriptEntry's cache,
+				        // which only refreshes from the real C# instance at scene-save time
+				        // (ScriptSerde.cpp's CaptureScripts) or when add_script explicitly
+				        // seeds it - so a field a script itself mutated at runtime (Lever.Out
+				        // flipping on Interact(), say) never reached this cache before. Same
+				        // fix, same call, as CaptureScripts: pull each entry's live values
+				        // from its actual instance immediately before reading, so a caller
+				        // asserting on state right after an action sees what really happened,
+				        // not what the scene was authored with.
+				        auto* runner = static_cast<app::ScriptComponentSystem*>(world.FindSystem("ScriptComponentSystem"));
+				        for (std::size_t i = 0; i < sc->scripts.size(); ++i)
 				        {
+					        ScriptEntry& script = sc->scripts[i];
+					        if (runner != nullptr && !script.path.empty())
+					        {
+						        runner->SyncPropertiesFromLiveInstance(entity, static_cast<std::uint32_t>(i), script);
+					        }
 					        // add_script accepts property values but nothing reported them
 					        // back, so a caller could set one and had no way to confirm it
 					        // took. Written as the inverse of the conversion add_script does,
