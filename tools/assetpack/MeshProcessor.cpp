@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <cgltf.h>
@@ -1242,6 +1243,40 @@ namespace aether::assetpipeline
 
 			cgltf_free(data);
 			return result;
+		}
+
+		std::vector<std::filesystem::path> CollectExternalSourceFiles(const std::filesystem::path& modelPath)
+		{
+			std::vector<fs::path> out;
+
+			cgltf_options options{};
+			cgltf_data* data = nullptr;
+			const std::string pathStr = modelPath.string();
+			if (cgltf_parse_file(&options, pathStr.c_str(), &data) != cgltf_result_success)
+			{
+				return out;
+			}
+
+			const fs::path dir = modelPath.parent_path();
+			const auto addUri = [&](const char* uri)
+			{
+				if (uri == nullptr || uri[0] == '\0' || std::string_view(uri).rfind("data:", 0) == 0)
+				{
+					return; // embedded (GLB binary chunk) or inline base64 - no external file
+				}
+				out.push_back((dir / uri).lexically_normal());
+			};
+			for (cgltf_size i = 0; i < data->buffers_count; ++i)
+			{
+				addUri(data->buffers[i].uri);
+			}
+			for (cgltf_size i = 0; i < data->images_count; ++i)
+			{
+				addUri(data->images[i].uri);
+			}
+
+			cgltf_free(data);
+			return out;
 		}
 
 	} // namespace MeshProcessor

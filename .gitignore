@@ -63,10 +63,15 @@ Makefile
 *.spv
 
 # Baked model artifacts. Cooked from source glTF/GLB by the editor's bake-on-drop
-# (EnsureModelBaked / MeshProcessor) and placed next to the source. They are
-# derived data: regenerated on demand and packed into project.pak on Publish, and
-# version-fragile (rejected once the baker format bumps, e.g. MESH_VERSION), so
-# they must not be committed. Commit the source (.gltf/.bin/textures) instead.
+# (EnsureModelBaked / MeshProcessor) or, project-wide, by `AssetPacker bake-all
+# <project-root>` (walks assets/models, re-bakes anything missing or staler than its
+# source - see tools/assetpack/main.cpp). They are derived data: regenerated on demand
+# and packed into project.pak on Publish, and version-fragile (rejected once the baker
+# format bumps, e.g. MESH_VERSION), so they must not be committed. Commit the source
+# (.gltf/.bin/textures) instead. `bake-all` is what makes ignoring them here safe rather
+# than accidental: a fresh clone genuinely has zero baked meshes until someone (or a build
+# step) runs it, so relying on "the Editor will bake it on demand" alone silently drops
+# any model that's never scene-authored (e.g. a catalogue array in a C# script).
 # Force one in with `git add -f` if a project ever needs an authored .mesh/.material.
 *.mesh
 *.skel
