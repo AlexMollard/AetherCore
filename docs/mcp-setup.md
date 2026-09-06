@@ -117,6 +117,39 @@ verified centred. `engine.send_input`'s `pad_axis` is also a genuine
 *synthetic aim authority* (right-stick deltas drive the same look path
 mouse-look would), which mouse-look itself is not.
 
+**Mouse-position drift while unfocused (root-caused and fixed in
+`Input.cpp`/`Input.hpp`, commit 52e45497 - stage a build newer than that
+before relying on this):** `Input::Update()` already gated real keyboard and
+mouse-BUTTON state behind window focus, but the real cursor POSITION sample
+(`glfwGetCursorPos`) had no such gate - GLFW keeps reporting the actual OS
+cursor position for an unfocused window, so ANY unrelated desktop mouse
+movement (another window, another automated agent's `computer` calls)
+accumulated into `m_mousePos` while idle. The next real `Update()` call,
+however much later, computed one large one-frame delta between the stale
+previous position and wherever the cursor had since wandered - which
+`FirstPersonPlayer.ApplyLook()` (and anything else reading `GetMouseDelta()`)
+consumes as a huge, spurious look input, up to and including snapping Pitch
+straight into its +-89 degree clamp on the very first frame after spawn.
+Confirmed live as the cause of an intermittent "player spawns looking at the
+floor" bug. `Update()` now freezes `m_mousePos` while unfocused, and
+`SetCursorLocked` forces one resync frame on every real lock-state
+transition (NORMAL and DISABLED cursor modes use different coordinate
+spaces, so a menu closing and re-engaging the lock had the same failure mode
+for the same underlying reason).
+
+**Still worth knowing, independent of that fix:** `resume()` followed by a
+`sleep()`/tool round-trip before the next call spends real wall-clock time
+with the sim unpaused, which is exactly the window the bug above (and any
+similar future one) needs to manifest. `play_input_sequence` does not have
+this problem even called directly from a paused state - it drives the game
+thread for its own short, fixed `duration` internally rather than leaving
+the sim freely running between two separate tool calls. Prefer
+`pause()` → set up state → `play_input_sequence` directly (no intervening
+`resume()`) over `resume()` → `sleep()` → `pause()` whenever a test needs
+a controlled, minimal-real-time input edge - confirmed live by comparing
+`camera_info` immediately before and after each approach on an otherwise
+identical scene state.
+
 ## Debugging a native crash reached through C# script
 
 AGENTS.md's crash-section promise (minidump + stacks + log tail under
