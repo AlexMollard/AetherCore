@@ -492,6 +492,7 @@ public abstract class NetSessionDirector : EntityScript
             Log.Error($"Net session: could not spawn prefab '{PlayerPrefab}' for connection {connection}");
             return player;
         }
+        player.EulerDegrees = SpawnRotation(slot);
         Log.Info($"Net session: spawned player for connection {connection} at spawn {slot}");
         return player;
     }
@@ -686,6 +687,26 @@ public abstract class NetSessionDirector : EntityScript
         }
         Log.Warn($"Net session: scene has no '{markerName}' entity; spawning at the origin");
         return spread;
+    }
+
+    /// <summary>The rotation a player spawned at marker <paramref name="index"/> should
+    /// face: the marker's own yaw, upright. A spawn marker points where its players
+    /// look - rotating Spawn0 in the scene rotates every player it spawns - and the
+    /// player's look script seeds its yaw from the entity's own Euler at attach, so
+    /// writing the rotation here (synchronously, before any script pass can attach)
+    /// is what makes spawn facing real instead of always world-default. Only yaw is
+    /// copied: a pitched or rolled marker would tilt the character body, and look
+    /// pitch deliberately starts level. A missing marker means no rotation, matching
+    /// <see cref="SpawnPosition"/>'s origin fallback.</summary>
+    private Vector3 SpawnRotation(int index)
+    {
+        Entity marker = Api.SceneFind($"{SpawnPointPrefix}{index}");
+        if (!marker.IsValid)
+        {
+            return Vector3.Zero;
+        }
+        Vector3 euler = marker.EulerDegrees;
+        return new Vector3(0.0f, euler.Y, 0.0f);
     }
 
     /// <summary>How many players have already been given <paramref name="slot"/>, not
@@ -1049,6 +1070,7 @@ public abstract class NetSessionDirector : EntityScript
         {
             return;
         }
+        player.EulerDegrees = SpawnRotation(slot);
         Api.NetSetPlayerName(player, NetSession.LocalPlayerName);
         LocalPlayer = player;
         // Nothing is added to the roster here: SyncRoster picks this player up on the next
