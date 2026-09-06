@@ -1,0 +1,830 @@
+# AetherCore scene - standalone test arena for BotBrain (the AI player).
+#
+# A small, fully enclosed physics box: four walls (unlike Sandbox.scene.toml's
+# three-plus-open-side arena - this scene has no human player to walk in through
+# the gap, so closing all four sides keeps an autonomous bot from ever wandering
+# off the ground slab into the void), six scattered grabbable props, and one Bot
+# entity (a real Character Controller, same component the human Player in
+# Sandbox.scene.toml uses) running BotBrain + BotGrabber instead of
+# FirstPersonPlayer + PhysicsGun. No PhysicsGun.cs instance is attached anywhere
+# in this scene - BotBrain.OnAttach tags the Props group's children "grabbable"
+# itself (see its own file comment on why that duplicate-but-idempotent tagging
+# is deliberate), so the bot is fully self-contained here.
+#
+# The Overview Camera is a plain fixed-position `main` camera (not parented to
+# the Bot) elevated and angled down over the whole arena, purely so Play mode
+# renders something a screenshot can show - the bot itself has no first-person
+# camera, since it steers by reading positions directly rather than looking at
+# anything.
+#
+# `node`/`parent_node` are intentionally omitted, same as Sandbox.scene.toml -
+# see that file's own comment.
+[environment]
+ambient = [ 0.14, 0.15, 0.17 ]
+sky_horizon = [ 0.42, 0.48, 0.64 ]
+sky_void = [ 0.001, 0.002, 0.004 ]
+sky_zenith = [ 0.09, 0.16, 0.38 ]
+sun_color = [ 1.0, 0.92, 0.82 ]
+sun_direction = [ -0.6307061, 0.68326485, 0.36791185 ]
+sun_intensity = 4.0
+
+[scene]
+features = [ 'meshes_3d', 'lighting_3d', 'physics_3d' ]
+kind = '3d'
+name = ''
+version = 16
+
+# --- index 0: Key Light ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Key Light'
+parent = -1
+position = [ 6.0, 10.0, 6.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.92, 0.82 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 60.0
+    radius = 30.0
+    shadow = true
+    sourceRadius = 0.1
+
+# --- index 1: Fill Light ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Fill Light'
+parent = -1
+position = [ -8.0, 6.0, -4.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.55, 0.65, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 22.0
+    radius = 24.0
+    shadow = false
+    sourceRadius = 0.1
+
+# --- index 2: Overview Camera - fixed high above the arena, tilted down, not
+# parented to anything (this scene has no first-person viewpoint - the bot does
+# not look at anything, it just reads positions). Framed to keep the full
+# 20x20 floor in view from outside the walls. ---
+[[entities]]
+euler = [ -42.0, 0.0, 0.0 ]
+name = 'Overview Camera'
+parent = -1
+position = [ 0.0, 15.0, 15.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.camera]
+    aperture = 2.0
+    background = 'sky_gradient'
+    clear_color = [ 0.1, 0.1, 0.12 ]
+    depth_of_field = false
+    far = 1000.0
+    focal_length_mm = 50.0
+    focus_distance = 18.0
+    fov = 60.0
+    gradient_angle = 0.0
+    main = true
+    near = 0.1
+    orthographic_height = 10.0
+    projection = 'perspective'
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.05, 0.06, 0.1 ]
+        position = 0.0
+
+        [[entities.camera.gradient_stops]]
+        colour = [ 0.02, 0.02, 0.03 ]
+        position = 1.0
+
+# --- index 3: Ground - a 20x20 static slab ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Ground'
+parent = -1
+position = [ 0.0, -0.5, 0.0 ]
+scale = [ 20.0, 1.0, 20.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.2, 0.21, 0.24, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.75
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.6
+    gravity_factor = 1.0
+    half_extents = [ 10.0, 0.5, 10.0 ]
+    half_height = 0.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'static'
+    radius = 0.5
+    restitution = 0.0
+    sensor = false
+    shape = 'box'
+
+# --- index 4: Walls - empty grouping parent ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Walls'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+# --- index 5: North Wall ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'North Wall'
+parent = 4
+position = [ 0.0, 1.5, -10.0 ]
+scale = [ 20.0, 3.0, 0.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.32, 0.33, 0.36, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.7
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
+    half_extents = [ 10.0, 1.5, 0.3 ]
+    half_height = 1.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'static'
+    radius = 0.5
+    restitution = 0.0
+    sensor = false
+    shape = 'box'
+
+# --- index 6: South Wall ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'South Wall'
+parent = 4
+position = [ 0.0, 1.5, 10.0 ]
+scale = [ 20.0, 3.0, 0.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.32, 0.33, 0.36, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.7
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
+    half_extents = [ 10.0, 1.5, 0.3 ]
+    half_height = 1.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'static'
+    radius = 0.5
+    restitution = 0.0
+    sensor = false
+    shape = 'box'
+
+# --- index 7: West Wall ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'West Wall'
+parent = 4
+position = [ -10.0, 1.5, 0.0 ]
+scale = [ 0.6, 3.0, 20.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.32, 0.33, 0.36, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.7
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
+    half_extents = [ 0.3, 1.5, 10.0 ]
+    half_height = 1.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'static'
+    radius = 0.5
+    restitution = 0.0
+    sensor = false
+    shape = 'box'
+
+# --- index 8: East Wall ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'East Wall'
+parent = 4
+position = [ 10.0, 1.5, 0.0 ]
+scale = [ 0.6, 3.0, 20.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.32, 0.33, 0.36, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.7
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
+    half_extents = [ 0.3, 1.5, 10.0 ]
+    half_height = 1.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'static'
+    radius = 0.5
+    restitution = 0.0
+    sensor = false
+    shape = 'box'
+
+# --- index 9: Props - empty grouping parent, tagged "grabbable" by
+# BotBrain.OnAttach (see its own file comment - no PhysicsGun instance exists
+# in this scene to do that tagging instead) ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Props'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+# --- index 10-12: three scattered cubes ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Prop Cube 1'
+parent = 9
+position = [ 3.0, 0.3, 3.0 ]
+scale = [ 0.6, 0.6, 0.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.85, 0.15, 0.15, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.55
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
+    half_extents = [ 0.3, 0.3, 0.3 ]
+    half_height = 0.3
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'dynamic'
+    radius = 0.5
+    restitution = 0.1
+    sensor = false
+    shape = 'box'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Prop Cube 2'
+parent = 9
+position = [ -4.0, 0.3, -3.0 ]
+scale = [ 0.6, 0.6, 0.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.9, 0.5, 0.1, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.55
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
+    half_extents = [ 0.3, 0.3, 0.3 ]
+    half_height = 0.3
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'dynamic'
+    radius = 0.5
+    restitution = 0.1
+    sensor = false
+    shape = 'box'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Prop Cube 3'
+parent = 9
+position = [ 5.0, 0.35, -5.0 ]
+scale = [ 0.7, 0.7, 0.7 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.2, 0.75, 0.25, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.55
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.5
+    gravity_factor = 1.0
+    half_extents = [ 0.35, 0.35, 0.35 ]
+    half_height = 0.35
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'dynamic'
+    radius = 0.5
+    restitution = 0.1
+    sensor = false
+    shape = 'box'
+
+# --- index 13-15: three scattered spheres ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Prop Sphere 1'
+parent = 9
+position = [ -3.0, 0.3, 4.0 ]
+scale = [ 0.6, 0.6, 0.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.15, 0.35, 0.9, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.1
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.35
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.4
+    gravity_factor = 1.0
+    half_extents = [ 0.5, 0.5, 0.5 ]
+    half_height = 0.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'dynamic'
+    radius = 0.3
+    restitution = 0.3
+    sensor = false
+    shape = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Prop Sphere 2'
+parent = 9
+position = [ 6.0, 0.35, 2.0 ]
+scale = [ 0.7, 0.7, 0.7 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8, 0.2, 0.75, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.1
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.35
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.4
+    gravity_factor = 1.0
+    half_extents = [ 0.5, 0.5, 0.5 ]
+    half_height = 0.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'dynamic'
+    radius = 0.35
+    restitution = 0.3
+    sensor = false
+    shape = 'sphere'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Prop Sphere 3'
+parent = 9
+position = [ -6.0, 0.25, -6.0 ]
+scale = [ 0.5, 0.5, 0.5 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.5, 0.2, 0.85, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.1
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.35
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+    [entities.physics]
+    allow_sleeping = true
+    angular_damping = 0.05
+    ccd = false
+    center = [ 0.0, 0.0, 0.0 ]
+    friction = 0.4
+    gravity_factor = 1.0
+    half_extents = [ 0.5, 0.5, 0.5 ]
+    half_height = 0.5
+    linear_damping = 0.05
+    lock_position = [ 0.0, 0.0, 0.0 ]
+    lock_rotation = [ 0.0, 0.0, 0.0 ]
+    mass = 0.0
+    max_angular_vel = 47.124
+    max_linear_vel = 500.0
+    motion = 'dynamic'
+    radius = 0.25
+    restitution = 0.3
+    sensor = false
+    shape = 'sphere'
+
+# --- index 16: Bot 1 - a real Character Controller (Jolt CharacterVirtual),
+# identical tuning to Sandbox.scene.toml's own Player entity. Position is the
+# FEET, same convention as Player - y = 0.0 sits on the ground slab's top
+# surface (Ground centred at y = -0.5, half_height 0.5). Bot 1 Body (index 17)
+# is this entity's visual stand-in, since a Character Controller has no mesh
+# of its own (same as Player, which is invisible on purpose - a first-person
+# view never needs to see itself; this bot needs to be SEEN, hence the body).
+# Three bots share this arena (indices 16, 19, 21) plus one Soak Monitor
+# (index 23) - see BotBrain.cs's own file comment on why nothing about this
+# script assumes there is only one, and BotSoakMonitor.cs's for how the monitor
+# finds all of them via the "bot" tag rather than a fixed list. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Bot 1'
+parent = -1
+position = [ 0.0, 0.0, -6.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.character_controller]
+    gravity_scale = 2.0
+    ground_snap_distance = 0.3
+    half_height = 0.6
+    mass = 80.0
+    max_push_force = 600.0
+    max_slope_angle = 0.7853982
+    radius = 0.3
+    step_height = 0.3
+
+    [[entities.scripts]]
+    type = 'BotBrain'
+
+# --- index 17: Bot 1 Body - purely visual capsule stand-in (no "capsule"
+# primitive exists - see AssetDatabase.cpp's kPrimitiveKinds - so this is a
+# cube sized to the character's radius/half_height bounding box instead).
+# World-space position, like every child transform in this file (scene
+# transforms are world-space, parent scale does not compound) - offset up by
+# half its own height above the Bot's feet, same relationship Sandbox.scene.toml's
+# Main Camera has to Player via EyeHeight. No physics component: the Character
+# Controller's own inner Jolt capsule is the only collider this entity needs;
+# a second box collider here would just fight it. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Bot 1 Body'
+parent = 16
+position = [ 0.0, 0.9, -6.0 ]
+scale = [ 0.6, 1.8, 0.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.95, 0.55, 0.05, 1.0 ]
+    double_sided = false
+    emissive = [ 0.1, 0.05, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.5
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+# --- index 18: Ragdoll Dummy - a bare transform BotBrain.OnAttach converts into a
+# physics ragdoll (Ragdoll.Spawn) on Play, using the Human.gltf skeleton copied into
+# this project's own assets/models/Human/ purely for its bind pose (see
+# BotBrain.SpawnRagdollDummy's own comment - nothing about that asset's rendering or
+# animation is used). Standing upright at ground level so the bind pose places its
+# feet at y = 0, same convention as Ground's top surface. Deliberately has no
+# mesh/physics/light section of its own - Ragdoll.Spawn installs everything the
+# pelvis bone needs (rigid body, collider, mesh) and builds ten more bone entities
+# alongside it, all tagged "grabbable" the same way as any prop. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Ragdoll Dummy'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+# --- index 19: Bot 2 - second bot sharing this arena's crates/ragdoll with Bot 1;
+# same Character Controller tuning, different spawn point so they do not start
+# stacked on each other. See index 16's own comment. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Bot 2'
+parent = -1
+position = [ 6.0, 0.0, 6.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.character_controller]
+    gravity_scale = 2.0
+    ground_snap_distance = 0.3
+    half_height = 0.6
+    mass = 80.0
+    max_push_force = 600.0
+    max_slope_angle = 0.7853982
+    radius = 0.3
+    step_height = 0.3
+
+    [[entities.scripts]]
+    type = 'BotBrain'
+
+# --- index 20: Bot 2 Body - see index 17's own comment. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Bot 2 Body'
+parent = 19
+position = [ 6.0, 0.9, 6.0 ]
+scale = [ 0.6, 1.8, 0.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.15, 0.65, 0.95, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.05, 0.1 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.5
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+# --- index 21: Bot 3 - third bot sharing this arena. See index 16's own comment. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Bot 3'
+parent = -1
+position = [ -6.0, 0.0, 2.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.character_controller]
+    gravity_scale = 2.0
+    ground_snap_distance = 0.3
+    half_height = 0.6
+    mass = 80.0
+    max_push_force = 600.0
+    max_slope_angle = 0.7853982
+    radius = 0.3
+    step_height = 0.3
+
+    [[entities.scripts]]
+    type = 'BotBrain'
+
+# --- index 22: Bot 3 Body - see index 17's own comment. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Bot 3 Body'
+parent = 21
+position = [ -6.0, 0.9, 2.0 ]
+scale = [ 0.6, 1.8, 0.6 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.65, 0.15, 0.95, 1.0 ]
+    double_sided = false
+    emissive = [ 0.05, 0.0, 0.1 ]
+    metallic = 0.0
+    occlusion = 1.0
+    receive_shadows = true
+    roughness = 0.5
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+# --- index 23: Soak Monitor - a bare transform carrying BotSoakMonitor, the
+# read-only watchdog that turns this multi-bot scene into an unattended soak
+# test (see that script's own file comment for the full anomaly list and log
+# format). ArenaMin/MaxX/Z below match this arena's actual walls (inner faces at
+# +/-9.7), same values BotBrain's own instances use for wander bounds. ---
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Soak Monitor'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'BotSoakMonitor'
+
+        [entities.scripts.properties.Duration]
+        t = 'float'
+        v = 600.0
