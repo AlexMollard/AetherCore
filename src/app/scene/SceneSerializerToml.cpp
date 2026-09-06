@@ -1160,6 +1160,29 @@ namespace aether::app::scene
 				}
 				t.insert("scripts", std::move(scripts));
 			}
+			// Script/tool-gun-created constraints (Physics.CreateWeld/CreateRope) -
+			// targetIndex is scene-local, same convention as JointRecord::targetIndex.
+			// Without this block a welded contraption silently saved unwelded: capture
+			// filled EntityRecord::scriptJoints but nothing wrote it to disk.
+			if (!rec.scriptJoints.empty())
+			{
+				toml::array joints;
+				for (const ScriptJointRecord& joint: rec.scriptJoints)
+				{
+					toml::table j;
+					j.insert("type", JointTypeName(joint.type));
+					j.insert("target", static_cast<std::int64_t>(joint.targetIndex));
+					j.insert("anchor", Vec3ToToml(joint.anchor));
+					j.insert("axis", Vec3ToToml(joint.axis));
+					j.insert("min_limit", joint.minLimit);
+					j.insert("max_limit", joint.maxLimit);
+					j.insert("distance", joint.distance);
+					j.insert("swing_limit", joint.swingLimit);
+					j.insert("collide_connected", joint.collideConnected);
+					joints.push_back(std::move(j));
+				}
+				t.insert("script_joints", std::move(joints));
+			}
 			return t;
 		};
 
@@ -1552,6 +1575,29 @@ namespace aether::app::scene
 				        .distance = static_cast<float>(jv["distance"].value_or(-1.0)),
 				        .collideConnected = jv["collide_connected"].value_or(false),
 				};
+			}
+			if (const auto* sj = tv["script_joints"].as_array())
+			{
+				for (const toml::node& jointNode : *sj)
+				{
+					const auto* jt = jointNode.as_table();
+					if (jt == nullptr)
+					{
+						continue;
+					}
+					const toml::node_view<const toml::node> jv{*jt};
+					ScriptJointRecord sjr;
+					sjr.type = JointTypeFromName(jv["type"].value_or(std::string{"fixed"}));
+					sjr.targetIndex = static_cast<int>(jv["target"].value_or(std::int64_t{-1}));
+					sjr.anchor = Vec3FromToml(jv["anchor"], glm::vec3(0.0f));
+					sjr.axis = Vec3FromToml(jv["axis"], glm::vec3(0.0f, 1.0f, 0.0f));
+					sjr.minLimit = static_cast<float>(jv["min_limit"].value_or(0.0));
+					sjr.maxLimit = static_cast<float>(jv["max_limit"].value_or(0.0));
+					sjr.distance = static_cast<float>(jv["distance"].value_or(-1.0));
+					sjr.swingLimit = static_cast<float>(jv["swing_limit"].value_or(0.0));
+					sjr.collideConnected = jv["collide_connected"].value_or(false);
+					rec.scriptJoints.push_back(std::move(sjr));
+				}
 			}
 			if (const auto* j2d = tv["joint_2d"].as_table())
 			{
