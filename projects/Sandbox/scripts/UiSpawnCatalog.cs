@@ -397,6 +397,13 @@ public sealed class UiSpawnCatalog : EntityScript
 
             if (!string.IsNullOrEmpty(def.IconPath))
             {
+                // Pooled tiles are reused across categories/searches; a tile that
+                // previously showed a fallback swatch left a real colour tint on this
+                // image (SetImageColor below), which otherwise keeps multiplying every
+                // icon texture shown here afterward - confirmed live: reused tiles
+                // rendered icons crushed near-black under a leftover tan/orange
+                // primitive tint. Must reset to neutral white whenever an icon is shown.
+                Ui.SetImageColor(_tiles[i].Swatch, Vector4.One);
                 Ui.SetImageTexture(_tiles[i].Swatch, def.IconPath);
             }
             else

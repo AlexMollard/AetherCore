@@ -142,72 +142,93 @@ public sealed class PropSpawner : EntityScript
         // half_height, confirmed from source bounds, not assumed symmetric with the
         // rest ──────────────────────────────────────────────────────────────────
         new("Large Cog", IsSphere: false, Size: 1f, Mass: 30f, Color: default,
-            ModelPath: "project://assets/models/Props/CogLarge.glb"
+            ModelPath: "project://assets/models/Props/CogLarge.glb",
+            IconPath: "project://assets/Icons/LargeCog.png"
         ),
         new("Medium Cog", IsSphere: false, Size: 1f, Mass: 20f, Color: default,
-            ModelPath: "project://assets/models/Props/CogMedium.glb"
+            ModelPath: "project://assets/models/Props/CogMedium.glb",
+            IconPath: "project://assets/Icons/MediumCog.png"
         ),
         new("Piston", IsSphere: false, Size: 1f, Mass: 35f, Color: default,
-            ModelPath: "project://assets/models/Props/Piston.glb"
+            ModelPath: "project://assets/models/Props/Piston.glb",
+            IconPath: "project://assets/Icons/Piston.png"
         ),
         new("Machine Block", IsSphere: false, Size: 1f, Mass: 60f, Color: default,
-            ModelPath: "project://assets/models/Props/MachineBlock.glb"
+            ModelPath: "project://assets/models/Props/MachineBlock.glb",
+            IconPath: "project://assets/Icons/MachineBlock.png"
         ),
         new("Hopper", IsSphere: false, Size: 1f, Mass: 15f, Color: default,
-            ModelPath: "project://assets/models/Props/Hopper.glb"
+            ModelPath: "project://assets/models/Props/Hopper.glb",
+            IconPath: "project://assets/Icons/Hopper.png"
         ),
         new("Pipe Segment", IsSphere: false, Size: 1f, Mass: 12f, Color: default,
-            ModelPath: "project://assets/models/Props/PipeSegment.glb"
+            ModelPath: "project://assets/models/Props/PipeSegment.glb",
+            IconPath: "project://assets/Icons/PipeSegment.png"
         ),
         new("Arrow Sign", IsSphere: false, Size: 1f, Mass: 3f, Color: default,
-            ModelPath: "project://assets/models/Props/ArrowSign.glb"
+            ModelPath: "project://assets/models/Props/ArrowSign.glb",
+            IconPath: "project://assets/Icons/ArrowSign.png"
         ),
         new("Warning Sign", IsSphere: false, Size: 1f, Mass: 8f, Color: default,
-            ModelPath: "project://assets/models/Props/WarningSign.glb"
+            ModelPath: "project://assets/models/Props/WarningSign.glb",
+            IconPath: "project://assets/Icons/WarningSign.png"
         ),
 
         // ── Construction (6, new) - self-authored, NOT downloaded; the "genuinely
         // unique" half of the 30. Exact-collider-by-construction, same as the
         // primitives, since these meshes were generated to these exact dimensions ──
         new("Steel Plate", IsSphere: false, Size: 1f, Mass: 15f, Color: default,
-            ModelPath: "project://assets/models/Props/SteelPlate.glb"
+            ModelPath: "project://assets/models/Props/SteelPlate.glb",
+            IconPath: "project://assets/Icons/SteelPlate.png"
         ),
         new("Beam", IsSphere: false, Size: 1f, Mass: 10f, Color: default,
-            ModelPath: "project://assets/models/Props/Beam.glb"
+            ModelPath: "project://assets/models/Props/Beam.glb",
+            IconPath: "project://assets/Icons/Beam.png"
         ),
         new("Wheel", IsSphere: false, Size: 1f, Mass: 12f, Color: default,
-            ModelPath: "project://assets/models/Props/Wheel.glb"
+            ModelPath: "project://assets/models/Props/Wheel.glb",
+            IconPath: "project://assets/Icons/Wheel.png"
         ),
         new("Hinge Plate", IsSphere: false, Size: 1f, Mass: 3f, Color: default,
-            ModelPath: "project://assets/models/Props/HingePlate.glb"
+            ModelPath: "project://assets/models/Props/HingePlate.glb",
+            IconPath: "project://assets/Icons/HingePlate.png"
         ),
         new("Ball Joint", IsSphere: false, Size: 1f, Mass: 5f, Color: default,
-            ModelPath: "project://assets/models/Props/BallJoint.glb"
+            ModelPath: "project://assets/models/Props/BallJoint.glb",
+            IconPath: "project://assets/Icons/BallJoint.png"
         ),
         new("Thruster Body", IsSphere: false, Size: 1f, Mass: 18f, Color: default,
-            ModelPath: "project://assets/models/Props/ThrusterBody.glb"
+            ModelPath: "project://assets/models/Props/ThrusterBody.glb",
+            IconPath: "project://assets/Icons/ThrusterBody.png"
         ),
         // ── Kenney import (native, via the AssetPacker `kenney` tool / MCP / Editor Kenney Browser) ──
         new("Machine Fortified", IsSphere: false, Size: 1f, Mass: 60.0000f, Color: default,
-            ModelPath: "project://assets/models/Props/MachineFortified.glb"
+            ModelPath: "project://assets/models/Props/MachineFortified.glb",
+            IconPath: "project://assets/Icons/MachineFortified.png"
         ),
         new("Catwalk Corner", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
-            ModelPath: "project://assets/models/FactoryKit/CatwalkCorner.glb"
+            ModelPath: "project://assets/models/FactoryKit/CatwalkCorner.glb",
+            IconPath: "project://assets/Icons/CatwalkCorner.png"
         ),
         new("Catwalk Cross", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
-            ModelPath: "project://assets/models/FactoryKit/CatwalkCross.glb"
+            ModelPath: "project://assets/models/FactoryKit/CatwalkCross.glb",
+            IconPath: "project://assets/Icons/CatwalkCross.png"
         ),
         new("Catwalk Junction", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
-            ModelPath: "project://assets/models/FactoryKit/CatwalkJunction.glb"
+            ModelPath: "project://assets/models/FactoryKit/CatwalkJunction.glb",
+            IconPath: "project://assets/Icons/CatwalkJunction.png"
         ),
         new("Catwalk Stairs Loop", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
-            ModelPath: "project://assets/models/FactoryKit/CatwalkStairsLoop.glb"
+            ModelPath: "project://assets/models/FactoryKit/CatwalkStairsLoop.glb",
+            IconPath: "project://assets/Icons/CatwalkStairsLoop.png"
         ),
         new("Catwalk Stairs", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
-            ModelPath: "project://assets/models/FactoryKit/CatwalkStairs.glb"
+            ModelPath: "project://assets/models/FactoryKit/CatwalkStairs.glb",
+            IconPath: "project://assets/Icons/CatwalkStairs.png"
         ),
         new("Catwalk Straight", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
-            ModelPath: "project://assets/models/FactoryKit/CatwalkStraight.glb"
+            ModelPath: "project://assets/models/FactoryKit/CatwalkStraight.glb",
+            IconPath: "project://assets/Icons/CatwalkStraight.png"
         ),
     };
 
