@@ -254,12 +254,23 @@ namespace aether::net
 				break; // a real socket error; leave it for next frame
 			}
 
-			const std::string_view line(buffer.data(), static_cast<std::size_t>(received));
-			const auto candidates = ParseLine(line, m_roomCode, m_nonceHex);
-			if (!candidates.has_value())
-			{
-				continue;
-			}
+		const std::string_view line(buffer.data(), static_cast<std::size_t>(received));
+		// Receive-path instrumentation: the whole point of this channel is that a
+		// silent nothing is indistinguishable from "never arrived" (a live two-instance
+		// join once read as 'the host saw zero log entries' because there was nothing
+		// here to log). One line per datagram - discovery traffic is ~1/second.
+		AE_INFO(LogCategory::App, "LAN broadcast signalling: received {} byte datagram from {}.{}.{}.{}:{}",
+		        received,
+		        from.host & 0xFF, (from.host >> 8) & 0xFF, (from.host >> 16) & 0xFF, (from.host >> 24) & 0xFF,
+		        from.port);
+		const auto candidates = ParseLine(line, m_roomCode, m_nonceHex);
+		if (!candidates.has_value())
+		{
+			// Rejections are quiet by design - our own announcements come back to us
+			// (same host, same port) and ParseLine already filters them by nonce, so
+			// most rejects here are self-traffic, not a problem.
+			continue;
+		}
 			for (const NatTraversal::Endpoint& endpoint: candidates->endpoints)
 			{
 				if (merged.endpoints.size() >= kMaxCandidates)
