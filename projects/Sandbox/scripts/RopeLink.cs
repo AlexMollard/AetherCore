@@ -66,6 +66,27 @@ public sealed class RopeLink : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
+        // Dead-endpoint sweep - the identical defect WireHub.PruneDead solves for
+        // wires, and the reason this runs before anything else here: Entity.Destroy
+        // does not cascade (confirmed twice, independently - World.cpp:54 unregisters
+        // the root and destroys exactly one entity; only the network despawn path
+        // walks the hierarchy), so a dead endpoint would leave this marker and its
+        // rope as a line to nowhere that a mid-Play save then captures forever.
+        // World.IsValid, NOT Entity.IsValid - the latter is only Id != 0 and happily
+        // reports a destroyed entity as fine (a stale handle's id slot can even be
+        // reused). Distinguished from "fields not applied yet" by Entity.IsValid:
+        // default/unset is pending, set-but-world-dead is dead. Every frame, the same
+        // cadence as PruneDead - the marker is gone by the end of the death frame,
+        // one full frame before a save's capture pass could ever see it.
+        bool sourceDied = Source.IsValid && !World.IsValid(Source);
+        bool targetDied = Target.IsValid && !World.IsValid(Target);
+        if (sourceDied || targetDied)
+        {
+            Log.Warn($"[Sandbox] RopeLink ({Self.Name}): endpoint {(sourceDied ? Source.Name : Target.Name)} was destroyed - removing the rope with it.");
+            Self.Destroy();
+            return;
+        }
+
         if (_rejectRemaining > 0.0f)
         {
             _rejectRemaining -= deltaTime;

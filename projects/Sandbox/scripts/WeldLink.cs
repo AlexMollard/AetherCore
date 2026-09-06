@@ -42,6 +42,27 @@ public sealed class WeldLink : EntityScript
 
     public override void OnUpdate(float deltaTime)
     {
+        // Dead-endpoint sweep - the identical defect WireHub.PruneDead solves for
+        // wires: Entity.Destroy does not cascade (confirmed twice, independently -
+        // World.cpp:54 unregisters the root and destroys exactly one entity; only the
+        // network despawn path walks the hierarchy), so a dead endpoint would leave
+        // this marker and its bead as a line to nowhere that a mid-Play save then
+        // captures forever. World.IsValid, NOT Entity.IsValid - the latter is only
+        // Id != 0 and happily reports a destroyed entity as fine (a stale handle's
+        // id slot can even be reused). Distinguished from "fields not applied yet" by
+        // Entity.IsValid: default/unset is pending, set-but-world-dead is dead. Runs
+        // every frame before anything else here, the same cadence as PruneDead - the
+        // marker is gone by the end of the death frame, one full frame before a save's
+        // capture pass could ever see it.
+        bool sourceDied = Source.IsValid && !World.IsValid(Source);
+        bool targetDied = Target.IsValid && !World.IsValid(Target);
+        if (sourceDied || targetDied)
+        {
+            Log.Warn($"[Sandbox] WeldLink ({Self.Name}): endpoint {(sourceDied ? Source.Name : Target.Name)} was destroyed - removing the weld with it.");
+            Self.Destroy();
+            return;
+        }
+
         if (_rejectRemaining > 0.0f)
         {
             _rejectRemaining -= deltaTime;
