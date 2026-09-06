@@ -109,3 +109,11 @@ any of these licences but is recorded here per project convention.
   actually rotate would be dishonest geometry; kept simple and said so here instead.
 - No CC0 sourcing question applies - authored by this session. Not intended as
   shippable/reusable art outside this project.
+
+## Kenney — Input Prompts (v1.5a)
+- Source: https://kenney.nl/assets/input-prompts
+- Author: Kenney (www.kenney.nl)
+- Licence: CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)
+- Files used:
+  - `kenney_input_keyboard_&_mouse.ttf` -> `assets/fonts/InputPromptsKeyboardMouse.ttf` (+ glyph map `InputPromptsKeyboardMouse.charmap.txt`)
+  - `kenney_input_playstation_series.ttf` -> `assets/fonts/InputPromptsPlayStation.ttf` (+ glyph map `InputPromptsPlayStation.charmap.txt`)
