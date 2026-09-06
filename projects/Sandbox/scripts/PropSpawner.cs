@@ -176,6 +176,24 @@ public sealed class PropSpawner : EntityScript
         new("Machine Fortified", IsSphere: false, Size: 1f, Mass: 60.0000f, Color: default,
             ModelPath: "project://assets/models/Props/MachineFortified.glb"
         ),
+        new("Catwalk Corner", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
+            ModelPath: "project://assets/models/FactoryKit/CatwalkCorner.glb"
+        ),
+        new("Catwalk Cross", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
+            ModelPath: "project://assets/models/FactoryKit/CatwalkCross.glb"
+        ),
+        new("Catwalk Junction", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
+            ModelPath: "project://assets/models/FactoryKit/CatwalkJunction.glb"
+        ),
+        new("Catwalk Stairs Loop", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
+            ModelPath: "project://assets/models/FactoryKit/CatwalkStairsLoop.glb"
+        ),
+        new("Catwalk Stairs", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
+            ModelPath: "project://assets/models/FactoryKit/CatwalkStairs.glb"
+        ),
+        new("Catwalk Straight", IsSphere: false, Size: 1f, Mass: 15.0000f, Color: default,
+            ModelPath: "project://assets/models/FactoryKit/CatwalkStraight.glb"
+        ),
     };
 
     public int MaxProps = 24;
