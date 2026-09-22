@@ -1,9 +1,8 @@
 #!/usr/bin/env pwsh
 # GPU abstraction guard
 #
-# Cheap local pre-submit check that mirrors
-# .github/workflows/gpu-abstraction-guard.yml. Use this before pushing
-# to catch regressions locally without waiting for CI.
+# Phase 0 of scripts/Run-DebugGauntlet.ps1, which is where it normally runs. Invoke it
+# directly for a seconds-long boundary check without building anything.
 #
 # Usage (from repo root):
 #   pwsh scripts/check-gpu-abstraction.ps1

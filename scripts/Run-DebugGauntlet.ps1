@@ -5,6 +5,7 @@
 .DESCRIPTION
     One entry point that runs the whole debug loop without a human in it:
 
+      0. Guard   - the GPU abstraction guard (scripts/check-gpu-abstraction.ps1).
       1. Build   - compile Editor, GameRuntime and EngineTests (MSVC multi-config).
       2. Unit    - run EngineTests.exe and parse the doctest summary.
       3. Editor  - launch Editor.exe under whatever Vulkan validation tier the build
@@ -41,12 +42,13 @@
     from source (use after editing shaders or the SPIR-V processor).
 .PARAMETER ReportPath
     Where to write the JSON report (default: <BuildDir>/gauntlet-report.json).
-.PARAMETER SkipBuild / -SkipUnit / -SkipEditor / -SkipRuntime
+.PARAMETER SkipGuard / -SkipBuild / -SkipUnit / -SkipEditor / -SkipRuntime
     Skip individual phases.
 .PARAMETER CI
-    Continuous-integration mode: skips the Editor and Runtime smokes (GitHub
-    runners have no GPU or display). Auto-enabled when $env:CI is set. Build and
-    unit phases still run, which is what catches compile/link/test regressions.
+    Hosted-runner mode: skips the Editor and Runtime smokes (a hosted runner has no
+    GPU or display). Explicit only - the manual CI workflow passes it. It is NOT
+    inferred from $env:CI: agent and tool shells set that variable, which silently
+    downgraded the local full run to build+unit while still printing GAUNTLET PASSED.
 .EXAMPLE
     ./scripts/Run-DebugGauntlet.ps1
     ./scripts/Run-DebugGauntlet.ps1 -Config Release -Repack
@@ -74,6 +76,7 @@ param(
     [switch]$SkipUnit,
     [switch]$SkipEditor,
     [switch]$SkipRuntime,
+    [switch]$SkipGuard,
     [switch]$CI
 )
 
@@ -110,9 +113,7 @@ function Join-BuildPath([string]$relative) {
 }
 if (-not $ReportPath) { $ReportPath = Join-Path $BuildRoot "gauntlet-report.json" }
 
-# GitHub Actions and most CI systems set $env:CI. No GPU/display there -> the
-# validation smokes cannot run, so fold into build+unit automatically.
-if ($env:CI) { $CI = $true }
+# -CI is explicit on purpose; see the .PARAMETER note. Do not re-add $env:CI sniffing.
 if ($CI) { $SkipEditor = $true; $SkipRuntime = $true }
 
 $LogDir = Join-Path $env:LOCALAPPDATA "AetherCore/logs"
@@ -239,6 +240,34 @@ function Measure-Findings([string[]]$logLines) {
         Tier       = if ($tierLine) { ($tierLine -replace "^.*validation layer enabled", "validation layer enabled").Trim() } else { "unknown" }
         Failing    = $errors.Count + $valWarn.Count + $valInfo.Count
     }
+}
+
+# --- Phase 0: Static guards ----------------------------------------------
+# The architectural check that used to run on a hosted runner. It costs seconds on the
+# machine the code was written on, so there is no reason for it to live anywhere else.
+function Invoke-Guard {
+    Write-Head "Phase 0: GPU abstraction guard"
+    $guardScript = Join-Path $PSScriptRoot "check-gpu-abstraction.ps1"
+    if (-not (Test-Path $guardScript)) {
+        Write-Bad "check-gpu-abstraction.ps1 not found at $guardScript"
+        Add-Phase @{ name = "guard"; status = "fail"; detail = "guard script missing" }
+        return $false
+    }
+    # The guard shells out to ripgrep for every check. Without it each rg call errors and
+    # the checks quietly pass on nothing, so refuse rather than report a false clean.
+    if (-not (Get-Command rg -ErrorAction SilentlyContinue)) {
+        Write-Bad "ripgrep (rg) is not on PATH - the guard cannot run"
+        Add-Phase @{ name = "guard"; status = "fail"; detail = "ripgrep not installed" }
+        return $false
+    }
+    Push-Location $RepoRoot
+    try { & $guardScript; $exit = $LASTEXITCODE }
+    finally { Pop-Location }
+    $ok = ($exit -eq 0)
+    if ($ok) { Write-Ok "No new GPU abstraction leaks" }
+    else { Write-Bad "GPU abstraction guard failed (exit $exit)" }
+    Add-Phase @{ name = "guard"; status = if ($ok) { "pass" } else { "fail" } }
+    return $ok
 }
 
 # --- Phase 1: Build ------------------------------------------------------
@@ -400,6 +429,10 @@ Write-Host "  build: $BuildRoot ($Config)  |  mode: $(if ($CI) { 'CI (build+unit
 
 $results = @{}
 $overall = $true
+
+# Independent of the build, so it runs first and never short-circuits it.
+if ($SkipGuard) { Write-Head "Phase 0: GPU abstraction guard"; Write-Skip "skipped"; Add-Phase @{ name = "guard"; status = "skip" } }
+else { $results.guard = Invoke-Guard; if (-not $results.guard) { $overall = $false } }
 
 if ($SkipBuild) { Write-Head "Phase 1: Build"; Write-Skip "skipped"; Add-Phase @{ name = "build"; status = "skip" } }
 else { $results.build = Invoke-Build; if (-not $results.build) { $overall = $false } }

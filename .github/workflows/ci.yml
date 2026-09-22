@@ -1,32 +1,22 @@
 name: CI
 
-# The gauntlet already knows about CI: it reads $env:CI and folds itself down to
-# build + unit, because the editor and runtime smokes need a GPU and a display that
-# hosted runners do not have. Those two phases stay a local pre-merge step - see
-# scripts/Run-DebugGauntlet.ps1.
+# MANUAL ONLY. This workflow has no automatic trigger.
+#
+# Hosted Windows minutes bill at 2x and a cold build here runs for the better part of
+# an hour, so a push-and-pull-request trigger charged for a compile the developer had
+# already done on the machine they were sitting at.
+#
+# The gate is local: scripts/Run-DebugGauntlet.ps1 runs the GPU abstraction guard, the
+# build, the unit suite, and the two GPU validation smokes a hosted runner cannot run
+# at all - a strict superset of what this workflow ever checked. Dispatch this from the
+# Actions tab only when "does it build on a machine that has never seen this repo" is
+# the actual question.
 on:
-  push:
-    branches: [master]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
-  # Pull requests share one group per branch, so a newer push supersedes the older run:
-  # nobody merges the middle commit, and the Windows job is far too expensive to leave
-  # duplicates running.
-  #
-  # Master gets a group PER COMMIT, so master runs never contend with each other at all.
-  # Two separate mechanisms would otherwise drop them. cancel-in-progress kills runs that
-  # have started - that is what the ref check below turns off. But a run still WAITING is
-  # dropped by a second rule that keeps only the newest pending run per group, which
-  # cancel-in-progress has no say over; three consecutive master commits were lost that way
-  # even after the first fix. A unique group per SHA is the only thing that answers both.
-  #
-  # The cost is that several hour-long Windows jobs can run at once during an active
-  # session. That is the trade: every commit on master is a commit someone can build from,
-  # so every one of them gets built.
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/master' && github.sha || 'shared' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Cheap, fast, and independent of the build: architectural rules and formatting.
@@ -110,12 +100,13 @@ jobs:
       - name: sccache stats
         run: sccache --show-stats
 
-      # The gauntlet sees $env:CI (GitHub sets it) and skips the two GPU smokes on
-      # its own, so this is the same entry point used locally rather than a second,
-      # drifting definition of "what CI runs".
-      - name: Gauntlet (build + unit)
+      # Same entry point developers run, rather than a second, drifting definition of
+      # "what CI runs". -CI is passed explicitly: the script no longer infers it from
+      # $env:CI, because tool shells set that too and it silently skipped the GPU smokes
+      # on local full runs.
+      - name: Gauntlet (guard + build + unit)
         shell: pwsh
-        run: ./scripts/Run-DebugGauntlet.ps1 -BuildDir build/ci-windows -Config RelWithDebInfo -SkipBuild
+        run: ./scripts/Run-DebugGauntlet.ps1 -CI -BuildDir build/ci-windows -Config RelWithDebInfo -SkipBuild
 
       - name: Upload the gauntlet report
         if: always()

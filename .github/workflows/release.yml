@@ -8,11 +8,10 @@ name: Release
 # file from the source tree the binaries were built from. If the editor works here, it
 # works for someone who only downloaded it.
 #
-# Push a tag to publish (`git tag v0.1.0 && git push origin v0.1.0`), or run it by hand
-# from the Actions tab to build the artifacts without creating a release.
+# MANUAL ONLY - pushing a tag does NOT start a build. Run it from the Actions tab and
+# select the tag as the ref to publish that release; run it from a branch to build the
+# artifacts without publishing anything.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:

@@ -272,16 +272,24 @@ Asset references are catalogued through stable `AssetId` values, while texture a
 ## Releases
 
 A release is a self-contained editor: someone downloads one file, installs it, and builds
-games without a compiler, the Vulkan SDK, or this repository. Tagging publishes one.
+games without a compiler, the Vulkan SDK, or this repository.
+
+No workflow in this repository runs automatically - not on push, not on a pull request,
+and not on a tag. Hosted Windows minutes are billed, the build is long, and the same
+build already happens locally. Verification is
+[`scripts/Run-DebugGauntlet.ps1`](scripts/Run-DebugGauntlet.ps1); GitHub Actions is a
+manual, deliberate button.
+
+To publish, tag the commit, push the tag, then dispatch
+[`.github/workflows/release.yml`](.github/workflows/release.yml) from the Actions tab
+**with that tag selected as the ref**. It builds `Release`, stages the payload, bundles a
+.NET runtime, verifies the result, and attaches an installer plus a portable zip to the
+GitHub Release. Dispatched from a branch instead, it builds the same artifacts and
+publishes nothing.
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.1.0 && git push origin v0.1.0   # publishes nothing on its own
 ```
-
-That runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds
-`Release`, stages the payload, bundles a .NET runtime, verifies the result, and attaches
-an installer plus a portable zip to the GitHub Release. Running the workflow manually from
-the Actions tab builds the same artifacts without publishing anything.
 
 What ships is declared in one place - the `_aether_payload` list in
 [`src/app/CMakeLists.txt`](src/app/CMakeLists.txt) - which drives both the build-tree
@@ -369,5 +377,5 @@ docs/                       Architecture, asset, tooling, and design notes
 
 - Third-party dependencies are fetched with CPM and should not be edited under build directories.
 - `clangd` users should regenerate `build/ninja-clang/compile_commands.json` with `cmake --preset clangd` after changing C++ source lists or CMake files.
-- The repository contains doctest-based test sources, but no tests are currently registered with CTest; `ctest` is therefore a no-op today.
+- Verify locally before pushing - no workflow will do it for you: `./scripts/Run-DebugGauntlet.ps1` (GPU abstraction guard, build, unit suite, editor and runtime validation smokes). `ctest --test-dir build/default -C RelWithDebInfo` runs just the two registered suites, `EngineTests` and `ManagedTests`.
 - Generated shader binaries and local tool state are intentionally excluded from source control.

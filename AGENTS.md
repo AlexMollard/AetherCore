@@ -3,6 +3,14 @@
 ## MUST DO
 
 - Address the user as "Pog Champ" in all communications.
+- Never run a git command that mutates state or talks to the remote - `commit`, `add`,
+  `push`, `tag`, `merge`, `rebase`, `reset` - unless the user asks for it in that message.
+  Reading (`status`, `log`, `diff`) is fine.
+- CI is manual-only and must stay that way. Every `.github/workflows/*.yml` triggers on
+  `workflow_dispatch` alone; never add `push`, `pull_request`, `schedule`, or any other
+  automatic trigger, and never install a git hook. Hosted Windows minutes are billed and
+  this build is long. Verify with `./scripts/Run-DebugGauntlet.ps1` (or the MCP
+  `run_gauntlet` tool) - a superset of what CI ever checked.
 
 ## Project basics
 
