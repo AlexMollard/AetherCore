@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "debug/DebugPanel.hpp"
-#include "debug/SceneSelection.hpp"
+#include "SceneSelection.hpp"
 #include "scene/Entity.hpp"
 
 namespace aether

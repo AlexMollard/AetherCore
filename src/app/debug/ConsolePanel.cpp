@@ -1,6 +1,6 @@
 #include "debug/ConsolePanel.hpp"
 #include "debug/EditorChrome.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 
 #include <algorithm>
 #include <cstdio>

@@ -16,7 +16,7 @@
 
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
-#include "debug/UndoStack.hpp"
+#include "editor/UndoStack.hpp"
 #include "FontProcessor.hpp"
 #include "editor/EditorEnginePak.hpp"
 #include "editor/EditorProjectPublisher.hpp"

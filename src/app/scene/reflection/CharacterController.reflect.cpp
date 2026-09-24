@@ -6,7 +6,7 @@
 
 #include "scene/reflection/Reflection.hpp"
 
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "physics/PhysicsComponents.hpp"
 
 using namespace aether;

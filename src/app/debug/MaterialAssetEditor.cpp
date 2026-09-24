@@ -10,8 +10,8 @@
 
 #include "assets/AssetManager.hpp"
 #include "debug/EditorChrome.hpp"
-#include "debug/Icons.hpp"
-#include "debug/EditorDragDrop.hpp"
+#include "Icons.hpp"
+#include "EditorDragDrop.hpp"
 #include "io/FileSystem.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/MaterialSystem.hpp"

@@ -12,7 +12,7 @@
 #include <imgui.h>
 
 #include "Color.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "debug/EditorChrome.hpp"
 #include "project/ProjectPaths.hpp"
 

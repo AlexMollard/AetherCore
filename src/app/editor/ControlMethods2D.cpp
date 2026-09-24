@@ -24,7 +24,7 @@
 #include "camera/CameraManager.hpp"
 #include "debug/TilePaintingState.hpp"
 #include "debug/EditorCommand.hpp"
-#include "debug/UndoStack.hpp"
+#include "editor/UndoStack.hpp"
 #include "io/FileGlobOptions.hpp"
 #include "io/FileSystem.hpp"
 #include "scene/SceneSerializer.hpp"

@@ -6,7 +6,7 @@
 #include <charconv>
 
 #include "assets/SpriteAtlasAsset.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"

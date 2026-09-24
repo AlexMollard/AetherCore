@@ -12,7 +12,7 @@
 #include <imgui.h>
 #include <implot.h>
 
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 
 #include "layers/AppLayer.hpp"
 #include "utils/FrameStats.hpp"

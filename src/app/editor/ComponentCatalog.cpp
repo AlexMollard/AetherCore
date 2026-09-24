@@ -7,7 +7,7 @@
 #include <glm/glm.hpp>
 
 #include "assets/AssetManager.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "material/MaterialSystem.hpp"
 #include "material/TextureRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"

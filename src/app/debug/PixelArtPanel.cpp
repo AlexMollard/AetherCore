@@ -8,7 +8,7 @@
 #include <misc/cpp/imgui_stdlib.h>
 
 #include "debug/EditorChrome.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "debug/PixelArtDocument.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "layers/AppLayer.hpp"

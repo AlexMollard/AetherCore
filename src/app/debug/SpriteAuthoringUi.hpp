@@ -10,9 +10,9 @@
 
 #include "assets/AssetDatabase.hpp"
 #include "debug/EditorChrome.hpp"
-#include "debug/EditorDragDrop.hpp"
-#include "debug/Icons.hpp"
-#include "debug/SceneSelection.hpp"
+#include "EditorDragDrop.hpp"
+#include "Icons.hpp"
+#include "SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
 
 namespace aether::editor::spriteui

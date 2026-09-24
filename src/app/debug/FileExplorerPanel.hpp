@@ -13,7 +13,7 @@
 #include <imgui_internal.h>
 
 #include "debug/DebugPanel.hpp"
-#include "debug/EditorDragDrop.hpp"
+#include "EditorDragDrop.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "material/TextureHandle.hpp"

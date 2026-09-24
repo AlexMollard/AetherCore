@@ -1,6 +1,6 @@
 #include "scene/reflection/Reflection.hpp"
 
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "net/NetComponents.hpp"
 #include "particles/ParticleComponents.hpp"
 #include "scene/BehaviorComponents.hpp"

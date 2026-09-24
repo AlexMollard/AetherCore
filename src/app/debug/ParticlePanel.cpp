@@ -1,6 +1,6 @@
 #include "AetherCore.hpp"
 #include "debug/ParticlePanel.hpp"
-#include "debug/UndoStack.hpp"
+#include "editor/UndoStack.hpp"
 #include "debug/EditorCommand.hpp"
 
 #include <algorithm>
@@ -12,9 +12,9 @@
 #include <imgui.h>
 
 #include "debug/EditorChrome.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "debug/InspectorWidgets.hpp"
-#include "debug/SceneSelection.hpp"
+#include "SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
 #include "particles/ParticleComponents.hpp"
 #include "particles/ParticleSystem.hpp"

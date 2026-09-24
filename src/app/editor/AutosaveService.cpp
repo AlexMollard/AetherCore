@@ -4,7 +4,7 @@
 #include <system_error>
 #include <utility>
 
-#include "debug/UndoStack.hpp"
+#include "editor/UndoStack.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "io/FileUtil.hpp"
 #include "io/IOThread.hpp"

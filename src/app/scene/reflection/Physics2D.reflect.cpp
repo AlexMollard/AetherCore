@@ -5,7 +5,7 @@
 
 #include "scene/reflection/Reflection.hpp"
 
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "physics2d/Physics2DSystem.hpp"
 #include "scene/World.hpp"

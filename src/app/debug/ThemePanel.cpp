@@ -8,7 +8,7 @@
 
 #include <imgui.h>
 
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "io/PlatformPaths.hpp"
 #include "layers/AppLayer.hpp"
 #include "utils/Profiler.hpp"

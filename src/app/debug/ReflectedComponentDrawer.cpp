@@ -10,12 +10,12 @@
 #include <imgui.h>
 
 #include "debug/EditorCommand.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "Color.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/InspectorWidgets.hpp"
-#include "debug/SceneSelection.hpp"
-#include "debug/UndoStack.hpp"
+#include "SceneSelection.hpp"
+#include "editor/UndoStack.hpp"
 #include "editor/ComponentFields.hpp"
 #include "editor/ReflectionJson.hpp"
 #include "scene/Entity.hpp"

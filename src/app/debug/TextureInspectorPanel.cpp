@@ -15,7 +15,7 @@
 
 #include "Color.hpp"
 #include "debug/DebugPanel.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "layers/AppLayer.hpp"

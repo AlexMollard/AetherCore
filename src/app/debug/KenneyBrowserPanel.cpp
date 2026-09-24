@@ -13,7 +13,7 @@
 #include "Color.hpp"
 #include "debug/DebugPanel.hpp"
 #include "debug/EditorChrome.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "layers/AppLayer.hpp"
 

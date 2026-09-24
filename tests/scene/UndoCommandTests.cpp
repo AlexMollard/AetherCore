@@ -21,7 +21,7 @@
 #include "debug/EditorCommand.hpp"
 #include "scene/reflection/Reflection.hpp"
 #include "assets/TileAssetStore.hpp"
-#include "debug/UndoStack.hpp"
+#include "editor/UndoStack.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"

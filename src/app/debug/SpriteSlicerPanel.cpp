@@ -15,7 +15,7 @@
 #include "assets/AssetManager.hpp"
 #include "assets/SpriteAssetStore.hpp"
 #include "debug/EditorChrome.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
 #include "editor/AsepriteSpriteImporter.hpp"
 #include "gpu/ResourceRegistry.hpp"

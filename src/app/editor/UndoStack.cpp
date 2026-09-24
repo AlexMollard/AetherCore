@@ -1,4 +1,4 @@
-#include "debug/UndoStack.hpp"
+#include "editor/UndoStack.hpp"
 
 #include <algorithm>
 #include <iterator>

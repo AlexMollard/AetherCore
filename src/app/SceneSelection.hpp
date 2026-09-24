@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "debug/EditorDragDrop.hpp"
+#include "EditorDragDrop.hpp"
 #include "scene/Entity.hpp"
 #include "scene/World.hpp"
 

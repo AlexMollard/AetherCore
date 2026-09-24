@@ -15,11 +15,11 @@
 #include "debug/DebugPanel.hpp"
 #include "debug/EditorProjectManager.hpp"
 #include "debug/EditorWindowActions.hpp"
-#include "debug/SceneSelection.hpp"
+#include "SceneSelection.hpp"
 #include "debug/ScriptErrorOverlay.hpp"
 #include "debug/PixelArtDocument.hpp"
 #include "debug/TilePaintingState.hpp"
-#include "debug/UndoStack.hpp"
+#include "editor/UndoStack.hpp"
 #include "editor/AutosaveService.hpp"
 #include "scene/BackgroundSceneWriter.hpp"
 

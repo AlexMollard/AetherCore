@@ -1,6 +1,6 @@
 #include "debug/ProjectPanel.hpp"
 #include "debug/EditorChrome.hpp"
-#include "debug/SceneSelection.hpp"
+#include "SceneSelection.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 #include "debug/InspectorWidgets.hpp"
@@ -29,7 +29,7 @@
 #	include <shellapi.h>
 #endif
 
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/TileAssetStore.hpp"

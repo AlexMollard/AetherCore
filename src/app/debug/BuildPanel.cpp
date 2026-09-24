@@ -20,7 +20,7 @@
 #	include <shellapi.h>
 #endif
 
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "layers/AppLayer.hpp"

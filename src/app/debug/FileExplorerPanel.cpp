@@ -25,11 +25,11 @@
 #include <imgui.h>
 
 #include "assets/AssetManager.hpp"
-#include "debug/EditorDragDrop.hpp"
+#include "EditorDragDrop.hpp"
 #include "debug/EditorShortcuts.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "debug/OpenInEditor.hpp"
-#include "debug/SceneSelection.hpp"
+#include "SceneSelection.hpp"
 #include "editor/ModelImport.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"

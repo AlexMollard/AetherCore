@@ -11,7 +11,7 @@
 #include <imgui.h>
 
 #include "debug/EditorChrome.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "layers/AppLayer.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Profiler.hpp"

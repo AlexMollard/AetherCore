@@ -41,7 +41,7 @@ using namespace std::string_view_literals;
 #include "debug/DevToolsPanel.hpp"
 #include "debug/FileExplorerPanel.hpp"
 #include "debug/EditorChrome.hpp"
-#include "debug/Icons.hpp"
+#include "Icons.hpp"
 #include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
 #include "debug/KenneyBrowserPanel.hpp"
