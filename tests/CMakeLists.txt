@@ -1,6 +1,6 @@
 # Engine/tooling unit tests. Test sources are globbed (CONFIGURE_DEPENDS) like the rest of
-# the build; the app-side TUs below live in src/app and are listed explicitly since they
-# can't be globbed from here.
+# the build; the app-side TUs below live in src/app and src/editor and are listed
+# explicitly since they can't be globbed from here.
 file(GLOB_RECURSE ENGINE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 add_executable(EngineTests
@@ -10,16 +10,19 @@ add_executable(EngineTests
     # from the RuntimeFramework OBJECT library below - no third copy is compiled here.
     #
     # What remains listed is either editor/tooling-only code the framework does not
-    # carry (src/app/editor, src/app/debug, src/app/imgui) or a per-target file
+    # carry (src/editor/{editor,debug,imgui}) or a per-target file
     # (CSharpScriptingSubsystem.cpp - macro-config-sensitive, see src/app/CMakeLists.txt).
-    "${CMAKE_SOURCE_DIR}/src/app/editor/ShaderCompiler.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/debug/ScenePicker.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/ShaderCompiler.cpp"
+    # ShaderCompiler resolves material graphs through the materialgraph/ tree, which
+    # moved out of the framework's runtime set along with the rest of the editor tree.
+    "${CMAKE_SOURCE_DIR}/src/editor/materialgraph/MaterialGraph.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/debug/ScenePicker.cpp"
     # Autosave's recovery rules: pure filesystem logic, and the half where a mistake
     # destroys work rather than merely failing to save it.
-    "${CMAKE_SOURCE_DIR}/src/app/editor/AutosaveRecovery.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/AutosaveRecovery.cpp"
     # What a refused control call says: pure text over pure data, and the difference
     # between a caller that can fix the call and one that has to go and read describe.
-    "${CMAKE_SOURCE_DIR}/src/app/editor/ControlDiagnostics.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/ControlDiagnostics.cpp"
     # Compile/link-only: the managed assemblies are never staged next to EngineTests.exe,
     # so scripting has no scripts to load here. (nethost.dll IS staged by the POST_BUILD
     # below - Engine imports it unconditionally once the .NET host pack is found.) The
@@ -27,23 +30,26 @@ add_executable(EngineTests
     # Editor-only define and is deliberately NOT set here. DotNetHost.cpp
     # (src/engine/scripting) needs no listing - it is globbed into Engine already.
     "${CMAKE_SOURCE_DIR}/src/app/scripting/CSharpScriptingSubsystem.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/imgui/ImguiFrameData.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/AsepriteSpriteImporter.cpp"
     # Publish planning and package verification. Pure/near-pure halves of the publish
     # pipeline; the IO steps stay out of the test build.
-    "${CMAKE_SOURCE_DIR}/src/app/editor/publish/PublishPlan.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/editor/publish/PublishVerify.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/imgui/UiInputScript.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/imgui/UiAutomation.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishPlan.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishVerify.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/imgui/UiInputScript.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/imgui/UiAutomation.cpp"
     # Editor undo/redo command logic under test. The typed component commands
     # (add/remove/set) resolve components through the editor catalog and the
     # hand-authored field sets, so both TUs are compiled in alongside them.
-    "${CMAKE_SOURCE_DIR}/src/app/editor/UndoStack.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/debug/EditorCommand.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/editor/ComponentCatalog.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/editor/ComponentFields.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/UndoStack.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/debug/EditorCommand.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/ComponentCatalog.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/ComponentFields.cpp"
 )
 target_link_libraries(EngineTests PRIVATE Engine AssetPipeline RuntimeFramework doctest::doctest imgui nlohmann_json::nlohmann_json)
+# The editor-side TUs above include their headers through preserved prefixes
+# ("editor/...", "imgui/..."), which now resolve under src/editor.
+target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/editor")
 # Engine carries a real DotNetHost (AETHER_HAS_DOTNET is a PUBLIC define), so this exe
 # imports nethost.dll even though no test touches scripting. Stage the DLL beside it;
 # IsAvailable() may then return true, but no test depends on it being false.

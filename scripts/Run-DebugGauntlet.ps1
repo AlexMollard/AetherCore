@@ -479,6 +479,8 @@ else {
     # The editor is always project-scoped now: pass --project (as F5 does), else it
     # exits requesting one. (Launching the Launcher would spawn a separate process the
     # smoke can't track, so drive the Editor directly.)
+    # Editor.exe's OUTPUT dir follows the CMakeLists location (src/app), not the
+    # source tree move - only the sources live in src/editor.
     else { $results.editor = Invoke-Smoke -Name "editor" -ExePath "src/app/{config}/Editor.exe" -LogName "Editor.log" -ExeArgs "--project `"$RepoRoot\projects\TestingProject`""; if (-not $results.editor) { $overall = $false } }
 
     if ($SkipRuntime) { Write-Head "Phase: runtime smoke"; Write-Skip $(if ($CI) { "skipped (CI: no GPU/display)" } else { "skipped" }); Add-Phase @{ name = "runtime"; status = "skip" } }

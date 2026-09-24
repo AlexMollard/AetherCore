@@ -399,7 +399,7 @@ if(TARGET libzstd_static AND NOT TARGET zstd::libzstd_static)
 endif()
 
 # ── Editor control endpoint (JSON + ENet transport) ───────────────────────────
-# Used by the editor-only ControlServer (src/app/editor) and the aether-ctl CLI
+# Used by the editor-only ControlServer (src/editor/editor) and the aether-ctl CLI
 # (tools/control-client) for the localhost MCP control channel. Linked only where
 # used, so GameRuntime carries neither.
 CPMAddPackage(

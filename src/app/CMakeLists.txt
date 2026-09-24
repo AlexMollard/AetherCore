@@ -1,40 +1,50 @@
 file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 file(GLOB_RECURSE APP_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 
+# ── Editor-side sources (src/editor) ────────────────────────────────────────
+# The editor framework split moved editor/, debug/, imgui/, launcher/ and
+# materialgraph/ out of src/app into a sibling src/editor tree. Include prefixes
+# were preserved (headers are still included as "editor/Foo.hpp" etc.), so the
+# only change is where those paths resolve from: src/editor joins the include
+# path wherever editor-side headers are needed.
+set(AETHERCORE_EDITOR_TREE_DIR "${CMAKE_SOURCE_DIR}/src/editor")
+file(GLOB_RECURSE EDITOR_TREE_SOURCES CONFIGURE_DEPENDS "${AETHERCORE_EDITOR_TREE_DIR}/*.cpp")
+file(GLOB_RECURSE EDITOR_TREE_HEADERS CONFIGURE_DEPENDS "${AETHERCORE_EDITOR_TREE_DIR}/*.hpp")
+
 # ── Editor sources ──────────────────────────────────────────────────────────
-# The full editor. Excludes only launcher/ (its LauncherMain.cpp is a second main()).
-set(APP_EDITOR_SOURCES ${APP_SOURCES})
+# The full editor: the app runtime tree plus the whole editor tree, excluding
+# only launcher/ (its LauncherMain.cpp is a second main()).
+set(APP_EDITOR_SOURCES ${APP_SOURCES} ${EDITOR_TREE_SOURCES})
 list(FILTER APP_EDITOR_SOURCES EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
 
 # ── GameRuntime sources ─────────────────────────────────────────────────────
 # Shipped runtime: no editor UI, no imgui (tooling-only; see rendering/IUiOverlay.hpp +
-# the AETHERCORE_WITH_IMGUI gate in Application.cpp), no launcher. project/ STAYS in:
+# the AETHERCORE_WITH_IMGUI gate in Application.cpp), no launcher. src/app now holds
+# ONLY runtime code - the editor-side trees above moved to src/editor - so the only
+# remaining exclusion is the one dev-only layer that stayed behind. project/ STAYS in:
 # it is runtime code (ProjectPaths, ProjectStartupScene, ProjectCommon), used by
 # RuntimeProjectSettings and EngineTests - not editor tooling.
 set(APP_RUNTIME_SOURCES ${APP_SOURCES})
 set(APP_RUNTIME_HEADERS ${APP_HEADERS})
-list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
-list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
 list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
-list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]imgui[/\\\\]")
-list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "EditorGuiExports")  # ImGui bridge: editor-only, never in a shipped runtime
-list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
-list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
-list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
+# ImGui bridge TU: editor-only, never in a shipped runtime. It lives in the runtime
+# tree (scripting/interop) but only compiles where imgui is linked.
+list(FILTER APP_RUNTIME_SOURCES EXCLUDE REGEX "EditorGuiExports")
 list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.hpp$")
-list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]imgui[/\\\\]")
-list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]launcher[/\\\\]")
 
 # ── Launcher sources ────────────────────────────────────────────────────────
 # Slim project-hub front end (own entry launcher/LauncherMain.cpp + LauncherLayer + shared
 # ProjectCommon + app framework + imgui). Excludes the editor, C# host, scene systems, and
 # serialization - it runs on a UiShell engine and only spawns Editor. From debug/ it keeps
 # only ProjectLauncherWindow (its other deps are header-only).
-set(APP_LAUNCHER_SOURCES ${APP_SOURCES})
+set(APP_LAUNCHER_SOURCES ${APP_SOURCES} ${EDITOR_TREE_SOURCES})
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]main\\.cpp$")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]PlaySession\\.cpp$")
-list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]debug[/\\\\]")
-list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]editor[/\\\\]")
+# NB: these two are anchored to the src/editor tree root. A bare "[/\\]editor[/\\]"
+# segment regex would also match the tree root itself ("src\editor\...") and wipe
+# every editor-side source, imgui/ and materialgraph/ included.
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]src[/\\\\]editor[/\\\\]debug[/\\\\]")
+list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]src[/\\\\]editor[/\\\\]editor[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scripting[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]systems[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scene[/\\\\]")
@@ -43,15 +53,15 @@ list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scene[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]net[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.cpp$")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]layers[/\\\\]ScriptedSceneLayer\\.cpp$")
-list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/debug/ProjectLauncherWindow.cpp")
+list(APPEND APP_LAUNCHER_SOURCES "${AETHERCORE_EDITOR_TREE_DIR}/debug/ProjectLauncherWindow.cpp")
 # Shared localhost ENet transport only. The Launcher supplies its own small method
 # table in LauncherLayer.cpp; the editor-only ControlMethods.cpp stays excluded.
-list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/editor/ControlServer.cpp")
+list(APPEND APP_LAUNCHER_SOURCES "${AETHERCORE_EDITOR_TREE_DIR}/editor/ControlServer.cpp")
 # ControlServer's refusal text lives here, and it is pure string/JSON work over the
 # method table - no editor dependency, so the slim Launcher can take it. It has to be
 # listed: editor/ is excluded wholesale above, so a file ControlServer.cpp needs is not
 # picked up just because it sits next to it.
-list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/editor/ControlDiagnostics.cpp")
+list(APPEND APP_LAUNCHER_SOURCES "${AETHERCORE_EDITOR_TREE_DIR}/editor/ControlDiagnostics.cpp")
 
 # ── RuntimeFramework ────────────────────────────────────────────────────────
 # The runtime source set, compiled ONCE and consumed by Editor, GameRuntime and EngineTests.
@@ -81,7 +91,12 @@ list(REMOVE_ITEM APP_FRAMEWORK_SOURCES ${APP_CONFIG_SENSITIVE_SOURCES})
 add_library(RuntimeFramework OBJECT ${APP_FRAMEWORK_SOURCES} ${APP_RUNTIME_HEADERS})
 # PUBLIC: the OBJECT lib needs src/app to compile its own sources, and consumers
 # (Editor/GameRuntime/EngineTests) get it transitively - no per-target copy needed.
-target_include_directories(RuntimeFramework PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+# src/editor is also PUBLIC: some runtime TUs include editor-side headers through
+# their preserved prefixes (PlaySession.cpp -> "editor/UndoStack.hpp" ->
+# "debug/EditorCommand.hpp"), which now resolve under src/editor.
+target_include_directories(RuntimeFramework PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${AETHERCORE_EDITOR_TREE_DIR}")
 target_link_libraries(RuntimeFramework PUBLIC Engine)
 # Header-only, so this adds nothing to a shipped binary. Needed because runtime sources
 # (PlaySession.cpp -> editor/UndoStack.hpp -> debug/EditorCommand.hpp) transitively include
@@ -115,7 +130,8 @@ add_executable(Editor)
 target_sources(Editor
     PRIVATE
         ${APP_EDITOR_SOURCES}
-        ${APP_HEADERS})
+        ${APP_HEADERS}
+        ${EDITOR_TREE_HEADERS})
 endif()
 add_executable(GameRuntime)
 target_sources(GameRuntime
@@ -210,9 +226,9 @@ target_compile_definitions(Editor PRIVATE
     AETHERCORE_KENNEY_CACHE_DIR="${CMAKE_SOURCE_DIR}/.temp/kenney-cache"
 )
 
-# Dev-only project shader compilation (ShaderCompiler, src/app/editor). Defined only when
+# Dev-only project shader compilation (ShaderCompiler, src/editor/editor). Defined only when
 # CMake found slangc; otherwise ShaderCompiler::CanCompileShaders() is a graceful no-op.
-# GameRuntime never gets it (editor/ is excluded from its sources).
+# GameRuntime never gets it (editor code lives outside its src/app source set).
 if(SLANGC_EXECUTABLE)
     target_compile_definitions(Editor PRIVATE
         AETHER_SLANGC_EXE="${SLANGC_EXECUTABLE}"
@@ -475,8 +491,10 @@ endif()
 # or scene systems are linked into the hub.
 if(AETHERCORE_BUILD_LAUNCHER)
 add_executable(Launcher)
-target_sources(Launcher PRIVATE ${APP_LAUNCHER_SOURCES} ${APP_HEADERS})
-target_include_directories(Launcher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_sources(Launcher PRIVATE ${APP_LAUNCHER_SOURCES} ${APP_HEADERS} ${EDITOR_TREE_HEADERS})
+target_include_directories(Launcher PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${AETHERCORE_EDITOR_TREE_DIR}")
 target_link_libraries(Launcher PRIVATE Engine imgui nlohmann_json::nlohmann_json enet)
 if(WIN32)
     target_link_libraries(Launcher PRIVATE ws2_32 winmm)
