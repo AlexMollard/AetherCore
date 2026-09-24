@@ -6,13 +6,9 @@ set(AETHERCORE_SHADER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders" CACHE
 set(AETHERCORE_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders" CACHE PATH "Directory for compiled shader outputs")
 set(AETHERCORE_SLANG_SHADER_ARGS "-target spirv -emit-spirv-directly -fvk-use-scalar-layout -matrix-layout-column-major" CACHE STRING "Extra arguments passed to slangc for shader compilation")
 
-function(aethercore_enable_slang_shader_compilation target_name)
+function(aethercore_declare_shader_compilation)
     if (NOT AETHERCORE_ENABLE_SLANG)
         return()
-    endif()
-
-    if (NOT TARGET ${target_name})
-        message(FATAL_ERROR "Target '${target_name}' does not exist; cannot attach Slang shader compilation")
     endif()
 
     set(_aethercore_slang_hints "")
@@ -105,9 +101,21 @@ function(aethercore_enable_slang_shader_compilation target_name)
         list(APPEND AETHERCORE_SHADER_OUTPUTS "${_shader_output}")
     endforeach()
 
-    # Fixed name (this function is registered once, for the Editor) so the target is
-    # plain "CompileShaders" rather than "<target>_CompileShaders".
-    add_custom_target(CompileShaders ALL DEPENDS ${AETHERCORE_SHADER_OUTPUTS})
-    set_target_properties(CompileShaders PROPERTIES FOLDER "Build")
+    # Standalone custom target: shader compilation must not depend on any one consumer
+    # existing - engine.pak baking needs it in runtime-only builds where the Editor is OFF.
+    # Idempotent so late aethercore_enable_slang_shader_compilation() callers don't re-add it.
+    if (NOT TARGET CompileShaders)
+        add_custom_target(CompileShaders ALL DEPENDS ${AETHERCORE_SHADER_OUTPUTS})
+        set_target_properties(CompileShaders PROPERTIES FOLDER "Build")
+    endif()
+endfunction()
+
+# Attaches shader compilation to <target>: declares the standalone CompileShaders target
+# (no-op if it already exists) and makes <target> depend on it.
+function(aethercore_enable_slang_shader_compilation target_name)
+    aethercore_declare_shader_compilation()
+    if (NOT TARGET ${target_name})
+        message(FATAL_ERROR "Target '${target_name}' does not exist; cannot attach Slang shader compilation")
+    endif()
     add_dependencies(${target_name} CompileShaders)
 endfunction()

@@ -4,12 +4,18 @@
     Rebuild and repack all game assets into assets.pak.
 .DESCRIPTION
     Presents an interactive menu to select a build preset and configuration,
-    then configures (if needed), builds AssetPacker + Editor (which triggers the
-    POST_BUILD asset-packing step), and syncs the LSP compilation database.
+    then configures (if needed), builds the asset-packing target (Editor by
+    default, EngineAssetsPak in runtime-only trees - see -Target), and syncs the
+    LSP compilation database.
 .PARAMETER Preset
     Skip the menu and use this preset directly.
 .PARAMETER Config
     Build configuration (Debug, RelWithDebInfo, Release). Default: RelWithDebInfo.
+.PARAMETER Target
+    CMake target to build (default: Editor, which compiles AssetPacker and runs
+    the packer via its dependency chain). In a build tree configured with
+    AETHERCORE_BUILD_EDITOR=OFF the script falls back to the EngineAssetsPak
+    custom target, which packs data/engine.pak without any editor present.
 .PARAMETER NoLspSync
     Skip the final cmake --preset clangd step.
 .EXAMPLE
@@ -21,6 +27,7 @@
 param(
     [string]$Preset = "",
     [string]$Config = "",
+    [string]$Target = "",
     [switch]$NoLspSync
 )
 
@@ -77,6 +84,22 @@ try {
         if ($LASTEXITCODE -ne 0) { Write-Error "cmake configure failed"; exit 1 }
     }
 
+    # ── Resolve the target to build ────────────────────────────────────
+    # Default is Editor (AssetPacker compiles as its dependency and the pack step
+    # runs in the chain). A runtime-only tree (AETHERCORE_BUILD_EDITOR=OFF) has no
+    # Editor target, so fall back to EngineAssetsPak - the unconditional custom
+    # target that packs data/engine.pak - unless the caller named a target.
+    if (-not $Target) {
+        $Target = "Editor"
+        $CacheFile = "$RepoRoot\$BinDir\CMakeCache.txt"
+        if (Test-Path $CacheFile -PathType Leaf) {
+            if (Select-String -LiteralPath $CacheFile -Pattern '^AETHERCORE_BUILD_EDITOR:BOOL=OFF' -Quiet) {
+                $Target = "EngineAssetsPak"
+                Write-Host "AETHERCORE_BUILD_EDITOR=OFF - building EngineAssetsPak instead of Editor." -ForegroundColor Yellow
+            }
+        }
+    }
+
     # ── Force full repack ──────────────────────────────────────────────
     # Delete the incremental-build manifest so AssetPacker re-processes
     # every source file regardless of mtime (important after packer changes).
@@ -86,10 +109,10 @@ try {
         Remove-Item -LiteralPath $PakManifest -Force
     }
 
-    # ── Build Editor (AssetPacker is compiled as a dependency, POST_BUILD
-    #    step runs it to produce assets.pak) ─────────────────────────────
-    Write-Host "`nBuilding Editor (compiles AssetPacker + runs packer via POST_BUILD)..." -ForegroundColor Yellow
-    cmake --build --preset $Preset --config $Config --target Editor *>&1 | Out-Host
+    # ── Build the resolved target (Editor pulls in AssetPacker; EngineAssetsPak
+    #    runs the packer directly in runtime-only trees) ────────────────
+    Write-Host "`nBuilding $Target..." -ForegroundColor Yellow
+    cmake --build --preset $Preset --config $Config --target $Target *>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Build failed - check errors above"
         exit 1

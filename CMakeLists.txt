@@ -33,6 +33,18 @@ aethercore_enable_compiler_cache()
 option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for faster iterative builds" ON)
 option(AETHERCORE_DEAD_STRIP_REPORT
     "Emit link map files (and per-section gc log) for Editor and AssetPacker" OFF)
+# App targets. GameRuntime and RuntimeFramework are always built (they ARE the framework); the
+# editor and the launcher are optional front ends so a runtime-only configure is possible.
+option(AETHERCORE_BUILD_EDITOR "Build the Editor executable" ON)
+option(AETHERCORE_BUILD_LAUNCHER "Build the Launcher executable" ON)
+# These used to be $<TARGET_FILE_NAME:...> genexes baked into compile definitions, which
+# hard-couples the Editor/Launcher to being real targets. Plain cache strings (overridable)
+# keep publish planning and the Launcher's spawn logic working when those exes are OFF -
+# the value is just a name, and defaults match the targets' OUTPUT_NAMEs.
+set(AETHER_EDITOR_EXE_NAME "Editor.exe" CACHE STRING
+    "File name of the Editor executable (publish verification and Launcher spawn)")
+set(AETHER_GAME_RUNTIME_EXE_NAME "AetherGame.exe" CACHE STRING
+    "File name of the GameRuntime executable (baked into the editor binary)")
 
 # Default project for the dev runtime and the VS debugger launch args.
 set(AETHERCORE_PROJECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/projects/TestingProject"
@@ -65,7 +77,9 @@ if(AETHERCORE_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT Editor)   # F5 default
+if(TARGET Editor)
+    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT Editor)   # F5 default
+endif()
 
 # ── Solution Explorer folders ───────────────────────────────────────────────
 # Runs after every add_subdirectory so all targets exist; if(TARGET) guards skip

@@ -47,3 +47,4 @@ src/engine/rendering/ScreenshotService.cpp: VkPipelineStageFlags sourceStage = V
 src/engine/rendering/ScreenshotService.cpp: vkQueueWaitIdle(static_cast<VkQueue>(m_queue));
 src/engine/rendering/ScreenshotService.hpp: bool Capture(void* image, std::uint32_t width, std::uint32_t height, gpu::Format format, gpu::ImageAspect aspect, std::int32_t vkSrcLayout, const std::string& path);
 src/engine/ui/UiRenderer.cpp: AE_ERROR(LogCategory::UI, "UiRenderer: HostCopyToImage failed for the curves of '{}' (VkResult={})", name, copyResult);
+src/engine/rendering/ScreenshotService.cpp: vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);

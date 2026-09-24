@@ -52,8 +52,13 @@ _SOURCE_ROOTS = ("src", "tools")
 # drop a candidate. Update this map when adding new top-level executables.
 # Keys are matched as path segments (whole-directory), so an exact match like
 # "src/app" is unambiguous: anything whose path contains a "src/app" segment.
+# Editor sources live under "src/app" today and move to a top-level "editor/"
+# during the editor/framework split; both keys map to the same Editor target,
+# and a key whose directory does not exist simply never matches (no error) -
+# after the move, "src/app" no longer matching is expected and harmless.
 _SOURCE_REACH = {
     "src/app":          frozenset({"Editor"}),
+    "editor":           frozenset({"Editor"}),
     "src/engine":       frozenset({"Editor", "AssetPacker"}),
     "tools/assetpack":  frozenset({"AssetPacker"}),
 }
@@ -389,7 +394,8 @@ def main() -> int:
         md.append("")
     md.append("## How the per-target filter works")
     md.append("")
-    md.append("- `src/app/*.cpp` are only considered for `Editor`.")
+    md.append("- `src/app/*.cpp` (and, after the editor/framework split,")
+    md.append("  `editor/*.cpp`) are only considered for `Editor`.")
     md.append("- `tools/assetpack/*.cpp` are only considered for `AssetPacker`.")
     md.append("- `src/engine/*.cpp` are considered for both (they are compiled into")
     md.append("  the `Engine` static lib which both executables link).")

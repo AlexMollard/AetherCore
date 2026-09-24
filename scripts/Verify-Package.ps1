@@ -19,11 +19,17 @@ The staged package directory to check.
 .PARAMETER RequireBundledRuntime
 Require a bundled .NET runtime under dotnet/. The release workflow sets this; a local
 `cmake --install` has no runtime staged and should not be failed for it.
+
+.PARAMETER RuntimeOnly
+Verify a runtime-only package (AETHERCORE_BUILD_EDITOR=OFF): Editor.exe and
+Launcher.exe become optional and only the runtime surface (AetherGame.exe,
+nethost.dll, data/) is required. Default (all-targets) behaviour is unchanged.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$PayloadDir,
-    [switch]$RequireBundledRuntime
+    [switch]$RequireBundledRuntime,
+    [switch]$RuntimeOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,9 +60,12 @@ function Require-Dir([string]$relative, [string]$why) {
     }
 }
 
-# The applications themselves.
-Require-File 'Launcher.exe' 'the project hub is the entry point users start from'
-Require-File 'Editor.exe'   'the editor'
+# The applications themselves. A runtime-only package (AETHERCORE_BUILD_EDITOR=OFF)
+# ships only the game runtime, so the editor-side exes are checked unless -RuntimeOnly.
+if (-not $RuntimeOnly) {
+    Require-File 'Launcher.exe' 'the project hub is the entry point users start from'
+    Require-File 'Editor.exe'   'the editor'
+}
 Require-File 'AetherGame.exe' 'the runtime the editor copies when publishing a game'
 Require-File 'nethost.dll'  'CoreCLR cannot be bootstrapped without it'
 

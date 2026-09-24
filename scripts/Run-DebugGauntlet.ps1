@@ -30,7 +30,9 @@
 .PARAMETER Config
     Multi-config build type: Debug or Release (default: Debug).
 .PARAMETER Targets
-    Targets to build (default: Editor GameRuntime EngineTests).
+    Targets to build (default: Editor GameRuntime EngineTests). In a build tree
+    configured with AETHERCORE_BUILD_EDITOR=OFF, Editor is dropped automatically
+    and the editor smoke is skipped (runtime + tests still run).
 .PARAMETER RunSeconds
     Frames-worth of extra runtime AFTER the startup scene loads, per smoke
     (default: 12). GPU-AV instrumentation is slow; bump this for that tier.
@@ -112,6 +114,19 @@ function Join-BuildPath([string]$relative) {
     return Join-Path $BuildRoot $resolved
 }
 if (-not $ReportPath) { $ReportPath = Join-Path $BuildRoot "gauntlet-report.json" }
+
+# Runtime-only tolerance. A tree configured with AETHERCORE_BUILD_EDITOR=OFF has no
+# Editor target, so asking cmake to build it (or smoking its exe) would fail for a
+# reason that is not a regression. The build directory's cache is the authority;
+# a not-yet-configured tree keeps the default all-targets behaviour.
+$EditorDisabled = $false
+if (Test-Path $CacheFile) {
+    $EditorDisabled = [bool](Select-String -LiteralPath $CacheFile -Pattern '^AETHERCORE_BUILD_EDITOR:BOOL=OFF' -Quiet)
+}
+if ($EditorDisabled -and $Targets -contains "Editor") {
+    $Targets = @($Targets | Where-Object { $_ -ne "Editor" })
+    Write-Host "  AETHERCORE_BUILD_EDITOR=OFF in this build tree - dropped Editor from the target list." -ForegroundColor DarkYellow
+}
 
 # -CI is explicit on purpose; see the .PARAMETER note. Do not re-add $env:CI sniffing.
 if ($CI) { $SkipEditor = $true; $SkipRuntime = $true }
@@ -279,7 +294,12 @@ function Invoke-Build {
         Write-Note "Removed built paks - shaders will repack."
     }
     $args = @("--build", $BuildRoot, "--config", $Config, "--target") + $Targets
+    # CMake prints status (e.g. "volk: using Vulkan_INCLUDE_DIRS...") on stderr; under
+    # $ErrorActionPreference="Stop" the 2>&1 merge turns those into terminating
+    # NativeCommandErrors. Success is judged by $LASTEXITCODE + error regex below.
+    $ErrorActionPreference = "Continue"
     $output = & cmake @args 2>&1
+    $ErrorActionPreference = "Stop"
     $exit = $LASTEXITCODE
     $sw.Stop()
     $compileErrors = @($output | Where-Object { $_ -match "error C[0-9]|error LNK|error MSB|: error " } | Select-Object -First 25)
@@ -302,7 +322,11 @@ function Invoke-UnitTests {
         Add-Phase @{ name = "unit"; status = "fail"; detail = "EngineTests.exe missing" }
         return $false
     }
+    # Same NativeCommandError trap as Invoke-Build: the exe logs to stderr and
+    # $ErrorActionPreference="Stop" would terminate on the merge.
+    $ErrorActionPreference = "Continue"
     $output = & $exe 2>&1
+    $ErrorActionPreference = "Stop"
     $exit = $LASTEXITCODE
     $summary = ($output | Where-Object { $_ -match "test cases:" }) | Select-Object -First 1
     $cases = 0; $passed = 0; $failed = 0
@@ -447,6 +471,11 @@ else {
     else { $results.unit = Invoke-UnitTests; if (-not $results.unit) { $overall = $false } }
 
     if ($SkipEditor) { Write-Head "Phase: editor smoke"; Write-Skip $(if ($CI) { "skipped (CI: no GPU/display)" } else { "skipped" }); Add-Phase @{ name = "editor"; status = "skip" } }
+    elseif ($EditorDisabled) {
+        Write-Head "Phase: editor smoke"
+        Write-Skip "skipped (AETHERCORE_BUILD_EDITOR=OFF - runtime-only tree, no Editor to smoke)"
+        Add-Phase @{ name = "editor"; status = "skip"; detail = "editor not built (AETHERCORE_BUILD_EDITOR=OFF)" }
+    }
     # The editor is always project-scoped now: pass --project (as F5 does), else it
     # exits requesting one. (Launching the Launcher would spawn a separate process the
     # smoke can't track, so drive the Editor directly.)

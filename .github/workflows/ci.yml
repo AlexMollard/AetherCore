@@ -83,7 +83,7 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Configure
-        run: cmake --preset ci-windows -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        run: cmake --preset ci-windows -DAETHERCORE_BUILD_EDITOR=ON -DAETHERCORE_BUILD_LAUNCHER=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
         env:
           CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache
           SCCACHE_GHA_ENABLED: "true"
