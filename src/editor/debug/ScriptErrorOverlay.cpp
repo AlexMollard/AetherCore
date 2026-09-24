@@ -258,7 +258,7 @@ namespace aether::editor
 				ImGui::SetItemTooltip("%s", toast.filePath.c_str());
 				previousFile = toast.filePath;
 			}
-			ImGui::PushStyleColor(ImGuiCol_Text, chrome::C(colors::Error));
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kError);
 			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
 			ImGui::TextWrapped("%s", MessageWithoutLocation(toast.summary).c_str());
 			ImGui::PopTextWrapPos();

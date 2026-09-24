@@ -93,6 +93,47 @@ namespace aether::editor::chrome
 		return theme;
 	}
 
+	// Crash Twinsanity workbench palette: saturated orange accents over deep violet/indigo
+	// surfaces, warm off-white text, high contrast. Paired with chunkier rounding via
+	// ApplyImGuiRounding when a twinsanity-flavored project opens.
+	[[nodiscard]] inline EditorTheme TwinsanityTheme()
+	{
+		return EditorTheme{
+		        .background = C(colors::detail::rgb(24, 17, 43)),
+		        .surface = C(colors::detail::rgb(37, 27, 64)),
+		        .surfaceElevated = C(colors::detail::rgb(49, 36, 84)),
+		        .border = C(colors::detail::rgb(76, 57, 122)),
+		        .accent = C(colors::detail::rgb(255, 140, 26)),
+		        .accentHover = C(colors::detail::rgb(255, 167, 77)),
+		        .accentActive = C(colors::detail::rgb(198, 101, 10)),
+		        .onAccent = C(colors::detail::rgb(26, 16, 38)),
+		        .textPrimary = C(colors::detail::rgb(244, 233, 222)),
+		        .textSecondary = C(colors::detail::rgb(184, 168, 201)),
+		        .textFaint = C(colors::detail::rgb(126, 111, 152)),
+		        .success = C(colors::detail::rgb(88, 200, 110)),
+		        .warning = C(colors::detail::rgb(255, 201, 60)),
+		        .error = C(colors::detail::rgb(255, 78, 78)),
+		};
+	}
+
+	// Default chrome rounding, mirroring the style block in ImguiSubsystem's init. A flavor
+	// theme may override it for the session; the unflavored path restores these.
+	constexpr float kDefaultFrameRounding = 3.0f;
+
+	inline void ApplyImGuiRounding(const float rounding)
+	{
+		ImGuiStyle& style = ImGui::GetStyle();
+		style.FrameRounding = rounding;
+		style.GrabRounding = rounding;
+		style.ChildRounding = rounding;
+		style.PopupRounding = rounding;
+		style.TabRounding = rounding;
+		// Window chrome stays square in every theme; only the scrollbar thumb keeps the
+		// hard-edged default.
+		style.WindowRounding = 0.0f;
+		style.ScrollbarRounding = 0.0f;
+	}
+
 	inline ImVec4 kBg = C(colors::Background);
 	inline ImVec4 kPanel = C(colors::Surface);
 	inline ImVec4 kPanelHi = C(colors::SurfaceElevated);

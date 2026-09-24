@@ -46,20 +46,20 @@ namespace aether::editor
 			auto* server = context.TryGet<editor::ControlServer>();
 			if (server == nullptr)
 			{
-				ImGui::TextColored(ToImVec4(colors::Error), "Control server unavailable (editor build only).");
+				ImGui::TextColored(chrome::kError, "Control server unavailable (editor build only).");
 			}
 			else
 			{
 				const bool running = server->IsRunning();
 				if (running)
 				{
-					ImGui::TextColored(ToImVec4(colors::Success), "%s", "\xE2\x97\x8F Listening");
+					ImGui::TextColored(chrome::kSuccess, "%s", "\xE2\x97\x8F Listening");
 					ImGui::SameLine();
 					ImGui::Text("127.0.0.1:%d", server->Port());
 				}
 				else
 				{
-					ImGui::TextColored(ToImVec4(colors::TextSecondary), "%s", "\xE2\x97\x8B Stopped");
+					ImGui::TextColored(chrome::kMuted, "%s", "\xE2\x97\x8B Stopped");
 				}
 
 				ImGui::Spacing();
@@ -100,7 +100,7 @@ namespace aether::editor
 						ImGui::TableSetColumnIndex(0);
 						ImGui::TextUnformatted(it.method.c_str());
 						ImGui::TableSetColumnIndex(1);
-						ImGui::TextColored(ToImVec4(it.ok ? colors::Success : colors::Error), "%s", it.ok ? "ok" : "error");
+						ImGui::TextColored(it.ok ? chrome::kSuccess : chrome::kError, "%s", it.ok ? "ok" : "error");
 					}
 					ImGui::EndTable();
 				}

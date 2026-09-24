@@ -62,6 +62,7 @@ using namespace std::string_view_literals;
 #include "debug/TilePalettePanel.hpp"
 #include "debug/UiCanvasPanel.hpp"
 #include "debug/ViewportPanel.hpp"
+#include "twinsanity/ReferenceImagesPanel.hpp"
 #include "AetherCore.hpp"
 #include "PlaySession.hpp"
 #include "assets/AssetManager.hpp"
@@ -542,6 +543,11 @@ namespace aether::editor
 	{
 		AE_PROFILE_ZONE();
 		m_projects.Attach(context.services);
+		m_layerContext = &context;
+		m_projects.SetProjectOpenedHandler([this](const app::EditorProjectContext& project)
+		{
+			ApplyProjectFlavor(project);
+		});
 		LoadSettings(context);
 
 		int defW = 2560;
@@ -723,6 +729,47 @@ namespace aether::editor
 		context.services.Register<EditorWindowActions>(m_windowActions = std::move(windowActions));
 	}
 
+	void DebugLayer::ApplyProjectFlavor(const app::EditorProjectContext& project)
+	{
+		if (m_layerContext == nullptr)
+		{
+			return;
+		}
+		app::LayerContext& context = *m_layerContext;
+
+		// Retire the previous flavor's panels first, so re-opening a project (or opening a
+		// differently-flavored one) never stacks a second copy of the same panel.
+		for (DebugPanel* panel: m_flavorPanels)
+		{
+			panel->OnDetach(context);
+			std::erase_if(m_panels, [panel](const std::unique_ptr<DebugPanel>& owned) { return owned.get() == panel; });
+		}
+		m_flavorPanels.clear();
+
+		if (project.editorFlavor == "twinsanity")
+		{
+			auto panel = std::make_unique<twinsanity::ReferenceImagesPanel>();
+			panel->OnAttach(context);
+			panel->LoadSettings(m_debugConfig, context);
+			panel->SetVisible(m_debugConfig.GetBool(PanelVisibilityKey(panel->GetName()), panel->DefaultVisible()));
+			m_flavorPanels.push_back(panel.get());
+			m_panels.push_back(std::move(panel));
+			chrome::ApplyTheme(chrome::TwinsanityTheme());
+			chrome::ApplyImGuiRounding(6.0f);
+			AE_INFO(LogCategory::App, "Editor flavor 'twinsanity' active for '{}'", project.name);
+		}
+		else
+		{
+			// Rule: a flavor theme is applied when the project OPENS only. Anything the user
+			// picks in the Theme panel while a flavored project is open stays in effect until
+			// the next project open - the user's live choice wins over the flavor.
+			chrome::EditorTheme theme = chrome::NightAmberTheme();
+			(void) LoadPersistedEditorTheme(theme);
+			chrome::ApplyTheme(theme);
+			chrome::ApplyImGuiRounding(chrome::kDefaultFrameRounding);
+		}
+	}
+
 	void DebugLayer::OnDetach(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -739,6 +786,8 @@ namespace aether::editor
 		context.services.Unregister<EditorWindowActions>();
 		m_windowActions = {};
 		m_panels.clear();
+		m_flavorPanels.clear();
+		m_layerContext = nullptr;
 		m_hierarchyPanel = nullptr;
 		context.services.Unregister<app::EditorProjectContext>();
 		context.services.Unregister<app::scene::ModelBakeHook>();
@@ -961,8 +1010,8 @@ namespace aether::editor
 				const std::vector<std::string>& scriptErrors = scripting->ScriptErrors();
 				char logLabel[64];
 				std::snprintf(logLabel, sizeof(logLabel), ICON_FA_CIRCLE_EXCLAMATION "  %zu##scriptErrors", scriptErrors.size());
-				ImGui::PushStyleColor(ImGuiCol_Text, C(colors::Error));
-				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(C(colors::Error), 0.18f));
+				ImGui::PushStyleColor(ImGuiCol_Text, chrome::kError);
+				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, chrome::WithAlpha(chrome::kError, 0.18f));
 				// Measured with the ID suffix HIDDEN. CalcTextSize keeps everything after "##"
 				// by default, so the clickable band stretched far past the badge - a wide strip
 				// of the status bar lit up and answered a click meant for the icon.
@@ -1006,8 +1055,8 @@ namespace aether::editor
 					const bool hasErrors = engineErrors > 0;
 					char engineLabel[64];
 					std::snprintf(engineLabel, sizeof(engineLabel), "%s  %zu##engineLog", hasErrors ? ICON_FA_CIRCLE_EXCLAMATION : ICON_FA_TRIANGLE_EXCLAMATION, hasErrors ? engineErrors : logCounts.warn);
-					ImGui::PushStyleColor(ImGuiCol_Text, hasErrors ? C(colors::Error) : C(colors::Orange));
-					ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(hasErrors ? C(colors::Error) : C(colors::Orange), 0.18f));
+					ImGui::PushStyleColor(ImGuiCol_Text, hasErrors ? chrome::kError : C(colors::Orange));
+					ImGui::PushStyleColor(ImGuiCol_HeaderHovered, WithAlpha(hasErrors ? chrome::kError : C(colors::Orange), 0.18f));
 					const float engineWidth = ImGui::CalcTextSize(engineLabel, nullptr, true).x;
 					if (ImGui::Selectable(engineLabel, false, ImGuiSelectableFlags_None, ImVec2(engineWidth, 0.0f)))
 					{

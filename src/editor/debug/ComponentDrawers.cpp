@@ -168,7 +168,7 @@ namespace aether::editor
 		}
 		if (world.Has<MeshComponent>(entity))
 		{
-			return {ICON_FA_CUBE, ToImVec4(colors::Success)};
+			return {ICON_FA_CUBE, chrome::kSuccess};
 		}
 		return {ICON_FA_CIRCLE, ToImVec4(colors::Neutral)};
 	}

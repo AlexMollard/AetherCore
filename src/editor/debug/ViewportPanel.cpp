@@ -631,7 +631,8 @@ namespace aether::editor
 			gizmoStyle.Colors[ImGuizmo::PLANE_X] = axis(colors::AxisX, 0.42f);
 			gizmoStyle.Colors[ImGuizmo::PLANE_Y] = axis(colors::AxisY, 0.42f);
 			gizmoStyle.Colors[ImGuizmo::PLANE_Z] = axis(colors::AxisZ, 0.42f);
-			gizmoStyle.Colors[ImGuizmo::SELECTION] = axis(colors::Primary, 0.9f);
+			// kAccent (not colors::Primary) so a flavor/theme swap restyles the gizmo too.
+			gizmoStyle.Colors[ImGuizmo::SELECTION] = ImVec4(chrome::kAccent.x, chrome::kAccent.y, chrome::kAccent.z, 0.9f);
 		}
 
 		const glm::mat4 view = camera->GetViewMatrix();

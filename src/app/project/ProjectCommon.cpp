@@ -989,6 +989,10 @@ namespace aether::app::project
 				        {
 					        project.kind = text::StripQuotes(entry.value) == "2d" ? ProjectKind::Scene2D : ProjectKind::Scene3D;
 				        }
+				        else if (entry.fullKey == "editor.flavor")
+				        {
+					        project.editorFlavor = text::StripQuotes(entry.value);
+				        }
 				        else if (entry.fullKey == "paths.assets")
 				        {
 					        assetsPath = text::StripQuotes(entry.value);

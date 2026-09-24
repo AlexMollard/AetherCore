@@ -37,11 +37,11 @@ namespace aether::editor
 		{
 			if (pass.isDebugDisabled)
 			{
-				return {colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a};
+				return chrome::kMuted;
 			}
 			if (pass.isCulled)
 			{
-				return {colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a};
+				return chrome::kWarning;
 			}
 			if (pass.isAsyncCompute)
 			{
@@ -51,7 +51,7 @@ namespace aether::editor
 			{
 				return {0.64f, 0.58f, 0.92f, 1.0f};
 			}
-			return {colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a};
+			return chrome::kSuccess;
 		}
 
 		bool PassMatchesFilter(const RenderGraph::PassInfo& pass, std::string_view lowerFilter)
@@ -284,9 +284,9 @@ namespace aether::editor
 				DrawMetricRowFormat("Frame", "{} / slot {} / image {}", frame.frameIndex, frame.frameSlot, frame.swapchainImageIndex);
 			}
 			DrawMetricRowFormat("Extent", "{} x {}", frame.extent.width, frame.extent.height);
-			DrawMetricRowFormat("Disabled", disabledCount == 0 ? ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a} : ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "{}", disabledCount);
+			DrawMetricRowFormat("Disabled", disabledCount == 0 ? chrome::kSuccess : chrome::kWarning, "{}", disabledCount);
 			DrawMetricRowFormat(
-			        "Culled", culledCount == 0 ? ImVec4{colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a} : ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "{}", culledCount);
+			        "Culled", culledCount == 0 ? chrome::kMuted : chrome::kWarning, "{}", culledCount);
 			DrawMetricRowFormat("Graph CPU", MsColor(graphCpuMs), "{:.3f} ms", graphCpuMs);
 			DrawMetricRowFormat("ImGui CPU", MsColor(imguiCpuMs), "{:.3f} ms", imguiCpuMs);
 			DrawMetricRowFormat("Hottest", MsColor(hottestMs), "{} ({:.3f} ms)", hottestName, hottestMs);
@@ -298,7 +298,7 @@ namespace aether::editor
 			        static_cast<double>(frameStats.transientPhysicalBytes) / (1024.0 * 1024.0),
 			        static_cast<double>(frameStats.transientLogicalBytes) / (1024.0 * 1024.0));
 			DrawMetricRowFormat("Cache (total)",
-			        frameStats.transientCacheMiss == 0 ? ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a} : ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a},
+			        frameStats.transientCacheMiss == 0 ? chrome::kSuccess : chrome::kWarning,
 			        "{} hit, {} miss, {} kept",
 			        frameStats.transientCacheHit,
 			        frameStats.transientCacheMiss,
@@ -446,7 +446,7 @@ namespace aether::editor
 				ImGui::TableSetColumnIndex(4);
 				if (pass.hasSideEffects)
 				{
-					ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "Effect");
+					ImGui::TextColored(chrome::kWarning, "Effect");
 				}
 				else
 				{
@@ -480,7 +480,7 @@ namespace aether::editor
 				if (!pass.contractWarnings.empty())
 				{
 					ImGui::SameLine();
-					ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "Warn");
+					ImGui::TextColored(chrome::kWarning, "Warn");
 				}
 				ImGui::TableSetColumnIndex(5);
 				ImGui::TextColored(MsColor(pass.lastCpuTimeMs), "%.3f", pass.lastCpuTimeMs);
@@ -584,12 +584,12 @@ namespace aether::editor
 			DrawMetricRow("Compiled", pass.isCompiled ? "Yes" : "No");
 			DrawMetricRow("Culled",
 			        pass.isCulled ? "Yes" : "No",
-			        pass.isCulled ? ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a} : ImVec4{colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a});
+			        pass.isCulled ? chrome::kWarning : chrome::kMuted);
 			DrawMetricRow(
-			        "Disabled", pass.isDebugDisabled ? "Yes" : "No", pass.isDebugDisabled ? ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a} : ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a});
+			        "Disabled", pass.isDebugDisabled ? "Yes" : "No", pass.isDebugDisabled ? chrome::kWarning : chrome::kSuccess);
 			DrawMetricRow("Side effects",
 			        pass.hasSideEffects ? (pass.sideEffectReason.empty() ? "Yes" : pass.sideEffectReason.c_str()) : "No",
-			        pass.hasSideEffects ? ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a} : ImVec4{colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a});
+			        pass.hasSideEffects ? chrome::kWarning : chrome::kMuted);
 			const std::string dependencies = JoinStrings(pass.logicalDependencies);
 			const std::string producedDrawLists = JoinStrings(pass.producedDrawLists);
 			const std::string consumedDrawLists = JoinStrings(pass.consumedDrawLists);
@@ -598,7 +598,7 @@ namespace aether::editor
 			const std::string contractWarnings = JoinStrings(pass.contractWarnings);
 			DrawMetricRow("Warnings",
 			        contractWarnings.empty() ? "None" : contractWarnings.c_str(),
-			        contractWarnings.empty() ? ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a} : ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a});
+			        contractWarnings.empty() ? chrome::kSuccess : chrome::kWarning);
 			DrawMetricRow("Dependencies", dependencies.empty() ? "None" : dependencies.c_str());
 			DrawMetricRow("Draw lists out", producedDrawLists.empty() ? "None" : producedDrawLists.c_str());
 			DrawMetricRow("Draw lists in", consumedDrawLists.empty() ? "None" : consumedDrawLists.c_str());
@@ -645,7 +645,7 @@ namespace aether::editor
 					ImGui::TableSetColumnIndex(3);
 					if (product.producerPass.empty())
 					{
-						ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "Missing");
+						ImGui::TextColored(chrome::kWarning, "Missing");
 					}
 					else
 					{
@@ -655,7 +655,7 @@ namespace aether::editor
 					const std::string consumers = JoinStrings(product.consumerPasses);
 					if (consumers.empty())
 					{
-						ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "None");
+						ImGui::TextColored(chrome::kWarning, "None");
 					}
 					else
 					{
@@ -722,7 +722,7 @@ namespace aether::editor
 				ImGui::TextUnformatted(resource.usage.c_str());
 				ImGui::TableSetColumnIndex(3);
 				ImGui::TextColored(
-				        resource.writes ? ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a} : ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a}, "%s", resource.writes ? "Write" : "Read");
+				        resource.writes ? chrome::kWarning : chrome::kSuccess, "%s", resource.writes ? "Write" : "Read");
 			}
 			ImGui::EndTable();
 		}

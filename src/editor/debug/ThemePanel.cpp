@@ -131,7 +131,7 @@ namespace aether::editor
 		Apply();
 	}
 
-	bool ThemePanel::LoadPersisted()
+	bool LoadPersistedEditorTheme(chrome::EditorTheme& out)
 	{
 		std::error_code ec;
 		if (!std::filesystem::exists(ThemePath(), ec))
@@ -148,21 +148,26 @@ namespace aether::editor
 		{
 			return FromHex(cfg.GetString(key, ToHex(fallback)), fallback);
 		};
-		m_theme.background = read("theme.background", def.background);
-		m_theme.surface = read("theme.surface", def.surface);
-		m_theme.surfaceElevated = read("theme.surface_elevated", def.surfaceElevated);
-		m_theme.border = read("theme.border", def.border);
-		m_theme.accent = read("theme.accent", def.accent);
-		m_theme.accentHover = read("theme.accent_hover", def.accentHover);
-		m_theme.accentActive = read("theme.accent_active", def.accentActive);
-		m_theme.onAccent = read("theme.on_accent", def.onAccent);
-		m_theme.textPrimary = read("theme.text_primary", def.textPrimary);
-		m_theme.textSecondary = read("theme.text_secondary", def.textSecondary);
-		m_theme.textFaint = read("theme.text_faint", def.textFaint);
-		m_theme.success = read("theme.success", def.success);
-		m_theme.warning = read("theme.warning", def.warning);
-		m_theme.error = read("theme.error", def.error);
+		out.background = read("theme.background", def.background);
+		out.surface = read("theme.surface", def.surface);
+		out.surfaceElevated = read("theme.surface_elevated", def.surfaceElevated);
+		out.border = read("theme.border", def.border);
+		out.accent = read("theme.accent", def.accent);
+		out.accentHover = read("theme.accent_hover", def.accentHover);
+		out.accentActive = read("theme.accent_active", def.accentActive);
+		out.onAccent = read("theme.on_accent", def.onAccent);
+		out.textPrimary = read("theme.text_primary", def.textPrimary);
+		out.textSecondary = read("theme.text_secondary", def.textSecondary);
+		out.textFaint = read("theme.text_faint", def.textFaint);
+		out.success = read("theme.success", def.success);
+		out.warning = read("theme.warning", def.warning);
+		out.error = read("theme.error", def.error);
 		return true;
+	}
+
+	bool ThemePanel::LoadPersisted()
+	{
+		return LoadPersistedEditorTheme(m_theme);
 	}
 
 	void ThemePanel::Persist() const

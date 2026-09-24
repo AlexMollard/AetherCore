@@ -404,7 +404,7 @@ namespace aether::editor
 		ImGui::PushTextWrapPos(0.0f);
 		if (filter.empty())
 		{
-			ImGui::TextColored(ToImVec4(colors::Warn), ICON_FA_TRIANGLE_EXCLAMATION "  No filter set - this imports the ENTIRE pack (%d models).", matchCount);
+			ImGui::TextColored(chrome::kWarning, ICON_FA_TRIANGLE_EXCLAMATION "  No filter set - this imports the ENTIRE pack (%d models).", matchCount);
 		}
 		else
 		{
@@ -471,12 +471,12 @@ namespace aether::editor
 		if (!m_importResult.ok)
 		{
 			ImGui::PushTextWrapPos(0.0f);
-			ImGui::TextColored(ToImVec4(colors::Error), "%s", m_importResult.error.c_str());
+			ImGui::TextColored(chrome::kError, "%s", m_importResult.error.c_str());
 			ImGui::PopTextWrapPos();
 			return;
 		}
 
-		ImGui::TextColored(ToImVec4(colors::Success), "Import succeeded");
+		ImGui::TextColored(chrome::kSuccess, "Import succeeded");
 		if (ImGui::BeginTable("KenneyImportResult", 2, ImGuiTableFlags_SizingStretchProp))
 		{
 			DrawMetricRow("Model", m_importResult.modelPath.generic_string().c_str());
@@ -498,7 +498,7 @@ namespace aether::editor
 
 		for (const std::string& warning: m_importResult.warnings)
 		{
-			ImGui::TextColored(ToImVec4(colors::Warn), ICON_FA_TRIANGLE_EXCLAMATION "  %s", warning.c_str());
+			ImGui::TextColored(chrome::kWarning, ICON_FA_TRIANGLE_EXCLAMATION "  %s", warning.c_str());
 		}
 	}
 
@@ -530,12 +530,12 @@ namespace aether::editor
 		if (!m_bulkResult.ok)
 		{
 			ImGui::PushTextWrapPos(0.0f);
-			ImGui::TextColored(ToImVec4(colors::Error), "%s", m_bulkResult.error.c_str());
+			ImGui::TextColored(chrome::kError, "%s", m_bulkResult.error.c_str());
 			ImGui::PopTextWrapPos();
 			return;
 		}
 
-		ImGui::TextColored(ToImVec4(m_bulkResult.failed > 0 ? colors::Warn : colors::Success), "%s", m_bulkResult.cancelled ? "Bulk import stopped" : "Bulk import finished");
+		ImGui::TextColored(m_bulkResult.failed > 0 ? chrome::kWarning : chrome::kSuccess, "%s", m_bulkResult.cancelled ? "Bulk import stopped" : "Bulk import finished");
 		if (ImGui::BeginTable("KenneyBulkImportResult", 2, ImGuiTableFlags_SizingStretchProp))
 		{
 			DrawMetricRowFormatted("Matched", std::format("{}", m_bulkResult.matched));
@@ -547,11 +547,11 @@ namespace aether::editor
 
 		for (const std::string& failure: m_bulkResult.failures)
 		{
-			ImGui::TextColored(ToImVec4(colors::Error), ICON_FA_CIRCLE_XMARK "  %s", failure.c_str());
+			ImGui::TextColored(chrome::kError, ICON_FA_CIRCLE_XMARK "  %s", failure.c_str());
 		}
 		for (const std::string& warning: m_bulkResult.warnings)
 		{
-			ImGui::TextColored(ToImVec4(colors::Warn), ICON_FA_TRIANGLE_EXCLAMATION "  %s", warning.c_str());
+			ImGui::TextColored(chrome::kWarning, ICON_FA_TRIANGLE_EXCLAMATION "  %s", warning.c_str());
 		}
 	}
 
@@ -589,7 +589,7 @@ namespace aether::editor
 		if (!it->second.ok)
 		{
 			ImGui::PushTextWrapPos(0.0f);
-			ImGui::TextColored(ToImVec4(colors::Error), "%s", it->second.error.c_str());
+			ImGui::TextColored(chrome::kError, "%s", it->second.error.c_str());
 			ImGui::PopTextWrapPos();
 			return;
 		}
@@ -612,7 +612,7 @@ namespace aether::editor
 		if (!m_manifestError.empty())
 		{
 			ImGui::PushTextWrapPos(0.0f);
-			ImGui::TextColored(ToImVec4(colors::Error), "%s", m_manifestError.c_str());
+			ImGui::TextColored(chrome::kError, "%s", m_manifestError.c_str());
 			ImGui::PopTextWrapPos();
 		}
 

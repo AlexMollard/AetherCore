@@ -77,6 +77,10 @@ namespace aether::editor
 		// Ctrl+Z/Y shortcut and the Edit menu so the two cannot drift apart.
 		void ApplyHistoryStep(app::LayerContext& context, bool redo);
 
+		// Rebuilds the flavor panel set and theme for the given project (invoked by the
+		// project manager on every open, so a flavor switch between projects is clean).
+		void ApplyProjectFlavor(const app::EditorProjectContext& project);
+
 		// Actions that throw away the scene in memory. Each is routed through
 		// ConfirmDiscard so it cannot run over unsaved work without being asked.
 		enum class PendingNav
@@ -167,6 +171,13 @@ namespace aether::editor
 		char m_newPresetName[64] = {};
 
 		EditorProjectManager m_projects;
+
+		// Borrowed from the layer stack for the lifetime of the layer; the flavor handler
+		// needs it when a project opens mid-frame.
+		app::LayerContext* m_layerContext = nullptr;
+		// Panels added for the open project's flavor (raw pointers into m_panels). Rebuilt
+		// on every project open so switching projects swaps flavors cleanly.
+		std::vector<DebugPanel*> m_flavorPanels;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
 		// Deferred so the focus lands inside the ImGui frame; the request may arrive from a

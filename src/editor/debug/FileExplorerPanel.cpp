@@ -1198,7 +1198,7 @@ namespace aether::editor
 
 		if (!m_opError.empty() || !m_scanError.empty())
 		{
-			ImGui::TextColored(chrome::C(colors::Error), "%s", !m_opError.empty() ? m_opError.c_str() : m_scanError.c_str());
+			ImGui::TextColored(chrome::kError, "%s", !m_opError.empty() ? m_opError.c_str() : m_scanError.c_str());
 		}
 
 		ImGui::PushStyleColor(ImGuiCol_Header, chrome::kSelectionBg);
@@ -2810,7 +2810,7 @@ namespace aether::editor
 			{
 				mutated = DuplicateEntry(entry.path);
 			}
-			ImGui::PushStyleColor(ImGuiCol_Text, chrome::C(colors::Error));
+			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kError);
 			if (ImGui::MenuItem(ICON_FA_TRASH "  Delete..."))
 			{
 				BeginDelete(entry);
@@ -3004,9 +3004,9 @@ namespace aether::editor
 				ImGui::PopStyleColor();
 			}
 			ImGui::Spacing();
-			ImGui::PushStyleColor(ImGuiCol_Button, chrome::WithAlpha(chrome::C(colors::Error), 0.22f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, chrome::WithAlpha(chrome::C(colors::Error), 0.65f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, chrome::C(colors::Error));
+			ImGui::PushStyleColor(ImGuiCol_Button, chrome::WithAlpha(chrome::kError, 0.22f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, chrome::WithAlpha(chrome::kError, 0.65f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, chrome::kError);
 			ImGui::PushStyleColor(ImGuiCol_Text, chrome::kText);
 			if (ImGui::Button(ICON_FA_TRASH " Delete", ImVec2(120.0f, 0.0f)))
 			{

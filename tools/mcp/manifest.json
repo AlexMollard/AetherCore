@@ -1,7 +1,7 @@
 {
   "methods": [
     {
-      "description": "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration. Assign the result to a Sprite Animator component to play it.",
+      "description": "Create a sprite animation asset from atlas frames. 'frames' entries are sprite indices, sprite names, or {sprite, duration} objects; 'fps' sets the default frame duration and must be greater than 0. 'loop' is one of loop (restart, the default), once (stop on the last frame), pingpong (forwards then backwards) or hold (stop, keeping the last frame shown). Assign the result to a Sprite Animator component to play it.",
       "mutates": true,
       "name": "animation.create",
       "paramsSchema": {
@@ -43,9 +43,9 @@
       "tool": "create_sprite_animation"
     },
     {
-      "description": "Select a project asset by path (project:// or absolute). The File Explorer mirrors it (preview card) and the Inspector shows the asset. Kind is inferred from the extension.",
+      "description": "Select a file as the current ASSET selection, exactly as clicking it in the File Explorer does: the Material, Texture and Inspector windows all follow it. Path is a project-relative or VFS path.",
       "mutates": true,
-      "name": "asset.select",
+      "name": "editor.select_asset",
       "paramsSchema": {
         "properties": {
           "path": {
@@ -60,7 +60,7 @@
       "tool": "select_asset"
     },
     {
-      "description": "Glob project files by virtual path, e.g. 'project://assets/**/*.png' or 'project://assets/**/*.spriteatlas.toml'. Feeds texture/atlas parameters on the other 2D authoring methods.",
+      "description": "Glob project files by virtual path, e.g. 'project://assets/**/*.png' or 'project://assets/**/*.spriteatlas.toml'. Feeds texture/atlas parameters on the other 2D authoring methods. 'limit' caps how many paths come back while 'matched' and 'truncated' still describe the full result, so a small limit is enough to count what a glob hits.",
       "mutates": false,
       "name": "assets.list",
       "paramsSchema": {
@@ -77,7 +77,7 @@
       "tool": "list_assets"
     },
     {
-      "description": "List a sprite atlas' regions: index, name, and pixel rect. Indices/names feed create_sprite_animation; names identify sprites for Sprite Renderer components.",
+      "description": "List a sprite atlas' regions: index, name, and pixel rect. Indices/names feed create_sprite_animation; names identify sprites for Sprite Renderer components. Returns spriteCount and the first 2,000 regions - check 'truncated'.",
       "mutates": false,
       "name": "atlas.info",
       "paramsSchema": {
@@ -94,7 +94,7 @@
       "tool": "get_atlas"
     },
     {
-      "description": "Grid-slice a texture into a sprite atlas asset (the same operation as the Sprite Slicer panel). Re-slicing an existing atlas keeps stable sprite ids where regions still correspond. Returns the atlas path and sprite list.",
+      "description": "Grid-slice a texture into a sprite atlas asset (the same operation as the Sprite Slicer panel). Re-slicing an existing atlas keeps stable sprite ids where regions still correspond. cellWidth/cellHeight are pixels and must be at least 1. Returns the atlas path, spriteCount, and the first 2,000 sprites - check 'truncated', because the atlas on disk holds them all.",
       "mutates": true,
       "name": "atlas.slice",
       "paramsSchema": {
@@ -150,7 +150,7 @@
       "tool": "camera_info"
     },
     {
-      "description": "Read a bounded tail of the live editor console. Filter by minimumLevel (verbose/info/warn/error), category, message text, or monotonic afterSeq for incremental polling.",
+      "description": "Read a bounded tail of the live editor console. Filter by minimumLevel (verbose/info/warn/error), category, message text, or monotonic afterSeq for incremental polling. 'limit' caps how many entries come back (1-500, default 100) while 'matched' still reports how many the filter actually hit, so counting errors costs one small call rather than the whole tail.",
       "mutates": false,
       "name": "console.logs",
       "paramsSchema": {
@@ -205,7 +205,7 @@
       "tool": "undo"
     },
     {
-      "description": "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Edit mode only - the play camera belongs to the game.",
+      "description": "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Call it with no arguments to read the camera without moving it - it returns the current position and orthographic height either way. 'height' only lands in a 2D scene; a 3D edit camera is perspective and keeps the value it had. Edit mode only - the play camera belongs to the game.",
       "mutates": true,
       "name": "editor.camera",
       "paramsSchema": {
@@ -285,11 +285,14 @@
       "tool": "open_scene_dialog"
     },
     {
-      "description": "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it.",
+      "description": "Open or close an editor panel by name (from list_windows; case-insensitive), e.g. show the Inspector so a screenshot captures it. Pass focus to also bring it to the front of its dock node - a panel sharing a node with others is visible while its tab is behind theirs, which reads as a panel that draws nothing.",
       "mutates": true,
       "name": "editor.window_set",
       "paramsSchema": {
         "properties": {
+          "focus": {
+            "type": "boolean"
+          },
           "name": {
             "type": "string"
           },
@@ -336,7 +339,7 @@
       "tool": "play"
     },
     {
-      "description": "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold/press (hold keys), release/up (release keys; 'release all' clears everything), tap (press then auto-release), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a running sequence. Returns {events, duration}.",
+      "description": "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold (keys stay down until a later release/clear), press/tap (a real key edge every time: down now, auto-released ~0.1s later - use this for repeated presses in one sequence), release/up (release keys; 'release all' clears everything), or clear; keys use the same names as send_input. '#' starts a comment. Keys auto-release when the sequence ends. Pass {stop:true} to abort a running sequence. Returns {events, duration}.",
       "mutates": true,
       "name": "engine.play_input_sequence",
       "paramsSchema": {
@@ -366,7 +369,7 @@
       "tool": "resume"
     },
     {
-      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, backspace, delete, home, end, pageup, pagedown, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field. GAMEPAD: {pad_connected:true} presents a synthetic controller (slot via {pad_slot}, default 0); {pad_down:[names], pad_up:[names]} with a/b/x/y, lb/rb, lt/rt, back/start/guide, lthumb/rthumb, dpad_up/dpad_down/dpad_left/dpad_right; {pad_axis:{left_x:0.5, left_y:-1.0}} sets axes with names left_x/left_y/right_x/right_y/left_trigger/right_trigger. Axis values use the RAW controller convention (-1 is stick UP, and a released trigger is -1, not 0) so the engine's own normalisation is what gets exercised rather than bypassed.",
+      "description": "Inject synthetic keyboard state for headless playtesting: {down:[names], up:[names], clear?:bool}. Keys stay held until released, `clear`, or Stop. Names: left/right/up/down, space, enter, escape, tab, shift, ctrl, alt, backspace, delete, home, end, pageup, pagedown, f1-f12, or a single letter a-z / digit 0-9. OR'd over the real keyboard, so IsKeyDown and the IsKeyPressed down-edge both fire. Pass {text:\"...\"} to type characters into a focused text field. GAMEPAD: {pad_connected:true} presents a synthetic controller (slot via {pad_slot}, default 0); {pad_down:[names], pad_up:[names]} with a/b/x/y, lb/rb, lt/rt, back/start/guide, lthumb/rthumb, dpad_up/dpad_down/dpad_left/dpad_right; {pad_axis:{left_x:0.5, left_y:-1.0}} sets axes with names left_x/left_y/right_x/right_y/left_trigger/right_trigger. Axis values use the RAW controller convention (-1 is stick UP, and a released trigger is -1, not 0) so the engine's own normalisation is what gets exercised rather than bypassed.",
       "mutates": true,
       "name": "engine.send_input",
       "paramsSchema": {
@@ -440,7 +443,7 @@
       "tool": "send_input"
     },
     {
-      "description": "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions.",
+      "description": "Set the play-speed multiplier (0.05-16; 1=normal, <1 slow-mo, >1 fast-forward). Persists across Play sessions, and 'info' reports the current value as 'speed'.",
       "mutates": true,
       "name": "engine.set_speed",
       "paramsSchema": {
@@ -459,11 +462,17 @@
       "tool": "set_speed"
     },
     {
-      "description": "Advance the simulation exactly one frame (pauses first if running). Use for frame-by-frame debugging; poll info for 'frame'.",
+      "description": "Advance the simulation exactly {frames} frames (default 1; pauses first if running). Use for frame-by-frame debugging, and to reach a KNOWN frame before render.capture_texture - a paused frame renders bit-identically, so two runs stopped on the same frame can be compared pixel for pixel.",
       "mutates": true,
       "name": "engine.step",
       "paramsSchema": {
-        "properties": {},
+        "properties": {
+          "frames": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "tool": "step"
@@ -913,7 +922,7 @@
       "tool": "publish_status"
     },
     {
-      "description": "Per-pass CPU-time benchmark of the last rendered frame: every compiled pass's CPU cost (ms), sorted slowest-first, plus the hottest pass, total graph CPU time and this frame's fps. Poll repeatedly to sample min/avg/max over time.",
+      "description": "Per-pass GPU and CPU timing for the last rendered frame, sorted by GPU time (slowest first), plus the hottest pass, graph totals for both, and this frame's fps. GPU time is the one that answers \"what does this pass cost\" - CPU time here is only the cost of RECORDING the pass, so a heavy shader shows as expensive on gpuTimeMs and near-free on cpuTimeMs. Poll repeatedly to sample min/avg/max; single frames vary by ~10%.",
       "mutates": false,
       "name": "render.benchmark",
       "paramsSchema": {
@@ -943,7 +952,7 @@
       "tool": "capture_texture"
     },
     {
-      "description": "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes.",
+      "description": "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes. 'limit' caps how many texture and buffer rows come back (default 24); pass 0 for the totals and heap figures with no rows, which is the whole answer when you only want to compare counts or watch for a leak.",
       "mutates": false,
       "name": "render.memory",
       "paramsSchema": {
@@ -1154,7 +1163,7 @@
       "tool": "add_script"
     },
     {
-      "description": "Apply a prefab instance's current state (its overrides included) back to the prefab file, so every instance of that prefab picks up the change on reload. 'id' is the instance root.",
+      "description": "Apply a prefab instance's current state (its overrides included) back to the prefab file. Every other live instance is rebuilt immediately so the change shows at once, each keeping its own overrides; 'refreshed' returns their new ids (rebuilding changes them). 'id' is the instance root.",
       "mutates": true,
       "name": "scene.apply_prefab_instance",
       "paramsSchema": {
@@ -1335,7 +1344,7 @@
       "tool": "delete_entities"
     },
     {
-      "description": "List every entity in the live scene with id, name, and world position.",
+      "description": "List every entity in the live scene with id, name, world position, and parent id (0 when it sits at the root). The parent is what makes the list a tree rather than a flat set - without it nothing outside the editor can tell how the scene is nested.",
       "mutates": false,
       "name": "scene.entities",
       "paramsSchema": {
@@ -1345,7 +1354,7 @@
       "tool": "list_entities"
     },
     {
-      "description": "Full detail for one entity by id: name, world position, scale, and its component type list.",
+      "description": "Full detail for one entity by id: name, world position, rotationEuler and scale (the same three channels scene.transform writes), its component type list, and 'editable' - the subset of those names get_component and set_component accept. Unreflected internals appear in 'components' under their raw C++ type name; they are real, just not addressable.",
       "mutates": false,
       "name": "scene.get",
       "paramsSchema": {
@@ -1545,7 +1554,7 @@
       "tool": "rename_entity"
     },
     {
-      "description": "Discard a prefab instance's overrides and re-expand it from the prefab (a fresh, unmodified copy). 'id' is the instance root. Returns the new root id.",
+      "description": "Discard a prefab instance's component overrides and re-expand it from the prefab. The instance keeps where it is: its root transform is placement, stored on the instance reference rather than as an override, so reverting does not move it back to the origin. 'id' is the instance root. Returns the new root id - the old subtree is destroyed, so an id held from before the call no longer resolves.",
       "mutates": true,
       "name": "scene.revert_prefab_instance",
       "paramsSchema": {
@@ -1576,7 +1585,7 @@
       "tool": "save_scene"
     },
     {
-      "description": "List the C# scripts attached to an entity.",
+      "description": "List the C# scripts attached to an entity: each one's type, whether it is attached yet, and its property values in the same shape add_script takes, so a value read here can be written straight back.",
       "mutates": false,
       "name": "scene.scripts",
       "paramsSchema": {
@@ -1593,18 +1602,21 @@
       "tool": "list_scripts"
     },
     {
-      "description": "Select an entity by id (0 clears the selection). The Inspector shows the selected entity - select first, then open the Inspector to work on / screenshot it.",
+      "description": "Select entities in the editor. Pass 'id' for a single entity (0 clears the selection), or 'ids' for a multi-selection - the same state a ctrl-click builds, which is what the bulk-edit paths and the Inspector's multi-entity mode act on. The last id given becomes the primary (what the Inspector shows). Ids that name no live entity come back under 'unknown' rather than being dropped silently.",
       "mutates": true,
       "name": "scene.select",
       "paramsSchema": {
         "properties": {
           "id": {
             "type": "integer"
+          },
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
           }
         },
-        "required": [
-          "id"
-        ],
         "type": "object"
       },
       "tool": "select_entity"
@@ -1620,11 +1632,14 @@
       "tool": "get_selection"
     },
     {
-      "description": "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
+      "description": "Set one or more editable fields on a component - the programmatic equivalent of editing it in the Inspector. 'type' is a component name; 'values' is an object mapping field name -> value for ONLY the fields you want to change (partial update; call get_component or list_component_types for field names/types). 'fields' is accepted as a synonym, so get_component output can be posted straight back. Colours/vectors are [x,y,z(,w)] arrays. Returns {id, type, applied:[...]}.",
       "mutates": true,
       "name": "scene.set_component",
       "paramsSchema": {
         "properties": {
+          "fields": {
+            "type": "object"
+          },
           "id": {
             "type": "integer"
           },
@@ -1637,8 +1652,7 @@
         },
         "required": [
           "id",
-          "type",
-          "values"
+          "type"
         ],
         "type": "object"
       },
@@ -1653,6 +1667,9 @@
           "items": {
             "items": {
               "properties": {
+                "fields": {
+                  "type": "object"
+                },
                 "id": {
                   "type": "integer"
                 },
@@ -1665,8 +1682,7 @@
               },
               "required": [
                 "id",
-                "type",
-                "values"
+                "type"
               ],
               "type": "object"
             },
@@ -1693,7 +1709,7 @@
       "tool": "scene_stats"
     },
     {
-      "description": "Set an entity's transform (position / rotationEuler in degrees / scale) by id.",
+      "description": "Set an entity's transform (position / rotationEuler in degrees / scale) by id. Partial update: whatever you leave out keeps its current value.",
       "mutates": true,
       "name": "scene.transform",
       "paramsSchema": {
@@ -1805,11 +1821,15 @@
       "tool": "unpack_prefab_instance"
     },
     {
-      "description": "Current engine settings: resolution, vsync, and target fps.",
+      "description": "Read one engine setting by key (e.g. 'window.mode', 'graphics.renderScale') as text, plus whether it is marked as needing a restart. Omit `key` to list every setting.",
       "mutates": false,
       "name": "settings.get",
       "paramsSchema": {
-        "properties": {},
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "tool": "get_settings"
@@ -1850,7 +1870,7 @@
       "tool": "add_tile_layer"
     },
     {
-      "description": "Create a tileset (every atlas sprite becomes a paintable tile) plus an empty tilemap, and bind the tilemap to an entity's Tile Map component when 'id' is given. Returns tileset/tilemap paths and the paintable tile list.",
+      "description": "Create a tileset (every atlas sprite becomes a paintable tile) plus an empty tilemap, and bind the tilemap to an entity's Tile Map component when 'id' is given. 'cellSize' is in world units and must be greater than 0. Returns tileset/tilemap paths and the paintable tile list.",
       "mutates": true,
       "name": "tiles.create",
       "paramsSchema": {
@@ -1883,7 +1903,7 @@
       "tool": "create_tile_assets"
     },
     {
-      "description": "Fill (or erase, when 'tile' is omitted) an inclusive cell rect [x0, y0, x1, y1] on a tilemap layer without sending every cell. Edits join the editor's undo stack.",
+      "description": "Fill (or erase, when 'tile' is omitted) an inclusive cell rect [x0, y0, x1, y1] on a tilemap layer without sending every cell. Edits join the editor's undo stack. Cells beyond what the physics engine can carry collision for are refused; the error names the limit.",
       "mutates": true,
       "name": "tiles.fill",
       "paramsSchema": {
@@ -1942,7 +1962,7 @@
       "tool": "get_tile_map"
     },
     {
-      "description": "Paint tilemap cells. Each cell is {x, y, tile?, flipX?, flipY?} where 'tile' is a tileset tile index (get_tile_map lists them); omit 'tile' to erase. Edits join the editor's undo stack. 'save' (default true) persists the tilemap asset.",
+      "description": "Paint tilemap cells. Each cell is {x, y, tile?, flipX?, flipY?} where 'tile' is a tileset tile index (get_tile_map lists them); omit 'tile' to erase. Cells beyond what the physics engine can carry collision for are refused, and every cell is checked before any is painted. Edits join the editor's undo stack. 'save' (default true) persists the tilemap asset.",
       "mutates": true,
       "name": "tiles.paint",
       "paramsSchema": {
@@ -1995,7 +2015,7 @@
       "tool": "paint_tiles"
     },
     {
-      "description": "Read the non-empty cells of an inclusive cell rect [x0, y0, x1, y1] back as {x, y, tile, flipX, flipY} with 'tile' as a tileset index.",
+      "description": "Read the non-empty cells of an inclusive cell rect [x0, y0, x1, y1] back as {x, y, tile, flipX, flipY} with 'tile' as a tileset index. Large rects are capped - check 'truncated'.",
       "mutates": false,
       "name": "tiles.read",
       "paramsSchema": {
@@ -2025,19 +2045,28 @@
       "tool": "read_tiles"
     },
     {
-      "description": "Click a widget by {window,label} or a raw {x,y} screen point. Optional 'button' ('left'|'right') and 'double'. Async: the click plays over a few frames; query/screenshot afterwards to see the effect.",
+      "description": "Click a widget by {window,label} or a raw {x,y} screen point. Optional 'button' ('left'|'right'), 'double', and 'ctrl'/'shift'/'alt' held for the click (multi-select and range-select). Async: the click plays over a few frames; query/screenshot afterwards to see the effect.",
       "mutates": true,
       "name": "ui.click",
       "paramsSchema": {
         "properties": {
+          "alt": {
+            "type": "boolean"
+          },
           "button": {
             "type": "string"
+          },
+          "ctrl": {
+            "type": "boolean"
           },
           "double": {
             "type": "boolean"
           },
           "label": {
             "type": "string"
+          },
+          "shift": {
+            "type": "boolean"
           },
           "window": {
             "type": "string"
@@ -2106,13 +2135,22 @@
       "tool": "ui_input_text"
     },
     {
-      "description": "Press a named key: enter, escape, tab, backspace, delete, space, left, right, up, down, home, end.",
+      "description": "Press a key, optionally with modifiers: enter, escape, tab, backspace, delete, space, left, right, up, down, home, end, f1-f12, or any single letter or digit. Set ctrl/shift/alt to send an editor shortcut such as ctrl+z.",
       "mutates": true,
       "name": "ui.key",
       "paramsSchema": {
         "properties": {
+          "alt": {
+            "type": "boolean"
+          },
+          "ctrl": {
+            "type": "boolean"
+          },
           "key": {
             "type": "string"
+          },
+          "shift": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -2123,7 +2161,7 @@
       "tool": "ui_key"
     },
     {
-      "description": "List on-screen ImGui widgets from the last frame: window, label, screen rect, and hovered/active state. Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click.",
+      "description": "List on-screen ImGui widgets from the last frame: window, label, screen rect, hovered/active state, and whether the widget was clipped by its window (part of it is not visible). Filter on clippedHorizontally to find controls drawn past the side of a panel; plain clipped also covers rows at the edge of a scrolling list, which is ordinary. Optional 'window'/'label' substring filters. Use this to navigate the UI before ui_click. AN EMPTY LABEL DOES NOT MEAN NO WIDGET: imgui only reports a label for the widget types that volunteer one, so combos and several others come back with a rect and an empty label, as does anything scrolled out of view. Treat a name missing from this list as unknown rather than absent - check the rects, or drive it by {x, y}, which is how an unlabelled combo is clicked.",
       "mutates": false,
       "name": "ui.query",
       "paramsSchema": {
@@ -2179,6 +2217,184 @@
         "type": "object"
       },
       "tool": "recovery_restore"
+    },
+    {
+      "description": "Every UI element's RESOLVED rect after the last layout pass - what is actually on screen, not what was authored - with its text, font, size and alignment. For checking alignment, gutters and overlap numerically instead of reading pixels.",
+      "mutates": false,
+      "name": "ui.layout",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "ui_layout"
+    },
+    {
+      "description": "The scene and prefab NAMES the other methods take: scene.load and scene.save want a scene name, add_prefab_instance wants a prefab's save name. Both are bare names, not paths - assets.list globs the files but leaves the caller stripping a directory and two extensions off each one. 'current' is the scene loaded now.",
+      "mutates": false,
+      "name": "scene.assets",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_scene_assets"
+    },
+    {
+      "description": "Undo the last scene edit, exactly as Ctrl+Z does - selection is remapped through the undone command. The step lands on the next editor frame, so read editor.undo_status afterwards to confirm it was consumed. Refused while playing or compiling, and when there is nothing to undo ('queued' comes back false).",
+      "mutates": true,
+      "name": "editor.undo",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "editor_undo"
+    },
+    {
+      "description": "Redo the last undone scene edit, exactly as Ctrl+Y does. Like editor.undo, the step lands on the next editor frame and 'queued' comes back false when the redo stack is empty.",
+      "mutates": true,
+      "name": "editor.redo",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "editor_redo"
+    },
+    {
+      "description": "How deep the editor's undo and redo stacks are, and whether the scene has unsaved edits. Pair it with editor.undo / editor.redo to tell what they will do, and whether one actually consumed an entry.",
+      "mutates": false,
+      "name": "editor.undo_status",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "undo_status"
+    },
+    {
+      "description": "Ask the application to close, exactly as the title-bar X does. Unsaved work still raises the confirmation prompt rather than being discarded, so check the response's `unsaved` flag and answer the dialog (Save/Discard/Cancel) before expecting the process to exit. A clean editor exits before it can answer at all, so a transport timeout here means it closed - only a reply means it is still up.",
+      "mutates": true,
+      "name": "app.quit",
+      "paramsSchema": {
+        "properties": null,
+        "type": "object"
+      },
+      "tool": "quit_app"
+    },
+    {
+      "description": "Set one engine setting by key and apply it live, exactly as the Settings panel does: {key, value} with value as text ('true', '0.5', 'borderless'). Does not save to disk unless {save:true}.",
+      "mutates": true,
+      "name": "settings.set",
+      "paramsSchema": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "save": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "tool": "set_setting"
+    },
+    {
+      "description": "Select a project asset by path (project:// or absolute). The File Explorer mirrors it (preview card) and the Inspector shows the asset. Kind is inferred from the extension.",
+      "mutates": true,
+      "name": "asset.select",
+      "paramsSchema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "tool": "asset_select"
+    },
+    {
+      "description": "List the C# script type names add_script accepts, as loaded from the project's built assembly. Empty while no assembly is loaded (a project that has not been built yet), which is also when add_script stops checking the name.",
+      "mutates": false,
+      "name": "scene.script_types",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "list_script_types"
+    },
+    {
+      "description": "Press at one widget or point and release at another: {from_window,from_label} or {from_x,from_y} to {to_window,to_label} or {to_x,to_y}. This is how a node-graph link or any drag-and-drop is made. hold_frames keeps the button down at the destination longer, for dwell-triggered behaviour. Async: query or screenshot afterwards.",
+      "mutates": true,
+      "name": "ui.drag",
+      "paramsSchema": {
+        "properties": {
+          "button": {
+            "type": "string"
+          },
+          "from_label": {
+            "type": "string"
+          },
+          "from_window": {
+            "type": "string"
+          },
+          "from_x": {
+            "type": "number"
+          },
+          "from_y": {
+            "type": "number"
+          },
+          "hold_frames": {
+            "type": "number"
+          },
+          "to_label": {
+            "type": "string"
+          },
+          "to_window": {
+            "type": "string"
+          },
+          "to_x": {
+            "type": "number"
+          },
+          "to_y": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "ui_drag"
+    },
+    {
+      "description": "Scroll a window's contents so off-screen widgets become visible to ui_query and ui_click. Pass {window} plus 'dy'/'dx' pixel deltas, or 'to' as 'top' or 'bottom'. imgui does not report a label for a widget scrolled out of view, so a control missing from ui_query may simply need scrolling to. Names come from ui_query's 'window' field, child windows included. Returns the resulting scroll and its maximum so a caller can tell when it has reached the end.",
+      "mutates": true,
+      "name": "ui.scroll",
+      "paramsSchema": {
+        "properties": {
+          "dx": {
+            "type": "number"
+          },
+          "dy": {
+            "type": "number"
+          },
+          "to": {
+            "type": "string"
+          },
+          "window": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window"
+        ],
+        "type": "object"
+      },
+      "tool": "ui_scroll"
     }
   ]
 }

@@ -643,7 +643,7 @@ namespace aether::editor
 		void DrawGapGuides(ImDrawList* drawList, const std::vector<GapGuide>& gapGuides, ImVec2 origin, ImVec2 pan, float zoom)
 		{
 			const ImU32 lineColor = ToU32(colors::detail::rgba(226, 214, 196, 0.74f));
-			const ImU32 textColor = ToU32(colors::TextPrimary);
+			const ImU32 textColor = chrome::U32(chrome::kText);
 			const ImU32 textBg = ToU32(colors::detail::rgba(30, 27, 24, 0.86f));
 			for (const GapGuide& guide: gapGuides)
 			{
@@ -782,7 +782,7 @@ namespace aether::editor
 				const ImVec2 b = CanvasToScreen({extent.x, y}, origin, pan, zoom);
 				drawList->AddLine(a, b, (static_cast<int>(y) % 256 == 0) ? major : minor);
 			}
-			drawList->AddRect(canvasMin, canvasMax, ToU32(colors::Border), 0.f, 0, 1.5f);
+			drawList->AddRect(canvasMin, canvasMax, chrome::U32(chrome::kStroke), 0.f, 0, 1.5f);
 		}
 
 		void DrawPreviewElement(ImDrawList* drawList, World& world, const UiElement& element, float zoom, ImTextureID texId)
@@ -930,8 +930,8 @@ namespace aether::editor
 			const ImVec2 max = Add(min, Add(textSize, Add(padding, padding)));
 
 			drawList->AddRectFilled(min, max, ToU32(colors::detail::rgba(20, 20, 20, 0.9f)), 4.f);
-			drawList->AddRect(min, max, ToU32(colors::Border), 4.f);
-			drawList->AddText(Add(min, padding), ToU32(colors::TextPrimary), text);
+			drawList->AddRect(min, max, chrome::U32(chrome::kStroke), 4.f);
+			drawList->AddText(Add(min, padding), chrome::U32(chrome::kText), text);
 		}
 	} // namespace
 
@@ -1085,7 +1085,7 @@ namespace aether::editor
 		const ImVec2 contentMax = Add(contentMin, canvasArea);
 
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		drawList->AddRectFilled(contentMin, contentMax, ToU32(colors::Surface));
+		drawList->AddRectFilled(contentMin, contentMax, chrome::U32(chrome::kPanel));
 		ImGui::InvisibleButton("##ui-canvas-surface", canvasArea, ImGuiButtonFlags_MouseButtonMiddle | ImGuiButtonFlags_MouseButtonLeft);
 		const bool surfaceHovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 		const bool surfaceActive = ImGui::IsItemActive();
@@ -1142,7 +1142,7 @@ namespace aether::editor
 
 		if (m_previewContent)
 		{
-			drawList->AddRectFilled(canvasMin, canvasMax, ToU32(colors::Background));
+			drawList->AddRectFilled(canvasMin, canvasMax, chrome::U32(chrome::kBg));
 			for (const UiElement& element: elements)
 			{
 				DrawPreviewElement(drawList, world, element, m_zoom, resolveTexId(element));
@@ -1180,7 +1180,7 @@ namespace aether::editor
 		{
 			const bool isSelected = selection != nullptr && selection->Contains(element.entity);
 			const bool isHovered = element.entity == m_hoveredEntity;
-			const ImU32 outline = isSelected ? ToU32(colors::Primary) : (isHovered ? ToU32(colors::Info) : ToU32(colors::Neutral));
+			const ImU32 outline = isSelected ? chrome::U32(chrome::kAccent) : (isHovered ? ToU32(colors::Info) : ToU32(colors::Neutral));
 			const ImU32 fill = isSelected ? ToU32(colors::detail::rgba(255, 124, 50, 0.10f)) : (isHovered ? ToU32(colors::detail::rgba(56, 189, 255, 0.06f)) : ToU32(colors::detail::rgba(226, 214, 196, 0.05f)));
 			drawList->AddRectFilled(element.min, element.max, fill);
 			drawList->AddRect(element.min, element.max, outline, 0.f, 0, isSelected ? 2.f : 1.5f);
@@ -1230,7 +1230,7 @@ namespace aether::editor
 			selectedCanvasRect = selectedCanvasRect.z > 0.f && selectedCanvasRect.w > 0.f ? selectedCanvasRect : ui::ResolveRect(selectedParentRect, *selectedRect);
 			const ImVec2 selectedMin = RectMin(selectedCanvasRect, origin, m_pan, m_zoom);
 			const ImVec2 selectedMax = RectMax(selectedCanvasRect, origin, m_pan, m_zoom);
-			const ImU32 handleFill = ToU32(colors::Primary);
+			const ImU32 handleFill = chrome::U32(chrome::kAccent);
 			for (const ResizeHit& hit: ResizeHandles(selectedMin, selectedMax))
 			{
 				const ImVec2 half{kHandleSize * 0.5f, kHandleSize * 0.5f};
@@ -1679,7 +1679,7 @@ namespace aether::editor
 			const ImVec2 mMax = ImVec2{std::max(m_marqueeStart.x, m_marqueeEnd.x), std::max(m_marqueeStart.y, m_marqueeEnd.y)};
 
 			drawList->AddRectFilled(mMin, mMax, ToU32(colors::detail::rgba(56, 189, 255, 0.15f)));
-			drawList->AddRect(mMin, mMax, ToU32(colors::Primary), 0.f, 0, 1.f);
+			drawList->AddRect(mMin, mMax, chrome::U32(chrome::kAccent), 0.f, 0, 1.f);
 
 			if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
 			{

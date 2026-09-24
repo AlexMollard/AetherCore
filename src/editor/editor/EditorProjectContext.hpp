@@ -21,6 +21,10 @@ namespace aether::app
 		std::filesystem::path prefabsDir;
 		std::filesystem::path scriptsDir;
 		std::string name;
+		// Editor workbench flavor from ProjectSettings.toml ("editor.flavor"). Empty means
+		// the default editor; a recognized flavor (e.g. "twinsanity") gates which flavor
+		// panels register and which editor theme applies. See docs/twinsanity-editor.md.
+		std::string editorFlavor;
 		ProjectKind kind = ProjectKind::Scene3D;
 		bool loaded = false;
 

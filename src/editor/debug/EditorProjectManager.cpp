@@ -455,6 +455,10 @@ namespace aether::editor
 			m_previewCaptureCountdown = 90;
 		}
 		AE_INFO(LogCategory::App, "Opened editor project '{}' at {}", m_currentProject.name, DisplayPath(m_currentProject.root));
+		if (m_projectOpened)
+		{
+			m_projectOpened(m_currentProject);
+		}
 	}
 
 	void EditorProjectManager::BakeProjectFonts() const

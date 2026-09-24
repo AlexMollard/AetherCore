@@ -8,6 +8,7 @@
 #include <imgui.h>
 
 #include "Color.hpp"
+#include "debug/EditorChrome.hpp"
 
 namespace aether
 {
@@ -21,7 +22,7 @@ namespace aether::app
 
 namespace aether::editor
 {
-	inline void DrawMetricRow(const char* label, const char* value, ImVec4 color = {colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a})
+	inline void DrawMetricRow(const char* label, const char* value, ImVec4 color = chrome::kMuted)
 	{
 		ImGui::TableNextRow();
 		ImGui::TableSetColumnIndex(0);
@@ -34,26 +35,26 @@ namespace aether::editor
 	{
 		if (fps >= 55.f)
 		{
-			return {colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a};
+			return chrome::kSuccess;
 		}
 		if (fps >= 30.f)
 		{
-			return {colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a};
+			return chrome::kWarning;
 		}
-		return {colors::Error.r, colors::Error.g, colors::Error.b, colors::Error.a};
+		return chrome::kError;
 	}
 
 	inline ImVec4 MsColor(float ms) noexcept
 	{
 		if (ms <= 16.667f)
 		{
-			return {colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a};
+			return chrome::kSuccess;
 		}
 		if (ms <= 25.f)
 		{
-			return {colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a};
+			return chrome::kWarning;
 		}
-		return {colors::Error.r, colors::Error.g, colors::Error.b, colors::Error.a};
+		return chrome::kError;
 	}
 
 	inline ImU32 ToU32(const glm::vec4& c) noexcept

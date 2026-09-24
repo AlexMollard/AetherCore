@@ -125,6 +125,12 @@ __pycache__/
 # Editor-generated per-project VS solution (paths are machine-local)
 AetherGame.slnx
 
+# Twinsanity workbench (docs/twinsanity-editor.md): ISO-derived study content never
+# enters this public repo. Extracted models/textures/audio land in the project's
+# assets/, and PS2 captures/scans land in reference/ - both machine-local.
+projects/Twinsanity/assets/
+projects/Twinsanity/reference/
+
 # Cooked scene/prefab binaries (derived from the .toml source)
 *.scene.bin
 *.prefab.bin

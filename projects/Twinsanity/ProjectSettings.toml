@@ -1,0 +1,37 @@
+# AetherCore project file.
+
+[app]
+startupscene = "Workbench"
+
+[editor]
+flavor = "twinsanity"
+
+[graphics]
+asynccompute = true
+fxaa = false
+vsync = true
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+name = "Twinsanity"
+version = 1
+
+[publish]
+buildscripts = true
+cleanoutput = true
+openafter = true
+outputroot = "D:\\AetherCore\\projects\\Twinsanity\\Builds"
+platformname = "Windows"
+productname = "Twinsanity"
+synceditorpak = true
+usepackagetemplate = true
+verifyoutput = true
+
+[window]
+height = 1440
+width = 2560

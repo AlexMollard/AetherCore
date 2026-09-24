@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -35,6 +36,14 @@ namespace aether::editor
 		void CloseLauncher();
 		void OpenProject(std::filesystem::path root, bool reloadScene = true);
 		void CreateProject(std::filesystem::path root, std::string_view name, app::project::ProjectTemplate projectTemplate);
+
+		// Invoked at the end of every successful OpenProject. The editor layer uses it to
+		// apply the project's flavor (flavor panels + theme) once the context is loaded.
+		void SetProjectOpenedHandler(std::function<void(const app::EditorProjectContext&)> handler)
+		{
+			m_projectOpened = std::move(handler);
+		}
+
 		void RefreshServices();
 		void UpdateScriptBuild();
 
@@ -63,6 +72,7 @@ namespace aether::editor
 		int m_previewCaptureCountdown = 0;
 		app::ProjectShaderRecompileHook m_shaderRecompileHook; // registered so Play recompiles shaders
 		EditorProjectActions m_actions;
+		std::function<void(const app::EditorProjectContext&)> m_projectOpened;
 		app::scene::ModelBakeHook m_bakeHook;
 		ServiceContainer* m_services = nullptr;
 		std::vector<app::EditorProjectContext> m_recentProjects;

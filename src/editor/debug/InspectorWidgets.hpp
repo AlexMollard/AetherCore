@@ -137,9 +137,9 @@ namespace aether::editor::iw
 			const ImVec2 hMax = ImGui::GetItemRectMax();
 			if (open)
 			{
-				headerDrawList->AddRectFilled(ImVec2(hMin.x, hMin.y + 4.0f), ImVec2(hMin.x + 3.0f, hMax.y - 4.0f), ImGui::ColorConvertFloat4ToU32(ToImVec4(colors::Primary)));
+				headerDrawList->AddRectFilled(ImVec2(hMin.x, hMin.y + 4.0f), ImVec2(hMin.x + 3.0f, hMax.y - 4.0f), ImGui::ColorConvertFloat4ToU32(chrome::kAccent));
 			}
-			headerDrawList->AddLine(ImVec2(hMin.x, hMax.y), ImVec2(hMax.x, hMax.y), ImGui::ColorConvertFloat4ToU32(WithAlpha(colors::Border, 0.9f)), 1.0f);
+			headerDrawList->AddLine(ImVec2(hMin.x, hMax.y), ImVec2(hMax.x, hMax.y), ImGui::ColorConvertFloat4ToU32(chrome::WithAlpha(chrome::kStroke, 0.9f)), 1.0f);
 		}
 
 		if (wantFocus)
@@ -165,7 +165,7 @@ namespace aether::editor::iw
 		DrawComponentContextMenu(menu);
 		ImGui::SameLine();
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - chrome::ButtonWidth(removeId));
-		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));
+		ImGui::PushStyleColor(ImGuiCol_Text, chrome::kMuted);
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, WithAlpha(colors::Red, 0.25f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, WithAlpha(colors::Red, 0.4f));
@@ -201,7 +201,7 @@ namespace aether::editor::iw
 
 		const ImVec2 clipMin = screenPos;
 		const ImVec2 clipMax(screenPos.x + columnWidth, screenPos.y + ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f);
-		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextSecondary));
+		ImGui::PushStyleColor(ImGuiCol_Text, chrome::kMuted);
 		ImGui::PushClipRect(clipMin, clipMax, true);
 		ImGui::TextUnformatted(truncated ? shown.c_str() : label);
 		ImGui::PopClipRect();
@@ -469,10 +469,10 @@ namespace aether::editor::iw
 
 	inline bool AccentButton(const char* label, const ImVec2& size = ImVec2(0.0f, 0.0f))
 	{
-		ImGui::PushStyleColor(ImGuiCol_Button, ToImVec4(colors::Orange));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ToImVec4(colors::PrimaryHover));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ToImVec4(colors::PrimaryActive));
-		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::OnPrimary));
+		ImGui::PushStyleColor(ImGuiCol_Button, chrome::kAccent);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, chrome::kAccentHi);
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, chrome::kAccentDim);
+		ImGui::PushStyleColor(ImGuiCol_Text, chrome::kOnAccent);
 		const bool clicked = ImGui::Button(label, size);
 		ImGui::PopStyleColor(4);
 		return clicked;
@@ -483,7 +483,7 @@ namespace aether::editor::iw
 		ImGui::PushStyleColor(ImGuiCol_Button, WithAlpha(colors::Red, 0.18f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, WithAlpha(colors::Red, 0.75f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ToImVec4(colors::Red));
-		ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(colors::TextPrimary));
+		ImGui::PushStyleColor(ImGuiCol_Text, chrome::kText);
 		const bool clicked = ImGui::Button(label, size);
 		ImGui::PopStyleColor(4);
 		return clicked;

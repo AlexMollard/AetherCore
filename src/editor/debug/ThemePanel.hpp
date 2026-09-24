@@ -26,4 +26,9 @@ namespace aether::editor
 		chrome::EditorTheme m_theme = chrome::NightAmberTheme();
 		bool m_loaded = false;
 	};
+
+	// Reads the user's persisted theme (Theme panel > save) into out. Returns false when
+	// nothing is persisted, leaving out untouched. Shared with the flavor machinery so a
+	// non-flavored project reopens with exactly the theme the user last chose.
+	bool LoadPersistedEditorTheme(chrome::EditorTheme& out);
 } // namespace aether::editor
