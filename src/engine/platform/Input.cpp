@@ -287,7 +287,10 @@ namespace aether
 		// and HadActivityThisFrame pins the editor awake. Real device state is
 		// therefore only trusted while the window has focus; synthetic injection
 		// is unaffected.
-		const bool focused = glfwGetWindowAttrib(m_window, GLFW_FOCUSED) != 0;
+		// GLFW asserts on a null window, and Input is legitimately constructed without
+		// one in tests and headless runtimes - treat a missing window as unfocused and
+		// rely on synthetic injection (see the key loop below).
+		const bool focused = m_window != nullptr && glfwGetWindowAttrib(m_window, GLFW_FOCUSED) != 0;
 
 		for (int i = 0; i < kMaxKeys; ++i)
 		{

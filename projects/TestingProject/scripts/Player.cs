@@ -23,7 +23,9 @@ public sealed class Player : EntityScript
     private Entity _cam;
     private int _idleClip;
     private int _walkClip = -1;
-    private readonly CharacterController _controller = new();
+    // AetherCore.CharacterController (SDK static helper) makes the bare name ambiguous
+    // under `using AetherCore;` - qualify the project's component explicitly.
+    private readonly AetherGame.Systems.CharacterController _controller = new();
 
     public override void OnAttach()
     {
