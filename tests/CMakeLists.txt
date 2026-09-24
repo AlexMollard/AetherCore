@@ -5,93 +5,30 @@ file(GLOB_RECURSE ENGINE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_
 
 add_executable(EngineTests
     ${ENGINE_TEST_SOURCES}
-    # App-side TUs under test: EngineTests links Engine only, so the scene serializer (plus
-    # the reflection TUs that populate the component registry at static-init) and the
-    # ImguiFrameData type its test exercises are compiled straight in here.
-    "${CMAKE_SOURCE_DIR}/src/app/EngineContentPaths.cpp"
+    # The shared runtime/framework TUs (scene, scene/reflection, net, scripting,
+    # systems, project, materialgraph, EngineContentPaths, RuntimeProjectSettings) come
+    # from the RuntimeFramework OBJECT library below - no third copy is compiled here.
+    #
+    # What remains listed is either editor/tooling-only code the framework does not
+    # carry (src/app/editor, src/app/debug, src/app/imgui) or a per-target file
+    # (CSharpScriptingSubsystem.cpp - macro-config-sensitive, see src/app/CMakeLists.txt).
     "${CMAKE_SOURCE_DIR}/src/app/editor/ShaderCompiler.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/debug/ScenePicker.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/materialgraph/MaterialGraph.cpp"
-"${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerApply.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerCapture.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializerToml.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/SceneComponentSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/serde/EffectSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/serde/CameraSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/serde/ScriptSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/serde/MaterialSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/serde/RenderSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/serde/PhysicsSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/serde/UiImageSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/serde/MeshSerde.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/SceneWorkflow.cpp"
     # Autosave's recovery rules: pure filesystem logic, and the half where a mistake
     # destroys work rather than merely failing to save it.
     "${CMAKE_SOURCE_DIR}/src/app/editor/AutosaveRecovery.cpp"
     # What a refused control call says: pure text over pure data, and the difference
     # between a caller that can fix the call and one that has to go and read describe.
     "${CMAKE_SOURCE_DIR}/src/app/editor/ControlDiagnostics.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Reflection.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CoreComponents.reflect.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/MoreComponents.reflect.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics.reflect.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/Physics2D.reflect.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scene/reflection/CharacterController.reflect.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetSerialize.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/ReplicationSchema.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetSession.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetSnapshot.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetRelevancy.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetInterpolation.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetSpawn.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetOwnership.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetRagdoll.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetVelocity.cpp"
-    # NetScriptFields only, NOT CSharpScriptFieldBridge.cpp: the packet logic goes
-    # through the abstract ScriptFieldBridge so it links without the CoreCLR host.
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetScriptFields.cpp"
-    # NetRpc only, NOT CSharpRpcBridge.cpp/NetRpcExports.cpp: encode/decode is pure
-    # and links without the CoreCLR host; the dispatch bridge does not.
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetRpc.cpp"
-    # The integration layer. Both TUs became linkable here once NetworkContext stopped
-    # constructing the CLR-backed script bridges itself and started taking them from
-    # its wiring site (Application.cpp) - see NetworkContext::SetFieldBridge. This is
-    # where the role gating, the net-id lifecycle and the session teardown rules live,
-    # so it is the half of the framework most worth pinning.
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetworkContext.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetworkSystems.cpp"
-    # The traversal ladder NetworkContext now owns (port mapping, then punch, then
-    # ConnectThrough). Links here because it only touches the transport and the engine
-    # net primitives, never the CLR host.
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetTraversalSession.cpp"
-    # Lag-compensated hit validation. Pure sampling over an InterpolationBuffer plus
-    # NetworkContext's own RTT estimate, so it links here for the same reason
-    # NetTraversalSession does: no CLR host, no export layer.
-    "${CMAKE_SOURCE_DIR}/src/app/net/NetRewind.cpp"
-    # The one definition of g_activeContext, which ActiveContextScope publishes and
-    # every script/RPC callback path depends on.
-    "${CMAKE_SOURCE_DIR}/src/app/scripting/SceneContext.cpp"
-    # ScriptSerde.cpp's CaptureScripts now calls ScriptComponentSystem::
-    # SyncPropertiesFromLiveInstance (a save-time live property re-read - see its
-    # own comment), which needs this. Compile/link-only: nethost.dll and the
-    # managed assemblies are never staged next to EngineTests.exe, so
-    # CSharpScriptingSubsystem::IsAvailable() is false at runtime here exactly as
-    # it would be with scripting absent entirely, and the sync is the same no-op
-    # every other headless/no-scripting World already exercises. DotNetHost.cpp
+    # Compile/link-only: the managed assemblies are never staged next to EngineTests.exe,
+    # so scripting has no scripts to load here. (nethost.dll IS staged by the POST_BUILD
+    # below - Engine imports it unconditionally once the .NET host pack is found.) The
+    # macro that turns on project-script compilation (AETHER_SCRIPT_BUILD_ENABLED) is an
+    # Editor-only define and is deliberately NOT set here. DotNetHost.cpp
     # (src/engine/scripting) needs no listing - it is globbed into Engine already.
-    "${CMAKE_SOURCE_DIR}/src/app/systems/ScriptComponentSystem.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/CSharpScriptingSubsystem.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/imgui/ImguiFrameData.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/AsepriteSpriteImporter.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/project/ProjectPaths.cpp"
-    # The one store for the startup scene, shared by the editor panels and the publish
-    # bake - the rule that a build never boots a scene the project does not have.
-    "${CMAKE_SOURCE_DIR}/src/app/project/ProjectStartupScene.cpp"
-    # Which project file a game runtime layers over its own settings - the rule that
-    # keeps a published build off the build machine's project directory.
-    "${CMAKE_SOURCE_DIR}/src/app/RuntimeProjectSettings.cpp"
     # Publish planning and package verification. Pure/near-pure halves of the publish
     # pipeline; the IO steps stay out of the test build.
     "${CMAKE_SOURCE_DIR}/src/app/editor/publish/PublishPlan.cpp"
@@ -101,15 +38,21 @@ add_executable(EngineTests
     # Editor undo/redo command logic under test. The typed component commands
     # (add/remove/set) resolve components through the editor catalog and the
     # hand-authored field sets, so both TUs are compiled in alongside them.
-    "${CMAKE_SOURCE_DIR}/src/app/debug/UndoStack.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/editor/UndoStack.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/debug/EditorCommand.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/ComponentCatalog.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scripting/interop/PhysicsExports.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scripting/interop/CharacterExports.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/scripting/interop/UiExports.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/editor/ComponentFields.cpp"
 )
-target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
+target_link_libraries(EngineTests PRIVATE Engine AssetPipeline RuntimeFramework doctest::doctest imgui nlohmann_json::nlohmann_json)
+# Engine carries a real DotNetHost (AETHER_HAS_DOTNET is a PUBLIC define), so this exe
+# imports nethost.dll even though no test touches scripting. Stage the DLL beside it;
+# IsAvailable() may then return true, but no test depends on it being false.
+if(AETHER_HAS_DOTNET AND WIN32)
+    add_custom_command(TARGET EngineTests POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${AETHER_NETHOST_DLL}" "$<TARGET_FILE_DIR:EngineTests>"
+        COMMENT "Staging nethost.dll next to EngineTests")
+endif()
 target_include_directories(EngineTests PRIVATE "${xxHash_SOURCE_DIR}")   # pak index-hash tests
 # Box2D headers for the direct dependency smoke test in tests/physics2d (Engine links
 # box2d PRIVATE; everything else goes through Physics2DSystem).
@@ -126,7 +69,7 @@ if(SLANGC_EXECUTABLE)
         AETHER_SLANG_ARGS="${AETHERCORE_SLANG_SHADER_ARGS}"
         AETHER_SHADER_INCLUDE_DIR="${AETHERCORE_SHADER_SOURCE_DIR}")
 endif()
-target_link_libraries(EngineTests PRIVATE Engine AssetPipeline doctest::doctest imgui nlohmann_json::nlohmann_json)
+
 aethercore_target_defaults(EngineTests)
 if(MSVC)
     target_compile_options(EngineTests PRIVATE /bigobj)
