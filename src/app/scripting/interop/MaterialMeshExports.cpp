@@ -298,6 +298,15 @@ AE_SCRIPT_API void aether_entity_material_set_color(std::uint32_t entityId, Vec3
 {
 	SafeExport([&] -> void
 	{
+	// EntityAlive: every other export in this file already guards a plain entity id
+	// this way (see aether_load_model's own comment above) - these four were the one
+	// gap, and MaterialSystem's Set* calls straight into entt registry lookups/emplace
+	// on whatever entt::entity World::ToEntt derives, which is undefined behaviour on a
+	// destroyed id, not a safe no-op.
+	if (!EntityAlive(entityId))
+	{
+		return;
+	}
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
@@ -310,6 +319,10 @@ AE_SCRIPT_API void aether_entity_material_set_metallic(std::uint32_t entityId, f
 {
 	SafeExport([&] -> void
 	{
+	if (!EntityAlive(entityId))
+	{
+		return;
+	}
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
@@ -322,6 +335,10 @@ AE_SCRIPT_API void aether_entity_material_set_roughness(std::uint32_t entityId, 
 {
 	SafeExport([&] -> void
 	{
+	if (!EntityAlive(entityId))
+	{
+		return;
+	}
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
@@ -334,11 +351,35 @@ AE_SCRIPT_API void aether_entity_material_set_emissive(std::uint32_t entityId, V
 {
 	SafeExport([&] -> void
 	{
+	if (!EntityAlive(entityId))
+	{
+		return;
+	}
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
 		aether::MaterialSystem::SetEmissive(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), ToGlm(color));
 	}
+	});
+}
+
+AE_SCRIPT_API Vec3 aether_entity_material_get_emissive(std::uint32_t entityId)
+{
+	return SafeExport([&] -> Vec3
+	{
+	// Same alive guard as the setter above, and for the same reason - reading a dead
+	// id's material is exactly as unsafe as writing one, not a query that happens to be
+	// harmless because it does not mutate anything.
+	if (!EntityAlive(entityId))
+	{
+		return Vec3{};
+	}
+	auto& ctx = ActiveContext();
+	if (ctx.assets == nullptr)
+	{
+		return Vec3{};
+	}
+	return FromGlm(aether::MaterialSystem::GetEmissive(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry()));
 	});
 }
 

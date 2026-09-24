@@ -50,6 +50,7 @@ public sealed class GameManager : EntityScript
 	private void BuildHud()
 	{
 		Entity canvas = Ui.CreateCanvas();
+		canvas.MarkTransient(); // runtime UI, never save-worthy - see Sandbox's PhysicsGun.EnsureHud comment on why
 		_title = MakeText(canvas, "ORB COLLECTOR", 0, 42, 640, 60, Amber, 46);
 		_score = MakeText(canvas, "Score: 0 | Best: 0", 0, 112, 420, 40, Ink, 28);
 

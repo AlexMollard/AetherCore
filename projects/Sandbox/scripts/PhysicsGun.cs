@@ -142,19 +142,22 @@ public sealed class PhysicsGun : EntityScript
     /// that only ever slides flat looks broken.</summary>
     public float ThrowOffCenter = 0.15f;
 
-    /// <summary>Emissive colour tint applied to a held prop and cleared on release - the
-    /// task's own minimum bar for "some visual indication of what is currently held".
-    /// Assumes every grabbable prop is authored at emissive black (true for every prop in
-    /// this sandbox, scene-authored or spawned), so clearing to Vector3.Zero on release is
-    /// safe; a prop with its own baseline emissive would need that value remembered
-    /// instead of assumed.</summary>
+    /// <summary>Emissive colour tint applied to a held prop and cleared on release, via
+    /// <see cref="Highlight"/> - the task's own minimum bar for "some visual indication
+    /// of what is currently held", now shared with ToolGun's own pending/hover tints
+    /// rather than a second hand-rolled apply/clear pair (see Highlight.cs's own file
+    /// comment). Highlight.Apply captures the prop's REAL emissive value before tinting
+    /// and Release restores exactly that, so this no longer assumes every prop is
+    /// authored at emissive black the way the original version of this comment
+    /// documented as a known simplification.</summary>
     public Vector3 HeldEmissiveTint = new(0.15f, 0.55f, 0.85f);
 
     /// <summary>Crosshair dot size in pixels. Small and unobtrusive - it only needs to
     /// mark screen centre, not draw attention to itself.</summary>
     public float CrosshairSize = 6.0f;
 
-    /// <summary>True while E is held and something is held - <see cref="FirstPersonPlayer"/>
+    /// <summary>True while the "rotate_prop" action (E by default, rebindable via
+    /// SandboxSettings) is held and something is held - <see cref="FirstPersonPlayer"/>
     /// reads this (cross-entity, via its cached camera reference) to redirect mouse
     /// movement into prop rotation instead of player look for exactly as long as this is
     /// true.</summary>
@@ -181,7 +184,9 @@ public sealed class PhysicsGun : EntityScript
 
     private Entity _player;
     private Entity _hud;
+    private Entity _crosshair;
     private Entity _held;
+    private Vector3 _heldBaseline;
     private Entity _pauseMenuEntity;
     private Beam? _beam;
 
@@ -228,6 +233,11 @@ public sealed class PhysicsGun : EntityScript
     {
         _player = Self.Parent;
         _pauseMenuEntity = Scene.Find("NetSession");
+        // Idempotent upsert, registered every attach - same reasoning as ToolGun's own
+        // OnAttach comment (and PropSpawner's before it): a fresh per-connection script
+        // re-hardcoding Key.E would silently undo a saved rebind on every reconnect.
+        SandboxSettings.EnsureLoaded();
+        InputActions.Register("rotate_prop", SandboxSettings.BoundKeys["rotate_prop"]);
         EnsureViewmodel();
 
         TagId grabbable = Tags.Create("grabbable");
@@ -267,11 +277,32 @@ public sealed class PhysicsGun : EntityScript
         }
         _hud = Ui.CreateCanvas();
         _hud.MarkTransient(); // runtime UI, never save-worthy - confirmed live: an accidental save during Play previously baked a duplicate crosshair canvas permanently into Sandbox.scene.toml
-        Entity crosshair = Ui.CreateImage(_hud);
-        Ui.SetAnchors(crosshair, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        Ui.SetPivot(crosshair, new Vector2(0.5f, 0.5f));
-        Ui.SetRect(crosshair, 0.0f, 0.0f, CrosshairSize, CrosshairSize);
-        Ui.SetImageColor(crosshair, new Vector4(1.0f, 1.0f, 1.0f, 0.85f));
+        _crosshair = Ui.CreateImage(_hud);
+        Ui.SetAnchors(_crosshair, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        Ui.SetPivot(_crosshair, new Vector2(0.5f, 0.5f));
+        Ui.SetRect(_crosshair, 0.0f, 0.0f, CrosshairSize, CrosshairSize);
+        Ui.SetImageColor(_crosshair, UiTheme.CrosshairIdle);
+    }
+
+    /// <summary>Reflects the same held/rotating state PhysicsGun already tracks onto the
+    /// crosshair's own colour - UiTheme.CrosshairHolding/Rotating existed as unused
+    /// constants before this (the crosshair was hardcoded to a fixed colour regardless
+    /// of state); this is the wiring that was missing, not a new visual language.
+    /// Rotating takes precedence over Holding when both are true (rotating only ever
+    /// happens while already holding), Idle otherwise. Reads this frame's state as of
+    /// whatever the PREVIOUS frame's grab/release/rotate logic left it at - called before
+    /// this frame's own logic runs below, so it lags the actual state change by at most
+    /// one frame, imperceptible for a colour swap.</summary>
+    private void UpdateCrosshairColor()
+    {
+        if (!_crosshair.IsValid)
+        {
+            return;
+        }
+        Vector4 color = IsRotatingProp ? UiTheme.CrosshairRotating
+                : _held.IsValid ? UiTheme.CrosshairHolding
+                : UiTheme.CrosshairIdle;
+        Ui.SetImageColor(_crosshair, color);
     }
     /// <summary>The beam's drawn start: the viewmodel's muzzle in world space (the
     /// placement offset transformed by the viewmodel's current angles - see
@@ -331,6 +362,7 @@ public sealed class PhysicsGun : EntityScript
             return;
         }
         EnsureHud();
+        UpdateCrosshairColor();
         UpdateViewmodel();
 
         bool menuOpen = GetScript<SpawnMenu>() is { IsOpen: true }
@@ -393,10 +425,10 @@ public sealed class PhysicsGun : EntityScript
 
         _holdDistance = Math.Clamp(_holdDistance + Input.ScrollDelta.Y * ScrollStep, MinHoldDistance, MaxHoldDistance);
 
-        if (Input.IsKeyDown(Key.E))
+        if (InputActions.IsDown("rotate_prop"))
         {
             IsRotatingProp = true;
-            // Don't leave it spinning the instant E is released.
+            // Don't leave it spinning the instant rotate_prop is released.
             Physics.SetAngularVelocity(_held, Vector3.Zero);
         }
 
@@ -508,7 +540,7 @@ public sealed class PhysicsGun : EntityScript
         // else wakes it), then make it weightless for the duration of the hold.
         Physics.SetBodyActive(_held, true);
         Physics.SetGravityFactor(_held, 0.0f);
-        _held.Material.SetEmissive(HeldEmissiveTint);
+        _heldBaseline = Highlight.Apply(_held, HeldEmissiveTint);
     }
 
     /// <summary>
@@ -528,7 +560,7 @@ public sealed class PhysicsGun : EntityScript
         {
             Physics.SetGravityFactor(_held, 1.0f);
             Physics.SetAngularVelocity(_held, Vector3.Zero);
-            _held.Material.SetEmissive(Vector3.Zero);
+            Highlight.Clear(_held, _heldBaseline);
             // Hand ownership back to the host so someone else (or this player, later)
             // can claim it - a dropped prop must not stay locked to whoever last held it.
             Net.ReleaseOwnership(_held);

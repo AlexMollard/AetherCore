@@ -135,6 +135,31 @@ namespace aether
 		AssignMaterial(world, entity, registry, pipelineCache, ref.inst.asset);
 	}
 
+	glm::vec3 MaterialSystem::GetEmissive(World& world, Entity entity, const MaterialRegistry& registry)
+	{
+		// Deliberately NOT GetOrSeedInstance - a read must not have the side effect of
+		// emplacing a MaterialInstanceComponent (that would make a plain query start
+		// looking, to the scene serializer's own CaptureMaterial, exactly like a real
+		// per-entity override). Same priority order as the setters would have seeded
+		// from, just without writing it back: an existing instance override wins, else
+		// whatever the entity's shared MaterialComponent asset describes, else black.
+		const auto& r = world.GetRegistry();
+		const entt::entity e = World::ToEntt(entity);
+		if (const auto* inst = r.try_get<MaterialInstanceComponent>(e))
+		{
+			return inst->asset.emissiveFactor;
+		}
+		if (const auto* mc = r.try_get<MaterialComponent>(e))
+		{
+			MaterialAsset described{};
+			if (registry.TryDescribe(mc->handle, described))
+			{
+				return described.emissiveFactor;
+			}
+		}
+		return glm::vec3(0.0f);
+	}
+
 	void MaterialSystem::SetOcclusion(World& world, Entity entity, MaterialRegistry& registry, PipelineCache& pipelineCache, float value)
 	{
 		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity), registry);

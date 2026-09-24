@@ -15,6 +15,7 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scene/ModelSpawn.hpp"
 #include "passes/PostProcessStack.hpp"
+#include "PlayState.hpp"
 #include "platform/Input.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "rendering/Renderer.hpp"
@@ -240,8 +241,28 @@ namespace aether::app
 
 		if (m_csharp != nullptr && m_csharp->HasReloadRequest())
 		{
-			m_csharp->ClearReloadRequest();
-			DoReload(context);
+			// A live Play session is a SIMULATION of the saved/authored state - the same
+			// reasoning AutosaveService.cpp's own Play guard already uses to refuse a
+			// background write. DoReload() calls ScriptComponentSystem::Invalidate(),
+			// which destroys and recreates every C# instance in the world; anything a
+			// running script had cached about itself (FirstPersonPlayer's own camera
+			// child, resolved once in OnAttach and never revisited) does not survive
+			// that, so mid-Play a script that looked correctly wired the frame before
+			// silently stops working the frame after - not from anything the player did,
+			// from a dev-only F5/"Reload Scripts" shortcut nothing gates today. Dropped
+			// outright rather than deferred to Stop: a reload firing as a surprise the
+			// moment Play ends is its own kind of confusing.
+			const auto* playState = context.TryGet<PlayState>();
+			if (playState != nullptr && playState->IsPlaying())
+			{
+				m_csharp->ClearReloadRequest();
+				AE_WARN(LogCategory::App, "ScriptedSceneLayer: script reload ignored while Play is running - Stop first.");
+			}
+			else
+			{
+				m_csharp->ClearReloadRequest();
+				DoReload(context);
+			}
 		}
 	}
 } // namespace aether::app

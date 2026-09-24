@@ -1,0 +1,20 @@
+# AetherCore project file.
+
+[app]
+startupscene = "default"
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+kind = "3d"
+name = "AetherProject"
+template = "blank_3d"
+version = 2
+
+[publish]
+platformname = "Windows"
+productname = "AetherProject"

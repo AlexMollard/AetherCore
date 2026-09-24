@@ -104,6 +104,9 @@ public sealed class DialogueRunner : EntityScript
         // on with _built still true - so replaying a level gave a runner with no widgets, and dialogue
         // silently paused the game with nothing on screen.
         _canvas.DontDestroyOnLoad();
+        // Runtime UI, never save-worthy - orthogonal to DontDestroyOnLoad above (that
+        // governs surviving a scene SWAP; this governs never being captured by a SAVE).
+        _canvas.MarkTransient();
 
         // Panel: bottom-anchored stretch (anchor Y=1 is the bottom edge; offsets go up = negative Y).
         _panel = Ui.CreateImage(_canvas);

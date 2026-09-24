@@ -69,7 +69,9 @@ public sealed class HollowtideGame : EntityScript
 		if (!_canvas.IsValid)
 		{
 			// A scene opened without its canvas still runs; the UI simply makes its own.
+			// Runtime UI, never save-worthy - see PhysicsGun.EnsureHud's own comment on why.
 			_canvas = Ui.CreateCanvas();
+			_canvas.MarkTransient();
 		}
 
 		BindBackdrop();

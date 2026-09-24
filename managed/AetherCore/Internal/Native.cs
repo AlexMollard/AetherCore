@@ -1206,6 +1206,9 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_entity_material_set_emissive(uint entityId, Vector3 color);
 
+    [LibraryImport(Lib)]
+    internal static partial Vector3 aether_entity_material_get_emissive(uint entityId);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_set_material_texture(uint entityId, string path);
 
