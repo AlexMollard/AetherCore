@@ -34,6 +34,7 @@ namespace aether
 		desc.depthWriteEnable = tmpl.depthWriteEnable;
 		desc.depthCompareOp = gpu::CompareOp::LessOrEqual;
 		desc.blendEnable = tmpl.blendEnable;
+		desc.blendMode = tmpl.blendMode;
 		desc.cullMode = tmpl.cullMode;
 		desc.descriptorHeapMappings = m_context.descriptorHeapMappings;
 		return desc;

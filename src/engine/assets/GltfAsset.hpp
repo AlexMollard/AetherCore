@@ -35,6 +35,7 @@ namespace aether::assets
 		float alphaCutoff = 0.5f;
 		bool doubleSided = false;
 		bool alphaBlend = false;
+		bool additiveBlend = false; // alphaBlend == 2 on disk: Cs*As + Cd
 		bool alphaMask = false;
 		bool modulateVertexColor = false;
 		bool foliage = false;

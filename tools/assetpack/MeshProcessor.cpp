@@ -640,6 +640,13 @@ namespace aether::assetpipeline
 					{
 						hdr.objectLit = 1;
 					}
+					// {"additive":true} - PS2 GS "blend add" ALPHA preset (Cs*As + Cd): a
+					// blended material that adds onto what is behind it (the Twinsanity sea's
+					// foam). Only meaningful on a BLEND material.
+					if (hdr.alphaBlend != 0 && std::strstr(extras, "\"additive\"") != nullptr)
+					{
+						hdr.alphaBlend = 2;
+					}
 				}
 			}
 

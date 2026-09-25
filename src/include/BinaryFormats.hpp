@@ -117,7 +117,9 @@ struct AnimSetHeaderDisk
 };
 
 inline constexpr char MATL_MAGIC[4] = {'M', 'A', 'T', 'L'};
-inline constexpr uint32_t MATL_VERSION = 1;
+// 2: alphaBlend == 2 means additive. The header has no pad bytes left, so the blend mode rides on
+// the byte that already said "blends". Version 1 files only ever wrote 0/1 and stay valid.
+inline constexpr uint32_t MATL_VERSION = 2;
 
 enum class TextureTypeDisk : uint8_t
 {
@@ -138,6 +140,8 @@ struct MaterialHeaderDisk
 	float emissiveFactor[3] = {0, 0, 0};
 	float alphaCutoff = 0;
 	uint8_t doubleSided = 0;
+	// 0 opaque, 1 alpha blend (Cs*As + Cd*(1-As)), 2 additive (Cs*As + Cd: the PS2 GS "blend add"
+	// ALPHA preset). Any non-zero value is a blended, sorted, non-depth-writing, non-casting draw.
 	uint8_t alphaBlend = 0;
 	uint8_t alphaMask = 0;
 	uint8_t texturePathCount = 0;
@@ -196,5 +200,5 @@ inline bool CheckMagic(const AnimSetHeaderDisk& h)
 
 inline bool CheckMagic(const MaterialHeaderDisk& h)
 {
-	return h.magic[0] == 'M' && h.magic[1] == 'A' && h.magic[2] == 'T' && h.magic[3] == 'L' && h.version == MATL_VERSION;
+	return h.magic[0] == 'M' && h.magic[1] == 'A' && h.magic[2] == 'T' && h.magic[3] == 'L' && (h.version == MATL_VERSION || h.version == 1);
 }

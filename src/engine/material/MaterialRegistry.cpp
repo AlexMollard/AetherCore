@@ -177,6 +177,7 @@ namespace aether
 		out.emissiveFactor = glm::vec3(g.emissiveFactor);
 		out.doubleSided = (g.flags & GpuMaterial::kDoubleSided) != 0;
 		out.alphaBlend = (g.flags & GpuMaterial::kAlphaBlend) != 0;
+		out.additiveBlend = (g.flags & GpuMaterial::kAdditiveBlend) != 0;
 		out.alphaMask = (g.flags & GpuMaterial::kAlphaMask) != 0;
 		out.modulateVertexColor = (g.flags & GpuMaterial::kModulateVertexColor) != 0;
 		out.receiveShadows = (g.flags & GpuMaterial::kNoReceiveShadows) == 0;

@@ -57,6 +57,7 @@ namespace aether
 		MaterialTemplate tmpl = asset.templateDesc;
 		tmpl.cullMode = asset.doubleSided ? gpu::CullMode::None : gpu::CullMode::Back;
 		tmpl.blendEnable = asset.alphaBlend;
+		tmpl.blendMode = asset.additiveBlend ? gpu::BlendMode::Additive : gpu::BlendMode::Alpha;
 		// Transparent geometry must not write depth: the surfaces behind it still have to be
 		// visible through it, and a depth write would reject them. Only ever cleared, never
 		// set - an opaque material keeps whatever its own template asked for.

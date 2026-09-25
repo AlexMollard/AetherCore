@@ -253,6 +253,7 @@ namespace aether
 					material.alphaCutoff = hdr.alphaCutoff;
 					material.doubleSided = hdr.doubleSided != 0;
 					material.alphaBlend = hdr.alphaBlend != 0;
+					material.additiveBlend = hdr.alphaBlend == 2;
 					material.alphaMask = hdr.alphaMask != 0;
 					material.modulateVertexColor = hdr.modulateVertexColor != 0;
 					material.foliage = hdr.foliage != 0;
@@ -484,6 +485,7 @@ namespace aether
 				mat.alphaCutoff = srcMat.alphaCutoff;
 				mat.doubleSided = srcMat.doubleSided;
 				mat.alphaBlend = srcMat.alphaBlend;
+				mat.additiveBlend = srcMat.additiveBlend;
 				mat.alphaMask = srcMat.alphaMask;
 				mat.modulateVertexColor = srcMat.modulateVertexColor;
 				mat.foliage = srcMat.foliage;

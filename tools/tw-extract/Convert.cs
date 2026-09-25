@@ -262,7 +262,7 @@ namespace TwExtract
 			return index;
 		}
 		string texture = null;
-		bool blend = false, mask = false;
+		bool blend = false, mask = false, additive = false;
 		float cutoff = 0.5f;
 		float scrollU = 0f, scrollV = 0f;
 		if (m_gfx.Materials.TryGetValue(materialId, out var mat))
@@ -289,6 +289,12 @@ namespace TwExtract
 				texture = m_textures.Name(tex);
 			}
 			blend = shader.ABlending == TwinsShader.AlphaBlending.ON;
+			// The GS ALPHA register comes from a preset unless the record's own A/B/C/D are used
+			// (the library's UsePresetAlphaRegSettings holds that bit: false = preset). Preset 1 is
+			// "(Cs - 0) * As + Cd", blend add (twinsanity-reversed GameArchivesItemsStructure.txt).
+			// The beach sea "lambert168" uses it: its foam adds onto the sand and saturates white on
+			// the PS2, where a mix left it a faint grey (logs/wateredge/foam.png).
+			additive = blend && !shader.UsePresetAlphaRegSettings && shader.AlphaRegSettingsIndex == 1;
 			mask = !blend && shader.ATest == Twinsanity.TwinsShader.AlphaTest.ON;
 			cutoff = Math.Min(shader.AlphaValueToBeComparedTo * 2, 255) / 255f;
 			// Shader types 23 and 26 carry float params, but they are not a UV scroll: every
@@ -302,7 +308,8 @@ namespace TwExtract
 		}
 		// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
 		// the model, so equal names must mean equal content.
-		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{m_isObject}|{scrollU:R}|{scrollV:R}"));
+		// Additive only joins the key when set, so every other material keeps its name.
+		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{m_isObject}|{scrollU:R}|{scrollV:R}" + (additive ? "|add" : "")));
 		if (m_byName.TryGetValue(name, out index))
 		{
 			return m_materialIndex[(materialId, vertexLit, layer)] = index;
@@ -355,6 +362,11 @@ namespace TwExtract
 			{
 				extras["foliage"] = true;
 			}
+			// GS "blend add" preset: MeshProcessor bakes it as alphaBlend = 2, drawn Cs*As + Cd.
+			if (additive)
+			{
+				extras["additive"] = true;
+			}
 			// PS2 vertex colour is prelit on scenery: it carries the level's whole lighting, so
 			// the renderer shows it as is instead of lighting it again (only real-time shadows
 			// pull it down to the scene's ambient). Object models instead carry a constant
@@ -386,9 +398,17 @@ namespace TwExtract
 	// water edge breathes with a 5.1-5.3 s period, travelling toward the inland camera. The
 	// texture's foam width has one dominant bulge per V repeat, so speed = 1 / period.
 	// Evidence: logs/wateredge (rigd/ dense captures, sheet.png).
+	// The skull waterfall behind the beach (beach prim 36, game x 107-125, y 38-66) scrolls 1 V
+	// per second (one repeat per 50 PAL frames). Rig at 20 ms spacing (logs/wateredge/fallsd):
+	// its blobs fall ~208 px/s, and the fall's profile repeats every 0.50 s at every multiple
+	// (0.5/1.0/1.5/2.0 s). That is half a repeat, since the texture's V profile is self-similar at
+	// 32 of its 64 texels. Both captures fall ~1.35 fall-heights per second: the rig at 208 px/s on
+	// a 155 px fall, the engine at ~500 px/s on a 370 px fall. Sign: +1 made the sheet climb
+	// (logs/wateredge/engfall_slow_plus1, 0.1x speed), so it is -1; engfall_slow_minus1 shows it fall.
 	private static readonly Dictionary<string, (float U, float V)> s_measuredScroll = new Dictionary<string, (float, float)>
 	{
 		["2b1f0286252911e6.png"] = (0f, -0.19f), // Earth-Hub beach sea blend layers
+		["f5ccfd069d94f219.png"] = (0f, -1.0f), // Earth-Hub waterfall sheets (skull fall; alwayson/hubb falls share it)
 	};
 
 	// How many DISTINCT texture-mapped layers a material exports (>= 1; texture-less

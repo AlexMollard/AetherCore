@@ -24,6 +24,10 @@ namespace aether
 		{
 			flags |= GpuMaterial::kAlphaBlend;
 		}
+		if (a.additiveBlend)
+		{
+			flags |= GpuMaterial::kAdditiveBlend;
+		}
 		if (a.alphaMask)
 		{
 			flags |= GpuMaterial::kAlphaMask;

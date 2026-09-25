@@ -15,11 +15,13 @@ namespace aether
 		std::string_view fragmentVfsPath;
 		gpu::CullMode cullMode = gpu::CullMode::None;
 		bool blendEnable = false;
+		// Only read when blendEnable: Alpha mixes, Additive adds (Cs*As + Cd).
+		gpu::BlendMode blendMode = gpu::BlendMode::Alpha;
 		bool depthWriteEnable = true;
 
 		friend bool operator==(const MaterialTemplate& a, const MaterialTemplate& b)
 		{
-			return a.shaderVfsPath == b.shaderVfsPath && a.fragmentVfsPath == b.fragmentVfsPath && a.cullMode == b.cullMode && a.blendEnable == b.blendEnable && a.depthWriteEnable == b.depthWriteEnable;
+			return a.shaderVfsPath == b.shaderVfsPath && a.fragmentVfsPath == b.fragmentVfsPath && a.cullMode == b.cullMode && a.blendEnable == b.blendEnable && a.blendMode == b.blendMode && a.depthWriteEnable == b.depthWriteEnable;
 		}
 	};
 
@@ -30,6 +32,7 @@ namespace aether
 		hasher.Mix(t.fragmentVfsPath);
 		hasher.MixValue(static_cast<std::uint32_t>(t.cullMode));
 		hasher.MixValue(t.blendEnable);
+		hasher.MixValue(static_cast<std::uint32_t>(t.blendMode));
 		hasher.MixValue(t.depthWriteEnable);
 		return hasher.Value();
 	}

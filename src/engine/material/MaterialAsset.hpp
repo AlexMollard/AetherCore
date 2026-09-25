@@ -19,6 +19,9 @@ namespace aether
 
 		bool doubleSided = false;
 		bool alphaBlend = false;
+		// With alphaBlend: add the surface onto what is behind it (Cs*As + Cd, the PS2 GS
+		// "blend add" preset) instead of mixing (Twinsanity sea foam).
+		bool additiveBlend = false;
 		bool alphaMask = false;
 		bool modulateVertexColor = false;
 		bool receiveShadows = true;

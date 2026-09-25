@@ -23,6 +23,9 @@ namespace aether
 		// PS2 object lighting: lit by the scene's object light records (ambient + two
 		// directional) like the GS lit everything that was not prelit scenery.
 		static constexpr std::uint32_t kObjectLit = 1u << 7;
+		// Additive blend (Cs*As + Cd). Pipeline state, not read by any shader: carried here only
+		// so MaterialRegistry::TryDescribe round-trips it.
+		static constexpr std::uint32_t kAdditiveBlend = 1u << 8;
 
 		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor{1.0f};
