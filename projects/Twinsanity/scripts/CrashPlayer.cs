@@ -101,7 +101,9 @@ public sealed class CrashPlayer : EntityScript
 	private float _facing;
 	private float _modelYaw;
 	private float _lookTurn;
-	private float _lookStick;
+	private float _lookPitch;
+	private Vector2 _lookStick;
+	private readonly CrashLook _look = new();
 	private bool _control = true;
 
 	private State _state = State.Ground;
@@ -929,7 +931,8 @@ public sealed class CrashPlayer : EntityScript
 	private void Look(float deltaTime)
 	{
 		_lookTurn -= Input.MouseDelta.X * MouseSensitivity;
-		_lookStick = Gamepad.RightStick.X;
+		_lookPitch += Input.MouseDelta.Y * MouseSensitivity;
+		_lookStick = Gamepad.RightStick;
 	}
 
 	private void PlaceModel(float deltaTime)
@@ -958,8 +961,10 @@ public sealed class CrashPlayer : EntityScript
 		// A drowning pulls the view up with the floating body (the rig ends looking down at him
 		// on the surface, not at the controller still on the drowning plane below).
 		float lift = _dead && _deathPlan.FloatToSurface ? _deathLift : 0.0f;
-		_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_facing), _horizontal, _lookTurn, _dead ? 0.0f : _lookStick, lift);
+		_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_facing), _horizontal, _lookTurn, _lookPitch, _dead ? Vector2.Zero : _lookStick, lift);
 		_lookTurn = 0.0f;
+		_lookPitch = 0.0f;
+		_look.Update(_model, _dead ? Vector2.Zero : _lookStick, deltaTime);
 	}
 
 	private static Vector3 FacingDir(float yawDegrees)
