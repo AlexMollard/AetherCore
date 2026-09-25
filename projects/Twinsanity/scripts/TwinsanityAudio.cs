@@ -152,6 +152,13 @@ public static class TwinsanityAudio
 
 	public static void ExtraLife() => Audio.Play(GlobalBank + "266.wav", WorldVolume);
 
+	// Aku Aku (AKUMASK Sounds[] = 59, 200, 59, 200, 59, -, 200; no script plays them, the engine
+	// does): 59 on gaining a mask, 200 on losing one. The split is read from the slot order, not
+	// isolated on the rig; the level is not measured either.
+	public static void AkuGained() => Audio.Play(LevelBank + "59.wav", WorldVolume);
+
+	public static void AkuLost() => Audio.Play(LevelBank + "200.wav", WorldVolume);
+
 	// ---- Crates (3D) ----------------------------------------------------------------------
 
 	/// <summary>A crate was jumped on. TNT answers with its fuse tick (TNTCRATE Sounds[0]).</summary>

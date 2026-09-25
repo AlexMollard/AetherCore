@@ -66,8 +66,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 	private int _wumpaCount;
 	private int _lives;
-	private int _aku;
-	private int _masks = 3; // rig (logs/wildlife/monkey_hit.csv): 3 hp, one hit per hit, death at 0
+	// Aku Aku masks, 0-2. The rig's health word is 1 + masks: a fresh beach reads 2 (one mask), a
+	// crab takes 3 -> 2 -> 1 -> dead, and the respawn reads 2 (logs/aku/track_hitcrab.csv).
+	private int _aku = 1;
 	private float _deathTimer = -1.0f;
 	private Entity _sky;
 
@@ -140,6 +141,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		CrateFx.RegisterObjectModels(_objectModels);
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
 		TwinsanityAudio.Start(LevelPath);
+		TwinsanityAku.Start();
 		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
 		// summary has the rig evidence for when the original shows it.
 	}
@@ -174,6 +176,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		// Keep world life and crate fx animating through the death pause, as in the original.
 		_actors.Update(deltaTime, _player!, this);
 		CrateFx.Update(deltaTime);
+		TwinsanityAku.Update(deltaTime, _player!, _aku);
 		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
 		// The pause menu ticks on the unscaled clock: it freezes the game itself (Time.Scale 0)
 		// while its own opening, drum and closing keep animating, as in the original.
@@ -190,6 +193,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			{
 				_player!.Respawn(_checkpoint + new Vector3(0.0f, 0.1f, 0.0f), _checkpointFacing);
 				_player.SetControl(true);
+				_aku = 1;
 				Log.Info("[Twinsanity] Crash respawned at checkpoint");
 			}
 			return;
@@ -650,7 +654,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				TwinsanityAudio.ExtraLife();
 				break;
 			case Kind.AkuAku:
-				_aku = Math.Min(_aku + 1, 2);
+				_aku = TwinsanityAku.Collect(_aku);
 				break;
 		}
 	}
@@ -796,16 +800,15 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 	private void Hurt(Vector3 from, DeathKind kind = DeathKind.Generic)
 	{
+		if (TwinsanityAku.Invincible)
+		{
+			return; // the mask on his face: nothing hurts him (rig logs/aku/track_l3.csv, _invwalk.png)
+		}
 		if (_aku > 0)
 		{
 			// Aku Aku eats the hit: the original's recoil and a shove away from the hazard.
 			_aku--;
-			_player!.Hurt(from);
-			return;
-		}
-		if (_masks > 1)
-		{
-			_masks--;
+			TwinsanityAudio.AkuLost();
 			_player!.Hurt(from);
 			return;
 		}
@@ -836,8 +839,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			_lives = StartLives;
 			_wumpaCount = 0;
 		}
-		_aku = 0;
-		_masks = 3;
+		_aku = 0; // the respawn hands the first mask back
 		Log.Info($"[Twinsanity] Crash died ({kind}), lives now {_lives}");
 		_deathTimer = _player.Die(kind); // Die takes control and keeps the model visible
 	}
