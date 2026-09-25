@@ -369,18 +369,19 @@ namespace aether
 			}
 
 			const float orthoHalf = std::max(kOrthoHalfMin, sphere.radius) * kCascadeOverlap;
-			glm::vec3 lightEye = shadowCenter + lightDir * (cascadeFar + kLightEyeBackoff);
-			glm::mat4 lightView = glm::lookAt(lightEye, shadowCenter, up);
-
+			// Snap the centre to the shadow-map texel grid in a light basis anchored at the
+			// world origin. Snapping in a view built to look AT the centre is a no-op (the
+			// centre is always at light-space x=y=0), so the grid slid with the camera and
+			// every shadow edge shimmered while moving.
 			const float texelSize = (2.0f * orthoHalf) / std::max(1.0f, static_cast<float>(m_shadowMapExtents[cascade].width));
-			glm::vec3 centerLs = glm::vec3(lightView * glm::vec4(shadowCenter, 1.0f));
+			const glm::mat4 lightBasis = glm::lookAt(glm::vec3(0.0f), -lightDir, up);
+			glm::vec3 centerLs = glm::vec3(lightBasis * glm::vec4(shadowCenter, 1.0f));
 			centerLs.x = std::floor(centerLs.x / texelSize + 0.5f) * texelSize;
 			centerLs.y = std::floor(centerLs.y / texelSize + 0.5f) * texelSize;
+			shadowCenter = glm::vec3(glm::inverse(lightBasis) * glm::vec4(centerLs, 1.0f));
 
-			const glm::mat4 invLightView = glm::inverse(lightView);
-			shadowCenter = glm::vec3(invLightView * glm::vec4(centerLs, 1.0f));
-			lightEye = shadowCenter + lightDir * (cascadeFar + kLightEyeBackoff);
-			lightView = glm::lookAt(lightEye, shadowCenter, up);
+			const glm::vec3 lightEye = shadowCenter + lightDir * (cascadeFar + kLightEyeBackoff);
+			const glm::mat4 lightView = glm::lookAt(lightEye, shadowCenter, up);
 
 			const float nearPlane = std::max(0.1f, cascadeNear * 0.5f);
 			const float farPlane = std::max(nearPlane + kFarPlanePadding, cascadeFar + cascadeRange + kCascadeRangePadding);
