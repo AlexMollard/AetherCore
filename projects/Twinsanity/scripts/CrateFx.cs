@@ -22,25 +22,32 @@ namespace AetherGame;
 ///   EXTRALIFE (12)      OGIs [19,5,-,28,-,-,-,5,24]  -> k0 whole, k1 broken-open
 ///   IRONSPRING (14)     OGIs [21,-,30,28,...]        -> k2 compressed spring
 /// The bounce squash is transform scaling because the behaviour scripts drive the joint
-/// directly (no clip exists); the explosion look is still an approximation - the disc's
-/// explosion particle bank sits in CRASH.BD's global data and is not extracted yet.
-/// ponytail: hand-tuned explosion look + guessed fuse-state timing, upgrade path =
-/// extracted particle definitions and script-derived state durations.
+/// directly (no clip exists). The break sparkle, TNT and nitro explosion particles, the
+/// landing dust and the nitro hop are driven from the disc's own values (ParticleData in
+/// Startup/Default.rm2, pages in assets/particles/, defs dumped in logs/cratebreak/particles.json).
 /// </summary>
 public static class CrateFx
 {
 	private sealed class Nitro
 	{
 		public Entity Model;
-		public float Phase;
+		public Vector3 Home;   // rest position; the hop lands back here
+		public float NextHop;  // seconds until the next random hop
+		public bool Hopping;
+		public float Vy;       // hop vertical velocity
+		public float HopT;     // seconds since hop start (drives the wobble decay)
 	}
 
 	private sealed class Tnt
 	{
 		public Entity Model;
 		public int ObjectId;
-		public float Remaining; // counts down from 3; model states swap each second
+		public float Remaining; // counts down from 2.2 (rig: 3/2/1 at ~0.6 s each, boom at 2.2)
 	}
+
+	private static readonly System.Random s_rng = new(0x51FF);
+
+	private static float NextHopDelay() => 0.9f + 1.4f * (float)s_rng.NextDouble();
 
 	private sealed class Squash
 	{
@@ -71,7 +78,10 @@ public static class CrateFx
 		// with no extractable clip the shiver stands in for it.
 		if (objectId == 4)
 		{
-			s_nitros.Add(new Nitro { Model = crateModel, Phase = 0.0f });
+			// COM_NITRO_CRATE_DEFAULT: on a condition timer the crate ApplyVelocity-hops and
+			// SetWobble-tilts, then settles (states 1 -> 2 -> back). The rig (nitro2_*, 20 fps)
+			// shows hops ~0.9-2.3 s apart per crate, ~0.3 s airborne: v0 = 7 with g = 50.
+			s_nitros.Add(new Nitro { Model = crateModel, Home = crateModel.Position, NextHop = NextHopDelay() });
 		}
 	}
 
@@ -83,8 +93,25 @@ public static class CrateFx
 		}
 		if (objectId == 5)
 		{
-			// Jumping on TNT arms the 3 s fuse; the crate's OGI states count it down.
-			s_tnts.Add(new Tnt { Model = crateModel, ObjectId = objectId, Remaining = 3.0f });
+			// Jumping on TNT arms the 2.2 s fuse on the same tick as the bounce; the crate's
+			// OGI states count it down (3 / 2 / 1, then the lit blink). A bounce arc lands
+			// back on the crate, so guard against re-arming a fuse already running.
+			bool armed = false;
+			foreach (Tnt t in s_tnts)
+			{
+				if (t.Model.Id == crateModel.Id)
+				{
+					armed = true;
+					break;
+				}
+			}
+			if (!armed)
+			{
+				s_tnts.Add(new Tnt { Model = crateModel, ObjectId = objectId, Remaining = 2.2f });
+				// The countdown starts on this tick: show the first digit now, not on the
+				// first state CHANGE (which would leave the crate idle through the "3").
+				ShowState(crateModel, objectId, 3);
+			}
 		}
 		s_squashes.Add(new Squash { Model = crateModel, T = 0.0f });
 	}
@@ -151,6 +178,8 @@ public static class CrateFx
 			return;
 		}
 		crateModel.Scale = Vector3.One; // drop any squash / shiver in progress
+		// COM_*_CRATE_BREAK's DoParticle(0): the star-sparkle burst plays alongside the plank rig.
+		CrateBreakSparkle(crateModel.Position + new Vector3(0.0f, 0.75f, 0.0f));
 		bool explosive = objectId is 4 or 5;
 		float length = ShowStateWithClip(crateModel, objectId, explosive ? 2 : 1, explosive ? "a004" : "a007");
 		if (length <= 0.0f)
@@ -219,41 +248,199 @@ public static class CrateFx
 		return stem.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
 	}
 
-	public static void Exploded(Vector3 position, int objectId)
+	// ── Disc particle bank (Startup/Default.rm2 ParticleData) ─────────────────────
+	// Rates: the disc emits GenRate * MaxCount particles across Emitter_OverTime frames at
+	// 60 fps. Sizes are the disc's size-gradient raws * 1e-4 (the game's own cut-radius
+	// formula adds MaxSize * 1e-4 as a world-space radius, which pins that scale).
+	// Velocities, spawn boxes and gravity are the disc's per-second values straight across.
+	private const string kParticleTex = "project://assets/particles/particle_page_{0}.png";
+
+	private static Entity SpawnEmitter(string name, Vector3 center, string page, Vector4 uv, int count, float rate, float emitDuration,
+		float life, Vector3 velocity, Vector3 velJitter, Vector3 spawnJitter, float gravityY,
+		Vector4[] colorKeys, float[] alphaKeys, float[] sizeKeys, float[] rotKeys)
 	{
-		bool nitro = objectId == 4;
-		Vector3 center = position + new Vector3(0.0f, 0.5f, 0.0f);
 		Entity e = World.Create();
-		e.Name = nitro ? "NitroExplosion" : "TntExplosion";
+		e.Name = name;
 		e.MarkTransient();
 		e.AddTransform();
 		e.Position = center;
 		var c = e.Component("Particle Emitter");
-		if (c.Add())
+		if (!c.Add())
 		{
-			// The original's explosion is a fast radial burst of camera-facing puffs:
-			// TNT orange fading to dark smoke, nitro bright green. Emitted in the
-			// camera-facing vertical plane, which is how the game's billboards read
-			// from its mostly axis-aligned chase camera.
-			c.SetFloat("rate", 0.0f);
-			c.SetInt("burst_count", nitro ? 40 : 32);
-			c.SetBool("emit_on_start", true);
-			c.SetBool("auto_destroy", true);
-			c.SetFloat("lifetime_min", 0.45f);
-			c.SetFloat("lifetime_max", 0.8f);
-			c.SetFloat("speed_min", nitro ? 4.5f : 3.5f);
-			c.SetFloat("speed_max", nitro ? 7.0f : 5.5f);
-			c.SetFloat("direction_deg", 90.0f);
-			c.SetFloat("spread_deg", 90.0f);
-			c.SetVector2("gravity", new Vector2(0.0f, nitro ? -1.5f : -4.0f));
-			c.SetFloat("start_size", nitro ? 0.9f : 0.8f);
-			c.SetFloat("end_size", 1.6f);
-			Vector4 hot = nitro ? new Vector4(0.35f, 1.0f, 0.25f, 0.95f) : new Vector4(1.0f, 0.55f, 0.15f, 0.95f);
-			Vector4 cool = nitro ? new Vector4(0.15f, 0.5f, 0.1f, 0.0f) : new Vector4(0.35f, 0.3f, 0.28f, 0.0f);
-			c.SetVector4("start_color", hot);
-			c.SetVector4("end_color", cool);
-			c.SetInt("blend_mode", 1); // additive
+			e.Destroy();
+			return e;
 		}
+		c.SetString("texture", string.Format(kParticleTex, page));
+		c.SetInt("space", 1); // Billboard3D
+		c.SetInt("blend_mode", 1); // additive (every bank entry is TextureFilter Additive)
+		bool burstOnly = rate <= 0.0f;
+		c.SetBool("emit_on_start", burstOnly); // burst defs fire their count once, at spawn
+		c.SetBool("auto_destroy", true);
+		c.SetInt("burst_count", burstOnly ? count : 0);
+		c.SetInt("max_particles", count);
+		c.SetFloat("rate", rate);
+		c.SetFloat("emit_duration", emitDuration);
+		c.SetFloat("lifetime_min", life);
+		c.SetFloat("lifetime_max", life);
+		c.SetVector3("velocity", velocity);
+		c.SetVector3("velocity_jitter", velJitter);
+		c.SetVector3("spawn_jitter", spawnJitter);
+		c.SetVector3("gravity_3d", new Vector3(0.0f, gravityY, 0.0f));
+		c.SetVector4("uv_rect", uv);
+		Particles.SetKeys(e, ParticleKeyChannel.Color, colorKeys);
+		SetScalarKeys(e, ParticleKeyChannel.Alpha, alphaKeys);
+		SetScalarKeys(e, ParticleKeyChannel.Size, sizeKeys);
+		SetScalarKeys(e, ParticleKeyChannel.Rotation, rotKeys);
+		return e;
+	}
+
+	private static void SetScalarKeys(Entity e, ParticleKeyChannel channel, float[] pairs)
+	{
+		var keys = new Vector4[pairs.Length / 2];
+		float scale = channel == ParticleKeyChannel.Alpha ? 1.0f / 128.0f : 1.0f; // GS alpha: 0x80 = 1.0, additive may exceed 1
+		for (int i = 0; i < keys.Length; i++)
+		{
+			keys[i] = new Vector4(pairs[i * 2], pairs[i * 2 + 1] * scale, 0.0f, 0.0f);
+		}
+		Particles.SetKeys(e, channel, keys);
+	}
+
+	private static Vector4 CK(float t, float r, float g, float b) => new(t, r / 255.0f, g / 255.0f, b / 255.0f);
+
+	// CRATE_BREAK (bank index 0): the burst of radial star sparkles every broken crate throws.
+	private static void CrateBreakSparkle(Vector3 center)
+	{
+		SpawnEmitter("CrateBreakFx", center, "2", new Vector4(65.9f, 2.3f, 127.8f, 62.3f) / 128.0f,
+			10, 60.0f, 0.1667f, 0.2f,
+			new Vector3(0.0f, 1.6f, 0.0f), new Vector3(0.25f, 0.0f, 0.125f), new Vector3(0.45f), 0.0f,
+			new[] { CK(0f, 254.1f, 255f, 0f), CK(0.0745f, 237.6f, 199.7f, 50.7f), CK(0.5185f, 171.7f, 110.2f, 51.7f), CK(1f, 0f, 0f, 0f) },
+			new[] { 0f, 0f, 0f, 255f, 1f, 0f },
+			new[] { 0f, 300.745f * 1e-4f, 0.24329f, 8878.46f * 1e-4f, 1f, 0f },
+			new[] { 0f, 0f, 1f, 18f / 65536f * 360f });
+	}
+
+	public static void Exploded(Vector3 position, int objectId)
+	{
+		Vector3 center = position + new Vector3(0.0f, 0.5f, 0.0f);
+		bool nitro = objectId == 4;
+		// 1A: the slow smoke/puff column. 1B: the fast spark/fire jet. 1C: the big flash.
+		if (nitro)
+		{
+			SpawnEmitter("NitroExplosionA", center, "0", new Vector4(0.0f, 64.2f, 64.1f, 128.0f) / 128.0f,
+				7, 60.0f, 7.0f / 60.0f, 1.582221f,
+				new Vector3(0.0f, 4.703004f, 0.0f), new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), -1.353525f,
+				new[] { CK(0f, 107.821f, 234.798f, 149.144f), CK(0.241f, 0f, 247.249f, 34.105f), CK(0.623f, 0f, 174.067f, 28.473f), CK(1f, 130.208f, 113.441f, 109.646f) },
+				new[] { 0f, 0f, 0.066f, 198.124f, 1f, 0f },
+				new[] { 0f, 46431.45f * 1e-4f, 0.062f, 16117.997f * 1e-4f, 1f, 15893.261f * 1e-4f },
+				new[] { 0f, 0f, 1f, 31154f / 65536f * 360f });
+			SpawnEmitter("NitroExplosionB", center, "1", new Vector4(33.6f, 1.6f, 63.4f, 31.4f) / 128.0f,
+				14, 240.0f, 7.0f / 60.0f, 0.9150347f,
+				new Vector3(0.0f, 16.82123f, 0.0f), new Vector3(1.84683f, 2.465651f, 1.815337f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -17.84222f,
+				new[] { CK(0f, 79.534f, 243.109f, 0f), CK(0.766f, 73.916f, 246.346f, 0f), CK(1f, 0f, 209.46f, 14.932f) },
+				new[] { 0f, 120.687f, 0.182f, 255f, 1f, 255f },
+				new[] { 0f, 17435.475f * 1e-4f, 0.049f, 5648.218f * 1e-4f, 0.798f, 2316.686f * 1e-4f, 1f, 0f },
+				new[] { 0f, -7470f / 65536f * 360f, 1f, 36978f / 65536f * 360f });
+			SpawnEmitter("NitroExplosionC", center, "2", new Vector4(64.6f, 1.7f, 128.0f, 63.9f) / 128.0f,
+				2, 0.0f, 0.0f, 0.3192643f,
+				Vector3.Zero, Vector3.Zero, Vector3.Zero, 0.0f,
+				new[] { CK(0f, 118.953f, 247.716f, 148.315f), CK(0.652f, 0f, 250.3f, 47.359f), CK(1f, 0f, 171.453f, 29.05f) },
+				new[] { 0f, 255f, 0.28f, 255f, 1f, 24.15f },
+				new[] { 0f, 43894.496f * 1e-4f, 1f, 18781.947f * 1e-4f },
+				new[] { 0f, 78299f / 65536f * 360f, 1f, 131072f / 65536f * 360f });
+		}
+		else
+		{
+			SpawnEmitter("TntExplosionA", center, "0", new Vector4(0.0f, 64.2f, 64.1f, 128.0f) / 128.0f,
+				7, 60.0f, 7.0f / 60.0f, 1.582221f,
+				new Vector3(0.0f, 4.703004f, 0.0f), new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), -1.353525f,
+				new[] { CK(0f, 208.401f, 168.424f, 48.024f), CK(0.241f, 156.013f, 0f, 0f), CK(0.623f, 94.255f, 54.73f, 5.981f), CK(1f, 130.208f, 113.441f, 109.646f) },
+				new[] { 0f, 0f, 0.066f, 198.124f, 1f, 0f },
+				new[] { 0f, 46245.46f * 1e-4f, 0.062f, 16069.652f * 1e-4f, 0.979f, 15845.901f * 1e-4f, 1f, 26634.685f * 1e-4f },
+				new[] { 0f, 0f, 1f, 31154f / 65536f * 360f });
+			SpawnEmitter("TntExplosionB", center, "1", new Vector4(32.5f, 0.0f, 65.8f, 33.1f) / 128.0f,
+				14, 240.0f, 7.0f / 60.0f, 0.6961219f,
+				new Vector3(0.0f, 16.21593f, 0.0f), new Vector3(3.193508f, 2.465651f, 3.05557f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -20.67021f,
+				new[] { CK(0f, 221.905f, 233.397f, 101.165f), CK(0.766f, 246.346f, 0f, 0f), CK(1f, 246.346f, 0f, 0f) },
+				new[] { 0f, 120.687f, 0.182f, 255f, 1f, 255f },
+				new[] { 0f, 17435.475f * 1e-4f, 0.049f, 5648.218f * 1e-4f, 0.798f, 2316.686f * 1e-4f, 1f, 0f },
+				new[] { 0f, -7470f / 65536f * 360f, 1f, 36978f / 65536f * 360f });
+			SpawnEmitter("TntExplosionC", center, "2", new Vector4(64.6f, 1.7f, 128.0f, 63.9f) / 128.0f,
+				2, 0.0f, 0.0f, 0.3192643f,
+				Vector3.Zero, Vector3.Zero, Vector3.Zero, 0.0f,
+				new[] { CK(0f, 255f, 249.895f, 0f), CK(0.652f, 255f, 0f, 0f), CK(1f, 116.232f, 89.643f, 0f) },
+				new[] { 0f, 255f, 0.28f, 255f, 1f, 24.15f },
+				new[] { 0f, 43894.496f * 1e-4f, 1f, 18781.947f * 1e-4f },
+				new[] { 0f, 78299f / 65536f * 360f, 1f, 131072f / 65536f * 360f });
+		}
+	}
+
+	// ── Crash landing dust ────────────────────────────────────────────────────────
+	// Rig (rig_jump_sheet): an ordinary jump landing throws nothing. Rig (rig_slam_ring,
+	// 0.05 s frames): a body slam is a white/pink flash blob (~0.1 s), then a ground-hugging
+	// ring of gold star sparkles that expands to ~4 crate widths and fades inside ~0.6 s.
+	// High-drop dust is gated at 24 units/s of fall (~6 units of drop with the game's
+	// g = 50); the rig threshold itself is [UNVERIFIED] - the beach has no clean high drop,
+	// so only "ordinary jumps are under it" is measured.
+	private const float LandDustMinFall = 24.0f;
+
+	public static void HookCrash()
+	{
+		CrashPlayer.Landed -= OnCrashLanded; // idempotent across play sessions
+		CrashPlayer.Landed += OnCrashLanded;
+	}
+
+	private static void OnCrashLanded(CrashPlayer crash, float impact, bool slam)
+	{
+		Vector3 at = crash.Self.Position;
+		if (slam)
+		{
+			SlamRing(at);
+		}
+		else if (impact >= LandDustMinFall)
+		{
+			LandDust(at);
+		}
+	}
+
+	// The slam impact: a quick pink-white flash, then the expanding gold sparkle ring.
+	private static void SlamRing(Vector3 at)
+	{
+		Vector3 ground = at + new Vector3(0.0f, 0.15f, 0.0f);
+		SpawnEmitter("SlamFlash", ground, "2", new Vector4(64.6f, 1.7f, 128.0f, 63.9f) / 128.0f,
+			2, 0.0f, 0.0f, 0.16f,
+			Vector3.Zero, Vector3.Zero, Vector3.Zero, 0.0f,
+			new[] { CK(0f, 255f, 240f, 255f), CK(1f, 255f, 120f, 230f) },
+			new[] { 0f, 255f, 0.6f, 200f, 1f, 0f },
+			new[] { 0f, 1.6f, 1f, 3.2f },
+			new[] { 0f, 0f, 1f, 0f });
+		// The ring: one small burst per spoke so the sparks fly radially and leave the middle
+		// empty (a single box-jittered emitter fills a square instead of drawing a ring).
+		const int spokes = 12;
+		for (int i = 0; i < spokes; i++)
+		{
+			float a = i * (MathF.Tau / spokes);
+			Vector3 dir = new(MathF.Cos(a), 0.0f, MathF.Sin(a));
+			SpawnEmitter("SlamRing", ground, "2", new Vector4(65.9f, 2.3f, 127.8f, 62.3f) / 128.0f,
+				3, 0.0f, 0.0f, 0.65f,
+				dir * 6.0f + new Vector3(0.0f, 0.6f, 0.0f), new Vector3(0.6f, 0.3f, 0.6f), new Vector3(0.15f, 0.0f, 0.15f), -2.0f,
+				new[] { CK(0f, 255f, 230f, 120f), CK(0.5f, 255f, 190f, 40f), CK(1f, 200f, 120f, 20f) },
+				new[] { 0f, 255f, 0.5f, 220f, 1f, 0f },
+				new[] { 0f, 0.55f, 0.5f, 0.45f, 1f, 0.2f },
+				new[] { 0f, 0f, 1f, 120f });
+		}
+	}
+
+	// A heavy landing on sand: a few low tan puffs. None on ordinary jumps (measured).
+	private static void LandDust(Vector3 at)
+	{
+		Vector3 ground = at + new Vector3(0.0f, 0.2f, 0.0f);
+		SpawnEmitter("LandDust", ground, "0", new Vector4(0.0f, 64.2f, 64.1f, 128.0f) / 128.0f,
+			8, 80.0f, 0.1f, 0.45f,
+			new Vector3(0.0f, 2.5f, 0.0f), new Vector3(2.5f, 0.0f, 2.5f), new Vector3(0.4f, 0.1f, 0.4f), -3.0f,
+			new[] { CK(0f, 235f, 205f, 160f), CK(1f, 190f, 160f, 120f) },
+			new[] { 0f, 180f, 0.4f, 140f, 1f, 0f },
+			new[] { 0f, 0.5f, 1f, 0.9f },
+			new[] { 0f, 0f, 1f, 60f });
 	}
 
 	/// <summary>Swap a crate's visible model to OGI state slot <paramref name="k"/>.</summary>
@@ -293,11 +480,15 @@ public static class CrateFx
 		{
 			CrateFragments.Models[kv.Key] = kv.Value;
 		}
+		HookCrash();
 	}
 
 	public static void Update(float dt)
 	{
-		// Nitro idle shiver (stand-in for its unextractable single-joint clip).
+		// Nitro idle: the original's random hop-and-wobble (ApplyVelocity + SetWobble on a
+		// condition timer), not a clip. Wobble: the disc calls SetWobble with (freq, amp) =
+		// (25.13, 0.15) rad / rad on X and Z at opposite phase, so the crate rocks side to
+		// side while airborne and settles when it lands.
 		for (int i = s_nitros.Count - 1; i >= 0; i--)
 		{
 			Nitro n = s_nitros[i];
@@ -306,13 +497,39 @@ public static class CrateFx
 				s_nitros.RemoveAt(i);
 				continue;
 			}
-			n.Phase += dt * 22.0f;
-			float w = 1.0f + 0.06f * MathF.Sin(n.Phase);
-			n.Model.Scale = new Vector3(w, 2.0f - w, w);
+			if (!n.Hopping)
+			{
+				n.NextHop -= dt;
+				if (n.NextHop <= 0.0f)
+				{
+					n.Hopping = true;
+					n.Vy = 7.0f;
+					n.HopT = 0.0f;
+				}
+				continue;
+			}
+			n.HopT += dt;
+			Vector3 pos = n.Model.Position;
+			pos.Y += n.Vy * dt;
+			n.Vy -= 50.0f * dt;
+			if (n.Vy < 0.0f && pos.Y <= n.Home.Y)
+			{
+				// Landed: settle and schedule the next random hop.
+				n.Model.Position = n.Home;
+				n.Model.EulerDegrees = Vector3.Zero;
+				n.Hopping = false;
+				n.NextHop = NextHopDelay();
+				continue;
+			}
+			n.Model.Position = pos;
+			float decay = MathF.Max(0.0f, 1.0f - n.HopT / 0.35f);
+			float tilt = 0.15f * MathF.Sin(25.13f * n.HopT) * decay;
+			n.Model.EulerDegrees = new Vector3(tilt, 0.0f, -tilt);
 		}
 
-		// TNT fuse: OGI states k2 (3), k3 (2), k4 (1), then k5 blinking for the last
-		// quarter second, matching the original's 12/11/10/9 countdown graphics.
+		// TNT fuse: the rig (tnt_fuse_sheet, 44 frames from landing to the boom at ~2.2 s)
+		// shows 3 / 2 / 1 for ~0.6 s each, then the lit state 1126 blinking for the last
+		// stretch, then the explosion. States: k0 idle, k2 fragments, k3/k4/k5 = 3/2/1, k6 lit.
 		for (int i = s_tnts.Count - 1; i >= 0; i--)
 		{
 			Tnt t = s_tnts[i];
@@ -323,8 +540,9 @@ public static class CrateFx
 			}
 			float prev = t.Remaining;
 			t.Remaining -= dt;
-			int prevState = prev > 2.0f ? 2 : prev > 1.0f ? 3 : prev > 0.25f ? 4 : 5;
-			int nowState = t.Remaining > 2.0f ? 2 : t.Remaining > 1.0f ? 3 : t.Remaining > 0.25f ? 4 : (int)(t.Remaining * 20.0f) % 2 == 0 ? 5 : 2;
+			int StateOf(float remaining) => remaining > 1.6f ? 3 : remaining > 1.0f ? 4 : remaining > 0.4f ? 5 : 6;
+			int prevState = StateOf(prev);
+			int nowState = StateOf(t.Remaining);
 			if (prevState != nowState)
 			{
 				ShowState(t.Model, t.ObjectId, nowState);

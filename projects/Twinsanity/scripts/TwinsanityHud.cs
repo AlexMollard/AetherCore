@@ -46,6 +46,25 @@ public sealed class TwinsanityHud
 	/// <summary>Where collected wumpa fly to: the wumpa icon's resting centre, 0..1 viewport UV (y down).</summary>
 	public static Vector2 WumpaCounterScreen { get; private set; } = new(0.1f, 0.1f);
 
+	/// <summary>Ink box of a Crash_Euro glyph, in texels (advance excluded). False when the
+	/// font has no such glyph. TwinsanityPause's menu text uses the same font.</summary>
+	public bool TryGlyph(char c, out float w, out float h)
+	{
+		(w, h) = _glyphs.TryGetValue(c, out var g) ? g : (0.0f, 0.0f);
+		return g.W > 0.0f;
+	}
+
+	/// <summary>Pop both counters back in, as the original does when the pause menu closes
+	/// (logs/hud/rig_pause_slow.png: the HUD reappears after Start).</summary>
+	public void PopBoth()
+	{
+		if (_canvas.IsValid)
+		{
+			Show(_wumpa!);
+			Show(_lives!);
+		}
+	}
+
 	private readonly Dictionary<char, (float W, float H)> _glyphs = new();
 	private Entity _canvas;
 	private Entity _frame;

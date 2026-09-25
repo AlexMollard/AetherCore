@@ -57,7 +57,8 @@ public sealed partial class TwinsanityActors
 	// ponytail: the flee speed was not captured on the rig (the chicken was off screen); 3 m/s
 	// is the old tuned value. Upgrade path: track a chicken while Crash runs at it.
 	private const float ChickenFlee = 3.0f;
-	// Crab (rig: track_crab2.csv).
+	// Crab (rig: track_crab2.csv, crab2_wander.csv).
+	private const float CrabWanderRadius = 3.5f;
 	private const float CrabNotice = 10.0f;
 	private const float CrabNoticeDelay = 3.5f;
 	private const float CrabSpeed = 2.7f;
@@ -68,6 +69,7 @@ public sealed partial class TwinsanityActors
 	private const float WormDepth = 2.5f;
 	// Monkey (script COM_GLOBAL_MONKEY_ECOLOGY_IDLE, rig track_monkey.csv).
 	private const float MonkeyAggro = 20.6f;
+	private const float MonkeyMinRange = 4.0f;
 	private const float MonkeyWalk = 1.9f;
 	private const float MonkeyClimbUp = 5.0f;
 	private const float MonkeyClimbDown = 4.0f;
@@ -109,11 +111,13 @@ public sealed partial class TwinsanityActors
 		public int PathIndex;
 		public Vector3 Offset;
 		public Vector3 Tree;
-		public Entity Fruit;
+		public Entity Fruit;           // the fruit in play (dropped, carried or thrown)
 		public Vector3 FruitVelocity;
 		public bool FruitFlying;
+		public bool Landed;
 		public float FruitLife;
 		public float Notice, NoticeDelay, GiveUp;
+		public float Timer2;
 		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1;
 	}
 
@@ -261,7 +265,9 @@ public sealed partial class TwinsanityActors
 				c.ClimbClip = Animation.Find(e, "a023");
 				c.ThrowClip = Animation.Find(e, "a029");
 				c.Mode = Mode.Idle;
-				c.Timer = RandomRange(1.0f, 4.0f);
+				// Rig: the three monkeys cycle out of phase (throws ~25-35 s apart); a shared start
+				// made all three fruit land at once.
+				c.Timer = RandomRange(2.0f, 30.0f);
 				break;
 		}
 	}
@@ -358,6 +364,78 @@ public sealed partial class TwinsanityActors
 	}
 
 	private readonly List<Actor> _pending = new();
+
+	// Ground creatures never overlap (rig: crabs and chickens keep their spacing). Circle push,
+	// half the overlap per side, horizontally only.
+	private void Separate()
+	{
+		for (int i = 0; i < _actors.Count; i++)
+		{
+			Actor? x = _actors[i];
+			if (!x.Alive || x.Critter == null || x.DeathTimer >= 0.0f)
+			{
+				continue;
+			}
+			for (int j = i + 1; j < _actors.Count; j++)
+			{
+				Actor? y = _actors[j];
+				if (!y.Alive || y.Critter == null || y.DeathTimer >= 0.0f)
+				{
+					continue;
+				}
+				float radii = CritterRadius(x) + CritterRadius(y);
+				Vector3 d = y.Model.Position - x.Model.Position;
+				d.Y = 0.0f;
+				float len = d.Length();
+				if (len >= radii || len < 0.0001f)
+				{
+					continue;
+				}
+				Vector3 push = d / len * (radii - len) * 0.5f;
+				x.Model.Position -= push;
+				y.Model.Position += push;
+			}
+		}
+	}
+
+	private static float CritterRadius(Actor a) => a.Kind switch
+	{
+		Behaviour.Chicken => 0.35f,
+		Behaviour.Crab or Behaviour.Monkey => 0.45f,
+		_ => 0.5f,
+	};
+
+	// Blast damage for ground creatures (TwinsanityLevel.Explode calls this).
+	public void CreatureBlast(Vector3 center, float radius)
+	{
+		foreach (Actor a in _actors)
+		{
+			if (!a.Alive || a.Critter == null || a.DeathTimer >= 0.0f)
+			{
+				continue;
+			}
+			Vector3 p = a.Model.Position;
+			if (new Vector2(center.X - p.X, center.Z - p.Z).Length() < radius && MathF.Abs(center.Y - p.Y) < radius)
+			{
+				PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
+				SetLooping(a.Model, false);
+				a.DeathTimer = 1.0f;
+			}
+		}
+	}
+
+	// Ground creatures set off nitro crates on contact (TwinsanityLevel implements the crate side).
+	private void TouchHost()
+	{
+		foreach (Actor a in _actors)
+		{
+			if (a.Alive && a.Critter != null && a.DeathTimer < 0.0f
+				&& a.Kind is Behaviour.Chicken or Behaviour.Crab or Behaviour.Skunk or Behaviour.Monkey)
+			{
+				_host?.CreatureTouch(a.Model.Position);
+			}
+		}
+	}
 
 	private void UpdateEcology(Vector3 crashPos)
 	{
@@ -625,6 +703,17 @@ public sealed partial class TwinsanityActors
 				if (c.Timer >= c.NoticeDelay)
 				{
 					c.Mode = Mode.Charge;
+					break;
+				}
+				// Rig (crab2_wander.csv): with Crash out of range the crabs do not stand still -
+				// each strays 2.5-3.6 m from its spawn in slow bursts (displacement over 30 s).
+				c.Timer2 -= dt;
+				if (c.Timer2 <= 0.0f)
+				{
+					float ang = RandomRange(0.0f, MathF.PI * 2.0f);
+					c.Target = a.Home + new Vector3(MathF.Cos(ang), 0.0f, MathF.Sin(ang)) * RandomRange(0.5f, CrabWanderRadius);
+					c.Mode = Mode.Walk;
+					c.Timer2 = RandomRange(4.0f, 9.0f);
 				}
 				break;
 			case Mode.Charge:
@@ -643,11 +732,14 @@ public sealed partial class TwinsanityActors
 				TouchCrash(a, crashPos);
 				break;
 			case Mode.Walk:
+				// ponytail: the wander burst speed was not captured (the rig's beach crabs spawned
+				// at the shoreline and the long take was lost); 1.2 m/s, half the measured charge.
 				PlayClip(a, c.WalkClip);
-				if (WalkTo(a, a.Home, CrabSpeed, dt, true))
+				if (WalkTo(a, c.Target, CrabSpeed * 0.45f, dt, true))
 				{
 					c.Mode = Mode.Idle;
 					c.Timer = 0.0f;
+					c.Timer2 = RandomRange(2.0f, 6.0f);
 				}
 				break;
 		}
@@ -734,9 +826,9 @@ public sealed partial class TwinsanityActors
 			case Mode.Idle:
 				PlayClip(a, a.IdleClip);
 				c.Timer -= dt;
-				if (d < MonkeyAggro && _monkeyTrees.Count > 0 && !c.FruitFlying)
+				if (d < MonkeyAggro && d > MonkeyMinRange && !c.FruitFlying && TryClaimTree(c, p, out Vector3 tree))
 				{
-					c.Tree = NearestTree(p);
+					c.Tree = tree;
 					c.Mode = Mode.GoTree;
 				}
 				else if (c.Timer <= 0.0f)
@@ -755,6 +847,11 @@ public sealed partial class TwinsanityActors
 				}
 				break;
 			case Mode.GoTree:
+				if (d > MonkeyAggro)
+				{
+					c.Mode = Mode.Idle;
+					break;
+				}
 				PlayClip(a, c.WalkClip);
 				if (WalkTo(a, c.Tree + new Vector3(0.0f, 0.0f, -0.6f), MonkeyWalk, dt, true))
 				{
@@ -784,14 +881,12 @@ public sealed partial class TwinsanityActors
 						c.Fruit = World.Create();
 						c.Fruit.Name = "MonkeyFruit";
 						c.Fruit.AddTransform();
+						c.Fruit.Position = at;
 						c.Fruit.LoadModel(fm);
 					}
 					if (c.Fruit.IsValid)
 					{
 						c.Fruit.Position = at;
-						c.FruitVelocity = Vector3.Zero;
-						c.FruitFlying = true;
-						c.FruitLife = -1.0f;
 					}
 					c.Mode = Mode.ClimbDown;
 					PlayClip(a, c.ClimbClip);
@@ -833,6 +928,15 @@ public sealed partial class TwinsanityActors
 				}
 				break;
 			case Mode.Throw:
+				// No throws past range: once Crash leaves its range the monkey will not release the
+				// fruit; it drops the idea and goes idle.
+				if (d > MonkeyAggro)
+				{
+					DropFruit(c);
+					c.Mode = Mode.Idle;
+					c.Timer = RandomRange(2.0f, 8.0f);
+					break;
+				}
 				c.Timer -= dt;
 				c.Fruit.Position = p + new Vector3(0.0f, 1.7f, 0.0f);
 				if (c.Timer <= 0.0f)
@@ -873,19 +977,49 @@ public sealed partial class TwinsanityActors
 		float ground = GroundY(p, c.Tree.Y);
 		if (p.Y <= ground)
 		{
-			c.Fruit.Position = new Vector3(p.X, ground, p.Z);
-			c.FruitFlying = false;
-			if (thrown)
+			// Rig (track_monkey.csv f1): the fruit bounces (restitution ~1/3) and then rolls away,
+			// 3.0 -> 1.6 m/s over ~4 s and ~15 m, then despawns.
+			p = new Vector3(p.X, ground, p.Z);
+			c.Fruit.Position = p;
+			if (!c.Landed)
 			{
-				DropFruit(c);
+				c.Landed = true;
+				c.FruitVelocity.Y = MathF.Max(0.0f, -c.FruitVelocity.Y / 3.0f);
+				// Rig: after landing the fruit rolls at 3.0 -> 1.6 m/s, never at throw speed.
+				float sp = new Vector2(c.FruitVelocity.X, c.FruitVelocity.Z).Length();
+				if (sp > 3.0f)
+				{
+					c.FruitVelocity.X *= 3.0f / sp;
+					c.FruitVelocity.Z *= 3.0f / sp;
+				}
+				c.FruitFlying = c.FruitVelocity.Y > 0.5f;
+				if (!c.FruitFlying && thrown)
+				{
+					DropFruit(c);
+				}
 			}
+			else
+			{
+				c.FruitVelocity.Y = 0.0f;
+				float sp = new Vector2(c.FruitVelocity.X, c.FruitVelocity.Z).Length();
+				float ns = MathF.Max(0.0f, sp - 0.35f * dt);
+				c.FruitVelocity.X *= ns / MathF.Max(sp, 0.001f);
+				c.FruitVelocity.Z *= ns / MathF.Max(sp, 0.001f);
+				c.FruitLife += dt;
+				if (c.FruitLife > 4.0f || (thrown && ns <= 0.1f))
+				{
+					DropFruit(c);
+				}
+			}
+		}
+		{
 		}
 	}
 
 	private static void DropFruit(Critter c)
 	{
-		c.Fruit.Destroy();
-		c.Fruit = default;
+		{
+		}
 		c.FruitFlying = false;
 	}
 
@@ -895,16 +1029,34 @@ public sealed partial class TwinsanityActors
 		return Assets.ReadText(path) != null ? path : null;
 	}
 
-	private Vector3 NearestTree(Vector3 p)
+	// Nearest tree no other monkey is heading to or climbing. Several monkeys sharing one trunk
+	// pile up at its base (Separate keeps them apart, so none ever arrives) and stall the cycle.
+	// ponytail: one monkey per tree is inferred, not rig-measured; if the rig shows trunk sharing,
+	// stack the climbers instead.
+	private bool TryClaimTree(Critter self, Vector3 p, out Vector3 tree)
 	{
-		Vector3 best = _monkeyTrees[0];
+		tree = default;
+		float best = float.MaxValue;
 		foreach (Vector3 t in _monkeyTrees)
 		{
-			if (Horizontal(t, p) < Horizontal(best, p))
+			bool taken = false;
+			foreach (Actor o in _actors)
 			{
-				best = t;
+				Critter? oc = o.Critter;
+				if (oc != null && oc != self && o.Alive && oc.Tree == t
+					&& oc.Mode is Mode.GoTree or Mode.ClimbUp or Mode.Shake or Mode.ClimbDown)
+				{
+					taken = true;
+					break;
+				}
+			}
+			float h = Horizontal(t, p);
+			if (!taken && h < best)
+			{
+				best = h;
+				tree = t;
 			}
 		}
-		return best;
+		return best < float.MaxValue;
 	}
 }

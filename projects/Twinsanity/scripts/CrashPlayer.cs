@@ -608,8 +608,10 @@ public sealed class CrashPlayer : EntityScript
 				_vy -= _slamGravity * dt;
 				if (grounded && _stateTime > Tick)
 				{
+					float impact = -_vy;
 					_vy = 0.0f;
 					Enter(State.SlamLand);
+					Landed?.Invoke(this, impact, true);
 				}
 				break;
 
@@ -676,12 +678,22 @@ public sealed class CrashPlayer : EntityScript
 		Play(clip, false);
 	}
 
+	/// <summary>
+	/// Raised on the landing tick: (fall speed at touchdown in units/s, is body slam). The level
+	/// layer hooks this for landing dust; the original throws none for an ordinary jump (rig
+	/// rig_jump_sheet) and a gold sparkle ring for a slam (rig_slam2_sheet), so callers gate on
+	/// the speed themselves.
+	/// </summary>
+	public static event Action<CrashPlayer, float, bool>? Landed;
+
 	private void Land(string clip, float lock_)
 	{
+		float impact = -_vy;
 		_vy = 0.0f;
 		Enter(State.Ground);
 		_landClip = clip;
 		_oneShotLeft = lock_;
+		Landed?.Invoke(this, impact, false);
 	}
 
 	private void Enter(State state)

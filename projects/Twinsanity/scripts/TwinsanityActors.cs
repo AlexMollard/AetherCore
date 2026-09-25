@@ -23,6 +23,7 @@ public sealed partial class TwinsanityActors
 	{
 		void DamagePlayer(Vector3 from, DeathKind kind);
 		void AddWumpa(int n);
+		void CreatureTouch(Vector3 position);
 	}
 
 	private enum Behaviour
@@ -196,6 +197,8 @@ public sealed partial class TwinsanityActors
 			}
 		}
 		UpdateCritters();
+		TouchHost();
+		Separate();
 		UpdateEcology(crashPos);
 		_actors.AddRange(_pending);
 		_pending.Clear();

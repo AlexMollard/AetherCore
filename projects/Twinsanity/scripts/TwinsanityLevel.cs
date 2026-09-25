@@ -41,21 +41,14 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		public float Fuse = -1.0f;
 		public int Hits;                       // remaining hits for MultiHit crates
 		public int ObjectId;                   // the original data's object id (CrateFx keys on it)
-		public bool Activated;                 // checkpoint crates flip state but never break
-	}
-
-	private sealed class Wumpa
-	{
-		public Entity Model;
-		public Vector3 Center;
-		public float Yaw;
-		public bool Alive = true;
+		public bool Activated;                 // checkpoint crates open (keep their model) instead of breaking
 	}
 
 	private readonly List<Crate> _crates = new();
-	private readonly List<Wumpa> _wumpa = new();
+	private TwinsanityWumpa _fruit = new(_ => { }); // re-created in OnAttach with AddWumpa
 	private readonly TwinsanityActors _actors = new();
 	private readonly TwinsanityHud _hud = new();
+	private readonly TwinsanityPause _pause = new();
 	private readonly HashSet<uint> _deadly = new();
 	private readonly Dictionary<int, string> _objectModels = new();
 
@@ -71,12 +64,14 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private int _wumpaCount;
 	private int _lives;
 	private int _aku;
+	private int _masks = 3; // rig (logs/wildlife/monkey_hit.csv): 3 hp, one hit per hit, death at 0
 	private float _deathTimer = -1.0f;
 	private Entity _sky;
 
 	public override void OnAttach()
 	{
 		_lives = StartLives;
+		_fruit = new TwinsanityWumpa(AddWumpa);
 		string? objects = Assets.ReadText(ObjectsPath);
 		if (objects != null)
 		{
@@ -140,7 +135,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			}
 		}
 		CrateFx.RegisterObjectModels(_objectModels);
-		Log.Info($"[Twinsanity] {_crates.Count} crates, {_wumpa.Count} wumpa, {_deadly.Count} deadly collision pieces");
+		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
 		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
 		// summary has the rig evidence for when the original shows it.
 	}
@@ -167,20 +162,20 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			return;
 		}
 
-		foreach (Wumpa w in _wumpa)
-		{
-			if (w.Alive)
-			{
-				w.Yaw += 120.0f * deltaTime;
-				w.Model.EulerDegrees = new Vector3(0.0f, w.Yaw, 0.0f);
-			}
-		}
+		_fruit.Update(deltaTime, _crash.Position);
 		UpdateFuses(deltaTime);
 		DebugWarpPoll(deltaTime);
 		// Keep world life and crate fx animating through the death pause, as in the original.
 		_actors.Update(deltaTime, _player!, this);
 		CrateFx.Update(deltaTime);
 		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
+		// The pause menu ticks on the unscaled clock: it freezes the game itself (Time.Scale 0)
+		// while its own opening, drum and closing keep animating, as in the original.
+		_pause.Update(_wumpaCount, _lives);
+		if (_pause.JustClosed)
+		{
+			_hud.PopBoth(); // the HUD pops back in when the menu closes (rig_pause_slow.png)
+		}
 
 		if (_deathTimer >= 0.0f)
 		{
@@ -195,7 +190,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 
 		Vector3 feet = _crash.Position;
-		CollectWumpa(feet);
 		TouchCrates(feet);
 		if (feet.Y < KillY)
 		{
@@ -203,6 +197,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		else if (OnDeadlyGround(feet, out Vector3 water))
 		{
+			// The sea is a mesh, so its surface is wherever the water piece sits under Crash,
+			// not the chunk origin: ray down onto the piece he is standing on.
+			RaycastHit sea = Physics.Raycast(feet + new Vector3(0.0f, 0.5f, 0.0f), new Vector3(0.0f, -1.0f, 0.0f), 5.0f);
+			_player!.DrownSurfaceY = sea.DidHit ? sea.Position.Y : water.Y;
 			Die(DeathKind.Drown); // every deadly piece in the hub is the sea
 		}
 	}
@@ -270,7 +268,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			AddInstance(instance, transform);
 		}
-		Log.Info($"[Twinsanity] chunk {name}: {_crates.Count} crates, {_wumpa.Count} wumpa, {_deadly.Count} deadly pieces so far");
+		Log.Info($"[Twinsanity] chunk {name}: {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly pieces so far");
 	}
 
 	// A level.json link entry -> the chunk's local transform (rotation, then offset), in
@@ -316,7 +314,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			if (model != null)
 			{
-				_wumpa.Add(new Wumpa { Model = Spawn("Wumpa", model, position, euler), Center = position + new Vector3(0.0f, 1.0f, 0.0f), Yaw = euler.Y });
+				_fruit.Spawn(model, position, euler.Y);
 			}
 			return;
 		}
@@ -427,20 +425,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 	}
 
-	private void CollectWumpa(Vector3 feet)
-	{
-		Vector3 center = feet + new Vector3(0.0f, kCrashHeight * 0.5f, 0.0f);
-		foreach (Wumpa w in _wumpa)
-		{
-			if (w.Alive && Vector3.DistanceSquared(center, w.Center) < 1.3f * 1.3f)
-			{
-				w.Alive = false;
-				w.Model.Destroy();
-				AddWumpa(1);
-			}
-		}
-	}
-
 	public void AddWumpa(int count)
 	{
 		_wumpaCount += count;
@@ -492,7 +476,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 						CrateFx.Bounced(c.Model, c.ObjectId);
 						if (c.Fuse < 0.0f)
 						{
-							c.Fuse = 3.0f;
+							c.Fuse = 2.2f; // rig: boom 2.2 s after the landing bounce (tnt_fuse_sheet)
 						}
 					}
 					break;
@@ -514,7 +498,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 					if (onTop || whirledHit)
 					{
 						c.Hits--;
-						AddWumpa(5); // a handful of wumpa per hit, as in the original
+						_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, 5); // a handful of wumpa per hit, as in the original
 						if (c.Hits <= 0)
 						{
 							Break(c);
@@ -554,23 +538,23 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 					}
 					break;
 				case Kind.Checkpoint:
-					// The original's checkpoint crate is NOT destroyed: its top bounces Crash and
-					// the OGI state flips to the activated look (245/246).
+					// The checkpoint breaks open on the first hit (the OGI flips to the opened look,
+					// 245/246): the bounce still happens, then its collider goes so Crash can walk
+					// through the opened crate and never lands on it again.
 					if (onTop || whirledHit)
 					{
-						if (!c.Activated)
-						{
-							c.Activated = true;
-							_checkpoint = c.Base;
-							_checkpointFacing = _player.Facing;
-							Log.Info("[Twinsanity] Checkpoint activated.");
-						}
+						c.Activated = true;
+						_checkpoint = c.Base;
+						_checkpointFacing = _player.Facing;
+						Log.Info("[Twinsanity] Checkpoint activated.");
 						CrateFx.Activated(c.Model, c.ObjectId);
 						if (onTop)
 						{
 							_player.Bounce(9.0f);
 							CrateFx.Bounced(c.Model, c.ObjectId);
 						}
+						c.Alive = false;
+						c.Body.Destroy();
 					}
 					break;
 				case Kind.Detonator:
@@ -647,10 +631,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		switch (c.Kind)
 		{
 			case Kind.Basic:
-				AddWumpa(5);
+				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, 5);
 				break;
 			case Kind.Surprise: // the "?" crate bursts into wumpa
-				AddWumpa(5);
+				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, 5);
 				break;
 			case Kind.ExtraLife:
 				_lives++;
@@ -671,10 +655,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		CrateFx.Exploded(c.Base, c.ObjectId);
 		Vector3 center = c.Base + new Vector3(0.0f, 0.5f, 0.0f);
 		_actors.Explosion(center, kExplosionRadius);
+		_actors.CreatureBlast(center, kExplosionRadius);
 		Vector3 crashCenter = _crash.Position + new Vector3(0.0f, kCrashHeight * 0.5f, 0.0f);
 		if (Vector3.Distance(center, crashCenter) < kExplosionRadius + kCrashRadius)
 		{
-			Hurt(center);
+			Hurt(center, DeathKind.Explode);
 		}
 		foreach (Crate other in _crates)
 		{
@@ -708,7 +693,20 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 	}
 
-	private void Hurt(Vector3 from)
+	// TwinsanityActors.ITwinsanityHost: creatures brush nitro crates, as on the rig (chickens
+	// walking into the coop detonate them).
+	public void CreatureTouch(Vector3 position)
+	{
+		foreach (Crate c in _crates)
+		{
+			if (c.Alive && c.Kind == Kind.Nitro && Vector3.Distance(c.Base + new Vector3(0.0f, 0.5f, 0.0f), position) < 1.0f)
+			{
+				Explode(c);
+			}
+		}
+	}
+
+	private void Hurt(Vector3 from, DeathKind kind = DeathKind.Generic)
 	{
 		if (_aku > 0)
 		{
@@ -717,7 +715,13 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			_player!.Hurt(from);
 			return;
 		}
-		Die(DeathKind.Explode);
+		if (_masks > 1)
+		{
+			_masks--;
+			_player!.Hurt(from);
+			return;
+		}
+		Die(kind);
 	}
 
 	// TwinsanityActors.ITwinsanityHost: enemies and hazards funnel their hits through here.
@@ -727,13 +731,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			return;
 		}
-		if (_aku > 0)
-		{
-			_aku--;
-			_player!.Hurt(from);
-			return;
-		}
-		Die(kind);
+		Hurt(from, kind);
 	}
 
 	private void Die(DeathKind kind)
@@ -751,6 +749,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			_wumpaCount = 0;
 		}
 		_aku = 0;
+		_masks = 3;
 		Log.Info($"[Twinsanity] Crash died ({kind}), lives now {_lives}");
 		_deathTimer = _player.Die(kind); // Die takes control and keeps the model visible
 	}
