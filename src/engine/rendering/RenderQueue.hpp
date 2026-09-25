@@ -14,6 +14,7 @@
 #include "gpu/ResourceRegistry.hpp"
 
 #include "animation/AnimationDatabase.hpp"
+#include "rendering/BatchRuns.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "vulkan/Swapchain.hpp"
 
@@ -235,6 +236,12 @@ namespace aether
 		// draw. Called from PrepareAndDispatch on the render thread.
 		void EnsureAnimationBuffers();
 
+		// Recreates one slot's BatchDesc buffer at a larger capacity. Runs on the render
+		// thread inside PrepareAndDispatch, after this frame's BeginFrame fence wait has
+		// proven the GPU finished with everything this slot held last time around, so the
+		// old buffer can be destroyed immediately.
+		void GrowBatchBuffer(std::uint32_t frameSlot, std::uint32_t newCapacity);
+
 		// Each slot is protected by m_slotMutexes[slot]. The game thread
 		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
 		std::array<std::mutex, kFramesInFlight> m_slotMutexes;
@@ -281,6 +288,13 @@ namespace aether
 		std::uint32_t m_maxDraws = 0;
 		std::uint32_t m_outputDrawCapacity = 0;
 		std::uint32_t m_maxBatches = 0;
+		// Per-slot because slots grow lazily: only the slot being prepared can be grown
+		// safely (its previous GPU use is fence-proven done), the others catch up when
+		// their next prepare overflows. m_maxBatches stays the largest capacity seen.
+		std::array<std::uint32_t, kFramesInFlight> m_batchCapacity{};
+		bool m_batchOverflowWarned = false;
+		bool m_drawOverflowWarned = false;
+		std::vector<render_queue_batching::DrawKey> m_keyScratch;
 		std::uint32_t m_maxAnimationDraws = 0;
 		std::uint32_t m_maxSkinJoints = 0;
 		std::uint32_t m_maxSampledPoses = 0;

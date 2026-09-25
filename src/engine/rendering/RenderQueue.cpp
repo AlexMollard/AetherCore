@@ -30,6 +30,7 @@ namespace aether
 		m_sharedPipelines = &pipelines;
 		m_maxDraws = config.maxDraws;
 		m_maxBatches = config.maxBatches;
+		m_batchCapacity.fill(m_maxBatches);
 		m_outputDrawCapacity = (config.outputDrawCapacity > 0) ? config.outputDrawCapacity : config.maxDraws;
 		m_maxAnimationDraws = (config.maxAnimationDraws == UINT32_MAX) ? std::min(config.maxDraws, kDefaultMaxAnimationDraws) : config.maxAnimationDraws;
 		m_maxSkinJoints = m_maxAnimationDraws * 128u;
@@ -118,6 +119,44 @@ namespace aether
 		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceData[0].mapped);
 		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInput[0].mapped);
 		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDesc[0].mapped);
+	}
+
+	// Runs on the render thread inside PrepareAndDispatch for the slot being prepared.
+	// BeginFrame already waited this slot's in-flight fence, which only signals once the
+	// GPU finished the last frame that used the slot, so destroying the old buffer here
+	// can never strand an in-flight read. Other slots keep their capacity and grow the
+	// same way when their own prepare overflows.
+	void RenderQueue::GrowBatchBuffer(const std::uint32_t frameSlot, const std::uint32_t newCapacity)
+	{
+		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
+
+		if (m_batchDesc[frameSlot].handle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_batchDesc[frameSlot].handle);
+			m_batchDesc[frameSlot] = {};
+		}
+
+		const gpu::MappedBufferDesc desc{
+		        .size = static_cast<gpu::DeviceSize>(newCapacity) * sizeof(CullContracts::Batch),
+		        .usage = kSsboFlags,
+		        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+		        .debugName = "RenderQueue.BatchDesc",
+		};
+		m_batchDesc[frameSlot].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!m_batchDesc[frameSlot].handle.IsValid())
+		{
+			// Capacity stays where it was; the prepare loop's overflow branch degrades
+			// gracefully instead of asserting.
+			AE_WARN(LogCategory::Render, "RenderQueue({}): growing slot {} batch capacity to {} failed - keeping {}.", m_debugName, frameSlot, newCapacity, m_batchCapacity[frameSlot]);
+			return;
+		}
+		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_batchDesc[frameSlot].handle);
+		m_batchDesc[frameSlot].mapped = view.mappedPtr;
+		m_batchDesc[frameSlot].address = view.deviceAddress;
+		m_batchDescMapped = static_cast<CullContracts::Batch*>(view.mappedPtr);
+		m_batchCapacity[frameSlot] = newCapacity;
+		m_maxBatches = std::max(m_maxBatches, newCapacity);
+		AE_INFO(LogCategory::Render, "RenderQueue({}): slot {} batch capacity grown to {}.", m_debugName, frameSlot, newCapacity);
 	}
 
 	// The skinning buffers are sized for the queue's worst case (maxAnimationDraws
@@ -342,6 +381,11 @@ namespace aether
 		m_maxDraws = 0;
 		m_outputDrawCapacity = 0;
 		m_maxBatches = 0;
+		m_batchCapacity.fill(0u);
+		m_batchOverflowWarned = false;
+		m_drawOverflowWarned = false;
+		m_keyScratch.clear();
+		m_keyScratch.shrink_to_fit();
 		m_maxAnimationDraws = 0;
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
@@ -492,7 +536,38 @@ namespace aether
 		        });
 
 		const auto submittedDraws = static_cast<std::uint32_t>(commands.size());
-		AE_ASSERT_ALWAYS(submittedDraws <= m_maxDraws, "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
+		if (submittedDraws > m_maxDraws)
+		{
+			// A draw-list overflow must not kill the editor (this runs on the render
+			// thread inside the frame): drop the tail and say so once. The sorted order
+			// puts opaque pipeline/mesh groups first, so the dropped tail is mostly
+			// far transparent geometry - degraded, not broken.
+			if (!m_drawOverflowWarned)
+			{
+				m_drawOverflowWarned = true;
+				AE_WARN(LogCategory::Render, "RenderQueue({}): {} draws exceed maxDraws {} - dropping the tail every frame until capacity grows or content shrinks.", m_debugName, submittedDraws, m_maxDraws);
+			}
+			commands.resize(m_maxDraws);
+		}
+
+		// Pre-count the (pipeline, mesh) runs this exact draw order produces and grow the
+		// slot's BatchDesc buffer up front, so a streamed scene raises its own capacity
+		// instead of tripping an assert. The blended half of the list is depth-sorted, so
+		// its runs are per-draw - the reason batch counts outrun unique-mesh counts.
+		{
+			m_keyScratch.clear();
+			m_keyScratch.reserve(commands.size());
+			for (const DrawCommand& dc: commands)
+			{
+				m_keyScratch.push_back(render_queue_batching::DrawKey{.blended = dc.blended, .pipeline = dc.pipeline, .mesh = dc.mesh});
+			}
+			const render_queue_batching::BatchRunStats runStats = render_queue_batching::CountBatchRuns(m_keyScratch.data(), m_keyScratch.data() + m_keyScratch.size());
+			if (runStats.runs > m_batchCapacity[frameSlot])
+			{
+				const std::uint32_t grown = render_queue_batching::GrownBatchCapacity(m_batchCapacity[frameSlot], runStats.runs);
+				GrowBatchBuffer(frameSlot, grown);
+			}
+		}
 
 		std::uint32_t globalDrawIdx = 0;
 		std::uint32_t batchIdx = 0;
@@ -516,7 +591,26 @@ namespace aether
 
 			const std::uint32_t batchOutputStart = globalDrawIdx;
 
-			AE_ASSERT_ALWAYS(batchIdx < m_maxBatches, "RenderQueue: exceeded maxBatches - increase Initialize capacity.");
+			if (batchIdx >= m_batchCapacity[frameSlot])
+			{
+				// Growth failed or was refused (allocation error): degrade instead of
+				// killing the editor - keep every batch already emitted this frame, drop
+				// the rest, and explain once, with the numbers that size the fix.
+				if (!m_batchOverflowWarned)
+				{
+					m_batchOverflowWarned = true;
+					const render_queue_batching::BatchRunStats runStats = render_queue_batching::CountBatchRuns(m_keyScratch.data(), m_keyScratch.data() + m_keyScratch.size());
+					AE_WARN(LogCategory::Render,
+					        "RenderQueue({}): {} batch runs needed ({} draws, {} blended) but capacity {} could not grow - dropping the tail every frame. Unique meshes: {}.",
+					        m_debugName,
+					        runStats.runs,
+					        commands.size(),
+					        runStats.blendedDraws,
+					        m_batchCapacity[frameSlot],
+					        render_queue_batching::CountUniqueMeshes(m_keyScratch.data(), m_keyScratch.data() + m_keyScratch.size()));
+				}
+				break;
+			}
 
 			for (std::size_t j = i; j < batchEnd; ++j)
 			{
