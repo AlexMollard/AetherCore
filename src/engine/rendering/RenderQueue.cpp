@@ -481,29 +481,13 @@ namespace aether
 		std::uint32_t nodePoseCursor = 0;
 		std::uint32_t ragdollOverrideCursor = 0;
 		std::uint64_t animationInputHash = 0ull;
-		std::uint32_t skinJobCount = 0;
-		std::uint32_t sampleJobsThisFrame = 0;
-
-		struct AnimSampleBatch
-		{
-			const AnimationDatabase* db;
-			std::uint32_t dbGeneration;
-			std::uint32_t startJob;
-			std::uint32_t count;
-		};
-
-		struct SkinPaletteBatch
-		{
-			const AnimationDatabase* db;
-			std::uint32_t dbGeneration;
-			std::uint32_t startJob;
-			std::uint32_t count;
-		};
-
-		AnimSampleBatch animSampleBatches[64];
-		std::uint32_t animSampleBatchCount = 0;
-		SkinPaletteBatch skinPaletteBatches[64];
-		std::uint32_t skinPaletteBatchCount = 0;
+		std::uint32_t animatedDraws = 0;
+		m_sampleKeys.Clear();
+		m_skinKeys.Clear();
+		m_pendingSampleJobs.clear();
+		m_pendingSkinJobs.clear();
+		m_animSampleBatches.clear();
+		m_skinPaletteBatches.clear();
 
 		std::ranges::stable_sort(commands,
 
@@ -633,131 +617,143 @@ namespace aether
 				const bool wantsGpuSampling = gpuSamplingEnabled && dbValid && dc.skinJointCount > 0 && dc.skinIndex >= 0 && dc.animClipIndex < drawClipCount && std::cmp_less(dc.skinIndex, drawSkinCount);
 				if (wantsGpuSampling)
 				{
-					if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
+					++animatedDraws;
+					// Everything the palette content depends on. Offsets are in here too,
+					// so a reordered draw list counts as a change even when the poses
+					// themselves are identical.
+					const auto mix = [&animationInputHash](std::uint64_t v)
 					{
-						AE_WARN(LogCategory::Animation, "RenderQueue: sampled skin palette pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
-					}
-					else if (drawNodeCount == 0u || nodePoseCursor + drawNodeCount > m_maxSampledPoses)
-					{
-						AE_WARN(LogCategory::Animation, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", nodePoseCursor + drawNodeCount, m_maxSampledPoses);
-					}
-					else if (skinJobCount >= m_maxAnimationDraws || sampleJobsThisFrame >= m_maxAnimationDraws)
-					{
-						AE_WARN(LogCategory::Animation, "RenderQueue: animation job overflow (jobs {}, cap {}) - dropping GPU skinning for this draw.", std::max(skinJobCount, sampleJobsThisFrame), m_maxAnimationDraws);
-					}
-					else
-					{
-						skinPaletteOffset = skinJointCursor;
-						skinJointCount = dc.skinJointCount;
+						animationInputHash ^= v + 0x9e3779b97f4a7c15ull + (animationInputHash << 6) + (animationInputHash >> 2);
+					};
 
-						AnimationContracts::AnimatorSampleJob animJob{};
-						animJob.animClipIndex = dc.animClipIndex;
-						animJob.animTime = dc.animTime;
-						animJob.nodePoseOffset = nodePoseCursor;
-						animJob.nodeCount = drawNodeCount;
-						animJob.clipsAddr = drawAnimDb->GetClipsAddr();
-						animJob.channelsAddr = drawAnimDb->GetChannelsAddr();
-						animJob.timesAddr = drawAnimDb->GetTimesAddr();
-						animJob.valuesAddr = drawAnimDb->GetValuesAddr();
-						animJob.clipCount = drawClipCount;
-						if (dc.fadeWeight > 0.0f && dc.fadeClipIndex < drawClipCount)
+					// One sample job per distinct animator state: a skinned actor's child
+					// meshes all submit the same one, and so does every draw of it the shadow
+					// cascades share. Overrides are part of the key, so a ragdoll's or a
+					// script's per-instance node overrides still get their own job.
+					render_queue_anim::SampleKey sampleKey{
+					        .db = drawAnimDb,
+					        .dbGeneration = drawAnimDb->GetGeneration(),
+					        .clip = dc.animClipIndex,
+					        .time = dc.animTime,
+					        .overrides = dc.ragdollOverrides,
+					};
+					if (dc.fadeWeight > 0.0f && dc.fadeClipIndex < drawClipCount)
+					{
+						sampleKey.fadeClip = dc.fadeClipIndex;
+						sampleKey.fadeTime = dc.fadeTime;
+						sampleKey.fadeWeight = dc.fadeWeight;
+					}
+
+					std::uint32_t sampleIdx = m_sampleKeys.Find(sampleKey);
+					if (sampleIdx == render_queue_anim::DedupeTable<render_queue_anim::SampleKey>::kNone)
+					{
+						if (drawNodeCount == 0u || nodePoseCursor + drawNodeCount > m_maxSampledPoses)
 						{
-							animJob.fadeClipIndex = dc.fadeClipIndex;
-							animJob.fadeTime = dc.fadeTime;
-							animJob.fadeWeight = dc.fadeWeight;
+							AE_WARN(LogCategory::Animation, "RenderQueue({}): sampled node-pose pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", m_debugName, nodePoseCursor + drawNodeCount, m_maxSampledPoses);
 						}
-
-						// Ragdoll skin-drive seam: dc.ragdollOverrides is empty for every
-						// ordinary animated draw (see RagdollSkinDrive.hpp for who fills it).
-						if (!dc.ragdollOverrides.empty())
+						else if (m_sampleKeys.Size() >= m_maxAnimationDraws)
 						{
-							if (ragdollOverrideCursor + dc.ragdollOverrides.size() > m_maxRagdollOverrides)
+							if (!m_animJobOverflowWarned)
 							{
-								AE_WARN(LogCategory::Animation,
-								        "RenderQueue: ragdoll override pool overflow (needed {}, cap {}) - this instance renders its last sampled animation pose instead of tracking its ragdoll this frame.",
-								        ragdollOverrideCursor + dc.ragdollOverrides.size(),
-								        m_maxRagdollOverrides);
+								m_animJobOverflowWarned = true;
+								AE_WARN(LogCategory::Animation, "RenderQueue({}): more than {} distinct animator states in one frame - dropping GPU skinning for the rest ({} animated draws so far).", m_debugName, m_maxAnimationDraws, animatedDraws);
 							}
-							else if (m_ragdollOverridesMapped != nullptr)
+						}
+						else
+						{
+							AnimationContracts::AnimatorSampleJob animJob{};
+							animJob.animClipIndex = dc.animClipIndex;
+							animJob.animTime = dc.animTime;
+							animJob.nodePoseOffset = nodePoseCursor;
+							animJob.nodeCount = drawNodeCount;
+							animJob.clipsAddr = drawAnimDb->GetClipsAddr();
+							animJob.channelsAddr = drawAnimDb->GetChannelsAddr();
+							animJob.timesAddr = drawAnimDb->GetTimesAddr();
+							animJob.valuesAddr = drawAnimDb->GetValuesAddr();
+							animJob.clipCount = drawClipCount;
+							animJob.fadeClipIndex = sampleKey.fadeClip;
+							animJob.fadeTime = sampleKey.fadeTime;
+							animJob.fadeWeight = sampleKey.fadeWeight;
+
+							// Ragdoll skin-drive seam: dc.ragdollOverrides is empty for every
+							// ordinary animated draw (see RagdollSkinDrive.hpp for who fills it).
+							if (!dc.ragdollOverrides.empty())
 							{
-								for (std::size_t k = 0; k < dc.ragdollOverrides.size(); ++k)
+								if (ragdollOverrideCursor + dc.ragdollOverrides.size() > m_maxRagdollOverrides)
 								{
-									m_ragdollOverridesMapped[ragdollOverrideCursor + k] = dc.ragdollOverrides[k];
+									AE_WARN(LogCategory::Animation,
+									        "RenderQueue: ragdoll override pool overflow (needed {}, cap {}) - this instance renders its last sampled animation pose instead of tracking its ragdoll this frame.",
+									        ragdollOverrideCursor + dc.ragdollOverrides.size(),
+									        m_maxRagdollOverrides);
 								}
-								animJob.overrideCount = static_cast<std::uint32_t>(dc.ragdollOverrides.size());
-								animJob.overridesAddr = currRagdollOverridesAddr + static_cast<gpu::DeviceSize>(ragdollOverrideCursor) * sizeof(AnimationContracts::RagdollOverrideEntry);
-								ragdollOverrideCursor += static_cast<std::uint32_t>(dc.ragdollOverrides.size());
+								else if (m_ragdollOverridesMapped != nullptr)
+								{
+									for (std::size_t k = 0; k < dc.ragdollOverrides.size(); ++k)
+									{
+										m_ragdollOverridesMapped[ragdollOverrideCursor + k] = dc.ragdollOverrides[k];
+									}
+									animJob.overrideCount = static_cast<std::uint32_t>(dc.ragdollOverrides.size());
+									animJob.overridesAddr = currRagdollOverridesAddr + static_cast<gpu::DeviceSize>(ragdollOverrideCursor) * sizeof(AnimationContracts::RagdollOverrideEntry);
+									ragdollOverrideCursor += static_cast<std::uint32_t>(dc.ragdollOverrides.size());
+								}
 							}
-						}
 
-						m_animationSampleJobsMapped[animJobBase + sampleJobsThisFrame] = animJob;
-
-						m_skinCopyJobsMapped[animJobBase + skinJobCount] = AnimationContracts::SkinCopyJob{
-						        .sampledPosesAddr = currSampledPosesAddr + static_cast<gpu::DeviceSize>(nodePoseCursor) * sizeof(AnimationContracts::SampledNodePose),
-						        .dstPaletteOffset = skinPaletteOffset,
-						        .jointCount = dc.skinJointCount,
-						        .skinIndex = static_cast<std::uint32_t>(dc.skinIndex),
-						        .nodeCount = drawNodeCount,
-						        .nodePoseOffset = nodePoseCursor,
-						};
-
-						if (animSampleBatchCount > 0 && animSampleBatches[animSampleBatchCount - 1].db == drawAnimDb)
-						{
-							animSampleBatches[animSampleBatchCount - 1].count++;
+							sampleIdx = m_sampleKeys.Add(sampleKey);
+							m_pendingSampleJobs.push_back({.job = animJob, .db = drawAnimDb});
+							// The key hash covers db, clip, times, fade and override contents -
+							// a ragdoll's bones move every physics step and a script's joint
+							// offsets change as it blends them, so they must count toward "did
+							// the pose change" or NodeFlatten would be skipped on a moving pose.
+							mix(sampleKey.Hash());
+							mix((static_cast<std::uint64_t>(nodePoseCursor) << 32) | drawNodeCount);
+							nodePoseCursor += drawNodeCount;
 						}
-						else
-						{
-							AE_ASSERT_ALWAYS(animSampleBatchCount < 64, "RenderQueue: too many animation sample batches");
-							animSampleBatches[animSampleBatchCount++] = {.db = drawAnimDb, .dbGeneration = drawAnimDb ? drawAnimDb->GetGeneration() : 0, .startJob = sampleJobsThisFrame, .count = 1u};
-						}
+					}
 
-						if (skinPaletteBatchCount > 0 && skinPaletteBatches[skinPaletteBatchCount - 1].db == drawAnimDb)
+					if (sampleIdx != render_queue_anim::DedupeTable<render_queue_anim::SampleKey>::kNone)
+					{
+						// One palette per distinct (state, skin): child meshes of one actor
+						// may use different skins of the same database.
+						const render_queue_anim::SkinKey skinKey{.sampleJob = sampleIdx, .skinIndex = static_cast<std::uint32_t>(dc.skinIndex)};
+						const std::uint32_t skinIdx = m_skinKeys.Find(skinKey);
+						if (skinIdx != render_queue_anim::DedupeTable<render_queue_anim::SkinKey>::kNone)
 						{
-							skinPaletteBatches[skinPaletteBatchCount - 1].count++;
+							skinPaletteOffset = m_pendingSkinJobs[skinIdx].job.dstPaletteOffset;
+							skinJointCount = m_pendingSkinJobs[skinIdx].job.jointCount;
 						}
-						else
+						else if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
 						{
-							AE_ASSERT_ALWAYS(skinPaletteBatchCount < 64, "RenderQueue: too many skin palette batches");
-							skinPaletteBatches[skinPaletteBatchCount++] = {.db = drawAnimDb, .dbGeneration = drawAnimDb ? drawAnimDb->GetGeneration() : 0, .startJob = skinJobCount, .count = 1u};
+							AE_WARN(LogCategory::Animation, "RenderQueue({}): sampled skin palette pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", m_debugName, skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
 						}
-
-						// Everything the palette content depends on. Offsets are in here too,
-						// so a reordered draw list counts as a change even when the poses
-						// themselves are identical.
-						const auto mix = [&animationInputHash](std::uint64_t v)
+						else if (m_skinKeys.Size() >= m_maxAnimationDraws)
 						{
-							animationInputHash ^= v + 0x9e3779b97f4a7c15ull + (animationInputHash << 6) + (animationInputHash >> 2);
-						};
-						mix(reinterpret_cast<std::uintptr_t>(drawAnimDb));
-						mix(drawAnimDb->GetGeneration());
-						mix(static_cast<std::uint64_t>(dc.animClipIndex));
-						mix(std::bit_cast<std::uint32_t>(dc.animTime));
-						mix(static_cast<std::uint64_t>(animJob.fadeClipIndex));
-						mix(std::bit_cast<std::uint32_t>(animJob.fadeTime));
-						mix(std::bit_cast<std::uint32_t>(animJob.fadeWeight));
-						mix(static_cast<std::uint64_t>(dc.skinIndex));
-						mix((static_cast<std::uint64_t>(skinPaletteOffset) << 32) | dc.skinJointCount);
-						mix((static_cast<std::uint64_t>(nodePoseCursor) << 32) | drawNodeCount);
-						// A ragdoll's bones move every physics step, and a script's joint
-						// offsets change as it blends them, so override data must count
-						// toward "did the pose change" - otherwise NodeFlatten's dispatch
-						// below would be skipped while the mesh kept rendering last frame's
-						// pose. Ragdoll entries differ in translation, joint offsets in rotation.
-						for (const AnimationContracts::RagdollOverrideEntry& ov: dc.ragdollOverrides)
-						{
-							mix((static_cast<std::uint64_t>(ov.kind) << 32) | ov.nodeIndex);
-							for (int c = 0; c < 4; ++c)
+							if (!m_animJobOverflowWarned)
 							{
-								mix(std::bit_cast<std::uint32_t>(ov.transform[c].x));
-								mix(std::bit_cast<std::uint32_t>(ov.transform[c].y));
-								mix(std::bit_cast<std::uint32_t>(ov.transform[c].z));
+								m_animJobOverflowWarned = true;
+								AE_WARN(LogCategory::Animation, "RenderQueue({}): more than {} distinct skin palettes in one frame - dropping GPU skinning for the rest ({} animated draws so far).", m_debugName, m_maxAnimationDraws, animatedDraws);
 							}
 						}
-
-						++sampleJobsThisFrame;
-						++skinJobCount;
-						skinJointCursor += dc.skinJointCount;
-						nodePoseCursor += drawNodeCount;
+						else
+						{
+							skinPaletteOffset = skinJointCursor;
+							skinJointCount = dc.skinJointCount;
+							const std::uint32_t poseOffset = m_pendingSampleJobs[sampleIdx].job.nodePoseOffset;
+							m_skinKeys.Add(skinKey);
+							m_pendingSkinJobs.push_back({.job =
+							                                     AnimationContracts::SkinCopyJob{
+							                                             .sampledPosesAddr = currSampledPosesAddr + static_cast<gpu::DeviceSize>(poseOffset) * sizeof(AnimationContracts::SampledNodePose),
+							                                             .dstPaletteOffset = skinPaletteOffset,
+							                                             .jointCount = dc.skinJointCount,
+							                                             .skinIndex = static_cast<std::uint32_t>(dc.skinIndex),
+							                                             .nodeCount = drawNodeCount,
+							                                             .nodePoseOffset = poseOffset,
+							                                     },
+							        .db = drawAnimDb});
+							mix(static_cast<std::uint64_t>(dc.skinIndex));
+							mix((static_cast<std::uint64_t>(skinPaletteOffset) << 32) | dc.skinJointCount);
+							mix(poseOffset);
+							skinJointCursor += dc.skinJointCount;
+						}
 					}
 				}
 
@@ -803,6 +799,45 @@ namespace aether
 			++batchIdx;
 			i = batchEnd;
 		}
+
+		// Jobs were collected in draw order, where databases interleave. Group them by
+		// database so each one's PoseInit/NodeFlatten/skin dispatches cover one contiguous
+		// range. Order within a group is fixed by the (unique) pose/palette offset, so the
+		// layout is deterministic. Nothing else refers to a job by its position: skin jobs
+		// read their pose by offset, and draws read their palette by offset.
+		const auto sampleBefore = [](const PendingSampleJob& a, const PendingSampleJob& b)
+		{ return a.db != b.db ? std::less<>{}(a.db, b.db) : a.job.nodePoseOffset < b.job.nodePoseOffset; };
+		const auto skinBefore = [](const PendingSkinJob& a, const PendingSkinJob& b)
+		{ return a.db != b.db ? std::less<>{}(a.db, b.db) : a.job.dstPaletteOffset < b.job.dstPaletteOffset; };
+		std::ranges::sort(m_pendingSampleJobs, sampleBefore);
+		std::ranges::sort(m_pendingSkinJobs, skinBefore);
+		const auto sampleJobsThisFrame = static_cast<std::uint32_t>(m_pendingSampleJobs.size());
+		const auto skinJobCount = static_cast<std::uint32_t>(m_pendingSkinJobs.size());
+		const auto appendToBatch = [](std::vector<AnimJobBatch>& batches, const AnimationDatabase* db, std::uint32_t job)
+		{
+			if (!batches.empty() && batches.back().db == db)
+			{
+				++batches.back().count;
+			}
+			else
+			{
+				batches.push_back({.db = db, .dbGeneration = db->GetGeneration(), .startJob = job, .count = 1u});
+			}
+		};
+		for (std::uint32_t k = 0; k < sampleJobsThisFrame; ++k)
+		{
+			m_animationSampleJobsMapped[animJobBase + k] = m_pendingSampleJobs[k].job;
+			appendToBatch(m_animSampleBatches, m_pendingSampleJobs[k].db, k);
+		}
+		for (std::uint32_t k = 0; k < skinJobCount; ++k)
+		{
+			m_skinCopyJobsMapped[animJobBase + k] = m_pendingSkinJobs[k].job;
+			appendToBatch(m_skinPaletteBatches, m_pendingSkinJobs[k].db, k);
+		}
+		const auto animSampleBatchCount = static_cast<std::uint32_t>(m_animSampleBatches.size());
+		const auto skinPaletteBatchCount = static_cast<std::uint32_t>(m_skinPaletteBatches.size());
+		const auto& animSampleBatches = m_animSampleBatches;
+		const auto& skinPaletteBatches = m_skinPaletteBatches;
 
 		gpu::ResourceRegistry::FlushMappedBuffer(m_instanceData[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(globalDrawIdx) * sizeof(DrawContracts::InstanceData));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(globalDrawIdx) * sizeof(CullContracts::DrawInput));

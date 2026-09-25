@@ -14,6 +14,7 @@
 #include "gpu/ResourceRegistry.hpp"
 
 #include "animation/AnimationDatabase.hpp"
+#include "rendering/AnimJobDedupe.hpp"
 #include "rendering/BatchRuns.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -295,6 +296,34 @@ namespace aether
 		bool m_batchOverflowWarned = false;
 		bool m_drawOverflowWarned = false;
 		std::vector<render_queue_batching::DrawKey> m_keyScratch;
+		// Per-frame animation job scratch (see AnimJobDedupe.hpp). The draw loop collects one
+		// sample job per distinct animator state and one skin job per distinct (state, skin),
+		// indexed like the dedupe tables; they are then written out grouped by database so
+		// each database's PoseInit/NodeFlatten/skin dispatch covers one contiguous range.
+		struct PendingSampleJob
+		{
+			AnimationContracts::AnimatorSampleJob job;
+			const AnimationDatabase* db = nullptr;
+		};
+		struct PendingSkinJob
+		{
+			AnimationContracts::SkinCopyJob job;
+			const AnimationDatabase* db = nullptr;
+		};
+		struct AnimJobBatch
+		{
+			const AnimationDatabase* db = nullptr;
+			std::uint32_t dbGeneration = 0;
+			std::uint32_t startJob = 0;
+			std::uint32_t count = 0;
+		};
+		render_queue_anim::DedupeTable<render_queue_anim::SampleKey> m_sampleKeys;
+		render_queue_anim::DedupeTable<render_queue_anim::SkinKey> m_skinKeys;
+		std::vector<PendingSampleJob> m_pendingSampleJobs;
+		std::vector<PendingSkinJob> m_pendingSkinJobs;
+		std::vector<AnimJobBatch> m_animSampleBatches;
+		std::vector<AnimJobBatch> m_skinPaletteBatches;
+		bool m_animJobOverflowWarned = false;
 		std::uint32_t m_maxAnimationDraws = 0;
 		std::uint32_t m_maxSkinJoints = 0;
 		std::uint32_t m_maxSampledPoses = 0;
