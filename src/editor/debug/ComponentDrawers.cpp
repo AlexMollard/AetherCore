@@ -192,6 +192,12 @@ namespace aether::editor
 		}
 		for (const Entity e: subtree)
 		{
+			// A local character's simulated position overwrites its transform every physics
+			// step; ask the physics flush to move it instead, or the edit silently reverts.
+			if (auto* cc = world.TryGet<CharacterControllerComponent>(e))
+			{
+				cc->teleportPending = true;
+			}
 			auto* ps = world.TryGet<PhysicsStateComponent>(e);
 			const auto* etc = world.TryGet<TransformComponent>(e);
 			if (ps == nullptr || etc == nullptr)
