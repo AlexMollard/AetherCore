@@ -387,9 +387,14 @@ public static class CrateFx
 			new[] { 0f, 0f, 1f, 18f / 65536f * 360f });
 	}
 
-	public static void Exploded(Vector3 position, int objectId)
+	/// <param name="yawDeg">The crate's yaw. DoParticle(type, 0x3FFFFFC0, 0...) emits along the
+	/// instance's local +Z (rig_nboomr: the nitro cloud drifts off low along the crate's facing,
+	/// fx_nitro.png), so a crate passes its yaw; null keeps the emit direction straight up.</param>
+	public static void Exploded(Vector3 position, int objectId, float? yawDeg = null)
 	{
 		Vector3 center = position + new Vector3(0.0f, 0.5f, 0.0f);
+		float yaw = (yawDeg ?? 0.0f) * MathF.PI / 180.0f;
+		Vector3 emit = yawDeg.HasValue ? new Vector3(MathF.Sin(yaw), 0.0f, MathF.Cos(yaw)) : Vector3.UnitY;
 		bool nitro = objectId == 4;
 		TwinsanityAudio.Explosion(center);
 		// 1A: the slow smoke/puff column. 1B: the fast spark/fire jet. 1C: the big flash.
@@ -397,14 +402,14 @@ public static class CrateFx
 		{
 			SpawnEmitter("NitroExplosionA", center, "0", new Vector4(0.0f, 64.2f, 64.1f, 128.0f) / 128.0f,
 				7, 60.0f, 7.0f / 60.0f, 1.582221f,
-				new Vector3(0.0f, 4.703004f, 0.0f), new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), -1.353525f,
+				emit * 4.703004f, new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), -1.353525f,
 				new[] { CK(0f, 107.821f, 234.798f, 149.144f), CK(0.241f, 0f, 247.249f, 34.105f), CK(0.623f, 0f, 174.067f, 28.473f), CK(1f, 130.208f, 113.441f, 109.646f) },
 				new[] { 0f, 0f, 0.066f, 198.124f, 1f, 0f },
 				new[] { 0f, 46431.45f * 1e-4f, 0.062f, 16117.997f * 1e-4f, 1f, 15893.261f * 1e-4f },
 				new[] { 0f, 0f, 1f, 31154f / 65536f * 360f });
 			SpawnEmitter("NitroExplosionB", center, "1", new Vector4(33.6f, 1.6f, 63.4f, 31.4f) / 128.0f,
 				14, 120.0f, 7.0f / 60.0f, 0.9150347f,
-				new Vector3(0.0f, 16.82123f, 0.0f), new Vector3(1.84683f, 2.465651f, 1.815337f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -17.84222f,
+				emit * 16.82123f, new Vector3(1.84683f, 2.465651f, 1.815337f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -17.84222f,
 				new[] { CK(0f, 79.534f, 243.109f, 0f), CK(0.766f, 73.916f, 246.346f, 0f), CK(1f, 0f, 209.46f, 14.932f) },
 				new[] { 0f, 120.687f, 0.182f, 255f, 1f, 255f },
 				new[] { 0f, 17435.475f * 1e-4f, 0.049f, 5648.218f * 1e-4f, 0.798f, 2316.686f * 1e-4f, 1f, 0f },
@@ -421,14 +426,14 @@ public static class CrateFx
 		{
 			SpawnEmitter("TntExplosionA", center, "0", new Vector4(0.0f, 64.2f, 64.1f, 128.0f) / 128.0f,
 				7, 60.0f, 7.0f / 60.0f, 1.582221f,
-				new Vector3(0.0f, 4.703004f, 0.0f), new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), -1.353525f,
+				emit * 4.703004f, new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), -1.353525f,
 				new[] { CK(0f, 208.401f, 168.424f, 48.024f), CK(0.241f, 156.013f, 0f, 0f), CK(0.623f, 94.255f, 54.73f, 5.981f), CK(1f, 130.208f, 113.441f, 109.646f) },
 				new[] { 0f, 0f, 0.066f, 198.124f, 1f, 0f },
 				new[] { 0f, 46245.46f * 1e-4f, 0.062f, 16069.652f * 1e-4f, 0.979f, 15845.901f * 1e-4f, 1f, 26634.685f * 1e-4f },
 				new[] { 0f, 0f, 1f, 31154f / 65536f * 360f });
 			SpawnEmitter("TntExplosionB", center, "1", new Vector4(32.5f, 0.0f, 65.8f, 33.1f) / 128.0f,
 				14, 120.0f, 7.0f / 60.0f, 0.6961219f,
-				new Vector3(0.0f, 16.21593f, 0.0f), new Vector3(3.193508f, 2.465651f, 3.05557f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -20.67021f,
+				emit * 16.21593f, new Vector3(3.193508f, 2.465651f, 3.05557f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -20.67021f,
 				new[] { CK(0f, 221.905f, 233.397f, 101.165f), CK(0.766f, 246.346f, 0f, 0f), CK(1f, 246.346f, 0f, 0f) },
 				new[] { 0f, 120.687f, 0.182f, 255f, 1f, 255f },
 				new[] { 0f, 17435.475f * 1e-4f, 0.049f, 5648.218f * 1e-4f, 0.798f, 2316.686f * 1e-4f, 1f, 0f },
