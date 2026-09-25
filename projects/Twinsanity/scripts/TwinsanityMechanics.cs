@@ -46,6 +46,12 @@ public static class MechanicsWorm
 ///     (about 40 m/s^2), then runs at his full speed (9 run, 2.5 walk) - pushing never slows him.
 ///   - Pushing at an angle moves it along the contact normal only.
 ///   - Let go, it rolls on, its speed decaying exponentially at 0.87/s on flat sand.
+/// Spin and slide (rig, logs/chickenpush/push_spin.csv / push_slide.csv, the nut at 60 frames/s):
+///   - A spin in contact launches it along the contact normal 3 frames after the spin starts: 33.7
+///     m/s, decaying at 0.67/s (35 m in 1.8 s), with a 0.1 m hop.
+///   - A slide into it throws it up in an arc on contact: 0.28 m pop, then 11.5 m/s up under 27.7
+///     m/s^2 (peak 2.7 m above rest, 0.87 s in the air) and 8.2 m/s along the contact normal,
+///     decaying at 0.85/s - the free-roll rate - so it lands 5 m away.
 /// Each is a kinematic collision body the script drives, so Crash's controller is blocked by it
 /// exactly as by scenery.
 /// </summary>
@@ -65,6 +71,10 @@ public sealed partial class TwinsanityActors
 		public Vector3 Velocity;     // horizontal
 		public Quaternion Roll = Quaternion.Identity;
 		public Quaternion Base = Quaternion.Identity;
+		public float FreeDamping;    // 1/s, current free decay (Damping, or the spin launch's)
+		public float VelocityY;      // while airborne
+		public bool Airborne;
+		public float LaunchFloor;    // ground height it was launched from
 	}
 
 	private readonly List<Pushable> _pushables = new();
@@ -78,6 +88,18 @@ public sealed partial class TwinsanityActors
 	// stands in, scaled by 5/7 for a rolling sphere. It only matters on slopes.
 	private const float SlopeGravity = 50.0f * 5.0f / 7.0f;
 	private const float RestSpeed = 0.05f;
+	// Spin / slide launches (rig, see the summary). One gravity fits the nut's slide arc and its
+	// spin hop; the ball and rock reuse the nut's numbers (ponytail: not measured).
+	private const float LaunchGravity = 27.7f;
+	private const float SpinLaunchSpeed = 33.7f;
+	private const float SpinLaunchHop = 2.35f;   // sqrt(2 g 0.1)
+	private const float SpinLaunchDamping = 0.67f;
+	private const float SpinLaunchDelay = 0.05f; // 3 frames after the spin starts
+	private const float SlideLaunchSpeed = 8.2f;
+	private const float SlideLaunchUp = 11.5f;
+	private const float SlideLaunchPop = 0.28f;
+	private float _spinClock = -1.0f;            // time since the current spin started; -1 = none
+	private bool _spinLaunched, _slideLaunched;
 
 	// Per family: collision radius (model extent - with our 0.4 capsule it reproduces the rig's
 	// 1.0-1.1 m contact distance), centre height above ground (the script's SetLogicalRadius),
@@ -134,6 +156,7 @@ public sealed partial class TwinsanityActors
 			Rolls = rolls,
 			PushAccel = accel,
 			Damping = damping,
+			FreeDamping = damping,
 			Base = Quaternion.CreateFromYawPitchRoll(eulerDegrees.Y * MathF.PI / 180.0f, eulerDegrees.X * MathF.PI / 180.0f, eulerDegrees.Z * MathF.PI / 180.0f),
 		});
 		return true;
@@ -149,6 +172,11 @@ public sealed partial class TwinsanityActors
 		Vector3 feet = player.Self.Position;
 		Vector3 flatVel = player.Velocity with { Y = 0.0f };
 		float speed = flatVel.Length();
+		// How long the current spin has run: its launch waits SpinLaunchDelay into it. One launch
+		// per spin, one per slide.
+		_spinClock = player.IsSpinning ? (_spinClock < 0.0f ? 0.0f : _spinClock + dt) : -1.0f;
+		_spinLaunched &= _spinClock >= 0.0f;
+		_slideLaunched &= player.IsSliding;
 
 		foreach (Pushable p in _pushables)
 		{
@@ -156,7 +184,17 @@ public sealed partial class TwinsanityActors
 			float dist = toObj.Length();
 			bool overlapY = feet.Y < p.Center.Y + p.Radius * 0.8f && feet.Y + CrashHeight > p.Center.Y - p.Radius;
 			bool pushed = false;
-			if (dist < p.Radius + CrashRadius + 0.2f && dist > 1e-3f && overlapY && player.IsGrounded && speed > 0.5f)
+			bool contact = dist < p.Radius + CrashRadius + 0.2f && dist > 1e-3f && overlapY && !p.Airborne;
+			bool slideHit = player.IsSliding && !_slideLaunched;
+			if (contact && p.Rolls && (slideHit || (_spinClock >= SpinLaunchDelay && !_spinLaunched)))
+			{
+				Launch(p, toObj / dist, slideHit);
+				_slideLaunched |= slideHit;
+				_spinLaunched |= !slideHit;
+				Step(p, dt, player.Self);
+				continue;
+			}
+			if (contact && player.IsGrounded && speed > 0.5f)
 			{
 				Vector3 n = toObj / dist;
 				if (Vector3.Dot(flatVel, n) > speed * 0.5f)
@@ -183,19 +221,39 @@ public sealed partial class TwinsanityActors
 						p.Velocity *= MathF.Max(speed, v - p.PushAccel * dt) / v;
 					}
 					pushed = pushing = true;
+					p.FreeDamping = p.Damping;
 				}
 			}
 			if (!pushed)
 			{
-				p.Velocity *= p.Rolls ? MathF.Exp(-p.Damping * dt) : 0.0f;
+				p.Velocity *= p.Rolls ? MathF.Exp(-p.FreeDamping * dt) : 0.0f;
 			}
 			Step(p, dt, player.Self);
 		}
 		player.Pushing = pushing;
 	}
 
+	// Spin: straight out along the contact normal with a small hop. Slide: thrown up in an arc.
+	private static void Launch(Pushable p, Vector3 normal, bool slide)
+	{
+		p.Velocity = normal * (slide ? SlideLaunchSpeed : SpinLaunchSpeed);
+		p.VelocityY = slide ? SlideLaunchUp : SpinLaunchHop;
+		p.FreeDamping = slide ? p.Damping : SpinLaunchDamping;
+		p.LaunchFloor = p.Center.Y - p.RestHeight;
+		if (slide)
+		{
+			p.Center.Y += SlideLaunchPop;
+		}
+		p.Airborne = true;
+	}
+
 	private void Step(Pushable p, float dt, Entity crash)
 	{
+		if (p.Airborne)
+		{
+			Fly(p, dt, crash);
+			return;
+		}
 		float? groundHere = Ground(p.Center, p.Radius, p.Center.Y + 1.0f, p.Body, crash, out Vector2 grad);
 		if (p.Rolls && groundHere != null)
 		{
@@ -207,6 +265,13 @@ public sealed partial class TwinsanityActors
 		if (p.Velocity.LengthSquared() < RestSpeed * RestSpeed)
 		{
 			p.Velocity = Vector3.Zero;
+			p.FreeDamping = p.Damping;
+			// A roller spawned before its chunk's collision loaded rests at its instance height
+			// (the nut hung 0.45 m up): settle it once the ground is there.
+			if (p.Rolls && groundHere != null && MathF.Abs(groundHere.Value + p.RestHeight - p.Center.Y) > 0.02f)
+			{
+				Place(p, p.Center with { Y = groundHere.Value + p.RestHeight }, Vector3.Zero, 0.0f);
+			}
 			return;
 		}
 		Vector3 step = p.Velocity * dt;
@@ -228,10 +293,46 @@ public sealed partial class TwinsanityActors
 			return;
 		}
 		next.Y = ground.Value + p.RestHeight;
+		Place(p, next, dir, len);
+	}
+
+	// A launched object flies under LaunchGravity until it comes down onto the ground at its rest
+	// height; its horizontal speed keeps decaying (UpdatePushables), as the rig's arc does.
+	private void Fly(Pushable p, float dt, Entity crash)
+	{
+		p.VelocityY -= LaunchGravity * dt;
+		Vector3 step = p.Velocity * dt;
+		float len = step.Length();
+		Vector3 dir = len > 1e-5f ? step / len : Vector3.Zero;
+		if (len > 1e-5f)
+		{
+			RaycastHit wall = Physics.Raycast(p.Center + dir * (p.Radius + 0.02f), dir, len + 0.05f);
+			if (wall.DidHit && wall.Entity != p.Body && wall.Normal.Y < 0.7f)
+			{
+				p.Velocity = Vector3.Zero;
+				step = Vector3.Zero;
+				len = 0.0f;
+			}
+		}
+		Vector3 next = p.Center + step + new Vector3(0.0f, p.VelocityY * dt, 0.0f);
+		// The arc tops out ~3 m up: probe well below it. ponytail: over a void (nothing within 40 m)
+		// it lands level with the ground it left - there is no falling sim below the launch.
+		float floor = Ground(next, p.Radius, MathF.Max(next.Y, p.Center.Y) + 1.0f, p.Body, crash, out _, 40.0f) ?? p.LaunchFloor;
+		if (p.VelocityY < 0.0f && next.Y <= floor + p.RestHeight)
+		{
+			next.Y = floor + p.RestHeight;
+			p.VelocityY = 0.0f;
+			p.Airborne = false;
+		}
+		Place(p, next, dir, len);
+	}
+
+	private static void Place(Pushable p, Vector3 next, Vector3 dir, float len)
+	{
 		p.Center = next;
 		p.Body.Position = next;
 		p.Model.Position = next + p.ModelOffset;
-		if (p.Rolls)
+		if (p.Rolls && len > 1e-5f)
 		{
 			Vector3 axis = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, dir));
 			p.Roll = Quaternion.Normalize(Quaternion.Concatenate(p.Roll, Quaternion.CreateFromAxisAngle(axis, len / p.Radius)));
@@ -244,7 +345,7 @@ public sealed partial class TwinsanityActors
 	// capsule) is not ground. Returns the highest hit and the height gradient (dh/dx, dh/dz).
 	// ponytail: four rim samples - a ball resting on a crest between them reads slightly low; upgrade
 	// to a shape cast that can filter the body out.
-	private static float? Ground(Vector3 center, float radius, float fromY, Entity self, Entity crash, out Vector2 grad)
+	private static float? Ground(Vector3 center, float radius, float fromY, Entity self, Entity crash, out Vector2 grad, float reach = 1.5f)
 	{
 		float r = radius + 0.05f;
 		Span<float> h = stackalloc float[4];
@@ -253,7 +354,7 @@ public sealed partial class TwinsanityActors
 		for (int i = 0; i < 4; i++)
 		{
 			h[i] = float.NaN;
-			RaycastHit hit = Physics.Raycast(new Vector3(center.X + offsets[i].X, fromY, center.Z + offsets[i].Y), -Vector3.UnitY, fromY - center.Y + radius + 1.5f);
+			RaycastHit hit = Physics.Raycast(new Vector3(center.X + offsets[i].X, fromY, center.Z + offsets[i].Y), -Vector3.UnitY, fromY - center.Y + radius + reach);
 			bool ignored = hit.Entity == self || hit.Entity == crash;
 			if (hit.DidHit && !ignored && hit.Position.Y < center.Y)
 			{
