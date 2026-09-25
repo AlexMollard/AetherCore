@@ -43,4 +43,8 @@ public static class CharacterController
 
     /// <summary>Surface normal of the ground the character is standing on (world up when airborne).</summary>
     public static Vector3 GetGroundNormal(Entity entity) => Native.aether_character_get_ground_normal(entity.Id);
+
+    /// <summary>The entity the character is standing on or touching as ground, including steep
+    /// ground (invalid when airborne) - for surface rules such as deadly ground.</summary>
+    public static Entity GetGroundEntity(Entity entity) => new(Native.aether_character_get_ground_entity(entity.Id));
 }

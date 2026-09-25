@@ -1336,6 +1336,10 @@ internal static unsafe partial class Native
 
     [LibraryImport(Lib)]
     [SuppressGCTransition]
+    internal static partial uint aether_character_get_ground_entity(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
     internal static partial Vector3 aether_get_forward(uint id);
 
     [LibraryImport(Lib)]

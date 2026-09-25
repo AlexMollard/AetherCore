@@ -126,3 +126,12 @@ AE_SCRIPT_API Vec3 aether_character_get_ground_normal(std::uint32_t id)
 	return cc != nullptr ? FromGlm(cc->groundNormal) : Vec3{0.0f, 1.0f, 0.0f};
 	});
 }
+
+AE_SCRIPT_API std::uint32_t aether_character_get_ground_entity(std::uint32_t id)
+{
+	return SafeExport([&] -> std::uint32_t
+	{
+	const auto* cc = ActiveWorld().TryGet<aether::CharacterControllerComponent>(aether::Entity{id});
+	return cc != nullptr ? cc->groundEntity : 0u;
+	});
+}

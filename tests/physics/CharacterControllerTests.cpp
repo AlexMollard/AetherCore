@@ -214,6 +214,31 @@ TEST_CASE("A teleport request moves a simulated character to its transform and s
 	CHECK_FALSE(fx.ControllerOf(player).teleportPending);
 }
 
+// Surface rules ("the sea drowns you") ask which entity the character stands on. A ray cast
+// from the feet cannot answer it: from inside the capsule it hits the character's own inner
+// body, from just below it misses a plane the feet rest level with.
+TEST_CASE("A character reports the entity it stands on as ground, and none in the air")
+{
+	CharacterFixture fx;
+	const aether::Entity other = fx.MakeStaticBox({20.0f, -0.5f, 0.0f}, {5.0f, 0.5f, 5.0f});
+	const aether::Entity floor = fx.MakeStaticBox({0.0f, -0.5f, 0.0f}, {5.0f, 0.5f, 5.0f});
+	const aether::Entity player = fx.MakeCharacter({0.0f, 0.5f, 0.0f});
+	fx.StepSeconds(1.0f);
+	REQUIRE(fx.ControllerOf(player).isGrounded);
+	CHECK(fx.ControllerOf(player).groundEntity == floor.id);
+	CHECK(fx.ControllerOf(player).groundEntity != other.id);
+
+	fx.world.Get<aether::TransformComponent>(player).localToWorld = aether::ComposeTransform({0.0f, 10.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f});
+	fx.ControllerOf(player).teleportPending = true;
+	// Updates too short to step: the teleport is flushed, but the outputs are re-synced from the
+	// last (pre-teleport) step, so a stale "still on the floor" would show here (a respawn out of
+	// the sea drowned twice).
+	fx.physics->Update(fx.world, aether::PhysicsSystem::kFixedTimestep * 0.25f);
+	fx.physics->Update(fx.world, aether::PhysicsSystem::kFixedTimestep * 0.25f);
+	CHECK(fx.ControllerOf(player).groundEntity == 0u);
+	CHECK_FALSE(fx.ControllerOf(player).isGrounded);
+}
+
 // Proves the Jolt inner rigid body (CharacterVirtualSettings::mInnerBodyShape, see
 // FlushPendingCharacters): without it, a character is invisible to Jolt's own rigid-body
 // integration - nothing stops a fast dynamic body's own sweep, because there is nothing in

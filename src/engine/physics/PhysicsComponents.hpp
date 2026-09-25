@@ -311,6 +311,9 @@ namespace aether
 		glm::vec3 velocity{0.0f, 0.0f, 0.0f};
 		bool isGrounded = false;
 		glm::vec3 groundNormal{0.0f, 1.0f, 0.0f};
+		// Entity whose body the character is standing on or touching as ground (0 in the air):
+		// what a surface-type rule such as "the sea drowns you" asks.
+		std::uint32_t groundEntity = 0;
 	};
 
 	// Marks one dynamic RigidBodyComponent/ColliderComponent entity as a bone of a

@@ -704,6 +704,7 @@ namespace aether
 			const Impl::LiveCharacter& live = it->second;
 			cc.isGrounded = live.io.isGrounded;
 			cc.groundNormal = live.io.groundNormal;
+			cc.groundEntity = live.io.groundEntity;
 			cc.velocity = live.io.velocity;
 
 			// The script's transform write is the teleport target until FlushPendingCharacters
@@ -1250,6 +1251,16 @@ namespace aether
 						const glm::vec3 target = ExtractPosition(*tc);
 						live.character->SetPosition(ToJolt(target));
 						live.character->SetLinearVelocity(JPH::Vec3::sZero());
+						// The outputs still describe the old position until the next step; a
+						// respawn out of the sea read "standing on the drowning plane" and died
+						// again. Clear the live copy too: a frame with no step re-syncs it.
+						for (CharacterControllerComponent* out: {&cc, &live.io})
+						{
+							out->isGrounded = false;
+							out->groundNormal = glm::vec3(0.0f, 1.0f, 0.0f);
+							out->groundEntity = 0;
+							out->velocity = glm::vec3(0.0f);
+						}
 						if (auto* state = reg.try_get<PhysicsStateComponent>(enttEntity))
 						{
 							state->prevPosition = target;
@@ -1368,6 +1379,7 @@ namespace aether
 				// FlushPendingCharacters this frame - nothing to integrate.
 				io.isGrounded = false;
 				io.groundNormal = glm::vec3(0.0f, 1.0f, 0.0f);
+				io.groundEntity = 0;
 				io.velocity = glm::vec3(0.0f);
 				continue;
 			}
@@ -1451,6 +1463,10 @@ namespace aether
 
 			io.isGrounded = character->GetGroundState() == JPH::CharacterBase::EGroundState::OnGround;
 			io.groundNormal = FromJolt(character->GetGroundNormal());
+			// Body user data is the owning entity id (see CastRay); steep ground counts too.
+			io.groundEntity = character->GetGroundState() != JPH::CharacterBase::EGroundState::InAir
+				? static_cast<std::uint32_t>(character->GetGroundUserData())
+				: 0u;
 			io.velocity = FromJolt(character->GetLinearVelocity());
 		}
 	}
