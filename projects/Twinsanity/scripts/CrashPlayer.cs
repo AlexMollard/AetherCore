@@ -953,7 +953,8 @@ public sealed class CrashPlayer : EntityScript
 			// The drowning body floats up to the surface while the controller stays on the
 			// drowning plane below (StepDeath advances the lift; PlaceModel would otherwise
 			// overwrite the model position every frame).
-			_deathLift = Math.Clamp(_deathLift + DrownRiseSpeed * Math.Max(deltaTime, 1.0f / 60.0f), 0.0f, DrownSurfaceY - Self.Position.Y);
+			// Above the surface already (a drown kind triggered from higher up): no rise, not an inverted clamp.
+			_deathLift = Math.Clamp(_deathLift + DrownRiseSpeed * Math.Max(deltaTime, 1.0f / 60.0f), 0.0f, Math.Max(0.0f, DrownSurfaceY - Self.Position.Y));
 			_model.Position = new Vector3(Self.Position.X, Self.Position.Y + _deathLift, Self.Position.Z);
 		}
 		_model.EulerDegrees = new Vector3(0.0f, _modelYaw + ModelYawOffset, 0.0f);
