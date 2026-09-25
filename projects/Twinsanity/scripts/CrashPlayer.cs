@@ -455,6 +455,7 @@ public sealed class CrashPlayer : EntityScript
 		else if (spin && _spinCooldown <= 0.0f && _state is State.Ground or State.Air)
 		{
 			_spinTime = _spinLength;
+			TwinsanityAudio.Spin();
 			// The solo OnSpin script plays no clip; the game poses him itself. On the rig
 			// (logs/spindeath/rig_spin_*_sheet.png) the body holds one arms-out pose for the whole
 			// spin, standing or running - a015's first frame, which the recovery then plays on
@@ -586,6 +587,7 @@ public sealed class CrashPlayer : EntityScript
 					_vy = _doubleJumpHeight;
 					_arc = Arc.DoubleJump;
 					Play("a021", false);
+					TwinsanityAudio.DoubleJump();
 				}
 				else if (jump)
 				{
@@ -684,6 +686,7 @@ public sealed class CrashPlayer : EntityScript
 		_doubleJumped = false;
 		Enter(State.Air);
 		Play(clip, false);
+		TwinsanityAudio.Jump();
 	}
 
 	/// <summary>

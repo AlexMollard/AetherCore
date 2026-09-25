@@ -157,6 +157,7 @@ public static class CrateFx
 			}
 		}
 		s_squashes.Add(new Squash { Model = crateModel, T = 0.0f });
+		TwinsanityAudio.CrateBounce(crateModel.Position, objectId);
 	}
 
 	/// <summary>
@@ -171,6 +172,7 @@ public static class CrateFx
 			return;
 		}
 		ShowState(crateModel, objectId, 2);
+		TwinsanityAudio.Checkpoint(crateModel.Position);
 		After(crateModel, PlayOnce(crateModel, "a005"), m => ShowState(m, objectId, 3));
 	}
 
@@ -221,6 +223,7 @@ public static class CrateFx
 			return;
 		}
 		crateModel.Scale = Vector3.One; // drop any squash / shiver in progress
+		TwinsanityAudio.CrateBreak(crateModel.Position, objectId);
 		// COM_*_CRATE_BREAK's DoParticle(0): the star-sparkle burst plays alongside the plank rig.
 		CrateBreakSparkle(crateModel.Position + new Vector3(0.0f, 0.75f, 0.0f));
 		bool explosive = objectId is 4 or 5;
@@ -369,6 +372,7 @@ public static class CrateFx
 	{
 		Vector3 center = position + new Vector3(0.0f, 0.5f, 0.0f);
 		bool nitro = objectId == 4;
+		TwinsanityAudio.Explosion(center);
 		// 1A: the slow smoke/puff column. 1B: the fast spark/fire jet. 1C: the big flash.
 		if (nitro)
 		{
@@ -543,6 +547,7 @@ public static class CrateFx
 					n.Hopping = true;
 					n.Vy = 7.0f;
 					n.HopT = 0.0f;
+					TwinsanityAudio.NitroHop(n.Model.Position);
 				}
 				continue;
 			}
@@ -586,6 +591,7 @@ public static class CrateFx
 				ShowState(t.Model, t.ObjectId, nowState);
 				if (nowState < 6)
 				{
+					TwinsanityAudio.TntTick(t.Model.Position);
 				}
 			}
 		}

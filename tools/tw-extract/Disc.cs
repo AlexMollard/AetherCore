@@ -44,6 +44,11 @@ namespace TwExtract
 
 		public void Dispose() => m_iso.Dispose();
 
+		// Files outside CRASH.BD (the music/voice streams under /CRASH6/).
+		public byte[] ReadIsoFile(string path) => ReadIsoFile(IsoFiles(), path);
+
+		public byte[] ReadIsoRange(string path, long offset, int size) => ReadAt((long)IsoFiles()[path].Lba * Sector + offset, size);
+
 		Dictionary<string, (uint Lba, uint Size)> IsoFiles()
 		{
 			var outFiles = new Dictionary<string, (uint, uint)>(StringComparer.OrdinalIgnoreCase);

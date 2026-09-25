@@ -277,6 +277,7 @@ public sealed partial class TwinsanityActors
 			PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
 			SetLooping(a.Model, false);
 			a.DeathTimer = a.DeathClip >= 0 ? 1.0f : 0.6f;
+			TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, a.Model.Position);
 			_host?.AddWumpa(1);
 		}
 		else

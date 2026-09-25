@@ -1,6 +1,6 @@
 // tw-extract - Crash Twinsanity (PAL, SLES-52568) disc -> glTF + PNG for projects/Twinsanity/assets.
 //
-//   tw-extract --iso <original.iso> [--out projects/Twinsanity/assets] [--cache <dir>] [--only <substring>]
+//   tw-extract --iso <original.iso> [--out projects/Twinsanity/assets] [--cache <dir>] [--only <substring>] [--music <n,n,...|all>]
 //
 // Output (all gitignored - ISO-derived content never enters the repo, see docs/twinsanity-editor.md).
 // Models live under models/ because that is what AssetPacker bake-all (and the build's auto-bake) bakes.
@@ -16,6 +16,8 @@
 //   ui/titles/<Language>/<Level>_00.png                  level title badges (Language/Titles), GS-brightened
 //   ui/text/<Language>.txt                               menu strings (Language/Code)
 //   ui/fonts/<font>_NN.png, <font>/<code>.png, <font>.font.json   bitmap fonts (Startup/Fonts/*.psf): pages, glyphs, metrics
+//   audio/sfx/<Area>/<Level>/<id>.wav, sounds.json      a level's sound bank (eng_<id>.wav = English voice) + who plays what
+//   audio/music/track_<n>.wav                            MUSIC.MH streams the extracted levels start, plus any --music tracks
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,6 +40,8 @@ namespace TwExtract
 		// but defined once, in Startup. ID -> { name, model } across every archive, first definition wins.
 		static readonly SortedDictionary<uint, Dictionary<string, object>> s_objectTable = new SortedDictionary<uint, Dictionary<string, object>>();
 		static int s_scenery, s_objects, s_images, s_failed;
+		// Music tracks the extracted levels' scripts start (BeginMusic), exported once at the end.
+		static readonly HashSet<int> s_musicTracks = new HashSet<int>();
 
 		static int Main(string[] args)
 		{
@@ -52,8 +56,21 @@ namespace TwExtract
 					case "--out": s_out = Next(); break;
 					case "--cache": cache = Next(); break;
 					case "--only": only = Next(); break;
+					case "--music":
+						foreach (string t in Next().Split(','))
+						{
+							if (t == "all")
+							{
+								s_musicTracks.UnionWith(Enumerable.Range(0, 256));
+							}
+							else
+							{
+								s_musicTracks.Add(int.Parse(t));
+							}
+						}
+						break;
 					default:
-						Console.Error.WriteLine("usage: tw-extract --iso <original.iso> [--out <assets dir>] [--cache <dir>] [--only <substring>]");
+						Console.Error.WriteLine("usage: tw-extract --iso <original.iso> [--out <assets dir>] [--cache <dir>] [--only <substring>] [--music <n,n,...|all>]");
 						return 2;
 				}
 			}
@@ -80,7 +97,8 @@ namespace TwExtract
 					string name = entry.Name.Replace('\\', '/');
 					string ext = Path.GetExtension(name).ToLowerInvariant();
 					bool text = ext == ".txt" && name.StartsWith("Language/Code/", StringComparison.OrdinalIgnoreCase);
-					if ((ext != ".sm2" && ext != ".rm2" && ext != ".psm" && ext != ".psf" && ext != ".ptc" && !text) || (only != null && name.IndexOf(only, StringComparison.OrdinalIgnoreCase) < 0))
+					bool frontend = name.Equals("Startup/Frontend.bin", StringComparison.OrdinalIgnoreCase);
+					if ((ext != ".sm2" && ext != ".rm2" && ext != ".psm" && ext != ".psf" && ext != ".ptc" && !text && !frontend) || (only != null && name.IndexOf(only, StringComparison.OrdinalIgnoreCase) < 0))
 					{
 						continue;
 					}
@@ -93,7 +111,7 @@ namespace TwExtract
 					try
 					{
 						Console.SetOut(TextWriter.Null); // the library prints load chatter
-						string result = ext == ".sm2" ? Scenery(local, name) : ext == ".rm2" ? Rm2(local, name) : ext == ".psf" ? Font(local, name) : text ? Strings(local, name) : Images(local, name);
+						string result = frontend ? AudioExport.Frontend(local, s_out) : ext == ".sm2" ? Scenery(local, name) : ext == ".rm2" ? Rm2(local, name) : ext == ".psf" ? Font(local, name) : text ? Strings(local, name) : Images(local, name);
 						Console.SetOut(stdout);
 						Console.WriteLine($"{name}: {result}");
 					}
@@ -103,6 +121,10 @@ namespace TwExtract
 						s_failed++;
 						Console.Error.WriteLine($"{name}: FAILED {e.GetType().Name}: {e.Message}");
 					}
+				}
+				if (s_musicTracks.Count > 0)
+				{
+					Console.WriteLine(AudioExport.Music(disc, s_out, s_musicTracks));
 				}
 			}
 			// Only a whole-disc run sees every definition; a partial table would silently lose objects.
@@ -335,7 +357,8 @@ namespace TwExtract
 			{
 				particles = ", " + ParticlePages(file, gfx);
 			}
-			return objects + particles + ", " + LevelExport.Write(file, Path.ChangeExtension(path, ".sm2"), LevelPath(archiveName), s_out, models);
+			return objects + particles + ", " + LevelExport.Write(file, Path.ChangeExtension(path, ".sm2"), LevelPath(archiveName), s_out, models)
+				+ ", " + AudioExport.Write(file, LevelPath(archiveName), s_out, s_musicTracks);
 		}
 
 		// ParticleData's three texture pages -> assets/particles/particle_page_<n>.png. The

@@ -185,6 +185,7 @@ public sealed class TwinsanityPause
 					_phase = Phase.Opening;
 					_phaseTime = 0.0f;
 					Time.Pause(); // gameplay freezes; this menu keeps animating unscaled
+					TwinsanityAudio.PauseOpened();
 					// The press that opened the menu is still down next frame: Escape is also Back
 					// and would close it again at once. Every menu button starts latched, so only a
 					// fresh press acts.
@@ -216,6 +217,7 @@ public sealed class TwinsanityPause
 				_selected = DefaultItem;
 				SetVisible(false);
 				Time.Resume();
+				TwinsanityAudio.PauseClosed();
 				_justClosed = true;
 				return;
 		}
@@ -246,6 +248,11 @@ public sealed class TwinsanityPause
 		{
 			// OPTIONS / SAVE / LOAD / QUIT have no target in this single-level build: like
 			// RESUME (and Start / Back) they close the menu. DISABLE AUTOSAVE is unreachable.
+			// Rig: Start closes in silence; a confirmed item plays the select sound.
+			if (confirm && !_latched[3])
+			{
+				TwinsanityAudio.MenuSelect();
+			}
 			_phase = Phase.Closing;
 			_phaseTime = 0.0f;
 		}
@@ -261,6 +268,10 @@ public sealed class TwinsanityPause
 			i = (i + dir + ItemLines.Length) % ItemLines.Length;
 			if (i != GreyedItem)
 			{
+				if (_selected != i)
+				{
+					TwinsanityAudio.MenuMove();
+				}
 				_selected = i;
 				return;
 			}

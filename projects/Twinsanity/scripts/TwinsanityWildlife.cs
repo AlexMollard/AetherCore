@@ -438,6 +438,7 @@ public sealed partial class TwinsanityActors
 				PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
 				SetLooping(a.Model, false);
 				a.DeathTimer = 1.0f;
+				TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, p);
 			}
 		}
 	}
@@ -543,6 +544,7 @@ public sealed partial class TwinsanityActors
 					float ang = RandomRange(0.0f, MathF.PI * 2.0f);
 					c.Target = new Vector3(MathF.Cos(ang), 0.0f, MathF.Sin(ang));
 					c.Mode = Mode.Climb;
+					TwinsanityAudio.Creature(TwinsanityAudio.Call.GullTakeOff, a.Model.Position);
 					PlayClip(a, c.ClimbClip);
 					FaceMovement(a, c.Target);
 					break;
@@ -743,6 +745,7 @@ public sealed partial class TwinsanityActors
 				Vector3 at = c.Points.Count > 0 ? c.Points[_rng.Next(c.Points.Count)] : a.Home;
 				c.Target = at + new Vector3(RandomRange(-1.0f, 1.0f), 0.0f, RandomRange(-1.0f, 1.0f));
 				c.Mode = Mode.Walk;
+				TwinsanityAudio.Creature(TwinsanityAudio.Call.Cluck, a.Model.Position);
 				c.Timer = 2.5f;
 			}
 			return;
@@ -768,6 +771,7 @@ public sealed partial class TwinsanityActors
 				if (c.Timer >= c.NoticeDelay)
 				{
 					c.Mode = Mode.Charge;
+					TwinsanityAudio.Creature(TwinsanityAudio.Call.CrabCharge, a.Model.Position);
 					break;
 				}
 				// Rig (crab2_wander.csv): with Crash out of range the crabs do not stand still -
@@ -826,6 +830,7 @@ public sealed partial class TwinsanityActors
 			PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
 			SetLooping(a.Model, false);
 			a.DeathTimer = 1.0f;
+			TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, p);
 		}
 		else
 		{
@@ -844,6 +849,7 @@ public sealed partial class TwinsanityActors
 				if (d < WormPopRadius)
 				{
 					c.Mode = Mode.Up;
+					TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);
 					PlayClip(a, c.PopClip);
 				}
 				// Rig: 3.68 -> 6.18 in 0.25 s up, 0.2 s down.
@@ -901,6 +907,7 @@ public sealed partial class TwinsanityActors
 					float ang = RandomRange(0.0f, MathF.PI * 2.0f);
 					c.Target = a.Home + new Vector3(MathF.Cos(ang), 0.0f, MathF.Sin(ang)) * RandomRange(0.0f, 4.0f);
 					c.Mode = Mode.Walk;
+					TwinsanityAudio.Creature(TwinsanityAudio.Call.Chatter, a.Model.Position);
 				}
 				break;
 			case Mode.Walk:
@@ -929,6 +936,7 @@ public sealed partial class TwinsanityActors
 				if (a.Model.Position.Y >= c.Tree.Y + MonkeyTreeTop)
 				{
 					c.Mode = Mode.Shake;
+					TwinsanityAudio.Creature(TwinsanityAudio.Call.TreeShake, a.Model.Position);
 					c.Timer = 7.0f; // rig m28: 39.9 s -> 47.0 s in the tree
 					PlayClip(a, c.ShakeClip);
 				}
@@ -987,6 +995,7 @@ public sealed partial class TwinsanityActors
 				if (c.Timer <= 0.0f)
 				{
 					c.Mode = Mode.Throw;
+					TwinsanityAudio.Creature(TwinsanityAudio.Call.Throw, a.Model.Position);
 					c.Timer = 0.4f;
 					PlayClip(a, c.ThrowClip);
 					FaceMovement(a, crashPos - p);

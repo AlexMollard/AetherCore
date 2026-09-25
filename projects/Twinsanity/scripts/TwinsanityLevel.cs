@@ -139,6 +139,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		CrateFx.RegisterObjectModels(_objectModels);
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
+		TwinsanityAudio.Start(LevelPath);
 		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
 		// summary has the rig evidence for when the original shows it.
 	}
@@ -166,6 +167,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 
 		_fruit.Update(deltaTime, _crash.Position);
+		TwinsanityAudio.Update(deltaTime, _player!);
 		UpdateFuses(deltaTime);
 		UpdateStacks(deltaTime);
 		DebugWarpPoll(deltaTime);
@@ -432,10 +434,12 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	public void AddWumpa(int count)
 	{
 		_wumpaCount += count;
+		TwinsanityAudio.Wumpa();
 		while (_wumpaCount >= 100)
 		{
 			_wumpaCount -= 100;
 			_lives++;
+			TwinsanityAudio.ExtraLife();
 		}
 	}
 
@@ -643,6 +647,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				break;
 			case Kind.ExtraLife:
 				_lives++;
+				TwinsanityAudio.ExtraLife();
 				break;
 			case Kind.AkuAku:
 				_aku = Math.Min(_aku + 1, 2);
