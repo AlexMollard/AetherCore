@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <future>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -20,7 +21,8 @@
 
 namespace aether::editor
 {
-	// file operations, and on a staleness timer) - never walked per frame. Rows
+	// file operations synchronously, and on a staleness timer on a worker thread) - never
+	// walked per frame. Rows
 	class FileExplorerPanel final : public DebugPanel
 	{
 	public:
@@ -119,9 +121,21 @@ namespace aether::editor
 			bool resolved = false;
 		};
 
+		// One full walk of the project tree. Pure: touches no panel state, so the staleness
+		// rescan can run it on a worker while the editor keeps drawing.
+		struct ScanResult
+		{
+			Entry tree;
+			int fileCount = 0;
+			int dirCount = 0;
+			std::string error;
+		};
+
 		void RefreshRoot(app::LayerContext& context);
 		void RescanTree();
-		void ScanDirectory(const std::filesystem::path& dir, Entry& out, int depth);
+		void ApplyScan(ScanResult&& result);
+		static ScanResult ScanProject(const std::filesystem::path& root, const std::string& name, bool rootAvailable);
+		static void ScanDirectory(const std::filesystem::path& dir, const std::filesystem::path& root, Entry& out, int depth, ScanResult& result);
 
 		void DrawToolbar(app::LayerContext& context);
 		// Left pane: folders only. Files live in the contents pane, so the tree stays a map of
@@ -222,6 +236,11 @@ namespace aether::editor
 		int m_fileCount = 0;
 		int m_dirCount = 0;
 		std::string m_scanError;
+		// The staleness rescan in flight, if any. A synchronous RescanTree bumps the
+		// generation, so a worker scan started before it can never overwrite the newer tree.
+		std::future<ScanResult> m_pendingScan;
+		std::uint64_t m_scanGeneration = 0;
+		std::uint64_t m_pendingScanGeneration = 0;
 
 		std::filesystem::path m_currentDir;
 		// Set by a tile and applied after the grid is drawn: opening a folder drops the

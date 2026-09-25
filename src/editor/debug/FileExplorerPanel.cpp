@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstdio>
 #include <string>
 #include <string_view>
@@ -491,22 +492,37 @@ namespace aether::editor
 	void FileExplorerPanel::RescanTree()
 	{
 		AE_PROFILE_ZONE();
-		m_tree = Entry{};
-		m_tree.path = m_root;
-		m_tree.name = m_projectName;
-		m_tree.isDirectory = true;
-		m_fileCount = 0;
-		m_dirCount = 0;
-		m_scanError.clear();
-		if (m_rootAvailable)
-		{
-			ScanDirectory(m_root, m_tree, 0);
-		}
+		// Anything still running on the worker walked the tree before whatever made this
+		// synchronous rescan necessary; its result is stale the moment this one lands.
+		++m_scanGeneration;
+		ApplyScan(ScanProject(m_root, m_projectName, m_rootAvailable));
+	}
+
+	void FileExplorerPanel::ApplyScan(ScanResult&& result)
+	{
+		m_tree = std::move(result.tree);
+		m_fileCount = result.fileCount;
+		m_dirCount = result.dirCount;
+		m_scanError = std::move(result.error);
 		m_lastScanTime = ImGui::GetTime();
 		m_treeDirty = false;
 	}
 
-	void FileExplorerPanel::ScanDirectory(const std::filesystem::path& dir, Entry& out, const int depth)
+	FileExplorerPanel::ScanResult FileExplorerPanel::ScanProject(const std::filesystem::path& root, const std::string& name, const bool rootAvailable)
+	{
+		AE_PROFILE_ZONE();
+		ScanResult result;
+		result.tree.path = root;
+		result.tree.name = name;
+		result.tree.isDirectory = true;
+		if (rootAvailable)
+		{
+			ScanDirectory(root, root, result.tree, 0, result);
+		}
+		return result;
+	}
+
+	void FileExplorerPanel::ScanDirectory(const std::filesystem::path& dir, const std::filesystem::path& root, Entry& out, const int depth, ScanResult& result)
 	{
 		if (depth > kMaxScanDepth)
 		{
@@ -537,7 +553,7 @@ namespace aether::editor
 		}
 		if (ec)
 		{
-			m_scanError = "Some entries could not be read (" + ec.message() + ").";
+			result.error = "Some entries could not be read (" + ec.message() + ").";
 		}
 
 		const auto byNameNoCase = [](const auto& a, const auto& b)
@@ -556,8 +572,8 @@ namespace aether::editor
 			e.path = child.path();
 			e.name = child.path().filename().generic_string();
 			e.isDirectory = true;
-			++m_dirCount;
-			ScanDirectory(child.path(), e, depth + 1);
+			++result.dirCount;
+			ScanDirectory(child.path(), root, e, depth + 1, result);
 			out.children.push_back(std::move(e));
 		}
 		for (const auto& file: files)
@@ -575,16 +591,18 @@ namespace aether::editor
 			}
 
 			e.payloadPath = ToUtf8Path(e.path);
-			if (e.kind != dragdrop::FileKind::Script && !m_root.empty())
+			if (e.kind != dragdrop::FileKind::Script && !root.empty())
 			{
-				std::error_code relEc;
-				const std::filesystem::path relative = std::filesystem::relative(e.path, m_root, relEc);
-				if (!relEc && IsSubpath(relative))
+				// e.path descends from root by construction, so the lexical form is exact.
+				// std::filesystem::relative canonicalises both paths with several syscalls per
+				// file, which made each rescan of a ~23k-file project take ~1.6 s.
+				const std::filesystem::path relative = e.path.lexically_relative(root);
+				if (!relative.empty() && IsSubpath(relative))
 				{
 					e.payloadPath = "project://" + relative.generic_string();
 				}
 			}
-			++m_fileCount;
+			++result.fileCount;
 			out.children.push_back(std::move(e));
 		}
 	}
@@ -1172,9 +1190,23 @@ namespace aether::editor
 			}
 		}
 
-		if (!m_treeDirty && ImGui::GetTime() - m_lastScanTime > kAutoRescanSeconds)
+		// Staleness rescan: walk on a worker and swap the tree in on a later frame. Walking a
+		// large project here stalled the whole editor every kAutoRescanSeconds.
+		if (m_pendingScan.valid())
 		{
-			m_treeDirty = true;
+			if (m_pendingScan.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+			{
+				ScanResult result = m_pendingScan.get();
+				if (m_pendingScanGeneration == m_scanGeneration && !m_treeDirty)
+				{
+					ApplyScan(std::move(result));
+				}
+			}
+		}
+		else if (!m_treeDirty && ImGui::GetTime() - m_lastScanTime > kAutoRescanSeconds)
+		{
+			m_pendingScanGeneration = m_scanGeneration;
+			m_pendingScan = std::async(std::launch::async, &FileExplorerPanel::ScanProject, m_root, m_projectName, m_rootAvailable);
 		}
 		if (m_treeDirty)
 		{
