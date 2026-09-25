@@ -33,9 +33,9 @@ public sealed partial class TwinsanityActors
 		Flock,     // bird clump: its birds fly the clump's path
 		Chicken,   // coop chickens: peck about, bolt from Crash
 		Crab,      // notices Crash, charges him
+		Skunk,     // turns angry and charges Crash
 		Worm,      // fixed pop-up worm
 		Monkey,    // throws fruit from its tree at Crash
-		Panicker,  // idles, runs away from Crash inside its panic radius
 		Enemy,     // chases Crash when close; touch hurts, spin/jump/slam kills it
 		Pickup,    // spins; collected on touch
 		Prop,      // plays its idle clip in place
@@ -53,7 +53,6 @@ public sealed partial class TwinsanityActors
 		public bool Alive = true;
 		public float DeathTimer = -1.0f;
 		public float Angle;      // bat orbit phase
-		public bool Fleeing;     // panicker
 		public Critter? Critter;
 	}
 
@@ -65,7 +64,6 @@ public sealed partial class TwinsanityActors
 	// ponytail: speeds/radii are not in the extracted data (instance floats encode something
 	// else); these are play-tuned approximations of the original scripts. Upgrade path: dump
 	// each object's behaviour script (logs/crashanims.ps1) and read the real constants.
-	private const float PanicRadius = 3.0f;
 	private const float ChaseRadius = 6.0f;
 	private const float EnemyHitRadius = 1.2f;
 	private const float PickupRadius = 1.3f;
@@ -129,7 +127,7 @@ public sealed partial class TwinsanityActors
 			_pickups.Add(a);
 		}
 		if (a.Kind is Behaviour.Seagull or Behaviour.Butterfly or Behaviour.Flock or Behaviour.Chicken
-			or Behaviour.Crab or Behaviour.Worm or Behaviour.Monkey)
+			or Behaviour.Crab or Behaviour.Skunk or Behaviour.Worm or Behaviour.Monkey)
 		{
 			SetupCritter(a, objectName, instance, transform);
 			if (a.Kind == Behaviour.Flock)
@@ -167,9 +165,6 @@ public sealed partial class TwinsanityActors
 				case Behaviour.Flyer:
 					UpdateFlyer(a, dt);
 					break;
-				case Behaviour.Panicker:
-					UpdatePanicker(a, dt, crashPos);
-					break;
 				case Behaviour.Enemy:
 					UpdateEnemy(a, dt, crashPos);
 					break;
@@ -189,6 +184,7 @@ public sealed partial class TwinsanityActors
 					UpdateChicken(a, a.Critter!, dt, crashPos);
 					break;
 				case Behaviour.Crab:
+				case Behaviour.Skunk:
 					UpdateCrab(a, a.Critter!, dt, crashPos);
 					break;
 				case Behaviour.Worm:
@@ -230,43 +226,6 @@ public sealed partial class TwinsanityActors
 			a.Model.Position = p + step;
 			FaceMovement(a, step);
 		}
-	}
-
-	private void UpdatePanicker(Actor a, float dt, Vector3 crashPos)
-	{
-		Vector3 p = a.Model.Position;
-		float dx = crashPos.X - p.X, dz = crashPos.Z - p.Z;
-		float distSq = dx * dx + dz * dz;
-		float speed;
-		Vector3 dir;
-		if (distSq < PanicRadius * PanicRadius)
-		{
-			// Run straight away from Crash (chickens squawk and bolt in the original).
-			float dist = MathF.Sqrt(distSq);
-			dir = dist > 0.001f ? new Vector3(-dx / dist, 0.0f, -dz / dist) : new Vector3(0.0f, 0.0f, 1.0f);
-			speed = 3.0f;
-			a.Fleeing = true;
-		}
-		else
-		{
-			Vector3 back = a.Home - p;
-			back.Y = 0.0f;
-			if (a.Fleeing && back.LengthSquared() > 0.25f)
-			{
-				dir = Vector3.Normalize(back);
-				speed = 2.0f;
-			}
-			else
-			{
-				a.Fleeing = false;
-				PlayClip(a, a.IdleClip);
-				return;
-			}
-		}
-		Vector3 step = dir * speed * dt;
-		a.Model.Position = p + step;
-		FaceMovement(a, step);
-		PlayClip(a, a.MoveClip >= 0 ? a.MoveClip : a.IdleClip);
 	}
 
 	private void UpdateEnemy(Actor a, float dt, Vector3 crashPos)
@@ -445,9 +404,9 @@ public sealed partial class TwinsanityActors
 		{
 			return Behaviour.Pickup;
 		}
-		if (n.StartsWith("act_global_skunk") || n.StartsWith("act_earth_emu_farmer") || n.StartsWith("act_coco_creature"))
+		if (n.StartsWith("act_global_skunk"))
 		{
-			return Behaviour.Panicker;
+			return Behaviour.Skunk;
 		}
 		return Behaviour.Prop;
 	}
@@ -474,6 +433,13 @@ public sealed partial class TwinsanityActors
 			|| raw.StartsWith("act_cortex1") || raw.StartsWith("act_cortex2") || raw.StartsWith("act_cortex3")
 			|| n.StartsWith("act_cutscene_extra") || n.StartsWith("act_dummy_frontend")
 			|| n.StartsWith("act_earth_emu_farmer"))
+		{
+			return true;
+		}
+		// Rig (logs/wildlife/orig_coco.png): the COCO_CREATUREs and the training skunk sit in the
+		// "|HubA|HubACutscenes|" group and are not in the world in free roam - Crash stood a
+		// metre from act_COCO_CREATURE3's spot and nothing was there.
+		if (n.StartsWith("act_coco_creature") || n.StartsWith("act_training_cutscene_skunk"))
 		{
 			return true;
 		}

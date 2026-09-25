@@ -13,7 +13,7 @@ namespace AetherGame;
 /// thresholds (MeToPlayerSqrDist) rooted; "rig" values are measured.
 ///
 /// - Seagull: stands and hops around its perch; when Crash comes within 15.5 m (rig) it climbs at
-///   4.97 m/s (4.45 up, 2.2 across) to 12 m above its perch, then circles a 3.15 m radius at
+///   4.97 m/s (4.45 up, 2.2 across) to 12 m above the ground, then circles a 3.15 m radius at
 ///   1.556 rad/s for good. Instances with flag 0x80000 start already circling at perch height.
 /// - Butterfly: straight legs at 3 m/s around its spawn, now and then drops straight down to
 ///   rest on the ground for 7-10 s.
@@ -23,6 +23,8 @@ namespace AetherGame;
 /// - Crab: act_UTIL_ECOLOGY_MANAGER spawns five at the key nearest Crash once he is within
 ///   80 m (script 6400; counter 40 in steps of 8); a crab notices Crash inside 10 m, waits
 ///   3.5 s and then charges at 2.7 m/s (rig) - touching him hurts.
+/// - Skunk: the generic COM_CREATURE_BASIC charger: angry inside 11.2 m, charges, melees
+///   inside 4 m, gives up beyond 17.3 m.
 /// - Worm: fixed in place, 2.5 m under its hole; pops up when Crash is within 14.1 m and sinks
 ///   beyond 13.4 m (script 200 / 180). Landing on a popped worm launches Crash (Mechanics).
 /// - Monkey: when Crash is within 20.6 m (script 425) it climbs its wumpa tree, shakes a fruit
@@ -111,6 +113,7 @@ public sealed partial class TwinsanityActors
 		public Vector3 FruitVelocity;
 		public bool FruitFlying;
 		public float FruitLife;
+		public float Notice, NoticeDelay, GiveUp;
 		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1;
 	}
 
@@ -226,6 +229,18 @@ public sealed partial class TwinsanityActors
 				break;
 			case Behaviour.Crab:
 				c.WalkClip = Animation.Find(e, "a002");
+				c.Notice = CrabNotice;
+				c.NoticeDelay = CrabNoticeDelay;
+				c.GiveUp = CrabGiveUp;
+				c.Mode = Mode.Idle;
+				break;
+			case Behaviour.Skunk:
+				// COM_CREATURE_BASIC_DEFAULT turns angry inside 11.2 m (125); BASIC_ANGRY_CHARGE
+				// gives up beyond 17.3 m (300) and melees (a021) inside 4 m (16).
+				c.WalkClip = Animation.Find(e, "a002");
+				c.ThrowClip = Animation.Find(e, "a021");
+				c.Notice = 11.18f;
+				c.GiveUp = 17.32f;
 				c.Mode = Mode.Idle;
 				break;
 			case Behaviour.Worm:
@@ -425,12 +440,14 @@ public sealed partial class TwinsanityActors
 				Vector3 v = c.Target * GullClimbAcross + new Vector3(0.0f, GullClimbUp, 0.0f);
 				p += v * dt;
 				a.Model.Position = p;
-				if (p.Y >= a.Home.Y + GullCircleHeight)
+				// Rig: g7 and g45 levelled off at exactly 12.00 over flat sand, the others 12-14.5
+				// above their perch - consistent with 12 m above the ground beneath them.
+				if (p.Y - GroundY(p, a.Home.Y) >= GullCircleHeight)
 				{
 					// Level off into a circle tangent to the climb heading.
 					c.Sign = _rng.Next(2) == 0 ? 1.0f : -1.0f;
 					Vector3 side = new(-c.Target.Z * c.Sign, 0.0f, c.Target.X * c.Sign);
-					c.Center = new Vector3(p.X, a.Home.Y + GullCircleHeight, p.Z) + side * GullCircleRadius;
+					c.Center = new Vector3(p.X, p.Y, p.Z) + side * GullCircleRadius;
 					c.Timer = MathF.Atan2(p.Z - c.Center.Z, p.X - c.Center.X);
 					c.Mode = Mode.Circle;
 					PlayClip(a, c.FlyClip);
@@ -604,19 +621,21 @@ public sealed partial class TwinsanityActors
 		{
 			case Mode.Idle:
 				PlayClip(a, a.IdleClip);
-				c.Timer = d < CrabNotice ? c.Timer + dt : 0.0f;
-				if (c.Timer >= CrabNoticeDelay)
+				c.Timer = d < c.Notice ? c.Timer + dt : 0.0f;
+				if (c.Timer >= c.NoticeDelay)
 				{
 					c.Mode = Mode.Charge;
 				}
 				break;
 			case Mode.Charge:
-				if (d > CrabGiveUp)
+				if (d > c.GiveUp)
 				{
 					c.Mode = Mode.Walk;
 					break;
 				}
-				PlayClip(a, c.WalkClip);
+				// ponytail: the skunk's charge speed was not captured (it lives 120 m from the rig's
+				// start); it shares the crab's measured 2.7 m/s. Upgrade path: track one on the rig.
+				PlayClip(a, c.ThrowClip >= 0 && d < 4.0f ? c.ThrowClip : c.WalkClip);
 				if (d > 0.6f)
 				{
 					WalkTo(a, crashPos, CrabSpeed, dt, true);
@@ -748,7 +767,7 @@ public sealed partial class TwinsanityActors
 				if (a.Model.Position.Y >= c.Tree.Y + MonkeyTreeTop)
 				{
 					c.Mode = Mode.Shake;
-					c.Timer = 3.0f;
+					c.Timer = 7.0f; // rig m28: 39.9 s -> 47.0 s in the tree
 					PlayClip(a, c.ShakeClip);
 				}
 				break;
