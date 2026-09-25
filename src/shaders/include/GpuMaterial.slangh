@@ -24,8 +24,7 @@ struct GpuMaterial
     [[vk::offset(60)]] uint   metallicRoughnessSlot;
     [[vk::offset(64)]] uint   occlusionSlot;
     [[vk::offset(68)]] uint   emissiveSlot;
-    [[vk::offset(72)]] uint   _pad0;
-    [[vk::offset(76)]] uint   _pad1;
+    [[vk::offset(72)]] float2 uvScroll; // UV units per second, offset by elapsed time
 };
 
 #endif

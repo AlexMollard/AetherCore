@@ -177,3 +177,41 @@ TEST_CASE("MaterialProcessor accepts TOML integers for numeric material factors"
 		CHECK(c == 1.f);
 	}
 }
+
+// uvScroll was carved from the old header's _pad[11] (size still 64): a header written
+// before the field has zeros there, and zeros mean a static texture - exactly how those
+// files rendered. Covers both the bake of the new key and the read of an old blob.
+TEST_CASE("MaterialProcessor bakes uvScroll and old headers still read as static")
+{
+	SUBCASE("properties.toml uvScroll lands in the header")
+	{
+		const std::string toml =
+		        "[material]\n"
+		        "uvScroll = [0.3, 0.03]\n";
+
+		const assetpipeline::ByteBuffer blob = assetpipeline::MaterialProcessor::Process(ToBytes(toml), "materials/water.material/properties.toml", "materials");
+		REQUIRE_FALSE(blob.empty());
+
+		BinaryReader reader(blob);
+		const auto hdr = reader.Read<MaterialHeaderDisk>();
+		REQUIRE(CheckMagic(hdr));
+		CHECK(hdr.uvScroll[0] == doctest::Approx(0.3f));
+		CHECK(hdr.uvScroll[1] == doctest::Approx(0.03f));
+	}
+
+	SUBCASE("a pre-uvScroll header's pad zeros read as no scroll")
+	{
+		// 64 bytes of a plausible old header: real magic/version, everything else zero.
+		std::vector<std::byte> old(sizeof(MaterialHeaderDisk));
+		MaterialHeaderDisk hdr; // writes current magic/version, uvScroll zeroed too
+		hdr.uvScroll[0] = 0.f;
+		hdr.uvScroll[1] = 0.f;
+		std::memcpy(old.data(), &hdr, sizeof(hdr));
+
+		BinaryReader reader(old);
+		const auto read = reader.Read<MaterialHeaderDisk>();
+		REQUIRE(CheckMagic(read));
+		CHECK(read.uvScroll[0] == 0.f);
+		CHECK(read.uvScroll[1] == 0.f);
+	}
+}

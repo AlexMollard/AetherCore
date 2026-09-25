@@ -61,6 +61,10 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     }
 
     float2 uv = input.uv;
+    // Per-material UV scroll (Twinsanity's sea, waterfalls, sky): the velocity is
+    // UV units per second; fract keeps the offset's mantissa small so hour-long
+    // sessions do not lose precision. The wrap sampler handles the mod.
+    uv += fract(mat.uvScroll * fc->elapsedTime);
 
     // ── Base colour ───────────────────────────────────────────────────────
     float4 baseColor = mat.baseColorFactor;

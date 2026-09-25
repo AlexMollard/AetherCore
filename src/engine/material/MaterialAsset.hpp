@@ -23,6 +23,9 @@ namespace aether
 		bool modulateVertexColor = false;
 		bool receiveShadows = true;
 
+		// UV scroll velocity in UV units per second (Twinsanity sea, waterfalls, sky).
+		glm::vec2 uvScroll{0.0f, 0.0f};
+
 		TextureHandle albedoTex{};
 		TextureHandle normalTex{};
 		TextureHandle metallicRoughnessTex{};

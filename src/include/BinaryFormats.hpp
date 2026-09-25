@@ -144,7 +144,11 @@ struct MaterialHeaderDisk
 	// Multiply base colour by the mesh's COLOR_0 (glTF's rule). Carved from the old padding, so
 	// files written before it read 0 - exactly how they rendered.
 	uint8_t modulateVertexColor = 0;
-	uint8_t _pad[11] = {0};
+	uint8_t _pad0[3] = {0};
+	// UV scroll velocity in UV units per second. Carved from the old padding like
+	// modulateVertexColor: files written before it read {0, 0} - a static texture, which
+	// is exactly how they rendered. Old .material files therefore stay valid unchanged.
+	float uvScroll[2] = {0, 0};
 };
 
 // which only governs the fixed header layout above):

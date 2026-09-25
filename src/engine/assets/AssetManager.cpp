@@ -255,6 +255,7 @@ namespace aether
 					material.alphaBlend = hdr.alphaBlend != 0;
 					material.alphaMask = hdr.alphaMask != 0;
 					material.modulateVertexColor = hdr.modulateVertexColor != 0;
+					material.uvScroll = glm::vec2(hdr.uvScroll[0], hdr.uvScroll[1]);
 
 					for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
 					{
@@ -482,6 +483,7 @@ namespace aether
 				mat.alphaBlend = srcMat.alphaBlend;
 				mat.alphaMask = srcMat.alphaMask;
 				mat.modulateVertexColor = srcMat.modulateVertexColor;
+				mat.uvScroll = srcMat.uvScroll;
 
 				// material's properties.toml. Intern into AssetManager-lifetime
 				if (!srcMat.shaderVfsPath.empty())

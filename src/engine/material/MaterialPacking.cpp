@@ -37,6 +37,7 @@ namespace aether
 			flags |= GpuMaterial::kNoReceiveShadows;
 		}
 		g.flags = flags;
+		g.uvScroll = a.uvScroll;
 
 		auto slotFor = [&textures](const TextureHandle h) -> std::uint32_t
 		{

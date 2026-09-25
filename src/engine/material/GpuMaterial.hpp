@@ -29,7 +29,8 @@ namespace aether
 		std::uint32_t metallicRoughnessSlot{kNoTexture};
 		std::uint32_t occlusionSlot{kNoTexture};
 		std::uint32_t emissiveSlot{kNoTexture};
-		std::uint32_t _pad[2]{0, 0};
+		// UV scroll velocity, UV units per second, added to the sampled UV scaled by frame time.
+		glm::vec2 uvScroll{0.0f, 0.0f};
 
 		bool operator==(const GpuMaterial&) const = default;
 	};
@@ -47,5 +48,5 @@ namespace aether
 	static_assert(offsetof(GpuMaterial, metallicRoughnessSlot) == 60);
 	static_assert(offsetof(GpuMaterial, occlusionSlot) == 64);
 	static_assert(offsetof(GpuMaterial, emissiveSlot) == 68);
-	static_assert(offsetof(GpuMaterial, _pad) == 72);
+	static_assert(offsetof(GpuMaterial, uvScroll) == 72);
 } // namespace aether

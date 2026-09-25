@@ -32,10 +32,13 @@ void AlphaMaskDiscard(uint materialIndex, float2 uv)
     {
         return;
     }
+    // Match the forward pass's UV scroll, so a masked AND scrolling material cuts
+    // out of the same texels it renders (see gltf_mesh.slang).
+    float2 scrolledUv = uv + fract(mat.uvScroll * fc->elapsedTime);
     float alpha = mat.baseColorFactor.a;
     if (mat.albedoSlot != kNoTexture)
     {
-        alpha *= g_textures[mat.albedoSlot].Sample(g_linearSampler, uv).a;
+        alpha *= g_textures[mat.albedoSlot].Sample(g_linearSampler, scrolledUv).a;
     }
     if (alpha < mat.alphaCutoff)
     {

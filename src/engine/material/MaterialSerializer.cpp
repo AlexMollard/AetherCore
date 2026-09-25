@@ -119,6 +119,14 @@ namespace aether
 				        }
 				        return;
 			        }
+			        if (entry.fullKey == "material.uvscroll" || entry.fullKey == "uvscroll")
+			        {
+				        if (const auto parsed = text::ParseFloatArray<2>(entry.value))
+				        {
+					        spec.material.uvScroll = glm::vec2((*parsed)[0], (*parsed)[1]);
+				        }
+				        return;
+			        }
 			        if (entry.fullKey == "material.doublesided" || entry.fullKey == "doublesided")
 			        {
 				        if (const auto parsed = text::ParseBool(entry.value))
@@ -216,6 +224,11 @@ namespace aether
 			out += std::format("roughnessfactor = {}\n", m.roughnessFactor);
 			out += std::format("occlusionstrength = {}\n", m.occlusionStrength);
 			out += std::format("alphacutoff = {}\n", m.alphaCutoff);
+			// Written only when it scrolls, so the common static material's file is unchanged.
+			if (m.uvScroll != glm::vec2(0.0f))
+			{
+				out += std::format("uvscroll = [ {}, {} ]\n", m.uvScroll.x, m.uvScroll.y);
+			}
 			out += std::format("doublesided = {}\n", m.doubleSided ? "true" : "false");
 			out += std::format("alphablend = {}\n", m.alphaBlend ? "true" : "false");
 			out += std::format("alphamask = {}\n", m.alphaMask ? "true" : "false");

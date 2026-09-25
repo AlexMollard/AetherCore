@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include <cstddef>
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialPacking.hpp"
 #include "material/TextureRegistry.hpp"
@@ -52,7 +53,6 @@ TEST_CASE("PackMaterial resolves handles to heap slots and freezes the 80-byte l
     FakeTextureSink texSink(8);
     TextureRegistry tex(texSink);
     static_assert(sizeof(GpuMaterial) == 80);
-
     MaterialAsset a;
     a.albedoTex = tex.Acquire("brick.png");
     const std::uint32_t expected = tex.ResolveSlot(a.albedoTex);
@@ -66,11 +66,25 @@ TEST_CASE("PackMaterial distinguishes a broken (requested-but-missing) map from 
     FakeTextureSink texSink(8);
     TextureRegistry tex(texSink);
     tex.InitializeDefault(TextureResource{99u});
-
     MaterialAsset a;
     a.albedoTex = TextureHandle::Broken();
 
     GpuMaterial g = PackMaterial(a, tex);
     CHECK(g.albedoSlot == 99u);
     CHECK(g.normalSlot == GpuMaterial::kNoTexture);
+}
+
+TEST_CASE("PackMaterial carries the UV scroll velocity at the frozen offset") {
+    FakeTextureSink texSink(8);
+    TextureRegistry tex(texSink);
+
+    MaterialAsset a;
+    a.uvScroll = {0.3f, 0.03f};
+
+    GpuMaterial g = PackMaterial(a, tex);
+    CHECK(g.uvScroll.x == doctest::Approx(0.3f));
+    CHECK(g.uvScroll.y == doctest::Approx(0.03f));
+    // The shader reads uvScroll where the struct's old padding sat; the Slang mirror
+    // must agree or the water scrolls at garbage speed.
+    static_assert(offsetof(GpuMaterial, uvScroll) == 72);
 }

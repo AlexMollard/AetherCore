@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <unordered_map>
@@ -594,6 +595,31 @@ namespace aether::assetpipeline
 				hdr.alphaBlend = (mat.alpha_mode == cgltf_alpha_mode_blend) ? 1 : 0;
 				hdr.alphaMask = (mat.alpha_mode == cgltf_alpha_mode_mask) ? 1 : 0;
 				hdr.modulateVertexColor = MaterialUsesVertexColor(data, mat) ? 1 : 0;
+
+			// tw-extract writes the UV scroll velocity (UV units per second, from the
+			// PS2 material's UV-scroll shader) into the glTF material's extras as
+			// {"uv_scroll":[u,v]}. cgltf keeps extras as raw JSON, so this scans for
+			// the key rather than building a DOM. Absent or malformed = no scroll.
+			{
+				const char* const extras = mat.extras.data;
+				if (extras != nullptr)
+				{
+					const char* const key = std::strstr(extras, "\"uv_scroll\"");
+					if (key != nullptr)
+					{
+						const char* const arr = std::strchr(key + sizeof("\"uv_scroll\""), '[');
+						if (arr != nullptr)
+						{
+							char* end = nullptr;
+							hdr.uvScroll[0] = std::strtof(arr + 1, &end);
+							if (end != nullptr && *end == ',')
+							{
+								hdr.uvScroll[1] = std::strtof(end + 1, nullptr);
+							}
+						}
+					}
+				}
+			}
 
 				struct TexSlot
 				{

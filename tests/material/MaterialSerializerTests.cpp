@@ -17,6 +17,7 @@ namespace
 		spec.material.roughnessFactor = 0.125f;
 		spec.material.occlusionStrength = 0.625f;
 		spec.material.alphaCutoff = 0.375f;
+		spec.material.uvScroll = glm::vec2(0.3f, 0.03f);
 		spec.material.doubleSided = true;
 		spec.material.alphaBlend = true;
 		spec.material.alphaMask = true;
@@ -48,6 +49,8 @@ TEST_CASE("A material survives a TOML round trip unchanged")
 	CHECK(parsed.material.roughnessFactor == doctest::Approx(original.material.roughnessFactor));
 	CHECK(parsed.material.occlusionStrength == doctest::Approx(original.material.occlusionStrength));
 	CHECK(parsed.material.alphaCutoff == doctest::Approx(original.material.alphaCutoff));
+	CHECK(parsed.material.uvScroll.x == doctest::Approx(original.material.uvScroll.x));
+	CHECK(parsed.material.uvScroll.y == doctest::Approx(original.material.uvScroll.y));
 	CHECK(parsed.material.doubleSided == original.material.doubleSided);
 	CHECK(parsed.material.alphaBlend == original.material.alphaBlend);
 	CHECK(parsed.material.alphaMask == original.material.alphaMask);

@@ -80,6 +80,8 @@ namespace aether::assetpipeline
 
 			readFloats("material", "baseColorFactor", baseColor, 4, {1.0, 1.0, 1.0, 1.0});
 			readFloats("material", "emissiveFactor", emissive, 3, {0.0, 0.0, 0.0});
+			float uvScroll[2] = {0, 0};
+			readFloats("material", "uvScroll", uvScroll, 2, {0.0, 0.0});
 
 			{
 				float value = 0.f;
@@ -166,6 +168,7 @@ namespace aether::assetpipeline
 			hdr.alphaBlend = alphaBlend ? 1 : 0;
 			hdr.alphaMask = alphaMask ? 1 : 0;
 			hdr.modulateVertexColor = modulateVertexColor ? 1 : 0;
+			std::memcpy(hdr.uvScroll, uvScroll, sizeof(uvScroll));
 			hdr.texturePathCount = static_cast<uint8_t>(textures.size());
 
 			std::vector<std::byte> out;
