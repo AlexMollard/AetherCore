@@ -104,10 +104,11 @@ target_link_libraries(RuntimeFramework PUBLIC Engine)
 # shortcut: runtime still compiles the editor command header; split PlaySession's
 # UndoStack usage into a runtime-owned dirty flag when the editor moves out for real.
 target_link_libraries(RuntimeFramework PUBLIC nlohmann_json::nlohmann_json)
-# Definitions every consumer agrees on, carried INTERFACE so Editor/GameRuntime/EngineTests
+# Definitions every consumer agrees on, carried PUBLIC so the framework's own sources
+# (EngineContentPaths.cpp reads the *_SOURCE_DIR dev hints) and Editor/GameRuntime/EngineTests
 # all see them. Anything target-specific belongs on the target - if a shared source ever
 # needs one, it stops being shared and moves to APP_CONFIG_SENSITIVE_SOURCES.
-target_compile_definitions(RuntimeFramework INTERFACE
+target_compile_definitions(RuntimeFramework PUBLIC
     AETHERCORE_SCENE_APP=1
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
