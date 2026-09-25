@@ -132,10 +132,19 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
     static const float kPi = 3.14159265f;
     static const float kHalfPi = 1.57079633f;
 
-    // How far behind the receiver an occluder may sit, along the view ray, before it
-    // reads as a separate surface rather than a fold of this one. Without it a distant
-    // wall behind a foreground object darkens that object's silhouette.
-    static const float kThickness = 1.0f;
+    // Occlusion fades out over this outer fraction of the radius and is gone AT the radius
+    // (XeGTAO's falloff range). Fading only beyond the radius, as this did before, never
+    // faded anything: the kernel only samples out to the radius, so every occluder inside it
+    // counted in full, however far from the receiver.
+    static const float kFalloffRange = 0.6f;
+
+    // Screen space sees only an occluder's front face, so everything reads as infinitely
+    // thick: a character's arm half a metre in front of the ground occluded that ground like
+    // a wall, drawing a dark band around the whole silhouette. Stretching each sample's
+    // offset along the view axis before the falloff (XeGTAO's thin-occluder compensation)
+    // lets depth-separated occluders fade sooner, while contact creases - whose samples are
+    // offset mostly across the screen - keep their darkening.
+    static const float kThinOccluderCompensation = 0.7f;
 
     // Minimum elevation, as a sine, that a sample must clear above the receiver's tangent
     // plane before it is allowed to occlude - a touch under half a degree. Guards against a
@@ -274,10 +283,11 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
 
                 float cosH = dot(delta / len, V);
 
-                // Ease the horizon back toward open past the radius, so an occluder
-                // leaving the kernel fades out instead of popping, and drop occluders
-                // that sit far enough behind to be a different surface entirely.
-                float falloff = saturate(1.0f - (len - pc.radius) / kThickness);
+                // Fade the horizon back toward open as the occluder nears the edge of the
+                // radius, so it leaves the kernel without popping, with the view-axis offset
+                // stretched so thin foreground occluders fade first.
+                const float falloffLen = length(float3(delta.xy, delta.z * (1.0f + kThinOccluderCompensation)));
+                const float falloff = saturate((pc.radius - falloffLen) / (pc.radius * kFalloffRange));
                 cosH = lerp(-1.0f, cosH, falloff);
 
                 if (side == 0u)
