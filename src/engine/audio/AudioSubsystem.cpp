@@ -399,7 +399,8 @@ namespace aether::audio
 			ma_sound_set_cone(&voice.sound, cone.innerRadians, cone.outerRadians, cone.outerVolume);
 			ma_sound_set_doppler_factor(&voice.sound, ClampDopplerFactor(params.dopplerFactor));
 		}
-		ma_sound_set_volume(&voice.sound, 1.0f);
+		// The voice's own volume; bus and master gains come from its sound group and the engine.
+		ma_sound_set_volume(&voice.sound, glm::max(params.volume, 0.0f));
 		ma_sound_start(&voice.sound);
 
 		++impl.startedTotal;
