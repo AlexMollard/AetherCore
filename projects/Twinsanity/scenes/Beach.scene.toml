@@ -1,0 +1,48 @@
+# N. Sanity Beach, playable. The level itself (scenery, collision, crates, wumpa, Crash's spawn)
+# is assembled at play time by TwinsanityLevel from tw-extract's gitignored
+# assets/levels/Earth/Hub/beach.level.json, so nothing ISO-derived lives in this file.
+[environment]
+ambient = [ 0.55, 0.55, 0.6 ]
+sky_horizon = [ 0.62, 0.74, 0.9 ]
+sky_void = [ 0.3, 0.4, 0.55 ]
+sky_zenith = [ 0.22, 0.42, 0.8 ]
+sun_color = [ 1.0, 0.92, 0.78 ]
+sun_direction = [ -0.35, -0.85, -0.4 ]
+sun_intensity = 1.5
+
+[scene]
+name = 'Beach'
+version = 16
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Level'
+parent = -1
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [[entities.scripts]]
+    type = 'TwinsanityLevel'
+
+# Placed at the beach's act_CRASH instance; TwinsanityLevel moves him to the extracted spawn on
+# the first frame anyway. The capsule is Crash-sized (his bind pose stands 1.95 units tall) and
+# gravity is raised so a 10 m/s jump peaks at about two units, close to the game's arc.
+[[entities]]
+euler = [ 0.0, 224.82, 0.0 ]
+name = 'Crash'
+parent = -1
+position = [ -6.33, 0.2, -39.6 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.character_controller]
+    gravity_scale = 2.5
+    ground_snap_distance = 0.35
+    half_height = 0.5
+    mass = 80.0
+    max_push_force = 500.0
+    max_slope_angle = 0.8726646
+    radius = 0.4
+    step_height = 0.35
+
+    [[entities.scripts]]
+    type = 'CrashPlayer'
