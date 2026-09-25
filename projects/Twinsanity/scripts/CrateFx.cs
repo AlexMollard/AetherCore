@@ -49,6 +49,33 @@ public static class CrateFx
 
 	private static float NextHopDelay() => 0.9f + 1.4f * (float)s_rng.NextDouble();
 
+	// Another live crate sits right on top: stacks here are 1-1.5 m apart, and a nitro above may be
+	// mid-hop (+0.49 m peak), hence the 2.2 m band. Stale roots from past sessions are dropped.
+	private static bool Covered(Nitro n)
+	{
+		List<uint>? stale = null;
+		bool covered = false;
+		foreach (var kv in s_crates)
+		{
+			if (!kv.Value.IsValid)
+			{
+				(stale ??= new()).Add(kv.Key);
+				continue;
+			}
+			if (kv.Key == n.Model.Id || s_breaking.Contains(kv.Key))
+			{
+				continue;
+			}
+			Vector3 d = kv.Value.Position - n.Home;
+			if (d.Y > 0.5f && d.Y < 2.2f && MathF.Abs(d.X) < 0.6f && MathF.Abs(d.Z) < 0.6f)
+			{
+				covered = true;
+			}
+		}
+		stale?.ForEach(id => s_crates.Remove(id));
+		return covered;
+	}
+
 	private sealed class Squash
 	{
 		public Entity Model;
@@ -70,10 +97,12 @@ public static class CrateFx
 	private static readonly HashSet<uint> s_opened = new();
 	private static readonly List<Timer> s_timers = new();
 	private static readonly Dictionary<uint, string> s_paths = new(); // crate root -> its "<Name>_0.gltf"
+	private static readonly Dictionary<uint, Entity> s_crates = new(); // every spawned crate root, for stack checks
 
 	public static void Spawned(Entity crateModel, int objectId, string modelPath)
 	{
 		s_paths[crateModel.Id] = modelPath;
+		s_crates[crateModel.Id] = crateModel;
 		if (objectId == 4)
 		{
 			// COM_NITRO_CRATE_DEFAULT: on a condition timer the crate ApplyVelocity-hops and
@@ -504,7 +533,12 @@ public static class CrateFx
 			if (!n.Hopping)
 			{
 				n.NextHop -= dt;
-				if (n.NextHop <= 0.0f)
+				// A nitro with a crate resting on it stays put (original: stacked nitros never hop).
+				if (n.NextHop <= 0.0f && Covered(n))
+				{
+					n.NextHop = NextHopDelay();
+				}
+				else if (n.NextHop <= 0.0f)
 				{
 					n.Hopping = true;
 					n.Vy = 7.0f;
@@ -550,6 +584,9 @@ public static class CrateFx
 			if (prevState != nowState)
 			{
 				ShowState(t.Model, t.ObjectId, nowState);
+				if (nowState < 6)
+				{
+				}
 			}
 		}
 
