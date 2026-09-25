@@ -22,8 +22,10 @@ namespace TwExtract
 		// A collision triangle's Surface is a SurfaceTypes value (DefaultEnums.cs); the CollisionSurface records
 		// only carry each type's sounds and particles. These kill on contact:
 		static readonly HashSet<int> s_deadly = new HashSet<int> { 3, 4, 5, 23, 26 };
-		// and these do not block the player: camera-only, rigid-body-only and AI-only.
-		static readonly HashSet<int> s_ignored = new HashSet<int> { 20, 25, 27 };
+		// and these do not block the player: camera-only, rigid-body-only and AI-only, and the water
+		// surface (12) - on the rig Crash wades through it down the seabed and drowns on the
+		// drowning plane (23) beneath; exported solid, he walked on the sea.
+		static readonly HashSet<int> s_ignored = new HashSet<int> { 12, 20, 25, 27 };
 
 		public static string Write(TwinsFile file, string sm2Path, string level, string outRoot, Dictionary<uint, string> models)
 		{
@@ -187,6 +189,7 @@ namespace TwExtract
 				down += ny < -0.7f ? 1 : 0;
 			}
 			bool flip = down > up;
+			bool[] pieceFlip = PieceFlips(col, verts, flip);
 
 			string dir = Path.Combine(outRoot, "models", "collision", level);
 			Directory.CreateDirectory(dir);
@@ -194,12 +197,13 @@ namespace TwExtract
 			{
 				File.Delete(stale);
 			}
-			int written = 0, skipped = 0;
+			int written = 0, skipped = 0, turned = 0;
 			foreach (var kind in new[] { "solid", "deadly" })
 			{
 				bool deadly = kind == "deadly";
-				var tris = col.Tris.Where(t => !s_ignored.Contains(t.Surface) && s_deadly.Contains(t.Surface) == deadly).OrderBy(t =>
+				var tris = Enumerable.Range(0, col.Tris.Count).Where(i => !s_ignored.Contains(col.Tris[i].Surface) && s_deadly.Contains(col.Tris[i].Surface) == deadly).OrderBy(i =>
 				{
+					var t = col.Tris[i];
 					var c = (verts[t.Vert1] + verts[t.Vert2] + verts[t.Vert3]) / 3f;
 					return ((long)Math.Floor(c.X / kCellSize) << 32) ^ (long)Math.Floor(c.Z / kCellSize) & 0xFFFFFFFF;
 				}).ToList();
@@ -234,19 +238,114 @@ namespace TwExtract
 					}
 					return index;
 				}
-				foreach (var t in tris)
+				foreach (int i in tris)
 				{
 					if (prim != null && remap.Count + 3 > kMaxPieceVertices)
 					{
 						Flush();
 					}
 					prim = prim ?? new Prim();
+					var t = col.Tris[i];
+					bool asStored = flip ^ pieceFlip[i];
+					// Floor-angle triangles always face up, even inside a piece whose floors mostly
+					// do: the rest are thin sheets and folds Crash stands on from above. A real
+					// ceiling turned up still blocks from below (Jolt collides with back faces).
+					Vector3 normal = asStored
+						? Vector3.Cross(verts[t.Vert2] - verts[t.Vert1], verts[t.Vert3] - verts[t.Vert1])
+						: Vector3.Cross(verts[t.Vert3] - verts[t.Vert1], verts[t.Vert2] - verts[t.Vert1]);
+					if (normal.Y < -0.64f * normal.Length())
+					{
+						asStored = !asStored;
+						turned++;
+					}
 					uint a = Vertex(t.Vert1), b = Vertex(t.Vert2), c = Vertex(t.Vert3);
-					prim.Idx.AddRange(flip ? new[] { a, b, c } : new[] { a, c, b });
+					prim.Idx.AddRange(asStored ? new[] { a, b, c } : new[] { a, c, b });
 				}
 				Flush();
 			}
-			return $"collision {col.Tris.Count} tris in {written} pieces ({col.Tris.Count(t => s_deadly.Contains(t.Surface))} deadly, {skipped} non-blocking skipped, winding {(flip ? "as stored" : "reversed")})";
+			int flipped = pieceFlip.Count(f => f);
+			return $"collision {col.Tris.Count} tris in {written} pieces ({col.Tris.Count(t => s_deadly.Contains(t.Surface))} deadly, {skipped} non-blocking skipped, winding {(flip ? "as stored" : "reversed")}, {flipped} tris in inside-out pieces turned, {turned} down-facing floors turned up)";
+		}
+
+		// The PS2 data winds whole connected pieces inside out (a cliff top or a rock cap whose floor
+		// faces down). The game collides both sides, but Jolt builds active edges and ground contacts
+		// from the winding, and Crash lost the ground standing on such a piece. Returns, per triangle,
+		// whether its edge-connected piece must be turned so most of its floor area faces up.
+		static bool[] PieceFlips(ColData col, Vector3[] verts, bool flip)
+		{
+			int n = col.Tris.Count;
+			var canonical = new Dictionary<(int, int, int), int>();
+			int Id(int v)
+			{
+				var p = verts[v];
+				var key = ((int)Math.Round(p.X * 1000f), (int)Math.Round(p.Y * 1000f), (int)Math.Round(p.Z * 1000f));
+				if (!canonical.TryGetValue(key, out int id))
+				{
+					id = canonical[key] = canonical.Count;
+				}
+				return id;
+			}
+			var parent = Enumerable.Range(0, n).ToArray();
+			int Find(int x)
+			{
+				while (parent[x] != x)
+				{
+					parent[x] = parent[parent[x]];
+					x = parent[x];
+				}
+				return x;
+			}
+			var byEdge = new Dictionary<long, int>();
+			for (int i = 0; i < n; i++)
+			{
+				var t = col.Tris[i];
+				int[] ids = { Id(t.Vert1), Id(t.Vert2), Id(t.Vert3) };
+				for (int e = 0; e < 3; e++)
+				{
+					int u = ids[e], v = ids[(e + 1) % 3];
+					long key = u < v ? ((long)u << 32) | (uint)v : ((long)v << 32) | (uint)u;
+					if (byEdge.TryGetValue(key, out int j))
+					{
+						parent[Find(i)] = Find(j);
+					}
+					else
+					{
+						byEdge[key] = i;
+					}
+				}
+			}
+			// Floor-angle area facing up vs down per piece, in the winding the writer uses.
+			var upArea = new float[n];
+			var downArea = new float[n];
+			for (int i = 0; i < n; i++)
+			{
+				var t = col.Tris[i];
+				var cross = flip
+					? Vector3.Cross(verts[t.Vert2] - verts[t.Vert1], verts[t.Vert3] - verts[t.Vert1])
+					: Vector3.Cross(verts[t.Vert3] - verts[t.Vert1], verts[t.Vert2] - verts[t.Vert1]);
+				float len = cross.Length();
+				if (len <= 0f)
+				{
+					continue;
+				}
+				float ny = cross.Y / len;
+				int root = Find(i);
+				if (ny > 0.64f)
+				{
+					upArea[root] += len;
+				}
+				else if (ny < -0.64f)
+				{
+					downArea[root] += len;
+				}
+			}
+			var result = new bool[n];
+			for (int i = 0; i < n; i++)
+			{
+				int root = Find(i);
+				result[i] = downArea[root] > upArea[root];
+			}
+			return result;
 		}
 
 		static string Instances(TwinsFile file, Dictionary<uint, string> models, Dictionary<string, object> manifest)
