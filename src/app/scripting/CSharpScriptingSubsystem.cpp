@@ -8,6 +8,12 @@
 #include <thread>
 #include <utility>
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 #include "EngineContentPaths.hpp"
 #include "RuntimeProjectSettings.hpp"
 #include "io/FileUtil.hpp"
@@ -20,6 +26,15 @@ namespace aether::app::scripting
 {
 	namespace
 	{
+		[[maybe_unused]] int CurrentProcessId()
+		{
+#ifdef _WIN32
+			return _getpid();
+#else
+			return static_cast<int>(getpid());
+#endif
+		}
+
 		std::filesystem::path ResolveManagedDir()
 		{
 			const auto cwd = std::filesystem::current_path();
@@ -366,7 +381,11 @@ namespace aether::app::scripting
 			// The editor already hosts the .NET runtime, so it can host the compiler too -
 			// which is what lets a machine with no .NET SDK open a project and press Play.
 			const fs::path scriptDir = gameProject.parent_path();
-			const fs::path outputPath = artifactsDir / "bin" / "AetherGame" / "debug" / "AetherGame.dll";
+			// One output folder per editor process: several editors on one project (a user plus
+			// test editors) compiled into the same file, and whichever wrote second failed with a
+			// sharing violation - Play then ran the previous scripts.
+			const fs::path buildOut = artifactsDir / "bin" / "AetherGame" / ("debug-" + std::to_string(CurrentProcessId()));
+			const fs::path outputPath = buildOut / "AetherGame.dll";
 
 			// Big enough for a wall of compiler errors; the managed side truncates to fit.
 			std::string diagnostics(64 * 1024, char{0});
@@ -391,7 +410,6 @@ namespace aether::app::scripting
 			}
 
 			// on-disk dll mid-run is safe.
-			const fs::path buildOut = artifactsDir / "bin" / "AetherGame" / "debug";
 			// A zero exit with no assembly behind it is not a success. It happened with a
 			// runtime-only .NET, where the muxer failed to find a compiler rather than the
 			// compiler failing - the loop below would then copy nothing, report success, and
@@ -408,14 +426,26 @@ namespace aether::app::scripting
 				{
 					continue;
 				}
+				// Another editor sharing this managed folder may be deploying or reading the
+				// same file this instant; the clash lasts milliseconds, so retry briefly.
 				std::error_code ec;
-				fs::copy_file(src, managedDir / name, fs::copy_options::overwrite_existing, ec);
+				for (int attempt = 0; attempt < 20; ++attempt)
+				{
+					fs::copy_file(src, managedDir / name, fs::copy_options::overwrite_existing, ec);
+					if (!ec)
+					{
+						break;
+					}
+					std::this_thread::sleep_for(std::chrono::milliseconds(50));
+				}
 				if (ec)
 				{
 					error = std::string("failed to deploy ") + name + ": " + ec.message();
 					return false;
 				}
 			}
+			std::error_code cleanup;
+			fs::remove_all(buildOut, cleanup);
 
 			// Record the fingerprints of the dlls we just deployed, so a later editor rebuild that
 			// re-stages a stub AetherGame.dll (or a new SDK) is detected and triggers a rebuild.
