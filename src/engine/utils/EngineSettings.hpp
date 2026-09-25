@@ -279,6 +279,7 @@ namespace aether
 		f("graphics.exposureSpeed", settings.graphics.exposureSpeed);
 		f("graphics.exposure", settings.graphics.exposure);
 		f("graphics.anisotropy", settings.graphics.anisotropy);
+		f("graphics.mipLodBias", settings.graphics.mipLodBias);
 		f("graphics.contactShadows", settings.graphics.contactShadows);
 		f("graphics.reflections", settings.graphics.reflections);
 		f("graphics.reflectionMaxRoughness", settings.graphics.reflectionMaxRoughness);

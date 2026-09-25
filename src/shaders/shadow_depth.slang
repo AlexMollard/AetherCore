@@ -37,5 +37,19 @@ void fragmentMain(DepthVSOutput input)
     // Foliage/cutout cards DO cast, cut out by the alpha test below: the original's umbrella
     // tops and palm leaves shade the ground. With prelit receivers the old clump-blotch
     // problem is gone - a shadow can only pull ground to the bake's own shade, never darker.
+    //
+    // Alpha-BLENDED surfaces never cast: the sea is one huge double-sided plane over the
+    // water, and the sky dome wraps the whole level - either of them casting paints a hard
+    // band (or the entire beach) with the sun's own shadow. ponytail: a genuinely
+    // shadow-casting transparent surface would need a per-material opt-in instead.
+    if (input.materialIndex != kNoTexture)
+    {
+        FrameConstantsData* fc = pc.frame.Ptr();
+        const GpuMaterial mat = ((GpuMaterial*)(fc->materialBufferAddr))[input.materialIndex];
+        if ((mat.flags & kFlagAlphaBlend) != 0u)
+        {
+            discard;
+        }
+    }
     AlphaMaskDiscard(input.materialIndex, input.uv);
 }

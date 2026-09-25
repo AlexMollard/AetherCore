@@ -47,7 +47,16 @@ float fragmentMain(DepthVSOutputWithWorldPos input) : SV_Target
 {
     AlphaMaskDiscard(input.materialIndex, input.uv);
 
-    // Foliage casts here too, matching the directional cascades (see shadow_depth.slang).
+    // Foliage casts here too, matching the directional cascades (see shadow_depth.slang);
+    // alpha-blended surfaces (the sea plane, the sky dome) never do.
+    if (input.materialIndex != kNoTexture)
+    {
+        const GpuMaterial mat = ((GpuMaterial*)(pc.frame.Ptr()->materialBufferAddr))[input.materialIndex];
+        if ((mat.flags & kFlagAlphaBlend) != 0u)
+        {
+            discard;
+        }
+    }
 
     FrameConstantsData* fc = pc.frame.Ptr();
     const float3 lightPos = fc->cameraWorldPos.xyz;
