@@ -50,9 +50,13 @@ namespace aether
 		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f}; // (u0, v0, u1, v1), v down
 		float rotationDegrees = 0.0f;             // clockwise on screen
 		std::uint32_t textureIndex = 0;
-		std::uint32_t blendMode = 0; // gpu::BlendMode
+		std::uint32_t blendMode = 0; // bit 0: additive (else alpha); kBillboardDisplaySpace: composite after the tonemap
 		std::uint32_t entityId = 0;
 	};
+
+	// BillboardParticleInstance::blendMode bits.
+	inline constexpr std::uint32_t kBillboardAdditive = 1u << 0u;
+	inline constexpr std::uint32_t kBillboardDisplaySpace = 1u << 8u;
 
 	// Occluder2D::flags bits.
 	inline constexpr std::uint32_t kOccluder2DFlipX = 1u << 0u;

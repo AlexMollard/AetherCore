@@ -118,6 +118,10 @@ namespace aether
 		float rotationJitterDeg = 0.0f;          // random start angle, +/- this
 		ParticleEmitShape emitShape = ParticleEmitShape::Box;
 		float radialSpeed = 0.0f;                // outward launch speed along the radius (Radial shapes)
+		// Composite after the tonemap, blending in display (gamma) space like a PS2 GS: faint
+		// additive halos stay visible over bright ground. Opt-in; bloom, exposure and DoF no
+		// longer apply to these particles. Off = linear HDR composite before post.
+		bool displaySpace = false;
 		// Over-lifetime keys. Empty = fall back to start/end colour and size (and no spin).
 		// size is the quad edge in world units; rotation is in degrees.
 		std::vector<ParticleColorKey> colorKeys;

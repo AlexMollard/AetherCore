@@ -409,7 +409,7 @@ namespace aether
 		}
 
 		m_renderer2D.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
-		m_billboardParticles.Initialize(gpu, PostProcessStack::GetForwardColorFormat(), swapchain.GetDepthFormat());
+		m_billboardParticles.Initialize(gpu, PostProcessStack::GetForwardColorFormat(), PostProcessStack::GetLdrColorFormat(), swapchain.GetDepthFormat());
 		m_customPassRenderer.Initialize(gpu);
 		m_light2D.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
 
@@ -1382,13 +1382,17 @@ namespace aether
 		}
 
 		// 3D billboard particles: after the scene is fully lit and fogged, before DoF so the
-		// optics can blur them. Depth-tested read-only against the scene depth.
-		m_billboardParticles.RegisterPass(m_renderGraph,
-		        hdrColor,
-		        m_sceneDepth.IsValid() ? m_sceneDepth : aether::RenderGraph::GetSwapchainDepth(),
-		        sceneExtent,
-		        *frame.bindless,
-		        "$BillboardParticles");
+		// optics can blur them. Depth-tested read-only against the scene depth. Emitters with
+		// display_space draw in a second pass after the tonemap instead (below).
+		const RGImage billboardDepth = m_sceneDepth.IsValid() ? m_sceneDepth : aether::RenderGraph::GetSwapchainDepth();
+		m_billboardParticles.RegisterPass(m_renderGraph, hdrColor, billboardDepth, sceneExtent, *frame.bindless, "$BillboardParticles");
+		// The LDR target shares the scene extent (render scale applies to both; FXAA resolves to
+		// the output), so the same depth image tests these at any render scale.
+		m_postProcessStack.SetAfterTonemapPass(
+		        [this, billboardDepth, &bindless = *frame.bindless](RenderGraph& graph, RGImage ldrColor, gpu::Extent2D extent)
+		        {
+			        m_billboardParticles.RegisterPass(graph, ldrColor, billboardDepth, extent, bindless, "$BillboardParticlesDisplay", nullptr, nullptr, true);
+		        });
 
 		// Project-registered custom passes, injected around the 2D scene (both stages draw into the
 		// scene HDR colour). BehindScene2D runs before sprites/tiles, OverScene2D after.

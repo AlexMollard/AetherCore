@@ -256,6 +256,7 @@ public static class TwinsanityAku
 		c.SetInt("space", 1);      // Billboard3D, simulated in world space: the sparkles stay behind
 		c.SetInt("blend_mode", 1); // TextureFilter Additive (all four defs)
 		c.SetInt("emit_shape", 0);
+		c.SetBool("display_space", true); // blend after the tonemap, in gamma space, like the GS
 		c.SetBool("emit_on_start", false);
 		c.SetBool("auto_destroy", false);
 		c.SetBool("emitting", false);
@@ -273,7 +274,7 @@ public static class TwinsanityAku
 		c.SetFloat("rotation_jitter", rotJitter);
 		Particles.SetKeys(e, ParticleKeyChannel.Color, color);
 		Keys(e, ParticleKeyChannel.Alpha, alpha, 1.0f / 128.0f);
-		Keys(e, ParticleKeyChannel.Size, size, 1e-4f);
+		Keys(e, ParticleKeyChannel.Size, size, CrateFx.DiscSizeToEdge);
 		if (rotation != null)
 		{
 			Keys(e, ParticleKeyChannel.Rotation, rotation, kRaw2Deg);

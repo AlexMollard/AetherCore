@@ -323,6 +323,7 @@ public static class CrateFx
 		c.SetInt("blend_mode", additive ? 1 : 0); // disc TextureFilter: Additive -> additive, Modulation -> alpha
 		c.SetInt("emit_shape", shape);            // 0 box, 1 Radial, 2 ImprovedRadial (disc GenSort 6 / 11)
 		c.SetFloat("radial_speed", radialSpeed);
+		c.SetBool("display_space", true);         // blend after the tonemap, in gamma space, like the GS
 		bool burstOnly = rate <= 0.0f;
 		c.SetBool("emit_on_start", burstOnly); // burst defs fire their count once, at spawn
 		c.SetBool("auto_destroy", true);
@@ -347,13 +348,21 @@ public static class CrateFx
 	private static void SetScalarKeys(Entity e, ParticleKeyChannel channel, float[] pairs)
 	{
 		var keys = new Vector4[pairs.Length / 2];
-		float scale = channel == ParticleKeyChannel.Alpha ? 1.0f / 128.0f : 1.0f; // GS alpha: 0x80 = 1.0, additive may exceed 1
+		// GS alpha: 0x80 = 1.0 (additive may exceed 1). Sizes arrive as raw * 1e-4, the disc's
+		// half-extent; the engine key is the quad edge.
+		float scale = channel == ParticleKeyChannel.Alpha ? 1.0f / 128.0f : channel == ParticleKeyChannel.Size ? 2.0f : 1.0f;
 		for (int i = 0; i < keys.Length; i++)
 		{
 			keys[i] = new Vector4(pairs[i * 2], pairs[i * 2 + 1] * scale, 0.0f, 0.0f);
 		}
 		Particles.SetKeys(e, channel, keys);
 	}
+
+	/// <summary>
+	/// Disc size raw -> engine quad edge. The disc's own cull radius adds MaxSize * 1e-4 to the
+	/// particle extents, so raw * 1e-4 is the half-extent and the edge is twice that.
+	/// </summary>
+	public const float DiscSizeToEdge = 2.0e-4f;
 
 	/// <summary>
 	/// A disc ParticleData texture rect, already divided by the 128-texel page, as an engine

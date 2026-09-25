@@ -21,6 +21,7 @@ struct VSOutput
     float2 uv : TEXCOORD0;
     float4 color : TEXCOORD1;
     nointerpolation uint textureIndex : TEXCOORD2;
+    nointerpolation uint displaySpace : TEXCOORD3;
 };
 
 [shader("vertex")]
@@ -52,6 +53,7 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     output.uv = lerp(p.uvRect.xy, p.uvRect.zw, float2(corner.x, 1.0 - corner.y));
     output.color = p.color;
     output.textureIndex = p.textureIndex;
+    output.displaySpace = (p.blendMode & kBillboardDisplaySpace) != 0u ? 1u : 0u;
     return output;
 }
 
@@ -64,5 +66,15 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     g_textures[input.textureIndex].GetDimensions(width, height);
     const float2 texSize = float2(max(width, 1u), max(height, 1u));
     const float2 uv = (floor(input.uv * texSize) + 0.5) / texSize;
-    return g_textures[input.textureIndex].Sample(g_linearSampler, uv) * input.color;
+    const float4 texel = g_textures[input.textureIndex].Sample(g_linearSampler, uv);
+    if (input.displaySpace == 0u)
+    {
+        return texel * input.color; // linear, into the scene HDR colour
+    }
+    // Display space (drawn after the tonemap into the gamma-encoded LDR target): modulate
+    // texel by colour in gamma space and clamp, as the PS2 GS does, so colours above 1
+    // brighten dim page art and the blend below also happens in gamma space. 2.2 matches
+    // the tonemap's own encode.
+    const float3 gammaTexel = pow(max(texel.rgb, 0.0), 1.0 / 2.2);
+    return float4(saturate(gammaTexel * input.color.rgb), texel.a * input.color.a);
 }

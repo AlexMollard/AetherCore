@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <span>
 
 #include <glm/glm.hpp>
@@ -45,6 +46,20 @@ namespace aether
 		[[nodiscard]] static constexpr gpu::Format GetForwardColorFormat()
 		{
 			return gpu::Format::R16G16B16A16Sfloat;
+		}
+
+		// Format of the display-space (gamma-encoded) target the tonemap writes and FXAA reads.
+		[[nodiscard]] static constexpr gpu::Format GetLdrColorFormat()
+		{
+			return gpu::Format::R8G8B8A8Unorm;
+		}
+
+		// Registered right after the tonemap, drawing into the display-space LDR target before
+		// FXAA: for passes that must blend in gamma space like the PS2 GS (additive particles).
+		using AfterTonemapPass = std::function<void(RenderGraph& graph, RGImage ldrColor, gpu::Extent2D extent)>;
+		void SetAfterTonemapPass(AfterTonemapPass pass)
+		{
+			m_afterTonemap = std::move(pass);
 		}
 
 		[[nodiscard]] RGImage GetHdrColor() const
@@ -381,6 +396,7 @@ namespace aether
 		float m_motionBlurStrength = 0.0f;
 		float m_motionBlurMaxRadiusPixels = 64.0f;
 		RGImage m_dofImage;
+		AfterTonemapPass m_afterTonemap;
 		std::array<gpu::Extent2D, kBloomMipCount> m_bloomExtents{};
 		GraphicsPipeline m_bloomDownsamplePipeline;
 		GraphicsPipeline m_bloomUpsamplePipeline;

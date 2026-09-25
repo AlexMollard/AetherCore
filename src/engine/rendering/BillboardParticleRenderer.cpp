@@ -37,17 +37,18 @@ namespace aether
 		static_assert(offsetof(BillboardParticleInstance, entityId) == 60);
 	} // namespace
 
-	void BillboardParticleRenderer::Initialize(GpuDevice& gpu, gpu::Format colorFormat, gpu::Format depthFormat)
+	void BillboardParticleRenderer::Initialize(GpuDevice& gpu, gpu::Format hdrColorFormat, gpu::Format displayColorFormat, gpu::Format depthFormat)
 	{
 		AE_PROFILE_ZONE();
-		for (std::uint32_t i = 0; i < kBlendModeCount; ++i)
+		for (std::uint32_t i = 0; i < kSpaceCount * kBlendModeCount; ++i)
 		{
-			// 0 = alpha, 1 = additive: the SpriteBlendMode::Additive value the emitter stores,
-			// shifted down past Opaque so the pipeline table stays small.
-			const auto mode = i == 0 ? gpu::BlendMode::Alpha : gpu::BlendMode::Additive;
+			// [space * 2 + blend]: space 0 = scene HDR, 1 = display-space LDR; blend 0 = alpha,
+			// 1 = additive (kBillboardAdditive).
+			const bool display = i / kBlendModeCount != 0;
+			const auto mode = i % kBlendModeCount == 0 ? gpu::BlendMode::Alpha : gpu::BlendMode::Additive;
 			const gpu::GraphicsPipelineDesc desc{
 			        .shaderVfsPath = "shaders://particle_billboard.spv",
-			        .colorFormat = colorFormat,
+			        .colorFormat = display ? displayColorFormat : hdrColorFormat,
 			        .depthFormat = depthFormat,
 			        .depthTestEnable = true,
 			        .depthWriteEnable = false,
@@ -57,13 +58,13 @@ namespace aether
 			        .topology = gpu::PrimitiveTopology::TriangleList,
 			        .polygonMode = gpu::PolygonMode::Fill,
 			        .cullMode = gpu::CullMode::None,
-			        .debugName = "BillboardParticles",
+			        .debugName = display ? "BillboardParticlesDisplay" : "BillboardParticles",
 			        .descriptorHeapMappings = gpu.GetBindlessManager().GetDescriptorHeapMappings(),
 			};
 			m_pipelines[i] = gpu::ResourceRegistry::CreateGraphicsPipeline(gpu.GetDevice(), desc);
 			if (!m_pipelines[i].IsValid())
 			{
-				AE_ERROR(LogCategory::Render, "BillboardParticleRenderer: failed to create blend pipeline {}", i);
+				AE_ERROR(LogCategory::Render, "BillboardParticleRenderer: failed to create pipeline {}", i);
 			}
 		}
 	}
@@ -147,9 +148,9 @@ namespace aether
 			return;
 		}
 
-		// Back-to-front from the camera, additive quads first within a distance tie
-		// (they composite the same either way; alpha must come after or it cuts a
-		// rectangular hole in the glow behind it).
+		// Grouped by space (each space is its own pass), then back-to-front from the camera,
+		// additive quads first within a distance tie (they composite the same either way;
+		// alpha must come after or it cuts a rectangular hole in the glow behind it).
 		std::vector<const BillboardParticleInstance*> order;
 		order.reserve(count);
 		for (const BillboardParticleInstance& instance: frameData.billboards)
@@ -163,10 +164,15 @@ namespace aether
 		};
 		std::stable_sort(order.begin(), order.end(), [&](const BillboardParticleInstance* a, const BillboardParticleInstance* b)
 		{
-			const bool aAdditive = a->blendMode != 0, bAdditive = b->blendMode != 0;
+			const bool aDisplay = (a->blendMode & kBillboardDisplaySpace) != 0, bDisplay = (b->blendMode & kBillboardDisplaySpace) != 0;
+			if (aDisplay != bDisplay)
+			{
+				return bDisplay;
+			}
+			const bool aAdditive = (a->blendMode & kBillboardAdditive) != 0, bAdditive = (b->blendMode & kBillboardAdditive) != 0;
 			if (aAdditive != bAdditive)
 			{
-				return aAdditive; // additive (1) before alpha (0)
+				return aAdditive; // additive before alpha
 			}
 			return distanceSq(a) > distanceSq(b);
 		});
@@ -180,10 +186,11 @@ namespace aether
 
 		for (std::uint32_t i = 0; i < count; ++i)
 		{
-			const std::uint32_t blend = std::min(order[i]->blendMode, 1u);
-			if (frame.batches.empty() || frame.batches.back().blendMode != blend)
+			const std::uint32_t blend = order[i]->blendMode & kBillboardAdditive;
+			const bool display = (order[i]->blendMode & kBillboardDisplaySpace) != 0;
+			if (frame.batches.empty() || frame.batches.back().blendMode != blend || frame.batches.back().displaySpace != display)
 			{
-				frame.batches.push_back(DrawBatch{.firstInstance = i, .count = 1, .blendMode = blend});
+				frame.batches.push_back(DrawBatch{.firstInstance = i, .count = 1, .blendMode = blend, .displaySpace = display});
 			}
 			else
 			{
@@ -204,14 +211,15 @@ namespace aether
 	        BindlessManager& bindless,
 	        std::string_view name,
 	        const FrameConstantsBuffer* frameConstants,
-	        const std::atomic<bool>* enabled)
+	        const std::atomic<bool>* enabled,
+	        bool displaySpace)
 	{
 		auto pass = graph.AddPass(std::string(name));
 		pass.SetExtent(extent);
 		pass.WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
 		        .WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::Store)
 		        .Execute(
-		                [this, &bindless, frameConstants, enabled](PassContext& ctx)
+		                [this, &bindless, frameConstants, enabled, displaySpace](PassContext& ctx)
 		                {
 			                if (enabled != nullptr && !enabled->load(std::memory_order_relaxed))
 			                {
@@ -225,7 +233,11 @@ namespace aether
 			                bindless.CmdBindGlobalResources(ctx.recorder);
 			                for (const DrawBatch& batch: frame.batches)
 			                {
-				                const gpu::PipelineHandle pipeline = m_pipelines[batch.blendMode];
+				                if (batch.displaySpace != displaySpace)
+				                {
+					                continue;
+				                }
+				                const gpu::PipelineHandle pipeline = m_pipelines[(displaySpace ? kBlendModeCount : 0u) + batch.blendMode];
 				                if (!pipeline.IsValid())
 				                {
 					                continue;

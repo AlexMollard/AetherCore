@@ -516,6 +516,11 @@ namespace aether
 			                cmd.Draw(3, 1, 0, 0);
 		                });
 
+		if (m_afterTonemap)
+		{
+			m_afterTonemap(graph, m_ldrColor, m_extent);
+		}
+
 		auto fxaaPass = graph.AddPass("$FXAA");
 		fxaaPass.ReadTexture(m_ldrColor).WriteColor(m_outputToTexture ? m_finalColor : aether::RenderGraph::GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {});
 		if (m_outputToTexture)

@@ -193,6 +193,8 @@ TEST_CASE("billboard particles spawn inside the jitter box and fall under gravit
 	cfg.spawnJitter = glm::vec3{0.5f, 0.5f, 0.5f};
 	cfg.gravity3D = glm::vec3{0.0f, -10.0f, 0.0f};
 	cfg.sizeKeys = {{0.0f, 1.0f}, {1.0f, 0.0f}};
+	cfg.blendMode = SpriteBlendMode::Additive;
+	cfg.displaySpace = true;
 	world.Emplace<ParticleEmitterComponent>(e, cfg);
 
 	particles.Update(world, 0.0f); // deterministic RNG seeding only
@@ -226,6 +228,8 @@ TEST_CASE("billboard particles spawn inside the jitter box and fall under gravit
 	REQUIRE(frame.billboards.size() == 16);
 	CHECK(frame.billboards[0].positionSize.w == doctest::Approx(1.0f).epsilon(0.05f)); // t~0.016 of the 1->0 size ramp
 	CHECK(frame.billboards[0].entityId == e.id);
+	// Additive + display_space reach the renderer as bits: it picks the post-tonemap pass by them.
+	CHECK(frame.billboards[0].blendMode == (kBillboardAdditive | kBillboardDisplaySpace));
 }
 
 TEST_CASE("radial shapes spawn on the disc's sphere and fly out along the radius")
