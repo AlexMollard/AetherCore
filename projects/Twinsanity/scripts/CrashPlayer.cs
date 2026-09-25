@@ -145,6 +145,9 @@ public sealed class CrashPlayer : EntityScript
 	/// <summary>The original's IsPushingObject: set each frame by TwinsanityMechanics while Crash
 	/// walks into a pushable, so walk/run play the push clips.</summary>
 	public bool Pushing;
+	/// <summary>Set by a ride (the beach sledge, TwinsanityProps.cs): while non-null his feet are held
+	/// at this point every frame and his own movement is suspended; null hands control back.</summary>
+	public Vector3? RideFeet;
 
 	private readonly Dictionary<string, int> _clips = new();
 	private readonly System.Random _random = new();
@@ -214,6 +217,17 @@ public sealed class CrashPlayer : EntityScript
 			_hurtLeft -= deltaTime;
 		}
 		Look(deltaTime);
+		if (RideFeet is Vector3 ride)
+		{
+			Self.Position = ride;
+			_horizontal = Vector3.Zero;
+			_vy = 0.0f;
+			_jumpLatch = _spinLatch = _crouchLatch = false;
+			CharacterController.SetVelocity(Self, Vector3.Zero);
+			PlaceModel(deltaTime);
+			PlaceCamera(deltaTime);
+			return;
+		}
 
 		// Edges are derived here from the down states rather than taken from IsKeyPressed: the
 		// engine's pressed edge is per render frame and gets missed when a press lands in a

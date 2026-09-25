@@ -19,8 +19,9 @@ namespace TwExtract
 	{
 		public const float Fps = 25f;
 
-		// endLocals, when given, receives per clip each joint's last-frame local matrix (row-vector S*R*T,
-		// mirrored), or null for a joint the clip leaves alone - the pose a play-once prop holds.
+		// endLocals, when given, receives per clip each joint's local matrix (row-vector S*R*T, mirrored)
+		// on the last frame under the clip's name and on the first frame under "<name>@0" - the poses a
+		// play-once prop rests in and holds; null for a joint the clip leaves alone.
 		public static int Add(Gltf g, GraphicsInfo.Joint[] joints, int[] nodes, IEnumerable<(string Name, Animation Anim)> clips, Dictionary<string, Matrix4x4?[]> endLocals = null)
 		{
 			int added = 0;
@@ -113,19 +114,21 @@ namespace TwExtract
 				}
 				if (endLocals != null)
 				{
-					var end = new Matrix4x4?[joints.Length];
-					int l = frames - 1;
-					for (int i = 0; i < joints.Length; i++)
+					foreach (int l in new[] { frames - 1, 0 })
 					{
-						if (t[i] == null)
+						var pose = new Matrix4x4?[joints.Length];
+						for (int i = 0; i < joints.Length; i++)
 						{
-							continue;
+							if (t[i] == null)
+							{
+								continue;
+							}
+							var q = new Quaternion(r[i][l * 4], r[i][l * 4 + 1], r[i][l * 4 + 2], r[i][l * 4 + 3]);
+							pose[i] = Matrix4x4.CreateScale(s[i][l * 3], s[i][l * 3 + 1], s[i][l * 3 + 2]) * Matrix4x4.CreateFromQuaternion(q)
+								* Matrix4x4.CreateTranslation(t[i][l * 3], t[i][l * 3 + 1], t[i][l * 3 + 2]);
 						}
-						var q = new Quaternion(r[i][l * 4], r[i][l * 4 + 1], r[i][l * 4 + 2], r[i][l * 4 + 3]);
-						end[i] = Matrix4x4.CreateScale(s[i][l * 3], s[i][l * 3 + 1], s[i][l * 3 + 2]) * Matrix4x4.CreateFromQuaternion(q)
-							* Matrix4x4.CreateTranslation(t[i][l * 3], t[i][l * 3 + 1], t[i][l * 3 + 2]);
+						endLocals[l == 0 ? name + "@0" : name] = pose;
 					}
-					endLocals[name] = end;
 				}
 				g.AddAnimation(name, times, tracks);
 				added++;

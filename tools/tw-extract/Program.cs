@@ -505,8 +505,9 @@ namespace TwExtract
 		public static string VfsPath(string underAssets) => "project://assets/" + Rel(s_out, Path.GetDirectoryName(underAssets)) + "/" + Path.GetFileName(underAssets);
 
 		// hulls receives the OGI's collision hulls (GI_CollisionData) as model-space triangle lists: suffix
-		// "hull<k>" at the rest pose and "hull<k>_<clip>" for the pose a rigid prop holds at the end of a clip
-		// that moves the hull's joint.
+		// "hull<k>" at the bind pose, "hull<k>_<clip>" for the pose a rigid prop holds at the end of a clip
+		// and "hull<k>_<clip>@0" for the clip's first frame (where a prop resting on that clip stands),
+		// each only when that pose moves the hull.
 		static bool BuildObject(Export ex, Gfx gfx, GraphicsInfo gi, string name, List<(string, Animation)> clips, List<(string Suffix, Prim Hull)> hulls)
 		{
 			var g = ex.Gltf;

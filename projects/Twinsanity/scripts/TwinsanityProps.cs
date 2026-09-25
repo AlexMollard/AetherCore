@@ -148,6 +148,17 @@ public sealed partial class TwinsanityActors
 			_bombs.Add(new Bomb { Actor = a });
 			return true;
 		}
+		else if (objectName.Equals("act_EARTH_NATIVE_SLEDGE", StringComparison.OrdinalIgnoreCase))
+		{
+			// The rigid body settles onto its chute, which is rigid-only collision (surface 25, not
+			// exported), so it rests where the rig measured it rather than at its instance height.
+			e.Position += SledSettle;
+			LoadHulls(s, model);
+			_sleds.Add(new Sled { Shot = s, Start = e.Position, Yaw = e.EulerDegrees.Y });
+			// ponytail: the ride replays the beach chute's rig track, so only the beach sledge rides;
+			// the bossarea copy (act_EARTH_NATIVE_SLEDGE1) is an ordinary solid prop until measured.
+			return true;
+		}
 		else
 		{
 			return false;
@@ -317,10 +328,144 @@ public sealed partial class TwinsanityActors
 		_cannonballs.RemoveAll(c => float.IsNaN(c.Velocity.X));
 	}
 
+	// act_EARTH_NATIVE_SLEDGE (COM_EARTH_NATIVE_SLEDGE_DEFAULT): a rigid body on a rigid-only chute
+	// that starts sliding once Crash stands on it, carries him down the chute, off the ramp and over
+	// the water to the clear-gem island, stops, then breaks (DoParticle/DoSound) and DestroyMe.
+	// Measured on the rig (logs/traversal/sled_rig.csv, 60 Hz): he stands 0.55 above the settled
+	// sledge's origin, rides straight along its facing, leaves the ramp 1.7 s in at 49.3 m/s forward
+	// and 19.05 m/s up, flies under 50.4 m/s^2, keeps 0.43 of his speed on landing, then brakes at
+	// 34 m/s^2 and stands on the stopped sledge ~1.6 s before it breaks.
+	private sealed class Sled
+	{
+		public OneShot Shot = null!; // the model and its disc hulls
+		public Vector3 Start;        // settled origin
+		public float Yaw;
+		public float T = -1.0f;      // seconds into the ride; -1 = waiting for Crash
+		public Vector3 Feet;
+		public Vector3 Velocity;
+		public bool Flying, Sliding;
+		public float Hold;
+	}
+
+	private readonly List<Sled> _sleds = new();
+	private static readonly Vector3 SledSettle = new(0.0f, -0.63f, 0.0f); // rig feet 17.71 - hull top 0.55 - instance 17.79
+	private const float SledTop = 0.55f;      // hull top above the origin: where Crash's feet ride
+	private const float SledBottom = -0.05f;  // hull bottom
+	private const float SledHalfWidth = 1.26f, SledHalfLength = 2.01f;
+	// ponytail: the chute is rigid-only collision the port does not simulate, so its run (t, drop,
+	// forward) replays the rig's feet track at 0.1 s; upgrade path: export surface 25 as a
+	// rigid-only body and slide the sledge on it.
+	private static readonly (float T, float Drop, float Forward)[] SledChute =
+	{
+		(0.0f, 0.00f, 0.00f), (0.1f, -0.02f, 0.13f), (0.2f, -0.04f, 0.34f), (0.3f, -0.27f, 0.71f),
+		(0.4f, -0.46f, 1.19f), (0.5f, -0.63f, 1.75f), (0.6f, -1.01f, 2.43f), (0.7f, -1.73f, 3.39f),
+		(0.8f, -2.49f, 4.79f), (0.9f, -3.47f, 6.52f), (1.0f, -4.52f, 8.61f), (1.1f, -5.72f, 11.14f),
+		(1.2f, -7.13f, 14.11f), (1.3f, -8.81f, 17.64f), (1.4f, -10.77f, 21.90f), (1.5f, -12.55f, 26.32f),
+		(1.6f, -13.97f, 30.82f), (1.7f, -13.88f, 35.27f),
+	};
+	private const float SledLaunchForward = 49.3f, SledLaunchUp = 19.05f, SledGravity = 50.4f;
+	private const float SledLandKeep = 0.43f, SledBrake = 34.0f, SledBreakAfter = 1.6f;
+
+	private void UpdateSleds(float dt, Vector3 crashPos)
+	{
+		if (_player == null)
+		{
+			return;
+		}
+		foreach (Sled s in _sleds)
+		{
+			Entity e = s.Shot.Actor.Model;
+			float yaw = s.Yaw * MathF.PI / 180.0f;
+			Vector3 forward = new(MathF.Sin(yaw), 0.0f, MathF.Cos(yaw));
+			if (s.T < 0.0f)
+			{
+				// Mount: Crash standing on the board (inside its hull footprint, feet on its top).
+				Vector3 d = crashPos - s.Start;
+				float along = Vector3.Dot(d, forward);
+				float side = d.X * forward.Z - d.Z * forward.X;
+				if (!_player.IsGrounded || MathF.Abs(along) > SledHalfLength || MathF.Abs(side) > SledHalfWidth
+					|| MathF.Abs(d.Y - SledTop) > 0.3f)
+				{
+					continue;
+				}
+				s.T = 0.0f;
+				foreach (PropHull h in s.Shot.Hulls)
+				{
+					h.Body.Destroy();
+				}
+				s.Shot.Hulls.Clear();
+			}
+			s.T += dt;
+			Vector3 feet0 = s.Start + new Vector3(0.0f, SledTop, 0.0f);
+			Vector3 before = s.Feet;
+			if (s.T <= SledChute[^1].T)
+			{
+				int i = Math.Min((int)(s.T / 0.1f), SledChute.Length - 2);
+				float f = (s.T - SledChute[i].T) / (SledChute[i + 1].T - SledChute[i].T);
+				float drop = SledChute[i].Drop + (SledChute[i + 1].Drop - SledChute[i].Drop) * f;
+				float ahead = SledChute[i].Forward + (SledChute[i + 1].Forward - SledChute[i].Forward) * f;
+				s.Feet = feet0 + forward * ahead + new Vector3(0.0f, drop, 0.0f);
+			}
+			else if (!s.Flying && !s.Sliding)
+			{
+				s.Flying = true;
+				s.Feet = feet0 + forward * SledChute[^1].Forward + new Vector3(0.0f, SledChute[^1].Drop, 0.0f);
+				s.Velocity = forward * SledLaunchForward + new Vector3(0.0f, SledLaunchUp, 0.0f);
+			}
+			else if (s.Flying)
+			{
+				s.Velocity.Y -= SledGravity * dt;
+				s.Feet += s.Velocity * dt;
+				float? ground = SledGround(s.Feet);
+				if (s.Velocity.Y < 0.0f && ground is float g && s.Feet.Y - SledTop + SledBottom <= g)
+				{
+					s.Flying = false;
+					s.Sliding = true;
+					s.Velocity = new Vector3(s.Velocity.X, 0.0f, s.Velocity.Z) * SledLandKeep;
+					s.Feet.Y = g - SledBottom + SledTop;
+				}
+			}
+			else if (s.Velocity.LengthSquared() > 0.0f)
+			{
+				float speed = MathF.Max(0.0f, s.Velocity.Length() - SledBrake * dt);
+				s.Velocity = speed > 0.0f ? Vector3.Normalize(s.Velocity) * speed : Vector3.Zero;
+				s.Feet += s.Velocity * dt;
+				if (SledGround(s.Feet) is float g)
+				{
+					s.Feet.Y = g - SledBottom + SledTop;
+				}
+			}
+			else if ((s.Hold += dt) >= SledBreakAfter)
+			{
+				// COM_EARTH_NATIVE_SLEDGE s2: the board breaks up and is destroyed; Crash stands.
+				// ponytail: its break particles (DoParticle 0xD2/0xD3) and sound are not ported.
+				e.Destroy();
+				_player.RideFeet = null;
+				s.Shot.Actor.Alive = false;
+				continue;
+			}
+			// Pitch the board along its travel (nose down the chute, up off the ramp).
+			Vector3 v = s.T <= SledChute[^1].T && dt > 0.0f ? (s.Feet - before) / dt : s.Velocity;
+			float pitch = s.T < dt * 1.5f || s.Sliding ? 0.0f : MathF.Atan2(v.Y, MathF.Max(1.0f, MathF.Sqrt(v.X * v.X + v.Z * v.Z))) * 180.0f / MathF.PI;
+			e.Position = s.Feet - new Vector3(0.0f, SledTop, 0.0f);
+			e.EulerDegrees = new Vector3(-pitch, s.Yaw, 0.0f);
+			_player.RideFeet = s.Feet;
+		}
+		_sleds.RemoveAll(s => !s.Shot.Actor.Alive);
+	}
+
+	// Static ground under the sledge, cast from just under Crash's feet so it cannot hit him.
+	private static float? SledGround(Vector3 feet)
+	{
+		RaycastHit hit = Physics.Raycast(feet - new Vector3(0.0f, SledTop - 0.1f, 0.0f), -Vector3.UnitY, 30.0f);
+		return hit.DidHit ? hit.Position.Y : null;
+	}
+
 	private void UpdateOneShots(float dt, Vector3 crashPos)
 	{
 		UpdateBombs(dt, crashPos);
 		UpdateCannons(dt, crashPos);
+		UpdateSleds(dt, crashPos);
 		foreach (OneShot s in _oneShots)
 		{
 			if (s.Remaining >= 0.0f)
