@@ -32,6 +32,7 @@ public static class CrateFx
 	{
 		public Entity Model;
 		public Vector3 Home;   // rest position; the hop lands back here
+		public float Yaw;      // placed yaw; the hop's wobble tilts around it
 		public float NextHop;  // seconds until the next random hop
 		public bool Hopping;
 		public float Vy;       // hop vertical velocity
@@ -108,7 +109,7 @@ public static class CrateFx
 			// COM_NITRO_CRATE_DEFAULT: on a condition timer the crate ApplyVelocity-hops and
 			// SetWobble-tilts, then settles (states 1 -> 2 -> back). The rig (nitro2_*, 20 fps)
 			// shows hops ~0.9-2.3 s apart per crate, ~0.3 s airborne: v0 = 7 with g = 50.
-			s_nitros.Add(new Nitro { Model = crateModel, Home = crateModel.Position, NextHop = NextHopDelay() });
+			s_nitros.Add(new Nitro { Model = crateModel, Home = crateModel.Position, Yaw = crateModel.EulerDegrees.Y, NextHop = NextHopDelay() });
 		}
 	}
 
@@ -559,7 +560,7 @@ public static class CrateFx
 			{
 				// Landed: settle and schedule the next random hop.
 				n.Model.Position = n.Home;
-				n.Model.EulerDegrees = Vector3.Zero;
+				n.Model.EulerDegrees = new Vector3(0.0f, n.Yaw, 0.0f);
 				n.Hopping = false;
 				n.NextHop = NextHopDelay();
 				continue;
@@ -567,7 +568,7 @@ public static class CrateFx
 			n.Model.Position = pos;
 			float decay = MathF.Max(0.0f, 1.0f - n.HopT / 0.35f);
 			float tilt = 0.15f * MathF.Sin(25.13f * n.HopT) * decay;
-			n.Model.EulerDegrees = new Vector3(tilt, 0.0f, -tilt);
+			n.Model.EulerDegrees = new Vector3(tilt, n.Yaw, -tilt);
 		}
 
 		// TNT fuse: the rig (tnt_fuse_sheet, 44 frames from landing to the boom at ~2.2 s)

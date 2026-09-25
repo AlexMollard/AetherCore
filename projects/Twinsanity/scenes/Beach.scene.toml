@@ -27,16 +27,18 @@ sun_color = [ 1.0, 0.792, 0.0 ]
 sun_direction = [ -0.3816, 0.8192, 0.4281 ]
 sun_intensity = 2.73
 # 3. PS2 object lighting (object_lit materials): the beach chunk's own object lights
-# (beach.sm2 SceneryData, logs/wumpa/lights-dump), at the same k = 0.29 the rig calibration
-# above measured: ambient 0.29*1.5; directional 0 = 0.29*5.3735*(0.5583, 0.4417, 0) towards
-# (0.3816, 0.8192, 0.4281) game space; directional 1 = 0.29*5.047*(0.2412, 0.2634, 0.4953)
-# horizontal fill towards (-0.6518, 0, -0.7584) game space. Measured against rig wumpa
-# close-ups (logs/wumpa/).
-object_ambient = [ 0.435, 0.435, 0.435 ]
+# (beach.sm2 SceneryData, logs/wumpa/lights-dump) at half their record intensity - the scale the
+# game itself uploads: the per-object light matrix in the rig's VIF packets (EE RAM, logs/objlight)
+# holds ambient 0.75 = 0.5*4.5*0.333, directional 0 colour (1.5, 1.187, 0) = 0.5*5.3735*(0.5583,
+# 0.4417, 0) towards (0.3816, 0.8192, 0.4281) game space, directional 1 colour (0.609, 0.665, 1.25)
+# = 0.5*5.047*(0.2412, 0.2634, 0.4953) towards (-0.6518, 0, -0.7584) game space; the GS shows
+# texture x that (0x80 = 1.0; poking the records on the rig: ambient-only chickens and Crash render
+# 0.75x their texture, linear in the intensity). Engine x = -game x.
+object_ambient = [ 0.75, 0.75, 0.75 ]
 object_light0_direction = [ -0.3816, 0.8192, 0.4281 ]
-object_light0_color = [ 0.87, 0.688, 0.0 ]
+object_light0_color = [ 1.5, 1.1867, 0.0 ]
 object_light1_direction = [ 0.6518, 0.0, -0.7584 ]
-object_light1_color = [ 0.353, 0.385, 0.724 ]
+object_light1_color = [ 0.6087, 0.6648, 1.25 ]
 
 [scene]
 name = 'Beach'

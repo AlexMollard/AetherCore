@@ -310,7 +310,11 @@ namespace TwExtract
 		// doubleSided: the GS never culls, and the game leaves culling off for foliage, cloth and decals.
 		// baseColorFactor above 1 is outside glTF's schema but not its maths: it carries the part of the
 		// PS2's vertex-colour range COLOR_0 cannot (see Space.Channel), and the engine applies it as is.
-		float gain = vertexLit ? Space.VertexGain : 1f;
+		// Scenery only: an object's vertex colour is a constant ~0xFE that its run-time lighting reads
+		// as 1.0, the same as its skinned parts' missing COLOR_0. Rig (logs/chickenpush): with the gain,
+		// rigid chicken bodies and crates rendered 2x the original's brightness (the chickens saturated
+		// white) while Crash's skin matched.
+		float gain = vertexLit && !m_isObject ? Space.VertexGain : 1f;
 		var gltfMat = new Dictionary<string, object>
 		{
 			["name"] = name,
@@ -472,7 +476,22 @@ namespace TwExtract
 				p.Col.Add(Space.Channel(d.R + d.ER)); p.Col.Add(Space.Channel(d.G + d.EG)); p.Col.Add(Space.Channel(d.B + d.EB));
 				p.Col.Add(1f);
 			}
+			int first = p.Idx.Count;
 			Strip(p, baseVertex, v.Count, j => v[j].Conn);
+			// The GS never culls, so a strip's starting orientation is arbitrary in the data: whole rigid
+			// models (every crate) came out wound against their authored normals, and the renderer's
+			// two-sided lighting (normal flipped on back faces) then lit them inside out - a crate's top
+			// took no key light. Wind each triangle to agree with its vertices' normals.
+			for (int i = first; i + 2 < p.Idx.Count; i += 3)
+			{
+				int a = (int)p.Idx[i], b = (int)p.Idx[i + 1], c = (int)p.Idx[i + 2];
+				var face = Vector3.Cross(At(p.Pos, b) - At(p.Pos, a), At(p.Pos, c) - At(p.Pos, a));
+				if (Vector3.Dot(face, At(p.Nrm, a) + At(p.Nrm, b) + At(p.Nrm, c)) < 0f)
+				{
+					p.Idx[i + 1] = (uint)c;
+					p.Idx[i + 2] = (uint)b;
+				}
+			}
 		}
 
 		// Vertices without authored normals (skins, some props) get area-weighted face normals.
