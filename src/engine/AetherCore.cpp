@@ -17,7 +17,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "animation/AnimationBlend.hpp"
 #include "animation/AnimationCompiler.hpp"
 #include "animation/AnimationDatabase.hpp"
 
@@ -177,18 +176,6 @@ namespace aether
 
 		m_rendering->RegisterPasses(m_services);
 
-		if (fullRuntime)
-		{
-			m_animationBlend = std::make_unique<AnimationBlendSystem>();
-
-			m_animationBlend->Init(256, 128);
-
-			m_services.Register<AnimationBlendSystem>(*m_animationBlend);
-
-			RenderQueue& rq = m_rendering->GetRenderQueue();
-			rq.SetAnimationBlendSystem(m_animationBlend.get());
-		}
-
 		m_gpu->SetSwapchainRecreatedCallback([this]() { m_rendering->RecreateSwapchainResources(m_services); });
 
 		// Referencing the anchor is what pulls the override translation unit out of
@@ -220,12 +207,6 @@ namespace aether
 			m_cameras->Shutdown();
 		}
 		m_services.Get<AssetSubsystem>().Shutdown();
-
-		// profile (see the fullRuntime guard in Init); the UiShell launcher never
-		if (m_animationBlend)
-		{
-			m_animationBlend->Shutdown();
-		}
 
 		m_gpu->Shutdown();
 		m_services.Get<PlatformSubsystem>().Shutdown();

@@ -70,6 +70,9 @@ namespace aether
 			std::uint32_t skinJointCount = 0;
 			std::uint32_t animClipIndex = 0;
 			float animTime = 0.f;
+			std::uint32_t fadeClipIndex = 0;
+			float fadeTime = 0.f;
+			float fadeWeight = 0.f;
 			const AnimationDatabase* animDb = nullptr;
 			if (const auto* const smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
 			{
@@ -79,6 +82,9 @@ namespace aether
 					skinJointCount = smc->jointCount;
 					animClipIndex = smc->clipIndex;
 					animTime = smc->animTime;
+					fadeClipIndex = smc->fadeClipIndex;
+					fadeTime = smc->fadeTime;
+					fadeWeight = smc->fadeWeight;
 					animDb = smc->animDb;
 				}
 			}
@@ -115,6 +121,9 @@ namespace aether
 			        .skinJointCount = skinJointCount,
 			        .animClipIndex = animClipIndex,
 			        .animTime = animTime,
+			        .fadeClipIndex = fadeClipIndex,
+			        .fadeTime = fadeTime,
+			        .fadeWeight = fadeWeight,
 			        .worldBoundingSphere = worldSphere,
 			        .ragdollOverrides = std::move(ragdollOverrides),
 			        .animDb = animDb,

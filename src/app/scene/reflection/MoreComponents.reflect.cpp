@@ -187,14 +187,6 @@ AE_FIELD_NT("enabled", enabled, Bool, "Scripts read and set this through the ani
 AE_NOT_ADDABLE()
 AE_COMPONENT_END()
 
-AE_COMPONENT(AnimationBlendComponent, "Animation Blend", "Rendering", ICON_FA_SHUFFLE)
-AE_FIELD_NT("primary_clip", primaryClip, UInt, "The clip currently playing. When a transition finishes, the secondary clip takes this slot.")
-AE_FIELD_NT("secondary_clip", secondaryClip, UInt, "The clip being blended toward. Only meaningful during a transition; it is cleared once the blend completes.")
-AE_FIELD_NT("blend_weight", blendWeight, Float, "How much of the primary clip is still showing: it counts DOWN from 1 to 0 across a transition, and reaching 0 is what promotes the secondary clip and ends the blend.")
-AE_FIELD_NT("transition_speed", transitionSpeed, Float, "Weight lost per second, so a transition lasts 1 divided by this: 4 gives a quarter-second crossfade, 1 a full second.")
-AE_NOT_ADDABLE()
-AE_COMPONENT_END()
-
 // UI components: authored data (the runtime resolved-rect is not reflected). Addable via
 // the MCP / editor so UI can be built through the authoring flow, and
 // serialized/inspected/MCP-reachable via reflection. Canvas/Rect/Text ride the generic

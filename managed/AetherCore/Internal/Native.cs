@@ -1264,7 +1264,7 @@ internal static unsafe partial class Native
     internal static partial int aether_anim_get_entities_with_animator(uint* buf, int cap);
 
     [LibraryImport(Lib)]
-    internal static partial void aether_anim_set_blend(uint id, int secondaryClipIndex, float transitionSpeed);
+    internal static partial void aether_anim_crossfade(uint id, int clipIndex, float seconds);
 
     [LibraryImport(Lib)]
     internal static partial void aether_anim_set_root_motion_enabled(uint id, int enabled);

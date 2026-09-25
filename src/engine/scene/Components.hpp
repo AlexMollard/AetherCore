@@ -277,16 +277,14 @@ namespace aether
 		float playbackSpeed = 1.f;
 		std::uint32_t nodePoseOffset = 0;
 		bool looping = true;
+		// Crossfade (see CrossFadeTo): the clip being faded out keeps its own clock and shows at
+		// fadeWeight, which falls from 1 to 0 at fadeRate per second. fadeWeight 0 = no fade.
+		std::uint32_t fadeClipIndex = 0;
+		float fadeTime = 0.f;
+		float fadeWeight = 0.f;
+		float fadeRate = 0.f;
+		bool fadeLooping = true;
 		std::vector<assets::GltfAnimation> pendingExternalAnims;
-	};
-
-	struct AnimationBlendComponent
-	{
-		std::uint32_t primaryClip = 0;
-		std::uint32_t secondaryClip = 0;
-		float blendWeight = 1.0f;
-		float transitionSpeed = 4.0f;
-		bool inTransition = false;
 	};
 
 	struct RootMotionComponent

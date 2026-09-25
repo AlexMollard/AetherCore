@@ -72,6 +72,11 @@ struct AnimatorSampleJob
     // RagdollOverrideEntry and node_flatten.slang's own use of this field.
     [[vk::offset(52)]] uint                          overrideCount;
     [[vk::offset(56)]] DevicePtr<RagdollOverrideEntry> overrides;
+    // Crossfade: outgoing clip sampled at its own time, blended over the pose at fadeWeight.
+    [[vk::offset(64)]] uint                          fadeClipIndex;
+    [[vk::offset(68)]] float                         fadeTime;
+    [[vk::offset(72)]] float                         fadeWeight;
+    [[vk::offset(76)]] uint                          _pad0;
 };
 
 struct SampledNodePose
@@ -140,39 +145,6 @@ struct AnimationSamplePush
     [[vk::offset(64)]] DevicePtr<SampledNodePose>    sampledPoses;
     [[vk::offset(72)]] uint                          jobCount;
     [[vk::offset(76)]] uint                          clipCount;
-};
-
-struct AnimatorBlendJob
-{
-    [[vk::offset(0)]]  uint                     primaryClipIndex;
-    [[vk::offset(4)]]  float                    primaryTime;
-    [[vk::offset(8)]]  uint                     secondaryClipIndex;
-    [[vk::offset(12)]] float                    secondaryTime;
-    [[vk::offset(16)]] float                    blendWeight;
-    [[vk::offset(20)]] uint                     nodePoseOffset;
-    [[vk::offset(24)]] uint                     nodeCount;
-    [[vk::offset(28)]] uint                     _padReserved;
-    [[vk::offset(32)]] DevicePtr<GpuClip>       clips;
-    [[vk::offset(40)]] DevicePtr<GpuChannel>    channels;
-    [[vk::offset(48)]] DevicePtr<float>         times;
-    [[vk::offset(56)]] DevicePtr<float4>        values;
-    [[vk::offset(64)]] uint                     clipCount;
-    [[vk::offset(68)]] uint                     _pad0;
-};
-
-struct AnimationBlendPush
-{
-    [[vk::offset(0)]]  DevicePtr<GpuClip>            animDbClips;
-    [[vk::offset(8)]]  DevicePtr<GpuChannel>         animDbChannels;
-    [[vk::offset(16)]] DevicePtr<float>              animDbTimes;
-    [[vk::offset(24)]] DevicePtr<float4>             animDbValues;
-    [[vk::offset(32)]] DevicePtr<float4>             bindTranslations;
-    [[vk::offset(40)]] DevicePtr<float4>             bindRotations;
-    [[vk::offset(48)]] DevicePtr<float4>             bindScales;
-    [[vk::offset(56)]] DevicePtr<AnimatorBlendJob>   blendJobs;
-    [[vk::offset(64)]] DevicePtr<SampledNodePose>    sampledPoses;
-    [[vk::offset(72)]] uint                          jobCount;
-    [[vk::offset(76)]] uint                          _pad0;
 };
 
 struct PoseInitPush

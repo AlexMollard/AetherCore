@@ -266,9 +266,15 @@ namespace CullContracts
 			// who fills overridesAddr and when.
 			std::uint32_t overrideCount = 0;
 			gpu::DeviceAddress overridesAddr = 0;
+			// Crossfade: the outgoing clip sampled at its own time and blended over the pose at
+			// fadeWeight. fadeWeight 0 (every draw that is not mid-fade) skips it.
+			std::uint32_t fadeClipIndex = 0;
+			float fadeTime = 0.0f;
+			float fadeWeight = 0.0f;
+			std::uint32_t _pad0 = 0;
 		};
 
-		static_assert(sizeof(AnimatorSampleJob) == 64, "AnimatorSampleJob layout changed - update shaders/include/AnimationContracts.slangh.");
+		static_assert(sizeof(AnimatorSampleJob) == 80, "AnimatorSampleJob layout changed - update shaders/include/AnimationContracts.slangh.");
 		static_assert(offsetof(AnimatorSampleJob, animClipIndex) == 0);
 		static_assert(offsetof(AnimatorSampleJob, animTime) == 4);
 		static_assert(offsetof(AnimatorSampleJob, nodePoseOffset) == 8);
@@ -280,6 +286,9 @@ namespace CullContracts
 		static_assert(offsetof(AnimatorSampleJob, clipCount) == 48);
 		static_assert(offsetof(AnimatorSampleJob, overrideCount) == 52);
 		static_assert(offsetof(AnimatorSampleJob, overridesAddr) == 56);
+		static_assert(offsetof(AnimatorSampleJob, fadeClipIndex) == 64);
+		static_assert(offsetof(AnimatorSampleJob, fadeTime) == 68);
+		static_assert(offsetof(AnimatorSampleJob, fadeWeight) == 72);
 
 		// One driving bone's current pose, uploaded once a frame for a ragdoll-driven
 		// mesh instance - see RagdollSkinDrive.hpp. `transform` is already in the
@@ -407,42 +416,6 @@ namespace CullContracts
 		static_assert(offsetof(PoseInitPush, sampledPosesAddr) == 32);
 		static_assert(offsetof(PoseInitPush, jobCount) == 40);
 		static_assert(offsetof(PoseInitPush, nodeCountPerJob) == 44);
-
-		struct AnimatorBlendJob
-		{
-			std::uint32_t primaryClipIndex = 0;
-			float primaryTime = 0.0f;
-			std::uint32_t secondaryClipIndex = 0;
-			float secondaryTime = 0.0f;
-			float blendWeight = 1.0f;
-			std::uint32_t nodePoseOffset = 0;
-			std::uint32_t nodeCount = 0;
-			gpu::DeviceAddress clipsAddr = 0;
-			gpu::DeviceAddress channelsAddr = 0;
-			gpu::DeviceAddress timesAddr = 0;
-			gpu::DeviceAddress valuesAddr = 0;
-			std::uint32_t clipCount = 0;
-			std::uint32_t _pad0 = 0;
-		};
-
-		static_assert(sizeof(AnimatorBlendJob) == 72, "AnimatorBlendJob layout changed - update shaders/include/AnimationContracts.slangh.");
-
-		struct AnimationBlendPush
-		{
-			gpu::DeviceAddress animDbClipsAddr = 0;
-			gpu::DeviceAddress animDbChannelsAddr = 0;
-			gpu::DeviceAddress animDbTimesAddr = 0;
-			gpu::DeviceAddress animDbValuesAddr = 0;
-			gpu::DeviceAddress bindTranslationsAddr = 0;
-			gpu::DeviceAddress bindRotationsAddr = 0;
-			gpu::DeviceAddress bindScalesAddr = 0;
-			gpu::DeviceAddress blendJobsAddr = 0;
-			gpu::DeviceAddress sampledPosesAddr = 0;
-			std::uint32_t jobCount = 0;
-			std::uint32_t _pad0 = 0;
-		};
-
-		static_assert(sizeof(AnimationBlendPush) == 80, "AnimationBlendPush layout changed - update shaders/include/AnimationContracts.slangh.");
 
 	} // namespace AnimationContracts
 

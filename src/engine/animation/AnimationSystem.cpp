@@ -10,6 +10,51 @@
 
 namespace aether
 {
+	namespace
+	{
+		float Advance(float time, float dt, float speed, bool looping, float duration)
+		{
+			time += dt * speed;
+			if (looping && duration > 0.f && time > duration)
+			{
+				time = std::fmod(time, duration);
+			}
+			return time;
+		}
+	} // namespace
+
+	void CrossFadeTo(SkinnedMeshComponent& smc, std::uint32_t clip, float seconds)
+	{
+		if (seconds > 0.f)
+		{
+			// Mid-fade, keep whichever clip shows more as the one fading out.
+			if (smc.fadeWeight <= 0.5f)
+			{
+				smc.fadeClipIndex = smc.clipIndex;
+				smc.fadeTime = smc.animTime;
+				smc.fadeLooping = smc.looping;
+			}
+			smc.fadeWeight = 1.f;
+			smc.fadeRate = 1.f / seconds;
+		}
+		else
+		{
+			smc.fadeWeight = 0.f;
+		}
+		smc.clipIndex = clip;
+		smc.animTime = 0.f;
+	}
+
+	void AdvanceAnimation(SkinnedMeshComponent& smc, float dt, float clipDuration, float fadeClipDuration)
+	{
+		smc.animTime = Advance(smc.animTime, dt, smc.playbackSpeed, smc.looping, clipDuration);
+		if (smc.fadeWeight > 0.f)
+		{
+			smc.fadeTime = Advance(smc.fadeTime, dt, smc.playbackSpeed, smc.fadeLooping, fadeClipDuration);
+			smc.fadeWeight = std::max(0.f, smc.fadeWeight - smc.fadeRate * dt);
+		}
+	}
+
 	void AnimationSystem::Update(World& world, float dt)
 	{
 		AE_PROFILE_ZONE();
@@ -27,38 +72,15 @@ namespace aether
 				continue;
 			}
 
-			if (smc.animDb->GetClipCount() == 0)
+			const std::uint32_t clipCount = smc.animDb->GetClipCount();
+			if (clipCount == 0)
 			{
 				continue;
 			}
 
-			smc.animTime += dt * smc.playbackSpeed;
-			if (smc.looping)
-			{
-				const float dur = smc.animDb->GetClipDuration(smc.clipIndex);
-				if (dur > 0.f && smc.animTime > dur)
-				{
-					smc.animTime = std::fmod(smc.animTime, dur);
-				}
-			}
-		}
-
-		auto blendView = world.View<AnimationBlendComponent>();
-		for (const auto& [entity, blendComp]: blendView.each())
-		{
-			if (!blendComp.inTransition || ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
-			{
-				continue;
-			}
-
-			blendComp.blendWeight -= blendComp.transitionSpeed * dt;
-			if (blendComp.blendWeight <= 0.0f)
-			{
-				blendComp.blendWeight = 1.0f;
-				blendComp.primaryClip = blendComp.secondaryClip;
-				blendComp.secondaryClip = 0;
-				blendComp.inTransition = false;
-			}
+			const float clipDuration = smc.animDb->GetClipDuration(smc.clipIndex);
+			const float fadeDuration = smc.fadeClipIndex < clipCount ? smc.animDb->GetClipDuration(smc.fadeClipIndex) : 0.f;
+			AdvanceAnimation(smc, dt, clipDuration, fadeDuration);
 		}
 	}
 } // namespace aether

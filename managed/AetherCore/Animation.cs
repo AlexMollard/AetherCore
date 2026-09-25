@@ -56,9 +56,12 @@ public static unsafe class Animation
     /// <summary>Find a clip index by name, or -1 if not found.</summary>
     public static int Find(Entity entity, string name) => Native.aether_anim_find(entity.Id, name);
 
-    /// <summary>Cross-fade to a secondary clip. Default transition speed if &lt;= 0.</summary>
-    public static void SetBlend(Entity entity, int secondaryClipIndex, float transitionSpeed = 0f)
-        => Native.aether_anim_set_blend(entity.Id, secondaryClipIndex, transitionSpeed);
+    /// <summary>
+    /// Start <paramref name="clipIndex"/> from time 0 while the clip playing now keeps running and
+    /// fades out over <paramref name="seconds"/>. seconds &lt;= 0 switches outright, like SetClip.
+    /// </summary>
+    public static void CrossFade(Entity entity, int clipIndex, float seconds)
+        => Native.aether_anim_crossfade(entity.Id, clipIndex, seconds);
 
     /// <summary>
     /// NOT IMPLEMENTED. Pose sampling runs on the GPU and nothing reads the hips back, so no

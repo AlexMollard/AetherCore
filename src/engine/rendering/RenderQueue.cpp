@@ -12,7 +12,6 @@
 #include "gpu/GpuTypes.hpp"
 #include "gpu/PushConstantsBytes.hpp"
 #include "gpu/ResourceRegistry.hpp"
-#include "animation/AnimationBlend.hpp"
 #include "io/FileSystem.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "rendering/GpuContracts.hpp"
@@ -567,6 +566,12 @@ namespace aether
 						animJob.timesAddr = drawAnimDb->GetTimesAddr();
 						animJob.valuesAddr = drawAnimDb->GetValuesAddr();
 						animJob.clipCount = drawClipCount;
+						if (dc.fadeWeight > 0.0f && dc.fadeClipIndex < drawClipCount)
+						{
+							animJob.fadeClipIndex = dc.fadeClipIndex;
+							animJob.fadeTime = dc.fadeTime;
+							animJob.fadeWeight = dc.fadeWeight;
+						}
 
 						// Ragdoll skin-drive seam: dc.ragdollOverrides is empty for every
 						// ordinary animated draw (see RagdollSkinDrive.hpp for who fills it).
@@ -633,6 +638,9 @@ namespace aether
 						mix(drawAnimDb->GetGeneration());
 						mix(static_cast<std::uint64_t>(dc.animClipIndex));
 						mix(std::bit_cast<std::uint32_t>(dc.animTime));
+						mix(static_cast<std::uint64_t>(animJob.fadeClipIndex));
+						mix(std::bit_cast<std::uint32_t>(animJob.fadeTime));
+						mix(std::bit_cast<std::uint32_t>(animJob.fadeWeight));
 						mix(static_cast<std::uint64_t>(dc.skinIndex));
 						mix((static_cast<std::uint64_t>(skinPaletteOffset) << 32) | dc.skinJointCount);
 						mix((static_cast<std::uint64_t>(nodePoseCursor) << 32) | drawNodeCount);
@@ -823,29 +831,6 @@ namespace aether
 				cmdList.EndDebugLabel();
 
 				cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
-			}
-
-			if (m_animationBlendSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && ((m_debugAnimPassMask & 2u) != 0u))
-			{
-				const AnimationContracts::AnimationBlendPush& blendPc = m_animationBlendSystem->GetBlendPush();
-				const std::uint32_t blendJobCount = m_animationBlendSystem->GetBlendJobCount();
-				const bool blendPushValid = blendPc.blendJobsAddr != 0 && blendPc.sampledPosesAddr != 0;
-				if (blendJobCount > 0 && blendPc.jobCount > 0 && blendPushValid)
-				{
-					AE_PROFILE_ZONE();
-					const auto animBlendPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animBlend);
-					cmdList.BindComputePipeline(animBlendPipe.state);
-					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
-					cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
-					{
-						AE_GPU_ZONE_SCOPED(rawCmd, "Animation.AnimBlend");
-						const std::uint32_t groups = (blendPc.jobCount + 63u) / 64u;
-						cmdList.Dispatch(groups, 1, 1);
-					}
-					cmdList.EndDebugLabel();
-
-					cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
-				}
 			}
 
 			m_animationSampleJobCount = 0;
@@ -1289,17 +1274,6 @@ namespace aether
 		{
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten compute pipeline."));
 		}
-
-		animBlend = gpu::ResourceRegistry::CreateComputePipeline(device,
-		        gpu::ComputePipelineDesc{
-		                .shaderVfsPath = "shaders://anim_blend.spv",
-		                .shaderEntry = "main",
-		                .debugName = "Animation.AnimBlend",
-		        });
-		if (!animBlend.IsValid())
-		{
-			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
-		}
 	}
 
 	void RenderQueueSharedPipelines::Shutdown()
@@ -1323,11 +1297,6 @@ namespace aether
 		{
 			gpu::ResourceRegistry::Destroy(poseInit);
 			poseInit = {};
-		}
-		if (animBlend.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(animBlend);
-			animBlend = {};
 		}
 	}
 } // namespace aether

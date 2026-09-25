@@ -90,6 +90,57 @@ float4 SampleChannelValue(GpuChannel channel, float animTime, float* times, floa
     return lerp(values[valueBase + bracket.lo], values[valueBase + bracket.hi], bracket.alpha);
 }
 
+float4 SampleRotation(GpuChannel channel, float animTime, float* times, float4* values)
+{
+    const uint valueBase = channel.valuesOffset / 16u;
+    if (channel.timesCount <= 1u || channel.interpolation == 1u)
+    {
+        return values[valueBase];
+    }
+    Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, animTime, times);
+    return Nlerp(values[valueBase + bracket.lo], values[valueBase + bracket.hi], bracket.alpha);
+}
+
+// Samples every channel of `clipIndex` at `animTime` into the poses. weight 1 overwrites; below 1
+// the sample is blended over what is already there (a crossfade's outgoing clip over the new one).
+// Nodes a clip does not animate keep what is there: the bind pose, or the other clip's value.
+void SampleClip(AnimatorSampleJob job, uint clipIndex, float animTime, float weight, SampledNodePose* poses)
+{
+    GpuClip clip = job.clips.Ptr()[clipIndex];
+    GpuChannel* channels = job.channels.Ptr();
+    float* times = job.times.Ptr();
+    float4* values = job.values.Ptr();
+    const bool overwrite = weight >= 1.0f;
+
+    for (uint chIdx = 0u; chIdx < clip.channelCount; ++chIdx)
+    {
+        GpuChannel channel = channels[clip.channelOffset + chIdx];
+
+        uint nodeIdx = channel.nodeIndex;
+        if (nodeIdx >= job.nodeCount)
+            continue;
+
+        uint animPath = channel.animPath;
+        uint poseIdx = job.nodePoseOffset + nodeIdx;
+
+        if (animPath == 0u)  // Translation
+        {
+            float4 sampled = SampleChannelValue(channel, animTime, times, values);
+            poses[poseIdx].translation = overwrite ? sampled : lerp(poses[poseIdx].translation, sampled, weight);
+        }
+        else if (animPath == 1u)  // Rotation
+        {
+            float4 sampled = SampleRotation(channel, animTime, times, values);
+            poses[poseIdx].rotation = overwrite ? sampled : Nlerp(poses[poseIdx].rotation, sampled, weight);
+        }
+        else if (animPath == 2u)  // Scale
+        {
+            float4 sampled = SampleChannelValue(channel, animTime, times, values);
+            poses[poseIdx].scale = overwrite ? sampled : lerp(poses[poseIdx].scale, sampled, weight);
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 [shader("compute")]
@@ -108,54 +159,10 @@ void main(uint3 dtid : SV_DispatchThreadID)
     if (job.clips.addr == 0 || job.channels.addr == 0 || job.times.addr == 0 || job.values.addr == 0 || pc.sampledPoses.addr == 0)
         return;
 
-    GpuClip* clips = job.clips.Ptr();
-    GpuChannel* channels = job.channels.Ptr();
-    float* times = job.times.Ptr();
-    float4* values = job.values.Ptr();
     SampledNodePose* poses = pc.sampledPoses.Ptr();
-
-    const uint poseBase = job.nodePoseOffset;
-
-    GpuClip clip = clips[job.animClipIndex];
-
-    // Sample all channels in this clip
-    for (uint chIdx = 0u; chIdx < clip.channelCount; ++chIdx)
+    SampleClip(job, job.animClipIndex, job.animTime, 1.0f, poses);
+    if (job.fadeWeight > 0.0f && job.fadeClipIndex < job.clipCount)
     {
-        uint globalChIdx = clip.channelOffset + chIdx;
-        GpuChannel channel = channels[globalChIdx];
-
-        uint nodeIdx = channel.nodeIndex;
-        if (nodeIdx >= job.nodeCount)
-            continue;
-
-        // Sample keyframes based on channel path type
-        uint animPath = channel.animPath;
-        uint poseIdx = poseBase + nodeIdx;
-
-        if (animPath == 0u)  // Translation
-        {
-            float4 sampled = SampleChannelValue(channel, job.animTime, times, values);
-            poses[poseIdx].translation = sampled;
-        }
-        else if (animPath == 1u)  // Rotation
-        {
-            const uint valueBase = channel.valuesOffset / 16u;
-            float4 sampled;
-            if (channel.timesCount <= 1u || channel.interpolation == 1u)
-            {
-                sampled = values[valueBase];
-            }
-            else
-            {
-                Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, job.animTime, times);
-                sampled = Nlerp(values[valueBase + bracket.lo], values[valueBase + bracket.hi], bracket.alpha);
-            }
-            poses[poseIdx].rotation = sampled;
-        }
-        else if (animPath == 2u)  // Scale
-        {
-            float4 sampled = SampleChannelValue(channel, job.animTime, times, values);
-            poses[poseIdx].scale = sampled;
-        }
+        SampleClip(job, job.fadeClipIndex, job.fadeTime, job.fadeWeight, poses);
     }
 }

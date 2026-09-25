@@ -11,6 +11,7 @@
 #include "BinaryFormats.hpp"
 #include "IEngineRuntime.hpp"
 #include "animation/AnimationCompiler.hpp"
+#include "animation/AnimationSystem.hpp"
 #include "animation/AnimationDatabase.hpp"
 #include "assets/GltfAsset.hpp"
 #include "io/FileSystem.hpp"
@@ -333,8 +334,7 @@ AE_SCRIPT_API void aether_anim_set_clip(std::uint32_t id, std::int32_t clipIndex
 	const auto uIdx = static_cast<std::uint32_t>(clipIndex);
 	const auto setClip = [uIdx](aether::SkinnedMeshComponent& smc)
 	{
-		smc.clipIndex = uIdx;
-		smc.animTime = 0.0f;
+		aether::CrossFadeTo(smc, uIdx, 0.0f);
 	};
 	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 	{
@@ -529,37 +529,22 @@ AE_SCRIPT_API std::int32_t aether_anim_get_entities_with_animator(std::uint32_t*
 	});
 }
 
-AE_SCRIPT_API void aether_anim_set_blend(std::uint32_t id, std::int32_t secondaryClipIndex, float transitionSpeed)
+AE_SCRIPT_API void aether_anim_crossfade(std::uint32_t id, std::int32_t clipIndex, float seconds)
 {
 	SafeExport([&] -> void
 	{
-	if (!EntityAlive(id))
-	{
-		return;
-	}
-	if (secondaryClipIndex < 0)
+	if (clipIndex < 0)
 	{
 		return;
 	}
 	auto& w = ActiveWorld();
-	const auto uIdx = static_cast<std::uint32_t>(secondaryClipIndex);
-	const float speed = transitionSpeed > 0.0f ? transitionSpeed : 4.0f;
-	const aether::Entity entity{id};
-
-	const auto applyBlend = [&]()
+	const auto uIdx = static_cast<std::uint32_t>(clipIndex);
+	const auto fade = [uIdx, seconds](aether::SkinnedMeshComponent& smc) { aether::CrossFadeTo(smc, uIdx, seconds); };
+	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 	{
-		auto& blend = w.GetRegistry().get_or_emplace<aether::AnimationBlendComponent>(aether::World::ToEntt(entity));
-		blend.secondaryClip = uIdx;
-		blend.blendWeight = 1.0f;
-		blend.transitionSpeed = speed;
-		blend.inTransition = true;
-	};
-
-	if (w.TryGet<aether::SkinnedMeshComponent>(entity))
-	{
-		applyBlend();
+		fade(*smc);
 	}
-	ForEachSpawnedSmc(w, id, [&](aether::SkinnedMeshComponent&) { applyBlend(); });
+	ForEachSpawnedSmc(w, id, fade);
 	});
 }
 

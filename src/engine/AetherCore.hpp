@@ -31,8 +31,6 @@ namespace aether
 {
 	struct FrameConstants;
 
-	class AnimationBlendSystem;
-
 	// The one place settings turn into a present mode, so the three-way choice can never
 	// disagree with itself across the call sites that need it.
 	[[nodiscard]] constexpr gpu::PresentMode DesiredPresentMode(const EngineSettings& settings) noexcept
@@ -356,8 +354,6 @@ namespace aether
 		std::unique_ptr<CameraSubsystem> m_cameras;
 		std::unique_ptr<IUiOverlay> m_uiOverlay;
 		std::unique_ptr<RenderingSubsystem> m_rendering;
-
-		std::unique_ptr<AnimationBlendSystem> m_animationBlend;
 
 		RuntimeProfile m_profile = RuntimeProfile::Full;
 

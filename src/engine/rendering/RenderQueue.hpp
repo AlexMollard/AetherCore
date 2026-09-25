@@ -19,7 +19,6 @@
 
 namespace aether
 {
-	class AnimationBlendSystem;
 	class GraphicsPipeline;
 	class Mesh;
 
@@ -29,7 +28,6 @@ namespace aether
 		gpu::PipelineHandle animSample;
 		gpu::PipelineHandle nodeFlatten;
 		gpu::PipelineHandle poseInit;
-		gpu::PipelineHandle animBlend;
 
 		void Initialize(gpu::Device device);
 		void Shutdown();
@@ -47,6 +45,10 @@ namespace aether
 		std::uint32_t skinJointCount = 0;
 		std::uint32_t animClipIndex = 0;
 		float animTime = 0.0f;
+		// Crossfade: the outgoing clip, its own time, and how much of it still shows (0 = none).
+		std::uint32_t fadeClipIndex = 0;
+		float fadeTime = 0.0f;
+		float fadeWeight = 0.0f;
 		glm::vec4 worldBoundingSphere{};
 		// Ragdoll skin-drive seam (see RagdollSkinDrive.hpp). Empty for every ordinary
 		// draw - the default-constructed vector allocates nothing, so an unragdolled
@@ -156,11 +158,6 @@ namespace aether
 		void SetDebugLogSkinJobs(std::uint32_t frameCount)
 		{
 			m_debugLogSkinJobsFramesLeft = frameCount;
-		}
-
-		void SetAnimationBlendSystem(AnimationBlendSystem* sys)
-		{
-			m_animationBlendSystem = sys;
 		}
 
 		// constants addresses; the computePipeline/layout must then be compatible
@@ -348,7 +345,5 @@ namespace aether
 		const AnimationDatabase* m_animationDb = nullptr;
 		std::uint32_t m_animationSampleJobCount = 0;
 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
-
-		AnimationBlendSystem* m_animationBlendSystem = nullptr;
 	};
 } // namespace aether
