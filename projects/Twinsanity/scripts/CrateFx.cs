@@ -305,7 +305,7 @@ public static class CrateFx
 	private static Entity SpawnEmitter(string name, Vector3 center, string page, Vector4 uv, int count, float rate, float emitDuration,
 		float life, Vector3 velocity, Vector3 velJitter, Vector3 spawnJitter, float gravityY,
 		Vector4[] colorKeys, float[] alphaKeys, float[] sizeKeys, float[] rotKeys,
-		int shape = 0, float radialSpeed = 0.0f, bool additive = true)
+		int shape = 0, float radialSpeed = 0.0f, bool additive = true, int unkByte7 = 1)
 	{
 		Entity e = World.Create();
 		e.Name = name;
@@ -340,17 +340,21 @@ public static class CrateFx
 		c.SetVector4("uv_rect", DiscUv(uv));
 		Particles.SetKeys(e, ParticleKeyChannel.Color, colorKeys);
 		SetScalarKeys(e, ParticleKeyChannel.Alpha, alphaKeys);
-		SetScalarKeys(e, ParticleKeyChannel.Size, sizeKeys);
+		// The disc's UnkByte7 = 1 defs (EXPLODE_*_1A/1B, CRASH_DROP2, crash_LAND1) draw at twice the
+		// edge of the UnkByte7 = 3 ones (EXPLODE_*_1C, CRATE_BREAK). Rig in crate widths: the nitro
+		// cloud is 4.1 x 2.6 at +0.55 s and the 1C flash about 5 wide; at one scale for both, either
+		// the cloud came out half as wide or the flash twice as wide (fx_nitro.png).
+		SetScalarKeys(e, ParticleKeyChannel.Size, sizeKeys, unkByte7 == 1 ? 2.0f : 1.0f);
 		SetScalarKeys(e, ParticleKeyChannel.Rotation, rotKeys);
 		return e;
 	}
 
-	private static void SetScalarKeys(Entity e, ParticleKeyChannel channel, float[] pairs)
+	private static void SetScalarKeys(Entity e, ParticleKeyChannel channel, float[] pairs, float sizeScale = 1.0f)
 	{
 		var keys = new Vector4[pairs.Length / 2];
-		// GS alpha: 0x80 = 1.0 (additive may exceed 1). Sizes arrive as raw * 1e-4, the disc's
-		// half-extent; the engine key is the quad edge.
-		float scale = channel == ParticleKeyChannel.Alpha ? 1.0f / 128.0f : channel == ParticleKeyChannel.Size ? 2.0f : 1.0f;
+		// GS alpha: 0x80 = 1.0 (additive may exceed 1). Sizes arrive as raw * 1e-4; the engine
+		// key is the quad edge (DiscSizeToEdge).
+		float scale = channel == ParticleKeyChannel.Alpha ? 1.0f / 128.0f : channel == ParticleKeyChannel.Size ? DiscSizeToEdge * 1e4f * sizeScale : 1.0f;
 		for (int i = 0; i < keys.Length; i++)
 		{
 			keys[i] = new Vector4(pairs[i * 2], pairs[i * 2 + 1] * scale, 0.0f, 0.0f);
@@ -360,7 +364,8 @@ public static class CrateFx
 
 	/// <summary>
 	/// Disc size raw -> engine quad edge. The disc's own cull radius adds MaxSize * 1e-4 to the
-	/// particle extents, so raw * 1e-4 is the half-extent and the edge is twice that.
+	/// particle extents, so raw * 1e-4 is the half-extent and the edge is twice that. Defs with
+	/// UnkByte7 = 1 draw twice that again (see SpawnEmitter).
 	/// </summary>
 	public const float DiscSizeToEdge = 2.0e-4f;
 
@@ -384,17 +389,18 @@ public static class CrateFx
 			new[] { CK(0f, 254.1f, 255f, 0f), CK(0.0745f, 237.6f, 199.7f, 50.7f), CK(0.5185f, 171.7f, 110.2f, 51.7f), CK(1f, 0f, 0f, 0f) },
 			new[] { 0f, 0f, 0f, 255f, 1f, 0f },
 			new[] { 0f, 300.745f * 1e-4f, 0.24329f, 8878.46f * 1e-4f, 1f, 0f },
-			new[] { 0f, 0f, 1f, 18f / 65536f * 360f });
+			new[] { 0f, 0f, 1f, 18f / 65536f * 360f },
+			unkByte7: 3);
 	}
 
-	/// <param name="yawDeg">The crate's yaw. DoParticle(type, 0x3FFFFFC0, 0...) emits along the
-	/// instance's local +Z (rig_nboomr: the nitro cloud drifts off low along the crate's facing,
-	/// fx_nitro.png), so a crate passes its yaw; null keeps the emit direction straight up.</param>
-	public static void Exploded(Vector3 position, int objectId, float? yawDeg = null)
+	// DoParticle(type, 0x3FFFFFC0, 0, 0, 0, 0, 0, 0, 0) - every crate explosion passes a zero
+	// direction, and the disc's Velocity and Gravity act along it, so only the Random_Emit /
+	// Random_Start jitter moves these particles. The rig agrees (rig_nboomr_*): the nitro cloud
+	// holds in place as a big low blob for ~1.3 s and the sparks float outward instead of
+	// falling (fx_nitro.png). The disc Velocity/Gravity values are kept here as comments.
+	public static void Exploded(Vector3 position, int objectId)
 	{
 		Vector3 center = position + new Vector3(0.0f, 0.5f, 0.0f);
-		float yaw = (yawDeg ?? 0.0f) * MathF.PI / 180.0f;
-		Vector3 emit = yawDeg.HasValue ? new Vector3(MathF.Sin(yaw), 0.0f, MathF.Cos(yaw)) : Vector3.UnitY;
 		bool nitro = objectId == 4;
 		TwinsanityAudio.Explosion(center);
 		// 1A: the slow smoke/puff column. 1B: the fast spark/fire jet. 1C: the big flash.
@@ -402,14 +408,14 @@ public static class CrateFx
 		{
 			SpawnEmitter("NitroExplosionA", center, "0", new Vector4(0.0f, 64.2f, 64.1f, 128.0f) / 128.0f,
 				7, 60.0f, 7.0f / 60.0f, 1.582221f,
-				emit * 4.703004f, new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), -1.353525f,
+				Vector3.Zero /* Velocity 4.703004 */, new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), 0.0f /* Gravity -1.353525 */,
 				new[] { CK(0f, 107.821f, 234.798f, 149.144f), CK(0.241f, 0f, 247.249f, 34.105f), CK(0.623f, 0f, 174.067f, 28.473f), CK(1f, 130.208f, 113.441f, 109.646f) },
 				new[] { 0f, 0f, 0.066f, 198.124f, 1f, 0f },
 				new[] { 0f, 46431.45f * 1e-4f, 0.062f, 16117.997f * 1e-4f, 1f, 15893.261f * 1e-4f },
 				new[] { 0f, 0f, 1f, 31154f / 65536f * 360f });
 			SpawnEmitter("NitroExplosionB", center, "1", new Vector4(33.6f, 1.6f, 63.4f, 31.4f) / 128.0f,
 				14, 120.0f, 7.0f / 60.0f, 0.9150347f,
-				emit * 16.82123f, new Vector3(1.84683f, 2.465651f, 1.815337f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -17.84222f,
+				Vector3.Zero /* Velocity 16.82123 */, new Vector3(1.84683f, 2.465651f, 1.815337f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), 0.0f /* Gravity -17.84222 */,
 				new[] { CK(0f, 79.534f, 243.109f, 0f), CK(0.766f, 73.916f, 246.346f, 0f), CK(1f, 0f, 209.46f, 14.932f) },
 				new[] { 0f, 120.687f, 0.182f, 255f, 1f, 255f },
 				new[] { 0f, 17435.475f * 1e-4f, 0.049f, 5648.218f * 1e-4f, 0.798f, 2316.686f * 1e-4f, 1f, 0f },
@@ -420,20 +426,21 @@ public static class CrateFx
 				new[] { CK(0f, 118.953f, 247.716f, 148.315f), CK(0.652f, 0f, 250.3f, 47.359f), CK(1f, 0f, 171.453f, 29.05f) },
 				new[] { 0f, 255f, 0.28f, 255f, 1f, 24.15f },
 				new[] { 0f, 43894.496f * 1e-4f, 1f, 18781.947f * 1e-4f },
-				new[] { 0f, 78299f / 65536f * 360f, 1f, 78299f / 65536f * 360f }); // track ends at its first t = 1 key
+				new[] { 0f, 78299f / 65536f * 360f, 1f, 78299f / 65536f * 360f }, // track ends at its first t = 1 key
+				unkByte7: 3);
 		}
 		else
 		{
 			SpawnEmitter("TntExplosionA", center, "0", new Vector4(0.0f, 64.2f, 64.1f, 128.0f) / 128.0f,
 				7, 60.0f, 7.0f / 60.0f, 1.582221f,
-				emit * 4.703004f, new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), -1.353525f,
+				Vector3.Zero /* Velocity 4.703004 */, new Vector3(0.4112141f, 0.0f, 0.4501139f), new Vector3(0.8801264f, 0.999f, 0.8288043f), 0.0f /* Gravity -1.353525 */,
 				new[] { CK(0f, 208.401f, 168.424f, 48.024f), CK(0.241f, 156.013f, 0f, 0f), CK(0.623f, 94.255f, 54.73f, 5.981f), CK(1f, 130.208f, 113.441f, 109.646f) },
 				new[] { 0f, 0f, 0.066f, 198.124f, 1f, 0f },
 				new[] { 0f, 46245.46f * 1e-4f, 0.062f, 16069.652f * 1e-4f, 0.979f, 15845.901f * 1e-4f, 1f, 26634.685f * 1e-4f },
 				new[] { 0f, 0f, 1f, 31154f / 65536f * 360f });
 			SpawnEmitter("TntExplosionB", center, "1", new Vector4(32.5f, 0.0f, 65.8f, 33.1f) / 128.0f,
 				14, 120.0f, 7.0f / 60.0f, 0.6961219f,
-				emit * 16.21593f, new Vector3(3.193508f, 2.465651f, 3.05557f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -20.67021f,
+				Vector3.Zero /* Velocity 16.21593 */, new Vector3(3.193508f, 2.465651f, 3.05557f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), 0.0f /* Gravity -20.67021 */,
 				new[] { CK(0f, 221.905f, 233.397f, 101.165f), CK(0.766f, 246.346f, 0f, 0f), CK(1f, 246.346f, 0f, 0f) },
 				new[] { 0f, 120.687f, 0.182f, 255f, 1f, 255f },
 				new[] { 0f, 17435.475f * 1e-4f, 0.049f, 5648.218f * 1e-4f, 0.798f, 2316.686f * 1e-4f, 1f, 0f },
@@ -444,7 +451,8 @@ public static class CrateFx
 				new[] { CK(0f, 255f, 249.895f, 0f), CK(0.652f, 255f, 0f, 0f), CK(1f, 116.232f, 89.643f, 0f) },
 				new[] { 0f, 255f, 0.28f, 255f, 1f, 24.15f },
 				new[] { 0f, 43894.496f * 1e-4f, 1f, 18781.947f * 1e-4f },
-				new[] { 0f, 78299f / 65536f * 360f, 1f, 78299f / 65536f * 360f }); // track ends at its first t = 1 key
+				new[] { 0f, 78299f / 65536f * 360f, 1f, 78299f / 65536f * 360f }, // track ends at its first t = 1 key
+				unkByte7: 3);
 		}
 	}
 

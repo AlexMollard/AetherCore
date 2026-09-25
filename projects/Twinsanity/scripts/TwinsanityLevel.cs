@@ -743,9 +743,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			return;
 		}
-		float yaw = c.Model.EulerDegrees.Y; // read before Break hands the model to the fragment clip
 		Break(c);
-		CrateFx.Exploded(c.Base, c.ObjectId, yaw);
+		CrateFx.Exploded(c.Base, c.ObjectId);
 		Vector3 center = c.Base + new Vector3(0.0f, 0.5f, 0.0f);
 		_actors.Explosion(center, kExplosionRadius);
 		_actors.CreatureBlast(center, kExplosionRadius);
