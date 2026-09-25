@@ -61,8 +61,9 @@ It is not part of the CMake build.
     tools/tw-extract/bin/Release/net48/tw-extract.exe --iso "<original PAL .iso>"
 
 Run from the repo root. Options: `--out <assets dir>`, `--only <substring>`
-(e.g. `Levels/Earth/Hub`) and `--cache <dir>` (unpacked archive files, default
-`%TEMP%/tw-extract/<crc>`). A full run takes about a minute.
+(e.g. `Levels/Earth/Hub`), `--cache <dir>` (unpacked archive files, default
+`%TEMP%/tw-extract/<crc>`) and `--music <n,n,...|all>` (extra `MUSIC.MH`
+tracks). A full run takes about a minute.
 
 |Output|Contents|
 |---|---|
@@ -75,6 +76,8 @@ Run from the repo root. Options: `--out <assets dir>`, `--only <substring>`
 |`collision/<Area>/<Level>/<chunk>*.gltf`|The chunk's collision triangles, split by surface (deadly surfaces separate)|
 |`levels/<Area>/<Level>/<chunk>.level.json`|Scenery, sky, collision pieces, object instances (position, rotation, the instance's float parameters) and the player spawn|
 |`images/<path>/<stem>_NN.png`|Gallery / loading-screen pictures, as the tiles the disc stores them in|
+|`audio/sfx/<Area>/<Level>/<id>.wav`, `sounds.json`|A level's sound bank (SPU ADPCM decoded to 16-bit WAV at its own rate) plus `sounds.json`: every clip, each object's sound slots, every sound/music script command with raw arguments, and the level's streams. `Startup/Default` is the shared crate/pickup bank, `Startup/Frontend` the menu sounds|
+|`audio/music/track_<n>.wav`|The `MUSIC.MH` streams the extracted levels' `act_DJ` (music) and `act_GLOBAL_AMBIENT_SOUND_*` (ambience bed) actors name in their instance params. Beach: 27 (title theme) and 89 (surf)|
 
 Load any of them with the editor's Add to Scene or the MCP `add_model` tool.
 Conversion notes:
@@ -90,7 +93,10 @@ Conversion notes:
 - The particle texture pages (Startup/Default.rm2 ParticleData) ARE extracted, to
   `particles/particle_page_<0..2>.png` (128x128 each, point-sampled). The definitions
   themselves are not exported as data; the crate effects hard-code the disc values
-  (from `logs/cratebreak/particles.json`) in `scripts/CrateFx.cs`. The rest of the
+  (from `logs/cratebreak/particles.json`) in `scripts/CrateFx.cs`. Disc conventions, shared
+  through `CrateFx.CK` / `CrateFx.DiscUv`: colour and alpha 0x80 = 1.0; the texture rect's
+  V runs up the page (the PNG is top-down); GenSort Radial / ImprovedRadial map to the
+  emitter's `emit_shape`. The rest of the
   frontend is not extracted yet. Dynamic-scenery rotation assumes an `(x, y, z, w)`
   quaternion and has not been checked against the game.
 

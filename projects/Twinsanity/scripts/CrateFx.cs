@@ -296,8 +296,8 @@ public static class CrateFx
 	}
 
 	// ── Disc particle bank (Startup/Default.rm2 ParticleData) ─────────────────────
-	// Rates: the disc emits GenRate * MaxCount particles across Emitter_OverTime frames at
-	// 60 fps. Sizes are the disc's size-gradient raws * 1e-4 (the game's own cut-radius
+	// Rates: the disc emits GenRate particles per frame for Emitter_OverTime frames at 60 fps
+	// (capped at MaxParticleCount). Sizes are the disc's size-gradient raws * 1e-4 (the game's own cut-radius
 	// formula adds MaxSize * 1e-4 as a world-space radius, which pins that scale).
 	// Velocities, spawn boxes and gravity are the disc's per-second values straight across.
 	private const string kParticleTex = "project://assets/particles/particle_page_{0}.png";
@@ -336,7 +336,7 @@ public static class CrateFx
 		c.SetVector3("velocity_jitter", velJitter);
 		c.SetVector3("spawn_jitter", spawnJitter);
 		c.SetVector3("gravity_3d", new Vector3(0.0f, gravityY, 0.0f));
-		c.SetVector4("uv_rect", uv);
+		c.SetVector4("uv_rect", DiscUv(uv));
 		Particles.SetKeys(e, ParticleKeyChannel.Color, colorKeys);
 		SetScalarKeys(e, ParticleKeyChannel.Alpha, alphaKeys);
 		SetScalarKeys(e, ParticleKeyChannel.Size, sizeKeys);
@@ -355,7 +355,16 @@ public static class CrateFx
 		Particles.SetKeys(e, channel, keys);
 	}
 
-	private static Vector4 CK(float t, float r, float g, float b) => new(t, r / 255.0f, g / 255.0f, b / 255.0f);
+	/// <summary>
+	/// A disc ParticleData texture rect, already divided by the 128-texel page, as an engine
+	/// uv_rect. The disc's V runs UP the page while particle_page_*.png is stored top-down, so
+	/// v0..v1 maps to rows 1 - v1 .. 1 - v0 (crash_LAND1 then samples the grey cloud and
+	/// FX_AKUTRAIL the four-point star, as the rig shows). Every particle FX goes through here.
+	/// </summary>
+	public static Vector4 DiscUv(Vector4 rect) => new(rect.X, 1.0f - rect.W, rect.Z, 1.0f - rect.Y);
+
+	/// <summary>A disc colour-gradient key. GS vertex colour: 0x80 = 1.0 (255 is ~2x, overbright).</summary>
+	public static Vector4 CK(float t, float r, float g, float b) => new(t, r / 128.0f, g / 128.0f, b / 128.0f);
 
 	// CRATE_BREAK (bank index 0): the burst of radial star sparkles every broken crate throws.
 	private static void CrateBreakSparkle(Vector3 center)

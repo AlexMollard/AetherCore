@@ -232,20 +232,13 @@ public static class TwinsanityAku
 		}
 	}
 
-	// GS vertex colour: 0x80 = 1.0, like alpha. At /255 the aura (peaks 95-238) rendered nearly
-	// black against the rig's bright glow (logs/aku/_invwalk.png vs the first eng_l3.png).
-	private static Vector4 CK(float t, float r, float g, float b) => new(t, r / 128.0f, g / 128.0f, b / 128.0f);
-
 	private const float kRaw2Deg = 360.0f / 65536.0f;
 
 	// One disc ParticleData def as a looping world-space Billboard3D emitter (switched with
-	// "emitting"). Conventions as in CrateFx: sizes are raws * 1e-4, GS alpha 0x80 = 1.0.
+	// "emitting"). Conventions as in CrateFx: sizes are raws * 1e-4, GS alpha and colour 0x80 = 1.0
+	// (CrateFx.CK), disc texture rects through CrateFx.DiscUv (the disc's V runs up the page).
 	// Rates: a GenRate of n > 0 emits n per 60 Hz frame, n < 0 one every -n frames; with the
 	// def's life that reproduces its MaxParticleCount (143: 12/s * 0.739 s = 9).
-	// UVs: the disc's V runs up the page while particle_page_*.png is stored top-down, so
-	// (u0, v0)-(u1, v1) maps to rows 128 - v1 .. 128 - v0. That lands FX_AKUTRAIL on the
-	// four-point star the rig shows (logs/aku/_break_zoom.png). Local flip until the shared fix
-	// lands (logs/lead/queue.md #6, CrateFx uv_rects).
 	private static Entity Emitter(string name, int page, Vector4 discUv, int max, int genRate, float life,
 		Vector3 velJitter, Vector3 spawnJitter, float gravity, Vector4[] color, float[] alpha, float[] size,
 		float rotJitter = 0.0f, float[]? rotation = null)
@@ -276,7 +269,7 @@ public static class TwinsanityAku
 		c.SetVector3("velocity_jitter", velJitter);
 		c.SetVector3("spawn_jitter", spawnJitter);
 		c.SetVector3("gravity_3d", new Vector3(0.0f, gravity, 0.0f));
-		c.SetVector4("uv_rect", new Vector4(discUv.X, 128.0f - discUv.W, discUv.Z, 128.0f - discUv.Y) / 128.0f);
+		c.SetVector4("uv_rect", CrateFx.DiscUv(discUv / 128.0f));
 		c.SetFloat("rotation_jitter", rotJitter);
 		Particles.SetKeys(e, ParticleKeyChannel.Color, color);
 		Keys(e, ParticleKeyChannel.Alpha, alpha, 1.0f / 128.0f);
@@ -302,8 +295,8 @@ public static class TwinsanityAku
 	// jitter, drifting UP at 1.09 u/s^2, random start angle (MinRotation -360 .. 360).
 	private static Entity AkuTrail() => Emitter("AkuTrail", 0, new Vector4(31.5f, 0.0f, 63.5f, 32.5f), 9, -5, 0.7390902f,
 		new Vector3(0.4399409f, 0.3626297f, 0.4266761f), new Vector3(0.3045322f, 0.4556634f, 0.314876f), 1.08949f,
-		new[] { CK(0f, 230.408936f, 230.408936f, 230.408936f), CK(0.256964952f, 219.3407f, 225.054932f, 0f),
-			CK(0.373372138f, 238.128662f, 55.28818f, 0f), CK(0.688475966f, 0f, 205.53772f, 143.063492f), CK(1f, 32.2201424f, 139.359741f, 0f) },
+		new[] { CrateFx.CK(0f, 230.408936f, 230.408936f, 230.408936f), CrateFx.CK(0.256964952f, 219.3407f, 225.054932f, 0f),
+			CrateFx.CK(0.373372138f, 238.128662f, 55.28818f, 0f), CrateFx.CK(0.688475966f, 0f, 205.53772f, 143.063492f), CrateFx.CK(1f, 32.2201424f, 139.359741f, 0f) },
 		new[] { 0f, 0f, 0.050846383f, 255f, 1f, 255f },
 		new[] { 0f, 0f, 0.08671884f, 3572.638f, 0.2673171f, 1859.25146f, 1f, 0f },
 		360.0f);
@@ -317,16 +310,16 @@ public static class TwinsanityAku
 		return new[]
 		{
 			Emitter("AkuInvulnerable1", 0, new Vector4(0.0f, 32.1f, 32.8f, 63.9f), 56, 2, 0.471124f, jitter, box, 0.0f,
-				new[] { CK(0f, 13.0426025f, 0f, 0f), CK(0.5f, 95.4071045f, 73.58175f, 0f), CK(1f, 113.749741f, 121.554565f, 0f) },
+				new[] { CrateFx.CK(0f, 13.0426025f, 0f, 0f), CrateFx.CK(0.5f, 95.4071045f, 73.58175f, 0f), CrateFx.CK(1f, 113.749741f, 121.554565f, 0f) },
 				new[] { 0f, 108.3992f, 1f, 0f },
 				new[] { 0.020703122f, 0f, 0.0479817577f, 15943.15f, 1f, 0f },
 				87.72614f, new[] { 0f, 15969f, 1f, 967f }),
 			Emitter("AkuInvulnerable2", 1, new Vector4(33.3f, 0.0f, 64.5f, 31.4f), 15, -2, 0.4930964f, jitter, box, 0.0f,
-				new[] { CK(0f, 13.0426025f, 0f, 0f), CK(0.0472657122f, 237.724f, 158.269714f, 0f), CK(1f, 113.749741f, 121.554565f, 0f) },
+				new[] { CrateFx.CK(0f, 13.0426025f, 0f, 0f), CrateFx.CK(0.0472657122f, 237.724f, 158.269714f, 0f), CrateFx.CK(1f, 113.749741f, 121.554565f, 0f) },
 				new[] { 0f, 0f, 0.04439961f, 190.094238f, 1f, 0f },
 				new[] { 0.020703122f, 0f, 0.06651899f, 6348.422f, 0.143814787f, 2470.00586f, 1f, 0f }),
 			Emitter("AkuInvulnerable3", 0, new Vector4(65.1f, 0.0f, 127.9f, 63.7f), 17, -4, 1.112561f, Vector3.Zero, box, 0.0f,
-				new[] { CK(0f, 13.0426025f, 0f, 0f), CK(0.6694638f, 237.724f, 183.3422f, 0f), CK(1f, 24.304533f, 153.865356f, 0f) },
+				new[] { CrateFx.CK(0f, 13.0426025f, 0f, 0f), CrateFx.CK(0.6694638f, 237.724f, 183.3422f, 0f), CrateFx.CK(1f, 24.304533f, 153.865356f, 0f) },
 				new[] { 0f, 0f, 0.0238249786f, 88.99453f, 1f, 0f },
 				new[] { 0.020703122f, 0f, 0.0552559979f, 1957.38867f, 0.113932118f, 761.5689f, 1f, 1957.38867f }),
 		};
