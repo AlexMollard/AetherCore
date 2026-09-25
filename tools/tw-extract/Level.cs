@@ -368,6 +368,13 @@ namespace TwExtract
 				{
 					continue;
 				}
+				// The layer's AI positions (item 3) and paths (item 4), which instances reference by index.
+				var points = section.ContainsItem(3) && section.GetItem<TwinsItem>(3) is TwinsSection ps
+					? ps.Records.OfType<Position>().ToDictionary(p => p.ID, p => Space.Mirror(new Vector3(p.Pos.X, p.Pos.Y, p.Pos.Z)))
+					: new Dictionary<uint, Vector3>();
+				var paths = section.ContainsItem(4) && section.GetItem<TwinsItem>(4) is TwinsSection pa
+					? pa.Records.OfType<Twinsanity.Path>().ToDictionary(p => p.ID, p => p.Positions.Select(q => Space.Mirror(new Vector3(q.X, q.Y, q.Z))).ToList())
+					: new Dictionary<uint, List<Vector3>>();
 				foreach (var ins in placed.Records.OfType<Instance>())
 				{
 					var pos = Space.Mirror(new Vector3(ins.Pos.X, ins.Pos.Y, ins.Pos.Z));
@@ -389,6 +396,32 @@ namespace TwExtract
 					if (ins.UnkI322.Count > 1)
 					{
 						entry["floats"] = ins.UnkI322.ToArray();
+					}
+					// The actor subtype (script condition ActorSubtypeEquals), e.g. which one-shot
+					// clip a wumpa tree plays or whether a falling log starts already down.
+					if (ins.UnkI323.Count > 0 && ins.UnkI323[0] != 0)
+					{
+						entry["subtype"] = ins.UnkI323[0];
+					}
+					// Instance flags (e.g. 0x80000 starts a seagull already flying), the instances it
+					// references (a creature spawner's template), its AI positions and its first path.
+					entry["flags"] = ins.Flags;
+					if (ins.InstanceIDs.Count > 0)
+					{
+						entry["links"] = ins.InstanceIDs.Select(i => (uint)i).ToArray();
+					}
+					var own = ins.PositionIDs.Where(i => points.ContainsKey(i)).Select(i => points[i]).ToList();
+					if (own.Count > 0)
+					{
+						entry["points"] = own.Select(v => new[] { v.X, v.Y, v.Z }).ToArray();
+					}
+					if (ins.PathIDs.Count > 0 && paths.TryGetValue(ins.PathIDs[0], out var path))
+					{
+						entry["path"] = path.Select(v => new[] { v.X, v.Y, v.Z }).ToArray();
+					}
+					if (ins.UnkI323.Count > 2)
+					{
+						entry["params"] = ins.UnkI323.ToArray();
 					}
 					list.Add(entry);
 					if (ins.ObjectID == 0 && !manifest.ContainsKey("spawn"))

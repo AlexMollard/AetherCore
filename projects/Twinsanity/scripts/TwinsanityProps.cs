@@ -54,6 +54,27 @@ public sealed partial class TwinsanityActors
 	private const float BombKickSpeed = 8.0f;
 	private const float BombDrag = 2.0f;
 
+	// act_RIGID_CANNON: belly-flopping its red button fires a GLOBAL_BOMB (the cannon's object list
+	// holds it) that COM_GLOBAL_BOMB_DEFAULT subtype 7 launches with cmd193(.., 8.0, .., 20.0) and that
+	// explodes where it lands (s12 TouchingTerrain) - on the CannonPuzzle idol heads.
+	private sealed class Cannonball
+	{
+		public Entity Model;
+		public Vector3 Velocity;
+		public float Floor; // explode when it falls below this height
+	}
+
+	private readonly List<Cannonball> _cannonballs = new();
+	private bool _slamHandled;
+	// ponytail: cmd193's 8.0 / 20.0 read as launch up-speed / forward speed (m/s); gravity, the
+	// muzzle offset and the button reach are not in the scripts. Upgrade path: measure a shot on
+	// the rig (the camera faces inland from the cannon, so it needs a free-camera capture).
+	private const float CannonUpSpeed = 8.0f;
+	private const float CannonForwardSpeed = 20.0f;
+	private const float CannonballGravity = 9.8f;
+	private const float CannonButtonReach = 2.0f;
+	private const string CannonballModel = "project://assets/models/objects/act_GLOBAL_BOMB/act_GLOBAL_BOMB_0.gltf";
+
 	// ponytail: the original's global progression counter (condition GlobalProgression) lives in
 	// the save; the port always starts a new game, where it is 0. Upgrade path: a save system.
 	private const int GlobalProgression = 0;
@@ -98,6 +119,15 @@ public sealed partial class TwinsanityActors
 				s.Clips = Clips(e, subtype == 1 ? "a005" : subtype == 2 ? "a004" : "a002");
 			}
 			// Other subtypes (10-12, the farmer cutscene trees) wait for a cutscene message.
+		}
+		else if (n.StartsWith("act_generic_grey_stone_door") || n.StartsWith("act_tiki_mon"))
+		{
+			// COM_GENERIC_GREY_STONE_DOOR_DEFAULT (a001) and COM_TIKI_MON_INIT (a007) play their clip
+			// at spawn with DoAnim flags 0x20FF1 / 0xA0FF1: loop nibble (bits 12-15) 0 = play once,
+			// the same as every one-shot above, while every idle loop in the hub scripts has it set
+			// (chicken 0x3FF1, butterfly 0x5FF1, worm 0x2FF1 - logs/triggers/dump-loops.txt).
+			s.Clips = Clips(e, n.StartsWith("act_tiki_mon") ? "a007" : "a001");
+			playNow = true;
 		}
 		else if (n.StartsWith("act_global_bomb"))
 		{
@@ -146,11 +176,22 @@ public sealed partial class TwinsanityActors
 	{
 		foreach (OneShot s in _oneShots)
 		{
-			if (s.Cue == PropCue.Explosion && s.Actor.Alive && Vector3.Distance(center, s.Actor.Model.Position) < radius)
+			if (s.Cue == PropCue.Explosion && s.Actor.Alive && InBlast(center, radius, s.Actor.Model.Position))
 			{
 				PlayOnce(s);
 			}
 		}
+	}
+
+	// Explosion-cued props are tall (idol head: joint1 at 5.5 m, +-2.4 m; tree ~16 m), so a blast
+	// counts along the prop's upright extent: within PropReach + radius sideways, above its base.
+	private const float PropReach = 2.5f;
+	private const float PropHeight = 8.0f;
+
+	private static bool InBlast(Vector3 center, float radius, Vector3 prop)
+	{
+		Vector3 d = center - prop;
+		return new Vector2(d.X, d.Z).Length() < PropReach + radius && d.Y > -radius && d.Y < PropHeight + radius;
 	}
 
 	private void UpdateBombs(float dt, Vector3 crashPos)
@@ -195,9 +236,73 @@ public sealed partial class TwinsanityActors
 		_bombs.RemoveAll(b => !b.Actor.Alive);
 	}
 
+	private void UpdateCannons(float dt, Vector3 crashPos)
+	{
+		// One shot per belly-flop landing on the cannon (COM_RIGID_CANNON_BUTTON_ACTIVATED on
+		// OnGettingBodyslamAttacked / OnLand).
+		bool slamLanded = _player != null && _player.IsSlamming && _player.IsGrounded;
+		if (!slamLanded)
+		{
+			_slamHandled = false;
+		}
+		else if (!_slamHandled)
+		{
+			_slamHandled = true;
+			foreach (Pushable p in _pushables)
+			{
+				Vector3 origin = p.Model.Position;
+				Vector3 flat = crashPos - origin;
+				flat.Y = 0.0f;
+				if (NameKey(p.Model.Name) != "act_rigid_cannon" || flat.Length() > CannonButtonReach || crashPos.Y < origin.Y + 1.0f)
+				{
+					continue;
+				}
+				float yaw = p.Model.EulerDegrees.Y * MathF.PI / 180.0f;
+				Vector3 forward = new(MathF.Sin(yaw), 0.0f, MathF.Cos(yaw));
+				Entity ball = World.Create();
+				ball.Name = "Cannonball";
+				ball.MarkTransient();
+				ball.AddTransform();
+				ball.Position = origin + forward * 3.1f + new Vector3(0.0f, 2.3f, 0.0f); // barrel mouth
+				ball.LoadModel(CannonballModel);
+				_cannonballs.Add(new Cannonball
+				{
+					Model = ball,
+					Velocity = forward * CannonForwardSpeed + new Vector3(0.0f, CannonUpSpeed, 0.0f),
+					Floor = origin.Y - 3.0f,
+				});
+			}
+		}
+
+		foreach (Cannonball c in _cannonballs)
+		{
+			c.Velocity.Y -= CannonballGravity * dt;
+			Vector3 p = c.Model.Position + c.Velocity * dt;
+			c.Model.Position = p;
+			bool hit = p.Y < c.Floor;
+			foreach (OneShot s in _oneShots)
+			{
+				if (s.Cue == PropCue.Explosion && InBlast(p, 0.0f, s.Actor.Model.Position))
+				{
+					hit = true;
+				}
+			}
+			if (!hit)
+			{
+				continue;
+			}
+			CrateFx.Exploded(p - new Vector3(0.0f, 0.5f, 0.0f), 5);
+			Explosion(p, BombDamageRadius);
+			c.Model.Destroy();
+			c.Velocity = new Vector3(float.NaN);
+		}
+		_cannonballs.RemoveAll(c => float.IsNaN(c.Velocity.X));
+	}
+
 	private void UpdateOneShots(float dt, Vector3 crashPos)
 	{
 		UpdateBombs(dt, crashPos);
+		UpdateCannons(dt, crashPos);
 		foreach (OneShot s in _oneShots)
 		{
 			if (s.Remaining >= 0.0f)
