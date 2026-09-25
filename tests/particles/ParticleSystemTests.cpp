@@ -264,14 +264,21 @@ TEST_CASE("radial shapes spawn on the disc's sphere and fly out along the radius
 	}
 	CHECK((sawNegX && sawPosX)); // +/-180 of yaw covers the whole circle
 
-	// Radial polar -180 is straight up; ImprovedRadial measures elevation, so 90 is up.
+	// Radial polar 0 is straight up and -84.6 (CRASH_DROP2) lifts off the ground; ImprovedRadial
+	// measures elevation, so 90 is up.
 	emitter.particles.clear();
-	emitter.spawnJitter = glm::vec3{0.0f, 0.0f, -180.0f};
+	emitter.spawnJitter = glm::vec3{0.0f, 0.0f, 0.0f};
 	emitter.velocityJitter = glm::vec3{0.0f};
 	emitter.pendingBurst = 1;
 	particles.Update(world, 0.001f);
 	REQUIRE(emitter.particles.size() == 1);
 	CHECK(emitter.particles[0].velocity3D.y == doctest::Approx(4.0f).epsilon(0.001f));
+	emitter.particles.clear();
+	emitter.spawnJitter = glm::vec3{0.0f, 0.0f, -84.6f};
+	emitter.pendingBurst = 1;
+	particles.Update(world, 0.001f);
+	REQUIRE(emitter.particles.size() == 1);
+	CHECK(emitter.particles[0].velocity3D.y > 0.0f);
 	emitter.particles.clear();
 	emitter.emitShape = ParticleEmitShape::ImprovedRadial;
 	emitter.spawnJitter = glm::vec3{0.0f, 0.0f, 90.0f};

@@ -38,9 +38,10 @@ namespace aether
 	// particle starts on a sphere around the emitter and flies outward along its radius.
 	// In those modes spawnJitter holds the base (radius, yawDeg, polarDeg) and velocityJitter
 	// the +/- random range of the same three, exactly as the disc reuses Random_Start and
-	// Random_Emit. Radial measures the polar angle from straight down, negative towards up
-	// (-180 = up, -90 = horizontal, 0 = down); ImprovedRadial measures it as elevation above
-	// the horizontal (0 = horizontal, 90 = up).
+	// Random_Emit. Radial measures the polar angle from straight up, negative towards down
+	// (0 = up, -90 = horizontal, -180 = down; the beach slam ring CRASH_DROP2 uses -84.6, a
+	// few degrees above the sand); ImprovedRadial measures it as elevation above the
+	// horizontal (0 = horizontal, 90 = up).
 	enum class ParticleEmitShape : std::uint8_t
 	{
 		Box = 0,

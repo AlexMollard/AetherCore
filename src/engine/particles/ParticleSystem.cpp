@@ -109,7 +109,7 @@ namespace aether
 					const float yaw = glm::radians(base.y + Range(emitter.rngState, -rnd.y, rnd.y));
 					const float polar = glm::radians(base.z + Range(emitter.rngState, -rnd.z, rnd.z));
 					const bool improved = emitter.emitShape == ParticleEmitShape::ImprovedRadial;
-					const float up = improved ? std::sin(polar) : -std::cos(polar);
+					const float up = improved ? std::sin(polar) : std::cos(polar);
 					const float flat = improved ? std::cos(polar) : std::abs(std::sin(polar));
 					const glm::vec3 dir{flat * std::cos(yaw), up, flat * std::sin(yaw)};
 					p.position3D = origin3D + dir * radius;
