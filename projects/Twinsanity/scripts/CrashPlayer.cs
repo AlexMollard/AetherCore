@@ -40,11 +40,7 @@ public sealed class CrashPlayer : EntityScript
 	public float ModelYawOffset = 180.0f;
 	public float ModelTurnRate = 1440.0f;
 
-	public float CameraDistance = 7.5f;
-	public float CameraPitch = 20.0f;
-	public float CameraTargetHeight = 1.4f;
 	public float MouseSensitivity = 0.15f;
-	public float StickTurnSpeed = 160.0f;
 
 	// CharacterInstanceFloats defaults: Crash's values from the beach instance, used until Configure.
 	private float _airGravity = 50.0f;
@@ -101,10 +97,11 @@ public sealed class CrashPlayer : EntityScript
 	public float Facing => _facing;
 
 	private Entity _model;
-	private Entity _camera;
+	private CrashCamera _camera = null!;
 	private float _facing;
 	private float _modelYaw;
-	private float _cameraYaw;
+	private float _lookTurn;
+	private float _lookStick;
 	private bool _control = true;
 
 	private State _state = State.Ground;
@@ -187,11 +184,7 @@ public sealed class CrashPlayer : EntityScript
 
 		_facing = Self.EulerDegrees.Y;
 		_modelYaw = _facing;
-		_cameraYaw = _facing;
-		_camera = Camera.CreateOrbit(Self.Position + new Vector3(0.0f, 3.0f, 6.0f), Self.Position, 60.0f);
-		_camera.Name = "Crash Camera";
-		Camera.SetMain(_camera);
-		PlaceCamera();
+		_camera = new CrashCamera(Self.Position, _facing);
 		PlaceModel(0.0f);
 	}
 
@@ -267,7 +260,7 @@ public sealed class CrashPlayer : EntityScript
 			CharacterController.SetVelocity(Self, Vector3.Zero);
 		}
 		PlaceModel(deltaTime);
-		PlaceCamera();
+		PlaceCamera(deltaTime);
 	}
 
 	// One death clip per kind, not a sequence: the extracted animation hashes name them
@@ -356,7 +349,7 @@ public sealed class CrashPlayer : EntityScript
 	private void StepDeath(float deltaTime)
 	{
 		PlaceModel(deltaTime);
-		PlaceCamera();
+		PlaceCamera(deltaTime);
 	}
 
 	/// <summary>Launch upward at <paramref name="speed"/>, keeping horizontal motion: a crate or
@@ -389,12 +382,11 @@ public sealed class CrashPlayer : EntityScript
 		_spinTime = 0.0f;
 		_facing = facing;
 		_modelYaw = facing;
-		_cameraYaw = facing;
 		_moveDir = FacingDir(facing);
 		Enter(State.Ground);
 		CharacterController.SetVelocity(Self, Vector3.Zero);
 		PlaceModel(0.0f);
-		PlaceCamera();
+		_camera.Snap(feet, facing);
 	}
 
 	public void SetControl(bool enabled)
@@ -908,8 +900,8 @@ public sealed class CrashPlayer : EntityScript
 
 	private (Vector3 Dir, float Amount) StickInput()
 	{
-		Vector3 forward = Flat(Camera.GetForward(_camera));
-		Vector3 right = Flat(Camera.GetRight(_camera));
+		Vector3 forward = Flat(Camera.GetForward(_camera.Entity));
+		Vector3 right = Flat(Camera.GetRight(_camera.Entity));
 		Vector2 pad = Gamepad.LeftStick;
 		float x = Input.GetAxisRaw(Key.A, Key.D) + Input.GetAxisRaw(Key.Left, Key.Right) + pad.X;
 		float z = Input.GetAxisRaw(Key.S, Key.W) + Input.GetAxisRaw(Key.Down, Key.Up) + pad.Y;
@@ -919,12 +911,11 @@ public sealed class CrashPlayer : EntityScript
 		return input.LengthSquared() > 1e-6f ? (Vector3.Normalize(input), amount) : (Vector3.Zero, 0.0f);
 	}
 
+	// Manual orbit: the mouse as before, the right stick at the rig's rate (CrashCamera).
 	private void Look(float deltaTime)
 	{
-		Vector2 mouse = Input.MouseDelta;
-		Vector2 stick = Gamepad.RightStick;
-		_cameraYaw -= mouse.X * MouseSensitivity + stick.X * StickTurnSpeed * deltaTime;
-		CameraPitch = Math.Clamp(CameraPitch + mouse.Y * MouseSensitivity - stick.Y * StickTurnSpeed * 0.5f * deltaTime, 0.0f, 60.0f);
+		_lookTurn -= Input.MouseDelta.X * MouseSensitivity;
+		_lookStick = Gamepad.RightStick.X;
 	}
 
 	private void PlaceModel(float deltaTime)
@@ -948,15 +939,13 @@ public sealed class CrashPlayer : EntityScript
 		_model.EulerDegrees = new Vector3(0.0f, _modelYaw + ModelYawOffset, 0.0f);
 	}
 
-	// shortcut: no camera collision, so walls can come between camera and Crash; add a
-	// Physics.SphereCast from target to eye if that gets in the way.
-	private void PlaceCamera()
+	private void PlaceCamera(float deltaTime)
 	{
 		// A drowning pulls the view up with the floating body (the rig ends looking down at him
 		// on the surface, not at the controller still on the drowning plane below).
 		float lift = _dead && _deathPlan.FloatToSurface ? _deathLift : 0.0f;
-		Camera.SetTarget(_camera, Self.Position + new Vector3(0.0f, CameraTargetHeight + lift, 0.0f));
-		Camera.SetOrbital(_camera, _cameraYaw, CameraPitch, CameraDistance);
+		_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_facing), _horizontal, _lookTurn, _dead ? 0.0f : _lookStick, lift);
+		_lookTurn = 0.0f;
 	}
 
 	private static Vector3 FacingDir(float yawDegrees)
