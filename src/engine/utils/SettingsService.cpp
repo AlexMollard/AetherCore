@@ -246,6 +246,13 @@ namespace aether
 				engine->SetAnisotropy(m_values.graphics.anisotropy);
 			}
 		}
+		else if (key == "graphics.mipLodBias")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetMipLodBias(m_values.graphics.mipLodBias);
+			}
+		}
 		else if (key == "window.mode")
 		{
 			if (auto* engine = m_services.TryGet<AetherCore>())

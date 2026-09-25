@@ -1,5 +1,6 @@
 #include "particles/ParticleSystem.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -25,6 +26,31 @@ namespace aether
 	{
 		constexpr std::uint32_t kInvalidTextureSlot = 0xFFFFFFFFu;
 
+		// (see ConsumeKeys for the key-track semantics)
+		void ConsumeKeys(const float* ts, const float* values, std::size_t count, float t, float& out) noexcept
+		{
+			// Piecewise-linear over normalised age. An exact hit on a key returns THAT key (the
+			// first of duplicates), so a duplicated t=0 pair like (0, 0),(0, 255) is invisible at
+			// birth and jumps once t moves; a zero-length segment between duplicates is a step.
+			// Tracks end at the first key whose t reaches 1 - later keys are leftovers from the
+			// disc's fixed 8-slot gradients.
+			for (std::size_t i = 0; i + 1 < count; ++i)
+			{
+				if (t <= ts[i])
+				{
+					out = values[i];
+					return;
+				}
+				if (t < ts[i + 1])
+				{
+					const float span = ts[i + 1] - ts[i];
+					out = span > 1e-6f ? values[i] + (values[i + 1] - values[i]) * ((t - ts[i]) / span) : values[i];
+					return;
+				}
+			}
+			out = values[count - 1];
+		}
+
 		// Cheap xorshift so each emitter is independent and needs no global RNG.
 		[[nodiscard]] float NextFloat(std::uint32_t& state) noexcept
 		{
@@ -49,20 +75,38 @@ namespace aether
 			return (static_cast<std::uint64_t>(BiasSigned(layer)) << 48u) | (static_cast<std::uint64_t>(BiasSigned(order)) << 32u) | static_cast<std::uint64_t>(id);
 		}
 
-		void SpawnOne(ParticleEmitterComponent& emitter, glm::vec2 origin)
+		void SpawnOne(ParticleEmitterComponent& emitter, glm::vec2 origin, glm::vec3 origin3D)
 		{
 			if (emitter.particles.size() >= emitter.maxParticles)
 			{
 				return;
 			}
-			const float angle = glm::radians(emitter.directionDeg + Range(emitter.rngState, -emitter.spreadDeg, emitter.spreadDeg));
-			const float speed = Range(emitter.rngState, emitter.speedMin, emitter.speedMax);
 			Particle p;
-			p.position = origin;
-			p.velocity = glm::vec2{std::cos(angle), std::sin(angle)} * speed;
 			p.age = 0.0f;
 			p.lifetime = std::max(0.01f, Range(emitter.rngState, emitter.lifetimeMin, emitter.lifetimeMax));
-			p.sizeJitter = Range(emitter.rngState, 0.75f, 1.25f);
+			if (emitter.space == ParticleSpace::Billboard3D)
+			{
+				p.position3D = origin3D + glm::vec3{
+				                        Range(emitter.rngState, -emitter.spawnJitter.x, emitter.spawnJitter.x),
+				                        Range(emitter.rngState, -emitter.spawnJitter.y, emitter.spawnJitter.y),
+				                        Range(emitter.rngState, -emitter.spawnJitter.z, emitter.spawnJitter.z),
+				};
+				p.velocity3D = emitter.velocity3D + glm::vec3{
+				                       Range(emitter.rngState, -emitter.velocityJitter.x, emitter.velocityJitter.x),
+				                       Range(emitter.rngState, -emitter.velocityJitter.y, emitter.velocityJitter.y),
+				                       Range(emitter.rngState, -emitter.velocityJitter.z, emitter.velocityJitter.z),
+				};
+				p.sizeJitter = 1.0f;
+				p.rotationOffsetDeg = Range(emitter.rngState, -emitter.rotationJitterDeg, emitter.rotationJitterDeg);
+			}
+			else
+			{
+				const float angle = glm::radians(emitter.directionDeg + Range(emitter.rngState, -emitter.spreadDeg, emitter.spreadDeg));
+				const float speed = Range(emitter.rngState, emitter.speedMin, emitter.speedMax);
+				p.position = origin;
+				p.velocity = glm::vec2{std::cos(angle), std::sin(angle)} * speed;
+				p.sizeJitter = Range(emitter.rngState, 0.75f, 1.25f);
+			}
 			emitter.particles.push_back(p);
 		}
 
@@ -77,9 +121,15 @@ namespace aether
 			return std::max(0.02f, glm::mix(emitter.startSize, emitter.endSize, t) * p.sizeJitter * 0.5f);
 		}
 
-		// Advance one particle, bouncing off physics colliders if requested.
+		// Advance one particle, bouncing off physics colliders if requested (2D space only).
 		void IntegrateParticle(ParticleEmitterComponent& emitter, Particle& p, float dt, const Physics2DSystem* physics)
 		{
+			if (emitter.space == ParticleSpace::Billboard3D)
+			{
+				p.velocity3D += emitter.gravity3D * dt;
+				p.position3D += p.velocity3D * dt;
+				return;
+			}
 			p.velocity += emitter.gravity * dt;
 			glm::vec2 delta = p.velocity * dt;
 
@@ -196,26 +246,29 @@ namespace aether
 	// The shared per-emitter step: start burst, queued bursts, continuous emission,
 	// integrate + swap-pop cull, then sibling collisions. `physics` is null for the
 	// editor preview (no world collision).
-	void ParticleSystem::StepEmitter(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin, const Physics2DSystem* physics)
+	void ParticleSystem::StepEmitter(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin, glm::vec3 origin3D, const Physics2DSystem* physics)
 	{
 		if (emitter.emitOnStart && !emitter.started)
 		{
 			emitter.pendingBurst += emitter.burstCount;
 		}
 		emitter.started = true;
+		emitter.emitElapsed += dt;
 
 		while (emitter.pendingBurst > 0)
 		{
-			SpawnOne(emitter, origin);
+			SpawnOne(emitter, origin, origin3D);
 			--emitter.pendingBurst;
 		}
 
-		if (emitter.emitting && emitter.rate > 0.0f)
+		// Continuous emission, optionally for a fixed window after the first tick.
+		const bool rateActive = emitter.emitting && emitter.rate > 0.0f && (emitter.emitDuration <= 0.0f || emitter.emitElapsed <= emitter.emitDuration);
+		if (rateActive)
 		{
 			emitter.spawnAccumulator += emitter.rate * dt;
 			while (emitter.spawnAccumulator >= 1.0f)
 			{
-				SpawnOne(emitter, origin);
+				SpawnOne(emitter, origin, origin3D);
 				emitter.spawnAccumulator -= 1.0f;
 			}
 		}
@@ -234,7 +287,8 @@ namespace aether
 			++i;
 		}
 
-		if (emitter.collideParticles)
+		// Sibling collisions are a 2D-plane feature (the radius maths is XY only).
+		if (emitter.collideParticles && emitter.space == ParticleSpace::Plane2D)
 		{
 			ResolveParticleCollisions(emitter);
 		}
@@ -250,7 +304,7 @@ namespace aether
 		{
 			emitter.rngState = 0x9E3779B9u;
 		}
-		StepEmitter(emitter, dt, origin, nullptr); // no world collision in preview
+		StepEmitter(emitter, dt, origin, glm::vec3{origin.x, origin.y, 0.0f}, nullptr); // no world collision in preview
 	}
 
 	void ParticleSystem::Update(World& world, float dt)
@@ -289,10 +343,11 @@ namespace aether
 			}
 			const glm::vec2 origin{transform.localToWorld[3].x, transform.localToWorld[3].y};
 
-			StepEmitter(emitter, dt, origin, physics);
+			StepEmitter(emitter, dt, origin, glm::vec3(transform.localToWorld[3]), physics);
 
 			// One-shot emitter that has finished: retire its entity.
-			const bool idle = emitter.particles.empty() && emitter.pendingBurst == 0 && !(emitter.emitting && emitter.rate > 0.0f);
+			const bool idle = emitter.particles.empty() && emitter.pendingBurst == 0
+			    && !(emitter.emitting && emitter.rate > 0.0f && (emitter.emitDuration <= 0.0f || emitter.emitElapsed <= emitter.emitDuration));
 			if (retireFinished && emitter.autoDestroyWhenDone && emitter.started && idle)
 			{
 				toDestroy.push_back(entity);
@@ -330,6 +385,11 @@ namespace aether
 			{
 				continue;
 			}
+			if (emitter.space == ParticleSpace::Billboard3D)
+			{
+				ExtractBillboards(emitter, entity);
+				continue;
+			}
 			TextureHandle texture = ResolveTexture(emitter.texturePath);
 			std::uint32_t slot = m_textures.ResolveSlot(texture);
 			if (slot == kInvalidTextureSlot)
@@ -361,6 +421,78 @@ namespace aether
 				});
 			}
 		}
+	}
+
+	void ParticleSystem::ExtractBillboards(const ParticleEmitterComponent& emitter, Entity entity)
+	{
+		if (m_billboardOut == nullptr)
+		{
+			return;
+		}
+		const TextureHandle texture = ResolveTexture(emitter.texturePath);
+		std::uint32_t slot = m_textures.ResolveSlot(texture);
+		if (slot == kInvalidTextureSlot)
+		{
+			slot = m_textures.ResolveSlot(m_textures.WhiteHandle());
+		}
+		// Alpha particles sit in front of additive ones at the same distance (the draw is
+		// ordered by depth then blend mode); additive quads composite identically either way.
+		for (const Particle& p: emitter.particles)
+		{
+			const float t = std::clamp(p.age / p.lifetime, 0.0f, 1.0f);
+			BillboardParticleInstance instance;
+			instance.positionSize = glm::vec4(p.position3D, EvaluateParticleKeys(emitter.sizeKeys, t, glm::mix(emitter.startSize, emitter.endSize, t)) * p.sizeJitter);
+			instance.color = glm::vec4(EvaluateParticleKeys(emitter.colorKeys, t, glm::vec3(emitter.startColor)), EvaluateParticleKeys(emitter.alphaKeys, t, glm::mix(emitter.startColor.a, emitter.endColor.a, t)));
+			instance.uvRect = emitter.uvRect;
+			instance.rotationDegrees = EvaluateParticleKeys(emitter.rotationKeys, t, 0.0f) + p.rotationOffsetDeg;
+			instance.textureIndex = slot;
+			instance.blendMode = static_cast<std::uint32_t>(emitter.blendMode);
+			instance.entityId = entity.id;
+			m_billboardOut->push_back(instance);
+		}
+	}
+
+	float EvaluateParticleKeys(const std::vector<ParticleScalarKey>& keys, float t, float fallback) noexcept
+	{
+		if (keys.empty())
+		{
+			return fallback;
+		}
+		// De-interleave: ConsumeKeys walks two parallel float tracks, the keys store (t, value).
+		float ts[16], values[16];
+		const std::size_t n = std::min(keys.size(), std::size_t{16});
+		for (std::size_t i = 0; i < n; ++i)
+		{
+			ts[i] = keys[i].t;
+			values[i] = keys[i].value;
+		}
+		float out = fallback;
+		ConsumeKeys(ts, values, n, std::clamp(t, keys.front().t, 1.0f), out);
+		return out;
+	}
+
+	glm::vec3 EvaluateParticleKeys(const std::vector<ParticleColorKey>& keys, float t, glm::vec3 fallback) noexcept
+	{
+		if (keys.empty())
+		{
+			return fallback;
+		}
+		float ts[16];
+		float xs[16], ys[16], zs[16];
+		const std::size_t n = std::min(keys.size(), std::size_t{16});
+		for (std::size_t i = 0; i < n; ++i)
+		{
+			ts[i] = keys[i].t;
+			xs[i] = keys[i].color.x;
+			ys[i] = keys[i].color.y;
+			zs[i] = keys[i].color.z;
+		}
+		glm::vec3 out = fallback;
+		const float tt = std::clamp(t, keys.front().t, 1.0f);
+		ConsumeKeys(ts, xs, n, tt, out.x);
+		ConsumeKeys(ts, ys, n, tt, out.y);
+		ConsumeKeys(ts, zs, n, tt, out.z);
+		return out;
 	}
 
 	void ParticleSystem::Shutdown()

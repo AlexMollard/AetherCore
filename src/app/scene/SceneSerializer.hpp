@@ -245,6 +245,13 @@ namespace aether::app::scene
 		// level and an overcast one, and a global slider cannot express that.
 		float cloudCoverage = 0.0f;
 		float cloudSpeed = 0.02f;
+		// PS2 object lighting (Twinsanity): the level's own light records that light
+		// everything that is not prelit scenery - objects, pickups, characters.
+		glm::vec3 objectAmbient{1.0f};
+		glm::vec3 objectLight0Direction{0.0f, 1.0f, 0.0f}; // towards the light
+		glm::vec3 objectLight0Color{0.0f};
+		glm::vec3 objectLight1Direction{0.0f, 1.0f, 0.0f};
+		glm::vec3 objectLight1Color{0.0f};
 	};
 
 	// A per-entity override inside a prefab instance: `guid` is the source prefab

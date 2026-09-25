@@ -148,7 +148,13 @@ struct MaterialHeaderDisk
 	// baked vertex colour with a wrapped diffuse and excluded from shadow casting/receiving.
 	// Carved from the same padding - files written before it read 0, i.e. ordinary geometry.
 	uint8_t foliage = 0;
-	uint8_t _pad0[2] = {0, 0};
+	// PS2 prelit scenery (tw-extract marks every vertex-coloured material): the vertex colour IS
+	// the lighting, so the renderer shows it as is and only lets the shadow maps pull it down to
+	// the scene's shade colour. Carved from the same padding - old files read 0, i.e. lit as PBR.
+	uint8_t bakedLighting = 0;
+	// PS2 object lighting (tw-extract marks object models "object_lit"): lit by the level's
+	// light records instead of the sun. Carved from the same padding - old files read 0.
+	uint8_t objectLit = 0;
 	// UV scroll velocity in UV units per second. Carved from the old padding like
 	// modulateVertexColor: files written before it read {0, 0} - a static texture, which
 	// is exactly how they rendered. Old .material files therefore stay valid unchanged.

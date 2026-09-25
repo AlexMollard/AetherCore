@@ -117,6 +117,9 @@ namespace aether
 
 		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .presentMode = config.presentMode, .enableGpuDiagnostics = config.enableGpuDiagnostics, .enableValidation = config.enableValidation, .maxAnisotropy = static_cast<std::uint32_t>(std::max(m_settings.graphics.anisotropy, 1))}));
 		m_screenshotService.Init(m_gpu->GetDevice(), m_gpu->GetGraphicsQueueFamily(), m_gpu->GetGraphicsQueue());
+		// A project-authored LOD bias rides the pending path: it is applied on the first
+		// quiesced frame, when rewriting the sampler is safe.
+		SetMipLodBias(m_settings.graphics.mipLodBias);
 		m_gpu->GetSwapchain().SetPrePresentCapture([this](void* cmd, void* image, gpu::Extent2D extent) { m_screenshotService.RecordFrameCapture(cmd, image, extent, m_gpu->GetSwapchainColorFormat()); });
 
 		aether::SceneSubsystem::Init();
@@ -843,6 +846,7 @@ namespace aether
 		// - not a swapchain rebuild. A change of anisotropy on its own leaves everything
 		// below with nothing to do.
 		(void) ApplyPendingAnisotropy();
+		(void) ApplyPendingMipLodBias();
 
 		// Before the rebuild below, because the graph only picks up the change when its
 		// passes are registered again.
@@ -951,6 +955,35 @@ namespace aether
 		// So it rides the same quiesced path as a viewport rebuild instead, which runs with
 		// the render thread parked and the GPU already idle.
 		m_pendingAnisotropy.store(clamped, std::memory_order_release);
+	}
+
+	void AetherCore::SetMipLodBias(const float bias)
+	{
+		const float clamped = std::clamp(bias, -4.0f, 4.0f);
+		if (m_settings.graphics.mipLodBias == clamped)
+		{
+			return;
+		}
+		m_settings.graphics.mipLodBias = clamped;
+
+		// Recorded, applied on the quiesced frame - same reason as anisotropy: rewriting the
+		// sampler needs the GPU idle. x1000 so a nonzero bias fits the pending int flag.
+		m_pendingMipLodBias.store(static_cast<int>(clamped * 1000.0f), std::memory_order_release);
+	}
+
+	bool AetherCore::ApplyPendingMipLodBias()
+	{
+		const int pending = m_pendingMipLodBias.exchange(0, std::memory_order_acq_rel);
+		if (pending == 0 || !m_gpu)
+		{
+			return false;
+		}
+		m_gpu->WaitIdle();
+		if (m_gpu->GetBindlessManager().SetMipLodBias(static_cast<float>(pending) / 1000.0f))
+		{
+			AE_INFO(LogCategory::Engine, "Texture LOD bias set to {}.", static_cast<float>(pending) / 1000.0f);
+		}
+		return true;
 	}
 
 	void AetherCore::SetAsyncCompute(const bool enabled)
@@ -1199,12 +1232,15 @@ namespace aether
 		{
 			assetsSub.GetTileMapSystem().Extract(world, tileView, static_cast<float>(m_gameElapsedSeconds), packet.render2D);
 		}
-		// Live particles append into the same 2D instance stream.
+		// Live particles append into the same 2D instance stream; 3D emitters append into the
+		// billboard stream carried by the same packet.
 		if (!collisionOnly)
 		{
 			if (auto* particles = static_cast<ParticleSystem*>(world.FindSystem("ParticleSystem")))
 			{
+				particles->SetBillboardTarget(&packet.render2D.billboards);
 				particles->Extract(world, packet.render2D);
+				particles->SetBillboardTarget(nullptr);
 			}
 		}
 		Finalize2DFrame(packet.render2D);
@@ -1235,6 +1271,11 @@ namespace aether
 		}
 
 		packet.sunColor = renderer.GetSunColorVector();
+		packet.objectAmbient = renderer.GetObjectAmbientVector();
+		packet.objectLight0Direction = renderer.GetObjectLight0DirectionVector();
+		packet.objectLight0Color = renderer.GetObjectLight0ColorVector();
+		packet.objectLight1Direction = renderer.GetObjectLight1DirectionVector();
+		packet.objectLight1Color = renderer.GetObjectLight1ColorVector();
 		packet.skyHorizonColor = renderer.GetSkyHorizonColorVector();
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();
 		packet.skyVoidColor = renderer.GetSkyVoidColorVector();
@@ -1373,6 +1414,7 @@ namespace aether
 			if (m_profile == RuntimeProfile::Full)
 			{
 				m_rendering->GetRenderer2D().BeginFrame(packet.render2D, packet.drawSlot);
+				m_rendering->GetBillboardParticles().BeginFrame(packet.render2D, glm::vec3(packet.cameraWorldPos), packet.drawSlot);
 				m_rendering->GetCustomPassRenderer().BeginFrame(packet.renderCustom, packet.drawSlot);
 				m_rendering->GetLight2DCompositor().BeginFrame(packet, packet.drawSlot);
 			}
@@ -1384,6 +1426,7 @@ namespace aether
 		if (m_rendering && m_profile == RuntimeProfile::Full)
 		{
 			m_rendering->GetRenderer2D().EndFrame();
+			m_rendering->GetBillboardParticles().EndFrame();
 			m_rendering->GetCustomPassRenderer().EndFrame();
 		}
 

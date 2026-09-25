@@ -178,6 +178,18 @@ namespace TwExtract
 
 		static byte Alpha(byte gs) => (byte)Math.Min(gs * 2, 255);
 
+		// Sprite art is drawn with a 2x vertex colour (MODULATE: tex * 0xFF >> 7), so bake that in.
+		public static void Brighten(byte[] rgba)
+		{
+			for (int i = 0; i < rgba.Length; i++)
+			{
+				if ((i & 3) != 3)
+				{
+					rgba[i] = (byte)Math.Min(rgba[i] * 2, 255);
+				}
+			}
+		}
+
 		public static void SavePng(string path, int w, int h, byte[] rgba)
 		{
 			using (var bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
@@ -227,12 +239,15 @@ namespace TwExtract
 		readonly Dictionary<(uint, bool, int), int> m_materialIndex = new Dictionary<(uint, bool, int), int>();
 		readonly Dictionary<string, int> m_byName = new Dictionary<string, int>();
 		readonly string m_texturesRel;
+		// Object models (Program.Objects): lit by the level's light records, not prelit.
+		readonly bool m_isObject;
 
-		public Export(Gfx gfx, TextureStore textures, string texturesRelativeToGltf)
+		public Export(Gfx gfx, TextureStore textures, string texturesRelativeToGltf, bool isObject = false)
 		{
 			m_gfx = gfx;
 			m_textures = textures;
 			m_texturesRel = texturesRelativeToGltf;
+			m_isObject = isObject;
 		}
 
 	// vertexLit: the primitive carries PS2 vertex colour, so the material takes Space.VertexGain.
@@ -287,7 +302,7 @@ namespace TwExtract
 		}
 		// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
 		// the model, so equal names must mean equal content.
-		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{scrollU:R}|{scrollV:R}"));
+		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{m_isObject}|{scrollU:R}|{scrollV:R}"));
 		if (m_byName.TryGetValue(name, out index))
 		{
 			return m_materialIndex[(materialId, vertexLit, layer)] = index;
@@ -321,7 +336,7 @@ namespace TwExtract
 			gltfMat["alphaMode"] = "MASK";
 			gltfMat["alphaCutoff"] = cutoff;
 		}
-		if (blend || mask || scrollU != 0f || scrollV != 0f)
+		if (blend || mask || vertexLit || m_isObject || scrollU != 0f || scrollV != 0f)
 		{
 			// Read back by AssetPacker's MeshProcessor (cgltf extras) into the baked
 			// material's uvScroll.
@@ -331,11 +346,21 @@ namespace TwExtract
 				extras["uv_scroll"] = new[] { scrollU, scrollV };
 			}
 			// Alpha-masked scenery is PS2 foliage/cutout card art (leaves, grass tufts,
-			// fences): the renderer lights it from its baked vertex colour with a wrapped
-			// diffuse and keeps it out of the shadow maps, like the original.
+			// fences): the renderer keeps it out of the shadow maps, like the original.
 			if (mask)
 			{
 				extras["foliage"] = true;
+			}
+			// PS2 vertex colour is prelit on scenery: it carries the level's whole lighting, so
+			// the renderer shows it as is instead of lighting it again (only real-time shadows
+			// pull it down to the scene's ambient). Object models instead carry a constant
+			// vertex colour and are lit at run time by the level's own light records
+			// (beach.sm2 SceneryData), as the GS lit everything that was not scenery -
+			// including their unvertex-coloured parts (Crash's body, the crab's shells), whose
+			// COLOR_0 the GS would have read as 1.0.
+			if (vertexLit || m_isObject)
+			{
+				extras[m_isObject ? "object_lit" : "baked_lighting"] = true;
 			}
 			if (extras.Count > 0)
 			{

@@ -112,6 +112,11 @@ namespace aether
 			// Texture samples taken along the footprint when a surface is seen edge-on.
 			// 1 disables it; the device ceiling is normally 16.
 			int anisotropy = 16;
+			// Constant added to every texture-sample LOD. The PS2 picked its mip from a fixed
+			// per-draw LOD, not from screen-space derivatives, so low-resolution source art
+			// (Twinsanity's 128px ground) reads sharper there than derivative LOD does; a
+			// negative bias is the stand-in.
+			float mipLodBias = 0.0f;
 			// Short screen-space ray toward the sun, recovering the contact-scale occlusion
 			// a shadow cascade texel is too coarse to hold.
 			bool contactShadows = false;

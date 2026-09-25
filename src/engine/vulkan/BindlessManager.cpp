@@ -800,6 +800,32 @@ namespace aether
 		return true;
 	}
 
+	bool BindlessManager::SetMipLodBias(const float bias)
+	{
+		const std::scoped_lock lock(m_mutex);
+		if (m_device == nullptr)
+		{
+			return false;
+		}
+		const float clamped = std::clamp(bias, -4.0f, 4.0f);
+		if (clamped == m_mipLodBias)
+		{
+			return false;
+		}
+		m_mipLodBias = clamped;
+
+		// Same reasoning as SetMaxAnisotropy: the fallback path's live VkSampler has the old
+		// bias baked in, and the caller has already waited for the device to go idle.
+		if (m_fallbackSampler != nullptr)
+		{
+			vkDestroySampler(static_cast<VkDevice>(m_device), static_cast<VkSampler>(m_fallbackSampler), nullptr);
+			m_fallbackSampler = nullptr;
+		}
+
+		WriteLinearSamplerUnlocked();
+		return true;
+	}
+
 	void BindlessManager::WriteLinearSampler()
 	{
 		const std::scoped_lock lock(m_mutex);
@@ -829,6 +855,7 @@ namespace aether
 		        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 		        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 		        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		        .mipLodBias = m_mipLodBias,
 		        .anisotropyEnable = m_maxAnisotropy > 1.0f ? VK_TRUE : VK_FALSE,
 		        .maxAnisotropy = m_maxAnisotropy,
 		        .compareEnable = VK_FALSE,

@@ -25,6 +25,7 @@
 #include "rendering/Renderer.hpp"
 #include "rendering/CustomPassRenderer.hpp"
 #include "rendering/Light2DCompositor.hpp"
+#include "rendering/BillboardParticleRenderer.hpp"
 #include "rendering/Renderer2D.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
@@ -231,6 +232,11 @@ namespace aether
 			return m_renderer2D;
 		}
 
+		[[nodiscard]] BillboardParticleRenderer& GetBillboardParticles()
+		{
+			return m_billboardParticles;
+		}
+
 		[[nodiscard]] CustomPassRenderer& GetCustomPassRenderer()
 		{
 			return m_customPassRenderer;
@@ -369,6 +375,7 @@ namespace aether
 		RenderQueue m_renderQueue;
 		Renderer m_renderer;
 		Renderer2D m_renderer2D;
+		BillboardParticleRenderer m_billboardParticles;
 		CustomPassRenderer m_customPassRenderer;
 		Light2DCompositor m_light2D;
 		FrameConstantsBuffer m_frameConstantsBuffer;

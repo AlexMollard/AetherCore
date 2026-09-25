@@ -52,6 +52,10 @@ namespace aether
 		// the GPU reads and may destroy a sampler object it is still using.
 		bool SetMaxAnisotropy(std::uint32_t requested);
 
+		// Constant added to every sampled LOD. Same contract as SetMaxAnisotropy: the caller
+		// must have the device idle. Returns whether the sampler was rewritten.
+		bool SetMipLodBias(float bias);
+
 		[[nodiscard]] gpu::DeviceAddress GetResourceHeapAddress() const;
 		[[nodiscard]] gpu::DeviceAddress GetSamplerHeapAddress() const;
 		[[nodiscard]] gpu::DeviceSize GetResourceHeapSize() const;
@@ -96,6 +100,8 @@ namespace aether
 		// What samplers are actually created with: the requested setting clamped to the
 		// hardware ceiling below. 1.0 means no anisotropic filtering.
 		float m_maxAnisotropy = 1.0f;
+		// Added to every sampled LOD; negative picks sharper mips than the footprint asks for.
+		float m_mipLodBias = 0.0f;
 		// The hardware ceiling itself, kept so a later request can be re-clamped.
 		float m_deviceMaxAnisotropy = 1.0f;
 

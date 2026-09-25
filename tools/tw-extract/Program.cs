@@ -12,6 +12,10 @@
 //   models/collision/<Area>/<Level>/<chunk>/*.gltf       collision pieces (see LevelExport)
 //   levels/<Area>/<Level>/<chunk>.level.json             everything a runtime needs to assemble the chunk
 //   images/<path>/<stem>_NN.png                          gallery / loading-screen pictures (.psm)
+//   ui/icons/Icons_NN.png, Decal_00.png                  HUD / menu sprites (Startup/Icons.psm, Decal.ptc), GS-brightened
+//   ui/titles/<Language>/<Level>_00.png                  level title badges (Language/Titles), GS-brightened
+//   ui/text/<Language>.txt                               menu strings (Language/Code)
+//   ui/fonts/<font>_NN.png, <font>/<code>.png, <font>.font.json   bitmap fonts (Startup/Fonts/*.psf): pages, glyphs, metrics
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -75,7 +79,8 @@ namespace TwExtract
 				{
 					string name = entry.Name.Replace('\\', '/');
 					string ext = Path.GetExtension(name).ToLowerInvariant();
-					if ((ext != ".sm2" && ext != ".rm2" && ext != ".psm") || (only != null && name.IndexOf(only, StringComparison.OrdinalIgnoreCase) < 0))
+					bool text = ext == ".txt" && name.StartsWith("Language/Code/", StringComparison.OrdinalIgnoreCase);
+					if ((ext != ".sm2" && ext != ".rm2" && ext != ".psm" && ext != ".psf" && ext != ".ptc" && !text) || (only != null && name.IndexOf(only, StringComparison.OrdinalIgnoreCase) < 0))
 					{
 						continue;
 					}
@@ -88,7 +93,7 @@ namespace TwExtract
 					try
 					{
 						Console.SetOut(TextWriter.Null); // the library prints load chatter
-						string result = ext == ".sm2" ? Scenery(local, name) : ext == ".rm2" ? Rm2(local, name) : Images(local, name);
+						string result = ext == ".sm2" ? Scenery(local, name) : ext == ".rm2" ? Rm2(local, name) : ext == ".psf" ? Font(local, name) : text ? Strings(local, name) : Images(local, name);
 						Console.SetOut(stdout);
 						Console.WriteLine($"{name}: {result}");
 					}
@@ -123,6 +128,10 @@ namespace TwExtract
 		        Uri.UnescapeDataString(new Uri(Path.GetFullPath(fromDir) + Path.DirectorySeparatorChar).MakeRelativeUri(new Uri(Path.GetFullPath(toDir) + Path.DirectorySeparatorChar)).ToString()).TrimEnd('/');
 
 		static Export NewExport(Gfx gfx, string gltfDir) => new Export(gfx, s_textures, Rel(gltfDir, Path.Combine(s_out, "textures")));
+
+		// Object models are not prelit scenery: they are lit at run time by the level's
+		// light records, so their materials get {"object_lit":true} instead.
+		static Export NewObjectExport(Gfx gfx, string gltfDir) => new Export(gfx, s_textures, Rel(gltfDir, Path.Combine(s_out, "textures")), isObject: true);
 
 		static TwinsFile Load(string path, TwinsFile.FileType type)
 		{
@@ -318,7 +327,41 @@ namespace TwExtract
 			var file = Load(path, TwinsFile.FileType.RM2);
 			var gfx = new Gfx(file, 11);
 			string objects = Objects(file, gfx, archiveName, out var models);
-			return objects + ", " + LevelExport.Write(file, Path.ChangeExtension(path, ".sm2"), LevelPath(archiveName), s_out, models);
+			string particles = "";
+			// Startup/Default.rm2 holds the shared particle bank: its three texture pages are
+			// what the runtime's billboard emitters sample. Everything else re-exports the
+			// same bank per level, so only write it once.
+			if (archiveName.EndsWith("Startup/Default.rm2", StringComparison.OrdinalIgnoreCase))
+			{
+				particles = ", " + ParticlePages(file, gfx);
+			}
+			return objects + particles + ", " + LevelExport.Write(file, Path.ChangeExtension(path, ".sm2"), LevelPath(archiveName), s_out, models);
+		}
+
+		// ParticleData's three texture pages -> assets/particles/particle_page_<n>.png. The
+		// pages are drawn point-sampled at their native texels; no 2x brighten (their own
+		// colour/alpha gradients supply the gain).
+		static string ParticlePages(TwinsFile file, Gfx gfx)
+		{
+			var pd = Gfx.Items(file).OfType<ParticleData>().FirstOrDefault() ?? throw new InvalidDataException("no ParticleData in Default.rm2");
+			string dir = Path.Combine(s_out, "particles");
+			Directory.CreateDirectory(dir);
+			uint[] ids = { pd.ParticleTextureID_1, pd.ParticleTextureID_2, pd.ParticleTextureID_3 };
+			int saved = 0;
+			var pages = new List<object>();
+			for (int i = 0; i < ids.Length; i++)
+			{
+				if (!gfx.Textures.TryGetValue(ids[i], out var tex))
+				{
+					continue;
+				}
+				var rgba = Pixels.Decode(tex) ?? throw new InvalidDataException($"particle page {i}: undecodable {tex.PixelFormat}");
+				string name = $"particle_page_{i}.png";
+				Pixels.SavePng(Path.Combine(dir, name), tex.Width, tex.Height, rgba);
+				pages.Add(new Dictionary<string, object> { ["page"] = i, ["file"] = name, ["width"] = tex.Width, ["height"] = tex.Height });
+				saved++;
+			}
+			return $"{saved} particle pages";
 		}
 
 		// models: object ID -> project:// path of the object's first graphics set, whether written now or by
@@ -354,7 +397,7 @@ namespace TwExtract
 				{
 					string name = Safe(obj.Name) + (used.Count > 1 ? $"_{k}" : "");
 					string dir = Path.Combine(s_out, "models", "objects", Safe(obj.Name));
-					var ex = NewExport(gfx, dir);
+					var ex = NewObjectExport(gfx, dir);
 					if (!BuildObject(ex, gfx, ogis[used[k]], name, clips))
 					{
 						continue;
@@ -627,7 +670,13 @@ namespace TwExtract
 		static string Images(string path, string archiveName)
 		{
 			string rel = archiveName.Substring(0, archiveName.Length - 4);
-			string dir = Path.Combine(s_out, "images", Path.GetDirectoryName(rel));
+			// The HUD and menu art: Startup/Icons.psm, Startup/Decal.ptc (one record, same layout) and the level
+			// title badges. Their texels hold half-range colour (<= 0x7F): the game draws the sprites with a 2x
+			// vertex colour, so ui/ stores them at the brightness they show at.
+			bool titles = rel.StartsWith("Language/Titles/", StringComparison.OrdinalIgnoreCase);
+			bool ui = titles || rel.StartsWith("Startup/", StringComparison.OrdinalIgnoreCase);
+			string dir = titles ? Path.Combine(s_out, "ui", "titles", Path.GetFileName(Path.GetDirectoryName(rel)))
+			           : ui ? Path.Combine(s_out, "ui", "icons") : Path.Combine(s_out, "images", Path.GetDirectoryName(rel));
 			string stem = Path.GetFileName(rel);
 			Directory.CreateDirectory(dir);
 			var raw = File.ReadAllBytes(path);
@@ -649,6 +698,10 @@ namespace TwExtract
 						break;
 					}
 					var rgba = Pixels.Decode(tex);
+					if (rgba != null && ui)
+					{
+						Pixels.Brighten(rgba);
+					}
 					if (rgba != null)
 					{
 						Pixels.SavePng(Path.Combine(dir, $"{stem}_{saved:D2}.png"), tex.Width, tex.Height, rgba);
@@ -657,16 +710,7 @@ namespace TwExtract
 					}
 					try
 					{
-						r.ReadUInt64();
-						r.ReadInt32();
-						r.ReadBytes(r.ReadInt32());
-						int shaders = r.ReadInt32();
-						for (int i = 0; i < shaders; i++)
-						{
-							uint kind = r.ReadUInt32();
-							int extra = kind == 23 ? 12 : kind == 26 ? 20 : (kind == 16 || kind == 17) ? 4 : 0;
-							r.ReadBytes(extra + 24 + 6 + 4 + 48 + 8);
-						}
+						SkipMaterial(r);
 					}
 					catch (EndOfStreamException)
 					{
@@ -675,6 +719,110 @@ namespace TwExtract
 				}
 			}
 			return $"{saved} tiles";
+		}
+
+		// The Material after each texture, skipped by its known layout (the library's Material.Load throws here).
+		static void SkipMaterial(BinaryReader r)
+		{
+			r.ReadUInt64();
+			r.ReadInt32();
+			r.ReadBytes(r.ReadInt32());
+			int shaders = r.ReadInt32();
+			for (int i = 0; i < shaders; i++)
+			{
+				uint kind = r.ReadUInt32();
+				int extra = kind == 23 ? 12 : kind == 26 ? 20 : (kind == 16 || kind == 17) ? 4 : 0;
+				r.ReadBytes(extra + 24 + 6 + 4 + 48 + 8);
+			}
+		}
+
+		// ---- menu strings (Language/Code/<Language>.txt) --------------------------------------------
+
+		// The front end and pause menu's own text, one string per line (blank lines separate groups; '~' is
+		// a line break, and \ ^ < > { } ¦ ¬ select the font's button glyphs). Copied verbatim to ui/text/.
+		static string Strings(string path, string archiveName)
+		{
+			string dir = Path.Combine(s_out, "ui", "text");
+			Directory.CreateDirectory(dir);
+			File.Copy(path, Path.Combine(dir, Path.GetFileName(archiveName)), true);
+			return "strings copied";
+		}
+
+		// ---- fonts (.psf) ---------------------------------------------------------------------------
+
+		// A .psf is TwinsPSF: a page count, that many (texture id, material id, Texture, Material) pages, then
+		// a glyph count, the first character code (32) and one vec4 per character: (u, v, width, height) in
+		// 1/16 texels, v measured up from the page's bottom edge to the cell's top. The page is not a field:
+		// u carries it in its low mantissa bits, (bits(u) - bits(floor(u))) - 1 (glyph '0' sits on page 1 at
+		// u 8.000002, '4' on page 0 at 8.000001, '%' on page 2 at 8.000003; the space is exactly 8.0, no page).
+		// Written as ui/fonts/<font>.font.json: { "pages": [...], "glyphs": { "<code>": [page, x, y, w, h] } }
+		// in whole page pixels, y from the top (page -1 is a blank, advance-only glyph), plus every drawn
+		// glyph cut out as ui/fonts/<font>/<code>.png - engine UI images show whole textures, not sub-rects.
+		static string Font(string path, string archiveName)
+		{
+			string stem = Path.GetFileNameWithoutExtension(archiveName);
+			string dir = Path.Combine(s_out, "ui", "fonts");
+			Directory.CreateDirectory(dir);
+			var pages = new List<object>();
+			var glyphs = new Dictionary<string, object>();
+			int first;
+			var decoded = new List<(byte[] Rgba, int W, int H)>();
+			Directory.CreateDirectory(Path.Combine(dir, stem));
+			using (var r = new BinaryReader(File.OpenRead(path)))
+			{
+				int count = r.ReadInt32();
+				for (int i = 0; i < count; i++)
+				{
+					r.ReadUInt32();
+					r.ReadUInt32();
+					var tex = new Texture();
+					tex.Load(r, 0);
+					SkipMaterial(r);
+					var rgba = Pixels.Decode(tex) ?? throw new InvalidDataException($"font page {i}: undecodable {tex.PixelFormat}");
+					Pixels.Brighten(rgba);
+					string file = $"{stem}_{i:D2}.png";
+					Pixels.SavePng(Path.Combine(dir, file), tex.Width, tex.Height, rgba);
+					pages.Add(new Dictionary<string, object> { ["file"] = file, ["width"] = tex.Width, ["height"] = tex.Height });
+					s_images++;
+					decoded.Add((rgba, tex.Width, tex.Height));
+				}
+				int glyphCount = r.ReadInt32();
+				first = r.ReadInt32();
+				for (int i = 0; i < glyphCount; i++)
+				{
+					float u = r.ReadSingle(), v = r.ReadSingle(), w = r.ReadSingle(), h = r.ReadSingle();
+					if (w <= 0 || h <= 0)
+					{
+						continue;
+					}
+					int page = BitConverter.ToInt32(BitConverter.GetBytes(u), 0) - BitConverter.ToInt32(BitConverter.GetBytes((float)Math.Floor(u)), 0) - 1;
+					int gx = (int)(u / 16f), gw = (int)Math.Round(w / 16f), gh = (int)Math.Round(h / 16f);
+					int gy = page >= 0 && page < decoded.Count ? (int)(decoded[page].H - v / 16f) : 0;
+					glyphs[(first + i).ToString()] = new List<object> { page, gx, gy, gw, gh };
+					if (page < 0 || page >= decoded.Count)
+					{
+						continue;
+					}
+					var src = decoded[page];
+					var cut = new byte[gw * gh * 4];
+					for (int y = 0; y < gh; y++)
+					{
+						for (int x = 0; x < gw; x++)
+						{
+							int sx = gx + x, sy = gy + y;
+							if (sx >= 0 && sx < src.W && sy >= 0 && sy < src.H)
+							{
+								Buffer.BlockCopy(src.Rgba, (sy * src.W + sx) * 4, cut, (y * gw + x) * 4, 4);
+							}
+						}
+					}
+					Pixels.SavePng(Path.Combine(dir, stem, $"{first + i}.png"), gw, gh, cut);
+				}
+			}
+			var sb = new StringBuilder();
+			Json.Write(sb, new Dictionary<string, object> { ["pages"] = pages, ["glyphs"] = glyphs });
+			File.WriteAllText(Path.Combine(dir, stem + ".font.json"), sb.ToString());
+			return $"{pages.Count} pages, {glyphs.Count} glyphs";
 		}
 	}
 }

@@ -630,6 +630,8 @@ namespace aether::assets
 			outMat.alphaMask = hdr.alphaMask != 0;
 			outMat.modulateVertexColor = hdr.modulateVertexColor != 0;
 			outMat.foliage = hdr.foliage != 0;
+			outMat.bakedLighting = hdr.bakedLighting != 0;
+			outMat.objectLit = hdr.objectLit != 0;
 			outMat.uvScroll = glm::vec2(hdr.uvScroll[0], hdr.uvScroll[1]);
 
 			for (uint8_t t = 0; t < hdr.texturePathCount; ++t)

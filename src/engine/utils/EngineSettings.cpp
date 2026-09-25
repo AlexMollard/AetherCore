@@ -75,6 +75,7 @@ namespace aether
 		        {"graphics.reflectionIntensity", {.description = "Strength of the screen-space reflection contribution.", .minValue = 0.0, .maxValue = 2.0}},
 		        {"graphics.contactShadows", {.description = "Recovers the small shadow at the base of an object that a shadow cascade texel is too coarse to resolve, by marching a short ray through the depth buffer."}},
 		        {"graphics.anisotropy", {.description = "Texture samples taken along the footprint when a surface is seen edge-on. 1 disables it, which visibly blurs ground at a grazing angle.", .minValue = 1.0, .maxValue = 16.0}},
+		        {"graphics.mipLodBias", {.description = "Constant added to every texture-sample LOD. Negative values pick sharper mips than the screen footprint asks for. Takes effect on the next quiesced frame.", .minValue = -4.0, .maxValue = 4.0}},
 		        {"graphics.shadowSplitLambda", {.description = "How the shadow cascades divide the view distance. 0 is even, 1 is logarithmic. Higher sharpens shadows near the camera and coarsens the middle distance; the far cascade is unaffected.", .minValue = 0.0, .maxValue = 1.0}},
 		        {"graphics.volumetrics", {.description = "March the sun's shadow cascades through the scene's fog so shadows carve beams out of it. Costs nothing in a scene with no fog authored."}},
 		        {"graphics.tonemap", {.description = "Display transform applied to the HDR image. ACES rolls highlights toward white in AP1; AgX mixes the channels before compressing them, so bright saturated colour stops rotating hue on its way to white.", .choices = kTonemapNames}},
@@ -198,6 +199,7 @@ namespace aether
 		}
 		settings.app.targetFps = std::max(0.0f, settings.app.targetFps);
 		settings.graphics.framesInFlight = std::clamp(settings.graphics.framesInFlight, 1, 3);
+		settings.graphics.mipLodBias = std::clamp(settings.graphics.mipLodBias, -4.0f, 4.0f);
 		// 0 is legitimate and is what practitioners run with GTSyncType 2; the pacer holds the
 		// latch point short of the flip itself. The upper bound is a whole 30 Hz interval,
 		// past which this stops being slack and becomes a frame of lag.

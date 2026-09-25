@@ -10,7 +10,7 @@ namespace aether
 {
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (912 bytes):
+	// Layout (1008 bytes):
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};
@@ -79,6 +79,17 @@ namespace aether
 		// w spare.
 		glm::vec4 shadingParams{1.0f, 0.0f, 0.0f, 0.0f};
 
+		// PS2 object lighting (kFlagObjectLit materials): the level's own light records
+		// (SM2 SceneryData) as the GS applied them to everything that was not prelit
+		// scenery - objects, pickups, characters. Ambient + two directional lights, each
+		// direction pointing TOWARDS its light like sunDirectionIntensity. Colours already
+		// carry the game's k scale, so the shader multiplies and clamps nothing.
+		glm::vec4 objectAmbient{1.0f, 1.0f, 1.0f, 1.0f};
+		glm::vec4 objectLight0Direction{0.0f, 1.0f, 0.0f, 0.0f};
+		glm::vec4 objectLight0Color{0.0f, 0.0f, 0.0f, 0.0f};
+		glm::vec4 objectLight1Direction{0.0f, 1.0f, 0.0f, 0.0f};
+		glm::vec4 objectLight1Color{0.0f, 0.0f, 0.0f, 0.0f};
+
 		void RefreshDerived()
 		{
 			invViewProj = glm::inverse(viewProj);
@@ -103,7 +114,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 928, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 1008, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -136,4 +147,9 @@ namespace aether
 	static_assert(offsetof(FrameConstants, skyParams) == 832);
 	static_assert(offsetof(FrameConstants, prevViewProj) == 848);
 	static_assert(offsetof(FrameConstants, shadingParams) == 912);
+	static_assert(offsetof(FrameConstants, objectAmbient) == 928);
+	static_assert(offsetof(FrameConstants, objectLight0Direction) == 944);
+	static_assert(offsetof(FrameConstants, objectLight0Color) == 960);
+	static_assert(offsetof(FrameConstants, objectLight1Direction) == 976);
+	static_assert(offsetof(FrameConstants, objectLight1Color) == 992);
 } // namespace aether

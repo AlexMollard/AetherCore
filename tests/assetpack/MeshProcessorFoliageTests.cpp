@@ -17,20 +17,22 @@ using namespace aether;
 namespace
 {
 	// Same shape as the vertex-colour bake test's glTF; the difference is the materials:
-	// "leaf" carries alphaMode MASK plus tw-extract's {"foliage":true} extras, "plain" is
-	// opaque with no extras.
+	// "leaf" carries alphaMode MASK plus tw-extract's {"foliage":true} extras, "lit" only
+	// {"baked_lighting":true}, "plain" is opaque with no extras.
 	constexpr const char* kGltf = R"({
   "asset": {"version": "2.0"},
   "scene": 0,
-  "scenes": [{"nodes": [0, 1]}],
-  "nodes": [{"mesh": 0}, {"mesh": 1}],
+  "scenes": [{"nodes": [0, 1, 2]}],
+  "nodes": [{"mesh": 0}, {"mesh": 1}, {"mesh": 2}],
   "meshes": [
     {"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 0}]},
-    {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 1}]}
+    {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 1}]},
+    {"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 2}]}
   ],
   "materials": [
     {"name": "leaf", "alphaMode": "MASK", "alphaCutoff": 0.5, "extras": {"foliage": true}},
-    {"name": "plain"}
+    {"name": "plain"},
+    {"name": "lit", "extras": {"baked_lighting": true}}
   ],
   "accessors": [
     {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
@@ -45,7 +47,7 @@ namespace
   "buffers": [{"uri": "tri.bin", "byteLength": 92}]
 })";
 
-	bool FoliageFlag(const std::vector<std::pair<std::string, std::vector<std::byte>>>& files, const std::string& name)
+	MaterialHeaderDisk Header(const std::vector<std::pair<std::string, std::vector<std::byte>>>& files, const std::string& name)
 	{
 		for (const auto& [path, blob]: files)
 		{
@@ -54,15 +56,15 @@ namespace
 				BinaryReader reader(blob);
 				const auto hdr = reader.Read<MaterialHeaderDisk>();
 				REQUIRE(CheckMagic(hdr));
-				return hdr.foliage != 0;
+				return hdr;
 			}
 		}
 		FAIL("no generated material named " << name);
-		return false;
+		return {};
 	}
 }
 
-TEST_CASE("Baked glTF materials carry the foliage flag exactly where tw-extract marked it")
+TEST_CASE("Baked glTF materials carry the foliage and baked-lighting flags exactly where tw-extract marked them")
 {
 	const std::filesystem::path dir = std::filesystem::temp_directory_path() / "aether_foliage_bake";
 	std::filesystem::create_directories(dir);
@@ -81,7 +83,11 @@ TEST_CASE("Baked glTF materials carry the foliage flag exactly where tw-extract 
 	const auto result = assetpipeline::MeshProcessor::Process(std::span<const std::byte>(p, text.size()), dir / "tri.gltf", "models/tri.gltf", dir);
 	REQUIRE_FALSE(result.meshData.empty());
 
-	CHECK(FoliageFlag(result.materialFiles, "leaf"));
-	CHECK_FALSE(FoliageFlag(result.materialFiles, "plain"));
+	CHECK(Header(result.materialFiles, "leaf").foliage != 0);
+	CHECK(Header(result.materialFiles, "leaf").bakedLighting == 0);
+	CHECK(Header(result.materialFiles, "lit").bakedLighting != 0);
+	CHECK(Header(result.materialFiles, "lit").foliage == 0);
+	CHECK(Header(result.materialFiles, "plain").foliage == 0);
+	CHECK(Header(result.materialFiles, "plain").bakedLighting == 0);
 	std::filesystem::remove_all(dir);
 }

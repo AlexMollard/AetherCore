@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include "material/TextureHandle.hpp"
+#include "rendering/RenderFramePacket.hpp"
 #include "scene/System.hpp"
 
 namespace aether
@@ -58,6 +59,10 @@ namespace aether
 		// Script-facing: queue a burst / toggle continuous emission.
 		static void QueueBurst(ParticleEmitterComponent& emitter, std::uint32_t count);
 
+		// Frame prep hands over where extracted billboard particles go this frame. The pointer
+		// is packet-owned and only read during Extract.
+		void SetBillboardTarget(std::vector<BillboardParticleInstance>* out) { m_billboardOut = out; }
+
 		// Advance a standalone emitter with no ECS/physics dependency, for an
 		// in-editor preview. Spawns from `origin`, integrates + culls, resolves
 		// sibling collisions, but never touches the world or auto-destroys.
@@ -66,11 +71,15 @@ namespace aether
 	private:
 		// Shared spawn/integrate/cull step for one emitter (physics == null skips
 		// world collision). Used by Update (per entity) and StepStandalone (preview).
-		static void StepEmitter(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin, const Physics2DSystem* physics);
+		static void StepEmitter(ParticleEmitterComponent& emitter, float dt, glm::vec2 origin, glm::vec3 origin3D, const Physics2DSystem* physics);
+
+		// Append one emitter's live 3D particles to the packet's billboard stream.
+		void ExtractBillboards(const ParticleEmitterComponent& emitter, Entity entity);
 
 		TextureHandle ResolveTexture(const std::string& path);
 
 		TextureRegistry& m_textures;
 		std::unordered_map<std::string, TextureHandle> m_textureCache;
+		std::vector<BillboardParticleInstance>* m_billboardOut = nullptr;
 	};
 } // namespace aether

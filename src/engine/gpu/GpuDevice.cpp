@@ -261,6 +261,11 @@ namespace aether
 		fc.fogParams = packet.fogParams;
 		fc.skyParams = packet.skyParams;
 		fc.shadingParams = packet.shadingParams;
+		fc.objectAmbient = packet.objectAmbient;
+		fc.objectLight0Direction = packet.objectLight0Direction;
+		fc.objectLight0Color = packet.objectLight0Color;
+		fc.objectLight1Direction = packet.objectLight1Direction;
+		fc.objectLight1Color = packet.objectLight1Color;
 
 		// A first frame has nothing behind it, and a camera that jumped has nothing
 		// meaningful behind it either - reprojecting through either produces a screen-wide

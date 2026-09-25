@@ -9,7 +9,9 @@ static const uint kFlagAlphaBlend  = 2u;
 static const uint kFlagAlphaMask   = 4u;
 static const uint kFlagModulateVertexColor = 8u;
 static const uint kFlagNoReceiveShadows = 16u; // set == material opts out of shadow receiving
-static const uint kFlagFoliage = 32u; // PS2 foliage/cutout card: wrapped diffuse, no shadow maps
+static const uint kFlagFoliage = 32u; // PS2 foliage/cutout card: no shadow maps
+static const uint kFlagBakedLighting = 64u; // PS2 prelit: vertex colour is the lighting
+static const uint kFlagObjectLit = 128u;    // PS2 object lighting from the level's light records
 
 struct GpuMaterial
 {

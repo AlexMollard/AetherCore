@@ -16,8 +16,13 @@ namespace aether
 		static constexpr std::uint32_t kAlphaMask = 1u << 2;
 		static constexpr std::uint32_t kModulateVertexColor = 1u << 3;
 		static constexpr std::uint32_t kNoReceiveShadows = 1u << 4;
-		// PS2 foliage/cutout card: wrapped diffuse, no shadow-map receive, no shadow casting.
+		// PS2 foliage/cutout card: no shadow-map receive, no shadow casting.
 		static constexpr std::uint32_t kFoliage = 1u << 5;
+		// PS2 prelit geometry: vertex colour is the lighting, shadow maps pull it to the ambient.
+		static constexpr std::uint32_t kBakedLighting = 1u << 6;
+		// PS2 object lighting: lit by the scene's object light records (ambient + two
+		// directional) like the GS lit everything that was not prelit scenery.
+		static constexpr std::uint32_t kObjectLit = 1u << 7;
 
 		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor{1.0f};

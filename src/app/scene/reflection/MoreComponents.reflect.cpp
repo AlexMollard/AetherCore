@@ -44,6 +44,15 @@ namespace
 		return table;
 	}
 
+	const reflect::EnumTable& ParticleSpaceEnum()
+	{
+		static const reflect::EnumTable table{{
+		        {"plane_2d", static_cast<int>(ParticleSpace::Plane2D)},
+		        {"billboard_3d", static_cast<int>(ParticleSpace::Billboard3D)},
+		}};
+		return table;
+	}
+
 	const reflect::EnumTable& UiScaleModeEnum()
 	{
 		static const reflect::EnumTable table{{
@@ -146,10 +155,12 @@ AE_COMPONENT_END()
 
 AE_COMPONENT(ParticleEmitterComponent, "Particle Emitter", "Rendering", ICON_FA_WAND_MAGIC_SPARKLES)
 AE_FIELD_N("texture", texturePath, String)
+AE_FIELD_ENUM("space", space, ParticleSpaceEnum())
 AE_FIELD_NT("rate", rate, Float, "Continuous particles per second (0 = burst only).")
 AE_FIELD_NT("burst_count", burstCount, UInt, "How many particles a single burst releases at once, on top of whatever rate is producing.")
 AE_FIELD_NT("emit_on_start", emitOnStart, Bool, "Fire the burst once when the emitter appears.")
 AE_FIELD_NT("emitting", emitting, Bool, "Spawn new particles at the rate above. Turning it off lets the ones already alive finish rather than cutting them.")
+AE_FIELD_NT("emit_duration", emitDuration, Float, "Seconds the rate stream runs after the first tick; 0 runs until emitting is turned off.")
 AE_FIELD_NT("auto_destroy", autoDestroyWhenDone, Bool, "One-shot effect entities retire themselves once the last particle dies.")
 AE_FIELD_N("max_particles", maxParticles, UInt)
 AE_FIELD_N("lifetime_min", lifetimeMin, Float)
@@ -171,6 +182,95 @@ AE_FIELD_NT("collide_particles", collideParticles, Bool, "Particles bounce off o
 AE_FIELD_N("bounce", bounce, Float)
 AE_FIELD_NT("collision_damping", collisionDamping, Float, "Tangential speed lost on a world hit - how much a particle is slowed as it scrapes along a surface, separately from how much it bounces.")
 AE_FIELD_NT("collision_radius", collisionRadius, Float, "0 = derive from particle size.")
+AE_FIELD_N("velocity", velocity3D, Vec3)
+AE_FIELD_NT("velocity_jitter", velocityJitter, Vec3, "Each axis gets a random offset of +/- this on top of velocity.")
+AE_FIELD_NT("spawn_jitter", spawnJitter, Vec3, "Random offset of the spawn point, +/- per axis.")
+AE_FIELD_N("gravity_3d", gravity3D, Vec3)
+AE_FIELD_NT("uv_rect", uvRect, Vec4, "(u0, v0, u1, v1) sub-rect of the texture page, v down.")
+AE_FIELD_NT("rotation_jitter", rotationJitterDeg, Float, "Random start angle in degrees, +/- this.")
+b.CustomListField(
+        "color_keys",
+        {{"t", reflect::FieldType::Float}, {"color", reflect::FieldType::Color3}},
+        [](const void* comp) -> reflect::FieldValue
+        {
+	        reflect::FieldValue v;
+	        v.type = reflect::FieldType::List;
+	        for (const ParticleColorKey& k: static_cast<const ParticleEmitterComponent*>(comp)->colorKeys)
+	        {
+		        reflect::FieldValue t;
+		        t.type = reflect::FieldType::Float;
+		        t.num = k.t;
+		        reflect::FieldValue col;
+		        col.type = reflect::FieldType::Color3;
+		        col.vec = glm::vec4(k.color, 0.0f);
+		        v.list.push_back({t, col});
+	        }
+	        return v;
+        },
+        [](void* comp, const reflect::FieldValue& in)
+        {
+	        auto& keys = static_cast<ParticleEmitterComponent*>(comp)->colorKeys;
+	        keys.clear();
+	        for (const std::vector<reflect::FieldValue>& row: in.list)
+	        {
+		        ParticleColorKey k{};
+		        if (row.size() >= 1)
+		        {
+			        k.t = static_cast<float>(row[0].num);
+		        }
+		        if (row.size() >= 2)
+		        {
+			        k.color = glm::vec3(row[1].vec);
+		        }
+		        keys.push_back(k);
+	        }
+        });
+// The scalar tracks share one element shape, so they go through one helper-driven lambda each.
+{
+	const auto scalarList = [](std::vector<ParticleScalarKey> ParticleEmitterComponent::* field)
+	{
+		return [field](void* comp, const reflect::FieldValue& in)
+		{
+			auto& keys = static_cast<ParticleEmitterComponent*>(comp)->*field;
+			keys.clear();
+			for (const std::vector<reflect::FieldValue>& row: in.list)
+			{
+				ParticleScalarKey k{};
+				if (row.size() >= 1)
+				{
+					k.t = static_cast<float>(row[0].num);
+				}
+				if (row.size() >= 2)
+				{
+					k.value = static_cast<float>(row[1].num);
+				}
+				keys.push_back(k);
+			}
+		};
+	};
+	const auto scalarGet = [](const std::vector<ParticleScalarKey>& keys) -> reflect::FieldValue
+	{
+		reflect::FieldValue v;
+		v.type = reflect::FieldType::List;
+		for (const ParticleScalarKey& k: keys)
+		{
+			reflect::FieldValue t;
+			t.type = reflect::FieldType::Float;
+			t.num = k.t;
+			reflect::FieldValue val;
+			val.type = reflect::FieldType::Float;
+			val.num = k.value;
+			v.list.push_back({t, val});
+		}
+		return v;
+	};
+	b.CustomListField("alpha_keys", {{"t", reflect::FieldType::Float}, {"value", reflect::FieldType::Float}},
+	        [&](const void* comp) { return scalarGet(static_cast<const ParticleEmitterComponent*>(comp)->alphaKeys); }, scalarList(&ParticleEmitterComponent::alphaKeys));
+	b.CustomListField("size_keys", {{"t", reflect::FieldType::Float}, {"value", reflect::FieldType::Float}},
+	        [&](const void* comp) { return scalarGet(static_cast<const ParticleEmitterComponent*>(comp)->sizeKeys); }, scalarList(&ParticleEmitterComponent::sizeKeys));
+	b.CustomListField("rotation_keys", {{"t", reflect::FieldType::Float}, {"value", reflect::FieldType::Float}},
+	        [&](const void* comp) { return scalarGet(static_cast<const ParticleEmitterComponent*>(comp)->rotationKeys); }, scalarList(&ParticleEmitterComponent::rotationKeys));
+}
 b.SerializeKey("particles"); // legacy on-disk key predates the display-name derivation
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()

@@ -259,6 +259,8 @@ namespace aether::app::scene
 				deps.renderer->SetSkyGradient(env.skyHorizon, env.skyZenith);
 				deps.renderer->SetSkyVoidColor(env.skyVoid);
 				deps.renderer->SetClouds(env.cloudCoverage, env.cloudSpeed);
+				deps.renderer->SetObjectLights(env.objectAmbient, env.objectLight0Direction, env.objectLight0Color,
+				                               env.objectLight1Direction, env.objectLight1Color);
 			}
 
 			std::size_t behaviorCount = 0;

@@ -893,6 +893,16 @@ namespace aether::app::scene
 				e.insert("cloud_coverage", env.cloudCoverage);
 				e.insert("cloud_speed", env.cloudSpeed);
 			}
+			// Object lights only when they differ from the do-nothing default (a full
+			// ambient and no directionals), for the same rewrite-avoidance reason as cloud.
+			if (env.objectAmbient != glm::vec3(1.0f) || env.objectLight0Color != glm::vec3(0.0f))
+			{
+				e.insert("object_ambient", Vec3ToToml(env.objectAmbient));
+				e.insert("object_light0_direction", Vec3ToToml(env.objectLight0Direction));
+				e.insert("object_light0_color", Vec3ToToml(env.objectLight0Color));
+				e.insert("object_light1_direction", Vec3ToToml(env.objectLight1Direction));
+				e.insert("object_light1_color", Vec3ToToml(env.objectLight1Color));
+			}
 			root.insert("environment", std::move(e));
 		}
 
@@ -1346,6 +1356,11 @@ namespace aether::app::scene
 			env.skyVoid = Vec3FromToml(ev["sky_void"], env.skyVoid);
 			env.cloudCoverage = static_cast<float>(ev["cloud_coverage"].value_or(0.0));
 			env.cloudSpeed = static_cast<float>(ev["cloud_speed"].value_or(0.02));
+			env.objectAmbient = Vec3FromToml(ev["object_ambient"], env.objectAmbient);
+			env.objectLight0Direction = Vec3FromToml(ev["object_light0_direction"], env.objectLight0Direction);
+			env.objectLight0Color = Vec3FromToml(ev["object_light0_color"], env.objectLight0Color);
+			env.objectLight1Direction = Vec3FromToml(ev["object_light1_direction"], env.objectLight1Direction);
+			env.objectLight1Color = Vec3FromToml(ev["object_light1_color"], env.objectLight1Color);
 			scene.environment = env;
 		}
 

@@ -8,7 +8,11 @@ flavor = "twinsanity"
 
 [graphics]
 asynccompute = true
+autoexposure = false
+bloomstrength = 0.00
 fxaa = false
+gtao = false
+tonemap = "Linear"
 vsync = true
 
 [paths]

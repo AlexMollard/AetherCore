@@ -1,0 +1,17 @@
+// Shared layout between BillboardParticleRenderer (C++) and the billboard particle
+// shader. Mirrors aether::BillboardParticleInstance (64 bytes).
+#ifndef PARTICLE_BILLBOARD_SLANGH
+#define PARTICLE_BILLBOARD_SLANGH
+
+struct GpuBillboardParticle
+{
+    [[vk::offset(0)]]  float4 positionSize;      // xyz = world centre, w = quad edge (world units)
+    [[vk::offset(16)]] float4 color;
+    [[vk::offset(32)]] float4 uvRect;            // (u0, v0, u1, v1), v down
+    [[vk::offset(48)]] float rotationDegrees;    // clockwise on screen
+    [[vk::offset(52)]] uint textureIndex;
+    [[vk::offset(56)]] uint blendMode;           // 0 = alpha, 1 = additive (pipeline picks the state)
+    [[vk::offset(60)]] uint entityId;
+};
+
+#endif

@@ -409,6 +409,7 @@ namespace aether
 		}
 
 		m_renderer2D.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
+		m_billboardParticles.Initialize(gpu, PostProcessStack::GetForwardColorFormat(), swapchain.GetDepthFormat());
 		m_customPassRenderer.Initialize(gpu);
 		m_light2D.Initialize(gpu, PostProcessStack::GetForwardColorFormat());
 
@@ -603,6 +604,7 @@ namespace aether
 		if (m_profile == RuntimeProfile::Full)
 		{
 			m_renderer2D.Shutdown();
+			m_billboardParticles.Shutdown();
 			m_customPassRenderer.Shutdown();
 			m_light2D.Shutdown();
 			DestroySceneViewportDepth();
@@ -1378,6 +1380,15 @@ namespace aether
 				                cmd.Draw(3, 1, 0, 0);
 			                });
 		}
+
+		// 3D billboard particles: after the scene is fully lit and fogged, before DoF so the
+		// optics can blur them. Depth-tested read-only against the scene depth.
+		m_billboardParticles.RegisterPass(m_renderGraph,
+		        hdrColor,
+		        m_sceneDepth.IsValid() ? m_sceneDepth : aether::RenderGraph::GetSwapchainDepth(),
+		        sceneExtent,
+		        *frame.bindless,
+		        "$BillboardParticles");
 
 		// Project-registered custom passes, injected around the 2D scene (both stages draw into the
 		// scene HDR colour). BehindScene2D runs before sprites/tiles, OverScene2D after.

@@ -40,6 +40,14 @@ namespace aether
 		{
 			flags |= GpuMaterial::kFoliage;
 		}
+		if (a.bakedLighting)
+		{
+			flags |= GpuMaterial::kBakedLighting;
+		}
+		if (a.objectLit)
+		{
+			flags |= GpuMaterial::kObjectLit;
+		}
 		g.flags = flags;
 		g.uvScroll = a.uvScroll;
 

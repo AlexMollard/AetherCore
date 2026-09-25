@@ -87,9 +87,12 @@ Conversion notes:
 - Vertex colour goes out as `COLOR_0 = min(byte / 128, 1)` (the GS reads `0x80`
   as 1.0). Scenery typically sits around `0xB0`, so the overbright part is
   clamped.
-- Particles and the frontend are not extracted yet. Dynamic-scenery rotation
-  assumes an `(x, y, z, w)` quaternion and has not been checked against the
-  game.
+- The particle texture pages (Startup/Default.rm2 ParticleData) ARE extracted, to
+  `particles/particle_page_<0..2>.png` (128x128 each, point-sampled). The definitions
+  themselves are not exported as data; the crate effects hard-code the disc values
+  (from `logs/cratebreak/particles.json`) in `scripts/CrateFx.cs`. The rest of the
+  frontend is not extracted yet. Dynamic-scenery rotation assumes an `(x, y, z, w)`
+  quaternion and has not been checked against the game.
 
 ## Status
 

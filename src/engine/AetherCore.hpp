@@ -272,6 +272,12 @@ namespace aether
 		// whichever thread changed the setting while the render thread is still submitting.
 		void SetAnisotropy(int anisotropy);
 
+		// Sets the global texture LOD bias. Negative picks sharper mips than the screen
+		// footprint asks for. Recorded like SetAnisotropy and applied on the next quiesced
+		// frame (the sampler rewrite needs the GPU idle). Bias is stored x1000 so it fits
+		// the pending int flag: 0 means nothing pending.
+		void SetMipLodBias(float bias);
+
 		// Whether the render graph may schedule passes on a dedicated compute queue. Applied
 		// on the next quiesced frame, which then rebuilds the graph around the new answer.
 		void SetAsyncCompute(bool enabled);
@@ -316,6 +322,10 @@ namespace aether
 		// be called with the render thread parked and the GPU idle. Returns whether it ran.
 		bool ApplyPendingAnisotropy();
 
+		// Applies a requested LOD bias. Must be called with the render thread parked and the
+		// GPU idle. Returns whether it ran.
+		bool ApplyPendingMipLodBias();
+
 		// Enables or disables async compute when one has been requested. Same preconditions
 		// as ApplyPendingAnisotropy. Returns whether the graph now needs rebuilding.
 		bool ApplyPendingAsyncCompute();
@@ -339,6 +349,9 @@ namespace aether
 		// Requested anisotropy waiting to be applied, or 0 for none. Atomic because the
 		// setting can change on any thread while the render loop reads it.
 		std::atomic<int> m_pendingAnisotropy{0};
+		// Requested LOD bias x1000; 0 means nothing pending (a true 0.0 bias is the default
+		// and never needs rewriting).
+		std::atomic<int> m_pendingMipLodBias{0};
 		// Requested async-compute state: +1 on, -1 off, 0 nothing pending. A tri-state
 		// rather than a bool pair, because "no request" and "requested off" are different.
 		std::atomic<int> m_pendingAsyncCompute{0};

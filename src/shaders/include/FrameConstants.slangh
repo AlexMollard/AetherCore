@@ -39,6 +39,13 @@ struct FrameConstantsData
     [[vk::offset(816)]] float4  fogParams;                  // x=density at y=0, y=height falloff, z=sun forward scatter, w=max opacity
     [[vk::offset(848)]] float4x4 prevViewProj;              // last frame's viewProj, for reprojecting a pixel to find its screen motion
     [[vk::offset(912)]] float4  shadingParams;             // x=specular filter strength (1=full, 0=off), y=cloud coverage, z=cloud drift speed
+    // PS2 object lighting (kFlagObjectLit materials): the level's own light records.
+    // Directions point TOWARDS their light; colours already carry the game's k scale.
+    [[vk::offset(928)]] float4  objectAmbient;
+    [[vk::offset(944)]] float4  objectLight0Direction;
+    [[vk::offset(960)]] float4  objectLight0Color;
+    [[vk::offset(976)]] float4  objectLight1Direction;
+    [[vk::offset(992)]] float4  objectLight1Color;
 };
 
 #endif

@@ -40,6 +40,20 @@ namespace aether
 		std::uint32_t blendMode = 0;
 	};
 
+	// One 3D billboard particle: a camera-facing quad at a world position, sampled from a sub-rect
+	// of a texture page. Sorted back-to-front against the camera at frame prep.
+	// Mirrors GpuBillboardParticle in shaders/include/ParticleBillboard.slangh (64 bytes).
+	struct BillboardParticleInstance
+	{
+		glm::vec4 positionSize{0.0f}; // xyz = world centre, w = quad edge (world units)
+		glm::vec4 color{1.0f};
+		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f}; // (u0, v0, u1, v1), v down
+		float rotationDegrees = 0.0f;             // clockwise on screen
+		std::uint32_t textureIndex = 0;
+		std::uint32_t blendMode = 0; // gpu::BlendMode
+		std::uint32_t entityId = 0;
+	};
+
 	// Occluder2D::flags bits.
 	inline constexpr std::uint32_t kOccluder2DFlipX = 1u << 0u;
 	inline constexpr std::uint32_t kOccluder2DFlipY = 1u << 1u;
@@ -75,6 +89,10 @@ namespace aether
 		// these into an occluder mask (sampling each tile's texture, so occlusion is sub-tile) and
 		// ray-marches it for shadows. Backgrounds and sprites do not occlude.
 		std::vector<Occluder2D> occluders;
+
+		// 3D billboard particles (ParticleEmitterComponent in Billboard3D space), drawn by
+		// BillboardParticleRenderer in the 3D scene, depth-tested against the scene depth.
+		std::vector<BillboardParticleInstance> billboards;
 	};
 
 	// Deterministic sort of the merged 2D instance stream (stable, by sortKey).
@@ -160,6 +178,12 @@ namespace aether
 		glm::vec4 fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		glm::vec4 skyParams{0.0f, 2.5f, 0.0f, 0.0f};
 		glm::vec4 shadingParams{1.0f, 0.0f, 0.0f, 0.0f};
+		// PS2 object lighting (kFlagObjectLit materials), from the scene environment.
+		glm::vec4 objectAmbient{1.0f, 1.0f, 1.0f, 1.0f};
+		glm::vec4 objectLight0Direction{0.0f, 1.0f, 0.0f, 0.0f};
+		glm::vec4 objectLight0Color{0.0f, 0.0f, 0.0f, 0.0f};
+		glm::vec4 objectLight1Direction{0.0f, 1.0f, 0.0f, 0.0f};
+		glm::vec4 objectLight1Color{0.0f, 0.0f, 0.0f, 0.0f};
 		bool contactShadows = false;
 		// 0 splits the cascades evenly across the view distance, 1 logarithmically.
 		float shadowSplitLambda = 0.65f;

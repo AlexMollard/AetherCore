@@ -34,17 +34,8 @@ DepthVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_St
 [shader("fragment")]
 void fragmentMain(DepthVSOutput input)
 {
-    // PS2 foliage/cutout cards never cast: one-sided alphas shadow-mapping themselves is
-    // what painted dark clump-shaped blotches over the ground, and the original's lighting
-    // (baked vertex colour, no realtime shadows) carries that grounding already.
-    if (input.materialIndex != kNoTexture)
-    {
-        FrameConstantsData* fc = pc.frame.Ptr();
-        const GpuMaterial mat = ((GpuMaterial*)(fc->materialBufferAddr))[input.materialIndex];
-        if ((mat.flags & kFlagFoliage) != 0u)
-        {
-            discard;
-        }
-    }
+    // Foliage/cutout cards DO cast, cut out by the alpha test below: the original's umbrella
+    // tops and palm leaves shade the ground. With prelit receivers the old clump-blotch
+    // problem is gone - a shadow can only pull ground to the bake's own shade, never darker.
     AlphaMaskDiscard(input.materialIndex, input.uv);
 }

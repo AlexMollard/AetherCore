@@ -94,6 +94,24 @@ namespace aether
 			return m_ambientColor;
 		}
 
+		// PS2 object lighting: the scene's own light records (ambient + two directional
+		// lights), used by kFlagObjectLit materials instead of the sun. Colours carry the
+		// scene's scale; directions point towards their light.
+		void SetObjectLights(glm::vec3 ambient, glm::vec3 dir0, glm::vec3 color0, glm::vec3 dir1, glm::vec3 color1)
+		{
+			m_objectAmbient = glm::vec4(glm::max(ambient, glm::vec3(0.0f)), 1.0f);
+			m_objectLight0Direction = glm::vec4(glm::normalize(dir0), 0.0f);
+			m_objectLight0Color = glm::vec4(glm::max(color0, glm::vec3(0.0f)), 0.0f);
+			m_objectLight1Direction = glm::vec4(glm::normalize(dir1), 0.0f);
+			m_objectLight1Color = glm::vec4(glm::max(color1, glm::vec3(0.0f)), 0.0f);
+		}
+
+		[[nodiscard]] glm::vec4 GetObjectAmbientVector() const { return m_objectAmbient; }
+		[[nodiscard]] glm::vec4 GetObjectLight0DirectionVector() const { return m_objectLight0Direction; }
+		[[nodiscard]] glm::vec4 GetObjectLight0ColorVector() const { return m_objectLight0Color; }
+		[[nodiscard]] glm::vec4 GetObjectLight1DirectionVector() const { return m_objectLight1Direction; }
+		[[nodiscard]] glm::vec4 GetObjectLight1ColorVector() const { return m_objectLight1Color; }
+
 		void SetSkyGradient(glm::vec3 horizonColor, glm::vec3 zenithColor);
 		[[nodiscard]] glm::vec3 GetSkyHorizonColor() const;
 		[[nodiscard]] glm::vec3 GetSkyZenithColor() const;
@@ -289,6 +307,11 @@ namespace aether
 		glm::vec4 m_skyHorizonColor{0.34f, 0.52f, 0.82f, 1.0f};
 		glm::vec4 m_skyZenithColor{0.08f, 0.19f, 0.45f, 1.0f};
 		glm::vec4 m_skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
+		glm::vec4 m_objectAmbient{1.0f, 1.0f, 1.0f, 1.0f};
+		glm::vec4 m_objectLight0Direction{0.0f, 1.0f, 0.0f, 0.0f};
+		glm::vec4 m_objectLight0Color{0.0f, 0.0f, 0.0f, 0.0f};
+		glm::vec4 m_objectLight1Direction{0.0f, 1.0f, 0.0f, 0.0f};
+		glm::vec4 m_objectLight1Color{0.0f, 0.0f, 0.0f, 0.0f};
 		glm::vec4 m_fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		glm::vec4 m_skyParams{0.0f, 2.5f, 0.0f, 0.0f};
 		glm::vec4 m_shadingParams{1.0f, 0.0f, 0.0f, 0.0f};

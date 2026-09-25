@@ -22,9 +22,14 @@ namespace aether
 		bool alphaMask = false;
 		bool modulateVertexColor = false;
 		bool receiveShadows = true;
-		// PS2 foliage/cutout card (tw-extract marks alpha-masked scenery): wrapped diffuse,
-		// excluded from shadow casting/receiving.
+		// PS2 foliage/cutout card (tw-extract marks alpha-masked scenery): excluded from
+		// shadow casting/receiving.
 		bool foliage = false;
+		// PS2 prelit geometry: the vertex colour is the lighting; only the shadow maps
+		// modulate it (down to the scene's ambient/shade colour). No PBR lights, no AO.
+		bool bakedLighting = false;
+		// PS2 object lighting: lit by the scene's object light records.
+		bool objectLit = false;
 
 		// UV scroll velocity in UV units per second (Twinsanity sea, waterfalls, sky).
 		glm::vec2 uvScroll{0.0f, 0.0f};

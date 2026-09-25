@@ -308,89 +308,124 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         : 1.0f;
     const float sunVisibility = receivesShadows ? min(min(shadow, contact), cloudShadow) : 1.0f;
 
-    // The 0.08 floor exists so a shadowed surface does not read as a black hole, and
-    // that is a DIFFUSE concern - it stands in for bounce light the renderer does not
-    // compute. Specular is a different thing entirely: it is an image of the light
-    // source, and a light that is blocked has no image to reflect. Leaking 8% of it was
-    // enough to put a sun glint on a glossy floor inside a wall's shadow, because the
-    // lobe on a smooth surface is orders of magnitude brighter than 1 and 8% of that is
-    // still blinding.
-    //
-    // So the floor applies where it was meant to and nowhere else. Shadowed specular
-    // goes to zero, which is what a blocked sun does.
-    const float diffuseVisibility = lerp(1.0f, max(sunVisibility, 0.08f), fc->shadowParams.z);
-    const float specularVisibility = lerp(1.0f, sunVisibility, fc->shadowParams.z);
-    float3 Lo = (diffuse * diffuseVisibility + specular * specularVisibility) * (sunColor * (sunIntensity * NdotL));
+    // PS2 prelit geometry (Twinsanity scenery and props): the vertex colour already IS the
+    // original's lighting - its sun, its sky fill, its baked shadows - and the GS showed
+    // texture x vertex colour as is. Running the PBR lights over it lit everything twice, the
+    // scene's ambient flattening it and the sun's NdotL darkening faces the bake had lit.
+    // So the colour stays exactly the original's, and the one thing the PS2 could not do -
+    // real-time shadows - pulls it down towards the scene's ambient, the colour the level's
+    // own bake gives fully shaded ground. Never below it, and never below what the bake
+    // already darkened: ground in baked shade stays as it was instead of shading twice.
+    float3 finalColor;
+    if ((mat.flags & kFlagBakedLighting) != 0u)
+    {
+        // The material factor carries the part of the vertex colour COLOR_0 cannot (the
+        // PS2's 0x80 = 1.0 range), so the two together are the vertex colour in lighting units.
+        const float3 bakedLight = max(vertexColor * mat.baseColorFactor.rgb, float3(1e-4, 1e-4, 1e-4));
+        const float3 shadeLight = min(bakedLight, ambientColor);
+        const float bakedVisibility = lerp(1.0f, sunVisibility, fc->shadowParams.z);
+        finalColor = baseColor.rgb * lerp(shadeLight / bakedLight, float3(1.0, 1.0, 1.0), bakedVisibility) + emissive;
+    }
+    else if ((mat.flags & kFlagObjectLit) != 0u)
+    {
+        // PS2 object lighting (Twinsanity objects, pickups, characters): the level's own
+        // light records - an ambient plus two directional lights - as the GS applied them
+        // to everything that was not prelit scenery. The multiply and its saturate run in
+        // gamma space on the PS2, so the result is raised to 2.2 to land in the renderer's
+        // linear pipeline with the same on-screen ratios. Objects receive no real-time
+        // shadows in the original (they drop a blob shadow instead), so sunVisibility is
+        // deliberately not applied.
+        const float3 lit = fc->objectAmbient.rgb
+            + fc->objectLight0Color.rgb * saturate(dot(Ngeom, fc->objectLight0Direction.xyz))
+            + fc->objectLight1Color.rgb * saturate(dot(Ngeom, fc->objectLight1Direction.xyz));
+        finalColor = baseColor.rgb * pow(max(lit, float3(0.0, 0.0, 0.0)), 2.2) + emissive;
+    }
+    else
+    {
+        // The 0.08 floor exists so a shadowed surface does not read as a black hole, and
+        // that is a DIFFUSE concern - it stands in for bounce light the renderer does not
+        // compute. Specular is a different thing entirely: it is an image of the light
+        // source, and a light that is blocked has no image to reflect. Leaking 8% of it was
+        // enough to put a sun glint on a glossy floor inside a wall's shadow, because the
+        // lobe on a smooth surface is orders of magnitude brighter than 1 and 8% of that is
+        // still blinding.
+        //
+        // So the floor applies where it was meant to and nowhere else. Shadowed specular
+        // goes to zero, which is what a blocked sun does.
+        const float diffuseVisibility = lerp(1.0f, max(sunVisibility, 0.08f), fc->shadowParams.z);
+        const float specularVisibility = lerp(1.0f, sunVisibility, fc->shadowParams.z);
+        float3 Lo = (diffuse * diffuseVisibility + specular * specularVisibility) * (sunColor * (sunIntensity * NdotL));
 
-    // Local lights accumulate separately from the sun so each keeps its own
-    // shadow term; neither carries an occlusion factor.
-    float3 LoLocal = float3(0.0, 0.0, 0.0);
+        // Local lights accumulate separately from the sun so each keeps its own
+        // shadow term; neither carries an occlusion factor.
+        float3 LoLocal = float3(0.0, 0.0, 0.0);
 
-    // Tiled local lights (point + spot).
-    // Blend toward geometric normal so local lights remain visibly radial on
-    // the ground while still retaining some normal-map detail.
-    const float localNormalMapInfluence = 0.35;
-    const float3 Nlocal = normalize(lerp(Ngeom, N, localNormalMapInfluence));
-    AccumulateTiledLocalLights(
-        pc.tileHeaders,
-        pc.tileLightIndices,
-        pc.lightData,
-        input.worldPos,
-        Nlocal,
-        V,
-        F0,
-        baseColor.rgb,
-        metallic,
-        roughness,
-        fc,
-        input.svPosition.xy,
-        LoLocal);
-    Lo += LoLocal;
+        // Tiled local lights (point + spot).
+        // Blend toward geometric normal so local lights remain visibly radial on
+        // the ground while still retaining some normal-map detail.
+        const float localNormalMapInfluence = 0.35;
+        const float3 Nlocal = normalize(lerp(Ngeom, N, localNormalMapInfluence));
+        AccumulateTiledLocalLights(
+            pc.tileHeaders,
+            pc.tileLightIndices,
+            pc.lightData,
+            input.worldPos,
+            Nlocal,
+            V,
+            F0,
+            baseColor.rgb,
+            metallic,
+            roughness,
+            fc,
+            input.svPosition.xy,
+            LoLocal);
+        Lo += LoLocal;
 
-    // Image-based ambient from the same procedural sky the skybox draws, rather than
-    // one flat colour in every direction. A constant ambient gives an object no shape
-    // at all where the sun does not reach: the underside of an arm reads exactly as
-    // bright as the top of a shoulder. Sampling the sky along the normal restores that,
-    // and costs two evaluations of a closed-form gradient - no probes, no prefiltering,
-    // no cubemap.
-    //
-    // SkyGradient, never EvalSky: the latter carries the solar disk, and lighting a
-    // surface with it would add the sun a second time on top of the direct term and
-    // smear a duplicate sun across every glossy surface.
-    const float3 skyDiffuse = SkyGradient(N, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y, 1.0f);
+        // Image-based ambient from the same procedural sky the skybox draws, rather than
+        // one flat colour in every direction. A constant ambient gives an object no shape
+        // at all where the sun does not reach: the underside of an arm reads exactly as
+        // bright as the top of a shoulder. Sampling the sky along the normal restores that,
+        // and costs two evaluations of a closed-form gradient - no probes, no prefiltering,
+        // no cubemap.
+        //
+        // SkyGradient, never EvalSky: the latter carries the solar disk, and lighting a
+        // surface with it would add the sun a second time on top of the direct term and
+        // smear a duplicate sun across every glossy surface.
+        const float3 skyDiffuse = SkyGradient(N, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y, 1.0f);
 
-    // Specular probe along the reflection vector, drifting toward the diffuse sample
-    // as the surface roughens - a one-sample stand-in for a prefiltered mip chain.
-    const float3 R = reflect(-V, N);
-    const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
-    const float3 skySpecular = SkySpecularProbe(skySpecularDir, input.worldPos, sunDir, sunColor, sunIntensity,
-            fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams,
-            fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime, roughness);
+        // Specular probe along the reflection vector, drifting toward the diffuse sample
+        // as the surface roughens - a one-sample stand-in for a prefiltered mip chain.
+        const float3 R = reflect(-V, N);
+        const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
+        const float3 skySpecular = SkySpecularProbe(skySpecularDir, input.worldPos, sunDir, sunColor, sunIntensity,
+                fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams,
+                fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime, roughness);
 
-    const float2 envBrdf = EnvBrdfApprox(roughness, NdotV);
+        const float2 envBrdf = EnvBrdfApprox(roughness, NdotV);
 
-    // ambientColor stays in as the scene's authored floor - the light that is not the
-    // sky at all - so an indoor or stylised scene can still set its own base level.
-    const float3 ambientDiffuse = (ambientColor + skyDiffuse) * baseColor.rgb * kD;
-    // Multi-scatter compensated, so a rough surface stops losing the light that bounces
-    // between its microfacets - see EnvBrdf.slangh.
-    const float3 ambientSpecular = skySpecular * EnvSpecularWeight(F0, envBrdf);
-    // Diffuse and specular are not occluded by the same amount. Diffuse gathers the
-    // whole hemisphere, so ambient occlusion describes it directly. A specular lobe
-    // gathers a cone whose width is set by roughness: the smoother the surface, the
-    // narrower that cone, and the less likely the geometry that occludes the
-    // hemisphere also occludes the one direction the reflection comes from. Applying
-    // the diffuse term to both - which is what this did - over-darkens reflections on
-    // smooth surfaces inside any crease or contact, so polished materials go dull
-    // exactly where they should still catch light.
-    //
-    // Lagarde's approximation ("Moving Frostbite to Physically Based Rendering")
-    // reconstructs the cone's occlusion from the hemisphere's. At roughness 1 it
-    // returns the plain AO, because then the lobe IS the hemisphere.
-    const float specularAo = SpecularOcclusion(ambientAo, NdotV, roughness);
-    float3 ambient = ambientDiffuse * MultiBounceAo(ambientAo, baseColor.rgb) + ambientSpecular * specularAo;
+        // ambientColor stays in as the scene's authored floor - the light that is not the
+        // sky at all - so an indoor or stylised scene can still set its own base level.
+        const float3 ambientDiffuse = (ambientColor + skyDiffuse) * baseColor.rgb * kD;
+        // Multi-scatter compensated, so a rough surface stops losing the light that bounces
+        // between its microfacets - see EnvBrdf.slangh.
+        const float3 ambientSpecular = skySpecular * EnvSpecularWeight(F0, envBrdf);
+        // Diffuse and specular are not occluded by the same amount. Diffuse gathers the
+        // whole hemisphere, so ambient occlusion describes it directly. A specular lobe
+        // gathers a cone whose width is set by roughness: the smoother the surface, the
+        // narrower that cone, and the less likely the geometry that occludes the
+        // hemisphere also occludes the one direction the reflection comes from. Applying
+        // the diffuse term to both - which is what this did - over-darkens reflections on
+        // smooth surfaces inside any crease or contact, so polished materials go dull
+        // exactly where they should still catch light.
+        //
+        // Lagarde's approximation ("Moving Frostbite to Physically Based Rendering")
+        // reconstructs the cone's occlusion from the hemisphere's. At roughness 1 it
+        // returns the plain AO, because then the lobe IS the hemisphere.
+        const float specularAo = SpecularOcclusion(ambientAo, NdotV, roughness);
+        float3 ambient = ambientDiffuse * MultiBounceAo(ambientAo, baseColor.rgb) + ambientSpecular * specularAo;
 
-    float3 finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
+        finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
+    }
 
     // Atmospheric perspective. Applied here rather than as a separate screen pass
     // because the world position and the sky terms this needs are already in hand;

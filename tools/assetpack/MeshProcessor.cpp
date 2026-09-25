@@ -622,12 +622,23 @@ namespace aether::assetpipeline
 							}
 						}
 					}
-					// {"foliage":true} - tw-extract marks PS2 foliage/cutout cards so the
-					// renderer lights them from their baked vertex colour instead of
-					// shadowing them like solid geometry.
+					// {"foliage":true} - tw-extract marks PS2 foliage/cutout cards, which
+					// stay out of the shadow maps (they would mostly shadow themselves).
 					if (std::strstr(extras, "\"foliage\"") != nullptr)
 					{
 						hdr.foliage = 1;
+					}
+					// {"baked_lighting":true} - PS2 prelit geometry: its vertex colour is
+					// the lighting, so the renderer skips the PBR lights for it.
+					if (std::strstr(extras, "\"baked_lighting\"") != nullptr)
+					{
+						hdr.bakedLighting = 1;
+					}
+					// {"object_lit":true} - PS2 object lighting: the level's light records
+					// light it (ambient + two directional), like the GS lit objects.
+					if (std::strstr(extras, "\"object_lit\"") != nullptr)
+					{
+						hdr.objectLit = 1;
 					}
 				}
 			}

@@ -816,6 +816,9 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_particles_set_emitting(uint id, int on);
 
+    [LibraryImport(Lib)]
+    internal static unsafe partial void aether_particles_set_keys(uint id, int channel, Vector4* keys, int count);
+
     // ── Audio ─────────────────────────────────────────────────────────────────
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint aether_audio_play_2d(string clipPath, float volume, float pitch, int loop, int bus);

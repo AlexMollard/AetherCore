@@ -317,6 +317,11 @@ namespace aether
 			                fc.fogParams = m_renderer->GetFogParams();
 			                fc.skyParams = m_renderer->GetSkyParams();
 			                fc.shadingParams = m_renderer->GetShadingParams();
+			                fc.objectAmbient = m_renderer->GetObjectAmbientVector();
+			                fc.objectLight0Direction = m_renderer->GetObjectLight0DirectionVector();
+			                fc.objectLight0Color = m_renderer->GetObjectLight0ColorVector();
+			                fc.objectLight1Direction = m_renderer->GetObjectLight1DirectionVector();
+			                fc.objectLight1Color = m_renderer->GetObjectLight1ColorVector();
 
 			                const auto frameIdx = ctx.frameSlot;
 			                if (rit->second.lightViewId == kInvalidLightView)
