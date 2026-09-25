@@ -125,6 +125,18 @@ namespace aether::editor::twinsanity
 	void ReferenceImagesPanel::OnImGui(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
+		// Its own window, closable from the title bar and the Window menu. Drawing without
+		// one put everything into ImGui's implicit fallback window ("Debug"), which has no
+		// close button and ignored the panel's visibility.
+		if (ImGui::Begin(GetName().data(), VisiblePtr()))
+		{
+			DrawContents(context);
+		}
+		ImGui::End();
+	}
+
+	void ReferenceImagesPanel::DrawContents(app::LayerContext& context)
+	{
 		const auto* project = context.TryGet<app::EditorProjectContext>();
 		if (project == nullptr || !project->IsLoaded())
 		{

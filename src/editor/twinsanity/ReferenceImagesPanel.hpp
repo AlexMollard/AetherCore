@@ -39,6 +39,8 @@ namespace aether::editor::twinsanity
 			std::string name;
 		};
 
+		// Body of the window OnImGui opens; early-returns freely, OnImGui owns Begin/End.
+		void DrawContents(app::LayerContext& context);
 		void Scan(const std::filesystem::path& referenceDir);
 		// Decode + upload the selected image (idempotent: re-selecting the current image
 		// keeps the uploaded texture).
