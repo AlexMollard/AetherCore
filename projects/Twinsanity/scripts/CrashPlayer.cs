@@ -32,6 +32,8 @@ namespace AetherGame;
 /// The model is a separate root entity, not a child: the Character Controller writes this entity's
 /// transform on its own schedule, so a child would be moved twice.
 /// </summary>
+public enum DeathKind { Generic, Drown, Explode, Fall }
+
 public sealed class CrashPlayer : EntityScript
 {
 	public string ModelPath = "project://assets/models/objects/act_CRASH/act_CRASH_0.gltf";
@@ -81,6 +83,12 @@ public sealed class CrashPlayer : EntityScript
 	private const float SlamLandLock = 0.3f;
 	private const float IdleFidgetAfter = 10.0f;
 	private const float HeightGain = 30.0f;
+	private const int GroundGraceTicks = 2;
+	// On the ground the script owns velocity outright (SetVelocity), which skips the engine's own
+	// press into the floor; with a vertical speed of exactly 0 a centimetre of float over a sand
+	// crest never closed, the grace ran out and the next press was spent as a double jump. Press
+	// along the ground normal instead: the contact solve removes all of it, so there is no creep.
+	private const float GroundPress = 2.0f;
 
 	private enum State { Ground, Crouch, Slide, Air, SlamHang, SlamDrop, SlamLand }
 	private enum Arc { Fall, Jump, DoubleJump, SlideJump, Bounce }
@@ -114,9 +122,28 @@ public sealed class CrashPlayer : EntityScript
 	private bool _jumpLatch;
 	private bool _spinLatch;
 	private bool _crouchLatch;
+	private bool _spaceWasDown;
+	private bool _spinWasDown;
+	private bool _crouchWasDown;
+	// Ground-loss grace: CharacterController.IsGrounded flickers false for a tick on bumps and
+	// slopes (60 Hz physics thread vs our 50 Hz tick), which used to eat jump presses. The
+	// original lets Crash jump for a few frames after leaving the ground (the edge jump, whose
+	// horizontal speed is _edgeSpeed), so a 2-tick grace is faithful and fixes the flicker.
+	private int _groundGrace;
+	// Ticks a spent-double-jump press stays live for the landing (see State.Air).
+	private int _jumpBuffer;
 	private float _idleTime;
 	private float _oneShotLeft;
 	private string _landClip = "";
+	private bool _dead;
+	private (string Clip, float Time)[] _deathSeq = Array.Empty<(string, float)>();
+	private int _deathIndex;
+	private float _deathTimer;
+	private float _hurtLeft;
+	/// <summary>The original's IsPushingObject: set each frame by TwinsanityMechanics while Crash
+	/// walks into a pushable, so walk/run play the push clips.</summary>
+	public bool Pushing;
+	private string _spinBase = "a008";
 
 	private readonly Dictionary<string, int> _clips = new();
 	private readonly System.Random _random = new();
@@ -172,11 +199,31 @@ public sealed class CrashPlayer : EntityScript
 	public override void OnUpdate(float deltaTime)
 	{
 		Input.CursorLockRequested = true;
+
+		if (_dead)
+		{
+			StepDeath(deltaTime);
+			return;
+		}
+		if (_hurtLeft > 0.0f)
+		{
+			_hurtLeft -= deltaTime;
+		}
 		Look(deltaTime);
 
-		_jumpLatch |= Input.IsKeyPressed(Key.Space) || Gamepad.IsPressed(GamepadButton.A);
-		_spinLatch |= Input.IsKeyPressed(Key.E) || Input.IsMousePressed(MouseButton.Left) || Gamepad.IsPressed(GamepadButton.X);
-		_crouchLatch |= Input.IsKeyPressed(Key.C) || Input.IsKeyPressed(Key.LeftCtrl) || Input.IsMousePressed(MouseButton.Right) || Gamepad.IsPressed(GamepadButton.B);
+		// Edges are derived here from the down states rather than taken from IsKeyPressed: the
+		// engine's pressed edge is per render frame and gets missed when a press lands in a
+		// hitched or just-started frame, which ate jump presses (the "sometimes can't jump"
+		// report). Our own previous-state comparison cannot miss one.
+		bool spaceDown = Input.IsKeyDown(Key.Space) || Gamepad.IsDown(GamepadButton.A);
+		_jumpLatch |= spaceDown && !_spaceWasDown;
+		_spaceWasDown = spaceDown;
+		bool spinDown = Input.IsKeyDown(Key.E) || Input.IsMouseDown(MouseButton.Left) || Gamepad.IsDown(GamepadButton.X);
+		_spinLatch |= spinDown && !_spinWasDown;
+		_spinWasDown = spinDown;
+		bool crouchDown = Input.IsKeyDown(Key.C) || Input.IsKeyDown(Key.LeftCtrl) || Input.IsMouseDown(MouseButton.Right) || Gamepad.IsDown(GamepadButton.B);
+		_crouchLatch |= crouchDown && !_crouchWasDown;
+		_crouchWasDown = crouchDown;
 
 		if (_control)
 		{
@@ -186,7 +233,21 @@ public sealed class CrashPlayer : EntityScript
 				_accumulator -= Tick;
 				Step(Tick);
 			}
-			CharacterController.SetVelocity(Self, new Vector3(_horizontal.X, TrackHeight(), _horizontal.Z));
+			Vector3 velocity = new(_horizontal.X, TrackHeight(), _horizontal.Z);
+			if (!Airborne)
+			{
+				// Keep the measured horizontal speed and follow a DESCENDING ground plane, so
+				// running down a walkable slope stays on it instead of launching off. Uphill is left
+				// to the contact solve: following the rising side of a sand ripple carried its climb
+				// past the crest and launched him over every ripple.
+				Vector3 normal = CharacterController.GetGroundNormal(Self);
+				if (normal.Y > 0.1f)
+				{
+					velocity.Y += MathF.Min(0.0f, -(normal.X * velocity.X + normal.Z * velocity.Z) / normal.Y);
+				}
+				velocity -= normal * GroundPress;
+			}
+			CharacterController.SetVelocity(Self, velocity);
 		}
 		else
 		{
@@ -195,6 +256,82 @@ public sealed class CrashPlayer : EntityScript
 			CharacterController.SetVelocity(Self, Vector3.Zero);
 		}
 		PlaceModel(deltaTime);
+		PlaceCamera();
+	}
+
+	// Deaths play the OnDefaultDeath behaviour-script sequence (act_CRASH.states.json): a081 is the
+	// wide-eyed panic (blend 0.5), a082 the look-down realization, a006 + a007 keel over backwards
+	// (one-shot, cut), a083 lies flat. Per kind, the original varies which of those run:
+	//   Generic / Drown - the full panic sequence (drowning runs it too, while he sinks).
+	//   Explode - no panic, he is simply blasted over: a006 + a007 + a083.
+	//   Fall - a short panic then straight over (OnFallingDeath, state 11, has no clip table of its
+	//   own in the extracted states, so the sequence is the generic one shortened).
+	private static readonly Dictionary<DeathKind, (string Clip, float Time)[]> DeathSequences = new()
+	{
+		[DeathKind.Generic] = new[] { ("a081", 1.2f), ("a082", 0.8f), ("a006", 0.5f), ("a007", 0.5f), ("a083", 1.0f) },
+		[DeathKind.Drown] = new[] { ("a081", 1.2f), ("a082", 0.8f), ("a006", 0.5f), ("a007", 0.5f), ("a083", 1.0f) },
+		[DeathKind.Explode] = new[] { ("a006", 0.5f), ("a007", 0.5f), ("a083", 1.0f) },
+		[DeathKind.Fall] = new[] { ("a081", 1.2f), ("a006", 0.5f), ("a007", 0.5f), ("a083", 1.0f) },
+	};
+
+	/// <summary>Kills Crash: takes control away, keeps the model visible and plays the original
+	/// death clip sequence for the kind. Returns the seconds until the level should respawn him.</summary>
+	public float Die(DeathKind kind)
+	{
+		if (_dead)
+		{
+			return 0.0f;
+		}
+		_dead = true;
+		_deathSeq = DeathSequences[kind];
+		_deathIndex = 0;
+		_deathTimer = _deathSeq[0].Time;
+		_horizontal = Vector3.Zero;
+		_vy = 0.0f;
+		_spinTime = 0.0f;
+		Animation.SetLayerClip(_model, -1);
+		CharacterController.SetVelocity(Self, Vector3.Zero);
+		Play(_deathSeq[0].Clip, false);
+		float total = 0.0f;
+		foreach (var entry in _deathSeq)
+		{
+			total += entry.Time;
+		}
+		// One extra second of lying there, as in the original, before the level respawns him.
+		return total + 1.0f;
+	}
+
+	/// <summary>A hit that Aku Aku absorbs: the original's recoil (a084, blend 0.2) and a short
+	/// push away from the hazard that the ordinary ground braking eats.</summary>
+	public void Hurt(Vector3 from)
+	{
+		if (_dead || _hurtLeft > 0.0f)
+		{
+			return;
+		}
+		Vector3 away = Self.Position - from;
+		away.Y = 0.0f;
+		_horizontal = away.LengthSquared() > 1e-6f
+			? Vector3.Normalize(away) * 3.0f
+			: -FacingDir(_facing) * 3.0f;
+		_hurtLeft = 0.4f;
+		Play("a084", false);
+		_landClip = "a084";
+		_oneShotLeft = 0.4f;
+	}
+
+	// Death: control is gone, the model stays put (the original freezes him in place), and the
+	// clip sequence for the kind plays out. The level respawns him after the seconds Die returned.
+	private void StepDeath(float deltaTime)
+	{
+		_deathTimer -= deltaTime;
+		if (_deathTimer <= 0.0f && _deathIndex + 1 < _deathSeq.Length)
+		{
+			_deathIndex++;
+			_deathTimer = _deathSeq[_deathIndex].Time;
+			Play(_deathSeq[_deathIndex].Clip, false);
+		}
+		PlaceModel(0.0f);
 		PlaceCamera();
 	}
 
@@ -211,6 +348,9 @@ public sealed class CrashPlayer : EntityScript
 
 	public void Respawn(Vector3 feet, float facing)
 	{
+		_dead = false;
+		_hurtLeft = 0.0f;
+		Animation.SetLayerClip(_model, -1);
 		Self.Position = feet;
 		_horizontal = Vector3.Zero;
 		_vy = 0.0f;
@@ -244,6 +384,15 @@ public sealed class CrashPlayer : EntityScript
 		bool grounded = CharacterController.IsGrounded(Self);
 		_stateTime += dt;
 
+		if (grounded)
+		{
+			_groundGrace = GroundGraceTicks;
+		}
+		else if (_groundGrace > 0)
+		{
+			_groundGrace--;
+		}
+
 		_spinCooldown -= dt;
 		if (_spinTime > 0.0f)
 		{
@@ -253,25 +402,48 @@ public sealed class CrashPlayer : EntityScript
 				_spinCooldown = _spinDelay;
 				_oneShotLeft = 0.2f;
 				_landClip = moving ? "a015" : "a016";
+				Animation.SetLayerClip(_model, -1);
 			}
 		}
 		else if (spin && _spinCooldown <= 0.0f && _state is State.Ground or State.Air)
 		{
 			_spinTime = _spinLength;
+			// a046 only animates the root joint; the original keeps the locomotion clip posing the
+			// body and layers the spin on top. Set once here (calling it again resets its clock);
+			// Play() re-applies it whenever the base clip changes mid-spin.
+			_spinBase = _clip is ("a015" or "a016" or "a084") ? "a008" : _clip;
+			if (Animation.Find(_model, "a046") >= 0)
+			{
+				Animation.SetLayerClip(_model, Animation.Find(_model, "a046"));
+			}
 		}
 
 		switch (_state)
 		{
 			case State.Ground:
-				if (!grounded)
+			{
+				// Jump first: IsGrounded flickering false for a tick must not eat the press.
+				if (jump && (grounded || _groundGrace > 0))
 				{
-					_arc = Arc.Fall;
-					_vy = 0.0f;
-					_doubleJumped = false;
-					Enter(State.Air);
+					StartJump(_horizontal.Length() > 1.0f ? "a020" : "a019");
 					break;
 				}
-				if (moving)
+				if (!grounded)
+				{
+					if (_groundGrace <= 0)
+					{
+						_arc = Arc.Fall;
+						_vy = 0.0f;
+						_doubleJumped = false;
+						Enter(State.Air);
+						break;
+					}
+				}
+				else if (_hurtLeft > 0.0f)
+				{
+					_horizontal = Brake(_horizontal, BrakeRate * dt);
+				}
+				else if (moving)
 				{
 					_moveDir = stickDir;
 					_horizontal = stickDir * (stick >= StickRun ? _runSpeed : _walkSpeed);
@@ -281,31 +453,28 @@ public sealed class CrashPlayer : EntityScript
 					_horizontal = Brake(_horizontal, BrakeRate * dt);
 				}
 				_vy = 0.0f;
-				if (jump)
-				{
-					StartJump(_horizontal.Length() > 1.0f ? "a020" : "a019");
-				}
-				else if (crouchPressed && !IsSpinning)
+				if (crouchPressed && !IsSpinning)
 				{
 					Enter(_horizontal.Length() >= _runSpeed - 0.5f ? State.Slide : State.Crouch);
 				}
 				break;
+			}
 
 			case State.Crouch:
-				_horizontal = moving ? stickDir * _crawlSpeed : Vector3.Zero;
-				if (moving)
+				_horizontal = moving && _hurtLeft <= 0.0f ? stickDir * _crawlSpeed : _hurtLeft > 0.0f ? Brake(_horizontal, BrakeRate * dt) : Vector3.Zero;
+				if (moving && _hurtLeft <= 0.0f)
 				{
 					_moveDir = stickDir;
 				}
 				_vy = 0.0f;
-				if (!grounded)
+				if (jump)
+				{
+					StartJump("a019");
+				}
+				else if (!grounded && _groundGrace <= 0)
 				{
 					_arc = Arc.Fall;
 					Enter(State.Air);
-				}
-				else if (jump)
-				{
-					StartJump("a019");
 				}
 				else if (!crouchHeld && _stateTime > 0.1f)
 				{
@@ -341,7 +510,30 @@ public sealed class CrashPlayer : EntityScript
 				break;
 
 			case State.Air:
-				AirHorizontal(stickDir, moving, dt);
+				if (_hurtLeft <= 0.0f)
+				{
+					AirHorizontal(stickDir, moving, dt);
+				}
+				// Land before anything else: when ground contact and the press arrive on the same
+				// tick, the press is a ground jump. Checking it after the double jump spent the
+				// press as a double jump launched off the floor (the "no jump from the ground" /
+				// "no double jump" reports). Gravity is folded in so the landing tick matches the
+				// old post-gravity check. Only launches wait a tick: on the take-off tick they still
+				// touch the floor, but a fall that finds ground again lands at once.
+				if (grounded && _vy - AirGravityNow() * dt <= 0.0f && (_arc == Arc.Fall || _stateTime > Tick))
+				{
+					bool jumpNow = jump || _jumpBuffer > 0;
+					Land(moving ? "a030" : "a029", 0.2f);
+					if (jumpNow)
+					{
+						StartJump(_horizontal.Length() > 1.0f ? "a020" : "a019");
+					}
+					break;
+				}
+				if (_jumpBuffer > 0)
+				{
+					_jumpBuffer--;
+				}
 				if (jump && !_doubleJumped && _arc is Arc.Jump or Arc.Fall or Arc.Bounce)
 				{
 					_doubleJumped = true;
@@ -349,16 +541,18 @@ public sealed class CrashPlayer : EntityScript
 					_arc = Arc.DoubleJump;
 					Play("a021", false);
 				}
+				else if (jump)
+				{
+					// Double jump spent: hold the press for the ground contact the physics
+					// reports up to two ticks late (the mirror of the ground-loss grace).
+					_jumpBuffer = GroundGraceTicks;
+				}
 				else if (crouchPressed && _arc != Arc.SlideJump)
 				{
 					Enter(State.SlamHang);
 					break;
 				}
 				_vy -= AirGravityNow() * dt;
-				if (grounded && _vy <= 0.0f && _stateTime > Tick)
-				{
-					Land(moving ? "a030" : "a029", 0.2f);
-				}
 				break;
 
 			case State.SlamHang:
@@ -391,11 +585,19 @@ public sealed class CrashPlayer : EntityScript
 				break;
 		}
 
-		// Ceiling: the controller stopped the rise.
-		if (_state == State.Air && _vy > 0.0f && CharacterController.GetVelocity(Self).Y <= 0.0f && _stateTime > 2 * Tick)
+		// Ceiling: while rising, the body trails the height the jump should have reached by at most
+		// what physics has not integrated yet (one frame plus one physics step of rise) - unless
+		// something above stopped it, when the gap grows without bound. Frame-rate independent,
+		// unlike comparing positions between our ticks (two ticks can run with no physics step
+		// between them below 50 fps, which cut every jump to ~0.4 m once the game slowed down).
+		if (_state == State.Air && _vy > 0.0f)
 		{
-			_vy = 0.0f;
-			_airY = Self.Position.Y;
+			float slack = 0.25f + _vy * (Time.DeltaTime + 1.0f / 60.0f);
+			if (_airY - Self.Position.Y > slack)
+			{
+				_vy = 0.0f;
+				_airY = Self.Position.Y;
+			}
 		}
 
 		if (Airborne)
@@ -448,6 +650,10 @@ public sealed class CrashPlayer : EntityScript
 	{
 		_state = state;
 		_stateTime = 0.0f;
+		if (state != State.Air)
+		{
+			_jumpBuffer = 0;
+		}
 		switch (state)
 		{
 			case State.Slide:
@@ -528,11 +734,8 @@ public sealed class CrashPlayer : EntityScript
 			}
 			return;
 		}
-		if (IsSpinning)
-		{
-			Play("a046", true);
-			return;
-		}
+		// During a spin the base locomotion/idle clip keeps playing normally (the a046 spin is a
+		// root-only layer set at spin start); Play() re-applies the layer if the base changes.
 		if (_state == State.Crouch)
 		{
 			if (_horizontal.LengthSquared() > 0.01f)
@@ -558,7 +761,7 @@ public sealed class CrashPlayer : EntityScript
 		if (_oneShotLeft > 0.0f)
 		{
 			_oneShotLeft -= dt;
-			if (!moving)
+			if (!moving || _hurtLeft > 0.0f)
 			{
 				Play(_landClip, false);
 				return;
@@ -567,18 +770,21 @@ public sealed class CrashPlayer : EntityScript
 		if (_horizontal.LengthSquared() > 0.01f && moving)
 		{
 			_idleTime = 0.0f;
-			Play(stick >= StickRun ? "a011" : "a010", true);
+			// OnWalk plays a010 (a041 only while holding the multi-tool); OnRun plays a011. Both
+			// switch to the push clips (a044 walk, a045 run) while IsPushingObject holds - set by
+			// TwinsanityMechanics while he walks into a pushable.
+			Play(stick >= StickRun ? (Pushing ? "a045" : "a011") : (Pushing ? "a044" : "a010"), true);
 			return;
 		}
 		_idleTime += dt;
 		if (_idleTime >= IdleFidgetAfter)
 		{
 			_idleTime = 0.0f;
-			string[] fidgets = { "a094", "a095", "a096", "a100", "a101", "a102", "a103" };
+			string[] fidgets = { "a094", "a095", "a096", "a097", "a098", "a099", "a100", "a101", "a102", "a103" };
 			Play(fidgets[_random.Next(fidgets.Length)], false);
 			return;
 		}
-		if (_clip is not ("a094" or "a095" or "a096" or "a100" or "a101" or "a102" or "a103") || ClipFinished())
+		if (_clip is not ("a094" or "a095" or "a096" or "a097" or "a098" or "a099" or "a100" or "a101" or "a102" or "a103") || ClipFinished())
 		{
 			Play("a008", true);
 		}
@@ -619,6 +825,11 @@ public sealed class CrashPlayer : EntityScript
 		}
 		_clip = name;
 		Animation.CrossFade(_model, index, BlendIn.TryGetValue(name, out float blend) ? blend : DefaultBlendIn);
+		// A CrossFade would clear the spin layer; re-apply it over the new base clip.
+		if (IsSpinning && Animation.Find(_model, "a046") >= 0)
+		{
+			Animation.SetLayerClip(_model, Animation.Find(_model, "a046"));
+		}
 		SetLooping(_model, loop);
 		_clipStarted = Time.TotalTime;
 		_clipDuration = Animation.ClipDuration(_model);
