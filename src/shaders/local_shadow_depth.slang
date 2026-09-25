@@ -24,7 +24,7 @@
 [[vk::push_constant]] DrawPushConstants pc;
 
 #include "include/DepthVertex.slangh"
-#include "include/ShadowAlphaTest.slangh"
+#include "include/AlphaMaskTest.slangh"
 
 [shader("vertex")]
 DepthVSOutputWithWorldPos vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
@@ -45,7 +45,7 @@ DepthVSOutputWithWorldPos vertexMain(uint vertexId : SV_VertexID, uint startInst
 [shader("fragment")]
 float fragmentMain(DepthVSOutputWithWorldPos input) : SV_Target
 {
-    ShadowAlphaDiscard(input.materialIndex, input.uv);
+    AlphaMaskDiscard(input.materialIndex, input.uv);
 
     FrameConstantsData* fc = pc.frame.Ptr();
     const float3 lightPos = fc->cameraWorldPos.xyz;

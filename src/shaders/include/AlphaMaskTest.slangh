@@ -1,0 +1,47 @@
+#ifndef AETHER_ALPHA_MASK_TEST_SLANGH
+#define AETHER_ALPHA_MASK_TEST_SLANGH
+
+// Kept out of DepthVertex.slangh on purpose: this samples through the bindless heap, and not
+// every depth pass has one bound. A pass that includes this must declare g_textures and
+// g_linearSampler at set 0, and its pipeline must carry the descriptor heap mappings.
+
+// Every pass that writes depth for a cutout material has to cut it out the same way the forward
+// pass does (gltf_mesh.slang). The depth passes were depth-only with an empty fragment shader:
+// - shadows: a leaf card, a grate or a fence cast the shadow of the quad it is painted on, and
+//   a fully masked-out surface still cast a solid shadow;
+// - the scene prepass: the quad's depth hid everything behind its cut-out texels (the forward
+//   pass then discarded them, leaving the quad visible as a hole), and GTAO occluded against
+//   the quad instead of the leaf.
+//
+// Requires the bindless heap (g_textures, g_linearSampler) to be declared by the caller.
+// Ceiling: every pixel loads its material to find out whether it needs testing at all,
+// because these passes draw everything through one override pipeline and so cannot select
+// a cheaper shader per material. Measured at +0.012 ms across three shadow cascades on a small
+// scene - if a heavy one shows this in a profile, the fix is to split draws into alpha-tested
+// and opaque lists with a pipeline each, not to make the test cheaper.
+void AlphaMaskDiscard(uint materialIndex, float2 uv)
+{
+    if (materialIndex == kNoTexture)
+    {
+        return;
+    }
+    FrameConstantsData* fc = pc.frame.Ptr();
+    GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);
+    const GpuMaterial mat = materials[materialIndex];
+    if ((mat.flags & kFlagAlphaMask) == 0u)
+    {
+        return;
+    }
+    float alpha = mat.baseColorFactor.a;
+    if (mat.albedoSlot != kNoTexture)
+    {
+        alpha *= g_textures[mat.albedoSlot].Sample(g_linearSampler, uv).a;
+    }
+    if (alpha < mat.alphaCutoff)
+    {
+        discard;
+    }
+}
+
+
+#endif

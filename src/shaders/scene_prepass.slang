@@ -58,6 +58,7 @@
 
 #include "include/DepthVertex.slangh"
 #include "include/OctNormal.slangh"
+#include "include/AlphaMaskTest.slangh"
 
 struct PrepassVSOutput
 {
@@ -142,6 +143,8 @@ PrepassVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_
 [shader("fragment")]
 PrepassOutput fragmentMain(PrepassVSOutput input, bool isFrontFace : SV_IsFrontFace)
 {
+	AlphaMaskDiscard(input.materialIndex, input.uv);
+
 	FrameConstantsData* fc = pc.frame.Ptr();
 	GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);
 

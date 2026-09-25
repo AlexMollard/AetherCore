@@ -14,7 +14,7 @@
 [[vk::push_constant]] DrawPushConstants pc;
 
 #include "include/DepthVertex.slangh"
-#include "include/ShadowAlphaTest.slangh"
+#include "include/AlphaMaskTest.slangh"
 
 [shader("vertex")]
 DepthVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
@@ -34,5 +34,5 @@ DepthVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_St
 [shader("fragment")]
 void fragmentMain(DepthVSOutput input)
 {
-    ShadowAlphaDiscard(input.materialIndex, input.uv);
+    AlphaMaskDiscard(input.materialIndex, input.uv);
 }
