@@ -16,7 +16,7 @@ namespace AetherGame;
 /// Object IDs are DefaultEnums.ObjectID from the Twinsanity editor. Crates are 1 unit cubes with
 /// their origin at the bottom centre; wumpa sit about 1 unit above their origin.
 /// </summary>
-public sealed class TwinsanityLevel : EntityScript
+public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanityHost
 {
 	public string LevelPath = "project://assets/levels/Earth/Hub/beach.level.json";
 	public string ObjectsPath = "project://assets/levels/objects.json";
@@ -29,7 +29,7 @@ public sealed class TwinsanityLevel : EntityScript
 	private const float kCrashHeight = 1.8f;
 	private const float kExplosionRadius = 2.5f;
 
-	private enum Kind { Basic, Nitro, Tnt, ExtraLife, WoodenSpring, IronSpring, Iron, Checkpoint, AkuAku }
+	private enum Kind { Basic, Nitro, Tnt, ExtraLife, WoodenSpring, IronSpring, Iron, Checkpoint, AkuAku, MultiHit, Level, Surprise, Detonator, Reinforced }
 
 	private sealed class Crate
 	{
@@ -39,6 +39,9 @@ public sealed class TwinsanityLevel : EntityScript
 		public Vector3 Base;
 		public bool Alive = true;
 		public float Fuse = -1.0f;
+		public int Hits;                       // remaining hits for MultiHit crates
+		public int ObjectId;                   // the original data's object id (CrateFx keys on it)
+		public bool Activated;                 // checkpoint crates flip state but never break
 	}
 
 	private sealed class Wumpa
@@ -51,6 +54,8 @@ public sealed class TwinsanityLevel : EntityScript
 
 	private readonly List<Crate> _crates = new();
 	private readonly List<Wumpa> _wumpa = new();
+	private readonly TwinsanityActors _actors = new();
+	private readonly TwinsanityHud _hud = new();
 	private readonly HashSet<uint> _deadly = new();
 	private readonly Dictionary<int, string> _objectModels = new();
 
@@ -66,12 +71,8 @@ public sealed class TwinsanityLevel : EntityScript
 	private int _wumpaCount;
 	private int _lives;
 	private int _aku;
-	private int _cratesBroken;
-	private int _cratesTotal;
 	private float _deathTimer = -1.0f;
-	private Entity _hud;
 	private Entity _sky;
-	private string _hudText = string.Empty;
 
 	public override void OnAttach()
 	{
@@ -138,16 +139,10 @@ public sealed class TwinsanityLevel : EntityScript
 				}
 			}
 		}
-		_cratesTotal = _crates.FindAll(c => c.Kind is not (Kind.Nitro or Kind.Iron or Kind.IronSpring)).Count;
+		CrateFx.RegisterObjectModels(_objectModels);
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_wumpa.Count} wumpa, {_deadly.Count} deadly collision pieces");
-
-		Entity canvas = Ui.CreateCanvas();
-		_hud = Ui.CreateText(canvas, string.Empty);
-		Ui.SetAnchors(_hud, new Vector2(0.0f, 0.0f), new Vector2(0.0f, 0.0f));
-		Ui.SetPivot(_hud, new Vector2(0.0f, 0.0f));
-		Ui.SetRect(_hud, 24.0f, 20.0f, 900.0f, 40.0f);
-		Ui.SetFontSize(_hud, 30.0f);
-		Ui.SetTextColor(_hud, new Vector4(1.0f, 0.85f, 0.3f, 1.0f));
+		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
+		// summary has the rig evidence for when the original shows it.
 	}
 
 	public override void OnUpdate(float deltaTime)
@@ -181,6 +176,11 @@ public sealed class TwinsanityLevel : EntityScript
 			}
 		}
 		UpdateFuses(deltaTime);
+		DebugWarpPoll(deltaTime);
+		// Keep world life and crate fx animating through the death pause, as in the original.
+		_actors.Update(deltaTime, _player!, this);
+		CrateFx.Update(deltaTime);
+		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
 
 		if (_deathTimer >= 0.0f)
 		{
@@ -189,19 +189,22 @@ public sealed class TwinsanityLevel : EntityScript
 			{
 				_player!.Respawn(_checkpoint + new Vector3(0.0f, 0.1f, 0.0f), _checkpointFacing);
 				_player.SetControl(true);
+				Log.Info("[Twinsanity] Crash respawned at checkpoint");
 			}
-			UpdateHud();
 			return;
 		}
 
 		Vector3 feet = _crash.Position;
 		CollectWumpa(feet);
 		TouchCrates(feet);
-		if (feet.Y < KillY || OnDeadlyGround(feet))
+		if (feet.Y < KillY)
 		{
-			Die();
+			Die(DeathKind.Fall); // fell off the world
 		}
-		UpdateHud();
+		else if (OnDeadlyGround(feet, out Vector3 water))
+		{
+			Die(DeathKind.Drown); // every deadly piece in the hub is the sea
+		}
 	}
 
 	private bool FindPlayer()
@@ -326,11 +329,23 @@ public sealed class TwinsanityLevel : EntityScript
 			13 => Kind.WoodenSpring,
 			14 => Kind.IronSpring,
 			15 => Kind.Iron,
+			19 => Kind.MultiHit,
 			266 => Kind.Checkpoint,
 			297 => Kind.AkuAku,
-			_ => null,
+			_ => NameKind(model),
 		};
-		if (kind == null || model == null)
+		if (kind == null)
+		{
+			// Not a crate: hand it to the actor system (enemies, birds, butterflies, chickens...).
+			string objectName = instance.TryGetProperty("name", out JsonElement n) ? n.GetString()! : $"object_{objectId}";
+			float[] floats = instance.TryGetProperty("floats", out JsonElement fl)
+				? fl.EnumerateArray().Select(f => f.GetSingle()).ToArray()
+				: Array.Empty<float>();
+			uint subtype = instance.TryGetProperty("subtype", out JsonElement st) ? st.GetUInt32() : 0u;
+			_actors.TrySpawn(objectId, objectName, model, position, euler, floats, subtype, instance, transform);
+			return;
+		}
+		if (model == null)
 		{
 			return;
 		}
@@ -341,7 +356,30 @@ public sealed class TwinsanityLevel : EntityScript
 		body.AddTransform();
 		body.Position = position + new Vector3(0.0f, 0.5f, 0.0f);
 		Physics.AddBoxBody(body, new Vector3(0.5f, 0.5f, 0.5f), dynamic: false);
-		_crates.Add(new Crate { Kind = kind.Value, Body = body, Model = Spawn(body.Name, model, position, euler), Base = position });
+		Entity crateModel = Spawn(body.Name, model, position, euler);
+		CrateFx.Spawned(crateModel, objectId, model);
+		_crates.Add(new Crate { Kind = kind.Value, Body = body, Model = crateModel, Base = position, Hits = kind.Value == Kind.MultiHit ? 3 : 1, ObjectId = objectId });
+	}
+
+	// Some crate kinds are only distinguishable by model name (their object ids differ per chunk
+	// file in the original data).
+	private static Kind? NameKind(string? model)
+	{
+		if (model == null)
+		{
+			return null;
+		}
+		string name = model.ToUpperInvariant();
+		if (name.Contains("CRATE"))
+		{
+			if (name.Contains("SURPRISE")) return Kind.Surprise;             // the "?" crate
+			if (name.Contains("DETONATOR")) return Kind.Detonator;           // TNT detonator switch
+			if (name.Contains("MULTIPLEHIT")) return Kind.MultiHit;          // needs several hits
+			if (name.Contains("REINFORCED")) return Kind.Reinforced;         // metal-clad but breakable (REINFORCED_WOODEN_CRATE_BREAK = 654)
+			if (name.Contains("INVISIBLE_CHECKPOINT")) return Kind.Checkpoint;
+			if (name.Contains("LEVELCRATE")) return Kind.Level;              // the level-entrance crate
+		}
+		return null;
 	}
 
 	private static Entity Spawn(string name, string path, Matrix4x4 transform)
@@ -363,6 +401,32 @@ public sealed class TwinsanityLevel : EntityScript
 		return e;
 	}
 
+	private float _warpPoll;
+
+	// ponytail: dev-only test hook - polls project://warp.txt and teleports Crash there
+	// ("x y z", any other content = idle). Inert in normal play; remove when automated
+	// testing gets a proper driver API.
+	private void DebugWarpPoll(float deltaTime)
+	{
+		_warpPoll -= deltaTime;
+		if (_warpPoll > 0.0f)
+		{
+			return;
+		}
+		_warpPoll = 0.25f;
+		string? text = Assets.ReadText("project://warp.txt");
+		if (text == null)
+		{
+			return;
+		}
+		string[] parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		if (parts.Length == 3 && float.TryParse(parts[0], out float x) && float.TryParse(parts[1], out float y) && float.TryParse(parts[2], out float z))
+		{
+			_player!.Respawn(new Vector3(x, y, z), _player.Facing);
+			Log.Info($"[Twinsanity] debug warp to ({x}, {y}, {z})");
+		}
+	}
+
 	private void CollectWumpa(Vector3 feet)
 	{
 		Vector3 center = feet + new Vector3(0.0f, kCrashHeight * 0.5f, 0.0f);
@@ -377,7 +441,7 @@ public sealed class TwinsanityLevel : EntityScript
 		}
 	}
 
-	private void AddWumpa(int count)
+	public void AddWumpa(int count)
 	{
 		_wumpaCount += count;
 		while (_wumpaCount >= 100)
@@ -390,7 +454,8 @@ public sealed class TwinsanityLevel : EntityScript
 	private void TouchCrates(Vector3 feet)
 	{
 		Vector3 velocity = _player!.Velocity;
-		bool spinning = _player.IsSpinning;
+		// Both the spin and the slide sweep break wooden crates in the original.
+		bool whirled = _player.IsSpinning || _player.IsSliding;
 		foreach (Crate c in _crates.ToArray())
 		{
 			if (!c.Alive)
@@ -402,32 +467,138 @@ public sealed class TwinsanityLevel : EntityScript
 			float top = c.Base.Y + 1.0f;
 			bool overlapsVertically = feet.Y < top + 0.1f && feet.Y + kCrashHeight > c.Base.Y;
 
-			// Standing on or landing on the lid.
+			// Standing on or landing on the lid. The character controller's feet rest about half a
+			// unit below the collider top, so the band reaches further down than it looks like it
+			// should.
 			bool onTop = dx < 0.5f + kCrashRadius * 0.75f && dz < 0.5f + kCrashRadius * 0.75f
-			             && feet.Y > top - 0.3f && feet.Y < top + 0.35f && velocity.Y < 0.5f;
+			             && feet.Y > top - 0.75f && feet.Y < top + 0.45f && velocity.Y < 0.5f;
 			bool touching = dx < 0.5f + kCrashRadius + 0.08f && dz < 0.5f + kCrashRadius + 0.08f && overlapsVertically;
-			bool spun = spinning && dx < 1.5f && dz < 1.5f && feet.Y < top + 0.5f && feet.Y + kCrashHeight > c.Base.Y;
+			bool whirledHit = whirled && dx < 1.5f && dz < 1.5f && feet.Y < top + 0.5f && feet.Y + kCrashHeight > c.Base.Y;
 
 			switch (c.Kind)
 			{
 				case Kind.Nitro:
-					if (onTop || touching || spun)
+					// Nitro goes up on any contact, including a landing from above or a spin.
+					if (onTop || touching || whirledHit)
 					{
 						Explode(c);
 					}
 					break;
 				case Kind.Tnt:
-					if (spun)
-					{
-						Explode(c);
-					}
-					else if (onTop)
+					// Jumping on top starts the fuse and bounces Crash; spins and slides do nothing.
+					if (onTop)
 					{
 						_player.Bounce(9.0f);
+						CrateFx.Bounced(c.Model, c.ObjectId);
 						if (c.Fuse < 0.0f)
 						{
 							c.Fuse = 3.0f;
 						}
+					}
+					break;
+				case Kind.Basic:
+					// The original's single wooden crate pops the moment it is touched from above,
+					// giving Crash a small bounce as it breaks.
+					if (onTop)
+					{
+						Break(c);
+						_player.Bounce(9.0f);
+						CrateFx.Bounced(c.Model, c.ObjectId);
+					}
+					else if (whirledHit)
+					{
+						Break(c);
+					}
+					break;
+				case Kind.MultiHit:
+					if (onTop || whirledHit)
+					{
+						c.Hits--;
+						AddWumpa(5); // a handful of wumpa per hit, as in the original
+						if (c.Hits <= 0)
+						{
+							Break(c);
+						}
+						if (onTop)
+						{
+							_player.Bounce(9.0f);
+							CrateFx.Bounced(c.Model, c.ObjectId);
+						}
+					}
+					break;
+				case Kind.Surprise:
+					if (onTop)
+					{
+						Break(c);
+						_player.Bounce(9.0f);
+						CrateFx.Bounced(c.Model, c.ObjectId);
+					}
+					else if (whirledHit)
+					{
+						Break(c);
+					}
+					break;
+				case Kind.Level:
+					// Smashing a level crate is the hub's door into that level; entering the level
+					// itself is out of scope, so the crate simply breaks.
+					if (onTop)
+					{
+						Break(c);
+						_player.Bounce(9.0f);
+						CrateFx.Bounced(c.Model, c.ObjectId);
+						Log.Info("[Twinsanity] Level crate smashed (level entry not implemented).");
+					}
+					else if (whirledHit)
+					{
+						Break(c);
+					}
+					break;
+				case Kind.Checkpoint:
+					// The original's checkpoint crate is NOT destroyed: its top bounces Crash and
+					// the OGI state flips to the activated look (245/246).
+					if (onTop || whirledHit)
+					{
+						if (!c.Activated)
+						{
+							c.Activated = true;
+							_checkpoint = c.Base;
+							_checkpointFacing = _player.Facing;
+							Log.Info("[Twinsanity] Checkpoint activated.");
+						}
+						CrateFx.Activated(c.Model, c.ObjectId);
+						if (onTop)
+						{
+							_player.Bounce(9.0f);
+							CrateFx.Bounced(c.Model, c.ObjectId);
+						}
+					}
+					break;
+				case Kind.Detonator:
+					// DETONATOR_CRATE_SPUN (4790) in the engine's state table: a spin sets it off;
+					// in practice any break does, and it lights every TNT in the level.
+					if (onTop || whirledHit)
+					{
+						Break(c);
+						foreach (Crate tnt in _crates)
+						{
+							if (tnt.Alive && tnt.Kind == Kind.Tnt && tnt.Fuse < 0.0f)
+							{
+								tnt.Fuse = 0.3f;
+							}
+						}
+					}
+					break;
+				case Kind.Reinforced:
+					// REINFORCED_WOODEN_CRATE_BREAK (654): breakable like a wooden crate.
+					if (onTop)
+					{
+						Break(c);
+						_player.Bounce(9.0f);
+						CrateFx.Bounced(c.Model, c.ObjectId);
+					}
+					else if (whirledHit)
+					{
+						Break(c);
 					}
 					break;
 				case Kind.Iron:
@@ -436,24 +607,22 @@ public sealed class TwinsanityLevel : EntityScript
 					if (onTop)
 					{
 						_player.Bounce(16.0f);
+						CrateFx.Bounced(c.Model, c.ObjectId);
 					}
 					break;
 				case Kind.WoodenSpring:
-					if (spun)
+					if (whirledHit)
 					{
 						Break(c);
 					}
 					else if (onTop)
 					{
 						_player.Bounce(16.0f);
+						CrateFx.Bounced(c.Model, c.ObjectId);
 					}
 					break;
 				default:
-					if (spun)
-					{
-						Break(c);
-					}
-					else if (onTop)
+					if (whirledHit || onTop)
 					{
 						Break(c);
 					}
@@ -474,22 +643,17 @@ public sealed class TwinsanityLevel : EntityScript
 		}
 		c.Alive = false;
 		c.Body.Destroy();
-		c.Model.Destroy();
-		if (c.Kind is not (Kind.Nitro or Kind.Iron or Kind.IronSpring))
-		{
-			_cratesBroken++;
-		}
+		CrateFx.Broken(c.Model, c.ObjectId); // plays the fragment clip, then destroys the model
 		switch (c.Kind)
 		{
 			case Kind.Basic:
 				AddWumpa(5);
 				break;
+			case Kind.Surprise: // the "?" crate bursts into wumpa
+				AddWumpa(5);
+				break;
 			case Kind.ExtraLife:
 				_lives++;
-				break;
-			case Kind.Checkpoint:
-				_checkpoint = c.Base;
-				_checkpointFacing = _player!.Facing;
 				break;
 			case Kind.AkuAku:
 				_aku = Math.Min(_aku + 1, 2);
@@ -504,11 +668,13 @@ public sealed class TwinsanityLevel : EntityScript
 			return;
 		}
 		Break(c);
+		CrateFx.Exploded(c.Base, c.ObjectId);
 		Vector3 center = c.Base + new Vector3(0.0f, 0.5f, 0.0f);
+		_actors.Explosion(center, kExplosionRadius);
 		Vector3 crashCenter = _crash.Position + new Vector3(0.0f, kCrashHeight * 0.5f, 0.0f);
 		if (Vector3.Distance(center, crashCenter) < kExplosionRadius + kCrashRadius)
 		{
-			Hurt();
+			Hurt(center);
 		}
 		foreach (Crate other in _crates)
 		{
@@ -542,52 +708,65 @@ public sealed class TwinsanityLevel : EntityScript
 		}
 	}
 
-	private void Hurt()
+	private void Hurt(Vector3 from)
 	{
 		if (_aku > 0)
 		{
+			// Aku Aku eats the hit: the original's recoil and a shove away from the hazard.
 			_aku--;
+			_player!.Hurt(from);
 			return;
 		}
-		Die();
+		Die(DeathKind.Explode);
 	}
 
-	private void Die()
+	// TwinsanityActors.ITwinsanityHost: enemies and hazards funnel their hits through here.
+	public void DamagePlayer(Vector3 from, DeathKind kind)
 	{
 		if (_deathTimer >= 0.0f)
+		{
+			return;
+		}
+		if (_aku > 0)
+		{
+			_aku--;
+			_player!.Hurt(from);
+			return;
+		}
+		Die(kind);
+	}
+
+	private void Die(DeathKind kind)
+	{
+		if (_deathTimer >= 0.0f || _player == null)
 		{
 			return;
 		}
 		_lives--;
 		if (_lives < 0)
 		{
-			// shortcut: no game-over screen; the run simply starts over with full lives.
+			// shortcut: the original's game over just reloads the level; we reset in place instead
+			// of a title-screen round trip.
 			_lives = StartLives;
 			_wumpaCount = 0;
 		}
 		_aku = 0;
-		_deathTimer = 1.2f;
-		_player!.SetControl(false);
+		Log.Info($"[Twinsanity] Crash died ({kind}), lives now {_lives}");
+		_deathTimer = _player.Die(kind); // Die takes control and keeps the model visible
 	}
 
-	private bool OnDeadlyGround(Vector3 feet)
+	private bool OnDeadlyGround(Vector3 feet, out Vector3 hitPoint)
 	{
+		hitPoint = feet;
 		if (_deadly.Count == 0)
 		{
 			return false;
 		}
-		RaycastHit hit = Physics.Raycast(feet + new Vector3(0.0f, 0.5f, 0.0f), new Vector3(0.0f, -1.0f, 0.0f), 0.8f);
-		return hit.DidHit && _deadly.Contains(hit.Entity.Id);
-	}
-
-	private void UpdateHud()
-	{
-		string text = $"WUMPA {_wumpaCount}    LIVES {Math.Max(_lives, 0)}    CRATES {_cratesBroken}/{_cratesTotal}{(_aku > 0 ? "    AKU AKU " + _aku : "")}";
-		if (text != _hudText)
-		{
-			_hudText = text;
-			Ui.SetText(_hud, text);
-		}
+		// What Crash stands on, straight from the controller: a ray from inside his capsule hits
+		// his own inner body, and one from under his feet starts below a plane he stands level
+		// with, so neither ever saw the sea and he never drowned.
+		Entity ground = CharacterController.GetGroundEntity(_crash);
+		return ground.IsValid && _deadly.Contains(ground.Id);
 	}
 
 	private static Vector3 Vec(JsonElement a) => new(a[0].GetSingle(), a[1].GetSingle(), a[2].GetSingle());

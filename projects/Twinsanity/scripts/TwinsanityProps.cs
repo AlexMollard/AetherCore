@@ -1,0 +1,249 @@
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using AetherCore;
+
+namespace AetherGame;
+
+/// <summary>
+/// One-shot props: objects whose behaviour script plays a clip once in reaction to an event and
+/// then holds its end pose (DoAnim with no loop), never as an idle loop. Each rests on the first
+/// frame of its first clip until its cue, as the original shows the unanimated model.
+/// Scripts dumped with logs/triggers/dump.ps1 (logs/triggers/dump.txt):
+/// - act_TRAINING_EXPLODING_IDOL_HEAD (the totems): COM_TRAINING_EXPLODING_IDOL_HEAD_DEFAULT waits
+///   for message 169 from its TRIGGER part, which sends it when damaged by an explosion; plays
+///   a001, then a002 on the next explosion.
+/// - act_TRAINING_FALLING_LOG (the falling tree): COM_TRAINING_FALLING_LOG_DAMAGED plays a001 when
+///   damaged by an explosion (the beach one stands 2 m from a TNT crate); subtype 10 starts down.
+/// - act_SEAPILLAR (rising pillars): COM_SEAPILLAR_DEFAULT plays a001 once global progression
+///   reaches 2.
+/// - act_WUMPA_TREE: COM_WUMPA_TREE_DEFAULT plays a001 at spawn for subtype 20, otherwise shakes
+///   once (a002, a005 for subtype 1, a004 for subtype 2) when Crash comes within 2 m.
+/// </summary>
+public sealed partial class TwinsanityActors
+{
+	private enum PropCue { None, Explosion, Proximity }
+
+	private sealed class OneShot
+	{
+		public Actor Actor = null!;
+		public PropCue Cue;
+		public int[] Clips = Array.Empty<int>(); // played in order, one per cue
+		public int Next;
+		public float Remaining = -1.0f; // seconds left of the clip playing now; -1 = resting
+	}
+
+	private readonly List<OneShot> _oneShots = new();
+
+	// act_GLOBAL_BOMB (COM_GLOBAL_BOMB_DEFAULT): a spin primes it (s4 AgentWasSpun -> s2
+	// COM_GLOBAL_BOMB_PRIMED), and 1 s later (s2 TimeInUnit 1) COM_GLOBAL_BOMB_DAMAGED explodes it
+	// with CreateDamage radius 3 - the explosion that knocks the idol heads over.
+	private sealed class Bomb
+	{
+		public Actor Actor = null!;
+		public float Fuse = -1.0f; // seconds to the explosion once primed
+		public Vector3 Velocity;
+	}
+
+	private readonly List<Bomb> _bombs = new();
+	private const float BombFuse = 1.0f;
+	private const float BombDamageRadius = 3.0f;
+	private const float BombSpinReach = 1.5f;
+	// ponytail: the bomb is a rigid body the spin knocks away; its launch speed and rolling drag
+	// are not in the scripts. Tuned to the rig; no collision while rolling (flat ground only).
+	private const float BombKickSpeed = 8.0f;
+	private const float BombDrag = 2.0f;
+
+	// ponytail: the original's global progression counter (condition GlobalProgression) lives in
+	// the save; the port always starts a new game, where it is 0. Upgrade path: a save system.
+	private const int GlobalProgression = 0;
+	// COM_WUMPA_TREE_DEFAULT s3: MeToFocusSqrDist <= 4 with Crash as the focus.
+	private const float WumpaTreeShakeRadius = 2.0f;
+
+	// Sets up a one-shot prop; false when the object is not one.
+	private bool SetupOneShot(Actor a, string objectName, uint subtype)
+	{
+		string n = NameKey(objectName);
+		Entity e = a.Model;
+		OneShot s = new() { Actor = a };
+		bool playNow = false;
+		bool startDone = false;
+		if (n.StartsWith("act_training_exploding_idol_head"))
+		{
+			s.Cue = PropCue.Explosion;
+			s.Clips = Clips(e, "a001", "a002");
+		}
+		else if (n.StartsWith("act_training_falling_log"))
+		{
+			s.Cue = PropCue.Explosion;
+			s.Clips = Clips(e, "a001");
+			startDone = subtype == 10;
+		}
+		else if (n.StartsWith("act_seapillar"))
+		{
+			s.Cue = PropCue.None; // rises only by progression
+			s.Clips = Clips(e, "a001");
+			startDone = GlobalProgression >= 2;
+		}
+		else if (n.StartsWith("act_wumpa_tree") || n.StartsWith("old_act_wumpa_tree"))
+		{
+			s.Cue = PropCue.Proximity;
+			if (subtype == 20)
+			{
+				s.Clips = Clips(e, "a001");
+				playNow = true;
+			}
+			else if (subtype is 0 or 1 or 2 or 3)
+			{
+				s.Clips = Clips(e, subtype == 1 ? "a005" : subtype == 2 ? "a004" : "a002");
+			}
+			// Other subtypes (10-12, the farmer cutscene trees) wait for a cutscene message.
+		}
+		else if (n.StartsWith("act_global_bomb"))
+		{
+			_bombs.Add(new Bomb { Actor = a });
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+
+		SetLooping(e, false);
+		// Rest on frame 0 of the first cue clip (or of the model's first clip when the prop has no
+		// cue here, e.g. the farmer-cutscene wumpa trees): the original shows it unanimated.
+		int restClip = s.Clips.Length > 0 ? s.Clips[0] : a.IdleClip;
+		if (restClip >= 0)
+		{
+			Animation.SetClip(e, restClip);
+			Animation.SetTime(e, 0.0f);
+			Animation.SetPlaybackSpeed(e, 0.0f);
+		}
+		if (s.Clips.Length == 0)
+		{
+			_oneShots.Add(s);
+			return true;
+		}
+		if (startDone)
+		{
+			// Already played before Crash arrived: hold the end pose.
+			Animation.SetTime(e, Animation.ClipDuration(e));
+			s.Next = s.Clips.Length;
+		}
+		else if (playNow)
+		{
+			PlayOnce(s);
+		}
+		_oneShots.Add(s);
+		return true;
+	}
+
+	/// <summary>
+	/// An explosion (TNT / Nitro crate) at <paramref name="center"/>: every explosion-cued prop
+	/// within <paramref name="radius"/> plays its next clip once.
+	/// </summary>
+	public void Explosion(Vector3 center, float radius)
+	{
+		foreach (OneShot s in _oneShots)
+		{
+			if (s.Cue == PropCue.Explosion && s.Actor.Alive && Vector3.Distance(center, s.Actor.Model.Position) < radius)
+			{
+				PlayOnce(s);
+			}
+		}
+	}
+
+	private void UpdateBombs(float dt, Vector3 crashPos)
+	{
+		foreach (Bomb b in _bombs)
+		{
+			if (!b.Actor.Alive)
+			{
+				continue;
+			}
+			Entity e = b.Actor.Model;
+			Vector3 p = e.Position;
+			if (b.Fuse < 0.0f)
+			{
+				Vector3 away = p - crashPos;
+				away.Y = 0.0f;
+				float dist = away.Length();
+				if (_player != null && _player.IsSpinning && dist < BombSpinReach && MathF.Abs(crashPos.Y - p.Y) < 1.5f)
+				{
+					b.Fuse = BombFuse;
+					b.Velocity = (dist > 0.001f ? away / dist : Vector3.UnitZ) * BombKickSpeed;
+				}
+				continue;
+			}
+			e.Position = p + b.Velocity * dt;
+			b.Velocity *= MathF.Max(0.0f, 1.0f - BombDrag * dt);
+			b.Fuse -= dt;
+			if (b.Fuse >= 0.0f)
+			{
+				continue;
+			}
+			Vector3 center = e.Position + new Vector3(0.0f, 0.5f, 0.0f);
+			CrateFx.Exploded(e.Position, 5);
+			Explosion(center, BombDamageRadius);
+			if (Vector3.Distance(center, crashPos + new Vector3(0.0f, 0.9f, 0.0f)) < BombDamageRadius)
+			{
+				_host?.DamagePlayer(center, DeathKind.Explode);
+			}
+			b.Actor.Alive = false;
+			e.Destroy();
+		}
+		_bombs.RemoveAll(b => !b.Actor.Alive);
+	}
+
+	private void UpdateOneShots(float dt, Vector3 crashPos)
+	{
+		UpdateBombs(dt, crashPos);
+		foreach (OneShot s in _oneShots)
+		{
+			if (s.Remaining >= 0.0f)
+			{
+				s.Remaining -= dt;
+				if (s.Remaining < 0.0f)
+				{
+					// Hold the last frame.
+					Animation.SetTime(s.Actor.Model, Animation.ClipDuration(s.Actor.Model));
+					Animation.SetPlaybackSpeed(s.Actor.Model, 0.0f);
+				}
+				continue;
+			}
+			if (s.Cue == PropCue.Proximity && s.Next < s.Clips.Length
+				&& Vector3.DistanceSquared(crashPos, s.Actor.Model.Position) <= WumpaTreeShakeRadius * WumpaTreeShakeRadius)
+			{
+				PlayOnce(s);
+			}
+		}
+	}
+
+	private static void PlayOnce(OneShot s)
+	{
+		// A clip still playing is not restarted; spent props ignore further cues.
+		if (s.Remaining >= 0.0f || s.Next >= s.Clips.Length)
+		{
+			return;
+		}
+		Entity e = s.Actor.Model;
+		Animation.SetClip(e, s.Clips[s.Next++]);
+		Animation.SetTime(e, 0.0f);
+		Animation.SetPlaybackSpeed(e, 1.0f);
+		s.Remaining = Animation.ClipDuration(e);
+	}
+
+	private static int[] Clips(Entity e, params string[] names)
+	{
+		var list = new List<int>();
+		foreach (string name in names)
+		{
+			int idx = Animation.Find(e, name);
+			if (idx >= 0)
+			{
+				list.Add(idx);
+			}
+		}
+		return list.ToArray();
+	}
+}

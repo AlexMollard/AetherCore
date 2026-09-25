@@ -205,6 +205,13 @@ public sealed class CrashPlayer : EntityScript
 			StepDeath(deltaTime);
 			return;
 		}
+		if (Time.IsPaused)
+		{
+			// TwinsanityHud's pause menu: no look, and the menu's confirm press (Space / A) must not
+			// latch a jump or spin that fires on resume - count every button as already held.
+			_spaceWasDown = _spinWasDown = _crouchWasDown = true;
+			return;
+		}
 		if (_hurtLeft > 0.0f)
 		{
 			_hurtLeft -= deltaTime;
