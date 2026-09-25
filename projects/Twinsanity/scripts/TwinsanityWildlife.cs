@@ -46,6 +46,14 @@ public sealed partial class TwinsanityActors
 	private const float GullCircleHeight = 12.0f;
 	private const float GullCircleRadius = 3.15f;
 	private const float GullCircleOmega = 1.556f;
+	// Rig (logs/wildlife/gull2_rig.csv, gull2_rig_flight.csv; Crash standing still): ground gulls
+	// step 0.1-1.75 m at 1.2-1.5 m/s for 0.4-1.2 s, 5-30 s apart (mean ~12 s), and now and then
+	// take off with nothing near them (g0: Crash 21 m away and still) into the usual 12 m circle,
+	// which they then hold (none landed within 100 s).
+	private const float GullWalk = 1.35f;
+	// ponytail: one unprovoked takeoff in ~300 gull-seconds of watching; the mean wait is that
+	// single sample. Upgrade path: a longer rig watch (or the script's timer) for a real rate.
+	private const float GullRandomTakeOffMean = 300.0f;
 	// Butterfly (rig: track_b0.csv).
 	private const float ButterflySpeed = 3.0f;
 	// Bird clump (rig: track_b0.csv k1-k3).
@@ -96,6 +104,8 @@ public sealed partial class TwinsanityActors
 		public bool Resolved;
 		public bool[] KeyUsed = Array.Empty<bool>();
 		public SpawnInfo? Template;
+		public List<Actor> Live = new();
+		public float Refill = -1.0f;
 	}
 
 	private enum Mode { Idle, Walk, Flee, Climb, Circle, Land, Rest, Charge, Up, Down, GoTree, ClimbUp, Shake, ClimbDown, GoFruit, Pickup, Throw }
@@ -212,6 +222,7 @@ public sealed partial class TwinsanityActors
 				{
 					c.Mode = Mode.Idle;
 					c.Timer = RandomRange(3.0f, 15.0f);
+					c.Timer2 = -GullRandomTakeOffMean * MathF.Log(1.0f - (float)_rng.NextDouble());
 				}
 				break;
 			case Behaviour.Butterfly:
@@ -274,9 +285,9 @@ public sealed partial class TwinsanityActors
 
 	private float RandomRange(float lo, float hi) => lo + (float)_rng.NextDouble() * (hi - lo);
 
-	private static float GroundY(Vector3 p, float fallback)
+	private static float GroundY(Vector3 p, float fallback, float above = 2.0f)
 	{
-		RaycastHit hit = Physics.Raycast(p + new Vector3(0.0f, 2.0f, 0.0f), -Vector3.UnitY, 40.0f);
+		RaycastHit hit = Physics.Raycast(p + new Vector3(0.0f, above, 0.0f), -Vector3.UnitY, 40.0f);
 		return hit.DidHit ? hit.Position.Y : fallback;
 	}
 
@@ -296,7 +307,8 @@ public sealed partial class TwinsanityActors
 		Vector3 next = len <= step ? new Vector3(target.X, p.Y, target.Z) : p + d / len * step;
 		if (followGround)
 		{
-			next.Y = GroundY(next, p.Y);
+			// From just above the feet: a walker under a roof (chickens in the coop) stays on the floor.
+			next.Y = GroundY(next, p.Y, 0.6f);
 		}
 		a.Model.Position = next;
 		if (len > 0.001f)
@@ -331,6 +343,7 @@ public sealed partial class TwinsanityActors
 					if (c?.Critter != null)
 					{
 						c.Critter.Points = s.Points;
+						s.Live.Add(c);
 					}
 				}
 			}
@@ -437,10 +450,15 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	private void UpdateEcology(Vector3 crashPos)
+	private void UpdateEcology(Vector3 crashPos, float dt)
 	{
 		foreach (Spawner s in _spawners)
 		{
+			if (!s.Ecology && s.Template != null)
+			{
+				RefillCoop(s, dt);
+				continue;
+			}
 			if (!s.Ecology || s.Template == null || s.Points.Count == 0)
 			{
 				continue;
@@ -470,6 +488,40 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
+	// The coop keeps its count alive. Rig (logs/wildlife/coop_respawn_rig.csv): a chicken that dies
+	// (spun, or walking into a nitro) is replaced ~2 s later (1-3 s between 1 s RAM samples, twice)
+	// at the spawner itself - the coop hatch, (12.44, 0.2, -4.0) - and walks out from there.
+	private const float CoopRefillDelay = 2.0f;
+
+	private void RefillCoop(Spawner s, float dt)
+	{
+		s.Live.RemoveAll(a => !a.Alive);
+		if (s.Live.Count >= s.Count)
+		{
+			s.Refill = -1.0f;
+			return;
+		}
+		if (s.Refill < 0.0f)
+		{
+			s.Refill = CoopRefillDelay;
+		}
+		s.Refill -= dt;
+		if (s.Refill > 0.0f)
+		{
+			return;
+		}
+		s.Refill = -1.0f;
+		Actor? c = SpawnCopy(s.Template!, s.Position);
+		if (c?.Critter != null)
+		{
+			// Inside the coop: the ground ray from above would land on its roof.
+			c.Model.Position = s.Position;
+			c.Home = s.Position;
+			c.Critter.Points = s.Points;
+			s.Live.Add(c);
+		}
+	}
+
 	private void UpdateSeagull(Actor a, Critter c, float dt, Vector3 crashPos)
 	{
 		Vector3 p = a.Model.Position;
@@ -480,7 +532,8 @@ public sealed partial class TwinsanityActors
 				// Rig: a gull 4.4 m from a standing Crash stayed put for minutes, while ones Crash
 				// walked toward left at 15.5 m - it takes a moving Crash to scare them.
 				Vector3 cv = _player?.Velocity ?? Vector3.Zero;
-				if (Horizontal(p, crashPos) < GullTakeOffRadius && cv.X * cv.X + cv.Z * cv.Z > 0.25f)
+				c.Timer2 -= dt;
+				if ((Horizontal(p, crashPos) < GullTakeOffRadius && cv.X * cv.X + cv.Z * cv.Z > 0.25f) || c.Timer2 <= 0.0f)
 				{
 					float ang = RandomRange(0.0f, MathF.PI * 2.0f);
 					c.Target = new Vector3(MathF.Cos(ang), 0.0f, MathF.Sin(ang));
@@ -495,18 +548,18 @@ public sealed partial class TwinsanityActors
 					c.Timer -= dt;
 					if (c.Timer <= 0.0f)
 					{
-						// Rig g7: short hops (0.5-1 s at ~2 m/s) about the perch, rarely.
+						// Rig g0-g2: short steps about the perch (they stayed within ~2 m of it).
 						float ang = RandomRange(0.0f, MathF.PI * 2.0f);
 						c.Target = a.Home + new Vector3(MathF.Cos(ang), 0.0f, MathF.Sin(ang)) * RandomRange(0.0f, 2.0f);
 						c.Mode = Mode.Walk;
-						c.Timer = 1.0f;
+						c.Timer = RandomRange(0.4f, 1.2f);
 					}
 				}
 				else
 				{
 					PlayClip(a, c.WalkClip >= 0 ? c.WalkClip : a.IdleClip);
 					c.Timer -= dt;
-					if (WalkTo(a, c.Target, 2.0f, dt, true) || c.Timer <= 0.0f)
+					if (WalkTo(a, c.Target, GullWalk, dt, true) || c.Timer <= 0.0f)
 					{
 						c.Mode = Mode.Idle;
 						c.Timer = RandomRange(5.0f, 20.0f);

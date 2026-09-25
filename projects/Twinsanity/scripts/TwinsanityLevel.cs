@@ -42,6 +42,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		public int Hits;                       // remaining hits for MultiHit crates
 		public int ObjectId;                   // the original data's object id (CrateFx keys on it)
 		public bool Activated;                 // checkpoint crates open (keep their model) instead of breaking
+		public bool CheckSupport;              // the crate under it broke or moved: see if it must fall
+		public bool Falling;
+		public float FallSpeed;
 	}
 
 	private readonly List<Crate> _crates = new();
@@ -164,6 +167,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 		_fruit.Update(deltaTime, _crash.Position);
 		UpdateFuses(deltaTime);
+		UpdateStacks(deltaTime);
 		DebugWarpPoll(deltaTime);
 		// Keep world life and crate fx animating through the death pause, as in the original.
 		_actors.Update(deltaTime, _player!, this);
@@ -628,6 +632,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		c.Alive = false;
 		c.Body.Destroy();
 		CrateFx.Broken(c.Model, c.ObjectId); // plays the fragment clip, then destroys the model
+		QueueAbove(c);
 		switch (c.Kind)
 		{
 			case Kind.Basic:
@@ -642,6 +647,84 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			case Kind.AkuAku:
 				_aku = Math.Min(_aku + 1, 2);
 				break;
+		}
+	}
+
+	// Stacked crates. Rig (logs/wildlife/stack_fall_rig_raw.csv, the iron crates on the nitro stack
+	// at (24.27, -7.9)): once the crate under one is gone it drops straight down, from rest, at
+	// 0.0198 m/frame^2 at 50 fps (49.5 m/s^2), no bounce, and lands flush on the next support
+	// (3.01 -> 0.0 on the ground, 4.01 -> 1.0 on the crate below). The crate above a falling one
+	// starts 7 frames later: it lets go once its supporter's lid has dropped more than 0.7 m.
+	private const float kStackGravity = 49.5f;
+	private const float kStackLetGo = 0.7f;
+
+	private void QueueAbove(Crate below)
+	{
+		foreach (Crate c in _crates)
+		{
+			if (c.Alive && c != below && !c.Falling && OverFootprint(c, below)
+				&& c.Base.Y > below.Base.Y + 0.5f && c.Base.Y < below.Base.Y + 1.5f)
+			{
+				c.CheckSupport = true;
+			}
+		}
+	}
+
+	private static bool OverFootprint(Crate a, Crate b) =>
+		MathF.Abs(a.Base.X - b.Base.X) < 0.5f && MathF.Abs(a.Base.Z - b.Base.Z) < 0.5f;
+
+	// Highest lid under c among live crates (or float.MinValue).
+	private float CrateSupportTop(Crate c)
+	{
+		float top = float.MinValue;
+		foreach (Crate s in _crates)
+		{
+			if (s.Alive && s != c && s.Base.Y < c.Base.Y && OverFootprint(c, s))
+			{
+				top = MathF.Max(top, s.Base.Y + 1.0f);
+			}
+		}
+		return top;
+	}
+
+	private void UpdateStacks(float dt)
+	{
+		foreach (Crate c in _crates)
+		{
+			if (!c.Alive || !(c.CheckSupport || c.Falling))
+			{
+				continue;
+			}
+			float support = CrateSupportTop(c);
+			if (!c.Falling)
+			{
+				if (support >= c.Base.Y - kStackLetGo)
+				{
+					// Still held; stop watching once the supporter has come to rest.
+					c.CheckSupport = _crates.Exists(s => s.Falling && s.Alive && OverFootprint(c, s) && s.Base.Y < c.Base.Y);
+					continue;
+				}
+				c.Falling = true;
+				c.CheckSupport = false;
+				c.FallSpeed = 0.0f;
+				Physics.SetMotionType(c.Body, PhysicsMotionType.Kinematic);
+				QueueAbove(c);
+			}
+			RaycastHit ground = Physics.Raycast(c.Base - new Vector3(0.0f, 0.005f, 0.0f), -Vector3.UnitY, 60.0f);
+			float floor = MathF.Max(support, ground.DidHit ? ground.Position.Y : float.MinValue);
+			c.FallSpeed += kStackGravity * dt;
+			float y = c.Base.Y - c.FallSpeed * dt;
+			if (y <= floor)
+			{
+				y = floor;
+				c.Falling = false;
+				c.FallSpeed = 0.0f;
+			}
+			Vector3 move = new(0.0f, y - c.Base.Y, 0.0f);
+			c.Base += move;
+			c.Body.Position += move;
+			c.Model.Position += move;
+			CrateFx.Moved(c.Model, c.Base); // nitro hops snap back to their cached rest position
 		}
 	}
 

@@ -199,7 +199,7 @@ public sealed partial class TwinsanityActors
 		UpdateCritters();
 		TouchHost();
 		Separate();
-		UpdateEcology(crashPos);
+		UpdateEcology(crashPos, dt);
 		_actors.AddRange(_pending);
 		_pending.Clear();
 		UpdateOneShots(dt, crashPos);
