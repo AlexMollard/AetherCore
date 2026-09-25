@@ -370,16 +370,21 @@ namespace TwExtract
 		return m_materialIndex[(materialId, vertexLit, layer)] = m_byName[name] = Gltf.AddMaterial(gltfMat);
 	}
 
-	// MEASURED FROM ORIGINAL, not disc data: these overlay textures scroll in the game but
+	// MEASURED FROM ORIGINAL, not disc data: these overlay textures animate in the game but
 	// their shader records carry no speed (types 12/22 read FloatParam=[0,0,0,0] - the motion
-	// is code-driven on the PS2). Values measured off PCSX2 PAL captures, 100 consecutive
-	// 20 ms frames, camera parked: the beach sea's foam band drifts -0.17 px/frame
-	// (-8.3 px/s) toward -screen-x; the 128 px sea texture spans ~150 px on screen there,
-	// giving ~0.055 uv/s. Evidence: logs/scroll/measurement-20ms.txt, logs/scroll/consecutive-sea.
-	// Caveat: shore-wash geometry motion would produce the same pixel drift - A/B in play.
+	// is code-driven on the PS2), so the value comes from PCSX2 captures.
+	// The sea scroll is V-only. The sea strips' U zigzags (0 -> 1 -> 0 mirrored across each
+	// strip, the foam columns of the texture on the u~0 shoreline edge), so any U scroll sweeps
+	// the foam band off the sand and back once per repeat - the "foam sits away from the
+	// shore" bug of the old (0.055, 0). V runs along each strip, so a V scroll keeps the foam
+	// on the waterline and slides its uneven width along the shore, which is what the rig
+	// shows: at the pier-side shore (game 12,-70) the foam's land edge never moves while its
+	// water edge breathes with a 5.1-5.3 s period, travelling toward the inland camera. The
+	// texture's foam width has one dominant bulge per V repeat, so speed = 1 / period.
+	// Evidence: logs/wateredge (rigd/ dense captures, sheet.png).
 	private static readonly Dictionary<string, (float U, float V)> s_measuredScroll = new Dictionary<string, (float, float)>
 	{
-		["2b1f0286252911e6.png"] = (0.055f, 0f), // Earth-Hub beach sea blend layers
+		["2b1f0286252911e6.png"] = (0f, -0.19f), // Earth-Hub beach sea blend layers
 	};
 
 	// How many DISTINCT texture-mapped layers a material exports (>= 1; texture-less
