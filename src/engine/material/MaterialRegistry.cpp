@@ -143,6 +143,17 @@ namespace aether
 		return m_defaultSlot;
 	}
 
+	std::uint32_t MaterialRegistry::GetFlags(MaterialHandle handle) const
+	{
+		if (!handle.IsValid() || handle.index >= m_slots.size())
+		{
+			return 0u;
+		}
+		const std::scoped_lock lock(m_mutex);
+		const SlotEntry& e = m_slots[handle.index];
+		return (e.alive && e.generation == handle.generation) ? e.packed.flags : 0u;
+	}
+
 	bool MaterialRegistry::TryDescribe(MaterialHandle handle, MaterialAsset& out) const
 	{
 		if (!handle.IsValid() || handle.index >= m_slots.size())

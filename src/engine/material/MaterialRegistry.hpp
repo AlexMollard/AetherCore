@@ -28,6 +28,9 @@ namespace aether
 		[[nodiscard]] std::uint32_t ResolveSlot(MaterialHandle handle) const;
 
 		bool TryDescribe(MaterialHandle handle, MaterialAsset& out) const;
+		// Packed GpuMaterial flags, 0 for a dead or stale handle. Cheap enough to ask per
+		// entity per frame, unlike TryDescribe, which copies the whole authored material.
+		[[nodiscard]] std::uint32_t GetFlags(MaterialHandle handle) const;
 
 		[[nodiscard]] MaterialHandle DefaultHandle() const
 		{

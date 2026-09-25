@@ -46,6 +46,9 @@ struct FrameConstantsData
     [[vk::offset(960)]] float4  objectLight0Color;
     [[vk::offset(976)]] float4  objectLight1Direction;
     [[vk::offset(992)]] float4  objectLight1Color;
+    // Contact blob shadows under object-lit actors: x = count; xyz = bounds centre, w = radius.
+    [[vk::offset(1008)]] uint4  blobShadowInfo;
+    [[vk::offset(1024)]] float4 blobShadows[64];
 };
 
 #endif

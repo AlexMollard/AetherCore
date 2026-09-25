@@ -10,7 +10,10 @@ namespace aether
 {
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (1008 bytes):
+	// Contact blob shadows under object-lit actors, see blobShadows below.
+	inline constexpr std::uint32_t kMaxBlobShadows = 64u;
+
+	// Layout (2048 bytes):
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};
@@ -90,6 +93,13 @@ namespace aether
 		glm::vec4 objectLight1Direction{0.0f, 1.0f, 0.0f, 0.0f};
 		glm::vec4 objectLight1Color{0.0f, 0.0f, 0.0f, 0.0f};
 
+		// Contact blob shadows: the PS2 dropped a soft dark blob under every object it lit
+		// with its light records (crates, characters, creatures); its scenery had no other
+		// ambient occlusion. x = blob count. Each blob is xyz = the actor's bounds centre,
+		// w = its bounds radius; the receiver shader projects it straight down.
+		glm::uvec4 blobShadowInfo{0u};
+		glm::vec4 blobShadows[kMaxBlobShadows]{};
+
 		void RefreshDerived()
 		{
 			invViewProj = glm::inverse(viewProj);
@@ -114,7 +124,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 1008, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 2048, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -152,4 +162,6 @@ namespace aether
 	static_assert(offsetof(FrameConstants, objectLight0Color) == 960);
 	static_assert(offsetof(FrameConstants, objectLight1Direction) == 976);
 	static_assert(offsetof(FrameConstants, objectLight1Color) == 992);
+	static_assert(offsetof(FrameConstants, blobShadowInfo) == 1008);
+	static_assert(offsetof(FrameConstants, blobShadows) == 1024);
 } // namespace aether

@@ -34,6 +34,33 @@
 
 // ── Fragment shader ───────────────────────────────────────────────────────
 
+// Contact blob shadows (see FrameConstants.blobShadows): the soft dark disc the PS2 laid on
+// the ground under every object it lit with its light records. Each blob is projected
+// straight down, so it lands on whatever ground is under the actor and fades out as the
+// actor rises off it. Overlapping blobs take the darkest, never stack.
+// Darkness is the rig's: ground under Crash reads 0.81 of the ground beside him on the PS2's
+// gamma-space output, 0.63 in linear. ponytail: kBlobFadeHeight (how far above the ground a
+// blob survives) is not measured - the game's shadow-scale-by-height table is not extracted.
+static const float kBlobDarkness = 0.37;
+static const float kBlobFadeHeight = 2.0;
+float BlobShadowVisibility(FrameConstantsData* fc, float3 worldPos, float upFacing)
+{
+    float shade = 0.0;
+    const uint count = min(fc->blobShadowInfo.x, 64u);
+    for (uint i = 0u; i < count; ++i)
+    {
+        const float4 blob = fc->blobShadows[i];
+        const float r = blob.w;
+        // Below the actor's bounds bottom: fade with the drop. Above it: only up to the
+        // actor's own middle, so the top of a neighbouring crate is not darkened.
+        const float drop = blob.y - worldPos.y;
+        const float vertical = (1.0 - smoothstep(0.0, kBlobFadeHeight, drop)) * (1.0 - smoothstep(1.5 * r, 2.0 * r, -drop));
+        const float horizontal = 1.0 - smoothstep(r, 2.0 * r, length(worldPos.xz - blob.xz));
+        shade = max(shade, horizontal * vertical);
+    }
+    return 1.0 - kBlobDarkness * shade * upFacing;
+}
+
 [shader("fragment")]
 float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
 {
@@ -324,7 +351,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         const float3 bakedLight = max(vertexColor * mat.baseColorFactor.rgb, float3(1e-4, 1e-4, 1e-4));
         const float3 shadeLight = min(bakedLight, ambientColor);
         const float bakedVisibility = lerp(1.0f, sunVisibility, fc->shadowParams.z);
-        finalColor = baseColor.rgb * lerp(shadeLight / bakedLight, float3(1.0, 1.0, 1.0), bakedVisibility) + emissive;
+        finalColor = baseColor.rgb * lerp(shadeLight / bakedLight, float3(1.0, 1.0, 1.0), bakedVisibility) * BlobShadowVisibility(fc, input.worldPos, foliage ? 1.0f : saturate(Ngeom.y * 2.0f)) + emissive;
     }
     else if ((mat.flags & kFlagObjectLit) != 0u)
     {

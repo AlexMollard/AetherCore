@@ -1,6 +1,12 @@
 #include "rendering/WorldRenderer.hpp"
 
 #include <algorithm>
+#include <limits>
+#include <unordered_map>
+
+#include "material/GpuMaterial.hpp"
+#include "material/MaterialRegistry.hpp"
+#include "rendering/FrameConstants.hpp"
 
 #include "physics/PhysicsComponents.hpp"
 #include "rendering/GpuContracts.hpp"
@@ -132,6 +138,72 @@ namespace aether
 			        .blended = pipelineComp.blended,
 			        .viewDepthSq = glm::dot(glm::vec3(worldSphere) - eyeWorldPos, glm::vec3(worldSphere) - eyeWorldPos),
 			});
+		}
+	}
+
+	void WorldRenderer::GatherBlobShadows(const World& world, const MaterialRegistry& materials, const glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out)
+	{
+		AE_PROFILE_ZONE();
+		out.clear();
+		// Union of an actor's primitive bounds, as an AABB of their spheres. An actor is one
+		// entity per primitive under a shared root, and one blob must stand for all of them:
+		// a crate's four primitives would otherwise lay four overlapping discs.
+		struct Bounds
+		{
+			glm::vec3 min{std::numeric_limits<float>::max()};
+			glm::vec3 max{std::numeric_limits<float>::lowest()};
+		};
+		std::unordered_map<std::uint32_t, Bounds> actors;
+		auto view = world.GetRegistry().view<const MeshComponent, const MaterialComponent, const TransformComponent>();
+		for (auto enttEntity: view)
+		{
+			const auto& meshComp = view.get<const MeshComponent>(enttEntity);
+			if (!meshComp.mesh || !meshComp.mesh->IsAlive())
+			{
+				continue;
+			}
+			const std::uint32_t flags = materials.GetFlags(view.get<const MaterialComponent>(enttEntity).handle);
+			if ((flags & GpuMaterial::kObjectLit) == 0u || (flags & GpuMaterial::kAlphaBlend) != 0u)
+			{
+				continue;
+			}
+			const Entity entity = World::FromEntt(enttEntity);
+			if (ecs::HasDisabledAncestor(world, entity) || ecs::IsHiddenInEditor(world, entity))
+			{
+				continue;
+			}
+			if (const auto* mr = world.GetRegistry().try_get<MeshRendererComponent>(enttEntity); mr != nullptr && !mr->visible)
+			{
+				continue;
+			}
+			const glm::vec4 sphere = TransformBoundingSphere(meshComp.mesh->GetBoundingSphere(), view.get<const TransformComponent>(enttEntity).localToWorld);
+			const auto* hierarchy = world.GetRegistry().try_get<HierarchyComponent>(enttEntity);
+			const std::uint32_t key = (hierarchy != nullptr && hierarchy->parent.IsValid()) ? hierarchy->parent.id : entity.id;
+			Bounds& b = actors[key];
+			b.min = glm::min(b.min, glm::vec3(sphere) - glm::vec3(sphere.w));
+			b.max = glm::max(b.max, glm::vec3(sphere) + glm::vec3(sphere.w));
+		}
+
+		// The blob covers the inner half of the actor's footprint and fades out past it, which
+		// is the rig's size: a crate's blob just rims its base, Crash's sits under his feet.
+		// ponytail: pickups (wumpa, ~0.25 m bounds) had no blob on the PS2; a size floor stands
+		// in for the per-actor shadow flag the game scripts carry until that is extracted.
+		constexpr float kFootprintFraction = 0.5f;
+		constexpr float kMinBlobRadius = 0.15f;
+		for (const auto& [key, b]: actors)
+		{
+			const float radius = kFootprintFraction * 0.5f * std::max(b.max.x - b.min.x, b.max.z - b.min.z);
+			if (radius < kMinBlobRadius)
+			{
+				continue;
+			}
+			out.emplace_back(0.5f * (b.min.x + b.max.x), b.min.y, 0.5f * (b.min.z + b.max.z), radius);
+		}
+		const auto distSq = [&](const glm::vec4& blob) { return glm::dot(glm::vec3(blob) - eyeWorldPos, glm::vec3(blob) - eyeWorldPos); };
+		if (out.size() > kMaxBlobShadows)
+		{
+			std::nth_element(out.begin(), out.begin() + kMaxBlobShadows, out.end(), [&](const glm::vec4& a, const glm::vec4& b) { return distSq(a) < distSq(b); });
+			out.resize(kMaxBlobShadows);
 		}
 	}
 

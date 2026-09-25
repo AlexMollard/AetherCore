@@ -184,6 +184,9 @@ namespace aether
 		glm::vec4 objectLight0Color{0.0f, 0.0f, 0.0f, 0.0f};
 		glm::vec4 objectLight1Direction{0.0f, 1.0f, 0.0f, 0.0f};
 		glm::vec4 objectLight1Color{0.0f, 0.0f, 0.0f, 0.0f};
+		// Contact blob shadows under object-lit actors, nearest the camera first (xyz = bounds
+		// centre, w = bounds radius). Only the first kMaxBlobShadows reach the GPU.
+		std::vector<glm::vec4> blobShadows;
 		bool contactShadows = false;
 		// 0 splits the cascades evenly across the view distance, 1 logarithmically.
 		float shadowSplitLambda = 0.65f;

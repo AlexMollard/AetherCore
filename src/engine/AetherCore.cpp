@@ -1276,6 +1276,11 @@ namespace aether
 		packet.objectLight0Color = renderer.GetObjectLight0ColorVector();
 		packet.objectLight1Direction = renderer.GetObjectLight1DirectionVector();
 		packet.objectLight1Color = renderer.GetObjectLight1ColorVector();
+		if (!collisionOnly)
+		{
+			const Camera* const blobEye = cameras.TryGetMainCamera();
+			WorldRenderer::GatherBlobShadows(world, assetsSub.GetMaterialRegistry(), blobEye ? blobEye->GetPosition() : glm::vec3(0.0f), packet.blobShadows);
+		}
 		packet.skyHorizonColor = renderer.GetSkyHorizonColorVector();
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();
 		packet.skyVoidColor = renderer.GetSkyVoidColorVector();
