@@ -49,6 +49,12 @@ namespace
 			}
 		}
 
+		// A local character's simulated position wins over the transform every step; ask the
+		// physics flush to move it instead (CharacterControllerComponent::teleportPending).
+		if (auto* cc = w.TryGet<aether::CharacterControllerComponent>(e))
+		{
+			cc->teleportPending = true;
+		}
 		// 2D bodies re-sync the transform from the body every frame, so a
 		// script teleport must move the body too or it silently reverts.
 		if (auto* physics2D = aether::app::scripting::ActiveContext().physics2D)

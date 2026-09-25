@@ -706,7 +706,9 @@ namespace aether
 			cc.groundNormal = live.io.groundNormal;
 			cc.velocity = live.io.velocity;
 
-			if (ecs::HasDisabledAncestor(world, handle))
+			// The script's transform write is the teleport target until FlushPendingCharacters
+			// consumes it, a few lines later in this same Update.
+			if (cc.teleportPending || ecs::HasDisabledAncestor(world, handle))
 			{
 				continue;
 			}
@@ -1240,6 +1242,22 @@ namespace aether
 				io.pendingJumpSpeed = cc.pendingJumpSpeed;
 				cc.pendingJumpSpeed = 0.0f;
 
+				if (cc.teleportPending && cc.locallySimulated)
+				{
+					cc.teleportPending = false;
+					if (const auto* tc = reg.try_get<TransformComponent>(enttEntity))
+					{
+						const glm::vec3 target = ExtractPosition(*tc);
+						live.character->SetPosition(ToJolt(target));
+						live.character->SetLinearVelocity(JPH::Vec3::sZero());
+						if (auto* state = reg.try_get<PhysicsStateComponent>(enttEntity))
+						{
+							state->prevPosition = target;
+							state->currPosition = target;
+						}
+					}
+				}
+
 				if (!cc.locallySimulated)
 				{
 					// Non-owner shadow (see CharacterControllerComponent::locallySimulated):
@@ -1366,12 +1384,17 @@ namespace aether
 			const bool movingTowardsGround = (currentVelocity - groundVelocity).Dot(up) < 0.1f;
 
 			JPH::Vec3 newVelocity;
+			bool standing = false;
 			if (onGround && movingTowardsGround)
 			{
 				newVelocity = groundVelocity;
 				if (io.pendingJumpSpeed > 0.0f)
 				{
 					newVelocity += up * io.pendingJumpSpeed;
+				}
+				else
+				{
+					standing = true;
 				}
 			}
 			else
@@ -1383,7 +1406,19 @@ namespace aether
 			// same as walking into a wall a frame too early does not queue the walk.
 			io.pendingJumpSpeed = 0.0f;
 
-			newVelocity += gravity * dt;
+			if (standing)
+			{
+				// On walkable ground, press into the surface along its normal only. Full gravity
+				// has a component ALONG any slope, which the contact solve leaves alone, so an
+				// idle character crept downhill. OnGround already means "not too steep"; a
+				// steep slope reports OnSteepGround and still slides under full gravity.
+				const JPH::Vec3 groundNormal = character->GetGroundNormal();
+				newVelocity += groundNormal * (gravity.Dot(groundNormal) * dt);
+			}
+			else
+			{
+				newVelocity += gravity * dt;
+			}
 
 			if (io.velocityOverride)
 			{

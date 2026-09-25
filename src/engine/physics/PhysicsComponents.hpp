@@ -302,6 +302,10 @@ namespace aether
 		glm::vec3 desiredVelocity{0.0f, 0.0f, 0.0f};
 		bool velocityOverride = false;
 		float pendingJumpSpeed = 0.0f;
+		// Set when a script writes this entity's transform (a respawn, a checkpoint): the next
+		// flush moves the Jolt character to the transform and stops it, then clears this.
+		// Without it the character's own simulated position overwrites the write next step.
+		bool teleportPending = false;
 
 		// ---- Runtime output (written by StepCharacters, read by script/inspector) ----
 		glm::vec3 velocity{0.0f, 0.0f, 0.0f};

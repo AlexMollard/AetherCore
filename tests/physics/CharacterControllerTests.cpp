@@ -89,6 +89,24 @@ TEST_CASE("Character controller treats a slope under the max angle as walkable g
 	CHECK(fx.ControllerOf(player).isGrounded);
 }
 
+// Grounded, the step used to add the whole gravity vector; its along-slope part survived the
+// contact solve, so an idle character crept downhill forever on any walkable slope.
+TEST_CASE("A character standing idle on a walkable slope stays where it is")
+{
+	CharacterFixture fx;
+	fx.MakeStaticBox({0.0f, 0.0f, 0.0f}, {5.0f, 0.1f, 5.0f}, {20.0f, 0.0f, 0.0f});
+	const aether::Entity player = fx.MakeCharacter({0.0f, 1.5f, 0.0f});
+	fx.StepSeconds(1.0f); // land and settle
+	REQUIRE(fx.ControllerOf(player).isGrounded);
+	const glm::vec3 settled = fx.FeetPositionOf(player);
+
+	fx.StepSeconds(3.0f);
+
+	const glm::vec3 later = fx.FeetPositionOf(player);
+	CHECK(glm::length(later - settled) < 0.01f);
+	CHECK(fx.ControllerOf(player).isGrounded);
+}
+
 TEST_CASE("Character controller treats a slope over the max angle as too steep to stand on")
 {
 	CharacterFixture fx;
@@ -170,6 +188,30 @@ TEST_CASE("Character controller ground state transitions from grounded to airbor
 	fx.StepSeconds(0.1f);
 
 	CHECK_FALSE(fx.ControllerOf(player).isGrounded);
+}
+
+// A respawn writes the transform and raises teleportPending (WorldExports.cpp's
+// TeleportBodyToTransform). Without the flush consuming it, the next step writes the
+// character's own simulated position straight back over the respawn.
+TEST_CASE("A teleport request moves a simulated character to its transform and stops it")
+{
+	CharacterFixture fx;
+	fx.MakeStaticBox({0.0f, -0.5f, 0.0f}, {5.0f, 0.5f, 5.0f});
+	const aether::Entity player = fx.MakeCharacter({0.0f, 3.0f, 0.0f});
+	fx.StepSeconds(0.5f); // falling at several m/s
+	REQUIRE(fx.ControllerOf(player).velocity.y < -2.0f);
+
+	fx.world.Get<aether::TransformComponent>(player).localToWorld = aether::ComposeTransform({20.0f, 10.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f});
+	fx.ControllerOf(player).teleportPending = true;
+	// Two updates: controller outputs are synced at the start of the update after a step.
+	fx.StepSeconds(2.0f * aether::PhysicsSystem::kFixedTimestep);
+
+	const glm::vec3 feet = fx.FeetPositionOf(player);
+	CHECK(feet.x == doctest::Approx(20.0f).epsilon(0.001));
+	// Restarted from rest: a couple of substeps of gravity, not the fall speed it had before.
+	CHECK(feet.y > 9.95f);
+	CHECK(fx.ControllerOf(player).velocity.y > -1.0f);
+	CHECK_FALSE(fx.ControllerOf(player).teleportPending);
 }
 
 // Proves the Jolt inner rigid body (CharacterVirtualSettings::mInnerBodyShape, see
