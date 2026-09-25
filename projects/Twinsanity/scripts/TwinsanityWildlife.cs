@@ -238,7 +238,12 @@ public sealed partial class TwinsanityActors
 				PlayClip(a, c.FlyClip);
 				break;
 			case Behaviour.Chicken:
+				// OGI slots (clip motion, logs/chickenpush): a001 stand, a007 peck (neck bobs, legs still),
+				// a002 walk, a008 flee (fast legs, flapping wings); COM_GLOBAL_CHICKEN_HIT plays a010.
 				c.WalkClip = Animation.Find(e, "a002");
+				c.PickClip = Animation.Find(e, "a007");
+				c.FlyClip = Animation.Find(e, "a008");
+				a.DeathClip = Animation.Find(e, "a010");
 				c.Mode = Mode.Idle;
 				c.Timer = RandomRange(1.0f, 10.0f);
 				break;
@@ -717,13 +722,20 @@ public sealed partial class TwinsanityActors
 				return;
 			}
 			Vector3 away = d > 0.001f ? new Vector3(p.X - crashPos.X, 0.0f, p.Z - crashPos.Z) / d : Vector3.UnitZ;
-			PlayClip(a, c.WalkClip);
+			PlayClip(a, c.FlyClip >= 0 ? c.FlyClip : c.WalkClip);
 			WalkTo(a, p + away * 2.0f, ChickenFlee, dt, true);
 			return;
 		}
 		if (c.Mode == Mode.Idle)
 		{
-			PlayClip(a, a.IdleClip);
+			// Rig: idle chickens peck most of the time, with short stands between bouts.
+			c.Timer2 -= dt;
+			if (c.Timer2 <= 0.0f)
+			{
+				c.RestClip = c.RestClip == c.PickClip ? a.IdleClip : c.PickClip;
+				c.Timer2 = c.RestClip == c.PickClip ? RandomRange(1.5f, 4.0f) : RandomRange(0.8f, 2.0f);
+			}
+			PlayClip(a, c.RestClip >= 0 ? c.RestClip : a.IdleClip);
 			c.Timer -= dt;
 			if (c.Timer <= 0.0f)
 			{
