@@ -86,16 +86,35 @@ namespace aether
 			p.lifetime = std::max(0.01f, Range(emitter.rngState, emitter.lifetimeMin, emitter.lifetimeMax));
 			if (emitter.space == ParticleSpace::Billboard3D)
 			{
-				p.position3D = origin3D + glm::vec3{
-				                        Range(emitter.rngState, -emitter.spawnJitter.x, emitter.spawnJitter.x),
-				                        Range(emitter.rngState, -emitter.spawnJitter.y, emitter.spawnJitter.y),
-				                        Range(emitter.rngState, -emitter.spawnJitter.z, emitter.spawnJitter.z),
-				};
-				p.velocity3D = emitter.velocity3D + glm::vec3{
-				                       Range(emitter.rngState, -emitter.velocityJitter.x, emitter.velocityJitter.x),
-				                       Range(emitter.rngState, -emitter.velocityJitter.y, emitter.velocityJitter.y),
-				                       Range(emitter.rngState, -emitter.velocityJitter.z, emitter.velocityJitter.z),
-				};
+				if (emitter.emitShape == ParticleEmitShape::Box)
+				{
+					p.position3D = origin3D + glm::vec3{
+					                        Range(emitter.rngState, -emitter.spawnJitter.x, emitter.spawnJitter.x),
+					                        Range(emitter.rngState, -emitter.spawnJitter.y, emitter.spawnJitter.y),
+					                        Range(emitter.rngState, -emitter.spawnJitter.z, emitter.spawnJitter.z),
+					};
+					p.velocity3D = emitter.velocity3D + glm::vec3{
+					                       Range(emitter.rngState, -emitter.velocityJitter.x, emitter.velocityJitter.x),
+					                       Range(emitter.rngState, -emitter.velocityJitter.y, emitter.velocityJitter.y),
+					                       Range(emitter.rngState, -emitter.velocityJitter.z, emitter.velocityJitter.z),
+					};
+				}
+				else
+				{
+					// Disc GenSort Radial/ImprovedRadial: base (radius, yaw, polar) in spawnJitter,
+					// +/- random ranges in velocityJitter; the particle flies out along its radius.
+					const glm::vec3& base = emitter.spawnJitter;
+					const glm::vec3& rnd = emitter.velocityJitter;
+					const float radius = std::max(0.0f, base.x + Range(emitter.rngState, -rnd.x, rnd.x));
+					const float yaw = glm::radians(base.y + Range(emitter.rngState, -rnd.y, rnd.y));
+					const float polar = glm::radians(base.z + Range(emitter.rngState, -rnd.z, rnd.z));
+					const bool improved = emitter.emitShape == ParticleEmitShape::ImprovedRadial;
+					const float up = improved ? std::sin(polar) : -std::cos(polar);
+					const float flat = improved ? std::cos(polar) : std::abs(std::sin(polar));
+					const glm::vec3 dir{flat * std::cos(yaw), up, flat * std::sin(yaw)};
+					p.position3D = origin3D + dir * radius;
+					p.velocity3D = emitter.velocity3D + dir * emitter.radialSpeed;
+				}
 				p.sizeJitter = 1.0f;
 				p.rotationOffsetDeg = Range(emitter.rngState, -emitter.rotationJitterDeg, emitter.rotationJitterDeg);
 			}

@@ -228,6 +228,59 @@ TEST_CASE("billboard particles spawn inside the jitter box and fall under gravit
 	CHECK(frame.billboards[0].entityId == e.id);
 }
 
+TEST_CASE("radial shapes spawn on the disc's sphere and fly out along the radius")
+{
+	FakeTextureSink sink;
+	TextureRegistry textures(sink);
+	textures.InitializeDefault("fallback.png");
+	ParticleSystem particles(textures);
+
+	World world;
+	const Entity e = world.Create();
+	world.Emplace<TransformComponent>(e, TransformComponent{});
+	ParticleEmitterComponent cfg = BurstEmitter(32, 1.0f);
+	cfg.space = ParticleSpace::Billboard3D;
+	cfg.gravity3D = glm::vec3{0.0f};
+	cfg.emitShape = ParticleEmitShape::Radial;
+	// CRASH_DROP2-style ring: radius 1.5, full circle of yaw, polar -90 (horizontal).
+	cfg.spawnJitter = glm::vec3{1.5f, 180.0f, -90.0f};
+	cfg.velocityJitter = glm::vec3{0.0f, 180.0f, 0.0f};
+	cfg.radialSpeed = 4.0f;
+	world.Emplace<ParticleEmitterComponent>(e, cfg);
+
+	particles.Update(world, 0.0f);
+	auto& emitter = world.Get<ParticleEmitterComponent>(e);
+	particles.Update(world, 0.001f);
+	REQUIRE(emitter.particles.size() == 32);
+	bool sawNegX = false, sawPosX = false;
+	for (const Particle& p: emitter.particles)
+	{
+		CHECK(std::abs(p.position3D.y) < 0.01f);                           // a flat ring, not a ball
+		CHECK(glm::length(p.position3D) == doctest::Approx(1.5f).epsilon(0.01f)); // on the base radius
+		CHECK(glm::length(p.velocity3D) == doctest::Approx(4.0f).epsilon(0.001f));
+		CHECK(glm::dot(glm::normalize(p.position3D), glm::normalize(p.velocity3D)) == doctest::Approx(1.0f).epsilon(0.001f)); // outward
+		sawNegX = sawNegX || p.position3D.x < -0.5f;
+		sawPosX = sawPosX || p.position3D.x > 0.5f;
+	}
+	CHECK((sawNegX && sawPosX)); // +/-180 of yaw covers the whole circle
+
+	// Radial polar -180 is straight up; ImprovedRadial measures elevation, so 90 is up.
+	emitter.particles.clear();
+	emitter.spawnJitter = glm::vec3{0.0f, 0.0f, -180.0f};
+	emitter.velocityJitter = glm::vec3{0.0f};
+	emitter.pendingBurst = 1;
+	particles.Update(world, 0.001f);
+	REQUIRE(emitter.particles.size() == 1);
+	CHECK(emitter.particles[0].velocity3D.y == doctest::Approx(4.0f).epsilon(0.001f));
+	emitter.particles.clear();
+	emitter.emitShape = ParticleEmitShape::ImprovedRadial;
+	emitter.spawnJitter = glm::vec3{0.0f, 0.0f, 90.0f};
+	emitter.pendingBurst = 1;
+	particles.Update(world, 0.001f);
+	REQUIRE(emitter.particles.size() == 1);
+	CHECK(emitter.particles[0].velocity3D.y == doctest::Approx(4.0f).epsilon(0.001f));
+}
+
 TEST_CASE("emit_duration stops the rate stream but lets live particles finish")
 {
 	FakeTextureSink sink;

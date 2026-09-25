@@ -33,6 +33,21 @@ namespace aether
 		Billboard3D,
 	};
 
+	// How a Billboard3D emitter picks spawn points and launch velocities. Box is the axis
+	// jitter below. Radial/ImprovedRadial are Twinsanity's ParticleData GenSort 6 / 11: the
+	// particle starts on a sphere around the emitter and flies outward along its radius.
+	// In those modes spawnJitter holds the base (radius, yawDeg, polarDeg) and velocityJitter
+	// the +/- random range of the same three, exactly as the disc reuses Random_Start and
+	// Random_Emit. Radial measures the polar angle from straight down, negative towards up
+	// (-180 = up, -90 = horizontal, 0 = down); ImprovedRadial measures it as elevation above
+	// the horizontal (0 = horizontal, 90 = up).
+	enum class ParticleEmitShape : std::uint8_t
+	{
+		Box = 0,
+		Radial,
+		ImprovedRadial,
+	};
+
 	// Piecewise-linear key over normalised particle age (t in 0..1). Keys are read in order
 	// and the list ends at the first key whose t reaches 1, or where t goes backwards; a run of
 	// keys at the same t is a jump (the later one wins going forward).
@@ -100,6 +115,8 @@ namespace aether
 		glm::vec3 gravity3D{0.0f, -9.81f, 0.0f};
 		glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f}; // (u0, v0, u1, v1) in the texture, v down
 		float rotationJitterDeg = 0.0f;          // random start angle, +/- this
+		ParticleEmitShape emitShape = ParticleEmitShape::Box;
+		float radialSpeed = 0.0f;                // outward launch speed along the radius (Radial shapes)
 		// Over-lifetime keys. Empty = fall back to start/end colour and size (and no spin).
 		// size is the quad edge in world units; rotation is in degrees.
 		std::vector<ParticleColorKey> colorKeys;

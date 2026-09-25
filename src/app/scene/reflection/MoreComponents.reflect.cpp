@@ -53,6 +53,16 @@ namespace
 		return table;
 	}
 
+	const reflect::EnumTable& ParticleEmitShapeEnum()
+	{
+		static const reflect::EnumTable table{{
+		        {"box", static_cast<int>(ParticleEmitShape::Box)},
+		        {"radial", static_cast<int>(ParticleEmitShape::Radial)},
+		        {"improved_radial", static_cast<int>(ParticleEmitShape::ImprovedRadial)},
+		}};
+		return table;
+	}
+
 	const reflect::EnumTable& UiScaleModeEnum()
 	{
 		static const reflect::EnumTable table{{
@@ -188,6 +198,8 @@ AE_FIELD_NT("spawn_jitter", spawnJitter, Vec3, "Random offset of the spawn point
 AE_FIELD_N("gravity_3d", gravity3D, Vec3)
 AE_FIELD_NT("uv_rect", uvRect, Vec4, "(u0, v0, u1, v1) sub-rect of the texture page, v down.")
 AE_FIELD_NT("rotation_jitter", rotationJitterDeg, Float, "Random start angle in degrees, +/- this.")
+AE_FIELD_ENUM("emit_shape", emitShape, ParticleEmitShapeEnum())
+AE_FIELD_NT("radial_speed", radialSpeed, Float, "Radial shapes: outward launch speed. spawn_jitter is then the base (radius, yaw, polar) and velocity_jitter their +/- ranges.")
 b.CustomListField(
         "color_keys",
         {{"t", reflect::FieldType::Float}, {"color", reflect::FieldType::Color3}},
