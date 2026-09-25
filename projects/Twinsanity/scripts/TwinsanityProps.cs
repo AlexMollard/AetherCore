@@ -414,15 +414,26 @@ public sealed partial class TwinsanityActors
 			}
 			else if (s.Flying)
 			{
+				float lastY = s.Feet.Y;
 				s.Velocity.Y -= SledGravity * dt;
 				s.Feet += s.Velocity * dt;
-				float? ground = SledGround(s.Feet);
+				// Cast from last frame's height: at ~50 m/s one frame can carry the feet through the sand.
+				float? ground = SledGround(new Vector3(s.Feet.X, lastY, s.Feet.Z));
 				if (s.Velocity.Y < 0.0f && ground is float g && s.Feet.Y - SledTop + SledBottom <= g)
 				{
 					s.Flying = false;
 					s.Sliding = true;
 					s.Velocity = new Vector3(s.Velocity.X, 0.0f, s.Velocity.Z) * SledLandKeep;
 					s.Feet.Y = g - SledBottom + SledTop;
+				}
+				else if (s.Feet.Y < s.Start.Y - 40.0f)
+				{
+					// No ground under the flight (collision missing): hand Crash back rather than
+					// carry him down forever.
+					e.Destroy();
+					_player.RideFeet = null;
+					s.Shot.Actor.Alive = false;
+					continue;
 				}
 			}
 			else if (s.Velocity.LengthSquared() > 0.0f)
@@ -454,11 +465,25 @@ public sealed partial class TwinsanityActors
 		_sleds.RemoveAll(s => !s.Shot.Actor.Alive);
 	}
 
-	// Static ground under the sledge, cast from just under Crash's feet so it cannot hit him.
-	private static float? SledGround(Vector3 feet)
+	// Static ground under the sledge, cast from 2 m above the feet (a slope rising under a fast board
+	// would otherwise put the start under the sand), passing through Crash's own capsule.
+	private float? SledGround(Vector3 feet)
 	{
-		RaycastHit hit = Physics.Raycast(feet - new Vector3(0.0f, SledTop - 0.1f, 0.0f), -Vector3.UnitY, 30.0f);
-		return hit.DidHit ? hit.Position.Y : null;
+		Vector3 from = feet + new Vector3(0.0f, 2.0f, 0.0f);
+		for (int i = 0; i < 3; i++)
+		{
+			RaycastHit hit = Physics.Raycast(from, -Vector3.UnitY, 32.0f);
+			if (!hit.DidHit)
+			{
+				return null;
+			}
+			if (_player == null || hit.Entity != _player.Self)
+			{
+				return hit.Position.Y;
+			}
+			from = hit.Position - new Vector3(0.0f, 0.02f, 0.0f);
+		}
+		return null;
 	}
 
 	private void UpdateOneShots(float dt, Vector3 crashPos)

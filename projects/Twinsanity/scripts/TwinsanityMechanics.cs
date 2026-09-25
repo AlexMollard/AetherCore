@@ -75,6 +75,8 @@ public sealed partial class TwinsanityActors
 		public float VelocityY;      // while airborne
 		public bool Airborne;
 		public float LaunchFloor;    // ground height it was launched from
+		public bool Pivots;          // turns about its origin instead of sliding (the cannon)
+		public List<Entity> Hulls = new(); // collision that turns with a pivoting object
 	}
 
 	private readonly List<Pushable> _pushables = new();
@@ -100,6 +102,12 @@ public sealed partial class TwinsanityActors
 	private const float SlideLaunchPop = 0.28f;
 	private float _spinClock = -1.0f;            // time since the current spin started; -1 = none
 	private bool _spinLaunched, _slideLaunched;
+	// The cannon (rig, logs/traversal/cannon_push2.csv: its world matrix in EE RAM at 0xC4B180 while
+	// Crash pushes it): its origin never moves - a push turns it about its origin, at up to ~15-30
+	// deg/s with Crash working 1.5-2 m out, the way his push would turn a pivoted body (yaw rate =
+	// PivotRate * (his push direction x his offset from the pivot)). ponytail: the rate is fitted
+	// to one capture and the contact is taken as his push line, not the hull's face normal.
+	private const float PivotRate = 11.0f; // deg/s per metre of lever
 
 	// Per family: collision radius (model extent - with our 0.4 capsule it reproduces the rig's
 	// 1.0-1.1 m contact distance), centre height above ground (the script's SetLogicalRadius),
@@ -111,7 +119,9 @@ public sealed partial class TwinsanityActors
 		// rig's live centres (ball 0.594, rock 0.28).
 		"act_beach_ball" => (0.67f, 0.594f, true, 80.0f, 0.87f),
 		"act_monkey_rock" => (0.45f, 0.28f, true, 80.0f, 0.87f),
-		"act_rigid_cannon" => (1.4f, 1.3f, false, 80.0f, 0.0f),
+		// The cannon's radius is only its push-contact reach (it collides with its hulls): the body box
+		// is 1.5 m half-wide, so Crash's centre touches it ~1.9 m out.
+		"act_rigid_cannon" => (1.8f, 1.3f, false, 80.0f, 0.0f),
 		_ => null,
 	};
 
@@ -142,8 +152,28 @@ public sealed partial class TwinsanityActors
 		body.Name = objectName + " Body";
 		body.AddTransform();
 		body.Position = center;
-		Physics.AddSphereBody(body, radius, dynamic: false);
-		Physics.SetMotionType(body, PhysicsMotionType.Kinematic);
+		var hulls = new List<Entity>();
+		if (key == "act_rigid_cannon")
+		{
+			// The cannon turns in place, so it collides with its own disc hulls (the body box with
+			// the button on top at +2.79, the barrel and the trail), turned with it, not a sphere.
+			string? text = Assets.ReadText(model.Substring(0, model.Length - ".gltf".Length) + ".hulls.json");
+			if (text != null)
+			{
+				using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(text);
+				foreach (System.Text.Json.JsonElement row in doc.RootElement.GetProperty("hulls").EnumerateArray())
+				{
+					Entity h = HullBody(e, row.GetProperty("rest").GetString()!);
+					Physics.SetMotionType(h, PhysicsMotionType.Kinematic);
+					hulls.Add(h);
+				}
+			}
+		}
+		if (hulls.Count == 0)
+		{
+			Physics.AddSphereBody(body, radius, dynamic: false);
+			Physics.SetMotionType(body, PhysicsMotionType.Kinematic);
+		}
 
 		_pushables.Add(new Pushable
 		{
@@ -158,6 +188,8 @@ public sealed partial class TwinsanityActors
 			Damping = damping,
 			FreeDamping = damping,
 			Base = Quaternion.CreateFromYawPitchRoll(eulerDegrees.Y * MathF.PI / 180.0f, eulerDegrees.X * MathF.PI / 180.0f, eulerDegrees.Z * MathF.PI / 180.0f),
+			Pivots = key == "act_rigid_cannon",
+			Hulls = hulls,
 		});
 		return true;
 	}
@@ -197,7 +229,21 @@ public sealed partial class TwinsanityActors
 			if (contact && player.IsGrounded && speed > 0.5f)
 			{
 				Vector3 n = toObj / dist;
-				if (Vector3.Dot(flatVel, n) > speed * 0.5f)
+				// Standing on its trail plate (feet ~1.2 up) he rides it rather than turning it.
+				if (p.Pivots && Vector3.Dot(flatVel, n) > 0.0f && feet.Y < p.Center.Y - 0.8f)
+				{
+					// Moving the contact point along his push direction turns it (yaw = atan2(x, z)).
+					Vector3 dir = flatVel / speed;
+					Vector3 r = -toObj;
+					float yawRate = PivotRate * (dir.X * r.Z - dir.Z * r.X);
+					p.Model.EulerDegrees = p.Model.EulerDegrees with { Y = p.Model.EulerDegrees.Y + yawRate * dt };
+					foreach (Entity h in p.Hulls)
+					{
+						h.EulerDegrees = p.Model.EulerDegrees;
+					}
+					pushing = true;
+				}
+				else if (!p.Pivots && Vector3.Dot(flatVel, n) > speed * 0.5f)
 				{
 					// The rig keeps the pushed object dead ahead of him, at his speed: drive it at the
 					// point his line meets contact distance (servo, closed at CenteringRate). The
