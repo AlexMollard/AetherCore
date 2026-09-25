@@ -240,7 +240,13 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
 
     // ── Occlusion ─────────────────────────────────────────────────────────
     const float materialAo = MaterialOcclusion(mat, uv);
-    const float gtaoVisibility = GtaoVisibility(fc, input.svPosition.xy);
+    // Alpha-tested and blended surfaces are not in the depth prepass GTAO is built from, so
+    // its value at their pixels belongs to whatever stands behind them. Object-lit models
+    // read GTAO ~0 across whole faces (a nitro crate's front went from 0.23 to 0.02 with GTAO
+    // on), so they keep their blob and sun shadows instead. ponytail: the object models'
+    // prepass normals are the suspect; until they are checked, GTAO is scenery-only.
+    const bool gtaoReceiver = (mat.flags & (kFlagAlphaMask | kFlagAlphaBlend | kFlagObjectLit)) == 0u;
+    const float gtaoVisibility = gtaoReceiver ? GtaoVisibility(fc, input.svPosition.xy) : 1.0f;
     float ao = saturate(materialAo * gtaoVisibility);
 
     // ── Emissive ──────────────────────────────────────────────────────────
@@ -350,8 +356,21 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         // PS2's 0x80 = 1.0 range), so the two together are the vertex colour in lighting units.
         const float3 bakedLight = max(vertexColor * mat.baseColorFactor.rgb, float3(1e-4, 1e-4, 1e-4));
         const float3 shadeLight = min(bakedLight, ambientColor);
-        const float bakedVisibility = lerp(1.0f, sunVisibility, fc->shadowParams.z);
-        finalColor = baseColor.rgb * lerp(shadeLight / bakedLight, float3(1.0, 1.0, 1.0), bakedVisibility) * BlobShadowVisibility(fc, input.worldPos, foliage ? 1.0f : saturate(Ngeom.y * 2.0f)) + emissive;
+        // A surface turned away from the sun cannot be sun-lit, and the cascade lookup
+        // answers "unshadowed" for it (it early-outs on NdotL <= 0, because the PBR path's
+        // own NdotL already zeroes such faces). The bake has no NdotL, so without this the
+        // sand-fade wedges at the cliff base - facing the camera, away from the sun - stayed
+        // at full baked brightness inside the cliff's shadow. Foliage cards face every way
+        // and keep their own opt-out. ponytail: the 0.1 terminator band is a smoothing
+        // width, not measured - the PS2 had no real-time terminator to compare against.
+        const float facing = foliage ? 1.0f : smoothstep(0.0f, 0.1f, dot(Ngeom, L));
+        const float bakedVisibility = lerp(1.0f, sunVisibility * facing, fc->shadowParams.z);
+        // Split the bake into the part the sun gave (bakedLight - shadeLight) and the part it
+        // did not (shadeLight, the level's ambient). Shadows take away the first; ambient
+        // occlusion only the second, so creases and contact areas darken in the ground's own
+        // hue while sunlit open ground - where GTAO reads 1 - keeps its exact bake colour.
+        const float3 bakedLit = shadeLight * ambientAo + (bakedLight - shadeLight) * bakedVisibility;
+        finalColor = baseColor.rgb * (bakedLit / bakedLight) * BlobShadowVisibility(fc, input.worldPos, foliage ? 1.0f : saturate(Ngeom.y * 2.0f)) + emissive;
     }
     else if ((mat.flags & kFlagObjectLit) != 0u)
     {
@@ -372,7 +391,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
             ? (foliage ? min(shadow, CloudSunVisibility(input.worldPos, L, fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime)) : sunVisibility)
             : 1.0f;
         const float keyVisibility = lerp(1.0f, objectVisibility, fc->shadowParams.z);
-        const float3 lit = fc->objectAmbient.rgb
+        const float3 lit = fc->objectAmbient.rgb * ambientAo
             + fc->objectLight0Color.rgb * (saturate(dot(Ngeom, fc->objectLight0Direction.xyz)) * keyVisibility)
             + fc->objectLight1Color.rgb * saturate(dot(Ngeom, fc->objectLight1Direction.xyz));
         finalColor = baseColor.rgb * pow(max(lit, float3(0.0, 0.0, 0.0)), 2.2) + emissive;

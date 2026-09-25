@@ -11,12 +11,8 @@ asynccompute = true
 autoexposure = false
 bloomstrength = 0.00
 fxaa = false
-# -0.5 gave the best detail-per-contrast on rig-matched grass frames (logs/lighting-pass3:
-# p3e-b0/-0.5/-1 vs orig-grass). The PS2 picked mips from a fixed per-draw LOD rather than
-# screen derivatives, so a small negative bias approximates it; ponytail: -0.5 is the best of
-# three measured values, not a fit to the PS2's actual LOD formula.
-mipLodBias = -0.5
-gtao = false
+gtao = true
+miplodbias = -0.5
 tonemap = "Linear"
 vsync = true
 
