@@ -64,6 +64,15 @@ public static unsafe class Animation
         => Native.aether_anim_crossfade(entity.Id, clipIndex, seconds);
 
     /// <summary>
+    /// Layer <paramref name="clipIndex"/> at full weight over the clip playing now: the layer
+    /// overwrites exactly the nodes it animates and the base clip keeps posing the rest. Intended
+    /// for partial clips (a clip that animates only a few joints). A negative index clears the
+    /// layer. A later CrossFade/SetClip also clears it.
+    /// </summary>
+    public static void SetLayerClip(Entity entity, int clipIndex)
+        => Native.aether_anim_set_layer_clip(entity.Id, clipIndex);
+
+    /// <summary>
     /// NOT IMPLEMENTED. Pose sampling runs on the GPU and nothing reads the hips back, so no
     /// delta is ever accumulated: this flag gates nothing and <see cref="GetRootMotionDelta"/>
     /// always returns zero. Move a character from script instead.

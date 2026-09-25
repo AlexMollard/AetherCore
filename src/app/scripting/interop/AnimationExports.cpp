@@ -548,6 +548,35 @@ AE_SCRIPT_API void aether_anim_crossfade(std::uint32_t id, std::int32_t clipInde
 	});
 }
 
+AE_SCRIPT_API void aether_anim_set_layer_clip(std::uint32_t id, std::int32_t clipIndex)
+{
+	SafeExport([&] -> void
+	{
+	auto& w = ActiveWorld();
+	const auto layer = [clipIndex](aether::SkinnedMeshComponent& smc)
+	{
+		if (clipIndex < 0)
+		{
+			smc.fadeWeight = 0.f;
+			return;
+		}
+		// A partial clip (e.g. Crash's root-only spin) layered at full weight over the playing
+		// clip: the sample shader overwrites exactly the nodes the layer animates and keeps the
+		// rest of the playing clip's pose. fadeRate 0 pins the layer until it is cleared.
+		smc.fadeClipIndex = static_cast<std::uint32_t>(clipIndex);
+		smc.fadeTime = 0.f;
+		smc.fadeLooping = true;
+		smc.fadeWeight = 1.f;
+		smc.fadeRate = 0.f;
+	};
+	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
+	{
+		layer(*smc);
+	}
+	ForEachSpawnedSmc(w, id, layer);
+	});
+}
+
 AE_SCRIPT_API void aether_anim_set_root_motion_enabled(std::uint32_t id, std::int32_t enabled)
 {
 	SafeExport([&] -> void
