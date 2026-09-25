@@ -156,28 +156,48 @@ namespace aether::assetpipeline
 	{
 		const int dstW = std::max(1, srcW / 2);
 		const int dstH = std::max(1, srcH / 2);
+		// PS2 cut-out textures carry black/garbage RGB in their fully transparent texels. Averaging
+		// RGB unweighted bleeds that black into every mip, so alpha-tested foliage (grass, leaves)
+		// darkens toward black with distance. Weight RGB by alpha instead (premultiplied-style);
+		// alpha itself stays a plain average so coverage still shrinks.
+		const bool hasAlpha = channels == 4;
 		for (int y = 0; y < dstH; ++y)
 		{
 			for (int x = 0; x < dstW; ++x)
 			{
-				for (int c = 0; c < channels; ++c)
+				int sums[4] = {0, 0, 0, 0};
+				int alphaSum = 0;
+				int count = 0;
+				for (int dy = 0; dy < 2; ++dy)
 				{
-					int sum = 0;
-					int count = 0;
-					for (int dy = 0; dy < 2; ++dy)
+					for (int dx = 0; dx < 2; ++dx)
 					{
-						for (int dx = 0; dx < 2; ++dx)
+						const int sx = x * 2 + dx;
+						const int sy = y * 2 + dy;
+						if (sx < srcW && sy < srcH)
 						{
-							const int sx = x * 2 + dx;
-							const int sy = y * 2 + dy;
-							if (sx < srcW && sy < srcH)
+							const uint8_t* px = &src[(sy * srcW + sx) * channels];
+							const int weight = hasAlpha ? px[3] : 255;
+							for (int c = 0; c < channels; ++c)
 							{
-								sum += src[(sy * srcW + sx) * channels + c];
-								++count;
+								sums[c] += px[c] * weight;
 							}
+							alphaSum += hasAlpha ? px[3] : 255;
+							++count;
 						}
 					}
-					dst[(y * dstW + x) * channels + c] = static_cast<uint8_t>(sum / count);
+				}
+				uint8_t* out = &dst[(y * dstW + x) * channels];
+				if (hasAlpha && alphaSum == 0)
+				{
+					out[0] = out[1] = out[2] = 0;
+					out[3] = 0;
+					continue;
+				}
+				for (int c = 0; c < channels; ++c)
+				{
+					const int divisor = (hasAlpha && c < 3) ? alphaSum : count * 255;
+					out[c] = static_cast<uint8_t>((sums[c] + divisor / 2) / divisor);
 				}
 			}
 		}
