@@ -4,9 +4,11 @@
 [environment]
 # Two lighting systems, as in the original.
 # 1. Prelit scenery (baked_lighting materials) shows its PS2 vertex colour as is; real-time
-#    shadows pull it down to `ambient`, the colour the level's own bake gives fully shaded
-#    ground: (62, 61, 124) in GS units (0x80 = 1.0), i.e. (byte/128)^2.2 below. Measured from
-#    beach.gltf COLOR_0, upward-facing opaque scenery (logs/lighting-pass2).
+#    shadows pull it down to `ambient` + sky (the PBR path's fully shaded light), never below
+#    the bake itself. `ambient` alone is the colour the level's bake gives its darkest shaded
+#    ground: (62, 61, 124) in GS units (0x80 = 1.0), i.e. (byte/128)^2.2 below, measured from
+#    beach.gltf COLOR_0, upward-facing opaque scenery (logs/lighting-pass2). As a shadow floor
+#    it read near-black; with the sky it matches the rig's shaded cliff wall (logs/cliff).
 # 2. Crash and other models without a bake are lit at runtime by the beach chunk's own light
 #    records (beach.sm2 SceneryData, logs/lighting-pass2/lights-dump.ps1): ambient grey 1.5,
 #    directional 0 = (3.0, 2.37, 0) towards (0.3816, 0.8192, 0.4281) game space, directional 1 =

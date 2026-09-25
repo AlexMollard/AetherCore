@@ -346,16 +346,22 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     // texture x vertex colour as is. Running the PBR lights over it lit everything twice, the
     // scene's ambient flattening it and the sun's NdotL darkening faces the bake had lit.
     // So the colour stays exactly the original's, and the one thing the PS2 could not do -
-    // real-time shadows - pulls it down towards the scene's ambient, the colour the level's
-    // own bake gives fully shaded ground. Never below it, and never below what the bake
-    // already darkened: ground in baked shade stays as it was instead of shading twice.
+    // real-time shadows - pulls it down towards the scene's ambient: the same floor plus sky
+    // the PBR path below lights a fully shaded surface with. Never below it, and never below
+    // what the bake already darkened: ground in baked shade stays as it was instead of
+    // shading twice.
     float3 finalColor;
     if ((mat.flags & kFlagBakedLighting) != 0u)
     {
         // The material factor carries the part of the vertex colour COLOR_0 cannot (the
         // PS2's 0x80 = 1.0 range), so the two together are the vertex colour in lighting units.
         const float3 bakedLight = max(vertexColor * mat.baseColorFactor.rgb, float3(1e-4, 1e-4, 1e-4));
-        const float3 shadeLight = min(bakedLight, ambientColor);
+        // The floor alone (`ambient`, set to the bake's darkest canopy shade) took every cast
+        // shadow near-black: at the cliff base, game (36, 34), shadowed grass went to 11-17% of
+        // its bake in red and green and the rock walls went dark purple. With the sky added, the
+        // shaded cliff wall renders about (40, 28, 30), against the rig's (44, 28, 32) (logs/cliff).
+        const float3 skyShade = SkyGradient(Ngeom, sunDir, sunColor, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y, 1.0f);
+        const float3 shadeLight = min(bakedLight, ambientColor + skyShade);
         // A surface turned away from the sun cannot be sun-lit, and the cascade lookup
         // answers "unshadowed" for it (it early-outs on NdotL <= 0, because the PBR path's
         // own NdotL already zeroes such faces). The bake has no NdotL, so without this the
