@@ -332,11 +332,21 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         // light records - an ambient plus two directional lights - as the GS applied them
         // to everything that was not prelit scenery. The multiply and its saturate run in
         // gamma space on the PS2, so the result is raised to 2.2 to land in the renderer's
-        // linear pipeline with the same on-screen ratios. Objects receive no real-time
-        // shadows in the original (they drop a blob shadow instead), so sunVisibility is
-        // deliberately not applied.
+        // linear pipeline with the same on-screen ratios. Light 0 is the level's key light and
+        // the sun the shadow maps are cast from, so the same sun visibility the scenery gets
+        // takes it away: without that an object standing in a palm's shadow stayed fully
+        // key-lit and read as full-bright against the shaded ground around it.
+        // ponytail: the PS2 had no real-time shadow here; it swapped per-zone light records
+        // (radius-limited) instead. Shadowing light 0 is the closest per-pixel stand-in until
+        // those zones are extracted.
+        // The foliage opt-out above is for self-shadowing card clumps; on an object it only
+        // marks an alpha-tested part (a crate's banding), which must shade with its crate.
+        const float objectVisibility = ((mat.flags & kFlagNoReceiveShadows) == 0u)
+            ? (foliage ? min(shadow, CloudSunVisibility(input.worldPos, L, fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime)) : sunVisibility)
+            : 1.0f;
+        const float keyVisibility = lerp(1.0f, objectVisibility, fc->shadowParams.z);
         const float3 lit = fc->objectAmbient.rgb
-            + fc->objectLight0Color.rgb * saturate(dot(Ngeom, fc->objectLight0Direction.xyz))
+            + fc->objectLight0Color.rgb * (saturate(dot(Ngeom, fc->objectLight0Direction.xyz)) * keyVisibility)
             + fc->objectLight1Color.rgb * saturate(dot(Ngeom, fc->objectLight1Direction.xyz));
         finalColor = baseColor.rgb * pow(max(lit, float3(0.0, 0.0, 0.0)), 2.2) + emissive;
     }

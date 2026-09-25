@@ -182,7 +182,11 @@ float ComputeDirectionalShadow(FrameConstantsData* fc, float3 worldPos, float3 w
         }
     }
 
-    return shadow;
+    // Fade the last cascade out over its tail rather than cutting to fully lit at the
+    // shadow range; past split2 there is no map, so the step would otherwise show.
+    const float split2 = fc->shadowCascadeSplits.z;
+    const float farFade = smoothstep(split2 * (1.0 - kCascadeBlendFraction), split2, viewDepth);
+    return lerp(shadow, 1.0, farFade);
 }
 
 #endif

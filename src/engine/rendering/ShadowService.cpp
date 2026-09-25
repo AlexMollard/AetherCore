@@ -289,7 +289,11 @@ namespace aether
 				                {
 					                m_bindless->CmdBindGlobalResources(cmd);
 				                }
-				                m_shadowRenderQueue.FlushDraw(cmd, ctx.frameSlot, nullptr, &m_shadowPipeline, cascadeOffset);
+				                // Each cascade draws with its own light view: the prepared frame
+				                // address is cascade 0's (the one handed to PrepareAndDispatch), so
+				                // FlushDraw alone rendered cascade 0's projection into C1/C2 and
+				                // their lookups found no casters where the C1/C2 matrices pointed.
+				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, ctx.frameSlot, nullptr, m_shadowFrameConstants[cascade].GetDeviceAddress(ctx.frameSlot), &m_shadowPipeline, cascadeOffset);
 			                });
 		}
 
