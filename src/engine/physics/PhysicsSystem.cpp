@@ -62,6 +62,7 @@
 
 #include "physics/PhysicsSystem.hpp"
 #include "assets/GltfAsset.hpp"
+#include "io/FileSystem.hpp"
 #include "physics/ColliderMeshSource.hpp"
 #include "physics2d/PhysicsDomainGate.hpp"
 #include "scene/Components.hpp"
@@ -360,7 +361,10 @@ namespace aether
 		std::unique_ptr<JPH::JobSystemThreadPool> jobSystem;
 		std::unique_ptr<JPH::PhysicsSystem> physics;
 		std::unique_ptr<ContactCollector> contactCollector;
-		std::unordered_map<uint64_t, JPH::ShapeRefC> shapeCache;
+		// Cached built shapes (including remembered failures - nullptr) plus the
+		// FileSystem::ContentStamp of the mesh source at build time, so a re-extract /
+		// re-bake invalidates instead of serving a stale collision mesh for the session.
+		std::unordered_map<uint64_t, std::pair<JPH::ShapeRefC, std::uint64_t>> shapeCache;
 
 		JPH::Ref<JPH::GroupFilterTable> groupFilter;
 
@@ -823,7 +827,7 @@ namespace aether
 		return out;
 	}
 
-	static JPH::ShapeRefC GetOrCreateColliderShape(std::unordered_map<uint64_t, JPH::ShapeRefC>& cache, const ColliderComponent& c)
+	static JPH::ShapeRefC GetOrCreateColliderShape(std::unordered_map<uint64_t, std::pair<JPH::ShapeRefC, std::uint64_t>>& cache, const ColliderComponent& c)
 	{
 		uint64_t key = 0;
 		switch (c.shape)
@@ -847,7 +851,11 @@ namespace aether
 				key = MeshSourceKey(c.meshSource, 5);
 				break;
 		}
-		if (const auto it = cache.find(key); it != cache.end())
+		// Mesh-source shapes validate their cache entry against the source file's current
+		// content stamp, so a re-extracted/re-baked mesh rebuilds its shape; the stamp of
+		// primitive shapes is 0 and always matches.
+		const std::uint64_t stamp = (c.shape == PhysicsShapeType::ConvexHull || c.shape == PhysicsShapeType::Mesh) ? io::FileSystem::ContentStamp(c.meshSource) : 0;
+		if (const auto it = cache.find(key); it != cache.end() && it->second.second == stamp)
 		{
 			// A cached nullptr is a REMEMBERED FAILURE, not "not cached yet" - see
 			// every failure path below. Returning it here (instead of falling through
@@ -857,7 +865,7 @@ namespace aether
 			// times a second, forever, for as long as the entity existed - drowning
 			// out every other log line, including the render-mesh load failure for
 			// the SAME broken asset (see PropSpawner.cs's own LoadModel call).
-			return it->second;
+			return it->second.first;
 		}
 
 		JPH::ShapeSettings::ShapeResult result;
@@ -880,7 +888,7 @@ namespace aether
 				const std::optional<MeshSourceGeometry> geo = LoadMeshSourceGeometry(c.meshSource);
 				if (!geo.has_value())
 				{
-					cache.emplace(key, nullptr);
+					cache.emplace(key, std::pair{JPH::ShapeRefC{}, stamp});
 					return nullptr;
 				}
 				result = JPH::ConvexHullShapeSettings{geo->positions}.Create();
@@ -891,13 +899,13 @@ namespace aether
 				const std::optional<MeshSourceGeometry> geo = LoadMeshSourceGeometry(c.meshSource);
 				if (!geo.has_value())
 				{
-					cache.emplace(key, nullptr);
+					cache.emplace(key, std::pair{JPH::ShapeRefC{}, stamp});
 					return nullptr;
 				}
 				if (geo->triangles.empty())
 				{
 					AE_WARN(LogCategory::Engine, "PhysicsSystem: collider mesh_source '{}' produced no triangles (unindexed or fully-degenerate mesh)", c.meshSource);
-					cache.emplace(key, nullptr);
+					cache.emplace(key, std::pair{JPH::ShapeRefC{}, stamp});
 					return nullptr;
 				}
 				result = JPH::MeshShapeSettings{geo->triangleVertices, geo->triangles}.Create();
@@ -907,10 +915,10 @@ namespace aether
 		if (result.HasError())
 		{
 			AE_WARN(LogCategory::Engine, "PhysicsSystem: collider shape error: {}", result.GetError().c_str());
-			cache.emplace(key, nullptr);
+			cache.emplace(key, std::pair{JPH::ShapeRefC{}, stamp});
 			return nullptr;
 		}
-		return cache.emplace(key, result.Get()).first->second;
+		return cache.emplace(key, std::pair{result.Get(), stamp}).first->second.first;
 	}
 
 	// Character capsules are not cached like collider shapes: they change per-entity via

@@ -58,6 +58,10 @@ namespace aether::io
 
 		[[nodiscard]] static Expected<std::vector<std::string>> Glob(std::string_view virtualPattern, const FileGlobOptions& options = {});
 
+		// Opaque content stamp of a virtual file (mtime+size loose, content hash in a pak);
+		// 0 when unknown. Caches key on it so a re-extract/re-bake invalidates.
+		[[nodiscard]] static std::uint64_t ContentStamp(std::string_view virtualPath);
+
 		// file has been read on the background I/O thread.  The calling
 		[[nodiscard]] static coro::task<std::vector<std::byte>> ReadFileAsync(std::string_view virtualPath, IOPriority priority = IOPriority::Normal);
 

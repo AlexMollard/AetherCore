@@ -14,6 +14,7 @@
 #include "mesh/Mesh.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scene/Components.hpp"
+#include "scene/ModelSpawn.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scene/SceneSerializerDetail.hpp"
@@ -62,35 +63,25 @@ namespace aether::app::scene
 			else if (deps.sceneContext != nullptr)
 			{
 				auto& ctx = *deps.sceneContext;
-				if (const auto it = ctx.loadedModelMap.find(c.rec.mesh->path); it != ctx.loadedModelMap.end())
+				if (deps.assets != nullptr)
 				{
-					model = &ctx.loadedModels[it->second];
-				}
-				else if (deps.assets != nullptr)
-				{
-					auto result = deps.assets->LoadModel(c.rec.mesh->path);
-					if (!result && deps.ensureModelBaked)
+					model = LoadCachedModel(*deps.assets, ctx, c.rec.mesh->path);
+					if (model == nullptr && deps.ensureModelBaked)
 					{
 						std::string bakeError;
 						if (deps.ensureModelBaked(c.rec.mesh->path, bakeError))
 						{
 							AE_INFO(LogCategory::App, "Scene load: auto-imported model '{}'", c.rec.mesh->path);
-							result = deps.assets->LoadModel(c.rec.mesh->path);
+							model = LoadCachedModel(*deps.assets, ctx, c.rec.mesh->path);
 						}
 						else
 						{
 							AE_WARN(LogCategory::App, "Scene load: auto-import of model '{}' failed: {}", c.rec.mesh->path, bakeError);
 						}
 					}
-					if (result)
+					if (model == nullptr)
 					{
-						ctx.loadedModels.push_back(std::move(result.value()));
-						ctx.loadedModelMap[c.rec.mesh->path] = ctx.loadedModels.size() - 1;
-						model = &ctx.loadedModels.back();
-					}
-					else
-					{
-						AE_WARN(LogCategory::App, "Scene load: model '{}' failed: {}", c.rec.mesh->path, result.error());
+						AE_WARN(LogCategory::App, "Scene load: model '{}' failed", c.rec.mesh->path);
 					}
 				}
 				if (model != nullptr && c.rec.mesh->primitiveIndex < model->primitives.size())

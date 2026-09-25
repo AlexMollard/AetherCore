@@ -10,6 +10,7 @@
 #include "material/MaterialSystem.hpp"
 #include "material/TextureRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
+#include "scene/ModelSpawn.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
@@ -43,23 +44,10 @@ AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 		xform = tc->localToWorld;
 	}
 
-	aether::LoadedModel* modelPtr = nullptr;
-	if (const auto it = ctx.loadedModelMap.find(path); it != ctx.loadedModelMap.end())
+	aether::LoadedModel* modelPtr = aether::app::scene::LoadCachedModel(*ctx.assets, ctx, path);
+	if (modelPtr == nullptr)
 	{
-		modelPtr = &ctx.loadedModels[it->second];
-	}
-	else
-	{
-		auto result = ctx.assets->LoadModel(path);
-		if (!result)
-		{
-			AE_WARN(aether::LogCategory::App, "load_model: failed to load '{}' because of {}", path, result.error());
-			return;
-		}
-		ctx.loadedModels.push_back(std::move(result.value()));
-		const size_t index = ctx.loadedModels.size() - 1;
-		ctx.loadedModelMap[path] = index;
-		modelPtr = &ctx.loadedModels[index];
+		return;
 	}
 
 	std::string stem = path;
@@ -77,12 +65,24 @@ AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 	}
 	w.EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = stem});
 
+	// Replacing a model: the previous model's generated mesh children (MeshSource
+	// Kind::Model) are destroyed, not just detached. Detaching left them standing in the
+	// world as orphans, so a script swapping a model per frame (an OGI-state crate)
+	// grew the scene by a whole model every frame until play crawled. Deferred through
+	// pendingDestroys like Entity.Destroy, because this runs inside script callbacks.
+	// Other children (script-attached entities) are only detached, as before.
 	if (const auto* h = w.TryGet<aether::HierarchyComponent>(aether::Entity{id}))
 	{
 		const std::vector<aether::Entity> stale = h->children;
 		for (const aether::Entity s: stale)
 		{
 			aether::ecs::DetachFromParent(w, s);
+			const auto* source = w.TryGet<aether::MeshSourceComponent>(s);
+			if (source != nullptr && source->kind == aether::MeshSourceComponent::Kind::Model)
+			{
+				std::erase(ctx.sceneEntities, s);
+				ctx.pendingDestroys.push_back(s);
+			}
 		}
 	}
 

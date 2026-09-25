@@ -7,6 +7,7 @@
 #include "assets/AssetManager.hpp"
 #include "assets/AssetTypes.hpp"
 #include "gpu/GpuEnums.hpp"
+#include "io/FileSystem.hpp"
 #include "material/MaterialSystem.hpp"
 #include "material/MaterialTemplate.hpp"
 #include "material/PipelineCache.hpp"
@@ -18,25 +19,38 @@
 
 namespace aether::app::scene
 {
-	namespace
+	// Shared in-process model cache behind every script/serde model-load path: returns
+	// the LoadedModel for `path`, loading it on first use and RELOADING when the file's
+	// FileSystem::ContentStamp changed (re-extract / re-bake). Superseded entries stay
+	// alive in ctx.loadedModels so live MeshComponent.mesh pointers never dangle.
+	LoadedModel* LoadCachedModel(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
 	{
-		LoadedModel* LoadModelCached(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
+		const std::uint64_t stamp = io::FileSystem::ContentStamp(path);
+		if (const auto it = ctx.loadedModelMap.find(path); it != ctx.loadedModelMap.end())
 		{
-			if (const auto it = ctx.loadedModelMap.find(path); it != ctx.loadedModelMap.end())
+			const auto stampIt = ctx.loadedModelStamps.find(path);
+			if (stampIt != ctx.loadedModelStamps.end() && stampIt->second == stamp)
 			{
 				return &ctx.loadedModels[it->second];
 			}
-			auto result = assets.LoadModel(path);
-			if (!result)
-			{
-				AE_WARN(LogCategory::App, "ModelSpawn: failed to load '{}': {}", path, result.error());
-				return nullptr;
-			}
-			ctx.loadedModels.push_back(std::move(result.value()));
-			ctx.loadedModelMap[path] = ctx.loadedModels.size() - 1;
-			return &ctx.loadedModels.back();
+			// The file changed since this entry was loaded (re-extract / re-bake). The new
+			// content is appended and the stale entry stays alive, so live
+			// MeshComponent.mesh pointers into it never dangle.
 		}
+		auto result = assets.LoadModel(path);
+		if (!result)
+		{
+			AE_WARN(LogCategory::App, "ModelSpawn: failed to load '{}': {}", path, result.error());
+			return nullptr;
+		}
+		ctx.loadedModels.push_back(std::move(result.value()));
+		ctx.loadedModelMap[path] = ctx.loadedModels.size() - 1;
+		ctx.loadedModelStamps[path] = stamp;
+		return &ctx.loadedModels.back();
+	}
 
+	namespace
+	{
 		std::string ModelDisplayName(const std::string& path)
 		{
 			std::string stem = path;
@@ -80,7 +94,7 @@ namespace aether::app::scene
 
 	Entity SpawnModelEntity(World& world, AssetManager& assets, scripting::SceneContext& ctx, const std::string& path, const glm::mat4& localToWorld)
 	{
-		LoadedModel* modelPtr = LoadModelCached(assets, ctx, path);
+		LoadedModel* modelPtr = LoadCachedModel(assets, ctx, path);
 		if (modelPtr == nullptr)
 		{
 			return {};
@@ -122,7 +136,7 @@ namespace aether::app::scene
 			return false;
 		}
 
-		LoadedModel* modelPtr = LoadModelCached(assets, ctx, path);
+		LoadedModel* modelPtr = LoadCachedModel(assets, ctx, path);
 		if (modelPtr == nullptr)
 		{
 			return false;
@@ -187,13 +201,13 @@ namespace aether::app::scene
 
 	int ModelPrimitiveCount(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
 	{
-		const LoadedModel* modelPtr = LoadModelCached(assets, ctx, path);
+		const LoadedModel* modelPtr = LoadCachedModel(assets, ctx, path);
 		return modelPtr != nullptr ? static_cast<int>(modelPtr->primitives.size()) : 0;
 	}
 
 	const Mesh* ResolveModelPrimitiveMesh(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path, int primitiveIndex)
 	{
-		LoadedModel* modelPtr = LoadModelCached(assets, ctx, path);
+		LoadedModel* modelPtr = LoadCachedModel(assets, ctx, path);
 		if (modelPtr == nullptr || primitiveIndex < 0 || static_cast<std::size_t>(primitiveIndex) >= modelPtr->primitives.size())
 		{
 			return nullptr;
@@ -203,7 +217,7 @@ namespace aether::app::scene
 
 	void RegisterModelAssets(AssetDatabase& db, AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
 	{
-		const LoadedModel* modelPtr = LoadModelCached(assets, ctx, path);
+		const LoadedModel* modelPtr = LoadCachedModel(assets, ctx, path);
 		if (modelPtr == nullptr)
 		{
 			return;
@@ -224,7 +238,7 @@ namespace aether::app::scene
 		{
 			return false;
 		}
-		LoadedModel* modelPtr = LoadModelCached(assets, ctx, path);
+		LoadedModel* modelPtr = LoadCachedModel(assets, ctx, path);
 		if (modelPtr == nullptr || primitiveIndex < 0 || static_cast<std::size_t>(primitiveIndex) >= modelPtr->primitives.size())
 		{
 			return false;
@@ -286,6 +300,7 @@ namespace aether::app::scene
 		}
 		ctx.loadedModels.push_back(std::move(result.value()));
 		ctx.loadedModelMap[path] = ctx.loadedModels.size() - 1;
+		ctx.loadedModelStamps[path] = io::FileSystem::ContentStamp(path);
 
 		RegisterModelAssets(db, assets, ctx, path);
 		db.TouchByPath(path);

@@ -3,11 +3,11 @@
 #include <utility>
 
 #include "gpu/CommandList.hpp"
-#include "gpu/OneShotCmd.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/ResourceRegistry.hpp"
+#include "vulkan/TransferManager.hpp"
 #include "vulkan/volk.hpp"
 #include <vk_mem_alloc.h>
 
@@ -19,6 +19,7 @@ namespace aether::gpu
 		VkCommandPool commandPool = VK_NULL_HANDLE;
 		VkQueue queue = VK_NULL_HANDLE;
 		aether::ResourceRegistry* backendRegistry = nullptr;
+		aether::vulkan::TransferManager* transfer = nullptr;
 	};
 
 	UploadContext::~UploadContext()
@@ -41,7 +42,7 @@ namespace aether::gpu
 		return *this;
 	}
 
-	UploadContext UploadContext::Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry)
+	UploadContext UploadContext::Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry, void* transferManager)
 	{
 		AE_PROFILE_ZONE();
 		auto* vkDevice = static_cast<VkDevice>(device);
@@ -65,6 +66,7 @@ namespace aether::gpu
 		impl->commandPool = pool;
 		impl->queue = static_cast<VkQueue>(queue);
 		impl->backendRegistry = static_cast<aether::ResourceRegistry*>(backendRegistry);
+		impl->transfer = static_cast<aether::vulkan::TransferManager*>(transferManager);
 
 		UploadContext ctx;
 		ctx.m_impl = impl;
@@ -97,7 +99,7 @@ namespace aether::gpu
 		}
 
 		const Impl* impl = static_cast<Impl*>(m_impl);
-		AE_ASSERT(impl->backendRegistry != nullptr, "UploadContext: backendRegistry is null.");
+		AE_ASSERT(impl->backendRegistry != nullptr && impl->transfer != nullptr, "UploadContext: backendRegistry or transfer manager is null.");
 
 		const auto* const srcEntry = impl->backendRegistry->Resolve(src);
 		const auto* const dstEntry = impl->backendRegistry->Resolve(dst);
@@ -107,19 +109,16 @@ namespace aether::gpu
 			return;
 		}
 
-		OneShotCmd cmd;
-		if (!cmd.Begin(static_cast<void*>(impl->device), static_cast<void*>(impl->commandPool)))
-		{
-			AE_ERROR(LogCategory::Vulkan, "UploadContext::CopyBuffer: failed to begin OneShotCmd.");
-			return;
-		}
-
-		cmd.CmdList().CopyBuffer(static_cast<void*>(srcEntry->buffer), static_cast<void*>(dstEntry->buffer), 0, 0, size);
-
-		if (!cmd.EndAndSubmit(static_cast<void*>(impl->queue)))
-		{
-			AE_ERROR(LogCategory::Vulkan, "UploadContext::CopyBuffer: failed to submit OneShotCmd.");
-		}
+		// On the TransferManager's queue (a dedicated DMA queue where the hardware has one),
+		// not the graphics queue: a one-shot there queued behind the frame in flight and
+		// cost ~3.7 ms per copy, which made a level's mesh uploads take seconds. The wait
+		// keeps this call blocking so callers can free the staging buffer straight after;
+		// the frame's submission waits on the transfer timeline, which publishes the copy
+		// to rendering (see TransferManager).
+		VkBuffer srcBuffer = srcEntry->buffer;
+		VkBuffer dstBuffer = dstEntry->buffer;
+		const aether::vulkan::TransferManager::Ticket ticket = impl->transfer->Submit([srcBuffer, dstBuffer, size](CommandList& cmdList) { cmdList.CopyBuffer(static_cast<void*>(srcBuffer), static_cast<void*>(dstBuffer), 0, 0, size); });
+		impl->transfer->WaitFor(ticket);
 	}
 
 	void* UploadContext::GetCommandPool() const

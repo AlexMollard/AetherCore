@@ -256,6 +256,18 @@ namespace aether::io
 		return std::make_unique<std::istringstream>(std::move(buf), std::ios::binary);
 	}
 
+	// Content hash + size from the pak index: a re-packed entry with different content
+	// gets a different stamp, identical content keeps the same one.
+	std::uint64_t PakBackend::ContentStamp(std::string_view relativePath) const
+	{
+		const auto it = FindInsensitive(relativePath);
+		if (it == m_index.end())
+		{
+			return 0;
+		}
+		return it->second.hash ^ (it->second.size * 0x9E3779B97F4A7C15ull);
+	}
+
 	Expected<std::vector<std::string>> PakBackend::Glob(std::string_view pattern, const FileGlobOptions& options) const
 	{
 		const auto regexFlags = options.caseSensitive ? std::regex::ECMAScript : std::regex::ECMAScript | std::regex::icase;

@@ -19,7 +19,9 @@ namespace aether::gpu
 		UploadContext(UploadContext&& other) noexcept;
 		UploadContext& operator=(UploadContext&& other) noexcept;
 
-		[[nodiscard]] static UploadContext Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry);
+		// `transferManager` (a vulkan::TransferManager*) carries CopyBuffer; the graphics
+		// queue/pool stay for GetCommandPool's texture uploads.
+		[[nodiscard]] static UploadContext Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry, void* transferManager);
 
 		void Destroy();
 
@@ -28,6 +30,7 @@ namespace aether::gpu
 			return m_impl != nullptr;
 		}
 
+		// Blocking: returns once the copy has completed, so the caller may free `src`.
 		void CopyBuffer(BufferHandle src, BufferHandle dst, DeviceSize size);
 
 		[[nodiscard]] void* GetCommandPool() const;

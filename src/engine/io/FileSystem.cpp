@@ -650,6 +650,20 @@ namespace aether::io
 		return result;
 	}
 
+	// Opaque content stamp of a virtual file (mtime+size loose, content hash in a pak);
+	// 0 when the path is unknown or the mount has no stamp support. Caches key on it so a
+	// re-extract/re-bake invalidates without rereading the file.
+	std::uint64_t FileSystem::ContentStamp(std::string_view virtualPath)
+	{
+		if (s_backend == nullptr)
+		{
+			return 0;
+		}
+		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
+		const auto backend = TryResolveBackend(mountPoint);
+		return backend != nullptr ? backend->ContentStamp(relativePath) : 0;
+	}
+
 	coro::task<std::vector<std::byte>> FileSystem::ReadFileAsync(std::string_view virtualPath, IOPriority priority)
 	{
 		AE_PROFILE_ZONE();

@@ -76,6 +76,9 @@ namespace aether::app::scripting
 		// Loaded model data.  Must outlive the mesh entities that reference it.
 		std::deque<aether::LoadedModel> loadedModels;
 		std::unordered_map<std::string, size_t> loadedModelMap;
+		// FileSystem::ContentStamp captured when each entry above was loaded; a mismatch
+		// (re-extract / re-bake) triggers a reload while unchanged files reuse the asset.
+		std::unordered_map<std::string, std::uint64_t> loadedModelStamps;
 
 		struct CachedMesh
 		{

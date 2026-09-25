@@ -12,6 +12,7 @@ namespace aether
 	class AssetDatabase;
 	class Mesh;
 	class World;
+	struct LoadedModel;
 } // namespace aether
 
 namespace aether::app::scripting
@@ -25,6 +26,12 @@ namespace aether::app::scene
 	Entity SpawnModelEntity(World& world, AssetManager& assets, scripting::SceneContext& ctx, const std::string& path, const glm::mat4& localToWorld);
 
 	// layout. This is the inspector/file-explorer workflow: create an entity, then
+	// Shared in-process model cache behind every script/serde model-load path: returns the
+	// LoadedModel for `path`, loading it on first use and RELOADING when the file's
+	// FileSystem::ContentStamp changed (re-extract / re-bake). Superseded entries stay
+	// alive in ctx.loadedModels so live MeshComponent.mesh pointers never dangle.
+	LoadedModel* LoadCachedModel(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path);
+
 	bool AssignModelToEntity(World& world, AssetManager& assets, scripting::SceneContext& ctx, Entity root, const std::string& path);
 
 	int ModelPrimitiveCount(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path);

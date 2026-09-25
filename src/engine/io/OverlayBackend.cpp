@@ -75,6 +75,18 @@ namespace aether::io
 		AE_UNEXPECTED(AetherError::FileSystem("overlay: not found: " + std::string(relativePath)));
 	}
 
+	std::uint64_t OverlayBackend::ContentStamp(std::string_view relativePath) const
+	{
+		for (const auto& layer: m_layers)
+		{
+			if (layer.backend->Exists(ApplyPrefix(layer.prefix, relativePath)))
+			{
+				return layer.backend->ContentStamp(ApplyPrefix(layer.prefix, relativePath));
+			}
+		}
+		return 0;
+	}
+
 	Expected<std::vector<std::string>> OverlayBackend::Glob(std::string_view pattern, const FileGlobOptions& options) const
 	{
 		std::vector<std::string> merged;

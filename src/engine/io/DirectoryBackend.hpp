@@ -18,6 +18,7 @@ namespace aether::io
 		[[nodiscard]] Expected<std::vector<std::byte>> Read(std::string_view relativePath) const override;
 		[[nodiscard]] Expected<std::unique_ptr<std::istream>> OpenStream(std::string_view relativePath) const override;
 		[[nodiscard]] Expected<std::vector<std::string>> Glob(std::string_view pattern, const FileGlobOptions& options) const override;
+		[[nodiscard]] std::uint64_t ContentStamp(std::string_view relativePath) const override;
 		[[nodiscard]] Expected<void> Write(std::string_view relativePath, std::span<const std::byte> data) const override;
 
 	private:

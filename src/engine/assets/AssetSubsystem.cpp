@@ -32,7 +32,7 @@ namespace aether
 		auto& world = services.Get<World>();
 
 		auto& registry = services.Get<aether::ResourceRegistry>();
-		m_uploadContext = gpu::UploadContext::Create(static_cast<void*>(vk.GetDevice().device), vk.GetGraphicsQueueFamily(), static_cast<void*>(vk.GetGraphicsQueue()), static_cast<void*>(&registry));
+		m_uploadContext = gpu::UploadContext::Create(static_cast<void*>(vk.GetDevice().device), vk.GetGraphicsQueueFamily(), static_cast<void*>(vk.GetGraphicsQueue()), static_cast<void*>(&registry), static_cast<void*>(&vk.GetTransferManager()));
 
 		m_materialBuffer.Initialize();
 		m_effectParamBuffer.Initialize();
