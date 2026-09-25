@@ -233,7 +233,9 @@ namespace aether::app::scene
 	struct EnvironmentRecord
 	{
 		glm::vec3 ambient{0.2f};
-		glm::vec3 sunDirection{0.0f, -1.0f, 0.0f};
+		// Points TOWARDS the sun, like the shader's L: positive y keeps an
+		// [environment] block without an explicit sun_direction in daylight.
+		glm::vec3 sunDirection{0.0f, 1.0f, 0.0f};
 		float sunIntensity = 1.0f;
 		glm::vec3 sunColor{1.0f};
 		glm::vec3 skyHorizon{0.5f};

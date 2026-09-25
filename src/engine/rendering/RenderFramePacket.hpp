@@ -140,7 +140,9 @@ namespace aether
 		// you what a scene actually contains.
 		bool hasSceneDraws = false;
 
-		glm::vec4 sunDirectionIntensity{0.0f, -1.0f, 0.0f, 1.0f};
+		// Towards-sun convention (matches FrameConstants usage); overwritten from the
+		// renderer every frame anyway.
+		glm::vec4 sunDirectionIntensity{0.0f, 1.0f, 0.0f, 1.0f};
 		glm::vec4 ambientColor{0.2f, 0.2f, 0.2f, 1.0f};
 
 		// 2D light-map settings (from Light2DSettingsComponent, else defaults). Decoupled from the shared

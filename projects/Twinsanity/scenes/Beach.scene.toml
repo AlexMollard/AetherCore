@@ -7,7 +7,10 @@ sky_horizon = [ 0.62, 0.74, 0.9 ]
 sky_void = [ 0.3, 0.4, 0.55 ]
 sky_zenith = [ 0.22, 0.42, 0.8 ]
 sun_color = [ 1.0, 0.92, 0.78 ]
-sun_direction = [ -0.35, -0.85, -0.4 ]
+# sun_direction points TOWARDS the sun (engine convention: gltf_mesh feeds it straight in
+# as L, positive y = daytime). Authored flipped for months, which put the sun below the
+# horizon: every upward-facing surface had NdotL <= 0, so the scene ran on ambient alone.
+sun_direction = [ 0.35, 0.85, 0.4 ]
 sun_intensity = 1.5
 
 [scene]
