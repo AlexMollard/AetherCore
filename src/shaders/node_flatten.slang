@@ -72,25 +72,29 @@ void main(uint3 dtid : SV_DispatchThreadID)
     uint nodeIdx = pc.depthSortedNodes.Load(pc.depthOffset + localNodeIdx);
     uint globalNodeIdx = poseBase + nodeIdx;
 
-    // Ragdoll skin-drive seam: overrideCount is 0 for every ordinary animated draw
-    // (the overwhelming common case), so this costs one branch on a field already
-    // loaded above - no extra buffer, no extra dispatch. For a ragdoll-driven mesh
-    // instance, a handful of "driving" bones already have their world pose computed
-    // by the physics ragdoll this frame (see RagdollSkinDrive.hpp); substituting it
-    // here, before this node's normal composition, means every non-driving
-    // descendant (fingers, toes, ...) still inherits it correctly through the
-    // ordinary depth-level walk below - no second pass, no separate compute
-    // dispatch.
+    // Per-node override seam: overrideCount is 0 for every ordinary animated draw (the
+    // overwhelming common case), so this costs one branch on a field already loaded above -
+    // no extra buffer, no extra dispatch. A ragdoll-driven instance substitutes a few
+    // "driving" bones' model-space pose (kind 0, see RagdollSkinDrive.hpp); a script joint
+    // offset (kind 1) turns the node's sampled local transform. Both happen here, before this
+    // node's composition, so every descendant still inherits them through the ordinary
+    // depth-level walk below - no second pass, no separate compute dispatch.
+    float4x4 localOffset = float4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    bool hasLocalOffset = false;
     if (job.overrideCount > 0)
     {
         RagdollOverrideEntry* overrides = job.overrides.Ptr();
         for (uint i = 0; i < job.overrideCount; ++i)
         {
-            if (overrides[i].nodeIndex == nodeIdx)
+            if (overrides[i].nodeIndex != nodeIdx)
+                continue;
+            if (overrides[i].kind == kNodeOverrideGlobal)
             {
                 pc.globalTransforms.Ptr()[globalNodeIdx] = overrides[i].transform;
                 return;
             }
+            localOffset = overrides[i].transform;
+            hasLocalOffset = true;
         }
     }
 
@@ -100,6 +104,8 @@ void main(uint3 dtid : SV_DispatchThreadID)
 
     SampledNodePose p = sampled[globalNodeIdx];
     float4x4 localM = ComposeTrs(p.translation, p.rotation, p.scale);
+    if (hasLocalOffset)
+        localM = mul(localM, localOffset);
 
     int parentIdx = nodeParents[nodeIdx];
     if (parentIdx >= 0)

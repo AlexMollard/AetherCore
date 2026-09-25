@@ -71,10 +71,10 @@ namespace aether
 		std::uint32_t maxDraws = 8192;
 		std::uint32_t maxBatches = 1024;
 		std::uint32_t maxAnimationDraws = UINT32_MAX;
-		// A ragdoll's driving bones only, capped at kRagdollBoneDefs' own size (11) per
-		// instance - this default comfortably covers dozens of simultaneously-ragdolled
-		// characters. Allocated lazily alongside the rest of the animation pools (see
-		// EnsureAnimationBuffers), so a scene with no ragdolls never pays for it.
+		// Per-node overrides: a ragdoll's driving bones, capped at kRagdollBoneDefs' own size
+		// (11) per instance, plus any script joint offsets (a handful per character) - this
+		// default comfortably covers dozens of such characters. Allocated lazily alongside the
+		// rest of the animation pools (see EnsureAnimationBuffers), so a plain scene never pays for it.
 		std::uint32_t maxRagdollOverrides = 2048;
 		std::uint32_t outputDrawCapacity = 0;
 		const char* debugName = "RenderQueue";

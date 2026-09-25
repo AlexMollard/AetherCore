@@ -1,12 +1,15 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <glm/glm.hpp>
 
 #include "rendering/GpuContracts.hpp"
+#include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 
 namespace aether
@@ -31,4 +34,12 @@ namespace aether
 	// RagdollSkinDriveComponent may simply be stale (the ragdoll it named is gone).
 	[[nodiscard]] std::vector<AnimationContracts::RagdollOverrideEntry> BuildRagdollSkinOverrides(
 	        const World& world, Entity ragdollRoot, std::span<const std::string> targetNodeNames, const glm::mat4& meshWorldToModel);
+
+	// The animated node a name refers to: a case-insensitive exact match, else a match on the
+	// node's local name after its last '_'/':' separator (a differently-prefixed export).
+	[[nodiscard]] std::optional<std::uint32_t> FindNodeIndexByName(std::span<const std::string> nodeNames, std::string_view target);
+
+	// Appends one kNodeOverrideLocalRotation entry per script joint offset: the node's local
+	// transform is post-multiplied by the rotation in node_flatten.slang.
+	void AppendJointRotationOverrides(std::span<const JointRotationOffset> offsets, std::vector<AnimationContracts::RagdollOverrideEntry>& out);
 } // namespace aether

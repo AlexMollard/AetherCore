@@ -5,6 +5,7 @@
 #include <optional>
 #include <string_view>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "physics/PhysicsComponents.hpp"
 #include "scene/Components.hpp"
@@ -18,36 +19,44 @@ namespace aether
 		{
 			return std::ranges::equal(a, b, [](unsigned char x, unsigned char y) { return std::tolower(x) == std::tolower(y); });
 		}
+	} // namespace
 
-		// Matches RagdollBuilder.cpp's own node-name resolution: prefer an exact match
-		// on the node's own local name (the part after the last '_'/':' separator),
-		// falling back to a plain case-insensitive substring match. A ragdoll bone's
-		// skinNodeName is the EXACT glTF node name it was measured from at spawn, so an
-		// exact match is the expected common case; the substring fallback only helps a
-		// mesh baked from a differently-prefixed export of the same rig.
-		std::optional<std::uint32_t> FindNodeIndexByName(std::span<const std::string> nodeNames, std::string_view target)
+	// Matches RagdollBuilder.cpp's own node-name resolution: prefer an exact match
+	// on the node's own local name (the part after the last '_'/':' separator),
+	// falling back to a plain case-insensitive substring match. A ragdoll bone's
+	// skinNodeName is the EXACT glTF node name it was measured from at spawn, so an
+	// exact match is the expected common case; the substring fallback only helps a
+	// mesh baked from a differently-prefixed export of the same rig.
+	std::optional<std::uint32_t> FindNodeIndexByName(std::span<const std::string> nodeNames, std::string_view target)
+	{
+		std::optional<std::uint32_t> substringMatch;
+		for (std::size_t i = 0; i < nodeNames.size(); ++i)
 		{
-			std::optional<std::uint32_t> substringMatch;
-			for (std::size_t i = 0; i < nodeNames.size(); ++i)
+			const std::string_view name = nodeNames[i];
+			if (EqualsCI(name, target))
 			{
-				const std::string_view name = nodeNames[i];
-				if (EqualsCI(name, target))
+				return static_cast<std::uint32_t>(i);
+			}
+			if (!substringMatch.has_value())
+			{
+				const std::size_t sep = name.find_last_of("_:");
+				const std::string_view localName = sep == std::string_view::npos ? name : name.substr(sep + 1);
+				if (EqualsCI(localName, target))
 				{
-					return static_cast<std::uint32_t>(i);
-				}
-				if (!substringMatch.has_value())
-				{
-					const std::size_t sep = name.find_last_of("_:");
-					const std::string_view localName = sep == std::string_view::npos ? name : name.substr(sep + 1);
-					if (EqualsCI(localName, target))
-					{
-						substringMatch = static_cast<std::uint32_t>(i);
-					}
+					substringMatch = static_cast<std::uint32_t>(i);
 				}
 			}
-			return substringMatch;
 		}
-	} // namespace
+		return substringMatch;
+	}
+
+	void AppendJointRotationOverrides(std::span<const JointRotationOffset> offsets, std::vector<AnimationContracts::RagdollOverrideEntry>& out)
+	{
+		for (const JointRotationOffset& offset: offsets)
+		{
+			out.push_back({.nodeIndex = offset.node, .kind = AnimationContracts::kNodeOverrideLocalRotation, .transform = glm::mat4_cast(offset.rotation)});
+		}
+	}
 
 	std::vector<AnimationContracts::RagdollOverrideEntry> BuildRagdollSkinOverrides(
 	        const World& world, Entity ragdollRoot, std::span<const std::string> targetNodeNames, const glm::mat4& meshWorldToModel)

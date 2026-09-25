@@ -738,17 +738,20 @@ namespace aether
 						mix(static_cast<std::uint64_t>(dc.skinIndex));
 						mix((static_cast<std::uint64_t>(skinPaletteOffset) << 32) | dc.skinJointCount);
 						mix((static_cast<std::uint64_t>(nodePoseCursor) << 32) | drawNodeCount);
-						// A ragdoll's bones move every physics step, so its override data
-						// must count toward "did the pose change" - otherwise a moving
-						// ragdoll could be mistaken for one that settled, and NodeFlatten's
-						// dispatch below would be skipped while the mesh kept rendering
-						// last frame's pose.
+						// A ragdoll's bones move every physics step, and a script's joint
+						// offsets change as it blends them, so override data must count
+						// toward "did the pose change" - otherwise NodeFlatten's dispatch
+						// below would be skipped while the mesh kept rendering last frame's
+						// pose. Ragdoll entries differ in translation, joint offsets in rotation.
 						for (const AnimationContracts::RagdollOverrideEntry& ov: dc.ragdollOverrides)
 						{
-							mix(static_cast<std::uint64_t>(ov.nodeIndex));
-							mix(std::bit_cast<std::uint32_t>(ov.transform[3].x));
-							mix(std::bit_cast<std::uint32_t>(ov.transform[3].y));
-							mix(std::bit_cast<std::uint32_t>(ov.transform[3].z));
+							mix((static_cast<std::uint64_t>(ov.kind) << 32) | ov.nodeIndex);
+							for (int c = 0; c < 4; ++c)
+							{
+								mix(std::bit_cast<std::uint32_t>(ov.transform[c].x));
+								mix(std::bit_cast<std::uint32_t>(ov.transform[c].y));
+								mix(std::bit_cast<std::uint32_t>(ov.transform[c].z));
+							}
 						}
 
 						++sampleJobsThisFrame;

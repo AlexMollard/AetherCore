@@ -46,14 +46,18 @@ struct GpuClip
     [[vk::offset(20)]] uint padding0;
 };
 
-// One driving bone's current pose, uploaded once a frame for a ragdoll-driven mesh
-// instance. `transform` is already in the mesh's own model space (NOT world space) -
-// node_flatten.slang writes it into globalTransforms verbatim, and every non-driving
-// descendant (fingers, toes, ...) still inherits it through the shader's ordinary
-// recursive walk.
+// One per-node override for a skinned mesh instance (GpuContracts.hpp has the full notes).
+// kind 0: a ragdoll driving bone - `transform` is its model-space pose, written into
+//         globalTransforms verbatim; descendants inherit it through the ordinary walk.
+// kind 1: a script joint offset - `transform` is a rotation post-multiplied onto the node's
+//         sampled local transform.
+static const uint kNodeOverrideGlobal = 0;
+static const uint kNodeOverrideLocalRotation = 1;
+
 struct RagdollOverrideEntry
 {
     [[vk::offset(0)]]  uint    nodeIndex;
+    [[vk::offset(4)]]  uint    kind;
     [[vk::offset(16)]] float4x4 transform;
 };
 

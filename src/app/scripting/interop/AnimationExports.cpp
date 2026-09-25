@@ -2,7 +2,9 @@
 #include "scripting/interop/InteropCommon.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -15,6 +17,7 @@
 #include "animation/AnimationDatabase.hpp"
 #include "assets/GltfAsset.hpp"
 #include "io/FileSystem.hpp"
+#include "rendering/RagdollSkinDrive.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "utils/BinaryReader.hpp"
@@ -574,6 +577,55 @@ AE_SCRIPT_API void aether_anim_set_layer_clip(std::uint32_t id, std::int32_t cli
 		layer(*smc);
 	}
 	ForEachSpawnedSmc(w, id, layer);
+	});
+}
+
+AE_SCRIPT_API void aether_anim_set_joint_offset(std::uint32_t id, const char* jointName, Vec4 rotation)
+{
+	SafeExport([&] -> void
+	{
+	if (jointName == nullptr)
+	{
+		return;
+	}
+	auto& w = ActiveWorld();
+	// Interop Vec4 is xyzw; glm::quat's constructor takes w first.
+	const glm::quat q = glm::normalize(glm::quat(rotation.w, rotation.x, rotation.y, rotation.z));
+	const bool identity = std::abs(q.w) > 0.999999f;
+	const auto apply = [&](aether::SkinnedMeshComponent& smc)
+	{
+		if (smc.animDb == nullptr || !smc.animDb->IsAlive() || !smc.animDb->IsValid())
+		{
+			return;
+		}
+		const std::optional<std::uint32_t> node = aether::FindNodeIndexByName(smc.animDb->GetNodeNames(), jointName);
+		if (!node.has_value())
+		{
+			return;
+		}
+		auto& offsets = smc.jointOffsets;
+		const auto it = std::ranges::find(offsets, *node, &aether::JointRotationOffset::node);
+		if (identity)
+		{
+			if (it != offsets.end())
+			{
+				offsets.erase(it);
+			}
+		}
+		else if (it != offsets.end())
+		{
+			it->rotation = q;
+		}
+		else
+		{
+			offsets.push_back({.node = *node, .rotation = q});
+		}
+	};
+	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
+	{
+		apply(*smc);
+	}
+	ForEachSpawnedSmc(w, id, apply);
 	});
 }
 

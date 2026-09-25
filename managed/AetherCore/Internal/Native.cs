@@ -1298,6 +1298,9 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_anim_set_layer_clip(uint id, int clipIndex);
 
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_anim_set_joint_offset(uint id, string jointName, Vector4 rotation);
+
     [LibraryImport(Lib)]
     internal static partial void aether_anim_set_root_motion_enabled(uint id, int enabled);
 

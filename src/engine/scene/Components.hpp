@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "animation/AnimationDatabase.hpp"
 #include "assets/AssetId.hpp"
@@ -267,6 +268,15 @@ namespace aether
 		std::vector<ScriptEntry> scripts;
 	};
 
+	// A script's local rotation for one animated node, post-multiplied onto the node's sampled
+	// local transform on the GPU (node_flatten.slang), so the joint and its children turn on top
+	// of whatever clip is playing. Set through Animation.SetJointOffset; identity removes it.
+	struct JointRotationOffset
+	{
+		std::uint32_t node = 0;
+		glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+	};
+
 	struct SkinnedMeshComponent
 	{
 		AnimationDatabase* animDb = nullptr;
@@ -285,6 +295,7 @@ namespace aether
 		float fadeRate = 0.f;
 		bool fadeLooping = true;
 		std::vector<assets::GltfAnimation> pendingExternalAnims;
+		std::vector<JointRotationOffset> jointOffsets;
 	};
 
 	struct RootMotionComponent

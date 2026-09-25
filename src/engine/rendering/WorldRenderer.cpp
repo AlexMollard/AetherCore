@@ -80,6 +80,7 @@ namespace aether
 			float fadeTime = 0.f;
 			float fadeWeight = 0.f;
 			const AnimationDatabase* animDb = nullptr;
+			std::span<const JointRotationOffset> jointOffsets;
 			if (const auto* const smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
 			{
 				if (smc->animDb && smc->animDb->IsAlive() && smc->animDb->IsValid())
@@ -92,12 +93,13 @@ namespace aether
 					fadeTime = smc->fadeTime;
 					fadeWeight = smc->fadeWeight;
 					animDb = smc->animDb;
+					jointOffsets = smc->jointOffsets;
 				}
 			}
 
-			// Ragdoll skin-drive seam: RagdollSkinDriveComponent is absent for every
-			// ordinary skinned mesh (the overwhelming common case), so this is one
-			// try_get plus one bool check - the same cost this loop already pays for
+			// Per-node override seam: RagdollSkinDriveComponent is absent and jointOffsets is
+			// empty for every ordinary skinned mesh (the overwhelming common case), so this is
+			// one try_get plus two empty checks - the same cost this loop already pays for
 			// MaterialComponent/EffectParamsComponent above.
 			std::vector<AnimationContracts::RagdollOverrideEntry> ragdollOverrides;
 			if (animDb != nullptr)
@@ -105,6 +107,10 @@ namespace aether
 				if (const auto* const drive = world.GetRegistry().try_get<RagdollSkinDriveComponent>(enttEntity))
 				{
 					ragdollOverrides = BuildRagdollSkinOverrides(world, drive->ragdollRoot, animDb->GetNodeNames(), glm::inverse(transformComp.localToWorld));
+				}
+				if (!jointOffsets.empty())
+				{
+					AppendJointRotationOverrides(jointOffsets, ragdollOverrides);
 				}
 			}
 

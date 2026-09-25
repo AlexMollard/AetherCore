@@ -290,15 +290,21 @@ namespace CullContracts
 		static_assert(offsetof(AnimatorSampleJob, fadeTime) == 68);
 		static_assert(offsetof(AnimatorSampleJob, fadeWeight) == 72);
 
-		// One driving bone's current pose, uploaded once a frame for a ragdoll-driven
-		// mesh instance - see RagdollSkinDrive.hpp. `transform` is already in the
-		// mesh's own model space (NOT world space): node_flatten.slang writes it into
-		// globalTransforms verbatim, and every non-driving descendant (fingers, toes,
-		// ...) still inherits it through the shader's ordinary recursive walk.
+		// One per-node override for a skinned mesh instance, uploaded once a frame. Two kinds:
+		//  - kNodeOverrideGlobal: a ragdoll's driving bone (see RagdollSkinDrive.hpp). `transform`
+		//    is already in the mesh's own model space (NOT world space): node_flatten.slang writes
+		//    it into globalTransforms verbatim, and every non-driving descendant (fingers, toes,
+		//    ...) still inherits it through the shader's ordinary recursive walk.
+		//  - kNodeOverrideLocalRotation: a script's joint offset (Animation.SetJointOffset).
+		//    `transform` is a pure rotation post-multiplied onto the node's sampled local
+		//    transform, so it turns the joint and everything under it on top of the animation.
+		inline constexpr std::uint32_t kNodeOverrideGlobal = 0;
+		inline constexpr std::uint32_t kNodeOverrideLocalRotation = 1;
+
 		struct RagdollOverrideEntry
 		{
 			std::uint32_t nodeIndex = 0;
-			std::uint32_t _pad0 = 0;
+			std::uint32_t kind = kNodeOverrideGlobal;
 			std::uint32_t _pad1 = 0;
 			std::uint32_t _pad2 = 0;
 			glm::mat4 transform{1.0f};
@@ -306,6 +312,7 @@ namespace CullContracts
 
 		static_assert(sizeof(RagdollOverrideEntry) == 80, "RagdollOverrideEntry layout changed - update shaders/include/AnimationContracts.slangh.");
 		static_assert(offsetof(RagdollOverrideEntry, nodeIndex) == 0);
+		static_assert(offsetof(RagdollOverrideEntry, kind) == 4);
 		static_assert(offsetof(RagdollOverrideEntry, transform) == 16);
 
 		struct SampledNodePose

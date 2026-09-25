@@ -73,6 +73,16 @@ public static unsafe class Animation
         => Native.aether_anim_set_layer_clip(entity.Id, clipIndex);
 
     /// <summary>
+    /// Turn joint <paramref name="jointName"/> by <paramref name="rotation"/> in its own local
+    /// space, on top of whatever clip is playing (post-multiplied after sampling and blending, so
+    /// its children turn with it) - e.g. a head look. Stays until changed;
+    /// <see cref="Quaternion.Identity"/> clears it. Names match the model's node names
+    /// (case-insensitive). Needs the model loaded; before that the call does nothing.
+    /// </summary>
+    public static void SetJointOffset(Entity entity, string jointName, Quaternion rotation)
+        => Native.aether_anim_set_joint_offset(entity.Id, jointName, new Vector4(rotation.X, rotation.Y, rotation.Z, rotation.W));
+
+    /// <summary>
     /// NOT IMPLEMENTED. Pose sampling runs on the GPU and nothing reads the hips back, so no
     /// delta is ever accumulated: this flag gates nothing and <see cref="GetRootMotionDelta"/>
     /// always returns zero. Move a character from script instead.
