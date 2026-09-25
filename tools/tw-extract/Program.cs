@@ -2,13 +2,16 @@
 //
 //   tw-extract --iso <original.iso> [--out projects/Twinsanity/assets] [--cache <dir>] [--only <substring>]
 //
-// Output (all gitignored - ISO-derived content never enters the repo, see docs/twinsanity-editor.md):
-//   textures/<hash>.png                         every decoded texture, content-addressed and shared
-//   scenery/<Area>/<Level>/<chunk>/<chunk>.gltf  a chunk's static scenery, world space, one primitive per material
-//   scenery/.../<chunk>_sky.gltf                  the chunk's skydome
-//   scenery/.../<chunk>_dynamic.gltf              animated scenery pieces at their initial transforms
-//   objects/<Object>/<Object>[_<n>].gltf          each game object's graphics: skeleton, skin, rigid parts
-//   images/<path>/<stem>_NN.png                   gallery / loading-screen pictures (.psm)
+// Output (all gitignored - ISO-derived content never enters the repo, see docs/twinsanity-editor.md).
+// Models live under models/ because that is what AssetPacker bake-all (and the build's auto-bake) bakes.
+//   textures/<hash>.png                                every decoded texture, content-addressed and shared
+//   models/scenery/<Area>/<Level>/<chunk>/<chunk>.gltf  a chunk's static scenery, world space, one primitive per material
+//   models/scenery/.../<chunk>_sky.gltf                  the chunk's skydome
+//   models/scenery/.../<chunk>_dynamic.gltf              animated scenery pieces at their initial transforms
+//   models/objects/<Object>/<Object>[_<n>].gltf          each game object's graphics: skeleton, skin, rigid parts
+//   models/collision/<Area>/<Level>/<chunk>/*.gltf       collision pieces (see LevelExport)
+//   levels/<Area>/<Level>/<chunk>.level.json             everything a runtime needs to assemble the chunk
+//   images/<path>/<stem>_NN.png                          gallery / loading-screen pictures (.psm)
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,8 +27,12 @@ namespace TwExtract
 	{
 		static string s_out;
 		static TextureStore s_textures;
-		// objects/<name>: content hashes already written, so a model shared by many levels is written once.
-		static readonly Dictionary<string, List<string>> s_objectHashes = new Dictionary<string, List<string>>();
+		// objects/<name>: content hash -> file stem already written, so a model shared by many levels is
+		// written once and every level can still name it.
+		static readonly Dictionary<string, Dictionary<string, string>> s_objectFiles = new Dictionary<string, Dictionary<string, string>>();
+		// Object IDs are global to the game (DefaultEnums.ObjectID); crates and wumpa are placed by every level
+		// but defined once, in Startup. ID -> { name, model } across every archive, first definition wins.
+		static readonly SortedDictionary<uint, Dictionary<string, object>> s_objectTable = new SortedDictionary<uint, Dictionary<string, object>>();
 		static int s_scenery, s_objects, s_images, s_failed;
 
 		static int Main(string[] args)
@@ -81,7 +88,7 @@ namespace TwExtract
 					try
 					{
 						Console.SetOut(TextWriter.Null); // the library prints load chatter
-						string result = ext == ".sm2" ? Scenery(local, name) : ext == ".rm2" ? Objects(local, name) : Images(local, name);
+						string result = ext == ".sm2" ? Scenery(local, name) : ext == ".rm2" ? Rm2(local, name) : Images(local, name);
 						Console.SetOut(stdout);
 						Console.WriteLine($"{name}: {result}");
 					}
@@ -92,6 +99,14 @@ namespace TwExtract
 						Console.Error.WriteLine($"{name}: FAILED {e.GetType().Name}: {e.Message}");
 					}
 				}
+			}
+			// Only a whole-disc run sees every definition; a partial table would silently lose objects.
+			if (only == null)
+			{
+				var sb = new StringBuilder();
+				Json.Write(sb, s_objectTable.ToDictionary(kv => kv.Key.ToString(), kv => (object)kv.Value));
+				Directory.CreateDirectory(Path.Combine(s_out, "levels"));
+				File.WriteAllText(Path.Combine(s_out, "levels", "objects.json"), sb.ToString());
 			}
 			Console.WriteLine($"done: {s_scenery} scenery glTF, {s_objects} object glTF, {s_images} images, {s_textures.Written} textures ({s_textures.Undecodable} undecodable), {s_failed} files failed");
 			return s_failed == 0 ? 0 : 1;
@@ -123,7 +138,7 @@ namespace TwExtract
 			var file = Load(path, TwinsFile.FileType.SM2);
 			var gfx = new Gfx(file, 6);
 			string level = LevelPath(archiveName), stem = Path.GetFileName(level);
-			string dir = Path.Combine(s_out, "scenery", level);
+			string dir = Path.Combine(s_out, "models", "scenery", level);
 			var notes = new List<string>();
 
 			if (file.ContainsItem(0) && file.GetItem<TwinsItem>(0) is SceneryData scenery && scenery.SceneryRoot != null)
@@ -286,12 +301,21 @@ namespace TwExtract
 			return true;
 		}
 
-		// ---- objects (.rm2) -------------------------------------------------------------------------
+		// ---- objects + level (.rm2) -----------------------------------------------------------------
 
-		static string Objects(string path, string archiveName)
+		static string Rm2(string path, string archiveName)
 		{
 			var file = Load(path, TwinsFile.FileType.RM2);
 			var gfx = new Gfx(file, 11);
+			string objects = Objects(file, gfx, archiveName, out var models);
+			return objects + ", " + LevelExport.Write(file, LevelPath(archiveName), s_out, models);
+		}
+
+		// models: object ID -> project:// path of the object's first graphics set, whether written now or by
+		// an earlier level.
+		static string Objects(TwinsFile file, Gfx gfx, string archiveName, out Dictionary<uint, string> models)
+		{
+			models = new Dictionary<uint, string>();
 			var items = Gfx.Items(file).ToList();
 			var ogis = new Dictionary<uint, GraphicsInfo>();
 			foreach (var gi in items.OfType<GraphicsInfo>())
@@ -305,7 +329,7 @@ namespace TwExtract
 				for (int k = 0; k < used.Count; k++)
 				{
 					string name = Safe(obj.Name) + (used.Count > 1 ? $"_{k}" : "");
-					string dir = Path.Combine(s_out, "objects", Safe(obj.Name));
+					string dir = Path.Combine(s_out, "models", "objects", Safe(obj.Name));
 					var ex = NewExport(gfx, dir);
 					if (!BuildObject(ex, gfx, ogis[used[k]], name))
 					{
@@ -313,24 +337,41 @@ namespace TwExtract
 					}
 					// Write once per distinct content; a different model under a taken name gets the level's name.
 					string hash = ex.Gltf.ContentHash();
-					if (!s_objectHashes.TryGetValue(name, out var seen))
+					if (!s_objectFiles.TryGetValue(name, out var seen))
 					{
-						s_objectHashes[name] = seen = new List<string>();
+						s_objectFiles[name] = seen = new Dictionary<string, string>();
 					}
-					if (seen.Contains(hash))
+					if (!seen.TryGetValue(hash, out string fileName))
+					{
+						fileName = seen.Count == 0 ? name : $"{name}@{Path.GetFileName(LevelPath(archiveName))}";
+						seen[hash] = fileName;
+						ex.Save(Path.Combine(dir, fileName + ".gltf"));
+						written++;
+						s_objects++;
+					}
+					else
 					{
 						shared++;
-						continue;
 					}
-					string fileName = seen.Count == 0 ? name : $"{name}@{Path.GetFileName(LevelPath(archiveName))}";
-					seen.Add(hash);
-					ex.Save(Path.Combine(dir, fileName + ".gltf"));
-					written++;
-					s_objects++;
+					if (!models.ContainsKey(obj.ID))
+					{
+						models[obj.ID] = VfsPath(Path.Combine(dir, fileName + ".gltf"));
+					}
+				}
+				if (!s_objectTable.ContainsKey(obj.ID))
+				{
+					var row = new Dictionary<string, object> { ["name"] = Safe(obj.Name) };
+					if (models.TryGetValue(obj.ID, out string model))
+					{
+						row["model"] = model;
+					}
+					s_objectTable[obj.ID] = row;
 				}
 			}
 			return $"{written} objects written, {shared} already extracted";
 		}
+
+		public static string VfsPath(string underAssets) => "project://assets/" + Rel(s_out, Path.GetDirectoryName(underAssets)) + "/" + Path.GetFileName(underAssets);
 
 		static bool BuildObject(Export ex, Gfx gfx, GraphicsInfo gi, string name)
 		{
