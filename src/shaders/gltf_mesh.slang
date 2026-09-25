@@ -244,7 +244,13 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     const float hLen2 = dot(Hraw, Hraw);
     float3 H = (hLen2 > 1e-12) ? normalize(Hraw) : N;
 
-    float NdotL = max(dot(N, L), 0.0);
+    float NdotLraw = dot(N, L);
+    // Foliage cards are one-sided alphas whose normals face every way; a raw NdotL puts the
+    // card's back half in hard shadow and the whole clump reads near-black on its shaded
+    // side. The original lit them from baked vertex colour only - closest faithful stand-in
+    // is a wrapped diffuse (half-Lambert), which keeps a sun-facing bias without a dark side.
+    const bool foliage = (mat.flags & kFlagFoliage) != 0u;
+    float NdotL = foliage ? saturate(NdotLraw * 0.5f + 0.5f) : max(NdotLraw, 0.0);
     float NdotV = max(dot(N, V), 0.0);
     float NdotH = max(dot(N, H), 0.0);
     float VdotH = max(dot(V, H), 0.0);
@@ -284,7 +290,10 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     const float shadow = ComputeDirectionalShadow(fc, input.worldPos, Ngeom, L, input.svPosition.xy);
     // Materials can opt out of shadow receiving (flag set == opt out); such
     // surfaces stay fully lit by the sun regardless of the shadow map.
-    const bool receivesShadows = (mat.flags & kFlagNoReceiveShadows) == 0u;
+    // Foliage opts out too: shadow-mapping a clump of one-sided cards mostly finds the
+    // cards shadowing THEMSELVES, which the original (baked vertex lighting, no realtime
+    // shadows) never had.
+    const bool receivesShadows = ((mat.flags & kFlagNoReceiveShadows) == 0u) && !foliage;
     // Contact shadows sharpen only where the cascade cannot resolve: the last few
     // centimetres at the base of an object, which a cascade texel is simply too
     // coarse to contain. Combined by min, because either occluder blocking the sun

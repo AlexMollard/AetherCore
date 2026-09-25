@@ -113,7 +113,18 @@ namespace aether::assetpipeline
 
 		if (ext == ".toml")
 		{
-			if (diskPath.filename() == "properties.toml")
+			// Two material source forms:
+			// - <name>.material/properties.toml (the original directory form - cannot coexist on
+			//   disk with the baked <name>.material FILE of the same name, so it only works for
+			//   materials the bake never generates);
+			// - <name>.material.override.toml (a FILE next to the baked ones - publishes under
+			//   the same materials/<name>.material virtual path, which is what makes an override
+			//   of an AUTO-GENERATED material possible at all).
+			const std::string filename = diskPath.filename().string();
+			constexpr std::string_view kOverrideSuffix = ".override.toml";
+			const bool isMaterialOverride = filename.size() > kOverrideSuffix.size()
+			                                && filename.substr(filename.size() - kOverrideSuffix.size()) == kOverrideSuffix;
+			if (diskPath.filename() == "properties.toml" || isMaterialOverride)
 			{
 				auto d = MaterialProcessor::Process(raw, diskPath, sourceDir);
 				if (!d.empty())
@@ -264,15 +275,28 @@ namespace aether::assetpipeline
 				result.virtualPath = parent.empty() ? stem + procResult.outExt : parent + "/" + stem + procResult.outExt;
 			}
 
-			if (procResult.outExt == ".material")
+		if (procResult.outExt == ".material")
 			{
-				auto dir = fs::path(virtualPath).parent_path();
-				const std::string dirName = dir.filename().string();
-				if (dirName.size() < 9 || dirName.substr(dirName.size() - 9) != ".material")
+				const std::string sourceName = diskPath.filename().string();
+				constexpr std::string_view kOverrideSuffix = ".override.toml";
+				if (sourceName.size() > kOverrideSuffix.size()
+				                && sourceName.substr(sourceName.size() - kOverrideSuffix.size()) == kOverrideSuffix)
 				{
-					dir += ".material";
+					// <name>.material.override.toml replaces the generated material in place:
+					// publish under the exact materials/<name>.material path loaders look up.
+					auto dir = fs::path(virtualPath).parent_path();
+					result.virtualPath = (dir / sourceName.substr(0, sourceName.size() - kOverrideSuffix.size())).generic_string();
 				}
-				result.virtualPath = dir.generic_string();
+				else
+				{
+					auto dir = fs::path(virtualPath).parent_path();
+					const std::string dirName = dir.filename().string();
+					if (dirName.size() < 9 || dirName.substr(dirName.size() - 9) != ".material")
+					{
+						dir += ".material";
+					}
+					result.virtualPath = dir.generic_string();
+				}
 			}
 		}
 

@@ -541,7 +541,11 @@ namespace aether::assetpipeline
 							seen[static_cast<std::size_t>(matIdx)] = true;
 							const std::string matName = GetMaterialName(*data, matIdx);
 							const std::string matDirPath = (sourceDir / "materials" / (matName + ".material") / "properties.toml").string();
-							if (std::filesystem::exists(matDirPath))
+							// Non-colliding override form: a <name>.material.override.toml FILE can
+							// sit beside the baked <name>.material FILE (the properties.toml
+							// DIRECTORY form cannot - same name, so NTFS allows only one).
+							const std::string matOverridePath = (sourceDir / "materials" / (matName + ".material.override.toml")).string();
+							if (std::filesystem::exists(matDirPath) || std::filesystem::exists(matOverridePath))
 							{
 								paths.push_back("materials/" + matName + ".material");
 							}
@@ -617,6 +621,13 @@ namespace aether::assetpipeline
 								hdr.uvScroll[1] = std::strtof(end + 1, nullptr);
 							}
 						}
+					}
+					// {"foliage":true} - tw-extract marks PS2 foliage/cutout cards so the
+					// renderer lights them from their baked vertex colour instead of
+					// shadowing them like solid geometry.
+					if (std::strstr(extras, "\"foliage\"") != nullptr)
+					{
+						hdr.foliage = 1;
 					}
 				}
 			}

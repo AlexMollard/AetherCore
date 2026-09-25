@@ -169,6 +169,7 @@ namespace aether
 		out.alphaMask = (g.flags & GpuMaterial::kAlphaMask) != 0;
 		out.modulateVertexColor = (g.flags & GpuMaterial::kModulateVertexColor) != 0;
 		out.receiveShadows = (g.flags & GpuMaterial::kNoReceiveShadows) == 0;
+		out.foliage = (g.flags & GpuMaterial::kFoliage) != 0;
 		out.albedoTex = e.textures[0];
 		out.normalTex = e.textures[1];
 		out.metallicRoughnessTex = e.textures[2];

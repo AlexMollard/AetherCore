@@ -276,23 +276,13 @@ namespace TwExtract
 			blend = shader.ABlending == TwinsShader.AlphaBlending.ON;
 			mask = !blend && shader.ATest == Twinsanity.TwinsShader.AlphaTest.ON;
 			cutoff = Math.Min(shader.AlphaValueToBeComparedTo * 2, 255) / 255f;
-			// Shader types 23 (the Hub's swimming foliage) and 26 (the pond/water murk) are the
-			// only shader kinds that carry float params (see TwinsShader.Read), and their first
-			// two floats are the U/V scroll speeds. Evidence: every other type reads
-			// f=[0,0,0,0] across the whole Hub dump, and the type-26 materials are exactly the
-			// water textures, while the sea (types 12/22) and sky (10/15/27) layers carry no
-			// params at all - their motion in the original is not material-driven. The
-			// magnitudes (0.03-0.45) only make sense as UV units per SECOND: per frame at the
-			// game's 50 Hz tick would wrap the texture ~17x per second. [2]/[3] are zero
-			// everywhere except type 26's [3]=0.03, which we do not interpret.
-			if (shader.ShaderType == 23 || shader.ShaderType == 26)
+			// Shader types 23 and 26 carry float params, but they are not a UV scroll: every
+			// material using them in the Hub is foliage (grass, leaves, ivy, palm fronds), and
+			// scrolling them makes the leaves visibly slide. Only rig-measured rates scroll.
+			if (texture != null && s_measuredScroll.TryGetValue(texture, out var measured))
 			{
-				scrollU = shader.FloatParam[0];
-				scrollV = shader.FloatParam[1];
-				if (scrollU != 0f || scrollV != 0f)
-				{
-					Console.Error.WriteLine($"  material {materialId}: UV scroll ({scrollU:R}, {scrollV:R}) uv/s (shader type {shader.ShaderType})");
-				}
+				scrollU = measured.U;
+				scrollV = measured.V;
 			}
 		}
 		// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
@@ -331,17 +321,41 @@ namespace TwExtract
 			gltfMat["alphaMode"] = "MASK";
 			gltfMat["alphaCutoff"] = cutoff;
 		}
-		if (scrollU != 0f || scrollV != 0f)
+		if (blend || mask || scrollU != 0f || scrollV != 0f)
 		{
 			// Read back by AssetPacker's MeshProcessor (cgltf extras) into the baked
 			// material's uvScroll.
-			gltfMat["extras"] = new Dictionary<string, object>
+			var extras = new Dictionary<string, object>();
+			if (scrollU != 0f || scrollV != 0f)
 			{
-				["uv_scroll"] = new[] { scrollU, scrollV },
-			};
+				extras["uv_scroll"] = new[] { scrollU, scrollV };
+			}
+			// Alpha-masked scenery is PS2 foliage/cutout card art (leaves, grass tufts,
+			// fences): the renderer lights it from its baked vertex colour with a wrapped
+			// diffuse and keeps it out of the shadow maps, like the original.
+			if (mask)
+			{
+				extras["foliage"] = true;
+			}
+			if (extras.Count > 0)
+			{
+				gltfMat["extras"] = extras;
+			}
 		}
 		return m_materialIndex[(materialId, vertexLit, layer)] = m_byName[name] = Gltf.AddMaterial(gltfMat);
 	}
+
+	// MEASURED FROM ORIGINAL, not disc data: these overlay textures scroll in the game but
+	// their shader records carry no speed (types 12/22 read FloatParam=[0,0,0,0] - the motion
+	// is code-driven on the PS2). Values measured off PCSX2 PAL captures, 100 consecutive
+	// 20 ms frames, camera parked: the beach sea's foam band drifts -0.17 px/frame
+	// (-8.3 px/s) toward -screen-x; the 128 px sea texture spans ~150 px on screen there,
+	// giving ~0.055 uv/s. Evidence: logs/scroll/measurement-20ms.txt, logs/scroll/consecutive-sea.
+	// Caveat: shore-wash geometry motion would produce the same pixel drift - A/B in play.
+	private static readonly Dictionary<string, (float U, float V)> s_measuredScroll = new Dictionary<string, (float, float)>
+	{
+		["2b1f0286252911e6.png"] = (0.055f, 0f), // Earth-Hub beach sea blend layers
+	};
 
 	// How many DISTINCT texture-mapped layers a material exports (>= 1; texture-less
 	// materials export exactly the layer-0 fallback).

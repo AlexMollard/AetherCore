@@ -47,6 +47,16 @@ float fragmentMain(DepthVSOutputWithWorldPos input) : SV_Target
 {
     AlphaMaskDiscard(input.materialIndex, input.uv);
 
+    // Foliage never casts, matching the directional cascades (see shadow_depth.slang).
+    if (input.materialIndex != kNoTexture)
+    {
+        const GpuMaterial mat = ((GpuMaterial*)(pc.frame.Ptr()->materialBufferAddr))[input.materialIndex];
+        if ((mat.flags & kFlagFoliage) != 0u)
+        {
+            discard;
+        }
+    }
+
     FrameConstantsData* fc = pc.frame.Ptr();
     const float3 lightPos = fc->cameraWorldPos.xyz;
     const float range = max(fc->cameraWorldPos.w, 1e-3);

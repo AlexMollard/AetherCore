@@ -36,6 +36,10 @@ namespace aether
 		{
 			flags |= GpuMaterial::kNoReceiveShadows;
 		}
+		if (a.foliage)
+		{
+			flags |= GpuMaterial::kFoliage;
+		}
 		g.flags = flags;
 		g.uvScroll = a.uvScroll;
 

@@ -144,7 +144,11 @@ struct MaterialHeaderDisk
 	// Multiply base colour by the mesh's COLOR_0 (glTF's rule). Carved from the old padding, so
 	// files written before it read 0 - exactly how they rendered.
 	uint8_t modulateVertexColor = 0;
-	uint8_t _pad0[3] = {0};
+	// PS2 foliage/cutout card (tw-extract marks alpha-masked scenery "foliage"): shaded by its
+	// baked vertex colour with a wrapped diffuse and excluded from shadow casting/receiving.
+	// Carved from the same padding - files written before it read 0, i.e. ordinary geometry.
+	uint8_t foliage = 0;
+	uint8_t _pad0[2] = {0, 0};
 	// UV scroll velocity in UV units per second. Carved from the old padding like
 	// modulateVertexColor: files written before it read {0, 0} - a static texture, which
 	// is exactly how they rendered. Old .material files therefore stay valid unchanged.

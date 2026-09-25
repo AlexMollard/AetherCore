@@ -22,6 +22,9 @@ namespace aether
 		bool alphaMask = false;
 		bool modulateVertexColor = false;
 		bool receiveShadows = true;
+		// PS2 foliage/cutout card (tw-extract marks alpha-masked scenery): wrapped diffuse,
+		// excluded from shadow casting/receiving.
+		bool foliage = false;
 
 		// UV scroll velocity in UV units per second (Twinsanity sea, waterfalls, sky).
 		glm::vec2 uvScroll{0.0f, 0.0f};

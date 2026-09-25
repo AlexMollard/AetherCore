@@ -94,6 +94,9 @@ foreach(_aethercore_settings ${_aethercore_project_settings})
             "${_aethercore_models_dir}/*.tga"
             "${_aethercore_models_dir}/*.hdr"
             "${_aethercore_models_dir}/*.ktx2"
+            # Material overrides (materials/<name>.material.override.toml) are hand-authored
+            # SOURCE files: a change to one must retrigger the bake like a glTF change.
+            "${_aethercore_models_dir}/*.override.toml"
         )
         set(_aethercore_stamp "${CMAKE_BINARY_DIR}/bake-stamps/${_aethercore_project_name}.stamp")
         add_custom_command(

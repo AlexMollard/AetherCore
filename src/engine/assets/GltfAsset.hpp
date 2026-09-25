@@ -37,6 +37,7 @@ namespace aether::assets
 		bool alphaBlend = false;
 		bool alphaMask = false;
 		bool modulateVertexColor = false;
+		bool foliage = false;
 		glm::vec2 uvScroll{0.0f, 0.0f};
 		std::int32_t baseColorTexture = -1;
 		std::int32_t metallicRoughnessTexture = -1;
