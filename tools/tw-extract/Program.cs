@@ -308,7 +308,7 @@ namespace TwExtract
 			var file = Load(path, TwinsFile.FileType.RM2);
 			var gfx = new Gfx(file, 11);
 			string objects = Objects(file, gfx, archiveName, out var models);
-			return objects + ", " + LevelExport.Write(file, LevelPath(archiveName), s_out, models);
+			return objects + ", " + LevelExport.Write(file, Path.ChangeExtension(path, ".sm2"), LevelPath(archiveName), s_out, models);
 		}
 
 		// models: object ID -> project:// path of the object's first graphics set, whether written now or by
@@ -322,16 +322,30 @@ namespace TwExtract
 			{
 				ogis[gi.ID] = gi;
 			}
+			var animations = new Dictionary<uint, Animation>();
+			foreach (var a in items.OfType<Animation>())
+			{
+				animations[a.ID] = a;
+			}
+			var scripts = new Dictionary<uint, Script>();
+			foreach (var s in items.OfType<Script>())
+			{
+				scripts[s.ID] = s;
+			}
 			int written = 0, shared = 0;
 			foreach (var obj in items.OfType<GameObject>())
 			{
 				var used = obj.OGIs.Where(id => ogis.ContainsKey(id)).Distinct().ToList();
+				// Clips are named by the object's animation slot, which is what its scripts' DoAnim commands name.
+				var clips = obj.Anims.Select((id, slot) => (Id: id, Slot: slot))
+					.Where(a => animations.ContainsKey(a.Id))
+					.Select(a => ($"a{a.Slot:D3}", animations[a.Id])).ToList();
 				for (int k = 0; k < used.Count; k++)
 				{
 					string name = Safe(obj.Name) + (used.Count > 1 ? $"_{k}" : "");
 					string dir = Path.Combine(s_out, "models", "objects", Safe(obj.Name));
 					var ex = NewExport(gfx, dir);
-					if (!BuildObject(ex, gfx, ogis[used[k]], name))
+					if (!BuildObject(ex, gfx, ogis[used[k]], name, clips))
 					{
 						continue;
 					}
@@ -358,6 +372,19 @@ namespace TwExtract
 						models[obj.ID] = VfsPath(Path.Combine(dir, fileName + ".gltf"));
 					}
 				}
+				// Characters (the behaviour slots past OnPhysicsCollision): which clips each state plays.
+				if (obj.Scripts.Count > 12 && clips.Count > 0)
+				{
+					var states = AnimExport.CharacterStates(obj, scripts);
+					if (states.Count > 0)
+					{
+						var sb = new StringBuilder();
+						Json.Write(sb, new Dictionary<string, object> { ["fps"] = AnimExport.Fps, ["states"] = states });
+						string objectDir = Path.Combine(s_out, "models", "objects", Safe(obj.Name));
+						Directory.CreateDirectory(objectDir);
+						File.WriteAllText(Path.Combine(objectDir, Safe(obj.Name) + ".states.json"), sb.ToString());
+					}
+				}
 				if (!s_objectTable.ContainsKey(obj.ID))
 				{
 					var row = new Dictionary<string, object> { ["name"] = Safe(obj.Name) };
@@ -373,7 +400,7 @@ namespace TwExtract
 
 		public static string VfsPath(string underAssets) => "project://assets/" + Rel(s_out, Path.GetDirectoryName(underAssets)) + "/" + Path.GetFileName(underAssets);
 
-		static bool BuildObject(Export ex, Gfx gfx, GraphicsInfo gi, string name)
+		static bool BuildObject(Export ex, Gfx gfx, GraphicsInfo gi, string name, List<(string, Animation)> clips)
 		{
 			var g = ex.Gltf;
 			var joints = gi.Joints ?? Array.Empty<GraphicsInfo.Joint>();
@@ -418,6 +445,10 @@ namespace TwExtract
 				{
 					Gltf.AddChild(g.Nodes[nodes[slot[joints[i].ParentJointIndex]]], nodes[i]);
 				}
+			}
+			if (joints.Length > 1 && clips.Count > 0)
+			{
+				AnimExport.Add(g, joints, nodes, clips);
 			}
 
 			bool any = false;

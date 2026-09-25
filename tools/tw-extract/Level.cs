@@ -25,7 +25,7 @@ namespace TwExtract
 		// and these do not block the player: camera-only, rigid-body-only and AI-only.
 		static readonly HashSet<int> s_ignored = new HashSet<int> { 20, 25, 27 };
 
-		public static string Write(TwinsFile file, string level, string outRoot, Dictionary<uint, string> models)
+		public static string Write(TwinsFile file, string sm2Path, string level, string outRoot, Dictionary<uint, string> models)
 		{
 			string stem = Path.GetFileName(level);
 			var manifest = new Dictionary<string, object> { ["level"] = level };
@@ -35,6 +35,7 @@ namespace TwExtract
 
 			string collisionNote = Collision(file, level, outRoot, manifest);
 			string instanceNote = Instances(file, models, manifest);
+			Links(sm2Path, level, outRoot, manifest);
 
 			string path = Path.Combine(outRoot, "levels", level + ".level.json");
 			Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -42,6 +43,127 @@ namespace TwExtract
 			Json.Write(sb, manifest);
 			File.WriteAllText(path, sb.ToString());
 			return collisionNote + ", " + instanceNote;
+		}
+
+		// Chunk links (SM2 section 5) position the neighbouring chunks. ChunkMatrix is the row-vector
+		// matrix placing the linked chunk relative to this one: its last row is the translation, the
+		// 3x3 above it the rotation. All exported content is X-mirrored, so the transform conjugates
+		// with S = diag(-1,1,1): negate row3.X and the four off-diagonal X entries of the rotation
+		// block (S*M*S for the rotation). Verified against the collision seams: for beach the
+		// mirrored ChunkMatrix gives huba (+70.40002, 0, +41.6001) and hubc (-182.0632, 0, -41.0094),
+		// aligning 635 and 497 shared boundary collision vertices with max mismatch 0.0003 and 0.0;
+		// the mirrored ObjectMatrix row3 points the opposite (wrong) way. Every Hub link so far
+		// carries an identity rotation to float precision.
+		// Flags' low byte is the link kind: 1 a seamless neighbour (huba, hubc, bossarea, alwayson),
+		// 2 a door into another space (totemex, docent, the level entrances), 0 the boat trip. Only
+		// kind-1 links are consistent around the hub's loops, so kind-2/0 are not spatial neighbours.
+		static void Links(string sm2Path, string level, string outRoot, Dictionary<string, object> manifest)
+		{
+			var links = new List<object>();
+			manifest["links"] = links;
+			// ChunkLinks live in the .sm2 (section 5), not the .rm2 the rest of the manifest reads.
+			if (!File.Exists(sm2Path))
+			{
+				return;
+			}
+			var sm2 = new TwinsFile();
+			sm2.LoadFile(sm2Path, TwinsFile.FileType.SM2);
+			if (!(sm2.GetItem<TwinsItem>(5) is ChunkLinks chunkLinks))
+			{
+				return;
+			}
+			foreach (var link in chunkLinks.Links)
+			{
+				if (link.ChunkMatrix == null || link.ChunkMatrix.Length < 4 || string.IsNullOrEmpty(link.Path))
+				{
+					continue;
+				}
+				Pos[] m = link.ChunkMatrix;
+				float[] rot =
+				{
+					m[0].X, -m[0].Y, -m[0].Z,
+					-m[1].X, m[1].Y, m[1].Z,
+					-m[2].X, m[2].Y, m[2].Z,
+				};
+				float maxOff = 0f;
+				for (int i = 0; i < 9; i++)
+				{
+					maxOff = Math.Max(maxOff, Math.Abs(rot[i] - (i % 4 == 0 ? 1f : 0f)));
+				}
+				var entry = new Dictionary<string, object>
+				{
+					["chunk"] = LinkChunk(level, link.Path, outRoot),
+					["offset"] = new[] { -m[3].X, m[3].Y, m[3].Z },
+					["flags"] = link.Flags,
+				};
+				if (maxOff > 1e-4f)
+				{
+					entry["rotation"] = Quat(rot);
+				}
+				links.Add(entry);
+			}
+		}
+
+		// Link paths are lowercase ("levels\earth\hub\huba") while the extracted tree keeps the
+		// archive's casing ("Earth/Hub"); resolve the segments against the files already on disk and
+		// fall back to the current level's directory + leaf for a target not written yet.
+		static string LinkChunk(string level, string linkPath, string outRoot)
+		{
+			var segs = linkPath.Split('\\', '/').Where(s => s.Length > 0 && !s.Equals("levels", StringComparison.OrdinalIgnoreCase)).ToList();
+			string dir = Path.Combine(outRoot, "levels");
+			for (int i = 0; dir != null && i < segs.Count - 1; i++)
+			{
+				dir = Directory.GetFileSystemEntries(dir).FirstOrDefault(e => string.Equals(Path.GetFileName(e), segs[i], StringComparison.OrdinalIgnoreCase));
+			}
+			if (dir != null)
+			{
+				string file = Directory.GetFiles(dir).FirstOrDefault(f => string.Equals(Path.GetFileName(f), segs.Last() + ".level.json", StringComparison.OrdinalIgnoreCase));
+				if (file != null)
+				{
+					return Program.VfsPath(file);
+				}
+			}
+			return Program.VfsPath(Path.Combine(Path.Combine(outRoot, "levels", level), segs.Last() + ".level.json"));
+		}
+
+		// Quaternion (x, y, z, w) from a row-major 3x3 rotation matrix (Shepperd).
+		static float[] Quat(float[] r)
+		{
+			float tr = r[0] + r[4] + r[8];
+			double x, y, z, w;
+			if (tr > 0)
+			{
+				double s = Math.Sqrt(tr + 1.0) * 2;
+				w = 0.25 * s;
+				x = (r[7] - r[5]) / s;
+				y = (r[2] - r[6]) / s;
+				z = (r[3] - r[1]) / s;
+			}
+			else if (r[0] > r[4] && r[0] > r[8])
+			{
+				double s = Math.Sqrt(1.0 + r[0] - r[4] - r[8]) * 2;
+				w = (r[7] - r[5]) / s;
+				x = 0.25 * s;
+				y = (r[1] + r[3]) / s;
+				z = (r[2] + r[6]) / s;
+			}
+			else if (r[4] > r[8])
+			{
+				double s = Math.Sqrt(1.0 + r[4] - r[0] - r[8]) * 2;
+				w = (r[2] - r[6]) / s;
+				x = (r[1] + r[3]) / s;
+				y = 0.25 * s;
+				z = (r[5] + r[7]) / s;
+			}
+			else
+			{
+				double s = Math.Sqrt(1.0 + r[8] - r[0] - r[4]) * 2;
+				w = (r[3] - r[1]) / s;
+				x = (r[2] + r[6]) / s;
+				y = (r[5] + r[7]) / s;
+				z = 0.25 * s;
+			}
+			return new[] { (float)x, (float)y, (float)z, (float)w };
 		}
 
 		static string Collision(TwinsFile file, string level, string outRoot, Dictionary<string, object> manifest)
@@ -162,6 +284,12 @@ namespace TwExtract
 					if (models.TryGetValue(ins.ObjectID, out string model))
 					{
 						entry["model"] = model;
+					}
+					// The object's tuning, e.g. a character's speeds, gravities and jump heights
+					// (DefaultEnums.CharacterInstanceFloats).
+					if (ins.UnkI322.Count > 1)
+					{
+						entry["floats"] = ins.UnkI322.ToArray();
 					}
 					list.Add(entry);
 					if (ins.ObjectID == 0 && !manifest.ContainsKey("spawn"))

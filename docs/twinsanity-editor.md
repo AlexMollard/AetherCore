@@ -70,7 +70,10 @@ Run from the repo root. Options: `--out <assets dir>`, `--only <substring>`
 |`scenery/<Area>/<Level>/<chunk>/<chunk>.gltf`|A chunk's static scenery in world space, one primitive per material|
 |`scenery/.../<chunk>_sky.gltf`|The chunk's skydome|
 |`scenery/.../<chunk>_dynamic.gltf`|Animated scenery pieces at their initial transforms|
-|`objects/<Object>/<Object>[_<n>].gltf`|A game object's graphics: skeleton, skin, joint-attached rigid parts. `_<n>` is one per graphics set; `@<chunk>` marks a differing model under a name another chunk already used|
+|`objects/<Object>/<Object>[_<n>].gltf`|A game object's graphics: skeleton, skin, joint-attached rigid parts, and every animation the object's OGI slots reference as clips named `aNNN` by slot (25 fps, sampled with the Twinsanity editor's `AnimationController` maths). `_<n>` is one per graphics set; `@<chunk>` marks a differing model under a name another chunk already used|
+|`objects/<Object>/<Object>.states.json`|Characters only: the behaviour scripts' `DoAnim` commands per state, giving the clip slot and blend-in time the game uses|
+|`collision/<Area>/<Level>/<chunk>*.gltf`|The chunk's collision triangles, split by surface (deadly surfaces separate)|
+|`levels/<Area>/<Level>/<chunk>.level.json`|Scenery, sky, collision pieces, object instances (position, rotation, the instance's float parameters) and the player spawn|
 |`images/<path>/<stem>_NN.png`|Gallery / loading-screen pictures, as the tiles the disc stores them in|
 
 Load any of them with the editor's Add to Scene or the MCP `add_model` tool.
@@ -84,12 +87,9 @@ Conversion notes:
 - Vertex colour goes out as `COLOR_0 = min(byte / 128, 1)` (the GS reads `0x80`
   as 1.0). Scenery typically sits around `0xB0`, so the overbright part is
   clamped.
-- The engine does not apply `COLOR_0` to imported glTF materials yet (the bake
-  has no `modulateVertexColor` path), so the baked PS2 lighting is present in
-  the files but not shown in the editor.
-- Animations, collision, object placement (instances), particles and the
-  frontend are not extracted yet. Dynamic-scenery rotation assumes an
-  `(x, y, z, w)` quaternion and has not been checked against the game.
+- Particles and the frontend are not extracted yet. Dynamic-scenery rotation
+  assumes an `(x, y, z, w)` quaternion and has not been checked against the
+  game.
 
 ## Status
 

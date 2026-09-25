@@ -36,7 +36,7 @@ namespace TwExtract
 		readonly MemoryStream m_bin = new MemoryStream();
 		readonly List<object> m_views = new List<object>(), m_accessors = new List<object>(), m_meshes = new List<object>();
 		readonly List<object> m_materials = new List<object>(), m_textures = new List<object>(), m_images = new List<object>();
-		readonly List<object> m_skins = new List<object>();
+		readonly List<object> m_skins = new List<object>(), m_animations = new List<object>();
 		readonly Dictionary<string, int> m_imageByUri = new Dictionary<string, int>();
 		public readonly List<Dictionary<string, object>> Nodes = new List<Dictionary<string, object>>();
 		public readonly List<int> SceneRoots = new List<int>();
@@ -123,6 +123,28 @@ namespace TwExtract
 			return m_skins.Count - 1;
 		}
 
+		// One clip: a shared time track and, per node, whole-clip translation / rotation / scale tracks
+		// (LINEAR, so rotations slerp). Values are flat: 3 floats per key for T and S, 4 (xyzw) for R.
+		public void AddAnimation(string name, float[] times, IEnumerable<(int Node, float[] T, float[] R, float[] S)> tracks)
+		{
+			int input = Accessor(View(ToBytes(times), null), 5126, times.Length, "SCALAR", new[] { times[0] }, new[] { times[times.Length - 1] });
+			var samplers = new List<object>();
+			var channels = new List<object>();
+			void Channel(int node, string path, float[] values, int comps)
+			{
+				int output = Accessor(View(ToBytes(values), null), 5126, values.Length / comps, comps == 4 ? "VEC4" : "VEC3", null, null);
+				samplers.Add(new Dictionary<string, object> { ["input"] = input, ["output"] = output, ["interpolation"] = "LINEAR" });
+				channels.Add(new Dictionary<string, object> { ["sampler"] = samplers.Count - 1, ["target"] = new Dictionary<string, object> { ["node"] = node, ["path"] = path } });
+			}
+			foreach (var (node, t, r, s) in tracks)
+			{
+				Channel(node, "translation", t, 3);
+				Channel(node, "rotation", r, 4);
+				Channel(node, "scale", s, 3);
+			}
+			m_animations.Add(new Dictionary<string, object> { ["name"] = name, ["samplers"] = samplers, ["channels"] = channels });
+		}
+
 		public void Save(string gltfPath)
 		{
 			string binName = Path.GetFileNameWithoutExtension(gltfPath) + ".bin";
@@ -157,6 +179,7 @@ namespace TwExtract
 			Put("textures", m_textures);
 			Put("images", m_images);
 			Put("skins", m_skins);
+			Put("animations", m_animations);
 			Put("accessors", m_accessors);
 			Put("bufferViews", m_views);
 			if (m_bin.Length > 0)
