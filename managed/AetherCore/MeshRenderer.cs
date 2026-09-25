@@ -10,4 +10,8 @@ public static class MeshRenderer
 {
     public static bool GetVisible(Entity entity) => Native.aether_mesh_renderer_get_visible(entity.Id) != 0;
     public static void SetVisible(Entity entity, bool visible) => Native.aether_mesh_renderer_set_visible(entity.Id, visible ? 1 : 0);
+
+    /// <summary>Whether the mesh draws into the shadow maps. Off for geometry that must be seen
+    /// but never occlude the sun, such as a skydome around the level.</summary>
+    public static void SetCastShadows(Entity entity, bool castShadows) => Native.aether_mesh_renderer_set_cast_shadows(entity.Id, castShadows ? 1 : 0);
 }

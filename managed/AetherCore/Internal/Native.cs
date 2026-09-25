@@ -1334,6 +1334,9 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_mesh_renderer_set_visible(uint id, int visible);
 
+    [LibraryImport(Lib)]
+    internal static partial void aether_mesh_renderer_set_cast_shadows(uint id, int castShadows);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int aether_ragdoll_spawn(uint id, string skeletonPath);
 

@@ -42,3 +42,26 @@ AE_SCRIPT_API void aether_mesh_renderer_set_visible(std::uint32_t id, std::int32
 	}
 	});
 }
+
+// MeshRenderer.SetCastShadows. For geometry that must light and draw but never occlude the
+// sun: a skydome enclosing the level would otherwise put everything inside it in shadow.
+// Unlike SetVisible this creates the component when it is missing: meshes spawned by
+// Entity.LoadModel carry none, and "no component" already means "casts".
+AE_SCRIPT_API void aether_mesh_renderer_set_cast_shadows(std::uint32_t id, std::int32_t castShadows)
+{
+	SafeExport([&] -> void
+	{
+	if (!EntityAlive(id))
+	{
+		return;
+	}
+	aether::World& world = ActiveWorld();
+	const aether::Entity e{id};
+	if (auto* mr = world.TryGet<aether::MeshRendererComponent>(e))
+	{
+		mr->castShadows = castShadows != 0;
+		return;
+	}
+	world.Emplace<aether::MeshRendererComponent>(e, aether::MeshRendererComponent{.castShadows = castShadows != 0});
+	});
+}
