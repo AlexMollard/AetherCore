@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Text.Json;
 using AetherCore;
@@ -56,6 +57,7 @@ public sealed class TwinsanityLevel : EntityScript
 	private Entity _crash;
 	private CrashPlayer? _player;
 	private Vector3 _spawn;
+	private float[]? _crashFloats;
 	private float _spawnFacing;
 	private Vector3 _checkpoint;
 	private float _checkpointFacing;
@@ -91,60 +93,53 @@ public sealed class TwinsanityLevel : EntityScript
 			Log.Warn($"[Twinsanity] {ObjectsPath} missing - run tw-extract over the whole disc; crates and wumpa from other files will be invisible.");
 		}
 
-		string? text = Assets.ReadText(LevelPath);
-		if (text == null)
+		// Load the start chunk plus every chunk reachable over its chunk links (BFS, each chunk
+		// once). A link's transform is relative to its own chunk, so a child's world transform is
+		// local * parent (row vectors). Link targets outside the extracted set are skipped. Only
+		// seamless-neighbour links (flags low byte 1) in the start chunk's own level folder stream
+		// in; kind 2 is a door into another space (Doc's lab, the totem, level entrances) and kind 0
+		// the boat trip - their transforms do not agree with the hub's loops.
+		string levelFolder = LevelPath[..(LevelPath.LastIndexOf('/') + 1)];
+		var queue = new Queue<(string Path, Matrix4x4 Transform)>();
+		var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		queue.Enqueue((LevelPath, Matrix4x4.Identity));
+		while (queue.Count > 0)
 		{
-			Log.Error($"[Twinsanity] {LevelPath} not found - run tools/tw-extract (see docs/twinsanity-editor.md).");
-			return;
-		}
-		using JsonDocument doc = JsonDocument.Parse(text);
-		JsonElement root = doc.RootElement;
-
-		foreach (JsonElement path in root.GetProperty("scenery").EnumerateArray())
-		{
-			// Listed by naming convention; not every chunk has dynamic scenery.
-			if (Assets.List(path.GetString()!).Length > 0)
+			(string path, Matrix4x4 transform) = queue.Dequeue();
+			if (!visited.Add(path))
 			{
-				Spawn("Scenery", path.GetString()!, Vector3.Zero, Vector3.Zero);
+				continue;
 			}
-		}
-		// Twinsanity draws its skydome around the camera, behind everything. The extracted dome is
-		// a 120-unit sphere at the chunk origin, so left in place it swallows any scenery further out.
-		// Kept on the camera and grown to just inside the far plane (1000), it stays behind the world.
-		_sky = Spawn("Sky", root.GetProperty("sky").GetString()!, Vector3.Zero, Vector3.Zero);
-		_sky.Scale = new Vector3(SkyScale);
-		for (int i = 0; i < _sky.ChildCount; i++)
-		{
-			MeshRenderer.SetCastShadows(_sky.GetChild(i), false);
-		}
-
-		foreach (JsonElement piece in root.GetProperty("collision").EnumerateArray())
-		{
-			Entity e = World.Create();
-			e.Name = "Collision";
-			e.AddTransform();
-			Physics.AddMeshBody(e, piece.GetProperty("path").GetString()!);
-			if (piece.GetProperty("deadly").GetBoolean())
+			string? text = Assets.ReadText(path);
+			if (text == null)
 			{
-				_deadly.Add(e.Id);
+				if (path == LevelPath)
+				{
+					Log.Error($"[Twinsanity] {path} not found - run tools/tw-extract (see docs/twinsanity-editor.md).");
+				}
+				else
+				{
+					Log.Warn($"[Twinsanity] linked chunk {path} not extracted - skipping.");
+				}
+				continue;
 			}
-		}
-
-		if (root.TryGetProperty("spawn", out JsonElement spawn))
-		{
-			_spawn = Vec(spawn.GetProperty("position"));
-			// The instance yaw turns a +Z-facing model; CrashPlayer's facing is the camera yaw.
-			_spawnFacing = Vec(spawn.GetProperty("euler")).Y + 180.0f;
-		}
-		_checkpoint = _spawn;
-		_checkpointFacing = _spawnFacing;
-
-		foreach (JsonElement instance in root.GetProperty("instances").EnumerateArray())
-		{
-			AddInstance(instance);
+			using JsonDocument doc = JsonDocument.Parse(text);
+			LoadChunk(doc.RootElement, transform, path == LevelPath);
+			if (doc.RootElement.TryGetProperty("links", out JsonElement links))
+			{
+				foreach (JsonElement link in links.EnumerateArray())
+				{
+					string chunk = link.GetProperty("chunk").GetString()!;
+					bool neighbour = link.TryGetProperty("flags", out JsonElement flags) && (flags.GetUInt32() & 0xFF) == 1;
+					if (neighbour && chunk.StartsWith(levelFolder, StringComparison.OrdinalIgnoreCase))
+					{
+						queue.Enqueue((chunk, ChunkTransform(link) * transform));
+					}
+				}
+			}
 		}
 		_cratesTotal = _crates.FindAll(c => c.Kind is not (Kind.Nitro or Kind.Iron or Kind.IronSpring)).Count;
-		Log.Info($"[Twinsanity] {root.GetProperty("level").GetString()}: {_crates.Count} crates, {_wumpa.Count} wumpa, {_deadly.Count} deadly collision pieces");
+		Log.Info($"[Twinsanity] {_crates.Count} crates, {_wumpa.Count} wumpa, {_deadly.Count} deadly collision pieces");
 
 		Entity canvas = Ui.CreateCanvas();
 		_hud = Ui.CreateText(canvas, string.Empty);
@@ -169,6 +164,10 @@ public sealed class TwinsanityLevel : EntityScript
 		if (!_placed)
 		{
 			_placed = true;
+			if (_crashFloats != null)
+			{
+				_player!.Configure(_crashFloats);
+			}
 			_player!.Respawn(_spawn, _spawnFacing);
 			return;
 		}
@@ -216,11 +215,98 @@ public sealed class TwinsanityLevel : EntityScript
 		return _player != null;
 	}
 
-	private void AddInstance(JsonElement instance)
+	private void LoadChunk(JsonElement root, Matrix4x4 transform, bool start)
+	{
+		string name = root.GetProperty("level").GetString()!;
+		foreach (JsonElement path in root.GetProperty("scenery").EnumerateArray())
+		{
+			// Listed by naming convention; not every chunk has dynamic scenery.
+			if (Assets.List(path.GetString()!).Length > 0)
+			{
+				Spawn("Scenery", path.GetString()!, transform);
+			}
+		}
+		if (start)
+		{
+			// Twinsanity draws its skydome around the camera, behind everything. The extracted dome is
+			// a 120-unit sphere at the chunk origin, so left in place it swallows any scenery further out.
+			// Kept on the camera and grown to just inside the far plane (1000), it stays behind the world.
+			_sky = Spawn("Sky", root.GetProperty("sky").GetString()!, Matrix4x4.Identity);
+			_sky.Scale = new Vector3(SkyScale);
+			for (int i = 0; i < _sky.ChildCount; i++)
+			{
+				MeshRenderer.SetCastShadows(_sky.GetChild(i), false);
+			}
+		}
+		foreach (JsonElement piece in root.GetProperty("collision").EnumerateArray())
+		{
+			Entity e = World.Create();
+			e.Name = "Collision";
+			e.AddTransform();
+			e.Position = transform.Translation;
+			e.EulerDegrees = EulerOf(transform);
+			Physics.AddMeshBody(e, piece.GetProperty("path").GetString()!);
+			if (piece.GetProperty("deadly").GetBoolean())
+			{
+				_deadly.Add(e.Id);
+			}
+		}
+		if (start && root.TryGetProperty("spawn", out JsonElement spawn))
+		{
+			_spawn = Vector3.Transform(Vec(spawn.GetProperty("position")), transform);
+			// The instance yaw turns a +Z-facing model; CrashPlayer's facing is the camera yaw.
+			_spawnFacing = EulerOf(SysRotation(Vec(spawn.GetProperty("euler"))) * transform).Y + 180.0f;
+			if (spawn.TryGetProperty("floats", out JsonElement floats))
+			{
+				_crashFloats = floats.EnumerateArray().Select(f => f.GetSingle()).ToArray();
+			}
+			_checkpoint = _spawn;
+			_checkpointFacing = _spawnFacing;
+		}
+		foreach (JsonElement instance in root.GetProperty("instances").EnumerateArray())
+		{
+			AddInstance(instance, transform);
+		}
+		Log.Info($"[Twinsanity] chunk {name}: {_crates.Count} crates, {_wumpa.Count} wumpa, {_deadly.Count} deadly pieces so far");
+	}
+
+	// A level.json link entry -> the chunk's local transform (rotation, then offset), in
+	// System.Numerics row-vector form.
+	private static Matrix4x4 ChunkTransform(JsonElement link)
+	{
+		Matrix4x4 m = Matrix4x4.CreateTranslation(Vec(link.GetProperty("offset")));
+		if (link.TryGetProperty("rotation", out JsonElement r))
+		{
+			var q = new Quaternion(r[0].GetSingle(), r[1].GetSingle(), r[2].GetSingle(), r[3].GetSingle());
+			m = Matrix4x4.CreateFromQuaternion(q) * m;
+		}
+		return m;
+	}
+
+	// The engine composes EulerDegrees as R = Ry * Rx * Rz (column vectors); System.Numerics works
+	// with row vectors, so a rotation crosses between the two as the transpose. EulerOf takes a
+	// row-vector transform and returns the engine's Euler degrees of its rotation.
+	private static Vector3 EulerOf(Matrix4x4 sys)
+	{
+		const float deg = 180.0f / MathF.PI;
+		float x = MathF.Asin(Math.Clamp(-sys.M32, -1.0f, 1.0f));
+		float y = MathF.Atan2(sys.M31, sys.M33);
+		float z = MathF.Atan2(sys.M12, sys.M22);
+		return new Vector3(x, y, z) * deg;
+	}
+
+	// Euler degrees (engine convention) -> row-vector rotation matrix: the transpose of Ry * Rx * Rz.
+	private static Matrix4x4 SysRotation(Vector3 euler)
+	{
+		float x = euler.X * MathF.PI / 180.0f, y = euler.Y * MathF.PI / 180.0f, z = euler.Z * MathF.PI / 180.0f;
+		return Matrix4x4.CreateRotationZ(z) * Matrix4x4.CreateRotationX(x) * Matrix4x4.CreateRotationY(y);
+	}
+
+	private void AddInstance(JsonElement instance, Matrix4x4 transform)
 	{
 		int objectId = instance.GetProperty("object").GetInt32();
-		Vector3 position = Vec(instance.GetProperty("position"));
-		Vector3 euler = Vec(instance.GetProperty("euler"));
+		Vector3 position = Vector3.Transform(Vec(instance.GetProperty("position")), transform);
+		Vector3 euler = EulerOf(SysRotation(Vec(instance.GetProperty("euler"))) * transform);
 		string? model = instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : _objectModels.GetValueOrDefault(objectId);
 
 		if (objectId == 1)
@@ -256,6 +342,14 @@ public sealed class TwinsanityLevel : EntityScript
 		body.Position = position + new Vector3(0.0f, 0.5f, 0.0f);
 		Physics.AddBoxBody(body, new Vector3(0.5f, 0.5f, 0.5f), dynamic: false);
 		_crates.Add(new Crate { Kind = kind.Value, Body = body, Model = Spawn(body.Name, model, position, euler), Base = position });
+	}
+
+	private static Entity Spawn(string name, string path, Matrix4x4 transform)
+	{
+		Entity e = Spawn(name, path, Vector3.Zero, Vector3.Zero);
+		e.Position = transform.Translation;
+		e.EulerDegrees = EulerOf(transform);
+		return e;
 	}
 
 	private static Entity Spawn(string name, string path, Vector3 position, Vector3 euler)
