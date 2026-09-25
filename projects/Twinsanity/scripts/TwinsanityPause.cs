@@ -74,9 +74,9 @@ public sealed class TwinsanityPause
 	private const float DimAlpha = 0.76f;
 	private const float MenuBright = 0.75f;
 	private const float GroupCenterX = 320.0f, GroupCenterY = 240.0f;
-	// Swirl box: the outer ellipse (227,208) about (326,236) plus its white rim; track box: the
+	// Swirl box: the outer ellipse (238,185) about (318,210) plus its white rim; track box: the
 	// arc band about the gem circle between -88 and +74 degrees (ui_pause.slang holds the shapes).
-	private const float SwirlX = 326.0f, SwirlY = 236.0f, SwirlW = 462.0f, SwirlH = 424.0f;
+	private const float SwirlX = 318.0f, SwirlY = 210.0f, SwirlW = 484.0f, SwirlH = 378.0f;
 	private const float TrackX = 509.0f, TrackY = 201.0f, TrackW = 188.0f, TrackH = 342.0f;
 	// Gem slots: least-squares circle through the six rig gem centres (residuals <= 5 px).
 	private const float GemCx = 428.9f, GemCy = 204.2f, GemR = 146.0f, GemAngle = -72.0f, GemStep = 26.0f, GemSize = 44.0f;
@@ -89,16 +89,16 @@ public sealed class TwinsanityPause
 	private const float RowBow = 3.5f, RowBowResume = 6.0f;
 	private const float GreyedTintR = 0.28f, GreyedTintG = 0.16f, GreyedTintB = 0.07f; // dark brown, rig row 4
 	private const float PromptScaleX = 0.9f, PromptScaleY = 0.55f, ShoulderScaleX = 1.08f, ShoulderScaleY = 0.9f;
-	private const float SelectX = 105.0f, BackX = 550.0f, PromptY = 443.0f;
-	private const float ShoulderLX = 104.0f, ShoulderRX = 536.0f, ShoulderY = 418.0f;
-	private const float DigitScaleX = 1.05f, DigitScaleY = 0.77f;
+	private const float SelectX = 105.0f, BackX = 550.0f, PromptY = 451.0f;
+	private const float ShoulderLX = 104.0f, ShoulderRX = 536.0f, ShoulderY = 424.0f;
+	private const float DigitScaleX = 1.35f, DigitScaleY = 1.0f;
 	private const float IconWobble = 0.03f, WobblePeriod = 1.4f; // badge/icons breathe while idle
 
 	// Counter discs, icons and read-outs, top to bottom: wumpa, Crash head (lives), crystals. The
 	// count is right-aligned at CountRight, left of its icon; the icons are drawn stretched as the
 	// PS2 draws them (the crystal cluster is 50x129 px on screen from a 64x53 texel tile).
 	private static readonly (float X, float Y, float Size)[] Discs = { (113.0f, 103.0f, 98.0f), (91.0f, 216.0f, 98.0f), (148.0f, 318.0f, 100.0f) };
-	private static readonly (float X, float Y, float W, float H)[] Icons = { (128.0f, 97.0f, 49.0f, 65.0f), (96.0f, 212.0f, 58.0f, 75.0f), (157.0f, 314.0f, 50.0f, 156.0f) };
+	private static readonly (float X, float Y, float W, float H)[] Icons = { (131.0f, 97.0f, 56.0f, 70.0f), (96.0f, 212.0f, 58.0f, 75.0f), (157.0f, 314.0f, 50.0f, 156.0f) };
 	private static readonly (float Right, float Y)[] Counts = { (97.5f, 103.0f), (62.0f, 215.0f), (125.0f, 317.0f) };
 
 	private readonly Dictionary<char, (float W, float H)> _glyphs = new();

@@ -6,10 +6,13 @@
 // 35 fps rig captures of the original menu (logs/pause/rig/, scan lines and absolute-labelled
 // crops of the idle frame t00334, 640x480 PAL). All distances below are in those frame pixels,
 // relative to each element's own box centre (TwinsanityPause.cs places the boxes):
-//   swirl  - ellipse bands about (326,236): outer radii (227,208) with a thin white rim, the outer
-//            blue band down to normalised radius 0.79 (y 30..74 on top, x 494..541 on the right),
-//            the white band to 0.52 (inner edges at (419,170) and (400,151)), inner blue inside;
-//            plus the inner blue's "hook" under the 0%, a disc about (465,290) r=62;
+//   swirl  - ellipse bands about (318,210): outer radii (238,185) with a thin white rim (edges
+//            measured where no disc, track or ball covers them: left x~80 at y~155, top y~26,
+//            bottom 347 at x=200 and 370 at x=400), the outer blue band down to normalised
+//            radius 0.77 (y 30..74 on top, x 495..541 at y=170), white inside it;
+//            the inner blue is a crescent right of the badge (x > 325, clear of the badge circle
+//            about (290,176) r=100) that runs down into the "hook" under the 0%, a disc about
+//            (465,290) r=62;
 //   disc   - a counter disc: graded blue fill lit from the top left, white rim from r=0.90;
 //   ball   - the menu ball, same construction, rim from 0.93;
 //   track  - the gem track: a cyan band r=127..167 with white edging (122..172) on the
@@ -61,16 +64,18 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     if (shape == 0)
     {
-        // The swirl, in frame pixels about its centre (326,236); the box is 462x424.
-        const float2 p = input.local * float2(231.0, 212.0);
-        const float e = length(p / float2(227.0, 208.0));
+        // The swirl, in frame pixels about its centre (318,210); the box is 484x378.
+        const float2 p = input.local * float2(242.0, 189.0);
+        const float e = length(p / float2(238.0, 185.0));
         if (e > 1.02) { discard; }
         if (e > 1.0)        { col = PALE; }        // outer white rim
-        else if (e > 0.79)  { col = SWIRL_BLUE; }  // outer blue band
-        else if (e > 0.52)  { col = PALE; }        // white band
-        else                { col = INNER_BLUE; }  // inner blue (under the badge)
-        // The inner blue's hook, carrying the 0%, over the white band at the lower right.
-        if (e <= 0.79 && length(p - float2(139.0, 54.0)) < 62.0) { col = INNER_BLUE; }
+        else if (e > 0.77)  { col = SWIRL_BLUE; }  // outer blue band
+        else                { col = PALE; }        // white band
+        // The inner blue crescent right of the badge (badge circle about (290,176) r=100), and
+        // its hook carrying the 0%.
+        const bool crescent = e < 0.62 && p.x > 7.0 && length(p - float2(-28.0, -34.0)) > 100.0;
+        const bool hook = e <= 0.77 && length(p - float2(147.0, 80.0)) < 62.0;
+        if (crescent || hook) { col = INNER_BLUE; }
         alpha = smoothstep(1.02, 1.005, e);
     }
     else if (shape == 1 || shape == 2)
