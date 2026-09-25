@@ -48,7 +48,52 @@ carries the same decisions for agent sessions.
    beside `capture_texture` output) -> PS2 asset browser -> level rebuild canvas
    -> entity spawn sheet -> spline/set-piece editor.
 
+## Extracting assets (`tools/tw-extract`)
+
+`tw-extract` reads the untouched PAL disc directly (it refuses any image whose
+PCSX2 CRC is not `1510E1D1`) and writes everything into the gitignored
+`projects/Twinsanity/assets/`. It is a .NET Framework 4.8 console tool built on
+the MIT `Twinsanity` library from a local CrashModded checkout
+(`tools/twinsanity-editor`), which is referenced by path and never copied here.
+It is not part of the CMake build.
+
+    dotnet build tools/tw-extract -c Release -p:TwinsanityDll=<CrashModded>/tools/twinsanity-editor/Twinsanity/bin/Release/Twinsanity.dll
+    tools/tw-extract/bin/Release/net48/tw-extract.exe --iso "<original PAL .iso>"
+
+Run from the repo root. Options: `--out <assets dir>`, `--only <substring>`
+(e.g. `Levels/Earth/Hub`) and `--cache <dir>` (unpacked archive files, default
+`%TEMP%/tw-extract/<crc>`). A full run takes about a minute.
+
+|Output|Contents|
+|---|---|
+|`textures/<hash>.png`|Every decoded texture, named by content, shared by all models|
+|`scenery/<Area>/<Level>/<chunk>/<chunk>.gltf`|A chunk's static scenery in world space, one primitive per material|
+|`scenery/.../<chunk>_sky.gltf`|The chunk's skydome|
+|`scenery/.../<chunk>_dynamic.gltf`|Animated scenery pieces at their initial transforms|
+|`objects/<Object>/<Object>[_<n>].gltf`|A game object's graphics: skeleton, skin, joint-attached rigid parts. `_<n>` is one per graphics set; `@<chunk>` marks a differing model under a name another chunk already used|
+|`images/<path>/<stem>_NN.png`|Gallery / loading-screen pictures, as the tiles the disc stores them in|
+
+Load any of them with the editor's Add to Scene or the MCP `add_model` tool.
+Conversion notes:
+
+- Game space is mirrored on X (as the Twinsanity editor does), so glTF is
+  right-handed Y-up; scenery instance matrices are applied row-vector
+  (`p * M`).
+- Texture and vertex alpha is re-decoded from the raw GS data: the library
+  stores `(byte)(a << 1)`, which turns opaque `0x80` into transparent `0`.
+- Vertex colour goes out as `COLOR_0 = min(byte / 128, 1)` (the GS reads `0x80`
+  as 1.0). Scenery typically sits around `0xB0`, so the overbright part is
+  clamped.
+- The engine does not apply `COLOR_0` to imported glTF materials yet (the bake
+  has no `modulateVertexColor` path), so the baked PS2 lighting is present in
+  the files but not shown in the editor.
+- Animations, collision, object placement (instances), particles and the
+  frontend are not extracted yet. Dynamic-scenery rotation assumes an
+  `(x, y, z, w)` quaternion and has not been checked against the game.
+
 ## Status
 
-- Editor/framework split phases 1-3 landed (see git log; 5+ local commits).
-- Flavor mechanism: NOT STARTED (this document is the agreed plan).
+- Editor/framework split phases 1-3 landed.
+- Flavor mechanism and the Reference Images panel landed (sequencing 1-2).
+- `tools/tw-extract` landed (sequencing 3): the whole disc extracts with no
+  failures; beach scenery, Crash, Aku Aku and a crab were checked in the editor.

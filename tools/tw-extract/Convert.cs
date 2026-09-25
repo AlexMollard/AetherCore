@@ -1,0 +1,397 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
+using System.Numerics;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using Twinsanity;
+using Path = System.IO.Path;
+
+namespace TwExtract
+{
+	// Everything one level file's graphics section holds, keyed by record ID per item type.
+	sealed class Gfx
+	{
+		public readonly Dictionary<uint, Texture> Textures = new Dictionary<uint, Texture>();
+		public readonly Dictionary<uint, Twinsanity.Material> Materials = new Dictionary<uint, Twinsanity.Material>();
+		public readonly Dictionary<uint, Model> Models = new Dictionary<uint, Model>();
+		public readonly Dictionary<uint, RigidModel> Rigids = new Dictionary<uint, RigidModel>();
+		public readonly Dictionary<uint, LodModel> Lods = new Dictionary<uint, LodModel>();
+		public readonly Dictionary<uint, Skydome> Skydomes = new Dictionary<uint, Skydome>();
+		public readonly Dictionary<uint, Skin> Skins = new Dictionary<uint, Skin>();
+		public readonly Dictionary<uint, BlendSkin> BlendSkins = new Dictionary<uint, BlendSkin>();
+
+		// The graphics section is 11 in an .rm2 and 6 in an .sm2. Sub-section IDs differ between the two
+		// (RigidModel is 3 in one, 6 in the other), so items are grouped by type instead of by sub-ID.
+		public Gfx(TwinsFile file, uint sectionId)
+		{
+			if (!file.ContainsItem(sectionId))
+			{
+				return;
+			}
+			foreach (var item in Items(file.GetItem<TwinsSection>(sectionId)))
+			{
+				switch (item)
+				{
+					case Texture t: Textures[t.ID] = t; break;
+					case Twinsanity.Material m: Materials[m.ID] = m; break;
+					case Model m: Models[m.ID] = m; break;
+					case RigidModel r: Rigids[r.ID] = r; break;
+					case LodModel l: Lods[l.ID] = l; break;
+					case Skydome s: Skydomes[s.ID] = s; break;
+					case Skin s: Skins[s.ID] = s; break;
+					case BlendSkin b: BlendSkins[b.ID] = b; break;
+				}
+			}
+		}
+
+		public static IEnumerable<TwinsItem> Items(TwinsSection section)
+		{
+			foreach (var r in section.Records)
+			{
+				if (r is TwinsSection child)
+				{
+					foreach (var nested in Items(child))
+					{
+						yield return nested;
+					}
+				}
+				else
+				{
+					yield return r;
+				}
+			}
+		}
+	}
+
+	// Textures are written once, content-addressed, into <out>/textures/ and shared by every model.
+	sealed class TextureStore
+	{
+		readonly string m_dir;
+		readonly Dictionary<Texture, string> m_names = new Dictionary<Texture, string>();
+		public int Written, Undecodable;
+
+		public TextureStore(string outRoot)
+		{
+			m_dir = Path.Combine(outRoot, "textures");
+			Directory.CreateDirectory(m_dir);
+		}
+
+		// File name (no directory) of the PNG for this texture, or null when its pixel format has no decoder.
+		public string Name(Texture t)
+		{
+			if (m_names.TryGetValue(t, out var cached))
+			{
+				return cached;
+			}
+			var rgba = Pixels.Decode(t);
+			string name = null;
+			if (rgba == null)
+			{
+				Undecodable++;
+			}
+			else
+			{
+				name = Hash.Of(BitConverter.GetBytes(t.Width), BitConverter.GetBytes(t.Height), rgba) + ".png";
+				string path = Path.Combine(m_dir, name);
+				if (!File.Exists(path))
+				{
+					Pixels.SavePng(path, t.Width, t.Height, rgba);
+					Written++;
+				}
+			}
+			return m_names[t] = name;
+		}
+	}
+
+	static class Pixels
+	{
+		static readonly BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
+		static T Field<T>(Texture t, string name) => (T)typeof(Texture).GetField(name, Private).GetValue(t);
+
+		// RGBA8, straight alpha, rows top-down in the library's orientation. Decoded here rather than read from
+		// Texture.RawData because the library stores GS alpha as (byte)(a << 1): 0x80 (opaque) wraps to 0, which
+		// would turn every opaque texel transparent. PS2 alpha is 0..0x80, so this uses min(a * 2, 255).
+		public static byte[] Decode(Texture t)
+		{
+			int w = t.Width, h = t.Height;
+			var raw = Field<byte[]>(t, "imageData");
+			if (raw == null)
+			{
+				return null;
+			}
+			var rgba = new byte[w * h * 4];
+			switch (t.PixelFormat)
+			{
+				case Texture.TexturePixelFormat.PSMCT32:
+					for (int i = 0; i < w * h; i++)
+					{
+						rgba[i * 4 + 0] = raw[i * 4 + 0];
+						rgba[i * 4 + 1] = raw[i * 4 + 1];
+						rgba[i * 4 + 2] = raw[i * 4 + 2];
+						rgba[i * 4 + 3] = Alpha(raw[i * 4 + 3]);
+					}
+					return rgba;
+				case Texture.TexturePixelFormat.PSMT8:
+				{
+					// Same GS-memory round trip as Texture.Load's PSMT8 branch, keeping the palette's raw alpha.
+					var ez = new EzSwizzle();
+					ez.writeTexPSMCT32(0, 1, 0, 0, Field<int>(t, "rrw"), Field<int>(t, "rrh"), raw);
+					var index = new byte[w * h];
+					ez.readTexPSMT8(0, Field<int>(t, "textureBufferWidth"), 0, 0, w, h, ref index);
+					var pal = new byte[256 * 4];
+					ez.readTexPSMCT32(Field<int>(t, "clutBufferBasePointer"), 1, 0, 0, 16, 16, ref pal);
+					// CSM1 CLUT layout: entries 8..15 and 16..23 of every 32 are stored swapped.
+					for (int block = 0; block < 8; block++)
+					{
+						for (int j = 8 + block * 32; j < 16 + block * 32; j++)
+						{
+							for (int b = 0; b < 4; b++)
+							{
+								(pal[j * 4 + b], pal[(j + 8) * 4 + b]) = (pal[(j + 8) * 4 + b], pal[j * 4 + b]);
+							}
+						}
+					}
+					for (int y = 0; y < h; y++)
+					{
+						int src = (h - 1 - y) * w; // Texture.Load flips PSMT8 vertically
+						for (int x = 0; x < w; x++)
+						{
+							int p = index[src + x] * 4, o = (y * w + x) * 4;
+							rgba[o + 0] = pal[p + 0];
+							rgba[o + 1] = pal[p + 1];
+							rgba[o + 2] = pal[p + 2];
+							rgba[o + 3] = Alpha(pal[p + 3]);
+						}
+					}
+					return rgba;
+				}
+				default:
+					return null;
+			}
+		}
+
+		static byte Alpha(byte gs) => (byte)Math.Min(gs * 2, 255);
+
+		public static void SavePng(string path, int w, int h, byte[] rgba)
+		{
+			using (var bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+			{
+				var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+				var bgra = new byte[w * h * 4];
+				for (int i = 0; i < w * h; i++)
+				{
+					bgra[i * 4 + 0] = rgba[i * 4 + 2];
+					bgra[i * 4 + 1] = rgba[i * 4 + 1];
+					bgra[i * 4 + 2] = rgba[i * 4 + 0];
+					bgra[i * 4 + 3] = rgba[i * 4 + 3];
+				}
+				for (int y = 0; y < h; y++)
+				{
+					Marshal.Copy(bgra, y * w * 4, data.Scan0 + y * data.Stride, w * 4);
+				}
+				bmp.UnlockBits(data);
+				bmp.Save(path, ImageFormat.Png);
+			}
+		}
+	}
+
+	static class Hash
+	{
+		public static string Of(params byte[][] parts)
+		{
+			using (var sha = SHA1.Create())
+			{
+				foreach (var p in parts)
+				{
+					sha.TransformBlock(p, 0, p.Length, null, 0);
+				}
+				sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+				return BitConverter.ToString(sha.Hash, 0, 8).Replace("-", "").ToLowerInvariant();
+			}
+		}
+	}
+
+	// A glTF under construction. Game materials become plain glTF materials (texture, alpha mode, double
+	// sided), which the engine's bake turns into .material files beside the model.
+	sealed class Export
+	{
+		public readonly Gltf Gltf = new Gltf();
+		readonly Gfx m_gfx;
+		readonly TextureStore m_textures;
+		readonly Dictionary<uint, int> m_materialIndex = new Dictionary<uint, int>();
+		readonly Dictionary<string, int> m_byName = new Dictionary<string, int>();
+		readonly string m_texturesRel;
+
+		public Export(Gfx gfx, TextureStore textures, string texturesRelativeToGltf)
+		{
+			m_gfx = gfx;
+			m_textures = textures;
+			m_texturesRel = texturesRelativeToGltf;
+		}
+
+		public int Material(uint materialId)
+		{
+			if (m_materialIndex.TryGetValue(materialId, out int index))
+			{
+				return index;
+			}
+			string texture = null;
+			bool blend = false, mask = false;
+			float cutoff = 0.5f;
+			if (m_gfx.Materials.TryGetValue(materialId, out var mat))
+			{
+				// Same pick as the Twinsanity editor's viewer: the first shader that maps a texture.
+				var shader = mat.Shaders.FirstOrDefault(s => s.TxtMapping == TwinsShader.TextureMapping.ON && s.TextureId != 0)
+				             ?? mat.Shaders.FirstOrDefault();
+				if (shader != null)
+				{
+					if (shader.TxtMapping == TwinsShader.TextureMapping.ON && m_gfx.Textures.TryGetValue(shader.TextureId, out var tex))
+					{
+						texture = m_textures.Name(tex);
+					}
+					blend = shader.ABlending == TwinsShader.AlphaBlending.ON;
+					mask = !blend && shader.ATest == TwinsShader.AlphaTest.ON;
+					cutoff = Math.Min(shader.AlphaValueToBeComparedTo * 2, 255) / 255f;
+				}
+			}
+			// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
+			// the model, so equal names must mean equal content.
+			string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}"));
+			if (m_byName.TryGetValue(name, out index))
+			{
+				return m_materialIndex[materialId] = index;
+			}
+			// doubleSided: the GS never culls, and the game leaves culling off for foliage, cloth and decals.
+			var gltfMat = new Dictionary<string, object>
+			{
+				["name"] = name,
+				["pbrMetallicRoughness"] = new Dictionary<string, object> { ["metallicFactor"] = 0f, ["roughnessFactor"] = 1f },
+				["doubleSided"] = true,
+			};
+			if (texture != null)
+			{
+				((Dictionary<string, object>)gltfMat["pbrMetallicRoughness"])["baseColorTexture"] =
+				        new Dictionary<string, object> { ["index"] = Gltf.TextureFor(m_texturesRel + "/" + texture) };
+			}
+			if (blend)
+			{
+				gltfMat["alphaMode"] = "BLEND";
+			}
+			else if (mask)
+			{
+				gltfMat["alphaMode"] = "MASK";
+				gltfMat["alphaCutoff"] = cutoff;
+			}
+			return m_materialIndex[materialId] = m_byName[name] = Gltf.AddMaterial(gltfMat);
+		}
+
+		public string Save(string gltfPath)
+		{
+			Directory.CreateDirectory(Path.GetDirectoryName(gltfPath));
+			Gltf.Save(gltfPath);
+			// The editor reuses an existing <stem>.mesh without comparing it to the source, so a re-extraction
+			// has to drop it to get the new glTF baked.
+			File.Delete(Path.ChangeExtension(gltfPath, ".mesh"));
+			return gltfPath;
+		}
+	}
+
+	// Game space -> glTF space. Twinsanity is mirrored relative to glTF's right-handed frame; like the
+	// Twinsanity editor, X is negated. Mirroring flips triangle winding, which Strip() accounts for.
+	static class Space
+	{
+		public static Vector3 Mirror(Vector3 v) => new Vector3(-v.X, v.Y, v.Z);
+		public static Quaternion Mirror(Quaternion q) => new Quaternion(q.X, -q.Y, -q.Z, q.W);
+
+		// PS2 vertex colour byte: the GS treats 0x80 as 1.0 (MODULATE is tex * col >> 7). glTF's COLOR_0 is a
+		// 0..1 multiplier, so shading below 0x80 is exact and the overbright headroom above it (typical
+		// scenery sits around 0xB0) is clamped.
+		public static float Channel(int gs) => Math.Min(gs / 128f, 1f);
+	}
+
+	static class Meshes
+	{
+		// Triangle-strip -> list, the rule the game data follows: vertex j+2's connection flag says whether
+		// (j, j+1, j+2) is a triangle, alternating orientation. Emitted reversed because of the X mirror.
+		public static void Strip(Prim p, uint baseVertex, int count, Func<int, bool> conn)
+		{
+			for (int j = 0; j + 2 < count; j++)
+			{
+				if (!conn(j + 2))
+				{
+					continue;
+				}
+				uint a = baseVertex + (uint)j, b = a + 1, c = a + 2;
+				if (j % 2 == 0)
+				{
+					p.Idx.Add(b); p.Idx.Add(a); p.Idx.Add(c);
+				}
+				else
+				{
+					p.Idx.Add(a); p.Idx.Add(b); p.Idx.Add(c);
+				}
+			}
+		}
+
+		// Rigid mesh vertices through an optional game-space affine transform (row-vector: p' = p * m).
+		public static void AppendModel(Prim p, Model.SubModel sub, Matrix4x4 xf)
+		{
+			var v = sub.Vertexes;
+			if (v == null || v.Count < 3)
+			{
+				return;
+			}
+			uint baseVertex = (uint)p.VertexCount;
+			foreach (var d in v)
+			{
+				var pos = Space.Mirror(Vector3.Transform(new Vector3(d.X, d.Y, d.Z), xf));
+				var n = Vector3.TransformNormal(new Vector3(d.NX, d.NY, d.NZ), xf);
+				n = n.LengthSquared() > 1e-12f ? Vector3.Normalize(Space.Mirror(n)) : Vector3.Zero; // filled by FillNormals
+				p.Pos.Add(pos.X); p.Pos.Add(pos.Y); p.Pos.Add(pos.Z);
+				p.Nrm.Add(n.X); p.Nrm.Add(n.Y); p.Nrm.Add(n.Z);
+				p.Uv.Add(d.U); p.Uv.Add(d.V);
+				// The emit colour is additive light baked per vertex; the editor sums it the same way.
+				p.Col.Add(Space.Channel(d.R + d.ER)); p.Col.Add(Space.Channel(d.G + d.EG)); p.Col.Add(Space.Channel(d.B + d.EB));
+				p.Col.Add(1f);
+			}
+			Strip(p, baseVertex, v.Count, j => v[j].Conn);
+		}
+
+		// Vertices without authored normals (skins, some props) get area-weighted face normals.
+		public static void FillNormals(Prim p)
+		{
+			var acc = new Vector3[p.VertexCount];
+			for (int i = 0; i + 2 < p.Idx.Count; i += 3)
+			{
+				int a = (int)p.Idx[i], b = (int)p.Idx[i + 1], c = (int)p.Idx[i + 2];
+				var n = Vector3.Cross(At(p.Pos, b) - At(p.Pos, a), At(p.Pos, c) - At(p.Pos, a));
+				acc[a] += n; acc[b] += n; acc[c] += n;
+			}
+			bool hadNormals = p.Nrm.Count == p.Pos.Count;
+			for (int v = 0; v < p.VertexCount; v++)
+			{
+				if (hadNormals && At(p.Nrm, v).LengthSquared() > 0.5f)
+				{
+					continue;
+				}
+				var n = acc[v].LengthSquared() > 1e-20f ? Vector3.Normalize(acc[v]) : Vector3.UnitY;
+				if (!hadNormals)
+				{
+					p.Nrm.Add(n.X); p.Nrm.Add(n.Y); p.Nrm.Add(n.Z);
+				}
+				else
+				{
+					p.Nrm[v * 3] = n.X; p.Nrm[v * 3 + 1] = n.Y; p.Nrm[v * 3 + 2] = n.Z;
+				}
+			}
+		}
+
+		public static Vector3 At(List<float> xyz, int v) => new Vector3(xyz[v * 3], xyz[v * 3 + 1], xyz[v * 3 + 2]);
+	}
+}

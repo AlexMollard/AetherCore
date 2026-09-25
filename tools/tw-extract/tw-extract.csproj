@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    tw-extract: Crash Twinsanity (PAL, SLES-52568) disc -> glTF + PNG for projects/Twinsanity/assets.
+    Not part of the CMake build: it needs the Twinsanity library from a local CrashModded checkout,
+    which never enters this repo. Point TwinsanityDll at it:
+      dotnet build tools/tw-extract -p:TwinsanityDll=<CrashModded>/tools/twinsanity-editor/Twinsanity/bin/Release/Twinsanity.dll
+    or set the TWINSANITY_DLL environment variable. See docs/twinsanity-editor.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net48 because Twinsanity.dll is a .NET Framework 4.8 library (System.Drawing). -->
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>tw-extract</AssemblyName>
+    <RootNamespace>TwExtract</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <TwinsanityDll Condition="'$(TwinsanityDll)' == ''">$(TWINSANITY_DLL)</TwinsanityDll>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="Twinsanity">
+      <HintPath>$(TwinsanityDll)</HintPath>
+    </Reference>
+  </ItemGroup>
+  <Target Name="RequireTwinsanityDll" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(TwinsanityDll)' == '' Or !Exists('$(TwinsanityDll)')"
+           Text="Twinsanity.dll not found ('$(TwinsanityDll)'). Pass -p:TwinsanityDll=&lt;path&gt; or set TWINSANITY_DLL; see docs/twinsanity-editor.md." />
+  </Target>
+</Project>
