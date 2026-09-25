@@ -1,4 +1,5 @@
 #include "utils/SettingsService.hpp"
+#include "audio/AudioSubsystem.hpp"
 #include "ui/CursorService.hpp"
 
 #include "AetherCore.hpp"
@@ -278,6 +279,13 @@ namespace aether
 			if (auto* engine = m_services.TryGet<AetherCore>())
 			{
 				engine->SetUiScale(m_values.graphics.uiScale);
+			}
+		}
+		else if (key.starts_with("audio."))
+		{
+			if (auto* audio = m_services.TryGet<audio::AudioSubsystem>())
+			{
+				audio->ApplySettings(m_values.audio);
 			}
 		}
 		else if (key == "window.width" || key == "window.height")

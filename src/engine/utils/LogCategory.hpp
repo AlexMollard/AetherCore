@@ -18,6 +18,7 @@ namespace aether
 		Camera,
 		UI,
 		Input,
+		Audio,
 		Unknown,
 	};
 }

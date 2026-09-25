@@ -184,6 +184,17 @@ namespace aether
 			bool pixelArt = true;      // nearest sampling, so small art scales up crisp
 		} cursor;
 
+		// Volume groups. All in 0..1 linear gain; a voice's final gain is
+		// master * bus * voice volume (see audio::AudioMath::EffectiveGain).
+		struct Audio
+		{
+			float masterVolume = 1.0f;
+			float musicVolume = 1.0f;
+			float sfxVolume = 1.0f;
+			float ambienceVolume = 1.0f;
+			bool muted = false;
+		} audio;
+
 		// NAT traversal servers, both plain IETF protocols (STUN: RFC 5389, TURN: RFC 5766 /
 		// 8656) so any of these can point at self-hosted coturn, a friend's box, or a paid
 		// provider - nothing here is tied to a vendor. See docs/multiplayer-relay.md.
@@ -294,6 +305,11 @@ namespace aether
 		f("network.allowRelay", settings.network.allowRelay);
 		f("network.rendezvousHost", settings.network.rendezvousHost);
 		f("network.rendezvousPort", settings.network.rendezvousPort);
+		f("audio.masterVolume", settings.audio.masterVolume);
+		f("audio.musicVolume", settings.audio.musicVolume);
+		f("audio.sfxVolume", settings.audio.sfxVolume);
+		f("audio.ambienceVolume", settings.audio.ambienceVolume);
+		f("audio.muted", settings.audio.muted);
 	}
 
 	// What a settings key means, what it will accept, and whether it needs a restart -

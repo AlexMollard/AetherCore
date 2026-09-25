@@ -100,6 +100,11 @@ namespace aether
 		        {"network.allowRelay", {.description = "Permit falling back to the TURN relay when a direct or punched connection fails. Off by default: relaying routes game traffic through a third party."}},
 		        {"network.rendezvousHost", {.description = "Rendezvous server that trades connect candidates with a peer on another network, so neither player forwards a port. Empty means LAN play only. It carries candidate addresses, never game traffic - run tools/rendezvous anywhere with a public address."}},
 		        {"network.rendezvousPort", {.description = "Rendezvous server port.", .minValue = 1.0, .maxValue = 65535.0}},
+		        {"audio.masterVolume", {.description = "Master output volume. Multiplies every bus.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"audio.musicVolume", {.description = "Music bus volume. 0..1 linear gain.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"audio.sfxVolume", {.description = "Sound-effect bus volume. 0..1 linear gain.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"audio.ambienceVolume", {.description = "Ambience bus volume. 0..1 linear gain.", .minValue = 0.0, .maxValue = 1.0}},
+		        {"audio.muted", {.description = "Silence all audio output without stopping the voices driving it."}},
 		});
 
 		template<class T>

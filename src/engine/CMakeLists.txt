@@ -109,6 +109,9 @@ if(WIN32)
     target_link_libraries(Engine PUBLIC ws2_32 winmm)
 endif()
 
+# miniaudio is header-only; the MINIAUDIO_IMPLEMENTATION TU lives in audio/.
+target_include_directories(Engine SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
+
 # VMA + stb are header-only; SYSTEM on VMA silences its header warnings. Jolt's include is
 # explicit because EXCLUDE_FROM_ALL can block propagation through target_link_libraries.
 target_include_directories(Engine SYSTEM PUBLIC "${VMA_SOURCE_DIR}/include")

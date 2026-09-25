@@ -5,6 +5,7 @@
 #include "scripting/CSharpScriptingSubsystem.hpp"
 
 #include "AetherCore.hpp"
+#include "audio/AudioSubsystem.hpp"
 #include "IEngineRuntime.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
@@ -148,6 +149,7 @@ namespace aether::app
 		{
 			m_sceneCtx.physics2D = dynamic_cast<aether::Physics2DSystem*>(phys2DSys);
 		}
+		m_sceneCtx.audio = context.TryGet<aether::audio::AudioSubsystem>();
 		m_sceneCtx.engineRuntime = &context.Get<aether::IEngineRuntime>();
 		if (auto* engine = context.TryGet<aether::AetherCore>())
 		{

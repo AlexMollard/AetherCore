@@ -129,6 +129,9 @@ Subsystem init order in `src/engine/AetherCore.cpp`:
 12. Register lighting compute passes
 13. Animation systems
 14. Swapchain recreation callback
+15. Audio (Full profile only; the UiShell/Launcher brings up none). Audio shuts
+    down FIRST in `~AetherCore` - its device thread mixes into clip buffers
+    loaded through the VFS, which must outlive it. See docs/audio.md.
 
 The engine also supports a `RuntimeProfile::UiShell` bring-up (`src/engine/RuntimeProfile.hpp`): window + Vulkan device + the Dear ImGui overlay only. It skips cameras, animation, and all scene render passes (steps 6, 11-13), and its render graph registers a single `$UiShellClear` swapchain-clear pass. This is what the `Launcher` runs on; the shared `Application` mirrors it at the app layer via `AETHERCORE_SCENE_APP` (wire ECS systems) and `AETHERCORE_WITH_IMGUI` (install the overlay). When touching init order, keep both the Full and UiShell paths working.
 
@@ -200,7 +203,7 @@ The MCP server auto-detects the build dir (override with `AETHER_BUILD_DIR`) and
 
 Dependencies are managed through CPM. Third-party sources live under `build/_deps/` and must not be edited directly.
 
-Key libraries: Vulkan SDK, GLFW, GLM, vk-bootstrap, volk, VMA, EnTT, Jolt Physics, Tracy, stb, cgltf, FreeType, zstd, xxHash, toml++, and bc7enc_rdo. Gameplay scripting runs on .NET (CoreCLR, hosted through nethost).
+Key libraries: Vulkan SDK, GLFW, GLM, vk-bootstrap, volk, VMA, EnTT, Jolt Physics, Tracy, stb, cgltf, FreeType, zstd, xxHash, toml++, and bc7enc_rdo. Audio is miniaudio (single-header; see docs/audio.md). Gameplay scripting runs on .NET (CoreCLR, hosted through nethost).
 
 ## Repo hygiene
 

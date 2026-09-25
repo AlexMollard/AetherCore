@@ -13,6 +13,7 @@
 
 #include "animation/AnimationSystem.hpp"
 #include "animation/SpriteAnimationSystem.hpp"
+#include "audio/AudioSystem.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/TileAssetStore.hpp"
@@ -388,7 +389,13 @@ namespace aether::app
 				attachContext.Get<World>().RegisterSystem(std::move(cameraSystem));
 				services.Register<aether::CameraSystem>(*cameraPtr);
 
-				// After everything: the host broadcasts post-simulation state, so clients
+				// After the camera system, on purpose: CameraSystem PUBLISHES the camera
+				// state the renderer draws with, and audio's listener is published from
+				// that same state, so the mix matches the view frame for frame.
+				auto audioSystem = std::make_unique<aether::audio::AudioSystem>(services);
+				attachContext.Get<World>().RegisterSystem(std::move(audioSystem));
+
+				// AFTER everything: the host broadcasts post-simulation state, so clients
 				// receive the world as it ended the frame rather than mid-update.
 				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::net::NetworkSendSystem>(networkRef));
 			}

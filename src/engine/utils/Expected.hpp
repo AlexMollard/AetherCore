@@ -48,6 +48,8 @@ namespace aether
 					return FormatError("UI", code, message);
 				case LogCategory::Input:
 					return FormatError("Input", code, message);
+				case LogCategory::Audio:
+					return FormatError("Audio", code, message);
 				case LogCategory::Unknown:
 					return FormatError("Unknown", code, message);
 				default:

@@ -23,6 +23,11 @@ namespace aether
 	class Physics2DSystem;
 	class IEngineRuntime;
 	class ServiceContainer;
+
+	namespace audio
+	{
+		class AudioSubsystem;
+	}
 	struct DebugVertex;
 } // namespace aether
 
@@ -46,6 +51,9 @@ namespace aether::app::scripting
 		aether::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
 		aether::Physics2DSystem* physics2D = nullptr;
+		// Null on a UiShell profile or when audio failed to init; every export
+		// treats that as "stay silent".
+		aether::audio::AudioSubsystem* audio = nullptr;
 		// Used to quiesce the render thread around script-triggered GPU work
 		aether::IEngineRuntime* engineRuntime = nullptr;
 		gpu::CommandPool uploadPool = nullptr;

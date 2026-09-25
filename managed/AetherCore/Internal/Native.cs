@@ -816,6 +816,32 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_particles_set_emitting(uint id, int on);
 
+    // ── Audio ─────────────────────────────────────────────────────────────────
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_audio_play_2d(string clipPath, float volume, float pitch, int loop, int bus);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_audio_play_3d(string clipPath, Vector3 position, float volume, float pitch, int loop, int bus, float minDistance, float maxDistance, int attenuationModel, float rolloff, float coneInnerDegrees, float coneOuterDegrees, float coneOuterVolume, float dopplerFactor);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_audio_stop(int voiceId);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_audio_play_music(string clipPath, float fadeSeconds, int loop, float volume);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_audio_stop_music(float fadeSeconds);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_audio_set_bus_volume(int bus, float volume);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial float aether_audio_get_bus_volume(int bus);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_audio_source_play(uint id);
+
     // â”€â”€ Effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_effect_set(uint id, string name);
@@ -1265,6 +1291,9 @@ internal static unsafe partial class Native
 
     [LibraryImport(Lib)]
     internal static partial void aether_anim_crossfade(uint id, int clipIndex, float seconds);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_anim_set_layer_clip(uint id, int clipIndex);
 
     [LibraryImport(Lib)]
     internal static partial void aether_anim_set_root_motion_enabled(uint id, int enabled);

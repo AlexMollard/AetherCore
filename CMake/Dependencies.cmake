@@ -379,6 +379,19 @@ CPMAddPackage(
     DOWNLOAD_ONLY  YES
 )
 
+# ── Audio (mixing + decoding) ─────────────────────────────────────────────────
+# miniaudio: single-header, public domain, Windows/Linux (WASAPI/ALSA + null),
+# built-in decoders for WAV/MP3/FLAC/Ogg-Vorbis. Chosen over OpenAL/SDL_mixer
+# because it needs no SDK or system library - CPM fetches one header and the
+# engine compiles its implementation into exactly one TU (AudioSubsystem.cpp).
+CPMAddPackage(
+    NAME miniaudio
+    GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+    GIT_TAG        0.11.22
+    GIT_SHALLOW    TRUE
+    DOWNLOAD_ONLY  YES
+)
+
 # ── Compression ───────────────────────────────────────────────────────────────
 CPMAddPackage(
     NAME zstd

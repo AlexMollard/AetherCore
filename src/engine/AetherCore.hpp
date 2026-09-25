@@ -83,6 +83,11 @@ namespace aether
 	class CameraSubsystem;
 	class RenderingSubsystem;
 
+	namespace audio
+	{
+		class AudioSubsystem;
+	}
+
 	// Owns the whole frame lifecycle: the render thread, the producer/game-thread
 	class AetherCore : public IEngineRuntime
 	{
@@ -354,6 +359,7 @@ namespace aether
 		std::unique_ptr<CameraSubsystem> m_cameras;
 		std::unique_ptr<IUiOverlay> m_uiOverlay;
 		std::unique_ptr<RenderingSubsystem> m_rendering;
+		std::unique_ptr<audio::AudioSubsystem> m_audio;
 
 		RuntimeProfile m_profile = RuntimeProfile::Full;
 

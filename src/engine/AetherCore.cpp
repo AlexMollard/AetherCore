@@ -20,6 +20,8 @@
 #include "animation/AnimationCompiler.hpp"
 #include "animation/AnimationDatabase.hpp"
 
+#include "audio/AudioSubsystem.hpp"
+
 #include "assets/GltfAsset.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "camera/CameraSubsystem.hpp"
@@ -178,6 +180,28 @@ namespace aether
 
 		m_gpu->SetSwapchainRecreatedCallback([this]() { m_rendering->RecreateSwapchainResources(m_services); });
 
+		// Audio is Full-runtime only (the Launcher's UiShell profile must not
+		// open a device). It needs no GPU and no window - just the VFS mounts
+		// made at the top of this constructor - so it can come up last. It must
+		// shut down FIRST in the destructor, before the VFS its clips loaded
+		// through goes away.
+		if (fullRuntime)
+		{
+			m_audio = std::make_unique<audio::AudioSubsystem>();
+			if (const Expected<void> audioInit = m_audio->Init({.headless = false}); !audioInit.has_value())
+			{
+				// Init never throws and falls back to the null backend; reaching
+				// here means something genuinely broke. Log and continue silent
+				// rather than taking the whole engine down over no audio.
+				AE_ERROR(LogCategory::Audio, "Audio failed to initialize: {}", audioInit.error().ToString());
+				m_audio.reset();
+			}
+			else
+			{
+				m_services.Register<audio::AudioSubsystem>(*m_audio);
+			}
+		}
+
 		// Referencing the anchor is what pulls the override translation unit out of
 		// Engine.lib. Without it the linker discards an object file nothing names, and every
 		// allocation silently falls back to the CRT while the build still succeeds.
@@ -189,6 +213,14 @@ namespace aether
 
 	AetherCore::~AetherCore()
 	{
+		// Audio first: its voices reference clip bytes and VFS paths, and its
+		// device thread mixes into buffers we are about to free. Nothing below
+		// reads audio state.
+		if (m_audio)
+		{
+			m_audio->Shutdown();
+		}
+
 		// Ensure the render thread is joined before we tear anything down. Stop()
 		m_renderThread.Stop();
 

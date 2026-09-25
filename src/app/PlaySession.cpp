@@ -8,6 +8,7 @@
 #include "PlayState.hpp"
 #include "animation/SpriteAnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
+#include "audio/AudioSubsystem.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "SceneSelection.hpp"
 #include "editor/UndoStack.hpp"
@@ -190,6 +191,15 @@ namespace aether::app
 
 		playState->SetMode(PlayState::Mode::Editing);
 
+		// The scene is about to be snapshotted back: no sound of the dead
+		// session may survive it (looping ambience would play over edit mode
+		// forever). Level music goes with it - PlayMusic state is play state.
+		if (auto* audio = context.TryGet<aether::audio::AudioSubsystem>())
+		{
+			audio->StopAllVoices();
+			audio->SetSuspended(false);
+		}
+
 		if (auto* scriptSystem = context.TryGet<ScriptComponentSystem>())
 		{
 			scriptSystem->Invalidate(world);
@@ -321,6 +331,10 @@ namespace aether::app
 			return false;
 		}
 		playState->SetPaused(true);
+		if (auto* audio = context.TryGet<aether::audio::AudioSubsystem>())
+		{
+			audio->SetSuspended(true);
+		}
 		return true;
 	}
 
@@ -332,6 +346,10 @@ namespace aether::app
 			return false;
 		}
 		playState->SetPaused(false);
+		if (auto* audio = context.TryGet<aether::audio::AudioSubsystem>())
+		{
+			audio->SetSuspended(false);
+		}
 		return true;
 	}
 
@@ -343,6 +361,10 @@ namespace aether::app
 			return false;
 		}
 		playState->SetPaused(!playState->IsPaused());
+		if (auto* audio = context.TryGet<aether::audio::AudioSubsystem>())
+		{
+			audio->SetSuspended(playState->IsPaused());
+		}
 		return true;
 	}
 
