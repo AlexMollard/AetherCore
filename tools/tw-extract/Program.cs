@@ -144,7 +144,7 @@ namespace TwExtract
 			if (file.ContainsItem(0) && file.GetItem<TwinsItem>(0) is SceneryData scenery && scenery.SceneryRoot != null)
 			{
 				var ex = NewExport(gfx, dir);
-				var prims = new Dictionary<uint, Prim>();
+				var prims = new Dictionary<(uint mat, int layer), Prim>();
 				int instances = 0;
 				void Leaf(SceneryData.SceneryModelStruct leaf)
 				{
@@ -160,7 +160,7 @@ namespace TwExtract
 						{
 							continue;
 						}
-						AppendRigid(prims, rigid, model, InstanceMatrix(sub.ModelMatrix));
+						AppendRigid(ex, prims, rigid, model, InstanceMatrix(sub.ModelMatrix));
 						instances++;
 					}
 				}
@@ -190,12 +190,12 @@ namespace TwExtract
 				if (scenery.SkydomeID != 0 && gfx.Skydomes.TryGetValue(scenery.SkydomeID, out var sky))
 				{
 					var skyEx = NewExport(gfx, dir);
-					var skyPrims = new Dictionary<uint, Prim>();
+					var skyPrims = new Dictionary<(uint mat, int layer), Prim>();
 					foreach (uint id in sky.MeshIDs)
 					{
 						if (gfx.Rigids.TryGetValue(id, out var rigid) && gfx.Models.TryGetValue(rigid.MeshID, out var model))
 						{
-							AppendRigid(skyPrims, rigid, model, Matrix4x4.Identity);
+							AppendRigid(skyEx, skyPrims, rigid, model, Matrix4x4.Identity);
 						}
 					}
 					if (SingleMeshNode(skyEx, stem + "_sky", skyPrims))
@@ -217,8 +217,8 @@ namespace TwExtract
 					{
 						continue;
 					}
-					var prims = new Dictionary<uint, Prim>();
-					AppendRigid(prims, rigid, model, Matrix4x4.Identity);
+					var prims = new Dictionary<(uint mat, int layer), Prim>();
+					AppendRigid(ex, prims, rigid, model, Matrix4x4.Identity);
 					int mesh = AddMesh(ex, $"dynamic{placed}", prims);
 					if (mesh < 0)
 					{
@@ -254,20 +254,26 @@ namespace TwExtract
 		        m[2].X, m[2].Y, m[2].Z, 0,
 		        m[3].X, m[3].Y, m[3].Z, 1);
 
-		static void AppendRigid(Dictionary<uint, Prim> prims, RigidModel rigid, Model model, Matrix4x4 xf)
+		// The PS2 draws every distinct texture-mapped shader record of a material over the same
+		// geometry (base texture, then blended overlays - the sea surface, the cloud sheet), so
+		// each layer becomes its own primitive reusing the same vertices with its own material.
+		static void AppendRigid(Export ex, Dictionary<(uint mat, int layer), Prim> prims, RigidModel rigid, Model model, Matrix4x4 xf)
 		{
 			for (int k = 0; k < model.SubModels.Count; k++)
 			{
 				uint mat = k < rigid.MaterialIDs.Length ? rigid.MaterialIDs[k] : rigid.MaterialIDs.LastOrDefault();
-				if (!prims.TryGetValue(mat, out var p))
+				for (int layer = 0; layer < ex.LayerCount(mat); layer++)
 				{
-					prims[mat] = p = new Prim();
+					if (!prims.TryGetValue((mat, layer), out var p))
+					{
+						prims[(mat, layer)] = p = new Prim();
+					}
+					Meshes.AppendModel(p, model.SubModels[k], xf);
 				}
-				Meshes.AppendModel(p, model.SubModels[k], xf);
 			}
 		}
 
-		static int AddMesh(Export ex, string name, Dictionary<uint, Prim> prims)
+		static int AddMesh(Export ex, string name, Dictionary<(uint mat, int layer), Prim> prims)
 		{
 			foreach (var p in prims.Values)
 			{
@@ -277,7 +283,11 @@ namespace TwExtract
 			var merged = new Dictionary<int, Prim>();
 			foreach (var kv in prims.Where(kv => kv.Value.Idx.Count > 0))
 			{
-				int material = ex.Material(kv.Key, kv.Value.Col.Count > 0);
+				int material = ex.Material(kv.Key.mat, kv.Value.Col.Count > 0, kv.Key.layer);
+				if (material < 0)
+				{
+					continue;
+				}
 				if (merged.TryGetValue(material, out var into))
 				{
 					into.Append(kv.Value);
@@ -290,7 +300,7 @@ namespace TwExtract
 			return ex.Gltf.AddMesh(name, merged.Select(kv => (kv.Value, kv.Key)).ToList());
 		}
 
-		static bool SingleMeshNode(Export ex, string name, Dictionary<uint, Prim> prims)
+		static bool SingleMeshNode(Export ex, string name, Dictionary<(uint mat, int layer), Prim> prims)
 		{
 			int mesh = AddMesh(ex, name, prims);
 			if (mesh < 0)
@@ -371,6 +381,22 @@ namespace TwExtract
 					{
 						models[obj.ID] = VfsPath(Path.Combine(dir, fileName + ".gltf"));
 					}
+				}
+				// Multi-OGI objects animate by swapping model states (crates do this instead of
+			// skeletal clips - they are single-joint). Record which OGI id each _k file is so
+			// runtime code can follow the original's state sequences.
+				if (used.Count > 1)
+				{
+					var ogiMap = new List<object>();
+					for (int k = 0; k < used.Count; k++)
+					{
+						ogiMap.Add(new Dictionary<string, object> { ["k"] = k, ["ogi"] = used[k] });
+					}
+					var ob = new StringBuilder();
+					Json.Write(ob, new Dictionary<string, object> { ["ogis"] = ogiMap });
+					string objectDir = Path.Combine(s_out, "models", "objects", Safe(obj.Name));
+					Directory.CreateDirectory(objectDir);
+					File.WriteAllText(Path.Combine(objectDir, Safe(obj.Name) + ".ogis.json"), ob.ToString());
 				}
 				// Characters (the behaviour slots past OnPhysicsCollision): which clips each state plays.
 				if (obj.Scripts.Count > 12 && clips.Count > 0)
@@ -460,8 +486,8 @@ namespace TwExtract
 				{
 					continue;
 				}
-				var prims = new Dictionary<uint, Prim>();
-				AppendRigid(prims, rigid, model, Matrix4x4.Identity);
+				var prims = new Dictionary<(uint mat, int layer), Prim>();
+				AppendRigid(ex, prims, rigid, model, Matrix4x4.Identity);
 				// Names carry no record IDs: those differ per level and would defeat the cross-level dedupe.
 				string part = $"part{partCount++}_joint{link.JointIndex}";
 				int mesh = AddMesh(ex, $"{name}_{part}", prims);
@@ -482,7 +508,8 @@ namespace TwExtract
 			}
 
 			// Skin + blend skin: bind-pose model-space vertices weighted to up to three joints.
-			var skinPrims = new Dictionary<uint, Prim>();
+			// Skins are characters: single layer (multi-layer records only occur on scenery).
+			var skinPrims = new Dictionary<(uint mat, int layer), Prim>();
 			if (gi.SkinID != 0 && gfx.Skins.TryGetValue(gi.SkinID, out var skin))
 			{
 				foreach (var sub in skin.SubModels)
@@ -530,11 +557,11 @@ namespace TwExtract
 			return (t, q);
 		}
 
-		static Prim Get(Dictionary<uint, Prim> prims, uint material)
+		static Prim Get(Dictionary<(uint mat, int layer), Prim> prims, uint material)
 		{
-			if (!prims.TryGetValue(material, out var p))
+			if (!prims.TryGetValue((material, 0), out var p))
 			{
-				prims[material] = p = new Prim();
+				prims[(material, 0)] = p = new Prim();
 			}
 			return p;
 		}

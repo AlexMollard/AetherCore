@@ -138,9 +138,20 @@ namespace TwExtract
 			}
 			foreach (var (node, t, r, s) in tracks)
 			{
-				Channel(node, "translation", t, 3);
-				Channel(node, "rotation", r, 4);
-				Channel(node, "scale", s, 3);
+				// A null track means the clip does not animate this node at all (partial clips like
+				// the spin): emit nothing, so the engine keeps whatever the previous clip posed.
+				if (t != null)
+				{
+					Channel(node, "translation", t, 3);
+				}
+				if (r != null)
+				{
+					Channel(node, "rotation", r, 4);
+				}
+				if (s != null)
+				{
+					Channel(node, "scale", s, 3);
+				}
 			}
 			m_animations.Add(new Dictionary<string, object> { ["name"] = name, ["samplers"] = samplers, ["channels"] = channels });
 		}

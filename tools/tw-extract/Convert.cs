@@ -224,7 +224,7 @@ namespace TwExtract
 		public readonly Gltf Gltf = new Gltf();
 		readonly Gfx m_gfx;
 		readonly TextureStore m_textures;
-		readonly Dictionary<(uint, bool), int> m_materialIndex = new Dictionary<(uint, bool), int>();
+		readonly Dictionary<(uint, bool, int), int> m_materialIndex = new Dictionary<(uint, bool, int), int>();
 		readonly Dictionary<string, int> m_byName = new Dictionary<string, int>();
 		readonly string m_texturesRel;
 
@@ -235,70 +235,127 @@ namespace TwExtract
 			m_texturesRel = texturesRelativeToGltf;
 		}
 
-		// vertexLit: the primitive carries PS2 vertex colour, so the material takes Space.VertexGain.
-		public int Material(uint materialId, bool vertexLit)
+	// vertexLit: the primitive carries PS2 vertex colour, so the material takes Space.VertexGain.
+	// layer: which DISTINCT texture-mapped shader record of the material to export. Sea and sky
+	// materials carry two records: a base texture plus a blended overlay (the sea surface, the
+	// cloud sheet), and the PS2 draws each over the same geometry. Exporting only the first used
+	// to drop the sea/cloud layer entirely - the second record's texture appeared in no glTF.
+	public int Material(uint materialId, bool vertexLit, int layer = 0)
+	{
+		if (m_materialIndex.TryGetValue((materialId, vertexLit, layer), out int index))
 		{
-			if (m_materialIndex.TryGetValue((materialId, vertexLit), out int index))
+			return index;
+		}
+		string texture = null;
+		bool blend = false, mask = false;
+		float cutoff = 0.5f;
+		float scrollU = 0f, scrollV = 0f;
+		if (m_gfx.Materials.TryGetValue(materialId, out var mat))
+		{
+			// Distinct texture-mapped records in order; identical repeats (per-context copies)
+			// collapse into one layer. Sea and sky materials carry two: a base texture plus a
+			// blended overlay (the sea surface, the cloud sheet) the PS2 draws over the same
+			// geometry - exporting only the first dropped the sea/cloud layer entirely.
+			var mapped = mat.Shaders
+				.Where(s => s.TxtMapping == TwinsShader.TextureMapping.ON && s.TextureId != 0)
+				.GroupBy(s => (s.TextureId, s.ShaderType, s.FloatParam[0], s.FloatParam[1], s.FloatParam[2], s.FloatParam[3]))
+				.Select(g => g.First())
+				.ToList();
+			var shader = mapped.ElementAtOrDefault(layer)
+			             // Layer 0 falls back to the editor-viewer pick so texture-less materials
+			             // still export as before; deeper layers with no further record export nothing.
+			             ?? (layer == 0 ? mat.Shaders.FirstOrDefault() : null);
+			if (shader == null)
 			{
-				return index;
+				return -1;
 			}
-			string texture = null;
-			bool blend = false, mask = false;
-			float cutoff = 0.5f;
-			if (m_gfx.Materials.TryGetValue(materialId, out var mat))
+			if (shader.TxtMapping == TwinsShader.TextureMapping.ON && m_gfx.Textures.TryGetValue(shader.TextureId, out var tex))
 			{
-				// Same pick as the Twinsanity editor's viewer: the first shader that maps a texture.
-				var shader = mat.Shaders.FirstOrDefault(s => s.TxtMapping == TwinsShader.TextureMapping.ON && s.TextureId != 0)
-				             ?? mat.Shaders.FirstOrDefault();
-				if (shader != null)
+				texture = m_textures.Name(tex);
+			}
+			blend = shader.ABlending == TwinsShader.AlphaBlending.ON;
+			mask = !blend && shader.ATest == Twinsanity.TwinsShader.AlphaTest.ON;
+			cutoff = Math.Min(shader.AlphaValueToBeComparedTo * 2, 255) / 255f;
+			// Shader types 23 (the Hub's swimming foliage) and 26 (the pond/water murk) are the
+			// only shader kinds that carry float params (see TwinsShader.Read), and their first
+			// two floats are the U/V scroll speeds. Evidence: every other type reads
+			// f=[0,0,0,0] across the whole Hub dump, and the type-26 materials are exactly the
+			// water textures, while the sea (types 12/22) and sky (10/15/27) layers carry no
+			// params at all - their motion in the original is not material-driven. The
+			// magnitudes (0.03-0.45) only make sense as UV units per SECOND: per frame at the
+			// game's 50 Hz tick would wrap the texture ~17x per second. [2]/[3] are zero
+			// everywhere except type 26's [3]=0.03, which we do not interpret.
+			if (shader.ShaderType == 23 || shader.ShaderType == 26)
+			{
+				scrollU = shader.FloatParam[0];
+				scrollV = shader.FloatParam[1];
+				if (scrollU != 0f || scrollV != 0f)
 				{
-					if (shader.TxtMapping == TwinsShader.TextureMapping.ON && m_gfx.Textures.TryGetValue(shader.TextureId, out var tex))
-					{
-						texture = m_textures.Name(tex);
-					}
-					blend = shader.ABlending == TwinsShader.AlphaBlending.ON;
-					mask = !blend && shader.ATest == TwinsShader.AlphaTest.ON;
-					cutoff = Math.Min(shader.AlphaValueToBeComparedTo * 2, 255) / 255f;
+					Console.Error.WriteLine($"  material {materialId}: UV scroll ({scrollU:R}, {scrollV:R}) uv/s (shader type {shader.ShaderType})");
 				}
 			}
-			// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
-			// the model, so equal names must mean equal content.
-			string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}"));
-			if (m_byName.TryGetValue(name, out index))
-			{
-				return m_materialIndex[(materialId, vertexLit)] = index;
-			}
-			// doubleSided: the GS never culls, and the game leaves culling off for foliage, cloth and decals.
-			// baseColorFactor above 1 is outside glTF's schema but not its maths: it carries the part of the
-			// PS2's vertex-colour range COLOR_0 cannot (see Space.Channel), and the engine applies it as is.
-			float gain = vertexLit ? Space.VertexGain : 1f;
-			var gltfMat = new Dictionary<string, object>
-			{
-				["name"] = name,
-				["pbrMetallicRoughness"] = new Dictionary<string, object>
-				{
-					["baseColorFactor"] = new[] { gain, gain, gain, 1f },
-					["metallicFactor"] = 0f,
-					["roughnessFactor"] = 1f,
-				},
-				["doubleSided"] = true,
-			};
-			if (texture != null)
-			{
-				((Dictionary<string, object>)gltfMat["pbrMetallicRoughness"])["baseColorTexture"] =
-				        new Dictionary<string, object> { ["index"] = Gltf.TextureFor(m_texturesRel + "/" + texture) };
-			}
-			if (blend)
-			{
-				gltfMat["alphaMode"] = "BLEND";
-			}
-			else if (mask)
-			{
-				gltfMat["alphaMode"] = "MASK";
-				gltfMat["alphaCutoff"] = cutoff;
-			}
-			return m_materialIndex[(materialId, vertexLit)] = m_byName[name] = Gltf.AddMaterial(gltfMat);
 		}
+		// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
+		// the model, so equal names must mean equal content.
+		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{scrollU:R}|{scrollV:R}"));
+		if (m_byName.TryGetValue(name, out index))
+		{
+			return m_materialIndex[(materialId, vertexLit, layer)] = index;
+		}
+		// doubleSided: the GS never culls, and the game leaves culling off for foliage, cloth and decals.
+		// baseColorFactor above 1 is outside glTF's schema but not its maths: it carries the part of the
+		// PS2's vertex-colour range COLOR_0 cannot (see Space.Channel), and the engine applies it as is.
+		float gain = vertexLit ? Space.VertexGain : 1f;
+		var gltfMat = new Dictionary<string, object>
+		{
+			["name"] = name,
+			["pbrMetallicRoughness"] = new Dictionary<string, object>
+			{
+				["baseColorFactor"] = new[] { gain, gain, gain, 1f },
+				["metallicFactor"] = 0f,
+				["roughnessFactor"] = 1f,
+			},
+			["doubleSided"] = true,
+		};
+		if (texture != null)
+		{
+			((Dictionary<string, object>)gltfMat["pbrMetallicRoughness"])["baseColorTexture"] =
+			        new Dictionary<string, object> { ["index"] = Gltf.TextureFor(m_texturesRel + "/" + texture) };
+		}
+		if (blend)
+		{
+			gltfMat["alphaMode"] = "BLEND";
+		}
+		else if (mask)
+		{
+			gltfMat["alphaMode"] = "MASK";
+			gltfMat["alphaCutoff"] = cutoff;
+		}
+		if (scrollU != 0f || scrollV != 0f)
+		{
+			// Read back by AssetPacker's MeshProcessor (cgltf extras) into the baked
+			// material's uvScroll.
+			gltfMat["extras"] = new Dictionary<string, object>
+			{
+				["uv_scroll"] = new[] { scrollU, scrollV },
+			};
+		}
+		return m_materialIndex[(materialId, vertexLit, layer)] = m_byName[name] = Gltf.AddMaterial(gltfMat);
+	}
+
+	// How many DISTINCT texture-mapped layers a material exports (>= 1; texture-less
+	// materials export exactly the layer-0 fallback).
+	public int LayerCount(uint materialId)
+	{
+		if (!m_gfx.Materials.TryGetValue(materialId, out var mat))
+		{
+			return 1;
+		}
+		return Math.Max(1, mat.Shaders
+			.Where(s => s.TxtMapping == TwinsShader.TextureMapping.ON && s.TextureId != 0)
+			.GroupBy(s => (s.TextureId, s.ShaderType, s.FloatParam[0], s.FloatParam[1], s.FloatParam[2], s.FloatParam[3]))
+			.Count());
+	}
 
 		public string Save(string gltfPath)
 		{

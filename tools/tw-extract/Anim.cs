@@ -31,8 +31,7 @@ namespace TwExtract
 			var order = Enumerable.Range(0, joints.Length).OrderBy(i => Depth(joints, byIndex, i)).ToArray();
 			foreach (var (name, anim) in clips)
 			{
-				if (anim.TotalFrames == 0 || anim.AnimatedTransforms.Count < anim.TotalFrames
-				    || joints.Any(j => j.JointIndex >= anim.JointsSettings.Count))
+				if (anim.TotalFrames == 0 || anim.AnimatedTransforms.Count < anim.TotalFrames)
 				{
 					continue;
 				}
@@ -48,11 +47,23 @@ namespace TwExtract
 					s[i] = new float[frames * 3];
 				}
 				var rawScale = new Vector3[joints.Length];
+				var tracks = new List<(int Node, float[] T, float[] R, float[] S)>();
 				for (int f = 0; f < frames; f++)
 				{
 					foreach (int i in order)
 					{
 						var joint = joints[i];
+						if (joint.JointIndex >= anim.JointsSettings.Count)
+						{
+							// This clip does not animate this joint (partial clips like the spin animate the
+							// root only). Emit no channels for it so the engine layers the clip over whatever
+							// the previous clip posed - the bind pose would give a T-pose.
+							t[i] = null;
+							r[i] = null;
+							s[i] = null;
+							rawScale[i] = Vector3.One;
+							continue;
+						}
 						var js = anim.JointsSettings[(int)joint.JointIndex];
 						var (tr, rot, scale) = Evaluate(anim, js, f);
 						if ((js.Flags >> 12 & 1) != 0)
@@ -73,11 +84,19 @@ namespace TwExtract
 						t[i][f * 3] = mt.X; t[i][f * 3 + 1] = mt.Y; t[i][f * 3 + 2] = mt.Z;
 						r[i][f * 4] = mr.X; r[i][f * 4 + 1] = mr.Y; r[i][f * 4 + 2] = mr.Z; r[i][f * 4 + 3] = mr.W;
 						s[i][f * 3] = local.X; s[i][f * 3 + 1] = local.Y; s[i][f * 3 + 2] = local.Z;
+						if (f == 0)
+						{
+							tracks.Add((nodes[i], t[i], r[i], s[i]));
+						}
 					}
 				}
 				// glTF slerps the shortest way; keep consecutive keys in one hemisphere so it does.
 				foreach (var q in r)
 				{
+					if (q == null)
+					{
+						continue;
+					}
 					for (int f = 1; f < frames; f++)
 					{
 						float dot = q[f * 4] * q[f * 4 - 4] + q[f * 4 + 1] * q[f * 4 - 3] + q[f * 4 + 2] * q[f * 4 - 2] + q[f * 4 + 3] * q[f * 4 - 1];
@@ -90,7 +109,7 @@ namespace TwExtract
 						}
 					}
 				}
-				g.AddAnimation(name, times, Enumerable.Range(0, joints.Length).Select(i => (nodes[i], t[i], r[i], s[i])));
+				g.AddAnimation(name, times, tracks);
 				added++;
 			}
 			return added;
