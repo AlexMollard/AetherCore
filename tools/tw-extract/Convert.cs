@@ -224,7 +224,7 @@ namespace TwExtract
 		public readonly Gltf Gltf = new Gltf();
 		readonly Gfx m_gfx;
 		readonly TextureStore m_textures;
-		readonly Dictionary<uint, int> m_materialIndex = new Dictionary<uint, int>();
+		readonly Dictionary<(uint, bool), int> m_materialIndex = new Dictionary<(uint, bool), int>();
 		readonly Dictionary<string, int> m_byName = new Dictionary<string, int>();
 		readonly string m_texturesRel;
 
@@ -235,9 +235,10 @@ namespace TwExtract
 			m_texturesRel = texturesRelativeToGltf;
 		}
 
-		public int Material(uint materialId)
+		// vertexLit: the primitive carries PS2 vertex colour, so the material takes Space.VertexGain.
+		public int Material(uint materialId, bool vertexLit)
 		{
-			if (m_materialIndex.TryGetValue(materialId, out int index))
+			if (m_materialIndex.TryGetValue((materialId, vertexLit), out int index))
 			{
 				return index;
 			}
@@ -262,16 +263,24 @@ namespace TwExtract
 			}
 			// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
 			// the model, so equal names must mean equal content.
-			string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}"));
+			string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}"));
 			if (m_byName.TryGetValue(name, out index))
 			{
-				return m_materialIndex[materialId] = index;
+				return m_materialIndex[(materialId, vertexLit)] = index;
 			}
 			// doubleSided: the GS never culls, and the game leaves culling off for foliage, cloth and decals.
+			// baseColorFactor above 1 is outside glTF's schema but not its maths: it carries the part of the
+			// PS2's vertex-colour range COLOR_0 cannot (see Space.Channel), and the engine applies it as is.
+			float gain = vertexLit ? Space.VertexGain : 1f;
 			var gltfMat = new Dictionary<string, object>
 			{
 				["name"] = name,
-				["pbrMetallicRoughness"] = new Dictionary<string, object> { ["metallicFactor"] = 0f, ["roughnessFactor"] = 1f },
+				["pbrMetallicRoughness"] = new Dictionary<string, object>
+				{
+					["baseColorFactor"] = new[] { gain, gain, gain, 1f },
+					["metallicFactor"] = 0f,
+					["roughnessFactor"] = 1f,
+				},
 				["doubleSided"] = true,
 			};
 			if (texture != null)
@@ -288,7 +297,7 @@ namespace TwExtract
 				gltfMat["alphaMode"] = "MASK";
 				gltfMat["alphaCutoff"] = cutoff;
 			}
-			return m_materialIndex[materialId] = m_byName[name] = Gltf.AddMaterial(gltfMat);
+			return m_materialIndex[(materialId, vertexLit)] = m_byName[name] = Gltf.AddMaterial(gltfMat);
 		}
 
 		public string Save(string gltfPath)
@@ -309,10 +318,12 @@ namespace TwExtract
 		public static Vector3 Mirror(Vector3 v) => new Vector3(-v.X, v.Y, v.Z);
 		public static Quaternion Mirror(Quaternion q) => new Quaternion(q.X, -q.Y, -q.Z, q.W);
 
-		// PS2 vertex colour byte: the GS treats 0x80 as 1.0 (MODULATE is tex * col >> 7). glTF's COLOR_0 is a
-		// 0..1 multiplier, so shading below 0x80 is exact and the overbright headroom above it (typical
-		// scenery sits around 0xB0) is clamped.
-		public static float Channel(int gs) => Math.Min(gs / 128f, 1f);
+		// PS2 vertex colour byte: the GS treats 0x80 as 1.0 and multiplies in gamma space
+		// (MODULATE is tex * col >> 7), and scenery sits well above 0x80 (around 0xB0). The engine
+		// multiplies in linear space, so the equivalent factor is (byte / 128)^2.2. COLOR_0 must stay in
+		// 0..1, so it holds (byte / 255)^2.2 and the material's base colour factor the rest.
+		public static float Channel(int gs) => (float)Math.Pow(Math.Min(gs, 255) / 255.0, 2.2);
+		public static readonly float VertexGain = (float)Math.Pow(255.0 / 128.0, 2.2);
 	}
 
 	static class Meshes

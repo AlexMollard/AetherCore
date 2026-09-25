@@ -556,6 +556,24 @@ namespace aether::assetpipeline
 				std::vector<std::byte> data;
 			};
 
+			// glTF multiplies base colour by COLOR_0 wherever a primitive has one. Material flags are
+			// per material, so the flag goes on when any primitive drawing with it carries colours.
+			bool MaterialUsesVertexColor(const cgltf_data& data, const cgltf_material& mat)
+			{
+				for (cgltf_size mi = 0; mi < data.meshes_count; ++mi)
+				{
+					for (cgltf_size pi = 0; pi < data.meshes[mi].primitives_count; ++pi)
+					{
+						const cgltf_primitive& prim = data.meshes[mi].primitives[pi];
+						if (prim.material == &mat && FindAttr(prim, cgltf_attribute_type_color, 0) != nullptr)
+						{
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+
 			GltfMatResult GenerateGlTFMaterialData(const cgltf_material& mat, const cgltf_data& data, const std::string& gltfVfsPath)
 			{
 				const std::string matName = GetMaterialName(data, static_cast<int32_t>(&mat - data.materials));
@@ -575,6 +593,7 @@ namespace aether::assetpipeline
 				hdr.doubleSided = (mat.double_sided != 0) ? 1 : 0;
 				hdr.alphaBlend = (mat.alpha_mode == cgltf_alpha_mode_blend) ? 1 : 0;
 				hdr.alphaMask = (mat.alpha_mode == cgltf_alpha_mode_mask) ? 1 : 0;
+				hdr.modulateVertexColor = MaterialUsesVertexColor(data, mat) ? 1 : 0;
 
 				struct TexSlot
 				{

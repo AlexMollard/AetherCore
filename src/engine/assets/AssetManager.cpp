@@ -254,6 +254,7 @@ namespace aether
 					material.doubleSided = hdr.doubleSided != 0;
 					material.alphaBlend = hdr.alphaBlend != 0;
 					material.alphaMask = hdr.alphaMask != 0;
+					material.modulateVertexColor = hdr.modulateVertexColor != 0;
 
 					for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
 					{
@@ -480,6 +481,7 @@ namespace aether
 				mat.doubleSided = srcMat.doubleSided;
 				mat.alphaBlend = srcMat.alphaBlend;
 				mat.alphaMask = srcMat.alphaMask;
+				mat.modulateVertexColor = srcMat.modulateVertexColor;
 
 				// material's properties.toml. Intern into AssetManager-lifetime
 				if (!srcMat.shaderVfsPath.empty())

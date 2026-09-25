@@ -141,7 +141,10 @@ struct MaterialHeaderDisk
 	uint8_t alphaBlend = 0;
 	uint8_t alphaMask = 0;
 	uint8_t texturePathCount = 0;
-	uint8_t _pad[12] = {0};
+	// Multiply base colour by the mesh's COLOR_0 (glTF's rule). Carved from the old padding, so
+	// files written before it read 0 - exactly how they rendered.
+	uint8_t modulateVertexColor = 0;
+	uint8_t _pad[11] = {0};
 };
 
 // which only governs the fixed header layout above):

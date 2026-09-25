@@ -36,6 +36,7 @@ namespace aether::assets
 		bool doubleSided = false;
 		bool alphaBlend = false;
 		bool alphaMask = false;
+		bool modulateVertexColor = false;
 		std::int32_t baseColorTexture = -1;
 		std::int32_t metallicRoughnessTexture = -1;
 		std::int32_t normalTexture = -1;

@@ -628,6 +628,7 @@ namespace aether::assets
 			outMat.doubleSided = hdr.doubleSided != 0;
 			outMat.alphaBlend = hdr.alphaBlend != 0;
 			outMat.alphaMask = hdr.alphaMask != 0;
+			outMat.modulateVertexColor = hdr.modulateVertexColor != 0;
 
 			for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
 			{

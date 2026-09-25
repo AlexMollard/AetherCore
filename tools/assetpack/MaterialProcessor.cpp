@@ -118,6 +118,11 @@ namespace aether::assetpipeline
 				auto* const v = tbl["material"]["alphaMask"].as_boolean();
 				return v && v->get();
 			}();
+			const bool modulateVertexColor = [&]() -> bool
+			{
+				auto* const v = tbl["material"]["modulateVertexColor"].as_boolean();
+				return v && v->get();
+			}();
 
 			std::string shaderVfsPath;
 			{
@@ -160,6 +165,7 @@ namespace aether::assetpipeline
 			hdr.doubleSided = doubleSided ? 1 : 0;
 			hdr.alphaBlend = alphaBlend ? 1 : 0;
 			hdr.alphaMask = alphaMask ? 1 : 0;
+			hdr.modulateVertexColor = modulateVertexColor ? 1 : 0;
 			hdr.texturePathCount = static_cast<uint8_t>(textures.size());
 
 			std::vector<std::byte> out;

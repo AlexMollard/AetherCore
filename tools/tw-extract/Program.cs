@@ -262,7 +262,7 @@ namespace TwExtract
 			var merged = new Dictionary<int, Prim>();
 			foreach (var kv in prims.Where(kv => kv.Value.Idx.Count > 0))
 			{
-				int material = ex.Material(kv.Key);
+				int material = ex.Material(kv.Key, kv.Value.Col.Count > 0);
 				if (merged.TryGetValue(material, out var into))
 				{
 					into.Append(kv.Value);
