@@ -74,14 +74,28 @@ public static class CrateFx
 	public static void Spawned(Entity crateModel, int objectId, string modelPath)
 	{
 		s_paths[crateModel.Id] = modelPath;
-		// Nitro: the original plays a single short clip on its one joint (anim slot 4);
-		// with no extractable clip the shiver stands in for it.
 		if (objectId == 4)
 		{
 			// COM_NITRO_CRATE_DEFAULT: on a condition timer the crate ApplyVelocity-hops and
 			// SetWobble-tilts, then settles (states 1 -> 2 -> back). The rig (nitro2_*, 20 fps)
 			// shows hops ~0.9-2.3 s apart per crate, ~0.3 s airborne: v0 = 7 with g = 50.
 			s_nitros.Add(new Nitro { Model = crateModel, Home = crateModel.Position, NextHop = NextHopDelay() });
+		}
+	}
+
+	/// <summary>A crate's model rest position changed (a stacked crate fell); nitro hops land here.</summary>
+	public static void Moved(Entity crateModel, Vector3 home)
+	{
+		foreach (Nitro n in s_nitros)
+		{
+			if (n.Model.Id == crateModel.Id)
+			{
+				n.Home = home;
+				if (!n.Hopping)
+				{
+					n.Model.Position = home;
+				}
+			}
 		}
 	}
 
@@ -257,7 +271,8 @@ public static class CrateFx
 
 	private static Entity SpawnEmitter(string name, Vector3 center, string page, Vector4 uv, int count, float rate, float emitDuration,
 		float life, Vector3 velocity, Vector3 velJitter, Vector3 spawnJitter, float gravityY,
-		Vector4[] colorKeys, float[] alphaKeys, float[] sizeKeys, float[] rotKeys)
+		Vector4[] colorKeys, float[] alphaKeys, float[] sizeKeys, float[] rotKeys,
+		int shape = 0, float radialSpeed = 0.0f, bool additive = true)
 	{
 		Entity e = World.Create();
 		e.Name = name;
@@ -272,7 +287,9 @@ public static class CrateFx
 		}
 		c.SetString("texture", string.Format(kParticleTex, page));
 		c.SetInt("space", 1); // Billboard3D
-		c.SetInt("blend_mode", 1); // additive (every bank entry is TextureFilter Additive)
+		c.SetInt("blend_mode", additive ? 1 : 0); // disc TextureFilter: Additive -> additive, Modulation -> alpha
+		c.SetInt("emit_shape", shape);            // 0 box, 1 Radial, 2 ImprovedRadial (disc GenSort 6 / 11)
+		c.SetFloat("radial_speed", radialSpeed);
 		bool burstOnly = rate <= 0.0f;
 		c.SetBool("emit_on_start", burstOnly); // burst defs fire their count once, at spawn
 		c.SetBool("auto_destroy", true);
@@ -334,7 +351,7 @@ public static class CrateFx
 				new[] { 0f, 46431.45f * 1e-4f, 0.062f, 16117.997f * 1e-4f, 1f, 15893.261f * 1e-4f },
 				new[] { 0f, 0f, 1f, 31154f / 65536f * 360f });
 			SpawnEmitter("NitroExplosionB", center, "1", new Vector4(33.6f, 1.6f, 63.4f, 31.4f) / 128.0f,
-				14, 240.0f, 7.0f / 60.0f, 0.9150347f,
+				14, 120.0f, 7.0f / 60.0f, 0.9150347f,
 				new Vector3(0.0f, 16.82123f, 0.0f), new Vector3(1.84683f, 2.465651f, 1.815337f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -17.84222f,
 				new[] { CK(0f, 79.534f, 243.109f, 0f), CK(0.766f, 73.916f, 246.346f, 0f), CK(1f, 0f, 209.46f, 14.932f) },
 				new[] { 0f, 120.687f, 0.182f, 255f, 1f, 255f },
@@ -346,7 +363,7 @@ public static class CrateFx
 				new[] { CK(0f, 118.953f, 247.716f, 148.315f), CK(0.652f, 0f, 250.3f, 47.359f), CK(1f, 0f, 171.453f, 29.05f) },
 				new[] { 0f, 255f, 0.28f, 255f, 1f, 24.15f },
 				new[] { 0f, 43894.496f * 1e-4f, 1f, 18781.947f * 1e-4f },
-				new[] { 0f, 78299f / 65536f * 360f, 1f, 131072f / 65536f * 360f });
+				new[] { 0f, 78299f / 65536f * 360f, 1f, 78299f / 65536f * 360f }); // track ends at its first t = 1 key
 		}
 		else
 		{
@@ -358,7 +375,7 @@ public static class CrateFx
 				new[] { 0f, 46245.46f * 1e-4f, 0.062f, 16069.652f * 1e-4f, 0.979f, 15845.901f * 1e-4f, 1f, 26634.685f * 1e-4f },
 				new[] { 0f, 0f, 1f, 31154f / 65536f * 360f });
 			SpawnEmitter("TntExplosionB", center, "1", new Vector4(32.5f, 0.0f, 65.8f, 33.1f) / 128.0f,
-				14, 240.0f, 7.0f / 60.0f, 0.6961219f,
+				14, 120.0f, 7.0f / 60.0f, 0.6961219f,
 				new Vector3(0.0f, 16.21593f, 0.0f), new Vector3(3.193508f, 2.465651f, 3.05557f), new Vector3(0.410156f, 0.6070957f, 0.4170732f), -20.67021f,
 				new[] { CK(0f, 221.905f, 233.397f, 101.165f), CK(0.766f, 246.346f, 0f, 0f), CK(1f, 246.346f, 0f, 0f) },
 				new[] { 0f, 120.687f, 0.182f, 255f, 1f, 255f },
@@ -370,18 +387,22 @@ public static class CrateFx
 				new[] { CK(0f, 255f, 249.895f, 0f), CK(0.652f, 255f, 0f, 0f), CK(1f, 116.232f, 89.643f, 0f) },
 				new[] { 0f, 255f, 0.28f, 255f, 1f, 24.15f },
 				new[] { 0f, 43894.496f * 1e-4f, 1f, 18781.947f * 1e-4f },
-				new[] { 0f, 78299f / 65536f * 360f, 1f, 131072f / 65536f * 360f });
+				new[] { 0f, 78299f / 65536f * 360f, 1f, 78299f / 65536f * 360f }); // track ends at its first t = 1 key
 		}
 	}
 
-	// ── Crash landing dust ────────────────────────────────────────────────────────
-	// Rig (rig_jump_sheet): an ordinary jump landing throws nothing. Rig (rig_slam_ring,
-	// 0.05 s frames): a body slam is a white/pink flash blob (~0.1 s), then a ground-hugging
-	// ring of gold star sparkles that expands to ~4 crate widths and fades inside ~0.6 s.
-	// High-drop dust is gated at 24 units/s of fall (~6 units of drop with the game's
-	// g = 50); the rig threshold itself is [UNVERIFIED] - the beach has no clean high drop,
-	// so only "ordinary jumps are under it" is measured.
+	// ── Crash landing FX ─────────────────────────────────────────────────────────
+	// Both straight from the disc's ParticleData (Startup/Default.rm2, dump in
+	// logs/cratefx2/particles_land.json). Body slam = CRASH_DROP2 (49): GenSort Radial, 85
+	// additive sparks on page 1 born 1.1 u out on a horizontal ring (polar -84.6 deg) flying
+	// outward at 5.47 u/s, huge (2.89 u) and pink at birth, gold by 0.12 of their 0.53 s life,
+	// shrinking to 0.31 u - the rig's pink flash then gold ring (rig_sslam_*). High landing =
+	// crash_LAND1 (129): ImprovedRadial, 30 modulated grey puffs rising at 0.78 u/s^2. An
+	// ordinary jump landing throws nothing (rig_jump_sheet); the fall speed that switches the
+	// dust on is [UNVERIFIED] (24 u/s ~ a 6 u drop with the game's g = 50).
 	private const float LandDustMinFall = 24.0f;
+	private const int ShapeRadial = 1, ShapeImprovedRadial = 2;
+	private const float kRaw2Deg = 360.0f / 65536.0f;
 
 	public static void HookCrash()
 	{
@@ -394,53 +415,36 @@ public static class CrateFx
 		Vector3 at = crash.Self.Position;
 		if (slam)
 		{
-			SlamRing(at);
+			CrashDrop2(at);
 		}
 		else if (impact >= LandDustMinFall)
 		{
-			LandDust(at);
+			CrashLand1(at);
 		}
 	}
 
-	// The slam impact: a quick pink-white flash, then the expanding gold sparkle ring.
-	private static void SlamRing(Vector3 at)
+	private static void CrashDrop2(Vector3 at)
 	{
-		Vector3 ground = at + new Vector3(0.0f, 0.15f, 0.0f);
-		SpawnEmitter("SlamFlash", ground, "2", new Vector4(64.6f, 1.7f, 128.0f, 63.9f) / 128.0f,
-			2, 0.0f, 0.0f, 0.16f,
-			Vector3.Zero, Vector3.Zero, Vector3.Zero, 0.0f,
-			new[] { CK(0f, 255f, 240f, 255f), CK(1f, 255f, 120f, 230f) },
-			new[] { 0f, 255f, 0.6f, 200f, 1f, 0f },
-			new[] { 0f, 1.6f, 1f, 3.2f },
-			new[] { 0f, 0f, 1f, 0f });
-		// The ring: one small burst per spoke so the sparks fly radially and leave the middle
-		// empty (a single box-jittered emitter fills a square instead of drawing a ring).
-		const int spokes = 12;
-		for (int i = 0; i < spokes; i++)
-		{
-			float a = i * (MathF.Tau / spokes);
-			Vector3 dir = new(MathF.Cos(a), 0.0f, MathF.Sin(a));
-			SpawnEmitter("SlamRing", ground, "2", new Vector4(65.9f, 2.3f, 127.8f, 62.3f) / 128.0f,
-				3, 0.0f, 0.0f, 0.65f,
-				dir * 6.0f + new Vector3(0.0f, 0.6f, 0.0f), new Vector3(0.6f, 0.3f, 0.6f), new Vector3(0.15f, 0.0f, 0.15f), -2.0f,
-				new[] { CK(0f, 255f, 230f, 120f), CK(0.5f, 255f, 190f, 40f), CK(1f, 200f, 120f, 20f) },
-				new[] { 0f, 255f, 0.5f, 220f, 1f, 0f },
-				new[] { 0f, 0.55f, 0.5f, 0.45f, 1f, 0.2f },
-				new[] { 0f, 0f, 1f, 120f });
-		}
+		SpawnEmitter("CrashDrop2", at, "1", new Vector4(32.3f, 0.0f, 65.3f, 32.5f) / 128.0f,
+			85, 17.0f * 60.0f, 5.0f / 60.0f, 0.5315906f,
+			Vector3.Zero, new Vector3(0.0f, 32768f * kRaw2Deg, 0.0f), new Vector3(1.095946f, 32768f * kRaw2Deg, -15391f * kRaw2Deg), 0.0f,
+			new[] { CK(0f, 194.175659f, 0f, 255f), CK(0.119661361f, 255f, 238.68895f, 0f), CK(1f, 94.72229f, 0f, 0f) },
+			new[] { 0f, 32.3074951f, 0.02695064f, 176.109512f, 0.184894964f, 36.8630524f, 0.457681119f, 58.45761f, 1f, 0f },
+			new[] { 0f, 28900.1016f * 1e-4f, 0.096484974f, 7762.684f * 1e-4f, 1f, 3095.451f * 1e-4f },
+			new[] { 0f, 0f, 1f, 17f * kRaw2Deg },
+			ShapeRadial, 5.471634f);
 	}
 
-	// A heavy landing on sand: a few low tan puffs. None on ordinary jumps (measured).
-	private static void LandDust(Vector3 at)
+	private static void CrashLand1(Vector3 at)
 	{
-		Vector3 ground = at + new Vector3(0.0f, 0.2f, 0.0f);
-		SpawnEmitter("LandDust", ground, "0", new Vector4(0.0f, 64.2f, 64.1f, 128.0f) / 128.0f,
-			8, 80.0f, 0.1f, 0.45f,
-			new Vector3(0.0f, 2.5f, 0.0f), new Vector3(2.5f, 0.0f, 2.5f), new Vector3(0.4f, 0.1f, 0.4f), -3.0f,
-			new[] { CK(0f, 235f, 205f, 160f), CK(1f, 190f, 160f, 120f) },
-			new[] { 0f, 180f, 0.4f, 140f, 1f, 0f },
-			new[] { 0f, 0.5f, 1f, 0.9f },
-			new[] { 0f, 0f, 1f, 60f });
+		SpawnEmitter("CrashLand1", at, "0", new Vector4(0.0f, 63.8f, 64.2f, 128.0f) / 128.0f,
+			30, 15.0f * 60.0f, 2.0f / 60.0f, 0.7392572f,
+			Vector3.Zero, new Vector3(0.4752603f, 32768f * kRaw2Deg, 0.0f), new Vector3(0.75651f, 32768f * kRaw2Deg, 3467f * kRaw2Deg), 0.7759857f,
+			new[] { CK(0f, 254.25293f, 254.25293f, 254.25293f), CK(1f, 63.28308f, 63.28308f, 63.28308f) },
+			new[] { 0f, 0f, 0.115623765f, 39.66123f, 1f, 0f },
+			new[] { 0f, 5537.58838f * 1e-4f, 1f, 5537.58838f * 1e-4f },
+			new[] { 0f, 20245f * kRaw2Deg, 1f, 39834f * kRaw2Deg },
+			ShapeImprovedRadial, 0.9808426f, additive: false);
 	}
 
 	/// <summary>Swap a crate's visible model to OGI state slot <paramref name="k"/>.</summary>
