@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Text.Json;
 using AetherCore;
 
 namespace AetherGame;
@@ -29,8 +30,21 @@ public sealed partial class TwinsanityActors
 		public Actor Actor = null!;
 		public PropCue Cue;
 		public int[] Clips = Array.Empty<int>(); // played in order, one per cue
+		public string[] ClipNames = Array.Empty<string>();
 		public int Next;
 		public float Remaining = -1.0f; // seconds left of the clip playing now; -1 = resting
+		public string Playing = "";
+		public readonly List<PropHull> Hulls = new();
+	}
+
+	// One of the object's disc collision hulls (GI_CollisionData, exported by tw-extract to
+	// <model>.hulls.json): a static convex body at the rest pose, swapped for the pose the prop
+	// holds once a clip that moves it ends - the fallen beach tree is the bridge Crash walks.
+	private sealed class PropHull
+	{
+		public Entity Body;
+		public string Rest = "";
+		public readonly Dictionary<string, string> Clips = new();
 	}
 
 	private readonly List<OneShot> _oneShots = new();
@@ -82,7 +96,7 @@ public sealed partial class TwinsanityActors
 	private const float WumpaTreeShakeRadius = 2.0f;
 
 	// Sets up a one-shot prop; false when the object is not one.
-	private bool SetupOneShot(Actor a, string objectName, uint subtype)
+	private bool SetupOneShot(Actor a, string objectName, uint subtype, string model)
 	{
 		string n = NameKey(objectName);
 		Entity e = a.Model;
@@ -92,18 +106,18 @@ public sealed partial class TwinsanityActors
 		if (n.StartsWith("act_training_exploding_idol_head"))
 		{
 			s.Cue = PropCue.Explosion;
-			s.Clips = Clips(e, "a001", "a002");
+			s.ClipNames = new[] { "a001", "a002" };
 		}
 		else if (n.StartsWith("act_training_falling_log"))
 		{
 			s.Cue = PropCue.Explosion;
-			s.Clips = Clips(e, "a001");
+			s.ClipNames = new[] { "a001" };
 			startDone = subtype == 10;
 		}
 		else if (n.StartsWith("act_seapillar"))
 		{
 			s.Cue = PropCue.None; // rises only by progression
-			s.Clips = Clips(e, "a001");
+			s.ClipNames = new[] { "a001" };
 			startDone = GlobalProgression >= 2;
 		}
 		else if (n.StartsWith("act_wumpa_tree") || n.StartsWith("old_act_wumpa_tree"))
@@ -111,12 +125,12 @@ public sealed partial class TwinsanityActors
 			s.Cue = PropCue.Proximity;
 			if (subtype == 20)
 			{
-				s.Clips = Clips(e, "a001");
+				s.ClipNames = new[] { "a001" };
 				playNow = true;
 			}
 			else if (subtype is 0 or 1 or 2 or 3)
 			{
-				s.Clips = Clips(e, subtype == 1 ? "a005" : subtype == 2 ? "a004" : "a002");
+				s.ClipNames = new[] { subtype == 1 ? "a005" : subtype == 2 ? "a004" : "a002" };
 			}
 			// Other subtypes (10-12, the farmer cutscene trees) wait for a cutscene message.
 		}
@@ -126,7 +140,7 @@ public sealed partial class TwinsanityActors
 			// at spawn with DoAnim flags 0x20FF1 / 0xA0FF1: loop nibble (bits 12-15) 0 = play once,
 			// the same as every one-shot above, while every idle loop in the hub scripts has it set
 			// (chicken 0x3FF1, butterfly 0x5FF1, worm 0x2FF1 - logs/triggers/dump-loops.txt).
-			s.Clips = Clips(e, n.StartsWith("act_tiki_mon") ? "a007" : "a001");
+			s.ClipNames = new[] { n.StartsWith("act_tiki_mon") ? "a007" : "a001" };
 			playNow = true;
 		}
 		else if (n.StartsWith("act_global_bomb"))
@@ -139,6 +153,9 @@ public sealed partial class TwinsanityActors
 			return false;
 		}
 
+		s.ClipNames = Array.FindAll(s.ClipNames, c => Animation.Find(e, c) >= 0);
+		s.Clips = Array.ConvertAll(s.ClipNames, c => Animation.Find(e, c));
+		LoadHulls(s, model);
 		SetLooping(e, false);
 		// Rest on frame 0 of the first cue clip (or of the model's first clip when the prop has no
 		// cue here, e.g. the farmer-cutscene wumpa trees): the original shows it unanimated.
@@ -159,6 +176,7 @@ public sealed partial class TwinsanityActors
 			// Already played before Crash arrived: hold the end pose.
 			Animation.SetTime(e, Animation.ClipDuration(e));
 			s.Next = s.Clips.Length;
+			HoldHulls(s, s.ClipNames[^1]);
 		}
 		else if (playNow)
 		{
@@ -313,6 +331,7 @@ public sealed partial class TwinsanityActors
 					// Hold the last frame.
 					Animation.SetTime(s.Actor.Model, Animation.ClipDuration(s.Actor.Model));
 					Animation.SetPlaybackSpeed(s.Actor.Model, 0.0f);
+					HoldHulls(s, s.Playing);
 				}
 				continue;
 			}
@@ -332,23 +351,55 @@ public sealed partial class TwinsanityActors
 			return;
 		}
 		Entity e = s.Actor.Model;
+		s.Playing = s.ClipNames[s.Next];
 		Animation.SetClip(e, s.Clips[s.Next++]);
 		Animation.SetTime(e, 0.0f);
 		Animation.SetPlaybackSpeed(e, 1.0f);
 		s.Remaining = Animation.ClipDuration(e);
 	}
 
-	private static int[] Clips(Entity e, params string[] names)
+	private static void LoadHulls(OneShot s, string model)
 	{
-		var list = new List<int>();
-		foreach (string name in names)
+		string? text = Assets.ReadText(model.Substring(0, model.Length - ".gltf".Length) + ".hulls.json");
+		if (text == null)
 		{
-			int idx = Animation.Find(e, name);
-			if (idx >= 0)
+			return;
+		}
+		using JsonDocument doc = JsonDocument.Parse(text);
+		foreach (JsonElement row in doc.RootElement.GetProperty("hulls").EnumerateArray())
+		{
+			PropHull h = new() { Rest = row.GetProperty("rest").GetString()! };
+			foreach (JsonProperty clip in row.GetProperty("clips").EnumerateObject())
 			{
-				list.Add(idx);
+				h.Clips[clip.Name] = clip.Value.GetString()!;
+			}
+			h.Body = HullBody(s.Actor.Model, h.Rest);
+			s.Hulls.Add(h);
+		}
+	}
+
+	// Move each hull the clip moved to the pose the prop now holds.
+	private static void HoldHulls(OneShot s, string clip)
+	{
+		foreach (PropHull h in s.Hulls)
+		{
+			if (h.Clips.TryGetValue(clip, out string? path))
+			{
+				h.Body.Destroy();
+				h.Body = HullBody(s.Actor.Model, path);
 			}
 		}
-		return list.ToArray();
+	}
+
+	private static Entity HullBody(Entity model, string path)
+	{
+		Entity b = World.Create();
+		b.Name = model.Name + " hull";
+		b.MarkTransient();
+		b.AddTransform();
+		b.Position = model.Position;
+		b.EulerDegrees = model.EulerDegrees;
+		Physics.AddConvexHullBody(b, path, dynamic: false);
+		return b;
 	}
 }

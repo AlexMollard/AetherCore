@@ -398,7 +398,8 @@ namespace TwExtract
 					string name = Safe(obj.Name) + (used.Count > 1 ? $"_{k}" : "");
 					string dir = Path.Combine(s_out, "models", "objects", Safe(obj.Name));
 					var ex = NewObjectExport(gfx, dir);
-					if (!BuildObject(ex, gfx, ogis[used[k]], name, clips))
+					var hulls = new List<(string Suffix, Prim Hull)>();
+					if (!BuildObject(ex, gfx, ogis[used[k]], name, clips, hulls))
 					{
 						continue;
 					}
@@ -413,6 +414,7 @@ namespace TwExtract
 						fileName = seen.Count == 0 ? name : $"{name}@{Path.GetFileName(LevelPath(archiveName))}";
 						seen[hash] = fileName;
 						ex.Save(Path.Combine(dir, fileName + ".gltf"));
+						SaveHulls(dir, fileName, hulls);
 						written++;
 						s_objects++;
 					}
@@ -467,9 +469,45 @@ namespace TwExtract
 			return $"{written} objects written, {shared} already extracted";
 		}
 
+		// <model>.hulls.json next to the model: {"hulls": [{"rest": gltf, "clips": {"a001": gltf}}]}, each gltf
+		// one convex hull in model space (see AddHulls) for a runtime convex-hull body.
+		static void SaveHulls(string dir, string fileName, List<(string Suffix, Prim Hull)> hulls)
+		{
+			if (hulls.Count == 0)
+			{
+				return;
+			}
+			var rows = new List<object>();
+			Dictionary<string, object> clipsOf = null;
+			foreach (var (suffix, prim) in hulls)
+			{
+				var g = new Gltf();
+				int mesh = g.AddMesh("hull", new[] { (prim, -1) });
+				g.SceneRoots.Add(g.AddNode(new Dictionary<string, object> { ["name"] = "hull", ["mesh"] = mesh }));
+				string path = Path.Combine(dir, $"{fileName}_{suffix}.gltf");
+				g.Save(path);
+				int clip = suffix.IndexOf('_');
+				if (clip < 0)
+				{
+					clipsOf = new Dictionary<string, object>();
+					rows.Add(new Dictionary<string, object> { ["rest"] = VfsPath(path), ["clips"] = clipsOf });
+				}
+				else
+				{
+					clipsOf[suffix.Substring(clip + 1)] = VfsPath(path);
+				}
+			}
+			var sb = new StringBuilder();
+			Json.Write(sb, new Dictionary<string, object> { ["hulls"] = rows });
+			File.WriteAllText(Path.Combine(dir, fileName + ".hulls.json"), sb.ToString());
+		}
+
 		public static string VfsPath(string underAssets) => "project://assets/" + Rel(s_out, Path.GetDirectoryName(underAssets)) + "/" + Path.GetFileName(underAssets);
 
-		static bool BuildObject(Export ex, Gfx gfx, GraphicsInfo gi, string name, List<(string, Animation)> clips)
+		// hulls receives the OGI's collision hulls (GI_CollisionData) as model-space triangle lists: suffix
+		// "hull<k>" at the rest pose and "hull<k>_<clip>" for the pose a rigid prop holds at the end of a clip
+		// that moves the hull's joint.
+		static bool BuildObject(Export ex, Gfx gfx, GraphicsInfo gi, string name, List<(string, Animation)> clips, List<(string Suffix, Prim Hull)> hulls)
 		{
 			var g = ex.Gltf;
 			var joints = gi.Joints ?? Array.Empty<GraphicsInfo.Joint>();
@@ -515,10 +553,12 @@ namespace TwExtract
 					Gltf.AddChild(g.Nodes[nodes[slot[joints[i].ParentJointIndex]]], nodes[i]);
 				}
 			}
+			var endLocals = new Dictionary<string, Matrix4x4?[]>();
 			if (joints.Length > 1 && clips.Count > 0)
 			{
-				AnimExport.Add(g, joints, nodes, clips);
+				AnimExport.Add(g, joints, nodes, clips, endLocals);
 			}
+			AddHulls(gi, joints, slot, World, endLocals, hulls);
 
 			bool any = false;
 			int partCount = 0;
@@ -589,6 +629,89 @@ namespace TwExtract
 				}
 			}
 			return any;
+		}
+
+		// A GI_CollisionData blob is one convex hull on the joint CollisionDataRelated[k] names, in that joint's
+		// space: Header[0] vertices (vec4) from byte 0, Header[2] faces whose start bytes sit at Header[8] and
+		// point into the face list at Header[9] (each face: vertex count, then that many vertex indices).
+		// The Euler count V - E + F = 2 holds for Header[0..2] on every hull checked (prisms and boxes).
+		static void AddHulls(GraphicsInfo gi, GraphicsInfo.Joint[] joints, Dictionary<uint, int> slot, Func<int, Matrix4x4> rest,
+			Dictionary<string, Matrix4x4?[]> endLocals, List<(string Suffix, Prim Hull)> hulls)
+		{
+			var data = gi.CollisionData ?? Array.Empty<GraphicsInfo.GI_CollisionData>();
+			bool rigidProp = gi.SkinID == 0 && gi.BlendSkinID == 0;
+			for (int k = 0; k < data.Length; k++)
+			{
+				var h = data[k].Header;
+				byte[] b = data[k].collisionDataBlob;
+				var local = new Vector3[h[0]];
+				for (int v = 0; v < local.Length; v++)
+				{
+					local[v] = Space.Mirror(new Vector3(BitConverter.ToSingle(b, v * 16), BitConverter.ToSingle(b, v * 16 + 4), BitConverter.ToSingle(b, v * 16 + 8)));
+				}
+				var tris = new List<uint>();
+				for (int f = 0; f < h[2]; f++)
+				{
+					int at = h[9] + b[h[8] + f];
+					for (int c = 2; c < b[at]; c++)
+					{
+						// Mirroring flips handedness: swap the fan's winding back.
+						tris.Add(b[at + 1]);
+						tris.Add(b[at + c + 1]);
+						tris.Add(b[at + c]);
+					}
+				}
+				int j = k < gi.CollisionDataRelated.Length && slot.TryGetValue(gi.CollisionDataRelated[k], out int s) ? s : -1;
+				Matrix4x4 restWorld = j >= 0 ? rest(j) : Matrix4x4.Identity;
+				hulls.Add(($"hull{k}", HullPrim(local, tris, restWorld)));
+				if (j < 0 || !rigidProp)
+				{
+					continue;
+				}
+				foreach (var clip in endLocals)
+				{
+					// Compose the clip's end locals (the rest local where the clip leaves a joint alone).
+					Matrix4x4 end = Matrix4x4.Identity;
+					for (int i = j; ; )
+					{
+						Matrix4x4 m;
+						if (clip.Value[i] is Matrix4x4 animated)
+						{
+							m = animated;
+						}
+						else
+						{
+							var (t, q) = JointLocal(joints[i]);
+							m = Matrix4x4.CreateFromQuaternion(q) * Matrix4x4.CreateTranslation(t);
+						}
+						end *= m;
+						int parent = -1;
+						if (i == 0 || !slot.TryGetValue(joints[i].ParentJointIndex, out parent) || parent == i)
+						{
+							break;
+						}
+						i = parent;
+					}
+					if (local.Any(p => Vector3.Distance(Vector3.Transform(p, end), Vector3.Transform(p, restWorld)) > 1e-3f))
+					{
+						hulls.Add(($"hull{k}_{clip.Key}", HullPrim(local, tris, end)));
+					}
+				}
+			}
+		}
+
+		static Prim HullPrim(Vector3[] local, List<uint> tris, Matrix4x4 world)
+		{
+			var prim = new Prim();
+			foreach (var p in local)
+			{
+				var w = Vector3.Transform(p, world);
+				prim.Pos.Add(w.X);
+				prim.Pos.Add(w.Y);
+				prim.Pos.Add(w.Z);
+			}
+			prim.Idx.AddRange(tris);
+			return prim;
 		}
 
 		// Joint rest pose: Matrix[0] is the local translation, Matrix[2] the local rotation quaternion.
