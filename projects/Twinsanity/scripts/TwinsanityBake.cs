@@ -176,8 +176,8 @@ public static class TwinsanityBake
 			foreach (JsonElement instance in rootElement.GetProperty("instances").EnumerateArray())
 			{
 				int objectId = instance.GetProperty("object").GetInt32();
-				string objectName = instance.TryGetProperty("name", out JsonElement n) ? n.GetString()! : $"object_{objectId}";
 				string? model = instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : objectModels.GetValueOrDefault(objectId);
+				string objectName = TwinsanityActors.InstanceName(instance, model);
 				Vector3 position = Vector3.Transform(TwinsanityLevel.Vec(instance.GetProperty("position")), transform);
 				Vector3 euler = TwinsanityLevel.EulerOf(TwinsanityLevel.SysRotation(TwinsanityLevel.Vec(instance.GetProperty("euler"))) * transform);
 				string identity = IdentityJson(instance, position, euler, transform, model, path);

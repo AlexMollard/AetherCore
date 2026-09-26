@@ -611,7 +611,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		if (kind == null)
 		{
 			// Not a crate: hand it to the actor system (enemies, birds, butterflies, chickens...).
-			string objectName = instance.TryGetProperty("name", out JsonElement n) ? n.GetString()! : $"object_{objectId}";
+			string objectName = TwinsanityActors.InstanceName(instance, model);
 			float[] floats = instance.TryGetProperty("floats", out JsonElement fl)
 				? fl.EnumerateArray().Select(f => f.GetSingle()).ToArray()
 				: Array.Empty<float>();

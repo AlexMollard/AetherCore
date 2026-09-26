@@ -49,30 +49,30 @@ public sealed partial class TwinsanityActors
 
 	private readonly List<OneShot> _oneShots = new();
 
-	// act_GLOBAL_BOMB (COM_GLOBAL_BOMB_DEFAULT): a spin primes it (s4 AgentWasSpun -> s2
-	// COM_GLOBAL_BOMB_PRIMED), and 1 s later (s2 TimeInUnit 1) COM_GLOBAL_BOMB_DAMAGED explodes it
-	// with CreateDamage radius 3 - the explosion that knocks the idol heads over.
+	// act_GLOBAL_BOMB (COM_GLOBAL_BOMB_DEFAULT) is a pushable (TwinsanityMechanics) with this fuse on
+	// top. A spin primes it (s4/s6 AgentWasSpun -> s2 COM_GLOBAL_BOMB_PRIMED); so does rolling it and
+	// walking off: s5 (rolling) -> s6 (stopped) -> s2 once MeToPlayerSqrDist > 20. 1 s after priming
+	// (s2 TimeInUnit 1) COM_GLOBAL_BOMB_DAMAGED explodes it with CreateDamage radius 3 - the blast
+	// that knocks the idol heads over (rig logs/beachcomplete/rig_totem_sheet.png: rolled to the
+	// yellow-gem totem, Crash leaves, it goes off at the totem's mouth).
 	private sealed class Bomb
 	{
-		public Actor Actor = null!;
+		public Pushable Push = null!;
 		public float Fuse = -1.0f; // seconds to the explosion once primed
-		public Vector3 Velocity;
+		public bool Rolled;        // s5 reached: it has been pushed
+		public bool Gone;
 	}
 
 	private readonly List<Bomb> _bombs = new();
 	private const float BombFuse = 1.0f;
 	private const float BombDamageRadius = 3.0f;
 	private const float BombSpinReach = 1.5f;
-	// ponytail: the bomb is a rigid body the spin knocks away; its launch speed and rolling drag
-	// are not in the scripts. No collision while rolling (flat ground only). Measured in HubA
-	// (logs/traversal/bomb_rig.csv): a spin beside it sends it rolling ~2.06 m, speed ramping to a
-	// ~1.3 m/s peak over ~2 s of contact (it stops against terrain), y settles at 0.6, the matrix
-	// rotation flips - it rolls, it does not slide. Walking into it does nothing and standing beside
-	// it pulls nothing (0.00 m in 3 s): it is not a pushable and has no magnet.
-	// 4.5 at drag 1.4 covers 2.34 m over the 1 s fuse - the rig's 2.06 m.
+	private const float BombLeaveSqr = 20.0f;
+	// ponytail: the spin's knock is not in the scripts. Measured in HubA (logs/traversal/bomb_rig.csv):
+	// a spin beside it sends it rolling ~2.06 m before the blast; 4.5 m/s decaying at 1.4/s covers
+	// 2.4 m over the 1 s fuse.
 	private const float BombKickSpeed = 4.5f;
 	private const float BombDrag = 1.4f;
-	private const float BombRest = 0.596f;
 
 	// act_RIGID_CANNON: belly-flopping its red button fires a GLOBAL_BOMB (the cannon's object list
 	// holds it) that COM_GLOBAL_BOMB_DEFAULT subtype 7 launches with cmd193(.., 8.0, .., 20.0) and that
@@ -148,15 +148,6 @@ public sealed partial class TwinsanityActors
 			// (chicken 0x3FF1, butterfly 0x5FF1, worm 0x2FF1 - logs/triggers/dump-loops.txt).
 			s.ClipNames = new[] { n.StartsWith("act_tiki_mon") ? "a007" : "a001" };
 			playNow = true;
-		}
-		else if (n.StartsWith("act_global_bomb"))
-		{
-			// COM_GLOBAL_BOMB_DEFAULT's rigid body (SetLogicalRadius 0.6) rests on the ground: rig
-			// (logs/audit/bomb_rig.txt) the placed y=0 bomb's live centre is 0.596 up, and the model
-			// is built around its centre.
-			e.Position = e.Position with { Y = GroundY(e.Position, e.Position.Y) + BombRest };
-			_bombs.Add(new Bomb { Actor = a });
-			return true;
 		}
 		else if (objectName.Equals("act_EARTH_NATIVE_SLEDGE", StringComparison.OrdinalIgnoreCase))
 		{
@@ -237,42 +228,45 @@ public sealed partial class TwinsanityActors
 	{
 		foreach (Bomb b in _bombs)
 		{
-			if (!b.Actor.Alive)
-			{
-				continue;
-			}
-			Entity e = b.Actor.Model;
-			Vector3 p = e.Position;
+			Pushable p = b.Push;
 			if (b.Fuse < 0.0f)
 			{
-				Vector3 away = p - crashPos;
-				away.Y = 0.0f;
+				Vector3 away = (p.Center - crashPos) with { Y = 0.0f };
 				float dist = away.Length();
-				if (_player != null && _player.IsSpinning && dist < BombSpinReach && MathF.Abs(crashPos.Y - p.Y) < 1.5f)
+				if (_player != null && _player.IsSpinning && dist < BombSpinReach && MathF.Abs(crashPos.Y - p.Center.Y) < 1.5f)
 				{
 					b.Fuse = BombFuse;
-					b.Velocity = (dist > 0.001f ? away / dist : Vector3.UnitZ) * BombKickSpeed;
+					p.Velocity = (dist > 0.001f ? away / dist : Vector3.UnitZ) * BombKickSpeed;
+					p.FreeDamping = BombDrag;
+				}
+				else
+				{
+					b.Rolled |= p.Velocity != Vector3.Zero;
+					if (b.Rolled && p.Velocity == Vector3.Zero && Vector3.DistanceSquared(p.Center, crashPos) > BombLeaveSqr)
+					{
+						b.Fuse = BombFuse;
+					}
 				}
 				continue;
 			}
-			e.Position = p + b.Velocity * dt;
-			b.Velocity *= MathF.Max(0.0f, 1.0f - BombDrag * dt);
 			b.Fuse -= dt;
 			if (b.Fuse >= 0.0f)
 			{
 				continue;
 			}
-			Vector3 center = e.Position;
-			CrateFx.Exploded(e.Position, 5);
+			Vector3 center = p.Center;
+			CrateFx.Exploded(center, 5);
 			Explosion(center, BombDamageRadius);
 			if (Vector3.Distance(center, crashPos + new Vector3(0.0f, 0.9f, 0.0f)) < BombDamageRadius)
 			{
 				_host?.DamagePlayer(center, DeathKind.Explode);
 			}
-			b.Actor.Alive = false;
-			e.Destroy();
+			b.Gone = true;
+			_pushables.Remove(p);
+			p.Body.Destroy();
+			p.Model.Destroy();
 		}
-		_bombs.RemoveAll(b => !b.Actor.Alive);
+		_bombs.RemoveAll(b => b.Gone);
 	}
 
 	private void UpdateCannons(float dt, Vector3 crashPos)

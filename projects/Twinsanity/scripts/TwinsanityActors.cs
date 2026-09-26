@@ -195,7 +195,26 @@ public sealed partial class TwinsanityActors
 	}
 
 	private static string ObjectNameOf(JsonElement instance)
-		=> instance.TryGetProperty("name", out JsonElement n) ? n.GetString()! : $"object_{(instance.TryGetProperty("object", out JsonElement o) ? o.GetInt32() : 0)}";
+		=> InstanceName(instance, instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : null);
+
+	/// <summary>The instance's object name. Layer-5 instances (crates, fruit and the hub's colour gems
+	/// GEM_YELLOW/PURPLE/GREEN...) carry none, so they are known by their object's model file
+	/// (GEM_YELLOW/GEM_YELLOW.gltf, BASICCRATE/BASICCRATE_0.gltf); "object_N" was never a pickup, which
+	/// left those gems as dead props. Shared by the JSON build, the bake and the bake bind.</summary>
+	internal static string InstanceName(JsonElement instance, string? model)
+	{
+		if (instance.TryGetProperty("name", out JsonElement n) && n.GetString() is { Length: > 0 } name)
+		{
+			return name;
+		}
+		if (model != null)
+		{
+			string stem = System.IO.Path.GetFileNameWithoutExtension(model);
+			int u = stem.LastIndexOf('_');
+			return u > 0 && int.TryParse(stem.AsSpan(u + 1), out _) ? stem[..u] : stem;
+		}
+		return $"object_{(instance.TryGetProperty("object", out JsonElement o) ? o.GetInt32() : 0)}";
+	}
 
 	private static uint SubtypeOf(JsonElement instance)
 		=> instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("subtype", out JsonElement st) ? st.GetUInt32() : 0u;

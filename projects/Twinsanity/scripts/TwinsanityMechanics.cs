@@ -15,10 +15,12 @@ namespace AetherGame;
 public static class MechanicsWorm
 {
 	private const float LaunchGravity = 50.0f;
-	// The rig shows the squash-launch giving a vertical velocity of exactly 30 (logs/mechanics/
-	// rig_burst.json worm1/worm2): 9 m of rise under 50 m/s^2, which tops out level with the ledges
-	// the worm columns of wumpa sit on (worm 2.33 -> ledge 12.1).
-	private const float LaunchVelocity = 30.0f;
+	private const float LaunchHeight = 10.0f;
+	// ApplyVelocity(gravity 50, distance Y 10): sqrt(2 g h) = 31.62. The game takes that frame's gravity
+	// before it moves, so the rig reads 30.6 on the take-off frame (older rig_burst.json samples caught
+	// 29.6-30 a frame later). Measured true rise off worm1 (Crash's world matrix, logs/cameralean/
+	// bounce_rig_worm1.csv): 9.69 m, apex 0.62 s after take-off. At 30 the engine rose 8.97 in 0.55 s.
+	private static readonly float LaunchVelocity = MathF.Sqrt(2.0f * LaunchGravity * LaunchHeight);
 
 	/// <summary>Launch Crash off the worm at <paramref name="wormPos"/>. Returns false when he is not
 	/// falling onto it (rising through it, or already launched this contact).</summary>
@@ -35,7 +37,8 @@ public static class MechanicsWorm
 
 /// <summary>
 /// Pushables: the objects whose spawn scripts give them SetContactRigid (a rigid-body contact
-/// response) - act_WUMPA_NUT, act_BEACH_BALL, act_MONKEY_ROCK and act_RIGID_CANNON. Crash walking
+/// response) - act_WUMPA_NUT, act_BEACH_BALL, act_MONKEY_ROCK, act_RIGID_CANNON, the hay bale, the
+/// barrel and act_GLOBAL_BOMB. Crash walking
 /// into one pushes it (the behaviour scripts' IsPushingObject condition, which switches his walk
 /// and run to the push clips a044/a045 - CrashPlayer.Pushing).
 ///
@@ -79,6 +82,7 @@ public sealed partial class TwinsanityActors
 		public List<Entity> Hulls = new(); // collision that turns with a pivoting object
 		public Entity Button;        // the cannon's red button (disc object 779), turns with it
 		public bool Settled;         // RestHeight known against real ground (collision may load late)
+		public bool NoLaunch;        // the bomb: a spin primes it (TwinsanityProps) instead of launching it
 	}
 
 	private readonly List<Pushable> _pushables = new();
@@ -147,6 +151,12 @@ public sealed partial class TwinsanityActors
 		// 0.5 m) were captured. Upgrade path: a head-on barrel push with goto_log.py.
 		"act_global_haybale" => (1.05f, 0.72f, false, 80.0f, 5.6f),
 		"act_global_barrel" => (1.0f, 0.91f, false, 80.0f, 5.6f),
+		// act_GLOBAL_BOMB (COM_GLOBAL_BOMB_DEFAULT: SetContactRigid, SetLogicalRadius 0.6): Crash rolls it
+		// by walking into it, at his own speed (rig logs/beachcomplete/rig_bomb_roll_sheet.png: pushed
+		// 5.6 m in ~1 s into the totem), and it stops soon after he lets go. Rest 0.596 is its live
+		// centre (logs/audit/bomb_rig.txt). ponytail: the free-roll decay reuses the bale's 5.6/s (the
+		// rig frames show it stopping within ~1 m); upgrade path: track it in EE RAM while released.
+		"act_global_bomb" => (0.6f, 0.596f, true, 80.0f, 5.6f),
 		_ => null,
 	};
 
@@ -234,7 +244,7 @@ public sealed partial class TwinsanityActors
 			Physics.SetMotionType(body, PhysicsMotionType.Kinematic);
 		}
 
-		_pushables.Add(new Pushable
+		var pushable = new Pushable
 		{
 			Model = e,
 			Body = body,
@@ -251,7 +261,13 @@ public sealed partial class TwinsanityActors
 			Pivots = pivots,
 			Hulls = hulls,
 			Button = button,
-		});
+			NoLaunch = key == "act_global_bomb",
+		};
+		_pushables.Add(pushable);
+		if (pushable.NoLaunch)
+		{
+			_bombs.Add(new Bomb { Push = pushable });
+		}
 	}
 
 	private void UpdatePushables(float dt, CrashPlayer player)
@@ -278,7 +294,7 @@ public sealed partial class TwinsanityActors
 			bool pushed = false;
 			bool contact = dist < p.Radius + CrashRadius + 0.2f && dist > 1e-3f && overlapY && !p.Airborne;
 			bool slideHit = player.IsSliding && !_slideLaunched;
-			if (contact && p.Rolls && (slideHit || (_spinClock >= SpinLaunchDelay && !_spinLaunched)))
+			if (contact && p.Rolls && !p.NoLaunch && (slideHit || (_spinClock >= SpinLaunchDelay && !_spinLaunched)))
 			{
 				Launch(p, toObj / dist, slideHit);
 				_slideLaunched |= slideHit;
@@ -460,7 +476,9 @@ public sealed partial class TwinsanityActors
 
 	// Ground under a body: rays down just outside its rim, +x -x +z -z. A hit on the body itself (the
 	// kinematic body trails its target by a physics step) or anything above its centre (Crash's
-	// capsule) is not ground. Returns the highest hit and the height gradient (dh/dx, dh/dz).
+	// capsule) is not ground; a hit level with the centre is (the bomb's instance puts its centre on
+	// the ground, and it must still find that ground to settle its rest height above it).
+	// Returns the highest hit and the height gradient (dh/dx, dh/dz).
 	// ponytail: four rim samples - a ball resting on a crest between them reads slightly low; upgrade
 	// to a shape cast that can filter the body out.
 	private static float? Ground(Vector3 center, float radius, float fromY, Entity self, Entity crash, out Vector2 grad, float reach = 1.5f)
@@ -474,7 +492,7 @@ public sealed partial class TwinsanityActors
 			h[i] = float.NaN;
 			RaycastHit hit = Physics.Raycast(new Vector3(center.X + offsets[i].X, fromY, center.Z + offsets[i].Y), -Vector3.UnitY, fromY - center.Y + radius + reach);
 			bool ignored = hit.Entity == self || hit.Entity == crash;
-			if (hit.DidHit && !ignored && hit.Position.Y < center.Y)
+			if (hit.DidHit && !ignored && hit.Position.Y < center.Y + 0.05f)
 			{
 				h[i] = hit.Position.Y;
 				best = best == null ? h[i] : MathF.Max(best.Value, h[i]);
