@@ -211,13 +211,19 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		else if (OnDeadlyGround(feet, out Vector3 water))
 		{
-			// The sea is a mesh, so its surface is wherever the water piece sits under Crash,
-			// not the chunk origin: ray down onto the piece he is standing on.
-			RaycastHit sea = Physics.Raycast(feet + new Vector3(0.0f, 0.5f, 0.0f), new Vector3(0.0f, -1.0f, 0.0f), 5.0f);
-			_player!.DrownSurfaceY = sea.DidHit ? sea.Position.Y : water.Y;
+			// What Crash stands on here is the drowning plane (surface 23); the water surface
+			// (surface 12) has no collider, so a ray cannot find it. In the hub collision every
+			// sea's surface sits 1.8 above its drowning plane (beach, huba, hubb, hubc, hubd:
+			// -1.5 over -3.3; pier -216.84 over -218.64).
+			// ponytail: a few inland pools differ (1.46 to 2.4 over their plane); export the
+			// surface-12 heights per piece if those ever need the exact float height.
+			RaycastHit plane = Physics.Raycast(feet + new Vector3(0.0f, 0.5f, 0.0f), new Vector3(0.0f, -1.0f, 0.0f), 5.0f);
+			_player!.DrownSurfaceY = (plane.DidHit ? plane.Position.Y : water.Y) + WaterAboveDrownPlane;
 			Die(DeathKind.Drown); // every deadly piece in the hub is the sea
 		}
 	}
+
+	private const float WaterAboveDrownPlane = 1.8f;
 
 	private bool FindPlayer()
 	{

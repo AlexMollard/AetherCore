@@ -78,7 +78,8 @@ public sealed class CrashPlayer : EntityScript
 	private const float SlamDropStart = 2.0f;
 	private const float SlamLandLock = 0.3f;
 	private const float IdleFidgetAfter = 10.0f;
-	private const float HeightGain = 30.0f;
+	private const float HeightGain = 30.0f;  // slam height steer (per second of gap)
+	private const float HeightDrift = 3.0f;  // jump drift pull (per second of gap): weak, as the gap is stale
 	private const int GroundGraceTicks = 2;
 	// On the ground the script owns velocity outright (SetVelocity), which skips the engine's own
 	// press into the floor; with a vertical speed of exactly 0 a centimetre of float over a sand
@@ -137,13 +138,28 @@ public sealed class CrashPlayer : EntityScript
 	private bool _dead;
 	private DeathPlan _deathPlan = DeathPlan.Generic;
 	private float _deathLift;
+	// Respawn fade (rig_drownfade): black by FadeBlackLead before the respawn, back after it.
+	private const float FadeOut = 0.5f;
+	private const float FadeBlackLead = 0.05f;
+	private const float FadeBlackHold = 0.05f;
+	private const float FadeIn = 0.3f;
+	private Entity _fadeCanvas;
+	private Entity _fade;
+	private float _deathClock;
+	private float _fadeInClock = float.MaxValue;
 	private float _hurtLeft;
 	private float _spinEndMoveLock;
 	// Rig: after a running spin the recovery clip shows for 8 frames (0.16 s) before the run clip
 	// takes over again (rig_spin_run 32-39).
 	private const float SpinEndMoveLock = 0.16f;
-	// Rig: the drowning body reaches the surface ~1.5 s after the contact (rig_drown 26-32).
-	private const float DrownRiseSpeed = 1.2f;
+	// OGI slot 6 (act_CRASH.ogis.json k 6): the model the game shows while he spins.
+	public string SpinModelPath = "project://assets/models/objects/act_CRASH/act_CRASH_6.gltf";
+	private Entity _spinModel;
+	private float _spinClock;
+	// a014 CrashSpin_Spin, joint0, sampled at the game's 25 fps: 720 degrees of yaw and this
+	// Y squash per 0.32 s loop (logs/spindeath/clipdump.py a014).
+	private const float SpinTurnRate = 720.0f / 0.32f;
+	private static readonly float[] SpinSquash = { 1.0f, 0.93f, 0.86f, 0.81f, 0.78f, 0.80f, 0.84f, 0.89f, 0.95f };
 	/// <summary>The original's IsPushingObject: set each frame by TwinsanityMechanics while Crash
 	/// walks into a pushable, so walk/run play the push clips.</summary>
 	public bool Pushing;
@@ -186,6 +202,17 @@ public sealed class CrashPlayer : EntityScript
 		_model.AddTransform();
 		_model.Position = Self.Position;
 		_model.LoadModel(ModelPath);
+		_spinModel = World.Create();
+		_spinModel.Name = "Crash Spin Model";
+		_spinModel.AddTransform();
+		_spinModel.LoadModel(SpinModelPath);
+		_spinModel.SetActive(false);
+		_fadeCanvas = Ui.CreateCanvas();
+		_fadeCanvas.MarkTransient();
+		_fade = Ui.CreateImage(_fadeCanvas);
+		Ui.SetAnchors(_fade, Vector2.Zero, Vector2.One);
+		Ui.SetOffsets(_fade, Vector2.Zero, Vector2.Zero);
+		Ui.SetImageColor(_fade, Vector4.Zero);
 
 		_facing = Self.EulerDegrees.Y;
 		_modelYaw = _facing;
@@ -202,6 +229,7 @@ public sealed class CrashPlayer : EntityScript
 	{
 		Input.CursorLockRequested = true;
 
+		UpdateFade(deltaTime);
 		if (_dead)
 		{
 			StepDeath(deltaTime);
@@ -253,7 +281,7 @@ public sealed class CrashPlayer : EntityScript
 				_accumulator -= Tick;
 				Step(Tick);
 			}
-			Vector3 velocity = new(_horizontal.X, TrackHeight(), _horizontal.Z);
+			Vector3 velocity = new(_horizontal.X, TrackHeight(deltaTime), _horizontal.Z);
 			if (!Airborne)
 			{
 				// Keep the measured horizontal speed and follow a DESCENDING ground plane, so
@@ -287,19 +315,19 @@ public sealed class CrashPlayer : EntityScript
 	//     the hash name and the behaviour-script death branches; the timing is the clip + hold.)
 	//   Drown - a004 Crash_DeathDrown (4.0 s): the rig (rig_drown) shows him sinking to the
 	//     drowning plane (y -3.3 on the beach), the clip floating him face-down up to the surface
-	//     (the hips rise through the clip's second half), where he stays until the respawn fade
-	//     ~4.4 s after contact. SurfaceY is the beach's water surface; TwinsanityLevel hands it in.
+	//     (the hips rise through the clip's second half), where he stays for ~3.8 s until the
+	//     respawn fade. SurfaceY is the beach's water surface; TwinsanityLevel hands it in.
 	//   Explode - a003 CrashDeathFireGibs_Death (1.96 s) on the fire-gibs body (act_CRASH_2):
 	//     the rig TNT capture (rig_explode 34-41) shows the blast flash, burning pieces flying and
 	//     Crash gone entirely until respawn.
 	//   Fall - a083 Crash_DeathFalloff (3 s) for the hub's instant-death pits (surface 4).
-	// The rig never respawned without a fade to black first (rig_drown 49-50); nothing renders a
-	// screen fade in this project yet, so the respawn is an instant cut - [ponytail] missing fade
-	// effect, ceiling: add a fullscreen fade when the project has a HUD/pass to draw it with.
+	// Every respawn goes through black (rig_drownfade, 50 ms frames, mean luminance): a linear
+	// 0.5 s fade to black, 0.1 s of black with the respawn in the middle of it, then a 0.3 s fade
+	// back in at the checkpoint. UpdateFade draws it.
 	private sealed record DeathPlan(string? Model, string Clip, float RespawnAfter, bool FloatToSurface)
 	{
 		public static readonly DeathPlan Generic = new(null, "a001", 2.6f, false);
-		public static readonly DeathPlan Drown = new(null, "a004", 4.6f, true);
+		public static readonly DeathPlan Drown = new(null, "a004", 4.4f, true);
 		public static readonly DeathPlan Explode = new("project://assets/models/objects/act_CRASH/act_CRASH_2.gltf", "a003", 4.2f, false);
 		public static readonly DeathPlan Fall = new(null, "a083", 4.2f, false);
 	}
@@ -317,6 +345,7 @@ public sealed class CrashPlayer : EntityScript
 		}
 		_dead = true;
 		_deathLift = 0.0f;
+		_deathClock = 0.0f;
 		_deathPlan = kind switch
 		{
 			DeathKind.Drown => DeathPlan.Drown,
@@ -327,7 +356,7 @@ public sealed class CrashPlayer : EntityScript
 		_horizontal = Vector3.Zero;
 		_vy = 0.0f;
 		_spinTime = 0.0f;
-		Animation.SetLayerClip(_model, -1);
+		ShowSpinModel(false);
 		CharacterController.SetVelocity(Self, Vector3.Zero);
 		if (_deathPlan.Model != null && _deathPlan.Model != ModelPath)
 		{
@@ -359,6 +388,24 @@ public sealed class CrashPlayer : EntityScript
 		_oneShotLeft = 0.4f;
 	}
 
+	// The respawn fade (timings above DeathPlan).
+	private void UpdateFade(float deltaTime)
+	{
+		float alpha = 0.0f;
+		if (_dead)
+		{
+			_deathClock += deltaTime;
+			float fadeStart = _deathPlan.RespawnAfter - FadeBlackLead - FadeOut;
+			alpha = Math.Clamp((_deathClock - fadeStart) / FadeOut, 0.0f, 1.0f);
+		}
+		else if (_fadeInClock < FadeBlackHold + FadeIn)
+		{
+			_fadeInClock += deltaTime;
+			alpha = 1.0f - Math.Clamp((_fadeInClock - FadeBlackHold) / FadeIn, 0.0f, 1.0f);
+		}
+		Ui.SetImageColor(_fade, new Vector4(0.0f, 0.0f, 0.0f, alpha));
+	}
+
 	// Death: control is gone, the clip for the kind plays once and freezes, and for a drowning the
 	// body drifts up to the water surface (PlaceModel applies the lift; the rig shows him
 	// face-down on the surface, rippling). The level respawns him after the seconds Die returned.
@@ -381,9 +428,10 @@ public sealed class CrashPlayer : EntityScript
 
 	public void Respawn(Vector3 feet, float facing)
 	{
+		// Coming back from a death fades in from black; the first placement does not.
+		_fadeInClock = _dead ? 0.0f : float.MaxValue;
 		_dead = false;
 		_hurtLeft = 0.0f;
-		Animation.SetLayerClip(_model, -1);
 		if (_deathPlan.Model != null)
 		{
 			// Death put the fire-gibs body on: back to Crash himself.
@@ -396,6 +444,7 @@ public sealed class CrashPlayer : EntityScript
 		_horizontal = Vector3.Zero;
 		_vy = 0.0f;
 		_spinTime = 0.0f;
+		ShowSpinModel(false);
 		_facing = facing;
 		_modelYaw = facing;
 		_moveDir = FacingDir(facing);
@@ -408,7 +457,8 @@ public sealed class CrashPlayer : EntityScript
 	public void SetControl(bool enabled)
 	{
 		_control = enabled;
-		_model.SetActive(enabled);
+		_model.SetActive(enabled && !IsSpinning);
+		_spinModel.SetActive(enabled && IsSpinning);
 	}
 
 	private void Step(float dt)
@@ -440,11 +490,12 @@ public sealed class CrashPlayer : EntityScript
 			if (_spinTime <= 0.0f)
 			{
 				// OnSpinEnd (COM_GENERIC_CHARACTER_SPIN_RECOVERY): a015 Crash_SpinRecover if
-				// PlayerIsGrounded, else a016 Crash_SpinRecoverFall, both cut in (blend 0). a015 is
-				// already on at frame 0 (the spin pose), so on the ground it simply starts running.
+				// PlayerIsGrounded, else a016 Crash_SpinRecoverFall, both cut in (blend 0) on the
+				// skinned model as the spin model goes away; a015 starts from the spin pose.
 				_spinCooldown = _spinDelay;
-				Animation.SetLayerClip(_model, -1);
+				ShowSpinModel(false);
 				_landClip = Airborne ? "a016" : "a015";
+				_clip = ""; // restart it even when the last spin left the same clip current
 				Play(_landClip, false);
 				_clipStarted = Time.TotalTime;
 				// The script hands back to OnIdle at GetAnimationTimeRemaining < 0.2 s.
@@ -456,13 +507,14 @@ public sealed class CrashPlayer : EntityScript
 		{
 			_spinTime = _spinLength;
 			TwinsanityAudio.Spin();
-			// The solo OnSpin script plays no clip; the game poses him itself. On the rig
-			// (logs/spindeath/rig_spin_*_sheet.png) the body holds one arms-out pose for the whole
-			// spin, standing or running - a015's first frame, which the recovery then plays on
-			// from - while a014 (CrashSpin_Spin, root yaw + squash only) turns him. a046 is the
-			// same data but CrashSpinWithCortex, the co-op-linked branch.
-			Play("a015", false);
-			Animation.SetLayerClip(_model, Animation.Find(_model, "a014"));
+			// The solo OnSpin script plays no clip: the game swaps Crash's graphics to his OGI
+			// slot 6, act_CRASH_6 - a static spin pose (arms out, one leg kicked, the eyes
+			// streaked) wrapped in the translucent streak ring that is the orange swirl - and
+			// turns it with the a014 CrashSpin_Spin root track (two turns and a Y squash per
+			// 0.32 s). Rig: logs/spindeath/rig_spin_stand_sheet.png, rig_spin_run_sheet.png.
+			// (a046 is the same track for the co-op-linked branch, CrashSpinWithCortex.)
+			_spinClock = 0.0f;
+			ShowSpinModel(true);
 		}
 
 		switch (_state)
@@ -636,13 +688,14 @@ public sealed class CrashPlayer : EntityScript
 		}
 
 		// Ceiling: while rising, the body trails the height the jump should have reached by at most
-		// what physics has not integrated yet (one frame plus one physics step of rise) - unless
-		// something above stopped it, when the gap grows without bound. Frame-rate independent,
-		// unlike comparing positions between our ticks (two ticks can run with no physics step
-		// between them below 50 fps, which cut every jump to ~0.4 m once the game slowed down).
+		// what physics has not integrated yet - unless something above stopped it, when the gap grows
+		// without bound. Frame-rate independent, unlike comparing positions between our ticks (two
+		// ticks can run with no physics step between them below 50 fps, which cut every jump to ~0.4 m
+		// once the game slowed down). The body lags up to two frames plus a step: at 30 fps it had not
+		// left the floor two frames after take-off, and one frame of slack cancelled the jump there.
 		if (_state == State.Air && _vy > 0.0f)
 		{
-			float slack = 0.25f + _vy * (Time.DeltaTime + 1.0f / 60.0f);
+			float slack = 0.25f + _vy * (2.0f * Time.DeltaTime + 1.0f / 60.0f);
 			if (_airY - Self.Position.Y > slack)
 			{
 				_vy = 0.0f;
@@ -668,14 +721,37 @@ public sealed class CrashPlayer : EntityScript
 	// held for one or two physics steps depending on phase, and a jump's apex wandered by +-0.1 m
 	// between otherwise identical jumps. Airborne, the script keeps the height the game's own
 	// integration gives (_airY, advanced by the same velocity each tick) and steers onto it.
-	private float TrackHeight()
+	// Below ~50 fps a fixed 30/s gain on that gap overshot: the body answers a velocity one to two
+	// frames late (logged), so the gap it steered on was stale, and a single jump peaked 2.4-2.6 and a
+	// double 4.3-4.9 against the game's 2.12 / 3.94 (rig physics copies, logs/traversal/jump_fit.png),
+	// or lost the double jump. In a jump the velocity is now the arc's own average over the coming
+	// frame, integrated tick by tick as the game does, and only a weak pull corrects the drift of
+	// mixed 50/60 Hz step counts. Slams keep the direct steer (their drop is not a tick arc here).
+	private float TrackHeight(float deltaTime)
 	{
 		if (!Airborne)
 		{
 			return _vy;
 		}
-		float target = _airY + _vy * _accumulator;
-		return _vy + Math.Clamp(target - Self.Position.Y, -0.5f, 0.5f) * HeightGain;
+		float gap = _airY + _vy * _accumulator - Self.Position.Y;
+		if (_state != State.Air)
+		{
+			return _vy + Math.Clamp(gap, -0.5f, 0.5f) * HeightGain;
+		}
+		float dt = Math.Max(deltaTime, 1.0f / 240.0f);
+		float t = _accumulator, end = _accumulator + dt, vy = _vy, rise = 0.0f;
+		for (float tickEnd = Tick; t < end; tickEnd += Tick)
+		{
+			if (tickEnd <= t)
+			{
+				continue;
+			}
+			float seg = Math.Min(tickEnd, end) - t;
+			rise += vy * seg;
+			t += seg;
+			vy -= AirGravityAt(vy) * Tick; // the next tick's velocity, gravity applied before it moves
+		}
+		return rise / dt + Math.Clamp(gap, -0.5f, 0.5f) * HeightDrift;
 	}
 
 	// The game applies the take-off frame's gravity before moving: the first rise is 12.25, not 13.
@@ -777,11 +853,13 @@ public sealed class CrashPlayer : EntityScript
 		_horizontal = MoveTowards(_horizontal, target, AirAccel * dt);
 	}
 
-	private float AirGravityNow() => _arc switch
+	private float AirGravityNow() => AirGravityAt(_vy);
+
+	private float AirGravityAt(float vy) => _arc switch
 	{
-		Arc.Jump => _vy > 0.0f ? _jumpRiseGravity : _airGravity,
-		Arc.DoubleJump => _vy > 0.0f ? _doubleJumpGravity : _airGravity,
-		Arc.SlideJump => _vy > SlideJumpFallAt ? _slideJumpGravity : _airGravity,
+		Arc.Jump => vy > 0.0f ? _jumpRiseGravity : _airGravity,
+		Arc.DoubleJump => vy > 0.0f ? _doubleJumpGravity : _airGravity,
+		Arc.SlideJump => vy > SlideJumpFallAt ? _slideJumpGravity : _airGravity,
 		_ => _airGravity,
 	};
 
@@ -797,11 +875,8 @@ public sealed class CrashPlayer : EntityScript
 		}
 		if (IsSpinning)
 		{
-			// Hold the spin pose (a015 frame 0) under the a014 layer; a jump mid-spin plays on.
-			if (_clip == "a015")
-			{
-				Animation.SetTime(_model, 0.0f);
-			}
+			// The spin model stands in for the skinned one (PlaceModel turns it); the skinned
+			// clip underneath just waits for the recovery.
 			return;
 		}
 		_spinEndMoveLock -= dt;
@@ -871,7 +946,7 @@ public sealed class CrashPlayer : EntityScript
 		["a008"] = 0.2f, ["a010"] = 0.2f, ["a011"] = 0.2f,
 		["a019"] = 0.1f, ["a020"] = 0.1f, ["a021"] = 0.1f, ["a048"] = 0.1f,
 		["a027"] = 0.1f, ["a029"] = 0.1f, ["a030"] = 0.1f,
-		["a015"] = 0.0f, ["a016"] = 0.0f, ["a014"] = 0.0f,
+		["a015"] = 0.0f, ["a016"] = 0.0f,
 		["a023"] = 0.2f, ["a024"] = 0.0f, ["a026"] = 0.0f,
 		["a032"] = 0.0f, ["a034"] = 0.0f, ["a036"] = 0.1f,
 	};
@@ -894,11 +969,6 @@ public sealed class CrashPlayer : EntityScript
 		}
 		_clip = name;
 		Animation.CrossFade(_model, index, BlendIn.TryGetValue(name, out float blend) ? blend : DefaultBlendIn);
-		// A CrossFade would clear the spin layer; re-apply it over the new base clip.
-		if (IsSpinning)
-		{
-			Animation.SetLayerClip(_model, Animation.Find(_model, "a014"));
-		}
 		SetLooping(_model, loop);
 		_clipStarted = Time.TotalTime;
 		_clipDuration = Animation.ClipDuration(_model);
@@ -950,14 +1020,33 @@ public sealed class CrashPlayer : EntityScript
 		_model.Position = Self.Position;
 		if (_dead && _deathPlan.FloatToSurface)
 		{
-			// The drowning body floats up to the surface while the controller stays on the
-			// drowning plane below (StepDeath advances the lift; PlaceModel would otherwise
-			// overwrite the model position every frame).
-			// Above the surface already (a drown kind triggered from higher up): no rise, not an inverted clamp.
-			_deathLift = Math.Clamp(_deathLift + DrownRiseSpeed * Math.Max(deltaTime, 1.0f / 60.0f), 0.0f, Math.Max(0.0f, DrownSurfaceY - Self.Position.Y));
+			// a004 Crash_DeathDrown is authored about the water surface: its hips start 2.1 below
+			// the model origin, bob up (0.4 s), sink again (to 2.6 s) and surface for good at
+			// ~3.2 s - the rise, dip and final float the rig shows (rig_drown 28-48). So the
+			// model origin goes to the surface at once and the clip does the floating, while the
+			// controller stays on the drowning plane below. Never below the controller.
+			_deathLift = Math.Max(0.0f, DrownSurfaceY - Self.Position.Y);
 			_model.Position = new Vector3(Self.Position.X, Self.Position.Y + _deathLift, Self.Position.Z);
 		}
 		_model.EulerDegrees = new Vector3(0.0f, _modelYaw + ModelYawOffset, 0.0f);
+		if (IsSpinning)
+		{
+			// a014's root track on the spin model: yaw at SpinTurnRate, the squash linearly
+			// between its 25 fps keys, looping every 0.32 s.
+			_spinClock += deltaTime;
+			float k = _spinClock * 25.0f % SpinSquash.Length;
+			int k0 = (int)k;
+			float squash = SpinSquash[k0] + (SpinSquash[(k0 + 1) % SpinSquash.Length] - SpinSquash[k0]) * (k - k0);
+			_spinModel.Position = _model.Position;
+			_spinModel.EulerDegrees = new Vector3(0.0f, _modelYaw + ModelYawOffset + _spinClock * SpinTurnRate % 360.0f, 0.0f);
+			_spinModel.Scale = new Vector3(1.0f, squash, 1.0f);
+		}
+	}
+
+	private void ShowSpinModel(bool spinning)
+	{
+		_spinModel.SetActive(spinning && _control);
+		_model.SetActive(!spinning && _control);
 	}
 
 	private void PlaceCamera(float deltaTime)
