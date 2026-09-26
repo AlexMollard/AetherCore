@@ -352,7 +352,7 @@ public sealed class CrashPlayer : EntityScript
 	/// <summary>The y the drowning body floats up to (the water surface). Set by the level.</summary>
 	public float DrownSurfaceY { get; set; } = -1.5f;
 
-	private const float DrownDrift = 0.9f;
+	private const float DrownDrift = 0.06f;
 	private Vector3 _deathDrift;
 
 	/// <summary>Kills Crash: takes control away, keeps the model visible and plays the original
@@ -373,8 +373,9 @@ public sealed class CrashPlayer : EntityScript
 			DeathKind.Fall => DeathPlan.Fall,
 			_ => DeathPlan.Generic,
 		};
-		// A drowning keeps his run for DrownDrift: on the rig (logs/camera c_drownN in rig_samples.csv) he
-		// carries on out to sea at the speed he went under (~8.9/s, ~8 units) and stops dead 0.9 s later.
+		// A drowning keeps his run for DrownDrift: on the rig (logs/respawndrown/rig_drown_track.csv) he
+		// runs on under the surface down the sea floor to the drowning plane, carries on 3 frames there
+		// (0.06 s, 0.54 units at ~8.9/s) and stops dead - the long run under water is the slope, not a drift.
 		_deathDrift = _deathPlan.FloatToSurface ? _horizontal with { Y = 0.0f } : Vector3.Zero;
 		_horizontal = Vector3.Zero;
 		_vy = 0.0f;

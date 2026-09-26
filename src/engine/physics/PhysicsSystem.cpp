@@ -624,6 +624,11 @@ namespace aether
 				// player, and the camera chasing him) lurches ahead and back.
 				WaitForStep();
 				ReadCurrentState(world);
+				// MoveKinematic's velocity reaches the frame's target in ONE step; left in place,
+				// every catch-up step carries the body that far again, past its transform (a
+				// script-driven falling crate sank into its own ray). Re-aim at the same target:
+				// the body is already there, so it holds.
+				PushKinematicTargets(world);
 			}
 
 			SavePrevState(world);

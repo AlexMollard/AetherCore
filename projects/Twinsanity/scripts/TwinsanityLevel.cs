@@ -456,13 +456,13 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		else if (OnDeadlyGround(feet, out Vector3 water))
 		{
 			// What Crash stands on here is the drowning plane (surface 23); the water surface
-			// (surface 12) has no collider, so a ray cannot find it. In the hub collision every
-			// sea's surface sits 1.8 above its drowning plane (beach, huba, hubb, hubc, hubd:
-			// -1.5 over -3.3; pier -216.84 over -218.64).
+			// (surface 12) has no collider. In the hub collision every sea's surface sits 1.8
+			// above its drowning plane (beach, huba, hubb, hubc, hubd: -1.5 over -3.3; pier
+			// -216.84 over -218.64). His feet are on the plane: a ray down through him hits his
+			// own inner body first (feet + 0.5, which floated him 0.5 above the rig's -1.5).
 			// ponytail: a few inland pools differ (1.46 to 2.4 over their plane); export the
 			// surface-12 heights per piece if those ever need the exact float height.
-			RaycastHit plane = Physics.Raycast(feet + new Vector3(0.0f, 0.5f, 0.0f), new Vector3(0.0f, -1.0f, 0.0f), 5.0f);
-			_player!.DrownSurfaceY = (plane.DidHit ? plane.Position.Y : water.Y) + WaterAboveDrownPlane;
+			_player!.DrownSurfaceY = water.Y + WaterAboveDrownPlane;
 			Die(DeathKind.Drown); // every deadly piece in the hub is the sea
 		}
 	}
@@ -538,7 +538,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	// On the rig a fresh beach load already shows the level-start checkpoint open (flat pieces, no crate
 	// to hit; logs/camera/_rig_cp.png), and a death before any other checkpoint respawns him standing on
 	// those pieces (game (-1.07, 0.07, -39.41); the crate is at engine (1.07, -39.41)). So it opens at load,
-	// silently, and is the first checkpoint rather than the spawn.
+	// silently, and is the first checkpoint rather than the spawn. He respawns facing the crate's own
+	// yaw: the rig runs off at heading 140.9 after a respawn, the crate's instance yaw is 140.87.
 	// ponytail: "nearest checkpoint to the spawn" stands in for the level's own start-checkpoint link.
 	private void OpenStartCheckpoint()
 	{
@@ -552,7 +553,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		first.Body.Destroy();
 		CrateFx.ShowOpened(first.Model, first.ObjectId);
 		_checkpoint = first.Base;
+		_checkpointFacing = CheckpointFacing(first);
 	}
+
+	// CrashPlayer's facing is the camera yaw: the instance yaw turns a +Z-facing model (as the spawn).
+	private static float CheckpointFacing(Crate c) => c.Model.EulerDegrees.Y + 180.0f;
 
 	// A level.json link entry -> the chunk's local transform (rotation, then offset), in
 	// System.Numerics row-vector form. Internal: TwinsanityBake walks the same links.
@@ -672,9 +677,13 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 	private float _warpPoll;
 
-	// ponytail: dev-only test hook - polls project://warp.txt and teleports Crash there
-	// ("x y z", any other content = idle). Inert in normal play; remove when automated
-	// testing gets a proper driver API.
+	// ponytail: dev-only test hook - polls project://warp.txt (shared by every playing editor), or
+	// instead project://warp-<AETHER_CONTROL_PORT>.txt when that file exists (this editor only), and
+	// teleports Crash there ("x y z", any other content = idle). Inert in normal play; remove when
+	// automated testing gets a proper driver API.
+	private static readonly string? kOwnWarp = Environment.GetEnvironmentVariable("AETHER_CONTROL_PORT") is { Length: > 0 } port
+		? $"project://warp-{port}.txt" : null;
+
 	private void DebugWarpPoll(float deltaTime)
 	{
 		_warpPoll -= deltaTime;
@@ -683,7 +692,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			return;
 		}
 		_warpPoll = 0.25f;
-		string? text = Assets.ReadText("project://warp.txt");
+		string? text = (kOwnWarp != null ? Assets.ReadText(kOwnWarp) : null) ?? Assets.ReadText("project://warp.txt");
 		if (text == null)
 		{
 			return;
@@ -834,7 +843,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 					{
 						c.Activated = true;
 						_checkpoint = c.Base;
-						_checkpointFacing = _player.Facing;
+						_checkpointFacing = CheckpointFacing(c);
 						Log.Info("[Twinsanity] Checkpoint activated.");
 						CrateFx.Activated(c.Model, c.ObjectId);
 						if (onTop)
@@ -996,8 +1005,12 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				Physics.SetMotionType(c.Body, PhysicsMotionType.Kinematic);
 				QueueAbove(c);
 			}
+			// The ground ray is for the terrain: crates below are the support above. A kinematic
+			// crate body trails (or overshoots) its model by a physics step, so a hit on any
+			// crate's body - its own included - is a stale lid that froze the fall mid-air.
 			RaycastHit ground = Physics.Raycast(c.Base - new Vector3(0.0f, 0.005f, 0.0f), -Vector3.UnitY, 60.0f);
-			float floor = MathF.Max(support, ground.DidHit ? ground.Position.Y : float.MinValue);
+			bool terrain = ground.DidHit && !_crates.Exists(s => s.Body.Id == ground.Entity.Id);
+			float floor = MathF.Max(support, terrain ? ground.Position.Y : float.MinValue);
 			c.FallSpeed += kStackGravity * dt;
 			float y = c.Base.Y - c.FallSpeed * dt;
 			if (y <= floor)
