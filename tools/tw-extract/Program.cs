@@ -615,37 +615,9 @@ namespace TwExtract
 			}
 			AddHulls(gi, joints, slot, World, endLocals, hulls);
 
+			bool hasSkin = (gi.SkinID != 0 && gfx.Skins.ContainsKey(gi.SkinID)) || (gi.BlendSkinID != 0 && gfx.BlendSkins.ContainsKey(gi.BlendSkinID));
 			bool any = false;
-			int partCount = 0;
-			// Rigid parts ride a joint: vertices are joint-local, so the mesh node is a child of that joint.
-			foreach (var link in gi.ModelIDs.Values)
-			{
-				if (!gfx.Rigids.TryGetValue(link.ModelID, out var rigid) || !gfx.Models.TryGetValue(rigid.MeshID, out var model))
-				{
-					continue;
-				}
-				var prims = new Dictionary<(uint mat, int layer), Prim>();
-				AppendRigid(ex, prims, rigid, model, Matrix4x4.Identity);
-				// Names carry no record IDs: those differ per level and would defeat the cross-level dedupe.
-				string part = $"part{partCount++}_joint{link.JointIndex}";
-				int mesh = AddMesh(ex, $"{name}_{part}", prims);
-				if (mesh < 0)
-				{
-					continue;
-				}
-				int node = g.AddNode(new Dictionary<string, object> { ["name"] = part, ["mesh"] = mesh });
-				if (slot.TryGetValue(link.JointIndex, out int j))
-				{
-					Gltf.AddChild(g.Nodes[nodes[j]], node);
-				}
-				else
-				{
-					g.SceneRoots.Add(node);
-				}
-				any = true;
-			}
-
-			// Skin + blend skin: bind-pose model-space vertices weighted to up to three joints.
+// Skin + blend skin: bind-pose model-space vertices weighted to up to three joints.
 			// Skins are characters: single layer (multi-layer records only occur on scenery).
 			var skinPrims = new Dictionary<(uint mat, int layer), Prim>();
 			if (gi.SkinID != 0 && gfx.Skins.TryGetValue(gi.SkinID, out var skin))
@@ -665,7 +637,63 @@ namespace TwExtract
 					}
 				}
 			}
-			if (skinPrims.Count > 0 && joints.Length > 0)
+						// Rigid parts ride a joint. Baked into the skin as vertices fully weighted to that joint, so they
+			// follow (and rotate with) its animated transform: the engine skins joints on the GPU and never
+			// moves the spawned static mesh nodes, so a part node parented to a joint node stayed in the bind
+			// pose (Cortex's wig did not follow his head). Objects without a skin keep the static part node.
+			if (hasSkin && joints.Length > 0)
+			{
+				foreach (var link in gi.ModelIDs.Values)
+				{
+					if (!gfx.Rigids.TryGetValue(link.ModelID, out var rigid) || !gfx.Models.TryGetValue(rigid.MeshID, out var model)
+						|| !slot.TryGetValue(link.JointIndex, out int sj))
+					{
+						continue;
+					}
+					var prims = new Dictionary<(uint mat, int layer), Prim>();
+					AppendRigid(ex, prims, rigid, model, Matrix4x4.Identity);
+					World(sj);
+					var xf = world[sj].Value;
+					foreach (var kv in prims)
+					{
+						var p = kv.Value;
+						if (p.Idx.Count == 0)
+						{
+							continue;
+						}
+						if (!skinPrims.TryGetValue(kv.Key, out var sp))
+						{
+							skinPrims[kv.Key] = sp = new Prim();
+						}
+						// A skin prim carries no vertex colour unless a part brought one: backfill the vertices already in it with the shader's implicit 1 (AppendSkinned pads the same way).
+						bool col = p.Col.Count > 0;
+						while (sp.Col.Count < sp.VertexCount * 4)
+						{
+							sp.Col.Add(1f); sp.Col.Add(1f); sp.Col.Add(1f); sp.Col.Add(1f);
+						}
+						uint baseVertex = (uint)sp.VertexCount;
+						for (int v = 0; v < p.VertexCount; v++)
+						{
+							var pos = Vector3.Transform(new Vector3(p.Pos[v * 3], p.Pos[v * 3 + 1], p.Pos[v * 3 + 2]), xf);
+							sp.Pos.Add(pos.X); sp.Pos.Add(pos.Y); sp.Pos.Add(pos.Z);
+							sp.Nrm.Add(p.Nrm[v * 3]); sp.Nrm.Add(p.Nrm[v * 3 + 1]); sp.Nrm.Add(p.Nrm[v * 3 + 2]);
+							sp.Uv.Add(p.Uv[v * 2]); sp.Uv.Add(p.Uv[v * 2 + 1]);
+							if (col)
+							{
+								sp.Col.Add(p.Col[v * 4]); sp.Col.Add(p.Col[v * 4 + 1]); sp.Col.Add(p.Col[v * 4 + 2]); sp.Col.Add(p.Col[v * 4 + 3]);
+							}
+							for (int k = 0; k < 4; k++)
+							{
+								sp.Joints.Add((ushort)sj);
+								sp.Weights.Add(k == 0 ? 1f : 0f);
+							}
+						}
+						sp.Idx.AddRange(p.Idx.Select(i => i + baseVertex));
+						any = true;
+					}
+				}
+			}
+if (skinPrims.Count > 0 && joints.Length > 0)
 			{
 				int mesh = AddMesh(ex, $"{name}_skin", skinPrims);
 				if (mesh >= 0)
