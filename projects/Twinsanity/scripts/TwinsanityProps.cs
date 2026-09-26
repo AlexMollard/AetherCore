@@ -64,9 +64,14 @@ public sealed partial class TwinsanityActors
 	private const float BombDamageRadius = 3.0f;
 	private const float BombSpinReach = 1.5f;
 	// ponytail: the bomb is a rigid body the spin knocks away; its launch speed and rolling drag
-	// are not in the scripts. Tuned to the rig; no collision while rolling (flat ground only).
-	private const float BombKickSpeed = 8.0f;
-	private const float BombDrag = 2.0f;
+	// are not in the scripts. No collision while rolling (flat ground only). Measured in HubA
+	// (logs/traversal/bomb_rig.csv): a spin beside it sends it rolling ~2.06 m, speed ramping to a
+	// ~1.3 m/s peak over ~2 s of contact (it stops against terrain), y settles at 0.6, the matrix
+	// rotation flips - it rolls, it does not slide. Walking into it does nothing and standing beside
+	// it pulls nothing (0.00 m in 3 s): it is not a pushable and has no magnet.
+	// 4.5 at drag 1.4 covers 2.34 m over the 1 s fuse - the rig's 2.06 m.
+	private const float BombKickSpeed = 4.5f;
+	private const float BombDrag = 1.4f;
 	private const float BombRest = 0.596f;
 
 	// act_RIGID_CANNON: belly-flopping its red button fires a GLOBAL_BOMB (the cannon's object list
