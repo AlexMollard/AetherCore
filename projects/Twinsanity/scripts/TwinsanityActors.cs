@@ -39,6 +39,7 @@ public sealed partial class TwinsanityActors
 		Worm,      // fixed pop-up worm
 		Piranha,   // rooted flycatcher: watches Crash, bites when he is close
 		Monkey,    // throws fruit from its tree at Crash
+		Parrot,    // spawned by a parrot spawner: perches on its keys, flies between them
 		Enemy,     // chases Crash when close; touch hurts, spin/jump/slam kills it
 		Pickup,    // spins; collected on touch
 		Prop,      // plays its idle clip in place
@@ -230,12 +231,16 @@ public sealed partial class TwinsanityActors
 				case Behaviour.Monkey:
 					UpdateMonkey(a, a.Critter!, dt, crashPos);
 					break;
+				case Behaviour.Parrot:
+					UpdateParrot(a, a.Critter!, dt);
+					break;
 			}
 		}
 		UpdateCritters();
 		TouchHost();
 		Separate();
 		UpdateEcology(crashPos, dt);
+		UpdateParrotSpawners(crashPos);
 		_actors.AddRange(_pending);
 		_pending.Clear();
 		UpdateOneShots(dt, crashPos);
@@ -488,6 +493,14 @@ public sealed partial class TwinsanityActors
 		// "|HubA|HubACutscenes|" group and are not in the world in free roam - Crash stood a
 		// metre from act_COCO_CREATURE3's spot and nothing was there.
 		if (n.StartsWith("act_coco_creature") || n.StartsWith("act_training_cutscene_skunk"))
+		{
+			return true;
+		}
+		// The nine huba bats (act_GLOBAL_BAT_DARKPURPLE8) are in "|HubA|HubACutscenes|" too: on the
+		// rig they never leave their spots inside the totem entrance (logs/wildlife/bat_rig.csv,
+		// Crash 15.6 m away) and none shows in its mouth (bat_rig_3.png). The hubb ones
+		// (DARKPURPLE10, "|HubB|HubB_Actors|") are live.
+		if (raw.StartsWith("act_global_bat_darkpurple8"))
 		{
 			return true;
 		}

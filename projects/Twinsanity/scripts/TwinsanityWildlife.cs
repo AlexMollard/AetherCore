@@ -65,13 +65,15 @@ public sealed partial class TwinsanityActors
 	private const float ChickenPanic = 5.0f;
 	private const float ChickenCalm = 7.0f;
 	private const float ChickenWalk = 1.0f;
-	// ponytail: the flee speed was not captured on the rig (the chicken was off screen); 3 m/s
-	// is the old tuned value. Upgrade path: track a chicken while Crash runs at it.
-	private const float ChickenFlee = 3.0f;
+	// Rig (logs/wildlife/chicken_flee_rig.csv): Crash ran at a coop chicken; it bolted at
+	// 4.6-5.1 m/s (1.85 m in 0.40 s; 1.27 m in 0.25 s mid-run) and stopped at 7.0 m from him.
+	private const float ChickenFlee = 5.0f;
 	// Crab (script COM_GLOBAL_CRAB_*; rig track_crab2.csv, crab2_wander.csv, logs/gameplay/
 	// rig_crab_notice.csv: all five rose the moment Crash came within 20 m, the one 3.9 m from him
 	// charged within a frame, one 6.9 m away never noticed him).
-	private const float CrabWanderRadius = 3.5f;
+	private const float CrabShuttleStop = 10.3f;
+	private const float CrabShuttleSpeed = 2.3f;
+	private const float CrabShuttleWait = 5.0f;
 	private const float CrabWake = 20.0f;
 	private const float CrabBurrow = 2.0f;
 	private const float CrabRise = 2.0f;
@@ -177,6 +179,16 @@ public sealed partial class TwinsanityActors
 	private bool TryRegisterSpawner(string objectName, JsonElement instance, Matrix4x4 transform, Vector3 position)
 	{
 		string n = NameKey(objectName);
+		if (n.StartsWith("act_parrot_spawner"))
+		{
+			_parrotSpawners.Add(new ParrotSpawner
+			{
+				Position = position,
+				Keys = PointList(instance, "points", transform),
+				Count = instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("params", out JsonElement pp) && pp.GetArrayLength() > 2 ? pp[2].GetInt32() : 1,
+			});
+			return true;
+		}
 		bool coop = n.StartsWith("act_creature_spawner");
 		bool ecology = n.StartsWith("act_util_ecology_manager");
 		if ((!coop && !ecology) || instance.ValueKind != JsonValueKind.Object || !instance.TryGetProperty("links", out JsonElement links))
@@ -379,17 +391,31 @@ public sealed partial class TwinsanityActors
 				template.Alive = false;
 				template.Model.Destroy();
 			}
+			// The two spawners behind the waterfall copy act_EARTH_FISHFOUNTAIN_* (COM_EARTH_LEMMING:
+			// warp near the spawner, thrown as a rigid body, splash and DestroyMe). On the rig nothing
+			// comes out of them in free roam - Crash stood 6 m away on the waterfall ledge for 12 s
+			// and no fish agent existed (logs/wildlife/fish_rig_1.png, fish_rig_2.png) - so the port
+			// spawns none rather than parking 14 static fish in the rock.
+			if (NameKey(info.Name).StartsWith("act_earth_fishfountain"))
+			{
+				_spawners.Remove(s);
+				break;
+			}
 			if (!s.Ecology)
 			{
 				for (int i = 0; i < s.Count; i++)
 				{
 					Vector3 at = s.Points.Count > 0 ? s.Points[i % s.Points.Count] : s.Position;
 					Actor? c = SpawnCopy(info, at);
-					if (c?.Critter != null)
+					if (c == null)
+					{
+						continue;
+					}
+					if (c.Critter != null)
 					{
 						c.Critter.Points = s.Points;
-						s.Live.Add(c);
 					}
+					s.Live.Add(c);
 				}
 			}
 			s.Template = info;
@@ -730,13 +756,128 @@ public sealed partial class TwinsanityActors
 		}
 		s.Refill = -1.0f;
 		Actor? c = SpawnCopy(s.Template!, s.Position);
-		if (c?.Critter != null)
+		if (c == null)
+		{
+			return;
+		}
+		s.Live.Add(c);
+		if (c.Critter != null)
 		{
 			// Inside the coop: the ground ray from above would land on its roof.
 			c.Model.Position = s.Position;
 			c.Home = s.Position;
 			c.Critter.Points = s.Points;
-			s.Live.Add(c);
+		}
+	}
+
+	// Parrots (COM_PARROT_SPAWNER_DEFAULT spawning ENV_PARROT; rig: logs/wildlife/parrot_rig.csv,
+	// huba spawners at 26-28 m from Crash). The spawner puts params[2] parrots on its keys once Crash
+	// is inside sqrt(800) = 28.3 m and clears them past sqrt(1000) = 31.6 m. Each parrot perches near
+	// a key for 1-6 s (rig: airborne ~70% of the time, perches of 1-10 s), then flies to another
+	// of its spawner's keys at 5.46 m/s (rig median while moving),
+	// arcing 3-6 m above the keys, and perches again within ~3 m of it (the script's key noise).
+	private const float ParrotNear = 28.3f;
+	private const float ParrotFar = 31.6f;
+	private const float ParrotSpeed = 5.46f;
+	// ponytail: arc height, perch offset and clip choice are read off one 40 s rig trace, not the
+	// script; upgrade path: decode ENV_PARROT's COM_ENV_PARROT_START focus/anim commands.
+	private const float ParrotArc = 4.0f;
+	private const float ParrotPerchLift = 0.7f;
+	private const string ParrotModel = "project://assets/models/objects/ENV_PARROT/ENV_PARROT.gltf";
+
+	private sealed class ParrotSpawner
+	{
+		public Vector3 Position;
+		public List<Vector3> Keys = new();
+		public int Count;
+		public List<Actor> Live = new();
+	}
+
+	private readonly List<ParrotSpawner> _parrotSpawners = new();
+
+	private void UpdateParrotSpawners(Vector3 crashPos)
+	{
+		foreach (ParrotSpawner s in _parrotSpawners)
+		{
+			float d = Vector3.Distance(s.Position, crashPos);
+			if (s.Live.Count == 0 && d < ParrotNear && s.Keys.Count > 0)
+			{
+				for (int i = 0; i < s.Count; i++)
+				{
+					s.Live.Add(SpawnParrot(s, i % s.Keys.Count));
+				}
+			}
+			else if (s.Live.Count > 0 && d > ParrotFar)
+			{
+				foreach (Actor a in s.Live)
+				{
+					a.Alive = false;
+					a.Model.Destroy();
+				}
+				s.Live.Clear();
+			}
+		}
+	}
+
+	private Actor SpawnParrot(ParrotSpawner s, int key)
+	{
+		Entity e = World.Create();
+		e.Name = "ENV_PARROT#spawned";
+		e.AddTransform();
+		e.Position = s.Keys[key] + new Vector3(0.0f, ParrotPerchLift, 0.0f);
+		e.LoadModel(ParrotModel);
+		Actor a = new() { Model = e, Home = e.Position, Kind = Behaviour.Parrot };
+		ReadClips(e, a);
+		SetLooping(e, true);
+		var c = new Critter
+		{
+			Points = s.Keys,
+			PathIndex = key,
+			Mode = Mode.Rest,
+			Timer = RandomRange(0.0f, 8.0f),
+			FlyClip = Animation.Find(e, "a011"),
+			RestClip = Animation.Find(e, "a001"),
+		};
+		a.Critter = c;
+		PlayClip(a, c.RestClip);
+		_pending.Add(a);
+		return a;
+	}
+
+	private void UpdateParrot(Actor a, Critter c, float dt)
+	{
+		switch (c.Mode)
+		{
+			case Mode.Rest:
+				c.Timer -= dt;
+				if (c.Timer <= 0.0f && c.Points.Count > 1)
+				{
+					int next = (c.PathIndex + 1 + _rng.Next(c.Points.Count - 1)) % c.Points.Count;
+					float ang = RandomRange(0.0f, MathF.PI * 2.0f), r = RandomRange(0.0f, 3.0f);
+					c.PathIndex = next;
+					c.Center = a.Model.Position;
+					c.Target = c.Points[next] + new Vector3(MathF.Cos(ang) * r, ParrotPerchLift, MathF.Sin(ang) * r);
+					c.Timer = 0.0f;
+					c.Timer2 = MathF.Max(0.5f, Vector3.Distance(c.Center, c.Target) / ParrotSpeed);
+					c.Mode = Mode.Walk;
+					PlayClip(a, c.FlyClip);
+				}
+				break;
+			case Mode.Walk:
+			{
+				c.Timer += dt;
+				float t = MathF.Min(1.0f, c.Timer / c.Timer2);
+				Vector3 next = Vector3.Lerp(c.Center, c.Target, t) + new Vector3(0.0f, ParrotArc * 4.0f * t * (1.0f - t), 0.0f);
+				FaceMovement(a, next - a.Model.Position);
+				a.Model.Position = next;
+				if (t >= 1.0f)
+				{
+					c.Mode = Mode.Rest;
+					c.Timer = RandomRange(1.0f, 6.0f);
+					PlayClip(a, c.RestClip);
+				}
+				break;
+			}
 		}
 	}
 
@@ -1009,21 +1150,30 @@ public sealed partial class TwinsanityActors
 					TwinsanityAudio.Creature(TwinsanityAudio.Call.CrabCharge, a.Model.Position);
 					break;
 				}
-				// Rig (crab2_wander.csv): with Crash out of range the crabs do not stand still -
-				// each strays 2.5-3.6 m from its spawn in slow bursts (displacement over 30 s).
+				// Rig (crab_far_rig.csv, crab_far_rig2.csv; Crash still 21 m from the group, 100 s):
+				// crabs farther than 20 m from him stand still. One inside 20 m shuttles: it walks
+				// toward him until ~10.3 m away, waits ~5 s, walks back to its key, waits ~5 s, and
+				// repeats, at ~2.3 m/s.
+				if (d >= CrabWake)
+				{
+					break;
+				}
 				c.Timer2 -= dt;
 				if (c.Timer2 <= 0.0f)
 				{
-					float ang = RandomRange(0.0f, MathF.PI * 2.0f);
-					c.Target = a.Home + new Vector3(MathF.Cos(ang), 0.0f, MathF.Sin(ang)) * RandomRange(0.5f, CrabWanderRadius);
+					bool atKey = Horizontal(p, a.Home) < 0.5f;
+					Vector3 toward = new(p.X - crashPos.X, 0.0f, p.Z - crashPos.Z);
+					c.Target = atKey && toward.LengthSquared() > 1e-4f
+						? crashPos + Vector3.Normalize(toward) * CrabShuttleStop
+						: a.Home;
 					c.Mode = Mode.Walk;
-					c.Timer2 = RandomRange(4.0f, 9.0f);
 				}
 				break;
 			case Mode.Charge:
 				if (d > c.GiveUp)
 				{
 					c.Mode = Mode.Walk;
+					c.Target = a.Home;
 					break;
 				}
 				// ponytail: the crab charge speed is the measured 2.7 m/s.
@@ -1035,8 +1185,6 @@ public sealed partial class TwinsanityActors
 				TouchCrash(a, crashPos);
 				break;
 			case Mode.Walk:
-				// ponytail: the wander burst speed was not captured (the rig's beach crabs spawned
-				// at the shoreline and the long take was lost); 1.2 m/s, half the measured charge.
 				PlayClip(a, c.WalkClip);
 				if (d < c.Notice)
 				{
@@ -1044,10 +1192,10 @@ public sealed partial class TwinsanityActors
 					TwinsanityAudio.Creature(TwinsanityAudio.Call.CrabCharge, a.Model.Position);
 					break;
 				}
-				if (WalkTo(a, c.Target, CrabSpeed * 0.45f, dt, true))
+				if (WalkTo(a, c.Target, CrabShuttleSpeed, dt, true))
 				{
 					c.Mode = Mode.Idle;
-					c.Timer2 = RandomRange(2.0f, 6.0f);
+					c.Timer2 = CrabShuttleWait;
 				}
 				break;
 		}
@@ -1248,7 +1396,11 @@ public sealed partial class TwinsanityActors
 	// after he arrived 2 m away. It waits out the clip (S4, AnimationFinished) and the idle's 1 s
 	// (S1 -> COM_GENERIC_CREATURE_IDLE_BASIC, DELAY 1) before it can strike again.
 	private const float WormAttackRadius = 3.0f;
-	private const float WormTurnRate = 90.0f;
+	// Rig (logs/wildlife/worm_turn_rig.txt): Crash dropped 2 m from the beach worm on each side;
+	// the mask went after 0.64 s (-z), 1.01 s (-x), 1.16 s (+x) and 1.50 s (+z). That fits a start
+	// heading of 167 deg (the instance yaw) and a turn of ~174-180 deg/s after a 0.57 s base, so
+	// the script's TURN_SPEED 1.5708 is not per second here; 180 deg/s matches the four times.
+	private const float WormTurnRate = 180.0f;
 	private const float WormHitAt = 0.3f;
 	private const float WormAttackClip = 1.24f; // a013
 	private const float WormAttackRest = 1.0f;
@@ -1288,7 +1440,10 @@ public sealed partial class TwinsanityActors
 		{
 			c.Landed = true;
 			c.FruitLife = 0.0f;
-			int clip = Animation.Find(a.Model, "a013");
+			// The idle attack DoAnim(0x...06) picks Anims[6] = id 296; in the animset the sorted ids are
+			// 56,76,100,296,297,298,299,300,309,310,533 for a001-a013, so 296 is a004 (slot 1 297 = a005
+			// and slot 5 298 = a006 are the verified pop and sink).
+			int clip = Animation.Find(a.Model, "a004");
 			if (clip >= 0)
 			{
 				Animation.CrossFade(a.Model, clip, 0.1f);
