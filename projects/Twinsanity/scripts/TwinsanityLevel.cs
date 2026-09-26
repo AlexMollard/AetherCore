@@ -459,7 +459,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				_player!.Respawn(_checkpoint + new Vector3(0.0f, 0.1f, 0.0f), _checkpointFacing);
 				_player.SetControl(true);
 				_aku = 1;
-				_cutscenes.Respawned(_checkpoint + new Vector3(0.0f, 0.1f, 0.0f));
+				if (_cutscenes.Respawned(_checkpoint + new Vector3(0.0f, 0.1f, 0.0f)))
+				{
+					_actors.ResetGuards();
+				}
 				Log.Info("[Twinsanity] Crash respawned at checkpoint");
 			}
 			return;

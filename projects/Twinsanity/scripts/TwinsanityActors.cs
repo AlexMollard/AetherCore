@@ -67,6 +67,7 @@ public sealed partial class TwinsanityActors
 		public Vector3 ShieldRest;         // the shield at rest, model space
 		public Quaternion ShieldRestRot;
 		public float Bash;       // shieldbearers: seconds left of the bash clip
+		public bool Shoving;     // bare shieldbearers: carrying Crash away from the post (UpdateBareGuard)
 		// Death knockback (Knockback.cs): airborne while Flying, then DeathTimer counts the linger.
 		public bool Flying, Bounced;
 		public Vector3 FlyVelocity;
@@ -75,6 +76,7 @@ public sealed partial class TwinsanityActors
 	}
 
 	private readonly List<Actor> _actors = new();
+	private readonly List<Actor> _guards = new(); // every shieldbearer, kept for ResetGuards
 	private readonly List<Actor> _pickups = new();
 	private ITwinsanityHost? _host;
 	private CrashPlayer? _player;
@@ -156,6 +158,7 @@ public sealed partial class TwinsanityActors
 			ReadShield(a, model);
 			a.IdleClip = Animation.Find(e, "a025");
 			a.MoveClip = Animation.Find(e, "a023");
+			_guards.Add(a);
 		}
 		// One-shot props (TwinsanityProps.cs) rest until their cue; everything else loops its idle.
 		if (a.Kind != Behaviour.Prop || !SetupOneShot(a, objectName, SubtypeOf(instance), model))
@@ -280,7 +283,14 @@ public sealed partial class TwinsanityActors
 					CrateFx.CreaturePop(at, chicken);
 					TwinsanityAudio.Creature(chicken ? TwinsanityAudio.Call.ChickenPop : TwinsanityAudio.Call.Pop, at);
 					a.Alive = false;
-					a.Model.Destroy();
+					if (a.Kind == Behaviour.Shieldbearer)
+					{
+						a.Model.SetActive(false); // ResetGuards brings him back for a zone replay
+					}
+					else
+					{
+						a.Model.Destroy();
+					}
 				}
 				continue;
 			}
@@ -371,16 +381,28 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	/// <summary>A scripted hit on a live enemy (a cutscene actor's blow): the one standing within 2 of `at` is
+	/// <summary>A scripted hit on a live enemy (a cutscene actor's blow): the nearest standing within 2 of `at` is
 	/// knocked away from `from`, with the gen_IMPACT1 flash the rig shows on the shieldbearer (station 3).
+	/// The nearest, not the first found: the mouth guard can stand near station 3's guard, and the blow is
+	/// the scene's, for station 3's guard alone.
 	/// ponytail: this is the enemy's death knockback; the disc's shieldbearer gets up again after its HIT
 	/// script's 4 s lie-down, which the rig's station 3 capture does not reach.</summary>
 	public void KnockEnemy(Vector3 at, Vector3 from)
 	{
-		Actor? a = _actors.Find(x => x.Alive && x.Kind is Behaviour.Enemy or Behaviour.Shieldbearer
-			&& (x.Model.Position.X - at.X) * (x.Model.Position.X - at.X) + (x.Model.Position.Z - at.Z) * (x.Model.Position.Z - at.Z) < 4.0f);
+		static float Sq(Vector3 p, Vector3 q) => (p.X - q.X) * (p.X - q.X) + (p.Z - q.Z) * (p.Z - q.Z);
+		Actor? a = null;
+		float best = 4.0f;
+		foreach (Actor x in _actors)
+		{
+			float d = Sq(x.Model.Position, at);
+			if (x.Alive && x.DeathTimer < 0.0f && x.Kind is Behaviour.Enemy or Behaviour.Shieldbearer && d < best)
+			{
+				(a, best) = (x, d);
+			}
+		}
 		if (a != null)
 		{
+			EndShove(a);
 			CrateFx.ImpactFlash(a.Model.Position + new Vector3(0.0f, 0.8f, 0.0f));
 			Kill(a, from);
 		}
@@ -443,11 +465,17 @@ public sealed partial class TwinsanityActors
 	// (MeToInitPosSqrDist 36) and walks back when Crash leaves. His HIT script ignores every attack while his
 	// hit points are above 10 except AgentWasSlid: spins, slams and jumps do nothing to him, while touching
 	// him any other way gets Crash bashed. A slide knocks the shield off (HP 20 -> 10) and Crash slides on
-	// past; he stays up and from then on is a plain tribesman (DEFAULT state 3) that a spin knocks away.
+	// past; he stays up and from then on is a plain tribesman (DEFAULT state 3, UpdateBareGuard) who shoves
+	// Crash out of his ground and whom a spin knocks away.
 	private const float GuardSightSq = 200.0f;
 	private const float GuardSpeed = 2.75f;
 	private const float GuardLeash = 6.0f;
 	private const float GuardStop = 1.6f; // he halts short of touching: Crash standing by him is not bashed
+	// A slide meets the shield he holds out in front, so it reaches him from where he halts; the bare
+	// body radius alone let a slide at a guard standing at his leash end stop short or pass him by.
+	// ponytail: the rig (rig_g2_leashF_sheet.png) knocks it off from ~1.5 m and a slide ending ~2 m
+	// short does not (rig_g2_leashE_sheet.png); the disc's collision radius is not decoded.
+	private const float GuardSlideReach = GuardStop;
 
 	private void UpdateShieldbearer(Actor a, float dt, Vector3 crashPos)
 	{
@@ -463,7 +491,7 @@ public sealed partial class TwinsanityActors
 			a.Bash -= dt;
 			if (a.Bash <= 0.0f)
 			{
-				UpdateEnemy(a, dt, crashPos);
+				UpdateBareGuard(a, player, dt, crashPos);
 			}
 			return;
 		}
@@ -505,7 +533,8 @@ public sealed partial class TwinsanityActors
 			PlayClip(a, step.LengthSquared() > 1e-8f ? a.MoveClip : a.IdleClip);
 		}
 
-		bool touching = distSq < EnemyHitRadius * EnemyHitRadius && crashPos.Y < p.Y + 1.6f && crashPos.Y + 1.8f > p.Y;
+		float reach = player.IsSliding ? GuardSlideReach : EnemyHitRadius;
+		bool touching = distSq < reach * reach && crashPos.Y < p.Y + 1.6f && crashPos.Y + 1.8f > p.Y;
 		if (!touching || player.IsSpinning)
 		{
 			return; // the shield takes a spin
@@ -522,6 +551,109 @@ public sealed partial class TwinsanityActors
 		a.Bash = 1.0f;
 		PlayClip(a, Animation.Find(a.Model, "a021"));
 		_host?.DamagePlayer(p, DeathKind.Generic);
+	}
+
+	// The bare tribesman (DEFAULT state 3, COM_CREATURE_BASIC_DEFAULT; rig rig_g2_bare_sheet.png,
+	// rig_g2_bare_push.png, 0 masks): he never hurts Crash. While Crash is within sqrt(200) of his post
+	// he comes at him and, on contact, walks him backwards away from the post (~5 m/s, Crash carried
+	// upright with no control) until Crash is sqrt(200) out - the rig's second shove ended 14.3 m from
+	// the post - and then stands watching him. A spin, slide, slam or landing on him knocks him away.
+	// ponytail: the approach reuses his shielded step speed and the shove is a straight carry at a
+	// constant 5 m/s (the rig's two shoves: 8 m in 1.6 s, 9.6 m in 2.4 s); Crash's feet keep their
+	// height, which holds on the flat mouth clearing. Upgrade path: time the approach and trace the
+	// shove's ground contact on the rig.
+	private const float ShoveSpeed = 5.0f;
+
+	private void UpdateBareGuard(Actor a, CrashPlayer player, float dt, Vector3 crashPos)
+	{
+		Vector3 p = a.Model.Position;
+		float dx = crashPos.X - p.X, dz = crashPos.Z - p.Z;
+		float distSq = dx * dx + dz * dz;
+		bool near = distSq < EnemyHitRadius * EnemyHitRadius && crashPos.Y < p.Y + 1.6f && crashPos.Y + 1.8f > p.Y;
+		bool attacked = player.IsSpinning || player.IsSliding || player.IsSlamming
+			|| (player.Velocity.Y < -2.0f && crashPos.Y > p.Y + 0.8f);
+		if (near && attacked && !a.Shoving)
+		{
+			Kill(a, crashPos);
+			_host?.AddWumpa(1);
+			return;
+		}
+		Vector3 fromPost = new(crashPos.X - a.Home.X, 0.0f, crashPos.Z - a.Home.Z);
+		bool inside = fromPost.LengthSquared() < GuardSightSq;
+		if (a.Shoving)
+		{
+			if (!inside || player.IsDead)
+			{
+				EndShove(a);
+				return;
+			}
+			Vector3 dir = Vector3.Normalize(fromPost);
+			Vector3 step = dir * ShoveSpeed * dt;
+			player.RideFeet = crashPos + step;
+			a.Model.Position = p + step;
+			FaceMovement(a, -dir);
+			PlayClip(a, a.MoveClip);
+			return;
+		}
+		float dist = MathF.Sqrt(distSq);
+		Vector3 toCrash = dist > 0.001f ? new Vector3(dx / dist, 0.0f, dz / dist) : Vector3.UnitZ;
+		if (!inside || player.IsDead || player.RideFeet != null)
+		{
+			FaceMovement(a, toCrash);
+			PlayClip(a, a.IdleClip);
+			return;
+		}
+		if (near)
+		{
+			a.Shoving = true;
+			return;
+		}
+		Vector3 walk = toCrash * MathF.Min(GuardSpeed * dt, dist);
+		a.Model.Position = p + walk;
+		FaceMovement(a, walk);
+		PlayClip(a, a.MoveClip);
+	}
+
+	private void EndShove(Actor a)
+	{
+		if (a.Shoving && _player != null)
+		{
+			_player.RideFeet = null;
+		}
+		a.Shoving = false;
+	}
+
+	/// <summary>Crash respawned at a zone checkpoint (TwinsanityCutscenes.Respawned): the zone's scenes replay,
+	/// and station 3's needs its guard back for Coco to knock down again, as the rig's replay shows. Every
+	/// shieldbearer goes back to how the level placed him: at his post, shield on, whatever happened to him.
+	/// ponytail: the rig shows only station 3's guard back; the mouth guard is reset the same way.</summary>
+	public void ResetGuards()
+	{
+		int restored = 0;
+		foreach (Actor a in _guards)
+		{
+			restored += !a.Alive || a.DeathTimer >= 0.0f || !a.Shielded ? 1 : 0;
+			EndShove(a);
+			a.Alive = true;
+			a.DeathTimer = -1.0f;
+			a.Flying = a.Bounced = false;
+			a.Shielded = true;
+			a.Bash = 0.0f;
+			a.Model.SetActive(true);
+			a.Model.Position = a.Home;
+			a.Model.EulerDegrees = new Vector3(0.0f, a.HomeYaw, 0.0f);
+			foreach (Entity part in a.ShieldParts)
+			{
+				MeshRenderer.SetVisible(part, true);
+			}
+			SetLooping(a.Model, true);
+			PlayClip(a, a.IdleClip);
+			if (!_actors.Contains(a))
+			{
+				_actors.Add(a);
+			}
+		}
+		Log.Info($"[Twinsanity] {_guards.Count} shieldbearers back at their posts, {restored} of them restored");
 	}
 
 	// The shield (WEAPON_NATIVE_SHIELD, attached on exit point 2 by his INIT script) is baked onto his

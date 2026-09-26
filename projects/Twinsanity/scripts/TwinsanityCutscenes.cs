@@ -679,13 +679,13 @@ public sealed class TwinsanityCutscenes
 	/// trigger 6. A director that ran SetState (34) is spent and stays so.
 	/// ponytail: the reset is scoped to message-138 checkpoints because that is all the rig has shown; the
 	/// beach respawns at its start checkpoint crate and resets nothing, so its scenes stay one-shot.</summary>
-	public void Respawned(Vector3 feet)
+	public bool Respawned(Vector3 feet)
 	{
 		Trigger? zone = _triggers.Find(t => t.Checkpoint is Agent crate
 			&& MathF.Abs(crate.Position.X - feet.X) < 0.5f && MathF.Abs(crate.Position.Z - feet.Z) < 0.5f);
 		if (zone == null)
 		{
-			return;
+			return false;
 		}
 		if (Active)
 		{
@@ -720,6 +720,7 @@ public sealed class TwinsanityCutscenes
 			}
 		}
 		Log.Info($"[Cutscenes] respawn at a zone checkpoint: {reset.Count} agents reset, the zone's scenes re-arm");
+		return true;
 	}
 
 	private static bool Contains(Trigger t, Vector3 feet)
