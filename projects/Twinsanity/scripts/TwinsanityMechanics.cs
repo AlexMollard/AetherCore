@@ -77,6 +77,7 @@ public sealed partial class TwinsanityActors
 		public float LaunchFloor;    // ground height it was launched from
 		public bool Pivots;          // turns about its origin instead of sliding (the cannon)
 		public List<Entity> Hulls = new(); // collision that turns with a pivoting object
+		public Entity Button;        // the cannon's red button (disc object 779), turns with it
 		public bool Settled;         // RestHeight known against real ground (collision may load late)
 	}
 
@@ -109,6 +110,17 @@ public sealed partial class TwinsanityActors
 	// PivotRate * (his push direction x his offset from the pivot)). ponytail: the rate is fitted
 	// to one capture and the contact is taken as his push line, not the hull's face normal.
 	private const float PivotRate = 11.0f; // deg/s per metre of lever
+
+	// The button sits on the body top between the trail handles; its model is a 1.556 disc, 0.46 tall.
+	private static readonly Vector3 CannonButtonLocal = new(0.0f, 2.79f, -1.05f);
+
+	// Engine yaw is atan2(x, z): local +z maps to (sin y, cos y).
+	private static Vector3 Yawed(Vector3 local, float yawDeg)
+	{
+		float yaw = yawDeg * MathF.PI / 180.0f;
+		float s = MathF.Sin(yaw), c = MathF.Cos(yaw);
+		return new Vector3(local.X * c + local.Z * s, local.Y, -local.X * s + local.Z * c);
+	}
 
 	// Per family: collision radius (model extent - with our 0.4 capsule it reproduces the rig's
 	// 1.0-1.1 m contact distance), centre height above ground (the script's SetLogicalRadius),
@@ -168,6 +180,7 @@ public sealed partial class TwinsanityActors
 		body.AddTransform();
 		body.Position = center;
 		var hulls = new List<Entity>();
+		Entity button = default;
 		if (key == "act_rigid_cannon")
 		{
 			// The cannon turns in place, so it collides with its own disc hulls (the body box with
@@ -183,6 +196,15 @@ public sealed partial class TwinsanityActors
 					hulls.Add(h);
 				}
 			}
+
+			// The red button between the trail handles ("BELLY-FLOP ON THE RED BUTTON"): the disc
+			// links it to the cannon as object 779. It turns with the cannon.
+			button = World.Create();
+			button.Name = objectName + " Button";
+			button.AddTransform();
+			button.LoadModel("project://assets/models/objects/RIGID_CANNON_BUTTON/RIGID_CANNON_BUTTON.gltf");
+			button.Position = e.Position + Yawed(CannonButtonLocal, e.EulerDegrees.Y);
+			button.EulerDegrees = e.EulerDegrees;
 		}
 		if (hulls.Count == 0)
 		{
@@ -206,6 +228,7 @@ public sealed partial class TwinsanityActors
 			Base = Quaternion.CreateFromYawPitchRoll(eulerDegrees.Y * MathF.PI / 180.0f, eulerDegrees.X * MathF.PI / 180.0f, eulerDegrees.Z * MathF.PI / 180.0f),
 			Pivots = pivots,
 			Hulls = hulls,
+			Button = button,
 		});
 		return true;
 	}
@@ -245,9 +268,10 @@ public sealed partial class TwinsanityActors
 			if (contact && player.IsGrounded && speed > 0.5f)
 			{
 				Vector3 n = toObj / dist;
-				// Standing on its trail plate (feet ~1.2 up) he rides it rather than turning it.
-				if (p.Pivots && Vector3.Dot(flatVel, n) > 0.0f && feet.Y < p.Center.Y - 0.8f)
+				if (p.Pivots && Vector3.Dot(flatVel, n) > 0.0f)
 				{
+					// The rig turns it from between the trail handles (feet on the plate, ~1.2 up);
+					// overhead there is no contact anyway (overlapY), so no guard is needed.
 					// Moving the contact point along his push direction turns it (yaw = atan2(x, z)).
 					Vector3 dir = flatVel / speed;
 					Vector3 r = -toObj;
@@ -256,6 +280,11 @@ public sealed partial class TwinsanityActors
 					foreach (Entity h in p.Hulls)
 					{
 						h.EulerDegrees = p.Model.EulerDegrees;
+					}
+					if (p.Button.IsValid)
+					{
+						p.Button.Position = p.Model.Position + Yawed(CannonButtonLocal, p.Model.EulerDegrees.Y);
+						p.Button.EulerDegrees = p.Model.EulerDegrees;
 					}
 					pushing = true;
 				}

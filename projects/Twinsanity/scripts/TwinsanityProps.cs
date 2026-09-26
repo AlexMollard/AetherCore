@@ -35,7 +35,6 @@ public sealed partial class TwinsanityActors
 		public float Remaining = -1.0f; // seconds left of the clip playing now; -1 = resting
 		public string Playing = "";
 		public readonly List<PropHull> Hulls = new();
-		public bool Crown; // an idol head: its spiky crown kills while the head is still raised
 	}
 
 	// One of the object's disc collision hulls (GI_CollisionData, exported by tw-extract to
@@ -109,7 +108,6 @@ public sealed partial class TwinsanityActors
 		{
 			s.Cue = PropCue.Explosion;
 			s.ClipNames = new[] { "a001", "a002" };
-			s.Crown = true;
 		}
 		else if (n.StartsWith("act_training_falling_log"))
 		{
@@ -517,29 +515,7 @@ public sealed partial class TwinsanityActors
 			{
 				PlayOnce(s);
 			}
-			if (s.Crown && s.Next == 0 && OnCrown(s.Actor.Model, crashPos))
-			{
-				// Rig (idol_rig_top1.png): landing on a raised head's crown kills him (the angel
-				// death, lives 4 -> 3). Once a cannonball has lowered it the crown is safe to stand in.
-				_host?.DamagePlayer(crashPos, DeathKind.Generic);
-			}
 		}
-	}
-
-	// The raised head's top (disc hull 0 rest pose: local x +-2.64, z +-1.98, top 8.53 above the origin).
-	private const float CrownHalfX = 2.64f, CrownHalfZ = 1.98f, CrownTop = 8.53f;
-
-	private static bool OnCrown(Entity head, Vector3 feet)
-	{
-		Vector3 d = feet - head.Position;
-		if (d.Y < CrownTop - 0.3f || d.Y > CrownTop + 0.5f)
-		{
-			return false;
-		}
-		float yaw = head.EulerDegrees.Y * MathF.PI / 180.0f;
-		float lx = d.X * MathF.Cos(yaw) - d.Z * MathF.Sin(yaw);
-		float lz = d.X * MathF.Sin(yaw) + d.Z * MathF.Cos(yaw);
-		return MathF.Abs(lx) <= CrownHalfX && MathF.Abs(lz) <= CrownHalfZ;
 	}
 
 	private static void PlayOnce(OneShot s)
