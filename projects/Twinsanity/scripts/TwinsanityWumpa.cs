@@ -208,6 +208,14 @@ public sealed class TwinsanityWumpa
 		e.Position = position;
 		e.EulerDegrees = new Vector3(0.0f, yawDegrees, 0.0f);
 		e.LoadModel(modelPath);
+		// The original lays a soft blob under each fruit (logs/wumpa/rig/idle_00.png), never a
+		// sun-projected silhouette. Cast into the shadow maps, a fruit hovering a metre up threw a
+		// detached shadow that a distant cascade quantised into a dark blocky speck - rows of them
+		// along every wumpa trail (logs/artifacts/specks_sheet.png).
+		for (int i = 0; i < e.ChildCount; i++)
+		{
+			MeshRenderer.SetCastShadows(e.GetChild(i), false);
+		}
 		return e;
 	}
 }
