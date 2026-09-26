@@ -114,16 +114,23 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 		// A baked level (the editor's Twinsanity bake, saved with the scene as a prefab
 		// instance) is bound to, not rebuilt: every entity already exists and carries its
-		// disc identity in a Twinsanity Marker. Without one - a fresh checkout, no bake -
-		// the level builds from the extracted JSON exactly as it always did.
+		// disc identity in a Twinsanity Marker. Only when there is no bake at all - a fresh
+		// checkout - does the level build from the extracted JSON. A bake root whose marker
+		// cannot be read (an editor binary older than the marker component) must not fall
+		// back: the baked entities are already in the scene and a JSON build would stack a
+		// second copy of the whole level on top of them.
 		Entity bakeRoot = Scene.Find(TwinsanityBake.BakeRootName);
-		if (bakeRoot.IsValid && bakeRoot.Component("Twinsanity Marker").Exists)
+		if (!bakeRoot.IsValid)
+		{
+			BuildFromJson();
+		}
+		else if (bakeRoot.Component("Twinsanity Marker").Exists)
 		{
 			BindBaked(bakeRoot);
 		}
 		else
 		{
-			BuildFromJson();
+			Log.Error("[Twinsanity] the baked level has no readable Twinsanity Marker (editor build predates the bake?) - rebuild the editor; not building the level a second time.");
 		}
 
 		CrateFx.RegisterObjectModels(_objectModels);
