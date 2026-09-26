@@ -18,6 +18,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <TextureDilate.hpp>
+
 #include "io/FileSystem.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
@@ -174,13 +176,18 @@ namespace aether
 					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: host transition to GENERAL failed"));
 				}
 
-				const std::int32_t copyResult = vkutil::HostCopyMipToImage(device, image, pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height), 0u);
+				// Cut-out textures: transparent texels take their visible neighbours' colour on every
+				// level, so bilinear filtering and the box downsample never pull in the near-black RGB
+				// PS2 art stores there (see DilateTransparentRgb).
+				std::vector<stbi_uc> base(pixels, pixels + static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+				DilateTransparentRgb(base.data(), width, height, 4);
+				const std::int32_t copyResult = vkutil::HostCopyMipToImage(device, image, base.data(), static_cast<uint32_t>(width), static_cast<uint32_t>(height), 0u);
 				if (copyResult != 0)
 				{
 					Throw(AetherError::Vulkan(copyResult, "UploadRgbaToGpuImage: HostCopyMipToImage failed"));
 				}
 
-				const stbi_uc* parent = pixels;
+				const stbi_uc* parent = base.data();
 				std::vector<stbi_uc> parentOwned;
 				int parentWidth = width;
 				int parentHeight = height;
@@ -190,6 +197,7 @@ namespace aether
 					const int levelHeight = std::max(1, parentHeight / 2);
 
 					std::vector<stbi_uc> levelPixels = DownsampleRgba(parent, parentWidth, parentHeight, levelWidth, levelHeight, colorSpace);
+					DilateTransparentRgb(levelPixels.data(), levelWidth, levelHeight, 4);
 					const std::int32_t levelResult =
 					        vkutil::HostCopyMipToImage(device, image, levelPixels.data(), static_cast<uint32_t>(levelWidth), static_cast<uint32_t>(levelHeight), level);
 					if (levelResult != 0)

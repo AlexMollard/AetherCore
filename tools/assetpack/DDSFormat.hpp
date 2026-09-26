@@ -11,6 +11,8 @@
 #include <string_view>
 #include <vector>
 
+#include <TextureDilate.hpp>
+
 namespace aether::assetpipeline
 {
 
@@ -202,4 +204,6 @@ namespace aether::assetpipeline
 			}
 		}
 	}
+
+	using aether::DilateTransparentRgb;
 } // namespace aether::assetpipeline

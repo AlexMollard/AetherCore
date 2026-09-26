@@ -203,10 +203,17 @@ namespace aether
 
 		// The blob covers the inner half of the actor's footprint and fades out past it, which
 		// is the rig's size: a crate's blob just rims its base, Crash's sits under his feet.
-		// Pickups get one too: the rig lays a small soft blob under every wumpa
-		// (logs/wumpa/rig/idle_00.png). The floor only drops degenerate bounds.
+		// Pickups (anything with a smaller blob than a crate's) get one too: the rig lays a small dark
+		// blob under every wumpa at full strength although the fruit hovers about a metre up
+		// (logs/wumpa/rig/idle_00.png). A negative radius tells the shader to skip the hover
+		// fade for them. The floor only drops degenerate bounds.
+		// ponytail: "pickup" is a size test standing in for the per-actor shadow flag the game
+		// scripts carry, until that is extracted.
 		constexpr float kFootprintFraction = 0.5f;
 		constexpr float kMinBlobRadius = 0.05f;
+		// A wumpa's bounds sphere (0.74 m, its model being 0.85 m across) gives 0.37 here, a 1 m
+		// crate 0.43.
+		constexpr float kPickupBlobRadius = 0.4f;
 		for (const auto& [key, b]: actors)
 		{
 			const float radius = kFootprintFraction * 0.5f * std::max(b.max.x - b.min.x, b.max.z - b.min.z);
@@ -214,7 +221,7 @@ namespace aether
 			{
 				continue;
 			}
-			out.emplace_back(0.5f * (b.min.x + b.max.x), b.min.y, 0.5f * (b.min.z + b.max.z), radius);
+			out.emplace_back(0.5f * (b.min.x + b.max.x), b.min.y, 0.5f * (b.min.z + b.max.z), radius < kPickupBlobRadius ? -radius : radius);
 		}
 		const auto distSq = [&](const glm::vec4& blob) { return glm::dot(glm::vec3(blob) - eyeWorldPos, glm::vec3(blob) - eyeWorldPos); };
 		if (out.size() > kMaxBlobShadows)

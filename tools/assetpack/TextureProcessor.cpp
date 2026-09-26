@@ -171,12 +171,15 @@ namespace aether::assetpipeline
 
 			std::vector<MipData> mips;
 			int mipW = width, mipH = height;
-			const uint8_t* srcPixels = pixels.get();
-			std::vector<uint8_t> mipStorage;
+			// A writable copy: every level has its transparent texels recoloured before it is
+			// compressed (see DilateTransparentRgb).
+			std::vector<uint8_t> level(pixels.get(), pixels.get() + static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * static_cast<std::size_t>(srcChannels));
+			std::vector<uint8_t> next;
 
 			while (true)
 			{
-				auto blocks = CompressBlocks(srcPixels, mipW, mipH, srcChannels, fmt, bc7Params);
+				DilateTransparentRgb(level.data(), mipW, mipH, srcChannels);
+				auto blocks = CompressBlocks(level.data(), mipW, mipH, srcChannels, fmt, bc7Params);
 				mips.push_back({mipW, mipH, std::move(blocks)});
 
 				if (mipW == 1 && mipH == 1)
@@ -186,12 +189,12 @@ namespace aether::assetpipeline
 
 				const int newW = std::max(1, mipW / 2);
 				const int newH = std::max(1, mipH / 2);
-				mipStorage.resize(static_cast<std::size_t>(newW) * static_cast<std::size_t>(newH) * static_cast<std::size_t>(srcChannels));
-				DownsampleBox2x2(srcPixels, mipW, mipH, srcChannels, mipStorage.data());
+				next.resize(static_cast<std::size_t>(newW) * static_cast<std::size_t>(newH) * static_cast<std::size_t>(srcChannels));
+				DownsampleBox2x2(level.data(), mipW, mipH, srcChannels, next.data());
+				level.swap(next);
 
 				mipW = newW;
 				mipH = newH;
-				srcPixels = mipStorage.data();
 			}
 
 			return BuildDDS(width, height, fmt, mips);

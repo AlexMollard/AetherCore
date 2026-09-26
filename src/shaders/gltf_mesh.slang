@@ -51,11 +51,15 @@ float BlobShadowVisibility(FrameConstantsData* fc, float3 worldPos, float upFaci
     for (uint i = 0u; i < count; ++i)
     {
         const float4 blob = fc->blobShadows[i];
-        const float r = blob.w;
+        // A negative radius marks a pickup (see WorldRenderer::GatherBlobShadows): its blob stays
+        // at full strength across its hover height and only fades past that, over a real drop.
+        const bool pickup = blob.w < 0.0;
+        const float r = abs(blob.w);
         // Below the actor's bounds bottom: fade with the drop. Above it: only up to the
         // actor's own middle, so the top of a neighbouring crate is not darkened.
         const float drop = blob.y - worldPos.y;
-        const float vertical = (1.0 - smoothstep(0.0, kBlobFadeHeight, drop)) * (1.0 - smoothstep(1.5 * r, 2.0 * r, -drop));
+        const float dropFade = pickup ? smoothstep(kBlobFadeHeight, 2.0 * kBlobFadeHeight, drop) : smoothstep(0.0, kBlobFadeHeight, drop);
+        const float vertical = (1.0 - dropFade) * (1.0 - smoothstep(1.5 * r, 2.0 * r, -drop));
         const float horizontal = 1.0 - smoothstep(r, 2.0 * r, length(worldPos.xz - blob.xz));
         shade = max(shade, horizontal * vertical);
     }

@@ -74,15 +74,24 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartIn
     }
 
     VSOutput o;
-    o.svPosition  = mul(fc->viewProj, worldPos);
 #ifdef AETHER_VS_SKY_DEPTH
     // Skydome (kFlagSky): pinned to the far plane, so it sits behind every piece of geometry
     // whatever its real radius, and its layers - all at that one depth, never written - fight
-    // neither each other nor distant scenery. Needs GpuMaterial.slangh.
-    if (instance.materialIndex != kNoTexture && (((GpuMaterial*)(fc->materialBufferAddr))[instance.materialIndex].flags & kFlagSky) != 0u)
+    // neither each other nor distant scenery. It is also re-centred on the camera rendering
+    // this frame: a script parking the dome on the camera runs a frame behind it, and that lag
+    // slid the dome under a moving camera. Needs GpuMaterial.slangh.
+    const bool sky = instance.materialIndex != kNoTexture && (((GpuMaterial*)(fc->materialBufferAddr))[instance.materialIndex].flags & kFlagSky) != 0u;
+    if (sky)
+    {
+        worldPos.xyz += fc->cameraWorldPos.xyz - mul(instance.model, float4(0.0, 0.0, 0.0, 1.0)).xyz;
+    }
+    o.svPosition  = mul(fc->viewProj, worldPos);
+    if (sky)
     {
         o.svPosition.z = o.svPosition.w;
     }
+#else
+    o.svPosition  = mul(fc->viewProj, worldPos);
 #endif
     o.worldPos    = worldPos.xyz;
     o.worldNormal = worldNormal;

@@ -8,6 +8,9 @@
 
 #include "DDSFormat.hpp"
 
+#include <vector>
+
+using aether::assetpipeline::DilateTransparentRgb;
 using aether::assetpipeline::DownsampleBox2x2;
 
 namespace
@@ -79,4 +82,33 @@ TEST_CASE("Alpha-weighted downsample keeps the opaque 3-channel average unweight
 	CHECK(dst[0] == 25);
 	CHECK(dst[1] == 50);
 	CHECK(dst[2] == 75);
+}
+
+TEST_CASE("Transparent texels take their visible neighbours' colour, so a cut-out edge filters without a dark outline")
+{
+	// 4x1: green, red opaque at the ends; two black fully transparent texels between them.
+	uint8_t px[16] = {
+		0, 200, 0, 255,   0, 0, 0, 0,   0, 0, 0, 0,   200, 0, 0, 255,
+	};
+	DilateTransparentRgb(px, 4, 1, 4);
+	// Each gap texel takes its one visible neighbour, and stays invisible.
+	CHECK(px[4] == 0);
+	CHECK(px[5] == 200);
+	CHECK(px[7] == 0);
+	CHECK(px[8] == 200);
+	CHECK(px[9] == 0);
+	CHECK(px[11] == 0);
+	// Visible texels never change.
+	CHECK(px[1] == 200);
+	CHECK(px[12] == 200);
+}
+
+TEST_CASE("Transparent texels beyond the flood reach take the mean visible colour, never black")
+{
+	std::vector<uint8_t> px(64 * 4, 0);
+	px[0] = 100; px[1] = 150; px[2] = 50; px[3] = 255; // one visible texel at the left end of 64x1
+	DilateTransparentRgb(px.data(), 64, 1, 4);
+	CHECK(px[63 * 4 + 0] == 100);
+	CHECK(px[63 * 4 + 1] == 150);
+	CHECK(px[63 * 4 + 3] == 0);
 }
