@@ -88,6 +88,14 @@ public sealed class CrashPlayer : EntityScript
 	private const float HeightGain = 30.0f;  // slam height steer (per second of gap)
 	private const float HeightDrift = 3.0f;  // jump drift pull (per second of gap): weak, as the gap is stale
 	private const int GroundGraceTicks = 2;
+	// Rig (logs/tutorialroute/rig_slide_start.csv, frame-exact from standing): circle after 0-2 ticks of
+	// full stick crouches, after 3 or more it slides. Walking (0.6 stick) crouches. So a slide needs
+	// three ticks at run speed before the press, not the run speed alone, which the stick sets on the
+	// first tick (the engine slid from a standing start with no run at all).
+	private const int SlideRunTicks = 3;
+	// Rig (rig_slide_start.csv / rig_slide_crawl.csv): a crouch tapped for 6 ticks lasts 12, one held for 40
+	// lasts as long as it is held; the old 0.1 s let a tap stand him up after 5.
+	private const float CrouchMin = 0.24f;
 	// On the ground the script owns velocity outright (SetVelocity), which skips the engine's own
 	// press into the floor; with a vertical speed of exactly 0 a centimetre of float over a sand
 	// crest never closed, the grace ran out and the next press was spent as a double jump. Press
@@ -148,6 +156,8 @@ public sealed class CrashPlayer : EntityScript
 	// original lets Crash jump for a few frames after leaving the ground (the edge jump, whose
 	// horizontal speed is _edgeSpeed), so a 2-tick grace is faithful and fixes the flicker.
 	private int _groundGrace;
+	// Consecutive logic ticks that ended at run speed (SlideRunTicks).
+	private int _runTicks;
 	// Ticks a spent-double-jump press stays live for the landing (see State.Air).
 	private int _jumpBuffer;
 	private float _idleTime;
@@ -552,6 +562,7 @@ public sealed class CrashPlayer : EntityScript
 		{
 			case State.Ground:
 			{
+				bool slideReady = _runTicks >= SlideRunTicks && _horizontal.Length() >= _runSpeed - 0.5f;
 				// Jump first: IsGrounded flickering false for a tick must not eat the press.
 				if (jump && (grounded || _groundGrace > 0))
 				{
@@ -585,7 +596,7 @@ public sealed class CrashPlayer : EntityScript
 				_vy = 0.0f;
 				if (crouchPressed && !IsSpinning)
 				{
-					Enter(_horizontal.Length() >= _runSpeed - 0.5f ? State.Slide : State.Crouch);
+					Enter(slideReady ? State.Slide : State.Crouch);
 				}
 				break;
 			}
@@ -606,7 +617,7 @@ public sealed class CrashPlayer : EntityScript
 					_arc = Arc.Fall;
 					Enter(State.Air);
 				}
-				else if (!crouchHeld && _stateTime > 0.1f)
+				else if (!crouchHeld && _stateTime >= CrouchMin)
 				{
 					Enter(State.Ground);
 				}
@@ -744,7 +755,7 @@ public sealed class CrashPlayer : EntityScript
 		{
 			_airY = Self.Position.Y;
 		}
-
+		_runTicks = _horizontal.Length() >= _runSpeed - 0.5f ? _runTicks + 1 : 0;
 		Animate(dt, moving, stick);
 	}
 
