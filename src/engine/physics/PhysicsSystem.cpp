@@ -498,6 +498,35 @@ namespace aether
 		}
 	}
 
+	void PhysicsSystem::ReadCurrentState(World& world)
+	{
+		AE_PROFILE_ZONE_N("Phys.ReadCurrentState");
+		auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
+		for (const auto& [entity, rigid, state]: world.View<RigidBodyComponent, PhysicsStateComponent>().each())
+		{
+			const JPH::BodyID id = ToJolt(rigid.body);
+			if (id.IsInvalid() || rigid.motionType != PhysicsMotionType::Dynamic || !bi.IsActive(id))
+			{
+				continue;
+			}
+			JPH::RVec3 pos;
+			JPH::Quat rot;
+			bi.GetPositionAndRotation(id, pos, rot);
+			state.currPosition = FromJolt(pos);
+			state.currRotation = FromJolt(rot);
+		}
+		for (const auto& [entity, cc, state]: world.View<CharacterControllerComponent, PhysicsStateComponent>().each())
+		{
+			const auto it = m_impl->characters.find(World::FromEntt(entity).id);
+			if (it == m_impl->characters.end() || cc.teleportPending)
+			{
+				continue;
+			}
+			state.currPosition = FromJolt(it->second.character->GetPosition());
+			state.currRotation = FromJolt(it->second.character->GetRotation());
+		}
+	}
+
 	void PhysicsSystem::OnRegister(World& world)
 	{
 		AE_PROFILE_ZONE();
@@ -588,7 +617,13 @@ namespace aether
 		{
 			if (m_stepInFlight)
 			{
+				// A catch-up step: the previous kick has advanced the simulation past the
+				// state SyncTransforms read, so refresh it first. Otherwise prev stays at the
+				// frame's start, the final interpolation spans every step this frame with an
+				// alpha meant for one, and anything followed at variable frame rates (the
+				// player, and the camera chasing him) lurches ahead and back.
 				WaitForStep();
+				ReadCurrentState(world);
 			}
 
 			SavePrevState(world);

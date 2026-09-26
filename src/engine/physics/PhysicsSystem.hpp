@@ -182,6 +182,10 @@ namespace aether
 		void PushKinematicTargets(World& world);
 
 		void SavePrevState(World& world);
+		// Pulls Jolt's live pose into PhysicsStateComponent::curr* for dynamic bodies and
+		// characters (physics thread idle). Between catch-up steps in one frame, so each
+		// step's SavePrevState captures the state that step actually starts from.
+		void ReadCurrentState(World& world);
 
 		// -- Dedicated physics thread ------------------------------------------------
 
