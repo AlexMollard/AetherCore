@@ -32,7 +32,8 @@ namespace AetherGame;
 /// The model is a separate root entity, not a child: the Character Controller writes this entity's
 /// transform on its own schedule, so a child would be moved twice.
 /// </summary>
-public enum DeathKind { Generic, Drown, Explode, Fall }
+// Crush: a blow that kills through the masks without a blast (hubb's swinging log); it dies the generic way.
+public enum DeathKind { Generic, Drown, Explode, Fall, Crush }
 
 public sealed class CrashPlayer : EntityScript
 {

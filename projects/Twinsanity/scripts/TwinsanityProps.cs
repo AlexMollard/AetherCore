@@ -102,7 +102,7 @@ public sealed partial class TwinsanityActors
 	private const float WumpaTreeShakeRadius = 2.0f;
 
 	// Sets up a one-shot prop; false when the object is not one.
-	private bool SetupOneShot(Actor a, string objectName, uint subtype, string model)
+	private bool SetupOneShot(Actor a, string objectName, uint subtype, string model, JsonElement instance, Matrix4x4 transform)
 	{
 		string n = NameKey(objectName);
 		Entity e = a.Model;
@@ -148,6 +148,30 @@ public sealed partial class TwinsanityActors
 			// (chicken 0x3FF1, butterfly 0x5FF1, worm 0x2FF1 - logs/triggers/dump-loops.txt).
 			s.ClipNames = new[] { n.StartsWith("act_tiki_mon") ? "a007" : "a001" };
 			playNow = true;
+		}
+		else if (n.StartsWith("act_training_cave_blocker"))
+		{
+			// No scripts of its own: hubb trigger 2's message 87 drops it from its placement (y 8, above the
+			// cave roof) onto its one key (y 0), shutting the cave to HubA behind Crash.
+			LoadHulls(s, model);
+			List<Vector3> keys = PointList(instance, "points", transform);
+			float[] floats = FloatsOf(instance);
+			_blockers.Add(new Blocker
+			{
+				Shot = s,
+				To = keys.Count > 0 ? keys[0] : e.Position,
+				Speed = floats.Length > 3 ? floats[3] : 25.0f,
+				Accel = floats.Length > 4 ? floats[4] : 25.0f,
+			});
+			return true;
+		}
+		else if (n.StartsWith("act_training_swinging_log") && subtype == 0)
+		{
+			// COM_TRAINING_SWINGING_LOG_START s0: PosWarp lifts the pivot 6.4 m (the model hangs 8.3 m below its
+			// origin); subtype 0 then swings from level start (s9 -> s13 SetWobble).
+			e.Position += new Vector3(0.0f, SwingLift, 0.0f);
+			_swingLogs.Add(new SwingLog { Model = e, Pivot = e.Position, Yaw = e.EulerDegrees.Y });
+			return true;
 		}
 		else if (objectName.Equals("act_EARTH_NATIVE_SLEDGE", StringComparison.OrdinalIgnoreCase))
 		{
@@ -490,11 +514,121 @@ public sealed partial class TwinsanityActors
 		return null;
 	}
 
+	// act_TRAINING_CAVE_BLOCKER (hubb inst 37): the stone face over the cave from HubA. The rig closes the cave
+	// once Crash is inside trigger 2 (logs/hubb/rig_notes.md: he walks back into it at x -80.5 against the face,
+	// 2.7 m short of its centre). Its floats are the path-platform mover's: [3] speed 25, [4] accel 25.
+	// ponytail: the drop itself is unmeasured (the rig's camera faces away from the cave there); 25 m/s^2
+	// capped at 25 m/s lands the 8 m drop in 0.8 s. Upgrade path: film it with a free camera.
+	private sealed class Blocker
+	{
+		public OneShot Shot = null!;
+		public Vector3 To;
+		public float Speed, Accel, Velocity;
+		public bool Moving, Down;
+	}
+
+	private readonly List<Blocker> _blockers = new();
+
+	/// <summary>Trigger message 87 aimed at the actor placed at <paramref name="home"/>: a path crab leaves its
+	/// wait (COM_GLOBAL_CRAB_INIT S11, huba trigger 1), the cave blocker drops (hubb trigger 2).</summary>
+	public void Wake(Vector3 home)
+	{
+		WakePathCrab(home);
+		foreach (Blocker b in _blockers)
+		{
+			if (!b.Moving && !b.Down && Horizontal(b.Shot.Actor.Home, home) < 0.5f)
+			{
+				b.Moving = true;
+			}
+		}
+	}
+
+	private void UpdateBlockers(float dt)
+	{
+		foreach (Blocker b in _blockers)
+		{
+			if (!b.Moving)
+			{
+				continue;
+			}
+			Entity e = b.Shot.Actor.Model;
+			b.Velocity = MathF.Min(b.Speed, b.Velocity + b.Accel * dt);
+			Vector3 to = b.To - e.Position;
+			float step = b.Velocity * dt;
+			if (step >= to.Length())
+			{
+				e.Position = b.To;
+				b.Moving = false;
+				b.Down = true;
+				foreach (PropHull h in b.Shot.Hulls)
+				{
+					h.Body.Destroy();
+					h.Body = HullBody(e, h.Rest);
+				}
+				continue;
+			}
+			e.Position += Vector3.Normalize(to) * step;
+		}
+	}
+
+	// act_TRAINING_SWINGING_LOG, subtype 0 (hubb inst 3): COM_TRAINING_SWINGING_LOG_START s13
+	// SetWobble(2.0944, 0, 0, 0.8, ...) - 2.0944 rad/s about its local x axis, amplitude 0.8 rad: a 3.0 s
+	// pendulum. COM_TRAINING_SWINGING_LOG_IMPACT sends Crash message 59 on touch. Rig (logs/hubb/rig_notes.md):
+	// period 2.9-3.0 s from 0.72 s samples (rig_log2_sheet.png); one hit killed Crash with an Aku mask up
+	// (rig_log_hit_sheet.png), so the hit goes through the masks.
+	// ponytail: the swing phase starts at level start, not at the chunk's load on the disc.
+	private sealed class SwingLog
+	{
+		public Entity Model;
+		public Vector3 Pivot;
+		public float Yaw, T;
+	}
+
+	private readonly List<SwingLog> _swingLogs = new();
+	private const float SwingLift = 6.4f;          // s0 PosWarp(0, 6.4, 0)
+	private const float SwingRate = 2.0944f;        // SetWobble rad/s
+	private const float SwingAmplitude = 0.8f;      // SetWobble rad
+	// The log in the model: its axis 7.3 m under the pivot, 5.5 m long along x (mesh -2.83..2.66), radius 1.0.
+	private static readonly Vector3 SwingLogA = new(-2.6f, -7.3f, 0.0f), SwingLogB = new(2.4f, -7.3f, 0.0f);
+	private const float SwingLogRadius = 1.0f;
+
+	private void UpdateSwingLogs(float dt, Vector3 crashPos)
+	{
+		foreach (SwingLog l in _swingLogs)
+		{
+			l.T += dt;
+			float angle = SwingAmplitude * MathF.Sin(SwingRate * l.T);
+			l.Model.EulerDegrees = new Vector3(angle * 180.0f / MathF.PI, l.Yaw, 0.0f);
+			Quaternion q = Quaternion.CreateFromYawPitchRoll(l.Yaw * MathF.PI / 180.0f, angle, 0.0f);
+			Vector3 a = l.Pivot + Vector3.Transform(SwingLogA, q);
+			Vector3 b = l.Pivot + Vector3.Transform(SwingLogB, q);
+			// Crash's body: feet + 0.4 to feet + 1.3, radius 0.4.
+			if (SegmentDistance(a, b, crashPos + new Vector3(0.0f, 0.4f, 0.0f), crashPos + new Vector3(0.0f, 1.3f, 0.0f)) < SwingLogRadius + 0.4f)
+			{
+				_host?.DamagePlayer((a + b) * 0.5f, DeathKind.Crush);
+			}
+		}
+	}
+
+	// Closest distance between segments p0-p1 and q0-q1.
+	private static float SegmentDistance(Vector3 p0, Vector3 p1, Vector3 q0, Vector3 q1)
+	{
+		Vector3 d1 = p1 - p0, d2 = q1 - q0, r = p0 - q0;
+		float a = Vector3.Dot(d1, d1), e = Vector3.Dot(d2, d2), f = Vector3.Dot(d2, r);
+		float c = Vector3.Dot(d1, r), b = Vector3.Dot(d1, d2), den = a * e - b * b;
+		float s = den > 1e-6f ? Math.Clamp((b * f - c * e) / den, 0.0f, 1.0f) : 0.0f;
+		float t = Math.Clamp((b * s + f) / e, 0.0f, 1.0f);
+		s = Math.Clamp((b * t - c) / a, 0.0f, 1.0f);
+		return Vector3.Distance(p0 + d1 * s, q0 + d2 * t);
+	}
+
 	private void UpdateOneShots(float dt, Vector3 crashPos)
 	{
 		UpdateBombs(dt, crashPos);
 		UpdateCannons(dt, crashPos);
 		UpdateSleds(dt, crashPos);
+		UpdateBlockers(dt);
+		UpdateSwingLogs(dt, crashPos);
 		foreach (OneShot s in _oneShots)
 		{
 			if (s.Remaining >= 0.0f)

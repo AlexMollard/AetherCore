@@ -161,7 +161,7 @@ public sealed partial class TwinsanityActors
 			_guards.Add(a);
 		}
 		// One-shot props (TwinsanityProps.cs) rest until their cue; everything else loops its idle.
-		if (a.Kind != Behaviour.Prop || !SetupOneShot(a, objectName, SubtypeOf(instance), model))
+		if (a.Kind != Behaviour.Prop || !SetupOneShot(a, objectName, SubtypeOf(instance), model, instance, transform))
 		{
 			SetLooping(e, true);
 			if (a.IdleClip >= 0)

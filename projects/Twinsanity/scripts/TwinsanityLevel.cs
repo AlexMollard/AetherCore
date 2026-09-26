@@ -454,7 +454,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		foreach (Vector3 home in _cutscenes.TakeWakes())
 		{
-			_actors.WakePathCrab(home);
+			_actors.Wake(home);
 		}
 		TwinsanityAku.Update(deltaTime, _player!, _aku);
 		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
@@ -1200,8 +1200,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			return; // the mask on his face: nothing hurts him (rig logs/aku/track_l3.csv, _invwalk.png)
 		}
 		// Every explosion deals 100 damage and goes through the masks (wiki what-changed.md; rig
-		// logs/gameplay/rig_blast1.csv: three masks, one nitro, dead in fire gibs, no knockback).
-		if (kind == DeathKind.Explode)
+		// logs/gameplay/rig_blast1.csv: three masks, one nitro, dead in fire gibs, no knockback). So does the
+		// swinging log (logs/hubb/rig_log_hit_sheet.png: dead with a mask up).
+		if (kind is DeathKind.Explode or DeathKind.Crush)
 		{
 			Die(kind);
 			return;

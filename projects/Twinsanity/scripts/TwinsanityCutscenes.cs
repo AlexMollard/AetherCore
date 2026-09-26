@@ -77,6 +77,15 @@ public sealed class TwinsanityCutscenes
 			(new Vector3(-51.8369f, 1.0582f, 128.9897f), new Vector3(-0.7961f, 0.0f, 0.6052f)),
 			(new Vector3(-54.3942f, 1.6085f, 127.6599f), new Vector3(-0.5093f, 0.0f, 0.8606f)),
 		},
+		// Hubb scene B (logs/hubb/rig_cam_sB.csv; the rig's camera is in huba space, hubb = huba - (76.8, 0, 214.4)).
+		// Shots 2 and 3 are the end eyes of 0.75 s moves (Cmd591 arg 3).
+		["COM_TRAINING_CUTSCENE_B"] = new[]
+		{
+			(new Vector3(8.161f, 1.763f, -13.148f), new Vector3(-0.029f, -0.173f, -0.984f)),
+			(new Vector3(5.384f, 8.999f, -11.446f), new Vector3(0.187f, -0.571f, -0.8f)),
+			(new Vector3(-1.405f, 11.031f, -34.153f), new Vector3(0.783f, -0.573f, -0.242f)),
+			(new Vector3(3.748f, 15.102f, -37.302f), new Vector3(0.676f, -0.706f, -0.211f)),
+		},
 	};
 
 	// ---- data ----------------------------------------------------------------------------------
@@ -224,6 +233,8 @@ public sealed class TwinsanityCutscenes
 	private float _skipHeld;
 	private Agent? _scene;        // the director whose cutscene holds the letterbox
 	private Vector3 _camEye, _camTarget;
+	private Vector3 _camFromEye, _camFromTarget; // where a timed Cmd591 move starts
+	private float _camMove, _camMoveT;             // its length (s) and progress
 	private float _sceneClock;
 	private int _speech;          // Audio voice id of the playing speech line
 	private const float SpeechVolume = 1.0f;
@@ -478,8 +489,9 @@ public sealed class TwinsanityCutscenes
 			_triggers.Add(tr);
 			return tr;
 		}
+		// Message 87 also wakes actors with no receiver: path crabs (huba trigger 1) and hubb's cave blocker (trigger 2).
 		if (tr.Message == WakeMessage && tr.Targets.Length > 0 && Array.TrueForAll(tr.Targets, id => chunk.Instances.TryGetValue((tr.Layer, id), out Agent? c)
-			&& c.Name.Contains("GLOBAL_CRAB", StringComparison.Ordinal)))
+			&& (c.Name.Contains("GLOBAL_CRAB", StringComparison.Ordinal) || c.Name.Contains("CAVE_BLOCKER", StringComparison.Ordinal))))
 		{
 			tr.Wake = true;
 			_triggers.Add(tr);
@@ -690,18 +702,33 @@ public sealed class TwinsanityCutscenes
 		return any;
 	}
 
-	/// <summary>Crash has respawned at feet. At a zone checkpoint (a message-138 volume's crate: huba's level
-	/// crate) the zone's scenes reset: every director of that chunk and the actors it uses go back to how the
-	/// level placed them and its volumes re-arm, so the volume holding the respawn point replays at once and the
-	/// others replay when entered again. Rig (logs/tutorial/rig_notes.md): a death in huba respawns Crash at
-	/// the level crate inside trigger 5, station 1 replays in full, and station 2 replays on re-entering
-	/// trigger 6. A director that ran SetState (34) is spent and stays so.
-	/// ponytail: the reset is scoped to message-138 checkpoints because that is all the rig has shown; the
-	/// beach respawns at its start checkpoint crate and resets nothing, so its scenes stay one-shot.</summary>
+	/// <summary>Crash has respawned at feet. At a zone checkpoint the zone's scenes reset: every director of that
+	/// chunk and the actors it uses go back to how the level placed them and its volumes re-arm, so the volume
+	/// holding the respawn point replays at once and the others replay when entered again. A director that ran
+	/// SetState (34) is spent and stays so. Zone checkpoints: a message-138 volume's crate (huba's level crate), or
+	/// a checkpoint crate in a chunk whose scenes are training directors (hubb's). Rig: a death in huba respawns
+	/// Crash at the level crate inside trigger 5, station 1 replays in full and station 2 on re-entering trigger 6
+	/// (logs/tutorial/rig_notes.md); a death in hubb respawns him at its checkpoint crate and scene B replays on
+	/// re-entering trigger 1, though walking back in without a death does not (logs/hubb/rig_notes.md).
+	/// ponytail: the beach respawns at its start checkpoint crate and resets nothing (its directors are not
+	/// training ones), so its scenes stay one-shot; the rig has not shown otherwise.</summary>
 	public bool Respawned(Vector3 feet)
 	{
-		Trigger? zone = _triggers.Find(t => t.Checkpoint is Agent crate
-			&& MathF.Abs(crate.Position.X - feet.X) < 0.5f && MathF.Abs(crate.Position.Z - feet.Z) < 0.5f);
+		static bool At(Agent crate, Vector3 feet) => MathF.Abs(crate.Position.X - feet.X) < 0.5f && MathF.Abs(crate.Position.Z - feet.Z) < 0.5f;
+		bool HasCheckpointAt(Chunk c)
+		{
+			foreach (Agent a in c.Instances.Values)
+			{
+				if (a.Name.Contains("CHECKPOINTCRATE", StringComparison.Ordinal) && At(a, feet))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		Chunk? zone = _triggers.Find(t => t.Checkpoint is Agent crate && At(crate, feet))?.Chunk
+			?? _chunks.Find(c => HasCheckpointAt(c) && _directors.Exists(d => d.Chunk == c && c.Objects[d.Object].Scripts is { Length: > 0 } s
+				&& Script(c, s[0])?.Name == "COM_TRAINING_CUTSCENE_DIRECTOR_DEFAULT"));
 		if (zone == null)
 		{
 			return false;
@@ -713,7 +740,7 @@ public sealed class TwinsanityCutscenes
 		var reset = new HashSet<Agent>();
 		foreach (Agent d in _directors)
 		{
-			if (d.Chunk != zone.Chunk || d.Spent)
+			if (d.Chunk != zone || d.Spent)
 			{
 				continue;
 			}
@@ -846,8 +873,11 @@ public sealed class TwinsanityCutscenes
 		Entity camera = Camera.Main;
 		if (OwnsCamera && camera.IsValid)
 		{
-			Camera.SetTarget(camera, _camTarget);
-			Camera.SetPosition(camera, _camEye);
+			// A Cmd591 with a move time (arg 3) glides from the last eye to its own; the rig's are linear.
+			_camMoveT += dt;
+			float f = _camMove > 0.0f ? Math.Clamp(_camMoveT / _camMove, 0.0f, 1.0f) : 1.0f;
+			Camera.SetTarget(camera, Vector3.Lerp(_camFromTarget, _camTarget, f));
+			Camera.SetPosition(camera, Vector3.Lerp(_camFromEye, _camEye, f));
 		}
 	}
 
@@ -1313,8 +1343,8 @@ public sealed class TwinsanityCutscenes
 			case 595: // the camera subject, framed by an unmeasured Cmd591 (the shot table replaces it)
 				a.CameraSubject = Target(a, Arg(0));
 				break;
-			case 591: // the scripted camera shot
-				Shot(m, (int)Arg(0));
+			case 591: // the scripted camera shot; arg 3 is a move time (only hubb's scene B has one: 0.75 s)
+				Shot(m, (int)Arg(0), BitConverter.UInt32BitsToSingle(Arg(3)));
 				break;
 			case 3: // PosWarp: onto the focus key
 				if (KeyPosition(a, a.Key) is Vector3 warp)
@@ -1762,9 +1792,16 @@ public sealed class TwinsanityCutscenes
 
 	// ---- camera ------------------------------------------------------------------------------
 
-	private void Shot(Machine m, int flags)
+	private void Shot(Machine m, int flags, float move)
 	{
 		Agent director = m.Self;
+		// A move starts from wherever the camera is: the last shot's eye, or the gameplay camera on a scene's first.
+		Entity camera = Camera.Main;
+		bool held = OwnsCamera && _camMoveT >= _camMove;
+		_camFromEye = held || !camera.IsValid ? _camEye : camera.Position;
+		_camFromTarget = held || !camera.IsValid ? _camTarget : camera.Position + camera.Forward * 5.0f;
+		_camMove = move is > 0.0f and < 10.0f ? move : 0.0f;
+		_camMoveT = 0.0f;
 		int index = director.Shots.GetValueOrDefault(m.Def.Name);
 		director.Shots[m.Def.Name] = index + 1;
 		Log.Info($"[Cutscenes] shot {m.Def.Name} #{index} at {_sceneClock:F2} s");

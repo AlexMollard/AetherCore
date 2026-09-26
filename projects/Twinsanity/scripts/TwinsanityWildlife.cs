@@ -1180,7 +1180,7 @@ public sealed partial class TwinsanityActors
 
 	/// <summary>Trigger message 87 (huba trigger 1 -> crabs 9 and 10) wakes the path crab standing at
 	/// <paramref name="home"/> (COM_GLOBAL_CRAB_INIT S11 leaves its wait on it).</summary>
-	public void WakePathCrab(Vector3 home)
+	private void WakePathCrab(Vector3 home)
 	{
 		foreach (Actor a in _actors)
 		{
