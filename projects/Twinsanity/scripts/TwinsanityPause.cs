@@ -156,9 +156,23 @@ public sealed class TwinsanityPause
 	/// <summary>True on the frame the menu finished closing: TwinsanityLevel pops the HUD back in.</summary>
 	public bool JustClosed => _justClosed;
 
+	// Gem track slots, top to bottom (rig logs/gameplay/rig_gemtrack_all.png: the level's gem word
+	// at 0x98EFA4 set bit by bit, bit 5 - slot): yellow, red, purple, green, clear, blue. The disc
+	// icons for them are Icons_12 (yellow) down to Icons_07 (blue); Icons_06 is the empty slot.
+	private static readonly string[] GemColours = { "yellow", "red", "purple", "green", "clear", "blue" };
+
+	/// <summary>The gem-track slot of a gem pickup (GEM_RED, act_GEM_RED ...), or -1 if it is not a gem.</summary>
+	public static int GemSlot(string objectName)
+	{
+		string n = objectName.ToLowerInvariant();
+		n = n.StartsWith("act_", StringComparison.Ordinal) ? n[4..] : n;
+		return n.StartsWith("gem_", StringComparison.Ordinal) ? Array.FindIndex(GemColours, c => n.AsSpan(4).StartsWith(c)) : -1;
+	}
+
 	/// <summary>Per frame, from TwinsanityLevel.OnUpdate. The level's scaled delta freezes with the
-	/// game, so timing here is taken from the unscaled clock.</summary>
-	public void Update(int wumpa, int lives)
+	/// game, so timing here is taken from the unscaled clock. <paramref name="gems"/> holds one bit
+	/// per collected gem, by GemSlot.</summary>
+	public void Update(int wumpa, int lives, int gems)
 	{
 		_justClosed = false;
 		float now = Time.UnscaledTime;
@@ -181,6 +195,10 @@ public sealed class TwinsanityPause
 				}
 				if (startEdge && _built)
 				{
+					for (int i = 0; i < _gems.Length; i++)
+					{
+						Ui.SetImageTexture(_gems[i], IconDir + ((gems >> i & 1) != 0 ? $"Icons_{12 - i:00}.png" : "Icons_06.png"));
+					}
 					_selected = DefaultItem;
 					_phase = Phase.Opening;
 					_phaseTime = 0.0f;

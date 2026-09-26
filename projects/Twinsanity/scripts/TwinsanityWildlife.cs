@@ -21,8 +21,10 @@ namespace AetherGame;
 /// - Chicken: spawned by act_CREATURE_SPAWNER (the coop) at its AI points; pecks about, walks
 ///   1 m/s bursts, bolts from Crash inside 5 m and calms beyond 7 m (script 25 / 49).
 /// - Crab: act_UTIL_ECOLOGY_MANAGER spawns five at the key nearest Crash once he is within
-///   80 m (script 6400; counter 40 in steps of 8); a crab notices Crash inside 10 m, waits
-///   3.5 s and then charges at 2.7 m/s (rig) - touching him hurts.
+///   80 m (script 6400; counter 40 in steps of 8). They lie dormant under the sand until he is
+///   within 20 m (COM_GLOBAL_CRAB_INIT, sqr 400), rise 2 m at 2 m/s, and a crab charges at once
+///   when he is within 5 m (COM_GLOBAL_CRAB_ROAM, sqr 25; rig rig_crab_notice.csv) - touching
+///   him hurts.
 /// - Skunk: patrols its instance path (COM_CREATURE_BASIC_IDLE_PATROL) at the instance's walk
 ///   speed (floats[2], 2.2 m/s), pausing ~1.3 s to turn at each end; it never chases Crash
 ///   (rig: logs/audit/skunk_patrol_rig.csv). Touching it hurts; his attacks kill it.
@@ -66,20 +68,32 @@ public sealed partial class TwinsanityActors
 	// ponytail: the flee speed was not captured on the rig (the chicken was off screen); 3 m/s
 	// is the old tuned value. Upgrade path: track a chicken while Crash runs at it.
 	private const float ChickenFlee = 3.0f;
-	// Crab (rig: track_crab2.csv, crab2_wander.csv).
+	// Crab (script COM_GLOBAL_CRAB_*; rig track_crab2.csv, crab2_wander.csv, logs/gameplay/
+	// rig_crab_notice.csv: all five rose the moment Crash came within 20 m, the one 3.9 m from him
+	// charged within a frame, one 6.9 m away never noticed him).
 	private const float CrabWanderRadius = 3.5f;
-	private const float CrabNotice = 10.0f;
-	private const float CrabNoticeDelay = 3.5f;
+	private const float CrabWake = 20.0f;
+	private const float CrabBurrow = 2.0f;
+	private const float CrabRise = 2.0f;
+	private const float CrabRiseWait = 0.5f;
+	private const float CrabNotice = 5.0f;
 	private const float CrabSpeed = 2.7f;
 	private const float CrabGiveUp = 20.0f;
 	// Skunk (rig: logs/audit/skunk_patrol_rig.csv). Walk speed is the instance's floats[2].
 	private const float SkunkWalk = 2.2f;
 	private const float SkunkArrive = 0.36f;
 	private const float SkunkTurnPause = 1.3f;
-	// Worm (script COM_EARTH_WORM_START, rig track_worm.csv).
+	// Worm (script COM_EARTH_WORM_START / _SQUASHLAUNCH / _SLAMMED / _MOVE, rig track_worm.csv,
+	// logs/gameplay/rig_worm_slam.csv).
 	private const float WormPopRadius = 14.14f;
 	private const float WormHideRadius = 13.42f;
 	private const float WormDepth = 2.5f;
+	private const float WormSquashDip = 1.2f;    // SQUASHLAUNCH: RAWPOS_Y -1.2 then +1.2 ...
+	private const float WormSquashSpeed = 7.6f;  // ... at MOVE_SPEED 7.6 (rig: root 6.18 -> 4.98 -> 6.18)
+	private const float WormSinkSpeed = 16.66f;  // MOVE S3: down 2.5 m
+	private const float WormTravelSpeed = 13.0f; // MOVE S4/S12: to the next key, 2 m under
+	private const float WormRiseSpeed = 10.0f;   // MOVE S7: up 2.5 m
+	private const float WormLoneWait = 1.0f;     // MOVE S5: a worm with no other hole waits 1 s
 	// Monkey (script COM_GLOBAL_MONKEY_ECOLOGY_IDLE, rig track_monkey.csv).
 	private const float MonkeyAggro = 20.6f;
 	private const float MonkeyMinRange = 4.0f;
@@ -113,7 +127,7 @@ public sealed partial class TwinsanityActors
 		public float Refill = -1.0f;
 	}
 
-	private enum Mode { Idle, Walk, Flee, Climb, Circle, Land, Rest, Charge, Up, Down, GoTree, ClimbUp, Shake, ClimbDown, GoFruit, Pickup, Throw }
+	private enum Mode { Idle, Walk, Flee, Climb, Circle, Land, Rest, Charge, Up, Down, GoTree, ClimbUp, Shake, ClimbDown, GoFruit, Pickup, Throw, Sink, Travel }
 
 	private sealed class Critter
 	{
@@ -131,7 +145,7 @@ public sealed partial class TwinsanityActors
 		public bool FruitFlying;
 		public bool Landed;
 		public float FruitLife;
-		public float Notice, NoticeDelay, GiveUp;
+		public float Notice, GiveUp;
 		public float Timer2;
 		public float Speed;
 		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1;
@@ -254,11 +268,13 @@ public sealed partial class TwinsanityActors
 				c.Timer = RandomRange(1.0f, 10.0f);
 				break;
 			case Behaviour.Crab:
+				// Dormant under the sand until Crash comes near (COM_GLOBAL_CRAB_INIT S17).
 				c.WalkClip = Animation.Find(e, "a002");
 				c.Notice = CrabNotice;
-				c.NoticeDelay = CrabNoticeDelay;
 				c.GiveUp = CrabGiveUp;
-				c.Mode = Mode.Idle;
+				c.Mode = Mode.Down;
+				a.Model.Position = a.Home - new Vector3(0.0f, CrabBurrow, 0.0f);
+				a.Model.SetActive(false);
 				break;
 			case Behaviour.Skunk:
 				// COM_CREATURE_BASIC_IDLE_PATROL: a002 walk to the next route key, a001 while turning.
@@ -284,11 +300,14 @@ public sealed partial class TwinsanityActors
 				c.Mode = Mode.Idle;
 				break;
 			case Behaviour.Worm:
-				// COM_EARTH_WORM_START: a006 pops up, a005 sinks; a012 squash-launch, a011 spun.
-				c.PopClip = Animation.Find(e, "a006");
-				c.SinkClip = Animation.Find(e, "a005");
+				// COM_EARTH_WORM_START: a005 pops up (S10 before the S11 rise), a006 sinks (S12 before
+				// the S13 drop); a012 squash-launch, a011 spun. Its holes are the instance's points.
+				c.PopClip = Animation.Find(e, "a005");
+				c.SinkClip = Animation.Find(e, "a006");
 				c.SquashClip = Animation.Find(e, "a012");
 				c.SpunClip = Animation.Find(e, "a011");
+				c.Points = PointList(instance, "points", transform);
+				c.Timer2 = -1.0f;
 				c.Mode = Mode.Down;
 				a.Model.Position = a.Home - new Vector3(0.0f, WormDepth, 0.0f);
 				break;
@@ -448,7 +467,7 @@ public sealed partial class TwinsanityActors
 	{
 		foreach (Actor a in _actors)
 		{
-			if (!a.Alive || a.Critter == null || a.DeathTimer >= 0.0f)
+			if (!a.Alive || a.Critter == null || a.DeathTimer >= 0.0f || (a.Kind == Behaviour.Crab && a.Critter.Mode == Mode.Down))
 			{
 				continue;
 			}
@@ -463,12 +482,79 @@ public sealed partial class TwinsanityActors
 					}
 					continue;
 				}
-				PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
-				SetLooping(a.Model, false);
-				a.DeathTimer = 1.0f;
-				TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, p);
+				Kill(a, center);
 			}
 		}
+	}
+
+	// A spin, slide or slam reaches a spun chicken 1.58 m out (rig logs/gameplay/rig_chicken_spin.csv).
+	private const float AttackReach = 1.6f;
+
+	/// <summary>Crash's attacks kill a ground creature in any state - dormant, idle, wandering,
+	/// fleeing, charging or up its tree: a spin, slide or slam within reach, or landing on it.
+	/// True when it died.</summary>
+	private bool Attacked(Actor a, Vector3 crashPos)
+	{
+		CrashPlayer? player = _player;
+		if (player == null)
+		{
+			return false;
+		}
+		Vector3 p = a.Model.Position;
+		// A crab still under the sand or rising out of it counts from its key.
+		float y = a.Kind == Behaviour.Crab ? MathF.Max(p.Y, a.Home.Y) : p.Y;
+		if (crashPos.Y >= y + 1.6f || crashPos.Y + 1.8f <= y)
+		{
+			return false;
+		}
+		float h = Horizontal(p, crashPos);
+		bool hit = (h < AttackReach && (player.IsSpinning || player.IsSliding || player.IsSlamming))
+			|| (h < EnemyHitRadius && player.Velocity.Y < -2.0f && crashPos.Y > y + 0.8f);
+		if (hit)
+		{
+			a.Model.SetActive(true);
+			Kill(a, crashPos);
+		}
+		return hit;
+	}
+
+	/// <summary>Death: the rig's knockback arc away from <paramref name="from"/> (Knockback.cs), the
+	/// death clip once, tumbling while airborne; it lies Arc.Linger once at rest, then goes.</summary>
+	private void Kill(Actor a, Vector3 from)
+	{
+		Vector3 p = a.Model.Position;
+		a.Arc = a.Kind == Behaviour.Chicken ? Knockback.Chicken : Knockback.Creature;
+		float yaw = a.Model.EulerDegrees.Y * MathF.PI / 180.0f;
+		a.FlyVelocity = Knockback.Launch(from, p, a.Arc, -new Vector3(MathF.Sin(yaw), 0.0f, MathF.Cos(yaw)));
+		a.Flying = true;
+		a.Bounced = false;
+		a.DeathTimer = a.Arc.Linger;
+		// It flies back from the hit, facing it.
+		a.FlyYaw = MathF.Atan2(-a.FlyVelocity.X, -a.FlyVelocity.Z) * (180.0f / MathF.PI);
+		a.Tumble = 0.0f;
+		a.Model.EulerDegrees = new Vector3(0.0f, a.FlyYaw, 0.0f);
+		PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
+		SetLooping(a.Model, false);
+		if (a.Critter is Critter c && c.Fruit.IsValid)
+		{
+			c.Fruit.Destroy(); // a monkey's fruit, in hand or in the air, goes with it
+			c.FruitFlying = false;
+		}
+		TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, p);
+	}
+
+	// One step of a death knockback; tumbles backward about the body's side axis while airborne.
+	private void Fly(Actor a, float dt)
+	{
+		Vector3 p = a.Model.Position, v = a.FlyVelocity;
+		bool bounced = a.Bounced;
+		bool rest = Knockback.Step(ref p, ref v, ref bounced, a.Arc, GroundY(p, a.Home.Y, 0.6f), dt);
+		a.Model.Position = p;
+		a.FlyVelocity = v;
+		a.Bounced = bounced;
+		a.Flying = !rest;
+		a.Tumble = rest ? 0.0f : a.Tumble - a.Arc.Tumble * dt;
+		a.Model.EulerDegrees = new Vector3(a.Tumble * (180.0f / MathF.PI), a.FlyYaw, 0.0f);
 	}
 
 	// Piranha plant (COM_PIRANHAPLANT_DEFAULT, rig logs/audit/piranha_rig_*): rooted. Crash inside
@@ -890,11 +976,34 @@ public sealed partial class TwinsanityActors
 		float d = Horizontal(p, crashPos);
 		switch (c.Mode)
 		{
+			case Mode.Down:
+				// Dormant at its key under the sand until Crash is within 20 m (INIT S17, sqr 400).
+				if (Vector3.Distance(a.Home, crashPos) < CrabWake)
+				{
+					c.Mode = Mode.Up;
+					c.Timer = 0.0f;
+					a.Model.SetActive(true);
+					PlayClip(a, a.IdleClip);
+				}
+				break;
+			case Mode.Up:
+				// INIT S14: up 2 m at 2 m/s, then S12 waits 0.5 s (rig: -2.0 -> 0.0 in 1.0 s).
+				a.Model.Position = new Vector3(p.X, MathF.Min(a.Home.Y, p.Y + CrabRise * dt), p.Z);
+				if (a.Model.Position.Y >= a.Home.Y)
+				{
+					c.Timer += dt;
+					if (c.Timer >= CrabRiseWait)
+					{
+						c.Mode = Mode.Idle;
+						c.Timer2 = RandomRange(2.0f, 6.0f);
+					}
+				}
+				break;
 			case Mode.Idle:
 				PlayClip(a, a.IdleClip);
-				c.Timer = d < c.Notice ? c.Timer + dt : 0.0f;
-				if (c.Timer >= c.NoticeDelay)
+				if (d < c.Notice)
 				{
+					// ROAM: Crash inside 5 m (sqr 25) sends it to ATTACK at once (rig: within a frame).
 					c.Mode = Mode.Charge;
 					TwinsanityAudio.Creature(TwinsanityAudio.Call.CrabCharge, a.Model.Position);
 					break;
@@ -928,10 +1037,15 @@ public sealed partial class TwinsanityActors
 				// ponytail: the wander burst speed was not captured (the rig's beach crabs spawned
 				// at the shoreline and the long take was lost); 1.2 m/s, half the measured charge.
 				PlayClip(a, c.WalkClip);
+				if (d < c.Notice)
+				{
+					c.Mode = Mode.Charge; // ROAM S1 (pathfinding about) notices him just the same
+					TwinsanityAudio.Creature(TwinsanityAudio.Call.CrabCharge, a.Model.Position);
+					break;
+				}
 				if (WalkTo(a, c.Target, CrabSpeed * 0.45f, dt, true))
 				{
 					c.Mode = Mode.Idle;
-					c.Timer = 0.0f;
 					c.Timer2 = RandomRange(2.0f, 6.0f);
 				}
 				break;
@@ -986,7 +1100,7 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	// Contact with Crash: his attacks kill the creature, otherwise it hurts him.
+	// Contact with Crash hurts him unless he is attacking (Attacked has already killed it then).
 	private void TouchCrash(Actor a, Vector3 crashPos)
 	{
 		CrashPlayer? player = _player;
@@ -995,16 +1109,9 @@ public sealed partial class TwinsanityActors
 		{
 			return;
 		}
-		bool attacked = player.IsSpinning || player.IsSliding || player.IsSlamming
+		bool attacking = player.IsSpinning || player.IsSliding || player.IsSlamming
 			|| (player.Velocity.Y < -2.0f && crashPos.Y > p.Y + 0.8f);
-		if (attacked)
-		{
-			PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
-			SetLooping(a.Model, false);
-			a.DeathTimer = 1.0f;
-			TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, p);
-		}
-		else
+		if (!attacking)
 		{
 			_host?.DamagePlayer(p, DeathKind.Generic);
 		}
@@ -1028,26 +1135,51 @@ public sealed partial class TwinsanityActors
 				a.Model.Position = new Vector3(p.X, MathF.Max(down.Y, p.Y - WormDepth / 0.2f * dt), p.Z);
 				break;
 			case Mode.Up:
-				a.Model.Position = new Vector3(p.X, MathF.Min(a.Home.Y, p.Y + WormDepth / 0.25f * dt), p.Z);
+			{
+				float y = MathF.Min(a.Home.Y, p.Y + WormDepth / 0.25f * dt);
+				if (c.Timer2 >= 0.0f)
+				{
+					// Squash (SQUASHLAUNCH S0/S1): the root dips 1.2 m and comes back at 7.6 m/s while
+					// a012 lifts the body by about as much (joint1 +1.0 m over its first 0.2 s), so the
+					// worm stays in its hole - rig: root 6.18 -> 4.98 -> 6.18 in 0.3 s.
+					c.Timer2 += dt;
+					float half = WormSquashDip / WormSquashSpeed;
+					y = a.Home.Y - WormSquashDip * MathF.Max(0.0f, 1.0f - MathF.Abs(c.Timer2 - half) / half);
+					if (c.Timer2 >= 2.0f * half)
+					{
+						c.Timer2 = -1.0f;
+					}
+				}
+				a.Model.Position = new Vector3(p.X, y, p.Z);
 				if (a.Model.Position.Y >= a.Home.Y && Animation.CurrentClip(a.Model) == c.PopClip && c.Timer <= 0.0f)
 				{
 					PlayClip(a, a.IdleClip);
 				}
 				c.Timer = MathF.Max(0.0f, c.Timer - dt);
-				if (d > WormHideRadius)
+				if (d > WormHideRadius && a.Model.Position.Y >= a.Home.Y)
 				{
 					c.Mode = Mode.Down;
+					c.Timer2 = -1.0f;
 					PlayClip(a, c.SinkClip);
 					break;
 				}
 				CrashPlayer? player = _player;
-				if (player != null && a.Model.Position.Y >= a.Home.Y - 0.1f)
+				if (player != null && c.Timer2 < 0.0f && a.Model.Position.Y >= a.Home.Y - 0.1f)
 				{
 					float h = Horizontal(a.Home, crashPos);
-					if (h < 0.8f && crashPos.Y > a.Home.Y + 0.3f && crashPos.Y < a.Home.Y + 1.6f && MechanicsWorm.TryLaunch(player, a.Home))
+					if (h < 1.3f && player.IsSlamming && crashPos.Y > a.Home.Y + 0.3f && crashPos.Y < a.Home.Y + 2.5f)
+					{
+						// COM_EARTH_WORM_SLAMMED -> _MOVE: a006, down 2.5 m at 16.66 m/s, then off to
+						// its next hole (or back up the same one after 1 s if it has only one).
+						c.Mode = Mode.Sink;
+						PlayClip(a, c.SinkClip);
+						TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);
+					}
+					else if (h < 0.8f && crashPos.Y > a.Home.Y + 0.3f && crashPos.Y < a.Home.Y + 1.6f && MechanicsWorm.TryLaunch(player, a.Home))
 					{
 						PlayClip(a, c.SquashClip);
 						c.Timer = 1.7f;
+						c.Timer2 = 0.0f;
 					}
 					else if (h < 1.3f && player.IsSpinning && c.Timer <= 0.0f)
 					{
@@ -1056,7 +1188,61 @@ public sealed partial class TwinsanityActors
 					}
 				}
 				break;
+			}
+			case Mode.Sink:
+				a.Model.Position = new Vector3(p.X, MathF.Max(down.Y, p.Y - WormSinkSpeed * dt), p.Z);
+				if (a.Model.Position.Y > down.Y)
+				{
+					break;
+				}
+				if (c.Points.Count > 1)
+				{
+					// MOVE S4: the next key of its path, 13 m/s under the ground (cmd 36 steps the key).
+					c.PathIndex = (c.PathIndex + 1) % c.Points.Count;
+					c.Target = c.Points[c.PathIndex];
+					c.Mode = Mode.Travel;
+				}
+				else
+				{
+					c.Mode = Mode.Rest; // MOVE S5: DELAY 1
+					c.Timer = WormLoneWait;
+				}
+				break;
+			case Mode.Travel:
+			{
+				Vector3 to = c.Target - new Vector3(0.0f, WormDepth, 0.0f);
+				Vector3 step = to - p;
+				float len = step.Length();
+				if (len > WormTravelSpeed * dt)
+				{
+					a.Model.Position = p + step / len * WormTravelSpeed * dt;
+					break;
+				}
+				a.Model.Position = to;
+				a.Home = c.Target;
+				Emerge(a, c);
+				break;
+			}
+			case Mode.Rest:
+				c.Timer -= dt;
+				if (c.Timer <= 0.0f)
+				{
+					Emerge(a, c);
+				}
+				break;
 		}
+	}
+
+	// MOVE S6/S7: a005 and up 2.5 m at 10 m/s out of the (new) hole; START takes over from there.
+	private static void Emerge(Actor a, Critter c)
+	{
+		c.Mode = Mode.Up;
+		c.Timer = 0.0f;
+		if (c.PopClip >= 0)
+		{
+			Animation.CrossFade(a.Model, c.PopClip, 0.2f);
+		}
+		TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);
 	}
 
 	private void UpdateMonkey(Actor a, Critter c, float dt, Vector3 crashPos)

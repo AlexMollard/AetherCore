@@ -245,6 +245,10 @@ public sealed class CrashPlayer : EntityScript
 		if (_hurtLeft > 0.0f)
 		{
 			_hurtLeft -= deltaTime;
+			if (_hurtLeft <= 0.0f && _state is State.Ground or State.Crouch)
+			{
+				_horizontal = Vector3.Zero; // rig: the shove ends in a dead stop, no slide
+			}
 		}
 		Look(deltaTime);
 		if (RideFeet is Vector3 ride)
@@ -369,20 +373,18 @@ public sealed class CrashPlayer : EntityScript
 		return _deathPlan.RespawnAfter;
 	}
 
-	/// <summary>A hit that Aku Aku absorbs: the original's recoil (a084, blend 0.2) and a short
-	/// push away from the hazard that the ordinary ground braking eats.</summary>
+	/// <summary>A hit that Aku Aku absorbs: the original's recoil (a084, blend 0.2) and the rig's
+	/// shove straight away from the hazard (Knockback.CrashHurt: 4.97 m/s for 0.517 s, 2.57 m).</summary>
 	public void Hurt(Vector3 from)
 	{
 		if (_dead || _hurtLeft > 0.0f)
 		{
 			return;
 		}
-		Vector3 away = Self.Position - from;
-		away.Y = 0.0f;
-		_horizontal = away.LengthSquared() > 1e-6f
-			? Vector3.Normalize(away) * 3.0f
-			: -FacingDir(_facing) * 3.0f;
-		_hurtLeft = 0.4f;
+		KnockArc arc = Knockback.CrashHurt;
+		Vector3 v = Knockback.Launch(from, Self.Position, arc, -FacingDir(_facing));
+		_horizontal = new Vector3(v.X, 0.0f, v.Z);
+		_hurtLeft = arc.Duration;
 		Play("a084", false);
 		_landClip = "a084";
 		_oneShotLeft = 0.4f;
@@ -540,7 +542,7 @@ public sealed class CrashPlayer : EntityScript
 				}
 				else if (_hurtLeft > 0.0f)
 				{
-					_horizontal = Brake(_horizontal, BrakeRate * dt);
+					// The hurt shove holds its speed to the end (rig), no ground braking.
 				}
 				else if (moving)
 				{
@@ -560,7 +562,7 @@ public sealed class CrashPlayer : EntityScript
 			}
 
 			case State.Crouch:
-				_horizontal = moving && _hurtLeft <= 0.0f ? stickDir * _crawlSpeed : _hurtLeft > 0.0f ? Brake(_horizontal, BrakeRate * dt) : Vector3.Zero;
+				_horizontal = _hurtLeft > 0.0f ? _horizontal : moving ? stickDir * _crawlSpeed : Vector3.Zero;
 				if (moving && _hurtLeft <= 0.0f)
 				{
 					_moveDir = stickDir;

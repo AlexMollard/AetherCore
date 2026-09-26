@@ -24,6 +24,7 @@ public sealed partial class TwinsanityActors
 		void DamagePlayer(Vector3 from, DeathKind kind);
 		void AddWumpa(int n);
 		void CreatureTouch(Vector3 position);
+		void CollectGem(int slot);
 	}
 
 	private enum Behaviour
@@ -56,6 +57,12 @@ public sealed partial class TwinsanityActors
 		public float DeathTimer = -1.0f;
 		public float Angle;      // bat orbit phase
 		public Critter? Critter;
+		public int Gem = -1;     // gem pickups: their TwinsanityPause gem-track slot
+		// Death knockback (Knockback.cs): airborne while Flying, then DeathTimer counts the linger.
+		public bool Flying, Bounced;
+		public Vector3 FlyVelocity;
+		public KnockArc Arc;
+		public float Tumble, FlyYaw; // tumble angle (rad) and heading while flying
 	}
 
 	private readonly List<Actor> _actors = new();
@@ -117,6 +124,7 @@ public sealed partial class TwinsanityActors
 			Home = position,
 			HomeYaw = eulerDegrees.Y,
 			Angle = (objectId % 17) * 0.7f,
+			Gem = TwinsanityPause.GemSlot(objectName),
 		};
 		ReadClips(e, a);
 
@@ -162,6 +170,11 @@ public sealed partial class TwinsanityActors
 			}
 			if (a.DeathTimer >= 0.0f)
 			{
+				if (a.Flying)
+				{
+					Fly(a, dt);
+					continue;
+				}
 				a.DeathTimer -= dt;
 				if (a.DeathTimer < 0.0f)
 				{
@@ -169,6 +182,10 @@ public sealed partial class TwinsanityActors
 					a.Model.Destroy();
 				}
 				continue;
+			}
+			if (a.Kind is Behaviour.Chicken or Behaviour.Crab or Behaviour.Skunk or Behaviour.Monkey && Attacked(a, crashPos))
+			{
+				continue; // his attacks kill a creature whatever it is doing
 			}
 			switch (a.Kind)
 			{
@@ -288,10 +305,7 @@ public sealed partial class TwinsanityActors
 			|| (player.Velocity.Y < -2.0f && crashPos.Y > p.Y + 0.8f);
 		if (attacked)
 		{
-			PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
-			SetLooping(a.Model, false);
-			a.DeathTimer = a.DeathClip >= 0 ? 1.0f : 0.6f;
-			TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, a.Model.Position);
+			Kill(a, crashPos);
 			_host?.AddWumpa(1);
 		}
 		else
@@ -308,7 +322,14 @@ public sealed partial class TwinsanityActors
 		{
 			a.Alive = false;
 			a.Model.Destroy();
-			host.AddWumpa(1);
+			if (a.Gem >= 0)
+			{
+				host.CollectGem(a.Gem);
+			}
+			else
+			{
+				host.AddWumpa(1);
+			}
 		}
 	}
 

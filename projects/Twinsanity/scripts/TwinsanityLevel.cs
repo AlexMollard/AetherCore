@@ -71,6 +71,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	// crab takes 3 -> 2 -> 1 -> dead, and the respawn reads 2 (logs/aku/track_hitcrab.csv).
 	private int _aku = 1;
 	private float _deathTimer = -1.0f;
+	// The original's grace after a hit (the 2 s hurt flicker): no second hit lands inside it
+	// (rig logs/gameplay/rig_crab_notice.csv: a crab in contact took masks at 17.0 s and 19.0 s).
+	private const float HurtGrace = 2.0f;
+	private float _hurtGrace;
+	private int _gems; // collected gems, one bit per TwinsanityPause.GemSlot
 	private Entity _sky;
 
 	public override void OnAttach()
@@ -172,6 +177,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 
 		_fruit.Update(deltaTime, _crash.Position);
+		_hurtGrace -= deltaTime;
 		TwinsanityAudio.Update(deltaTime, _player!);
 		UpdateFuses(deltaTime);
 		UpdateStacks(deltaTime);
@@ -184,7 +190,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
 		// The pause menu ticks on the unscaled clock: it freezes the game itself (Time.Scale 0)
 		// while its own opening, drum and closing keep animating, as in the original.
-		_pause.Update(_wumpaCount, _lives);
+		_pause.Update(_wumpaCount, _lives, _gems);
 		if (_pause.JustClosed)
 		{
 			_hud.PopBoth(); // the HUD pops back in when the menu closes (rig_pause_slow.png)
@@ -814,16 +820,31 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			return; // the mask on his face: nothing hurts him (rig logs/aku/track_l3.csv, _invwalk.png)
 		}
+		// Every explosion deals 100 damage and goes through the masks (wiki what-changed.md; rig
+		// logs/gameplay/rig_blast1.csv: three masks, one nitro, dead in fire gibs, no knockback).
+		if (kind == DeathKind.Explode)
+		{
+			Die(kind);
+			return;
+		}
+		if (_hurtGrace > 0.0f)
+		{
+			return;
+		}
 		if (_aku > 0)
 		{
 			// Aku Aku eats the hit: the original's recoil and a shove away from the hazard.
 			_aku--;
+			_hurtGrace = HurtGrace;
 			TwinsanityAudio.AkuLost();
 			_player!.Hurt(from);
 			return;
 		}
 		Die(kind);
 	}
+
+	// TwinsanityActors.ITwinsanityHost: a gem pickup fills its slot in the pause-menu gem track.
+	public void CollectGem(int slot) => _gems |= 1 << slot;
 
 	// TwinsanityActors.ITwinsanityHost: enemies and hazards funnel their hits through here.
 	public void DamagePlayer(Vector3 from, DeathKind kind)
