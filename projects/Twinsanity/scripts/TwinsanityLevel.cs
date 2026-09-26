@@ -1067,10 +1067,20 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	// Stacked crates. Rig (logs/wildlife/stack_fall_rig_raw.csv, the iron crates on the nitro stack
 	// at (24.27, -7.9)): once the crate under one is gone it drops straight down, from rest, at
 	// 0.0198 m/frame^2 at 50 fps (49.5 m/s^2), no bounce, and lands flush on the next support
-	// (3.01 -> 0.0 on the ground, 4.01 -> 1.0 on the crate below). The crate above a falling one
-	// starts 7 frames later: it lets go once its supporter's lid has dropped more than 0.7 m.
+	// (3.01 -> 0.0 on the ground, 4.01 -> 1.0 on the crate below) - except an iron on an iron spring
+	// (kSpringLaunch). The crate above a falling one starts 7 frames later: it lets go once its
+	// supporter's lid has dropped more than 0.7 m.
 	private const float kStackGravity = 49.5f;
 	private const float kStackLetGo = 0.7f;
+	// An iron crate that lands on an iron spring crate bounces on it forever. Rig (HubGems,
+	// logs/hubroute/rig_red_*, 50 Hz RAM on the red-gem columns' iron 49): every landing launches it at
+	// 0.455 m/frame (22.75 m/s) whatever it fell from (its first drop is 1.02 m), up 5.225 m to base
+	// 6.235 over the spring top at 1.01, under the same 49.5 m/s^2 gravity: a 0.92 s period.
+	// ponytail: only iron on an iron spring is measured; other kinds landing on a spring come to rest.
+	private const float kSpringLaunch = 22.75f;
+
+	private Crate? SpringUnder(Crate c, float lid)
+		=> _crates.Find(s => s.Alive && s.Kind == Kind.IronSpring && OverFootprint(c, s) && MathF.Abs(s.Base.Y + 1.0f - lid) < 0.05f);
 
 	private void QueueAbove(Crate below)
 	{
@@ -1130,21 +1140,47 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			RaycastHit ground = Physics.Raycast(c.Base - new Vector3(0.0f, 0.005f, 0.0f), -Vector3.UnitY, 60.0f);
 			bool terrain = ground.DidHit && !_crates.Exists(s => s.Body.Id == ground.Entity.Id);
 			float floor = MathF.Max(support, terrain ? ground.Position.Y : c.ColumnFloor);
+			// Exact under constant gravity, so a bounce's apex does not sag with the frame time.
+			float y = c.Base.Y - (c.FallSpeed * dt + 0.5f * kStackGravity * dt * dt);
 			c.FallSpeed += kStackGravity * dt;
-			float y = c.Base.Y - c.FallSpeed * dt;
 			if (y <= floor)
 			{
-				y = floor;
-				c.Falling = false;
-				c.FallSpeed = 0.0f;
+				Crate? spring = c.Kind == Kind.Iron ? SpringUnder(c, floor) : null;
+				if (spring != null)
+				{
+					// Launched again off the spring's lid, forever. The launch takes up the rest of the
+					// frame after the touchdown, so the period does not stretch by a frame per bounce.
+					float down = c.FallSpeed - kStackGravity * dt; // speed at the frame's start
+					float hit = (-down + MathF.Sqrt(down * down + 2.0f * kStackGravity * (c.Base.Y - floor))) / kStackGravity;
+					float rest = Math.Clamp(dt - hit, 0.0f, dt);
+					y = floor + kSpringLaunch * rest - 0.5f * kStackGravity * rest * rest;
+					c.FallSpeed = -kSpringLaunch + kStackGravity * rest;
+					CrateFx.Bounced(spring.Model, spring.ObjectId);
+				}
+				else
+				{
+					y = floor;
+					c.Falling = false;
+					c.FallSpeed = 0.0f;
+				}
 			}
 			Vector3 move = new(0.0f, y - c.Base.Y, 0.0f);
+			// Crash on the lid rides it up and down (rig: his feet stay at the iron's base + 1.02 through
+			// every bounce); CrashPlayer.Carry holds him there and lets his own jump leave it.
+			Vector3 feet = _crash.Position;
+			bool onLid = _player != null
+				&& MathF.Abs(feet.X - c.Base.X) < 0.5f + kCrashRadius * 0.75f && MathF.Abs(feet.Z - c.Base.Z) < 0.5f + kCrashRadius * 0.75f
+				&& feet.Y > c.Base.Y + 1.0f - 0.75f && feet.Y < c.Base.Y + 1.0f + 0.45f;
 			c.Base += move;
 			if (!c.BodyIsChild)
 			{
 				c.Body.Position += move; // baked crates: the body is a child, it follows the model
 			}
 			c.Model.Position += move;
+			if (onLid)
+			{
+				_player!.Carry(c.Base.Y + 1.0f, -c.FallSpeed);
+			}
 			CrateFx.Moved(c.Model, c.Base); // nitro hops snap back to their cached rest position
 		}
 	}

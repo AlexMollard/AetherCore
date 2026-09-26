@@ -198,6 +198,22 @@ public sealed class CrashPlayer : EntityScript
 	/// <summary>Set by a ride (the beach sledge, TwinsanityProps.cs): while non-null his feet are held
 	/// at this point every frame and his own movement is suspended; null hands control back.</summary>
 	public Vector3? RideFeet;
+	private bool _carried, _carriedNow; // held on a moving lid since our last update (Carry)
+
+	/// <summary>A moving lid carries him (the Hub B red-gem columns' irons, bouncing forever on their
+	/// iron springs; rig: his feet stay on the lid through every bounce). His feet are put on it and he
+	/// counts as grounded there, so the lid's motion is never a fall or a landing, and he keeps full
+	/// control. His own jump, rising faster than the lid, leaves it.</summary>
+	public void Carry(float feetY, float lidVelocityY)
+	{
+		if (_dead || RideFeet != null || (Airborne && _vy > lidVelocityY + 0.5f))
+		{
+			return;
+		}
+		Self.Position = Self.Position with { Y = feetY };
+		_airY = feetY;
+		_carried = true;
+	}
 
 	private readonly Dictionary<string, int> _clips = new();
 	private readonly System.Random _random = new();
@@ -312,13 +328,16 @@ public sealed class CrashPlayer : EntityScript
 		if (_control)
 		{
 			_accumulator = Math.Min(_accumulator + deltaTime, 0.1f);
+			_carriedNow = _carried;
+			_carried = false;
 			while (_accumulator >= Tick)
 			{
 				_accumulator -= Tick;
 				Step(Tick);
 			}
-			Vector3 velocity = new(_horizontal.X, TrackHeight(deltaTime), _horizontal.Z);
-			if (!Airborne)
+			// On a carrying lid the lid places him (Carry); his own ground press would sink him into it.
+			Vector3 velocity = new(_horizontal.X, _carriedNow && !Airborne ? 0.0f : TrackHeight(deltaTime), _horizontal.Z);
+			if (!Airborne && !_carriedNow)
 			{
 				// Keep the measured horizontal speed and follow a DESCENDING ground plane, so
 				// running down a walkable slope stays on it instead of launching off. Uphill is left
@@ -527,7 +546,7 @@ public sealed class CrashPlayer : EntityScript
 
 		var (stickDir, stick) = StickInput();
 		bool moving = stick >= StickDeadZone;
-		bool grounded = CharacterController.IsGrounded(Self);
+		bool grounded = CharacterController.IsGrounded(Self) || _carriedNow;
 		_stateTime += dt;
 
 		if (grounded)
