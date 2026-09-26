@@ -52,6 +52,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private readonly TwinsanityActors _actors = new();
 	private readonly TwinsanityHud _hud = new();
 	private readonly TwinsanityPause _pause = new();
+	private readonly TwinsanityCutscenes _cutscenes = new();
 	private readonly HashSet<uint> _deadly = new();
 	private readonly Dictionary<int, string> _objectModels = new();
 
@@ -125,6 +126,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			}
 			using JsonDocument doc = JsonDocument.Parse(text);
 			LoadChunk(doc.RootElement, transform, path == LevelPath);
+			_cutscenes.AddChunk(path, doc.RootElement, transform);
 			if (doc.RootElement.TryGetProperty("links", out JsonElement links))
 			{
 				foreach (JsonElement link in links.EnumerateArray())
@@ -142,6 +144,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
 		TwinsanityAudio.Start(LevelPath);
 		TwinsanityAku.Start();
+		_cutscenes.Start();
 		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
 		// summary has the rig evidence for when the original shows it.
 	}
@@ -176,6 +179,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		// Keep world life and crate fx animating through the death pause, as in the original.
 		_actors.Update(deltaTime, _player!, this);
 		CrateFx.Update(deltaTime);
+		_cutscenes.Update(deltaTime, _player!);
 		TwinsanityAku.Update(deltaTime, _player!, _aku);
 		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
 		// The pause menu ticks on the unscaled clock: it freezes the game itself (Time.Scale 0)

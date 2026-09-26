@@ -348,7 +348,7 @@ namespace TwExtract
 		{
 			var file = Load(path, TwinsFile.FileType.RM2);
 			var gfx = new Gfx(file, 11);
-			string objects = Objects(file, gfx, archiveName, out var models);
+			string objects = Objects(file, gfx, archiveName, out var models, out var ogiModels);
 			string particles = "";
 			// Startup/Default.rm2 holds the shared particle bank: its three texture pages are
 			// what the runtime's billboard emitters sample. Everything else re-exports the
@@ -358,7 +358,8 @@ namespace TwExtract
 				particles = ", " + ParticlePages(file, gfx);
 			}
 			return objects + particles + ", " + LevelExport.Write(file, Path.ChangeExtension(path, ".sm2"), LevelPath(archiveName), s_out, models)
-				+ ", " + AudioExport.Write(file, LevelPath(archiveName), s_out, s_musicTracks);
+				+ ", " + AudioExport.Write(file, LevelPath(archiveName), s_out, s_musicTracks)
+				+ ", " + ScriptExport.Write(file, LevelPath(archiveName), s_out, ogiModels);
 		}
 
 		// ParticleData's three texture pages -> assets/particles/particle_page_<n>.png. The
@@ -388,10 +389,12 @@ namespace TwExtract
 		}
 
 		// models: object ID -> project:// path of the object's first graphics set, whether written now or by
-		// an earlier level.
-		static string Objects(TwinsFile file, Gfx gfx, string archiveName, out Dictionary<uint, string> models)
+		// an earlier level. ogiModels: object ID -> each of its OGI ids with the model written for it (the
+		// cutscene player shows an actor with the director's model whose skeleton fits the clip).
+		static string Objects(TwinsFile file, Gfx gfx, string archiveName, out Dictionary<uint, string> models, out Dictionary<uint, List<(uint Ogi, string Model)>> ogiModels)
 		{
 			models = new Dictionary<uint, string>();
+			ogiModels = new Dictionary<uint, List<(uint Ogi, string Model)>>();
 			var items = Gfx.Items(file).ToList();
 			var ogis = new Dictionary<uint, GraphicsInfo>();
 			foreach (var gi in items.OfType<GraphicsInfo>())
@@ -445,6 +448,11 @@ namespace TwExtract
 					{
 						shared++;
 					}
+					if (!ogiModels.TryGetValue(obj.ID, out var perOgi))
+					{
+						ogiModels[obj.ID] = perOgi = new List<(uint Ogi, string Model)>();
+					}
+					perOgi.Add((used[k], VfsPath(Path.Combine(dir, fileName + ".gltf"))));
 					if (!models.ContainsKey(obj.ID))
 					{
 						models[obj.ID] = VfsPath(Path.Combine(dir, fileName + ".gltf"));

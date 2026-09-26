@@ -361,6 +361,7 @@ namespace TwExtract
 			}
 
 			var list = new List<object>();
+			var triggers = new List<object>();
 			for (uint layer = 0; layer < 8; layer++)
 			{
 				if (!file.ContainsItem(layer) || !(file.GetItem<TwinsItem>(layer) is TwinsSection section) || !section.ContainsItem(6)
@@ -384,6 +385,9 @@ namespace TwExtract
 						["layer"] = layer,
 						["object"] = (uint)ins.ObjectID,
 						["name"] = names.TryGetValue(ins.ObjectID, out string n) ? Leaf(n) : "",
+						// The object's group path, e.g. |Beach|CutsceneL01B|act_AKUAKUCRATE: cutscene-only actors
+						// live in *Cutscene* groups.
+						["group"] = n ?? "",
 						["position"] = new[] { pos.X, pos.Y, pos.Z },
 						["euler"] = Euler(ins),
 					};
@@ -429,8 +433,31 @@ namespace TwExtract
 						manifest["spawn"] = entry;
 					}
 				}
+				// Trigger volumes (item 7): an oriented box (rotation quaternion, centre, half extents) that sends
+				// its message args to the listed instances of this layer - Arg1 (header bit 11) on entry. The
+				// cutscene directors start this way (beach trigger 8 -> act_BEACH_AKU_CUTSCENE_DIRECTOR, 87).
+				if (section.ContainsItem(7) && section.GetItem<TwinsItem>(7) is TwinsSection trigs)
+				{
+					foreach (var t in trigs.Records.OfType<Trigger>())
+					{
+						var c = Space.Mirror(new Vector3(t.Coords[1].X, t.Coords[1].Y, t.Coords[1].Z));
+						triggers.Add(new Dictionary<string, object>
+						{
+							["id"] = t.ID,
+							["layer"] = layer,
+							// X-mirroring a rotation negates the quaternion's Y and Z.
+							["rotation"] = new[] { t.Coords[0].X, -t.Coords[0].Y, -t.Coords[0].Z, t.Coords[0].W },
+							["center"] = new[] { c.X, c.Y, c.Z },
+							["extents"] = new[] { t.Coords[2].X, t.Coords[2].Y, t.Coords[2].Z },
+							["header"] = t.Header,
+							["args"] = new[] { (int)t.Arg1, (int)t.Arg2, (int)t.Arg3, (int)t.Arg4 },
+							["targets"] = t.Instances.Select(i => (int)i).ToList(),
+						});
+					}
+				}
 			}
 			manifest["instances"] = list;
+			manifest["triggers"] = triggers;
 			return $"{list.Count} instances{(manifest.ContainsKey("spawn") ? " (spawn found)" : "")}";
 		}
 

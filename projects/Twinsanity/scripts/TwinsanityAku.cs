@@ -52,6 +52,7 @@ public static class TwinsanityAku
 	private static float s_fly = -1.0f;  // time since the last mask was lost
 	private static Vector3 s_flyFrom;
 	private static float s_yaw;
+	private static bool s_sceneHidden;
 
 	public static bool Invincible => s_invincible > 0.0f;
 
@@ -61,6 +62,7 @@ public static class TwinsanityAku
 		s_shown = 0;
 		s_invincible = 0.0f;
 		s_kick = -1.0f;
+		s_sceneHidden = false;
 		s_fly = -1.0f;
 	}
 
@@ -92,6 +94,17 @@ public static class TwinsanityAku
 			s_mask.SetActive(masks > 0);
 			s_shown = masks;
 			s_yaw = crash.Facing;
+		}
+		// In-engine cutscenes hide the follower (rig logs/cutscenes/_aku_rig.png: no mask by Crash while
+		// Aku Aku speaks); it is back beside him when the letterbox drops.
+		if (TwinsanityCutscenes.Active != s_sceneHidden)
+		{
+			s_sceneHidden = TwinsanityCutscenes.Active;
+			s_mask.SetActive(!s_sceneHidden && masks > 0);
+		}
+		if (s_sceneHidden)
+		{
+			return;
 		}
 		if (masks == 0)
 		{

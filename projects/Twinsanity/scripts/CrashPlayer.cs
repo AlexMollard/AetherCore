@@ -965,7 +965,10 @@ public sealed class CrashPlayer : EntityScript
 		// A drowning pulls the view up with the floating body (the rig ends looking down at him
 		// on the surface, not at the controller still on the drowning plane below).
 		float lift = _dead && _deathPlan.FloatToSurface ? _deathLift : 0.0f;
-		_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_facing), _horizontal, _lookTurn, _lookPitch, _dead ? Vector2.Zero : _lookStick, lift);
+		if (!TwinsanityCutscenes.OwnsCamera) // an in-engine cutscene's scripted camera holds the view
+		{
+			_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_facing), _horizontal, _lookTurn, _lookPitch, _dead ? Vector2.Zero : _lookStick, lift);
+		}
 		_lookTurn = 0.0f;
 		_lookPitch = 0.0f;
 		_look.Update(_model, _dead ? Vector2.Zero : _lookStick, deltaTime);
