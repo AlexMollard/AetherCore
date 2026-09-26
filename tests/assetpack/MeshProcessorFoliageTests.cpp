@@ -19,8 +19,8 @@ namespace
 	// Same shape as the vertex-colour bake test's glTF; the difference is the materials:
 	// "leaf" carries alphaMode MASK plus tw-extract's {"foliage":true} extras, "lit" only
 	// {"baked_lighting":true}, "plain" is opaque with no extras. "foam" is BLEND with the PS2
-	// "blend add" preset tw-extract marks {"additive":true}, "glass" a plain BLEND, and "solid"
-	// an opaque material wrongly carrying the additive mark.
+	// "blend add" preset tw-extract marks {"additive":true}, "glass" a plain BLEND that is also a
+	// skydome layer ({"sky":true}), and "solid" an opaque material wrongly carrying the additive mark.
 	constexpr const char* kGltf = R"({
   "asset": {"version": "2.0"},
   "scene": 0,
@@ -39,7 +39,7 @@ namespace
     {"name": "plain"},
     {"name": "lit", "extras": {"baked_lighting": true}},
     {"name": "foam", "alphaMode": "BLEND", "extras": {"additive": true}},
-    {"name": "glass", "alphaMode": "BLEND"},
+    {"name": "glass", "alphaMode": "BLEND", "extras": {"sky": true}},
     {"name": "solid", "extras": {"additive": true}}
   ],
   "accessors": [
@@ -93,7 +93,9 @@ TEST_CASE("Baked glTF materials carry the foliage, baked-lighting and additive-b
 
 	CHECK(Header(result.materialFiles, "leaf").foliage != 0);
 	CHECK(Header(result.materialFiles, "leaf").bakedLighting == 0);
-	CHECK(Header(result.materialFiles, "lit").bakedLighting != 0);
+	// Sky and baked lighting share one byte as separate bits; neither mark sets the other.
+	CHECK(Header(result.materialFiles, "lit").bakedLighting == kMaterialDiskBaked);
+	CHECK(Header(result.materialFiles, "glass").bakedLighting == kMaterialDiskSky);
 	CHECK(Header(result.materialFiles, "lit").foliage == 0);
 	CHECK(Header(result.materialFiles, "plain").foliage == 0);
 	CHECK(Header(result.materialFiles, "plain").bakedLighting == 0);

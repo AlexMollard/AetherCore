@@ -120,6 +120,9 @@ inline constexpr char MATL_MAGIC[4] = {'M', 'A', 'T', 'L'};
 // 2: alphaBlend == 2 means additive. The header has no pad bytes left, so the blend mode rides on
 // the byte that already said "blends". Version 1 files only ever wrote 0/1 and stay valid.
 inline constexpr uint32_t MATL_VERSION = 2;
+// MaterialHeaderDisk::bakedLighting bits (see there).
+inline constexpr uint8_t kMaterialDiskBaked = 1;
+inline constexpr uint8_t kMaterialDiskSky = 2;
 
 enum class TextureTypeDisk : uint8_t
 {
@@ -155,6 +158,9 @@ struct MaterialHeaderDisk
 	// PS2 prelit scenery (tw-extract marks every vertex-coloured material): the vertex colour IS
 	// the lighting, so the renderer shows it as is and only lets the shadow maps pull it down to
 	// the scene's shade colour. Carved from the same padding - old files read 0, i.e. lit as PBR.
+	// Bit 0 is that flag (kMaterialDiskBaked). Bit 1 (kMaterialDiskSky, tw-extract's "sky") is a
+	// skydome surface: drawn first, behind everything, at infinite depth. It shares this byte
+	// because the header has no padding left; files written before it only ever held 0/1.
 	uint8_t bakedLighting = 0;
 	// PS2 object lighting (tw-extract marks object models "object_lit"): lit by the level's
 	// light records instead of the sun. Carved from the same padding - old files read 0.

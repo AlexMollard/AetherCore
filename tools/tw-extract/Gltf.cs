@@ -62,6 +62,19 @@ namespace TwExtract
 			return m_materials.Count - 1;
 		}
 
+		// Adds {key: true} to every material's extras (e.g. "sky": the whole skydome file).
+		public void MarkAllMaterials(string key)
+		{
+			foreach (Dictionary<string, object> material in m_materials)
+			{
+				if (!material.TryGetValue("extras", out object e) || e is not Dictionary<string, object> extras)
+				{
+					material["extras"] = extras = new Dictionary<string, object>();
+				}
+				extras[key] = true;
+			}
+		}
+
 		public int TextureFor(string uri)
 		{
 			if (!m_imageByUri.TryGetValue(uri, out int image))

@@ -257,7 +257,8 @@ namespace aether
 					material.alphaMask = hdr.alphaMask != 0;
 					material.modulateVertexColor = hdr.modulateVertexColor != 0;
 					material.foliage = hdr.foliage != 0;
-					material.bakedLighting = hdr.bakedLighting != 0;
+					material.bakedLighting = (hdr.bakedLighting & kMaterialDiskBaked) != 0;
+					material.sky = (hdr.bakedLighting & kMaterialDiskSky) != 0;
 					material.objectLit = hdr.objectLit != 0;
 					material.uvScroll = glm::vec2(hdr.uvScroll[0], hdr.uvScroll[1]);
 
@@ -490,6 +491,7 @@ namespace aether
 				mat.modulateVertexColor = srcMat.modulateVertexColor;
 				mat.foliage = srcMat.foliage;
 				mat.bakedLighting = srcMat.bakedLighting;
+				mat.sky = srcMat.sky;
 				mat.objectLit = srcMat.objectLit;
 				mat.uvScroll = srcMat.uvScroll;
 

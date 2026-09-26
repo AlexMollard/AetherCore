@@ -26,6 +26,9 @@ namespace aether
 		// Additive blend (Cs*As + Cd). Pipeline state, not read by any shader: carried here only
 		// so MaterialRegistry::TryDescribe round-trips it.
 		static constexpr std::uint32_t kAdditiveBlend = 1u << 8;
+		// Skydome surface: the vertex shaders put it at infinite depth (clip z = w). Mirrors
+		// kFlagSky in GpuMaterial.slangh.
+		static constexpr std::uint32_t kSky = 1u << 9;
 
 		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor{1.0f};

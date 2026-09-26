@@ -632,7 +632,13 @@ namespace aether::assetpipeline
 					// the lighting, so the renderer skips the PBR lights for it.
 					if (std::strstr(extras, "\"baked_lighting\"") != nullptr)
 					{
-						hdr.bakedLighting = 1;
+						hdr.bakedLighting |= kMaterialDiskBaked;
+					}
+					// {"sky":true} - a skydome surface, drawn behind everything at infinite
+					// depth (tw-extract marks every material of a chunk's skydome).
+					if (std::strstr(extras, "\"sky\"") != nullptr)
+					{
+						hdr.bakedLighting |= kMaterialDiskSky;
 					}
 					// {"object_lit":true} - PS2 object lighting: the level's light records
 					// light it (ambient + two directional), like the GS lit objects.

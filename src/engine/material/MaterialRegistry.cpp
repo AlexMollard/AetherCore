@@ -184,6 +184,7 @@ namespace aether
 		out.foliage = (g.flags & GpuMaterial::kFoliage) != 0;
 		out.bakedLighting = (g.flags & GpuMaterial::kBakedLighting) != 0;
 		out.objectLit = (g.flags & GpuMaterial::kObjectLit) != 0;
+		out.sky = (g.flags & GpuMaterial::kSky) != 0;
 		out.albedoTex = e.textures[0];
 		out.normalTex = e.textures[1];
 		out.metallicRoughnessTex = e.textures[2];

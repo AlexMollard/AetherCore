@@ -493,6 +493,14 @@ namespace aether
 
 		        [](const DrawCommand& a, const DrawCommand& b)
 		        {
+			        if (a.sky != b.sky)
+			        {
+				        return a.sky;
+			        }
+			        if (a.sky)
+			        {
+				        return a.skyOrder < b.skyOrder;
+			        }
 			        // Transparent geometry draws after everything opaque. It does not write
 			        // depth, so anything opaque submitted after it would pass the depth test
 			        // and paint straight over it - the blend would be undone by the very

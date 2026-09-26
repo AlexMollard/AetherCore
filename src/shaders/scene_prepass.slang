@@ -143,6 +143,12 @@ PrepassVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_
 [shader("fragment")]
 PrepassOutput fragmentMain(PrepassVSOutput input, bool isFrontFace : SV_IsFrontFace)
 {
+	// A sky surface has no depth: it draws at the far plane in the forward pass, behind
+	// everything. Written here at its real distance it would reject its own forward draw.
+	if (input.materialIndex != kNoTexture && (((GpuMaterial*)(pc.frame.Ptr()->materialBufferAddr))[input.materialIndex].flags & kFlagSky) != 0u)
+	{
+		discard;
+	}
 	AlphaMaskDiscard(input.materialIndex, input.uv);
 
 	FrameConstantsData* fc = pc.frame.Ptr();

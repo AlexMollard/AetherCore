@@ -31,6 +31,9 @@ namespace aether
 		// PS2 prelit geometry: the vertex colour is the lighting; only the shadow maps
 		// modulate it (down to the scene's ambient/shade colour). No PBR lights, no AO.
 		bool bakedLighting = false;
+		// Skydome surface: drawn before everything else in primitive order, at infinite depth
+		// (clip z = w) with no depth write, so it only fills what no geometry covers.
+		bool sky = false;
 		// PS2 object lighting: lit by the scene's object light records.
 		bool objectLit = false;
 

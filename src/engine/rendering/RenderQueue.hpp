@@ -65,6 +65,11 @@ namespace aether
 		// needs the comparison and the square root would not change it.
 		bool blended = false;
 		float viewDepthSq = 0.0f;
+		// Sky draws go before everything, opaque and blended alike, ordered by skyOrder (the
+		// primitive index): every sky layer sits at the same infinite depth, so the layers
+		// composite in draw order, and scenery drawn later covers them by depth.
+		bool sky = false;
+		std::uint32_t skyOrder = 0;
 	};
 
 	struct RenderQueueConfig

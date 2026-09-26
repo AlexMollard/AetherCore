@@ -61,12 +61,14 @@ namespace aether
 		// Transparent geometry must not write depth: the surfaces behind it still have to be
 		// visible through it, and a depth write would reject them. Only ever cleared, never
 		// set - an opaque material keeps whatever its own template asked for.
-		if (asset.alphaBlend)
+		// A sky surface is drawn at the far plane (the vertex shaders set clip z = w) and must never
+		// write it either: every sky layer shares that one depth, and a write would reject the next.
+		if (asset.alphaBlend || asset.sky)
 		{
 			tmpl.depthWriteEnable = false;
 		}
 		const GraphicsPipeline* pipeline = pipelineCache.Acquire(tmpl);
-		r.emplace_or_replace<PipelineComponent>(e, PipelineComponent{pipeline, asset.alphaBlend});
+		r.emplace_or_replace<PipelineComponent>(e, PipelineComponent{.pipeline = pipeline, .blended = asset.alphaBlend, .sky = asset.sky});
 	}
 
 	namespace

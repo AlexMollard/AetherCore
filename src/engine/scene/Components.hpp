@@ -101,6 +101,8 @@ namespace aether
 		// because a GraphicsPipeline is only a handle - it does not remember the state it
 		// was built with - and the draw submitter already has this component in hand.
 		bool blended = false;
+		// Skydome surface (MaterialAsset::sky): drawn before everything else, in primitive order.
+		bool sky = false;
 	};
 
 	struct MeshSourceComponent

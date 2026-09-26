@@ -28,6 +28,7 @@
 #include "include/LocalShadow.slangh"
 #include "include/PBRUtilities.slangh"
 #include "include/MeshVertex.slangh"
+#define AETHER_VS_SKY_DEPTH 1
 #include "include/DefaultVertex.slangh"
 
 [[vk::push_constant]] DrawPushConstants pc;

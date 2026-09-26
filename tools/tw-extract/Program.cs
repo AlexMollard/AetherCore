@@ -246,6 +246,8 @@ namespace TwExtract
 					}
 					if (SingleMeshNode(skyEx, stem + "_sky", skyPrims))
 					{
+						// The engine draws "sky" materials behind everything at infinite depth.
+						skyEx.Gltf.MarkAllMaterials("sky");
 						skyEx.Save(Path.Combine(dir, stem + "_sky.gltf"));
 						s_scenery++;
 						notes.Add("sky");

@@ -123,6 +123,15 @@ namespace aether
 
 			const glm::vec4 worldSphere = TransformBoundingSphere(localSphere, transformComp.localToWorld);
 
+			std::uint32_t skyOrder = 0;
+			if (pipelineComp.sky)
+			{
+				if (const auto* src = world.GetRegistry().try_get<MeshSourceComponent>(enttEntity))
+				{
+					skyOrder = src->primitiveIndex;
+				}
+			}
+
 			queue.Submit({
 			        .pipeline = pipelineComp.pipeline,
 			        .mesh = meshComp.mesh,
@@ -143,6 +152,8 @@ namespace aether
 			        .meshGeneration = meshComp.mesh ? meshComp.mesh->GetGeneration() : 0,
 			        .blended = pipelineComp.blended,
 			        .viewDepthSq = glm::dot(glm::vec3(worldSphere) - eyeWorldPos, glm::vec3(worldSphere) - eyeWorldPos),
+			        .sky = pipelineComp.sky,
+			        .skyOrder = skyOrder,
 			});
 		}
 	}
@@ -192,10 +203,10 @@ namespace aether
 
 		// The blob covers the inner half of the actor's footprint and fades out past it, which
 		// is the rig's size: a crate's blob just rims its base, Crash's sits under his feet.
-		// ponytail: pickups (wumpa, ~0.25 m bounds) had no blob on the PS2; a size floor stands
-		// in for the per-actor shadow flag the game scripts carry until that is extracted.
+		// Pickups get one too: the rig lays a small soft blob under every wumpa
+		// (logs/wumpa/rig/idle_00.png). The floor only drops degenerate bounds.
 		constexpr float kFootprintFraction = 0.5f;
-		constexpr float kMinBlobRadius = 0.15f;
+		constexpr float kMinBlobRadius = 0.05f;
 		for (const auto& [key, b]: actors)
 		{
 			const float radius = kFootprintFraction * 0.5f * std::max(b.max.x - b.min.x, b.max.z - b.min.z);
