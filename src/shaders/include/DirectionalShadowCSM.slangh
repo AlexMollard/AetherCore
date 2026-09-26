@@ -26,6 +26,11 @@ static const float kMaxPenumbraTexels = 6.0;
 // Fraction of a cascade's own depth range spent fading into the next one.
 static const float kCascadeBlendFraction = 0.15;
 
+// Steepest tilt against the light the slope-scaled bias follows (tan 76 degrees). Past it a
+// receiver is nearly edge-on to the sun, where the lighting term has already gone to nothing
+// and a bias that kept growing would only detach shadows from their casters.
+static const float kMaxBiasSlope = 4.0;
+
 // Point fetch, clamped to the map. Filtering happens on the comparison results.
 float LoadCascadeDepth(uint shadowSlot, float2 uv, uint width, uint height)
 {
@@ -89,6 +94,7 @@ float ComputeDirectionalShadowCascade(
     // One number, already expressed in this cascade's NDC depth units on the CPU from its
     // real texel size and ortho depth range - no ad-hoc per-cascade multiplier.
     const float bias = fc->shadowCascadeDepthBias[cascadeIdx];
+    const float slopeBias0 = bias * 0.70710678 * 0.71 * min(sinTheta / max(NdotL, 1e-3), kMaxBiasSlope);
 
     const float2 texel = 1.0 / float2((float)entry.width, (float)entry.height);
     const float maxTexel = max(texel.x, texel.y);
@@ -101,15 +107,28 @@ float ComputeDirectionalShadowCascade(
     const float searchRadiusUv = min(penumbraScale, kMaxPenumbraTexels * maxTexel);
     const float phi = InterleavedGradientNoise(pixelCoord) * kTwoPi;
 
+    // Slope-scaled bias for the taps that land away from the lookup. A surface tilted by
+    // theta against the light changes depth by tan(theta) texels of depth per texel across
+    // the map, so a tap d texels out reads the receiver's OWN surface up to d * tan(theta)
+    // nearer the light - past the constant bias, the ground found itself as a blocker and
+    // shadowed itself in texel-sized dashes along its triangles, worst in the distant
+    // cascades where the filter spans metres. `bias` is sqrt(2) texels of depth, so one
+    // texel of depth is bias / sqrt(2); the extra 0.71 texel is the distance a point fetch
+    // can land from the sample itself. tan(theta) is capped where the surface turns edge-on.
+    const float tanTheta = min(sinTheta / max(NdotL, 1e-3), kMaxBiasSlope);
+    const float slopeBiasPerUv = (bias * 0.70710678 * tanTheta) / maxTexel;
+    const float slopeBiasBase = bias * 0.70710678 * tanTheta * 0.71;
+
     // Stage 1: how far in front of this receiver do the occluders sit?
     float blockerSum = 0.0;
     float blockerCount = 0.0;
     [unroll]
     for (uint i = 0u; i < kCsmBlockerSamples; ++i)
     {
-        const float2 sampleUv = uv + VogelDiskSample(i, kCsmBlockerSamples, phi) * searchRadiusUv;
-        const float d = LoadCascadeDepth(shadowSlot, sampleUv, entry.width, entry.height);
-        if (d < receiverDepth - bias)
+        const float2 offsetUv = VogelDiskSample(i, kCsmBlockerSamples, phi) * searchRadiusUv;
+        const float d = LoadCascadeDepth(shadowSlot, uv + offsetUv, entry.width, entry.height);
+        const float tapBias = bias + slopeBias0 + slopeBiasBase + slopeBiasPerUv * length(offsetUv);
+        if (d < receiverDepth - tapBias)
         {
             blockerSum += d;
             blockerCount += 1.0;
@@ -134,9 +153,10 @@ float ComputeDirectionalShadowCascade(
     [unroll]
     for (uint j = 0u; j < kCsmFilterSamples; ++j)
     {
-        const float2 sampleUv = uv + VogelDiskSample(j, kCsmFilterSamples, phi) * filterRadiusUv;
-        const float d = LoadCascadeDepth(shadowSlot, sampleUv, entry.width, entry.height);
-        visibility += ((receiverDepth - bias) <= d) ? 1.0 : 0.0;
+        const float2 offsetUv = VogelDiskSample(j, kCsmFilterSamples, phi) * filterRadiusUv;
+        const float d = LoadCascadeDepth(shadowSlot, uv + offsetUv, entry.width, entry.height);
+        const float tapBias = bias + slopeBias0 + slopeBiasBase + slopeBiasPerUv * length(offsetUv);
+        visibility += ((receiverDepth - tapBias) <= d) ? 1.0 : 0.0;
     }
 
     return visibility / float(kCsmFilterSamples);
