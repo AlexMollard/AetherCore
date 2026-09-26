@@ -41,6 +41,7 @@ public sealed class TwinsanityCutscenes
 	private const float BarSlide = 0.5f;       // rig: 1.33 -> 1.83 s in, 14.65 -> 15.2 s out
 	private const float SkipHold = 0.5f;       // Triangle held, as the mod's movie skip (30 frames at 60 Hz)
 	private const int FocusTarget = 0xFB;
+	private const int CheckpointMessage = 138; // a volume's message to a checkpoint / level crate
 	private const int FocusKey = 252;
 	private const int FocusKey2 = 246;   // KEY_INDEX 246: the key SetFocusToKey2 picked
 	private const int CurrentKey = 254;  // KEY_INDEX 254 (and SetFocusToKey2's 0xFE): the SetKey/NextKey key
@@ -48,8 +49,11 @@ public sealed class TwinsanityCutscenes
 	// ponytail: Cmd591 (the scripted camera) is decoded only as far as its argument layout (pitch at +0x10,
 	// extra distance at +0x14) - the framing maths (FUN_001102d0 and its helpers) is not. Each shot's eye and
 	// look direction are the rig's, read from the EE camera matrix (0x00CFEE00) while the scene played:
-	// logs/cutscenes/track_aku.csv, track_train.csv. Game coordinates; x is mirrored on use. Scenes not in this
-	// table fall back to framing the camera subject from the player's side.
+	// logs/cutscenes/track_aku.csv, track_train.csv, logs/tutorial/rig_cam_s1.csv (scenes A, C), rig_cam_s2.csv (D)
+	// and rig_cam_s3.csv (G). Game coordinates; x is mirrored on use. Every shot is a fixed eye held until the next
+	// Cmd591 (rig_cam_s1: constant to 4 decimals). A script's shots are counted from its own CutsceneStart, so a
+	// replayed scene frames the same. Scenes not in this table fall back to framing the camera subject from the
+	// player's side.
 	private static readonly Dictionary<string, (Vector3 Eye, Vector3 Look)[]> s_shots = new()
 	{
 		["COM_CUTSCENE_L01B"] = new[] { (new Vector3(-12.2527f, 1.6712f, -53.3858f), new Vector3(-0.653f, 0.0f, -0.7574f)) },
@@ -57,6 +61,19 @@ public sealed class TwinsanityCutscenes
 		{
 			(new Vector3(-54.0194f, 1.1007f, -60.3352f), new Vector3(-0.36f, 0.0f, 0.933f)),
 			(new Vector3(-51.5224f, 2.8086f, -62.0865f), new Vector3(-0.5802f, -0.1736f, 0.7958f)),
+		},
+		["COM_TRAINING_CUTSCENE_A"] = new[] { (new Vector3(-6.6791f, 1.7622f, -14.9401f), new Vector3(0.0f, -0.1736f, 0.9848f)) },
+		["COM_TRAINING_CUTSCENE_C"] = new[]
+		{
+			(new Vector3(-6.6791f, 2.5316f, -12.8680f), new Vector3(0.2588f, 0.0f, 0.9659f)),
+			(new Vector3(-6.5479f, -0.5181f, 2.0527f), new Vector3(0.2418f, 0.0f, 0.9703f)),
+		},
+		["COM_TRAINING_CUTSCENE_D"] = new[] { (new Vector3(-14.7571f, -0.5181f, 34.9496f), new Vector3(-1.0f, 0.0f, 0.0076f)) },
+		["COM_TRAINING_CUTSCENE_G"] = new[]
+		{
+			(new Vector3(-54.5015f, 1.6510f, 123.3484f), new Vector3(-0.1305f, 0.0f, 0.9914f)),
+			(new Vector3(-51.8369f, 1.0582f, 128.9897f), new Vector3(-0.7961f, 0.0f, 0.6052f)),
+			(new Vector3(-54.3942f, 1.6085f, 127.6599f), new Vector3(-0.5093f, 0.0f, 0.8606f)),
 		},
 	};
 
@@ -107,16 +124,16 @@ public sealed class TwinsanityCutscenes
 	{
 		public string Name = "";
 		public Matrix4x4 Transform;
+		public bool Placed;   // Transform known: given on the JSON path, solved from the first bound agent on the bake path
 		public Dictionary<int, JsonElement> RawScripts = new();
 		public Dictionary<int, ScriptDef?> Scripts = new();
 		public Dictionary<int, ObjectDef> Objects = new();
 		public Dictionary<(int Layer, int Id), Agent> Instances = new();
 		public int BeginScript = -1;
 		// The chunk's sound bank (tw-extract audio/sfx/<area>/<chunk>/): each object's Sounds[] slots, which
-		// DoSound indexes, and every effect's length. Loaded on the first DoSound.
+		// DoSound indexes. Loaded on the first DoSound.
 		public string Bank = "";
 		public Dictionary<int, int[]>? Sounds;
-		public Dictionary<int, float> SoundSeconds = new();
 	}
 
 	private sealed class Trigger
@@ -127,7 +144,9 @@ public sealed class TwinsanityCutscenes
 		public Vector3 Center, Extents;
 		public int[] Targets = Array.Empty<int>();
 		public bool Inside;
-		public bool Fired;   // a volume starts its scene once per level load (a respawn inside it re-fires nothing)
+		// A volume starts its scene once, until a respawn at its zone's checkpoint re-arms it (Respawned).
+		public bool Fired;
+		public Agent? Checkpoint;   // message 138: the crate this volume makes the respawn point (huba trigger 7)
 	}
 
 	private sealed class Agent
@@ -150,13 +169,18 @@ public sealed class TwinsanityCutscenes
 		public string Clip = "";
 		public bool ClipLoops;
 		public float ClipTime, ClipLength;
-		public int Shots;                          // Cmd591s run by this agent's scene, for the shot table
+		public readonly Dictionary<string, int> Shots = new(); // Cmd591s each scene script has run, for the shot table
+		public Vector3 Home;                       // where the level placed it (a respawn reset puts it back)
+		public float HomeYaw;
+		public bool Spent;                         // SetState (34): the director's scene is over for good
+		public readonly HashSet<Agent> Cast = new(); // a director's actors (handed a script), which a replay resets
 		public Agent? Requested;                   // RequestFocus2's find (message/hand target 0xF8)
 		public Agent? CameraSubject;               // Cmd595's subject (low byte a target selector: 0xF8, 0xFB)
 		public int CurKey;                         // SetKey/NextKey: the current key (KEY_INDEX 254)
 		public int Hp = 1;                         // ReduceHitPoints / AgentHitPoints
-		public float SoundEnds;                    // Time.TotalTime its last DoSound runs out (cond 122 "busy")
-		public bool ClipBlocks;                    // the clip marks the actor busy (a one-shot DoAnim without bit 15)
+		// The instance's busy flag (+4 bit 8), which condition 122 reads: RequestFocus2 claims its find
+		// (ELF 0x121438) and SetObject (78, ELF 0x210DF8) sets or clears it (first argument & 3: 1 set, 2 clear).
+		public bool Claimed;
 		public Agent? MessageFrom;                 // who sent the last message (SetFocusToAgent's attacker)
 		public Vector3 Velocity;                   // ColliderLaunchNow flight
 		public bool Airborne;
@@ -204,6 +228,8 @@ public sealed class TwinsanityCutscenes
 	// (logs/tutorial/rig_s1_prompt.png, 640x485): glyph cells 28 of 485 lines tall, centred at line 434.5,
 	// i.e. 0.386 of the 15% bar's height, centred 0.306 of the way down it.
 	private string _hint = "";
+	private (Vector3 Position, float Facing)? _checkpoint; // a checkpoint volume entered, for TakeCheckpoint
+	private readonly List<(Vector3 At, Vector3 From)> _hits = new(); // hits on live actors, for TakeHits
 	private string[]? _hintLines;
 	private const string HintText = "project://assets/ui/text/AgentLab/English.txt";
 	private const float HintScale = 0.386f;
@@ -221,6 +247,7 @@ public sealed class TwinsanityCutscenes
 			return;
 		}
 		chunk.Transform = transform; // the rig-shot camera table frames through it
+		chunk.Placed = true;
 		IngestAgents(chunk, level.GetProperty("instances"), transform);
 		if (level.TryGetProperty("triggers", out JsonElement triggers))
 		{
@@ -260,9 +287,30 @@ public sealed class TwinsanityCutscenes
 			return;
 		}
 		Chunk? chunk = _chunks.Find(c => c.Name == chunkEl.GetString());
-		if (chunk != null)
+		if (chunk != null && IngestAgent(chunk, worldInstance, Matrix4x4.Identity) is Agent a && !chunk.Placed)
 		{
-			IngestAgent(chunk, worldInstance, Matrix4x4.Identity);
+			PlaceChunk(chunk, a);
+		}
+	}
+
+	// The rig shots are in the chunk's own (disc) space, but bake markers are world space. The hub's chunk links
+	// are pure offsets (level.json links[].offset), so the chunk's transform is the agent's world position less
+	// its level.json one.
+	private static void PlaceChunk(Chunk chunk, Agent a)
+	{
+		chunk.Placed = true;
+		if (Assets.ReadText(chunk.Name) is not string text)
+		{
+			return;
+		}
+		using JsonDocument doc = JsonDocument.Parse(text);
+		foreach (JsonElement i in doc.RootElement.GetProperty("instances").EnumerateArray())
+		{
+			if (i.GetProperty("layer").GetInt32() == a.Layer && i.GetProperty("id").GetInt32() == a.Id)
+			{
+				chunk.Transform = Matrix4x4.CreateTranslation(a.Position - Vec(i.GetProperty("position")));
+				return;
+			}
 		}
 	}
 
@@ -362,6 +410,8 @@ public sealed class TwinsanityCutscenes
 		{
 			a.Keys = Array.ConvertAll(ToArray(points), p => Vector3.Transform(Vec(p), transform));
 		}
+		a.Home = a.Position;
+		a.HomeYaw = a.Yaw;
 		chunk.Instances[(a.Layer, a.Id)] = a;
 		if (IsDirector(chunk, def))
 		{
@@ -390,9 +440,18 @@ public sealed class TwinsanityCutscenes
 		};
 		JsonElement q = t.GetProperty("rotation");
 		tr.Rotation = Quaternion.Normalize(new Quaternion(q[0].GetSingle(), q[1].GetSingle(), q[2].GetSingle(), q[3].GetSingle()));
-		// Only triggers aimed at a director matter here; crates and spawners are other code's.
+		// Triggers aimed at a director start scenes. Message 138 aimed at a scripted crate (the hub sends it only to
+		// checkpoint and level crates) makes that crate the respawn point: huba trigger 7 and its level crate 50,
+		// where the rig respawns Crash after a death (game (-3.12, 0.02, -24.07) = the crate). Other crates and
+		// spawners are other code's.
 		if (tr.Message >= 0 && Array.Exists(tr.Targets, id => chunk.Instances.TryGetValue((tr.Layer, id), out Agent? d) && d.IsDirector))
 		{
+			_triggers.Add(tr);
+			return tr;
+		}
+		if (tr.Message == CheckpointMessage && tr.Targets.Length > 0 && chunk.Instances.TryGetValue((tr.Layer, tr.Targets[0]), out Agent? crate))
+		{
+			tr.Checkpoint = crate;
 			_triggers.Add(tr);
 			return tr;
 		}
@@ -561,6 +620,116 @@ public sealed class TwinsanityCutscenes
 		Log.Info($"[Cutscenes] {agents} agents, {_directors.Count} directors, {_triggers.Count} trigger volumes");
 	}
 
+	/// <summary>Scene hits on live world actors since the last call: where the actor stands and where the blow
+	/// came from (station 3: Coco's slide into the shieldbearer).</summary>
+	public List<(Vector3 At, Vector3 From)> TakeHits()
+	{
+		var hits = new List<(Vector3, Vector3)>(_hits);
+		_hits.Clear();
+		return hits;
+	}
+
+	/// <summary>A checkpoint volume Crash entered since the last call (message 138): the crate's position and
+	/// the facing (camera yaw) he respawns with there.</summary>
+	public bool TakeCheckpoint(out Vector3 position, out float facing)
+	{
+		(position, facing) = _checkpoint.GetValueOrDefault();
+		bool any = _checkpoint.HasValue;
+		_checkpoint = null;
+		return any;
+	}
+
+	/// <summary>Crash has respawned at feet. At a zone checkpoint (a message-138 volume's crate: huba's level
+	/// crate) the zone's scenes reset: every director of that chunk and the actors it uses go back to how the
+	/// level placed them and its volumes re-arm, so the volume holding the respawn point replays at once and the
+	/// others replay when entered again. Rig (logs/tutorial/rig_notes.md): a death in huba respawns Crash at
+	/// the level crate inside trigger 5, station 1 replays in full, and station 2 replays on re-entering
+	/// trigger 6. A director that ran SetState (34) is spent and stays so.
+	/// ponytail: the reset is scoped to message-138 checkpoints because that is all the rig has shown; the
+	/// beach respawns at its start checkpoint crate and resets nothing, so its scenes stay one-shot.</summary>
+	public void Respawned(Vector3 feet)
+	{
+		Trigger? zone = _triggers.Find(t => t.Checkpoint is Agent crate
+			&& MathF.Abs(crate.Position.X - feet.X) < 0.5f && MathF.Abs(crate.Position.Z - feet.Z) < 0.5f);
+		if (zone == null)
+		{
+			return;
+		}
+		if (Active)
+		{
+			EndScene();
+		}
+		var reset = new HashSet<Agent>();
+		foreach (Agent d in _directors)
+		{
+			if (d.Chunk != zone.Chunk || d.Spent)
+			{
+				continue;
+			}
+			reset.Add(d);
+			reset.UnionWith(d.Cast);
+			for (int i = 0; i < d.Links.Length; i++)
+			{
+				if (Linked(d, i) is Agent l)
+				{
+					reset.Add(l);
+				}
+			}
+		}
+		foreach (Agent a in reset)
+		{
+			Reset(a);
+		}
+		foreach (Trigger t in _triggers)
+		{
+			if (t.Checkpoint == null && Array.Exists(t.Targets, id => t.Chunk.Instances.TryGetValue((t.Layer, id), out Agent? d) && reset.Contains(d)))
+			{
+				t.Fired = t.Inside = false;
+			}
+		}
+		Log.Info($"[Cutscenes] respawn at a zone checkpoint: {reset.Count} agents reset, the zone's scenes re-arm");
+	}
+
+	private static bool Contains(Trigger t, Vector3 feet)
+	{
+		Vector3 local = Vector3.Transform(feet + new Vector3(0.0f, 0.5f, 0.0f) - t.Center, Quaternion.Conjugate(t.Rotation));
+		return MathF.Abs(local.X) <= t.Extents.X && MathF.Abs(local.Y) <= t.Extents.Y && MathF.Abs(local.Z) <= t.Extents.Z;
+	}
+
+	// Back to the level's placement: the pose, no script, nothing held or found, not destroyed.
+	private void Reset(Agent a)
+	{
+		if (a.IsPlayer)
+		{
+			return;
+		}
+		a.Position = a.Home;
+		a.Yaw = a.HomeYaw;
+		a.Done = false;
+		a.Machine = null;
+		a.Owner = a.IsDirector ? a : null;
+		a.Focus = a.Requested = a.CameraSubject = a.MessageFrom = null;
+		a.Message = -1;
+		a.Key = a.CurKey = 0;
+		a.Hp = 1;
+		a.Claimed = false;
+		a.Airborne = false;
+		a.Velocity = Vector3.Zero;
+		a.Clip = "";
+		if (a.Proxy.IsValid)
+		{
+			a.Proxy.SetActive(false);
+		}
+		if (a.IsDirector)
+		{
+			ObjectDef def = a.Chunk.Objects[a.Object];
+			if (def.Scripts.Length > 0 && Script(a.Chunk, def.Scripts[0]) is ScriptDef s)
+			{
+				a.Machine = NewMachine(s, a);
+			}
+		}
+	}
+
 	public void Update(float dt, CrashPlayer crash)
 	{
 		_crash = crash;
@@ -572,11 +741,16 @@ public sealed class TwinsanityCutscenes
 		Vector3 feet = crash.Self.Position;
 		foreach (Trigger t in _triggers)
 		{
-			Vector3 local = Vector3.Transform(feet + new Vector3(0.0f, 0.5f, 0.0f) - t.Center, Quaternion.Conjugate(t.Rotation));
-			bool inside = MathF.Abs(local.X) <= t.Extents.X && MathF.Abs(local.Y) <= t.Extents.Y && MathF.Abs(local.Z) <= t.Extents.Z;
-			if (inside && !t.Inside && !t.Fired)
+			bool inside = Contains(t, feet);
+			if (inside && !t.Inside && t.Checkpoint is Agent crate)
+			{
+				// Every entry: walking back in after a later checkpoint makes this one current again.
+				_checkpoint = (crate.Position, crate.Yaw + 180.0f);
+			}
+			else if (inside && !t.Inside && !t.Fired)
 			{
 				t.Fired = true;
+				Log.Info($"[Cutscenes] volume (layer {t.Layer}, message {t.Message}) entered at {feet}");
 				foreach (int id in t.Targets)
 				{
 					if (t.Chunk.Instances.TryGetValue((t.Layer, id), out Agent? target))
@@ -879,8 +1053,14 @@ public sealed class TwinsanityCutscenes
 				return a.Focus?.Machine?.Busy ?? false;
 			case 77: // RequestFocus2 found its object
 				return a.Requested != null;
-			case 122: // the requested object is busy, or gone (ELF 0x2523A8 reads its IsBusy flag, 1.0 when none)
-				return a.Requested == null || a.Requested.Done || ActorBusy(a.Requested);
+			case 122: // the requested object is busy (ELF 0x2523A8: 1.0 when there is none; 0 once it is gone,
+			          // which also forgets it)
+				if (a.Requested is { Done: true })
+				{
+					a.Requested = null;
+					return false;
+				}
+				return a.Requested?.Claimed ?? true;
 			case 56: // GotFocusObject (ELF 0x11E2A0: the focus is an object, not a position)
 				return a.Focus != null;
 			case 58: // GetAnimationTimeRemaining (seconds left of a one-shot clip)
@@ -928,6 +1108,10 @@ public sealed class TwinsanityCutscenes
 			case 564: // RequestFocus2: the nearest instance of object (arg 5 & 0xFFFF) within arg 11 of the
 			          // requester (the training directors find Coco, object 412, at 20/40/400)
 				a.Requested = Nearest(a.Position, (int)(Arg(5) & 0xFFFF), BitConverter.UInt32BitsToSingle(Arg(11)));
+				if (a.Requested != null && (Arg(8) & 0x20000000) != 0)
+				{
+					a.Requested.Claimed = true; // the scenes C, D and G claim Coco; scene A leaves her to L01A's SetObject(1)
+				}
 				break;
 			case 146: // focus a linked instance (ELF Run 0x2150D0)
 				FocusLink(a, Arg(0));
@@ -956,8 +1140,10 @@ public sealed class TwinsanityCutscenes
 				break;
 			case 603: // BottomTextDisplay(AgentLab line, x, y, r, g, b, 0)
 				_hint = HintLine((int)Arg(0));
+				Log.Info($"[Cutscenes] prompt \"{_hint}\" ({a.Name}) at {_sceneClock:F2} s");
 				break;
 			case 608: // BottomTextClear
+				Log.Info($"[Cutscenes] prompt cleared ({a.Name}) at {_sceneClock:F2} s");
 				_hint = "";
 				break;
 			case 11: // DoSound(flags, Sounds[] slot | flags << 16, ...)
@@ -1016,6 +1202,7 @@ public sealed class TwinsanityCutscenes
 			case 589: // CutsceneStart
 				Log.Info($"[Cutscenes] start {m.Def.Name} ({a.Name})");
 				_sceneClock = 0.0f;
+				a.Shots.Clear();
 				Active = true;
 				_scene = a;
 				SetControl(false);
@@ -1086,18 +1273,27 @@ public sealed class TwinsanityCutscenes
 				_fadeRate = 1.0f / MathF.Max(BitConverter.UInt32BitsToSingle(Arg(1)), 0.05f);
 				break;
 			case 34:  // SetState: the director is spent; its trigger no longer restarts it
-				a.Done = true;
+				a.Done = a.Spent = true;
 				break;
-			case 78:  // SetObject: the model follows the clip's skeleton (see ProxyFor)
+			case 78:  // SetObject: busy flag (see Claimed); the model follows the clip's skeleton (see ProxyFor)
+				a.Claimed = (Arg(0) & 3) switch { 1 => true, 2 => false, _ => a.Claimed };
+				break;
 			case 515: // SetAgent flags
 			case 659: // HUD / hint toggle
 			case 1:   // AddTrail / ClearTrail: Cortex's flight streak, Coco's run streak
 			case 2:
 				break;
+			case 10:  // DoParticle(0x7E81nnnn: bank index nn, ...). The tutorial's only one the rig shows is the hit
+			          // flash gen_IMPACT1 (127) when Coco spins the skunk; the rest (Coco's L01C burst 42, which
+			          // the rig does not show) stay unported.
+				if ((Arg(0) & 0xFFFF) == 0x7F)
+				{
+					CrateFx.ImpactFlash(a.Position + new Vector3(0.0f, 0.8f, 0.0f));
+				}
+				break;
 			// ponytail: visual and physics bookkeeping the tutorial's actors run that this interpreter has no
-			// counterpart for: DoParticle (Coco's hit flash, the skunk's pop), collider shape/wobble/detach,
-			// StoreCurrentSpace, RotWarp, the creature counters. None of them gates a script.
-			case 10:  // DoParticle
+			// counterpart for: collider shape/wobble/detach, StoreCurrentSpace, RotWarp, the creature counters.
+			// None of them gates a script.
 			case 12:  // SetWobble
 			case 13:  // ClearWobble
 			case 27:  // StoreCurrentSpace
@@ -1131,6 +1327,18 @@ public sealed class TwinsanityCutscenes
 		{
 			if (msg == message && Script(target.Chunk, script) is ScriptDef s)
 			{
+				if (!target.Proxy.IsValid && s.Name.EndsWith("_HIT", StringComparison.Ordinal) && from != null)
+				{
+					// A hit on an agent no scene has drawn: it is the live world's actor (station 3's shieldbearer,
+					// whom Coco slides into). The level knocks that actor down; running the script here would
+					// only draw a second copy of it.
+					_hits.Add((target.Position, from.Position));
+					return;
+				}
+				// Its own object's script: its own keys and animation tables, and no longer the director's to
+				// release (scene A's message 110 starts Coco's COM_COCO_CREATURE_HUB_AFTERCUTSCENE, her run to
+				// the end of her own path keys, where the rig shows her waiting for station 2).
+				target.Owner = target.IsDirector ? target : null;
 				target.Machine = NewMachine(s, target);
 				return;
 			}
@@ -1168,12 +1376,6 @@ public sealed class TwinsanityCutscenes
 
 	private static int KeyCount(Agent a) => (a.Owner ?? a).Keys.Length;
 
-	// Busy as the requested-object check (condition 122) reads it: playing a one-shot clip that blocks, or a
-	// DoSound. ponytail: the engine's IsBusy flag (instance +4 bit 8) is set by whoever claims the actor; the
-	// rig timings fit "clip or sound" (Coco's 3.52 s talk ends scene A; her spin sound ends scene C).
-	private static bool ActorBusy(Agent x) =>
-		(x.ClipBlocks && !x.ClipLoops && x.Clip.Length > 0 && x.ClipTime < x.ClipLength) || Time.TotalTime < x.SoundEnds;
-
 	// DoSound: the owner's (or its own) object's Sounds[slot] from the chunk's bank, at the agent.
 	private void PlaySound(Agent a, int slot)
 	{
@@ -1186,7 +1388,6 @@ public sealed class TwinsanityCutscenes
 		}
 		int id = slots[slot];
 		Audio.PlayAt($"{chunk.Bank}{id}.wav", a.Position, 1.0f, 1.0f, false, Audio.Bus.Sfx, 4.0f, 50.0f, Audio.AttenuationModel.Linear);
-		a.SoundEnds = Time.TotalTime + chunk.SoundSeconds.GetValueOrDefault(id, 0.5f);
 	}
 
 	private static void LoadSounds(Chunk chunk)
@@ -1206,10 +1407,6 @@ public sealed class TwinsanityCutscenes
 		foreach (JsonElement o in doc.RootElement.GetProperty("objects").EnumerateArray())
 		{
 			chunk.Sounds[o.GetProperty("id").GetInt32()] = Array.ConvertAll(ToArray(o.GetProperty("sounds")), e => e.GetInt32());
-		}
-		foreach (JsonElement e in doc.RootElement.GetProperty("effects").EnumerateArray())
-		{
-			chunk.SoundSeconds[e.GetProperty("id").GetInt32()] = e.GetProperty("seconds").GetSingle();
 		}
 	}
 
@@ -1290,6 +1487,10 @@ public sealed class TwinsanityCutscenes
 			return;
 		}
 		actor.Owner = director;
+		if (!actor.IsPlayer)
+		{
+			director.Cast.Add(actor);
+		}
 		actor.Key = 0;
 		actor.CurKey = 0;
 		actor.Message = -1;
@@ -1301,6 +1502,7 @@ public sealed class TwinsanityCutscenes
 			actor.Yaw = (_crash?.Facing ?? 0.0f) + 180.0f;
 		}
 		actor.Machine = NewMachine(s, actor);
+		Log.Info($"[Cutscenes] {s.Name} -> {actor.Name} {actor.Id} at {_sceneClock:F2} s");
 	}
 
 	private void Release(Agent actor)
@@ -1406,7 +1608,6 @@ public sealed class TwinsanityCutscenes
 		}
 		a.Clip = $"a{slot:D3}";
 		a.ClipLoops = (flags & 0x1000) != 0;
-		a.ClipBlocks = (flags & 0x8000) == 0; // Coco's pose after her run (0xAFF1) leaves her free for the next message
 		a.ClipTime = 0.0f;
 		int index = Animation.Find(a.Proxy, a.Clip);
 		if (index >= 0)
@@ -1467,9 +1668,12 @@ public sealed class TwinsanityCutscenes
 	private void Shot(Machine m, int flags)
 	{
 		Agent director = m.Self;
-		if (s_shots.TryGetValue(m.Def.Name, out (Vector3 Eye, Vector3 Look)[]? shots) && director.Shots < shots.Length)
+		int index = director.Shots.GetValueOrDefault(m.Def.Name);
+		director.Shots[m.Def.Name] = index + 1;
+		Log.Info($"[Cutscenes] shot {m.Def.Name} #{index} at {_sceneClock:F2} s");
+		if (s_shots.TryGetValue(m.Def.Name, out (Vector3 Eye, Vector3 Look)[]? shots) && index < shots.Length)
 		{
-			(Vector3 eye, Vector3 look) = shots[director.Shots];
+			(Vector3 eye, Vector3 look) = shots[index];
 			Matrix4x4 t = director.Chunk.Transform;
 			_camEye = Vector3.Transform(new Vector3(-eye.X, eye.Y, eye.Z), t);
 			_camTarget = _camEye + Vector3.TransformNormal(new Vector3(-look.X, look.Y, look.Z), t) * 5.0f;
@@ -1483,9 +1687,8 @@ public sealed class TwinsanityCutscenes
 			away = away.LengthSquared() > 1e-4f ? Vector3.Normalize(away) : Vector3.UnitZ;
 			_camTarget = subject;
 			_camEye = subject + away * 5.0f + new Vector3(0.0f, 1.3f, 0.0f);
-			Warn($"no rig shot for {m.Def.Name} #{director.Shots} (flags 0x{flags:X})");
+			Warn($"no rig shot for {m.Def.Name} #{index} (flags 0x{flags:X})");
 		}
-		director.Shots++;
 	}
 
 	// ---- skip, letterbox, fade -----------------------------------------------------------------

@@ -431,6 +431,15 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		_actors.Update(deltaTime, _player!, this);
 		CrateFx.Update(deltaTime);
 		_cutscenes.Update(deltaTime, _player!);
+		if (_cutscenes.TakeCheckpoint(out Vector3 checkpoint, out float checkpointFacing))
+		{
+			_checkpoint = checkpoint;
+			_checkpointFacing = checkpointFacing;
+		}
+		foreach ((Vector3 at, Vector3 from) in _cutscenes.TakeHits())
+		{
+			_actors.KnockEnemy(at, from);
+		}
 		TwinsanityAku.Update(deltaTime, _player!, _aku);
 		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
 		// The pause menu ticks on the unscaled clock: it freezes the game itself (Time.Scale 0)
@@ -449,6 +458,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				_player!.Respawn(_checkpoint + new Vector3(0.0f, 0.1f, 0.0f), _checkpointFacing);
 				_player.SetControl(true);
 				_aku = 1;
+				_cutscenes.Respawned(_checkpoint + new Vector3(0.0f, 0.1f, 0.0f));
 				Log.Info("[Twinsanity] Crash respawned at checkpoint");
 			}
 			return;

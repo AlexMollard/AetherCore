@@ -405,6 +405,21 @@ public static class CrateFx
 			unkByte7: 3);
 	}
 
+	/// <summary>gen_IMPACT1 (bank index 127): the white star flash a hit throws, e.g. COM_GENERIC_CREATURE_DAMAGED_SPIN's
+	/// DoParticle(0x7E81007F) when Coco spins the tutorial skunk (rig: logs/tutorial st1 ~10.45 s, st3 ~7.2 s).
+	/// One particle, 0.25 s, alpha ramping to 250 in 0.034 then out by 0.85, shrinking from 15436 raw.</summary>
+	public static void ImpactFlash(Vector3 center)
+	{
+		SpawnEmitter("ImpactFlash", center, "2", new Vector4(65.3f, 0.2f, 127.6f, 62.0f) / 128.0f,
+			1, 60.0f, 1.0f / 60.0f, 0.2532225f,
+			Vector3.Zero, Vector3.Zero, Vector3.Zero, 0.0f,
+			new[] { CK(0f, 255f, 255f, 255f), CK(0.538215339f, 255f, 255f, 255f), CK(1f, 0f, 0f, 0f) },
+			new[] { 0f, 22.148859f, 0.03378904f, 250.444229f, 0.8494779f, 0f },
+			new[] { 0f, 15436.44f * 1e-4f, 1f, 0f },
+			new[] { 0f, 0f, 1f, 9f / 65536f * 360f },
+			shape: 2);
+	}
+
 	/// <summary>A dead creature's pop (logs/gameplay/pop_sheet.md, defs in pop_particles.json).
 	/// COM_GENERIC_CREATURE_DEAD_BODYPOP fires ENEMY_POP1 (210, sparks) and ENEMY_POP2 (211, grey
 	/// puff); COM_GLOBAL_CHICKEN_POP fires SEAGULLPOP (254, feathers) and ENEMY_POP2. As for the crate

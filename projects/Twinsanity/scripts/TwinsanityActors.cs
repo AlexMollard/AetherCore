@@ -348,6 +348,21 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
+	/// <summary>A scripted hit on a live enemy (a cutscene actor's blow): the one standing within 2 of `at` is
+	/// knocked away from `from`, with the gen_IMPACT1 flash the rig shows on the shieldbearer (station 3).
+	/// ponytail: this is the enemy's death knockback; the disc's shieldbearer gets up again after its HIT
+	/// script's 4 s lie-down, which the rig's station 3 capture does not reach.</summary>
+	public void KnockEnemy(Vector3 at, Vector3 from)
+	{
+		Actor? a = _actors.Find(x => x.Alive && x.Kind == Behaviour.Enemy
+			&& (x.Model.Position.X - at.X) * (x.Model.Position.X - at.X) + (x.Model.Position.Z - at.Z) * (x.Model.Position.Z - at.Z) < 4.0f);
+		if (a != null)
+		{
+			CrateFx.ImpactFlash(a.Model.Position + new Vector3(0.0f, 0.8f, 0.0f));
+			Kill(a, from);
+		}
+	}
+
 	private void UpdateEnemy(Actor a, float dt, Vector3 crashPos)
 	{
 		CrashPlayer? player = _player;
