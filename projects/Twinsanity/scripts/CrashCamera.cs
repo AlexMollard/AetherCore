@@ -17,9 +17,16 @@ namespace AetherGame;
 ///     with a 0.17 s lag. Running away pulls it out to ~8.9, running at it pushes it in, and
 ///     running sideways swings it round behind him (~75 deg/s at run speed). Standing still, it
 ///     never swings back behind him on its own.
-///   - Height follows the ground, not Crash: a jump leaves eye and look point where they were.
-///   - The look point leads to the side Crash faces (0.55 at rest, ~1.3 running across the view),
-///     easing over ~0.5 s, so he sits off-centre toward the side he is not facing.
+///   - Height follows the ground, not Crash: a plain jump (2.2 up) leaves eye and look point where
+///     they were. Once his feet climb past the look point (double jump, bounce crate, worm launch)
+///     the look point rides with them and the eye follows 0.17 s behind. Falling, both hold until he
+///     drops 0.5 below the raised ground, then track 0.5 above his feet; the look point settles
+///     within ~0.05 s, the eye still 0.17 s behind (rig bounce_rig_*.csv, logs/cameralean).
+///   - The look point leads to the side Crash faces: 0.86 x the sine of his facing off the view at
+///     rest (0.84 after a run across, 0.68 after a tap turn), ~1.4 running across, easing over ~0.6 s,
+///     so he sits off-centre toward the side he is not facing. Turned toward the camera it also
+///     slides toward the eye, 1.93 x the facing's toward-camera share (9.17 away facing straight at it).
+///     (rig lean_rig.csv, Crash's world matrix at 0x00CF0A70, logs/cameralean).
 ///   - The right stick orbits it round him at ~115 deg/s at full deflection.
 ///   - Scenery between Crash and the eye pulls the eye in along the line; it eases back out (0.2 s).
 /// The beach's camera section holds 13 trigger boxes, all with both camera types None (3): no
@@ -29,9 +36,10 @@ public sealed class CrashCamera
 {
 	public const float FovDegrees = 45.0f;
 	private const float FollowLag = 0.17f;
-	private const float LeadFacing = 0.55f;
-	private const float LeadVelocity = 0.08f;
-	private const float LeadLag = 0.5f;
+	private const float LeadFacing = 0.86f;
+	private const float LeadVelocity = 0.062f;
+	private const float LeadPush = 1.93f;
+	private const float LeadLag = 0.6f;
 	// Collision: a 0.3 sphere cast (the near plane must stay outside terrain) pulls the eye in at once and
 	// eases back out over about 1.3 s - the rig holds a pull for a good second before it settles (rig
 	// orb_cliff/orb_pillar in rig_samples.csv: in within a frame, out over ~1.4 s).
@@ -39,8 +47,11 @@ public sealed class CrashCamera
 	private const float WallMargin = 0.05f;
 	private const float CameraSkin = 0.3f;
 	private const float StickTurnRate = 115.0f;
-	// Airborne, the height reference holds; it only follows him down once he falls this far below it.
-	private const float DropFollow = 1.0f;
+	// Airborne, the height reference holds between his feet less the look height (a launch past the look
+	// point lifts it) and his feet plus DropFollow (a fall drags it down). The look point's height eases
+	// to it faster than the eye (rig djump/worm1: ~1 frame at 50 Hz up, ~0.05 s down and on landing).
+	private const float DropFollow = 0.5f;
+	private const float AimLag = 0.05f;
 
 	// Pitch (rig, logs/camera pitch*): the right stick's Y swings the camera up over Crash (stick up) or down
 	// behind him (stick down) at 59 deg/s at full deflection, between 75 deg above and 35 deg below. The rate
@@ -75,8 +86,10 @@ public sealed class CrashCamera
 
 	private Vector3 _eye;
 	private float _groundY;
+	private float _aimGroundY;
 	private float _heldGroundY;
 	private float _lead;
+	private float _push;
 	private float _pull = 1.0f;
 	private float _pitch = DefaultPitch;
 	private float _pitchRate;
@@ -100,8 +113,8 @@ public sealed class CrashCamera
 	public void Snap(Vector3 feet, float facingDegrees)
 	{
 		float r = facingDegrees * (MathF.PI / 180.0f);
-		_groundY = _heldGroundY = feet.Y;
-		_lead = 0.0f;
+		_groundY = _aimGroundY = _heldGroundY = feet.Y;
+		_lead = _push = 0.0f;
 		_pull = 1.0f;
 		_pitch = DefaultPitch;
 		_pitchRate = _yawRate = 0.0f;
@@ -116,12 +129,10 @@ public sealed class CrashCamera
 	public void Update(float dt, Vector3 feet, bool grounded, Vector3 facing, Vector3 velocity, float turnDegrees, float pitchDegrees, Vector2 stick)
 	{
 		_drownClock = -1.0f;
-		if (grounded || feet.Y < _heldGroundY - DropFollow)
-		{
-			_heldGroundY = feet.Y;
-		}
+		_heldGroundY = grounded ? feet.Y : Math.Clamp(_heldGroundY, feet.Y - Table(s_aim, _pitch), feet.Y + DropFollow);
 		float follow = 1.0f - MathF.Exp(-dt / FollowLag);
 		_groundY += (_heldGroundY - _groundY) * follow;
+		_aimGroundY += (_heldGroundY - _aimGroundY) * (1.0f - MathF.Exp(-dt / AimLag));
 
 		// Stick rates ease in; pitch fades into its limits, and returns to the default while he moves.
 		float ease = 1.0f - MathF.Exp(-dt / StickEase);
@@ -140,10 +151,13 @@ public sealed class CrashCamera
 		Vector2 toCrash = new(feet.X - _eye.X, feet.Z - _eye.Z);
 		Vector2 view = toCrash.LengthSquared() > 1e-6f ? Vector2.Normalize(toCrash) : new Vector2(0.0f, -1.0f);
 		Vector2 right = new(-view.Y, view.X);
-		float lead = Vector2.Dot(new Vector2(facing.X, facing.Z), right) * LeadFacing
-			+ Vector2.Dot(new Vector2(velocity.X, velocity.Z), right) * LeadVelocity;
-		_lead += (lead - _lead) * (1.0f - MathF.Exp(-dt / LeadLag));
-		Vector2 focus = new Vector2(feet.X, feet.Z) + right * _lead;
+		Vector2 face = new(facing.X, facing.Z);
+		float lead = Vector2.Dot(face, right) * LeadFacing + Vector2.Dot(new Vector2(velocity.X, velocity.Z), right) * LeadVelocity;
+		float push = MathF.Max(0.0f, -Vector2.Dot(face, view)) * LeadPush;
+		float leadEase = 1.0f - MathF.Exp(-dt / LeadLag);
+		_lead += (lead - _lead) * leadEase;
+		_push += (push - _push) * leadEase;
+		Vector2 focus = new Vector2(feet.X, feet.Z) + right * _lead - view * _push;
 
 		// Manual orbit about the focus. A pitch change rescales the flat distance at once; the string
 		// then pulls the eye toward the flat distance for this pitch.
@@ -163,7 +177,8 @@ public sealed class CrashCamera
 		float rise = Table(s_radius, _pitch) * MathF.Sin(_pitch * (MathF.PI / 180.0f));
 		_eye = new Vector3(eye.X, _groundY + aimHeight + rise, eye.Y);
 
-		Vector3 aim = new(focus.X, _groundY + aimHeight, focus.Y);
+		// The look point never lags below his feet: on a launch it rides with him while the eye catches up.
+		Vector3 aim = new(focus.X, MathF.Max(_aimGroundY + aimHeight, feet.Y), focus.Y);
 		Apply(aim, Collide(aim, _eye, dt));
 	}
 
