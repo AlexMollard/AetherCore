@@ -142,6 +142,7 @@ public sealed class TwinsanityCutscenes
 		public bool ClipLoops;
 		public float ClipTime, ClipLength;
 		public int Shots;                          // Cmd591s run by this agent's scene, for the shot table
+		public Agent? Requested;                   // RequestFocus2's find (message/hand target 0xF8)
 	}
 
 	private sealed class Machine
@@ -177,6 +178,15 @@ public sealed class TwinsanityCutscenes
 	private Vector3 _camEye, _camTarget;
 	private float _sceneClock;
 	private int _speech;          // Audio voice id of the playing speech line
+	private float _speechEnds;    // Time.TotalTime the line runs out: "dialogue busy" (condition 122)
+	// ponytail: the engine cannot report a voice's length or whether it still plays, so the hub's speech
+	// lines carry their lengths here (the extracted track_<n>.wav, 32 kHz mono). Upgrade path: an engine
+	// voice-length/playing query, then drop this table. An unlisted track counts as 3 s.
+	private static readonly Dictionary<int, float> s_speechSeconds = new()
+	{
+		[47] = 12.59f, [48] = 4.24f, [52] = 11.78f, [74] = 12.34f, [100] = 36.72f, [127] = 16.87f,
+		[129] = 5.52f, [130] = 5.17f, [132] = 5.23f, [133] = 3.28f, [141] = 4.76f,
+	};
 	private const float SpeechVolume = 1.0f;
 	private readonly TwinsanitySkipPrompt _prompt = new();    // game seconds since CutsceneStart, for the log
 
@@ -612,15 +622,24 @@ public sealed class TwinsanityCutscenes
 				continue;
 			}
 			Rule? fired = null;
-			foreach (Rule r in st.Rules)
+			// Else (condition 2) is the fall-through wherever the list puts it: the training director's
+			// subtype switch lists it first (COM_TRAINING_CUTSCENE_DIRECTOR_ACTIVATED s1).
+			foreach (bool fallThrough in s_passes)
 			{
-				if (r.To < 0 && m.FiredInPlace.Contains(r))
+				foreach (Rule r in st.Rules)
 				{
-					continue;
+					if ((r.Cond == 2) != fallThrough || (r.To < 0 && m.FiredInPlace.Contains(r)))
+					{
+						continue;
+					}
+					if (Condition(m, r) != r.Not)
+					{
+						fired = r;
+						break;
+					}
 				}
-				if (Condition(m, r) != r.Not)
+				if (fired != null)
 				{
-					fired = r;
 					break;
 				}
 			}
@@ -717,6 +736,10 @@ public sealed class TwinsanityCutscenes
 				return m.Busy;
 			case 66: // FocusIsBusy
 				return a.Focus?.Machine?.Busy ?? false;
+			case 77: // RequestFocus2 found its object
+				return a.Requested != null;
+			case 122: // dialogue busy: the speech line is still playing
+				return Time.TotalTime < _speechEnds;
 			case 572: // CutsceneSkipped: taken by UpdateSkip, never polled
 			case 642: // is a cutscene already running (BEGIN skips its own start when it is)
 				return false;
@@ -734,6 +757,10 @@ public sealed class TwinsanityCutscenes
 		{
 			case 556: // SetFocusToPlayer
 				a.Focus = _player;
+				break;
+			case 564: // RequestFocus2: the nearest instance of object (arg 5 & 0xFFFF) within arg 11 of the
+			          // requester (the training directors find Coco, object 412, at 20/40/400)
+				a.Requested = Nearest(a.Position, (int)(Arg(5) & 0xFFFF), BitConverter.UInt32BitsToSingle(Arg(11)));
 				break;
 			case 146: // focus a linked instance. ponytail: only 256 (the first link) occurs on the hub.
 				a.Focus = Linked(a, Math.Max(0, (int)(Arg(0) >> 8) - 1));
@@ -800,8 +827,10 @@ public sealed class TwinsanityCutscenes
 				break;
 			case 185: // start a speech line: ENGLISH.MB stream <int arg> (tw-extract --voice -> audio/voice/track_<n>.wav)
 				StopSpeech();
-				_speech = Audio.Play($"project://assets/audio/voice/track_{Arg(0) >> 3}.wav", SpeechVolume);
-				Log.Info($"[Cutscenes] speech {Arg(0) >> 3} ({a.Name}) at {_sceneClock:F2} s");
+				int track = (int)(Arg(0) >> 3);
+				_speech = Audio.Play($"project://assets/audio/voice/track_{track}.wav", SpeechVolume);
+				_speechEnds = Time.TotalTime + s_speechSeconds.GetValueOrDefault(track, 3.0f);
+				Log.Info($"[Cutscenes] speech {track} ({a.Name}) at {_sceneClock:F2} s");
 				break;
 			case 186: // stop the speech line
 				StopSpeech();
@@ -887,8 +916,31 @@ public sealed class TwinsanityCutscenes
 	private Agent? Target(Agent a, uint selector) => (selector & 0xFF) switch
 	{
 		FocusTarget => a.Focus,
+		RequestedTarget => a.Requested,
 		_ => Linked(a, (int)(selector & 0xFF)),
 	};
+
+	private static readonly bool[] s_passes = { false, true }; // rules first, then Else
+	private const int RequestedTarget = 0xF8;
+
+	private Agent? Nearest(Vector3 from, int obj, float range)
+	{
+		Agent? best = null;
+		float bestSq = range * range;
+		foreach (Chunk c in _chunks)
+		{
+			foreach (Agent x in c.Instances.Values)
+			{
+				float d = Vector3.DistanceSquared(x.Position, from);
+				if (x.Object == obj && d <= bestSq)
+				{
+					best = x;
+					bestSq = d;
+				}
+			}
+		}
+		return best;
+	}
 
 	private Agent? Linked(Agent a, int index) =>
 		index >= 0 && index < a.Links.Length && a.Chunk.Instances.TryGetValue((a.Layer, a.Links[index]), out Agent? l) ? l : null;

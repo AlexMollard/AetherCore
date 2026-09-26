@@ -72,6 +72,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		// Baked crates: the body is a CHILD of the model (one selectable unit in the editor), so
 		// it follows the model's transform and must not be moved again by the fall code.
 		public bool BodyIsChild;
+		// Where the bottom of its column stood at load: the fall's floor when the ground ray sees no
+		// terrain (it hit a crate body still being destroyed, or started under the ground).
+		public float ColumnFloor;
 	}
 
 	private readonly List<Crate> _crates = new();
@@ -134,6 +137,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 
 		CrateFx.RegisterObjectModels(_objectModels);
+		foreach (Crate c in _crates)
+		{
+			c.ColumnFloor = _crates.Where(s => OverFootprint(c, s)).Min(s => s.Base.Y);
+		}
 		OpenStartCheckpoint();
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
 		if (!IntroMovie || !_movie.Play("H01_A", () => TwinsanityAudio.Start(LevelPath)))
@@ -1010,7 +1017,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			// crate's body - its own included - is a stale lid that froze the fall mid-air.
 			RaycastHit ground = Physics.Raycast(c.Base - new Vector3(0.0f, 0.005f, 0.0f), -Vector3.UnitY, 60.0f);
 			bool terrain = ground.DidHit && !_crates.Exists(s => s.Body.Id == ground.Entity.Id);
-			float floor = MathF.Max(support, terrain ? ground.Position.Y : float.MinValue);
+			float floor = MathF.Max(support, terrain ? ground.Position.Y : c.ColumnFloor);
 			c.FallSpeed += kStackGravity * dt;
 			float y = c.Base.Y - c.FallSpeed * dt;
 			if (y <= floor)
