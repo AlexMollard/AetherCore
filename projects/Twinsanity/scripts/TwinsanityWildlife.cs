@@ -23,8 +23,9 @@ namespace AetherGame;
 /// - Crab: act_UTIL_ECOLOGY_MANAGER spawns five at the key nearest Crash once he is within
 ///   80 m (script 6400; counter 40 in steps of 8); a crab notices Crash inside 10 m, waits
 ///   3.5 s and then charges at 2.7 m/s (rig) - touching him hurts.
-/// - Skunk: the generic COM_CREATURE_BASIC charger: angry inside 11.2 m, charges, melees
-///   inside 4 m, gives up beyond 17.3 m.
+/// - Skunk: patrols its instance path (COM_CREATURE_BASIC_IDLE_PATROL) at the instance's walk
+///   speed (floats[2], 2.2 m/s), pausing ~1.3 s to turn at each end; it never chases Crash
+///   (rig: logs/audit/skunk_patrol_rig.csv). Touching it hurts; his attacks kill it.
 /// - Worm: fixed in place, 2.5 m under its hole; pops up when Crash is within 14.1 m and sinks
 ///   beyond 13.4 m (script 200 / 180). Landing on a popped worm launches Crash (Mechanics).
 /// - Monkey: when Crash is within 20.6 m (script 425) it climbs its wumpa tree, shakes a fruit
@@ -71,6 +72,10 @@ public sealed partial class TwinsanityActors
 	private const float CrabNoticeDelay = 3.5f;
 	private const float CrabSpeed = 2.7f;
 	private const float CrabGiveUp = 20.0f;
+	// Skunk (rig: logs/audit/skunk_patrol_rig.csv). Walk speed is the instance's floats[2].
+	private const float SkunkWalk = 2.2f;
+	private const float SkunkArrive = 0.36f;
+	private const float SkunkTurnPause = 1.3f;
 	// Worm (script COM_EARTH_WORM_START, rig track_worm.csv).
 	private const float WormPopRadius = 14.14f;
 	private const float WormHideRadius = 13.42f;
@@ -128,6 +133,7 @@ public sealed partial class TwinsanityActors
 		public float FruitLife;
 		public float Notice, NoticeDelay, GiveUp;
 		public float Timer2;
+		public float Speed;
 		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1;
 	}
 
@@ -255,12 +261,26 @@ public sealed partial class TwinsanityActors
 				c.Mode = Mode.Idle;
 				break;
 			case Behaviour.Skunk:
-				// COM_CREATURE_BASIC_DEFAULT turns angry inside 11.2 m (125); BASIC_ANGRY_CHARGE
-				// gives up beyond 17.3 m (300) and melees (a021) inside 4 m (16).
+				// COM_CREATURE_BASIC_IDLE_PATROL: a002 walk to the next route key, a001 while turning.
+				// Rig (logs/audit/skunk_patrol_rig.csv, huba skunk 12): 2.15 m/s legs (the instance's
+				// floats[2] = 2.2), stops ~0.36 m short of each key and stands 1.3 s before heading
+				// back - a ping-pong along the keys, never off them.
 				c.WalkClip = Animation.Find(e, "a002");
-				c.ThrowClip = Animation.Find(e, "a021");
-				c.Notice = 11.18f;
-				c.GiveUp = 17.32f;
+				c.Points = PointList(instance, "points", transform);
+				c.Speed = SkunkWalk;
+				if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("floats", out JsonElement fl) && fl.GetArrayLength() > 2)
+				{
+					c.Speed = fl[2].GetSingle();
+				}
+				c.Mode = Mode.Walk;
+				break;
+			case Behaviour.Piranha:
+				// COM_PIRANHAPLANT_DEFAULT: a001 idle, a007 rears up on noticing Crash, a010 watching,
+				// a011 bite; COM_PIRANHAPLANT_DAMAGED plays a004 and holds it (knocked flat for good).
+				c.PopClip = Animation.Find(e, "a007");
+				c.RestClip = Animation.Find(e, "a010");
+				c.ThrowClip = Animation.Find(e, "a011");
+				a.DeathClip = Animation.Find(e, "a004");
 				c.Mode = Mode.Idle;
 				break;
 			case Behaviour.Worm:
@@ -390,14 +410,14 @@ public sealed partial class TwinsanityActors
 		for (int i = 0; i < _actors.Count; i++)
 		{
 			Actor? x = _actors[i];
-			if (!x.Alive || x.Critter == null || x.DeathTimer >= 0.0f)
+			if (!x.Alive || x.Critter == null || x.DeathTimer >= 0.0f || x.Kind == Behaviour.Piranha)
 			{
 				continue;
 			}
 			for (int j = i + 1; j < _actors.Count; j++)
 			{
 				Actor? y = _actors[j];
-				if (!y.Alive || y.Critter == null || y.DeathTimer >= 0.0f)
+				if (!y.Alive || y.Critter == null || y.DeathTimer >= 0.0f || y.Kind == Behaviour.Piranha)
 				{
 					continue;
 				}
@@ -435,12 +455,117 @@ public sealed partial class TwinsanityActors
 			Vector3 p = a.Model.Position;
 			if (new Vector2(center.X - p.X, center.Z - p.Z).Length() < radius && MathF.Abs(center.Y - p.Y) < radius)
 			{
+				if (a.Kind == Behaviour.Piranha)
+				{
+					if (a.Critter?.Mode != Mode.Rest)
+					{
+						KnockFlat(a, a.Critter);
+					}
+					continue;
+				}
 				PlayClip(a, a.DeathClip >= 0 ? a.DeathClip : a.MoveClip);
 				SetLooping(a.Model, false);
 				a.DeathTimer = 1.0f;
 				TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, p);
 			}
 		}
+	}
+
+	// Piranha plant (COM_PIRANHAPLANT_DEFAULT, rig logs/audit/piranha_rig_*): rooted. Crash inside
+	// 14.1 m (MeToPlayerSqrDist 200) makes it rear up (a007) and watch him (a010), turned to face
+	// him; inside 5.48 m (sqr 30) it bites (a011) over and over, ~2 s a bite. The bite's
+	// CreateDamage lands 0.48 s in (the script's 0.25 + 0.23 s waits) and reaches ~3 m: on the rig
+	// a bite at 5 m misses, at 2.8 m it takes a mask and knocks him back. A spin, slide or slam
+	// knocks it flat (a004, held) for good - it stays in the world, harmless.
+	private const float PiranhaNotice = 14.14f;
+	private const float PiranhaBite = 5.48f;
+	private const float PiranhaBiteHitAt = 0.48f;
+	// ponytail: the bite reach is bracketed by two rig samples (miss at 5 m, hit at 2.8 m); 3.2 m
+	// sits inside. Upgrade path: step Crash out from 2.8 m on the rig until a bite misses.
+	private const float PiranhaReach = 3.2f;
+	private const float PiranhaSpinReach = 2.0f;
+
+	private void UpdatePiranha(Actor a, Critter c, float dt, Vector3 crashPos)
+	{
+		if (c.Mode == Mode.Rest)
+		{
+			return;
+		}
+		Vector3 p = a.Model.Position;
+		float d = Horizontal(p, crashPos);
+		CrashPlayer? player = _player;
+		if (player != null && d < PiranhaSpinReach && MathF.Abs(crashPos.Y - p.Y) < 2.0f
+			&& (player.IsSpinning || player.IsSliding || player.IsSlamming))
+		{
+			KnockFlat(a, c);
+			return;
+		}
+		if (c.Mode != Mode.Idle && d > 0.01f)
+		{
+			FaceMovement(a, new Vector3(crashPos.X - p.X, 0.0f, crashPos.Z - p.Z));
+		}
+		switch (c.Mode)
+		{
+			case Mode.Idle:
+				PlayClip(a, a.IdleClip);
+				if (d < PiranhaNotice)
+				{
+					c.Mode = Mode.Up;
+					c.Timer = 1.32f; // a007
+					PlayClip(a, c.PopClip);
+				}
+				break;
+			case Mode.Up:
+				c.Timer -= dt;
+				if (c.Timer <= 0.0f)
+				{
+					c.Mode = Mode.Circle;
+				}
+				break;
+			case Mode.Circle:
+				PlayClip(a, c.RestClip);
+				if (d >= PiranhaNotice)
+				{
+					c.Mode = Mode.Idle;
+				}
+				else if (d < PiranhaBite)
+				{
+					c.Mode = Mode.Throw;
+					c.Timer = 0.0f;
+					c.Landed = false;
+					Animation.CrossFade(a.Model, c.ThrowClip, 0.1f);
+				}
+				break;
+			case Mode.Throw:
+				c.Timer += dt;
+				if (!c.Landed && c.Timer >= PiranhaBiteHitAt)
+				{
+					c.Landed = true;
+					if (d < PiranhaReach && MathF.Abs(crashPos.Y - p.Y) < 2.0f)
+					{
+						_host?.DamagePlayer(p, DeathKind.Generic);
+					}
+				}
+				if (c.Timer >= 1.92f) // a011
+				{
+					c.Mode = Mode.Circle;
+				}
+				break;
+		}
+	}
+
+	private static void KnockFlat(Actor a, Critter? c)
+	{
+		if (c != null)
+		{
+			c.Mode = Mode.Rest;
+		}
+		SetLooping(a.Model, false);
+		if (a.DeathClip >= 0)
+		{
+			Animation.CrossFade(a.Model, a.DeathClip, 0.1f);
+		}
+		TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, a.Model.Position);
 	}
 
 	// Ground creatures set off nitro crates on contact (TwinsanityLevel implements the crate side).
@@ -791,8 +916,7 @@ public sealed partial class TwinsanityActors
 					c.Mode = Mode.Walk;
 					break;
 				}
-				// ponytail: the skunk's charge speed was not captured (it lives 120 m from the rig's
-				// start); it shares the crab's measured 2.7 m/s. Upgrade path: track one on the rig.
+				// ponytail: the crab charge speed is the measured 2.7 m/s.
 				PlayClip(a, c.ThrowClip >= 0 && d < 4.0f ? c.ThrowClip : c.WalkClip);
 				if (d > 0.6f)
 				{
@@ -811,6 +935,54 @@ public sealed partial class TwinsanityActors
 					c.Timer2 = RandomRange(2.0f, 6.0f);
 				}
 				break;
+		}
+	}
+
+	// Ping-pong along the route keys at the instance speed, standing SkunkTurnPause at each end.
+	// Crash does not change its route: it only hurts him on contact (or dies to his attacks).
+	private void UpdateSkunk(Actor a, Critter c, float dt, Vector3 crashPos)
+	{
+		TouchCrash(a, crashPos);
+		if (a.DeathTimer >= 0.0f)
+		{
+			return;
+		}
+		if (c.Points.Count == 0)
+		{
+			PlayClip(a, a.IdleClip);
+			return;
+		}
+		if (c.Mode == Mode.Idle)
+		{
+			PlayClip(a, a.IdleClip);
+			c.Timer -= dt;
+			if (c.Timer <= 0.0f)
+			{
+				c.Mode = Mode.Walk;
+			}
+			return;
+		}
+		PlayClip(a, c.WalkClip >= 0 ? c.WalkClip : a.IdleClip);
+		Vector3 key = c.Points[c.PathIndex];
+		WalkTo(a, key, c.Speed, dt, true);
+		if (Horizontal(a.Model.Position, key) > SkunkArrive)
+		{
+			return;
+		}
+		if (c.Points.Count > 1)
+		{
+			if (c.PathIndex + (int)c.Sign < 0 || c.PathIndex + (int)c.Sign >= c.Points.Count)
+			{
+				c.Sign = -c.Sign;
+				c.Mode = Mode.Idle;
+				c.Timer = SkunkTurnPause;
+			}
+			c.PathIndex += (int)c.Sign;
+		}
+		else
+		{
+			c.Mode = Mode.Idle;
+			c.Timer = float.MaxValue;
 		}
 	}
 

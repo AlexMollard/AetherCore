@@ -36,6 +36,7 @@ public sealed partial class TwinsanityActors
 		Crab,      // notices Crash, charges him
 		Skunk,     // turns angry and charges Crash
 		Worm,      // fixed pop-up worm
+		Piranha,   // rooted flycatcher: watches Crash, bites when he is close
 		Monkey,    // throws fruit from its tree at Crash
 		Enemy,     // chases Crash when close; touch hurts, spin/jump/slam kills it
 		Pickup,    // spins; collected on touch
@@ -101,6 +102,14 @@ public sealed partial class TwinsanityActors
 		e.Position = position;
 		e.EulerDegrees = eulerDegrees;
 		e.LoadModel(model);
+		if (key.StartsWith("act_redwumpa"))
+		{
+			// Wumpa cast no shadow (as TwinsanityWumpa.SpawnModel): at distance they show as specks.
+			for (int i = 0; i < e.ChildCount; i++)
+			{
+				MeshRenderer.SetCastShadows(e.GetChild(i), false);
+			}
+		}
 
 		Actor a = new()
 		{
@@ -128,7 +137,7 @@ public sealed partial class TwinsanityActors
 			_pickups.Add(a);
 		}
 		if (a.Kind is Behaviour.Seagull or Behaviour.Butterfly or Behaviour.Flock or Behaviour.Chicken
-			or Behaviour.Crab or Behaviour.Skunk or Behaviour.Worm or Behaviour.Monkey)
+			or Behaviour.Crab or Behaviour.Skunk or Behaviour.Worm or Behaviour.Monkey or Behaviour.Piranha)
 		{
 			SetupCritter(a, objectName, instance, transform);
 			if (a.Kind == Behaviour.Flock)
@@ -185,8 +194,13 @@ public sealed partial class TwinsanityActors
 					UpdateChicken(a, a.Critter!, dt, crashPos);
 					break;
 				case Behaviour.Crab:
-				case Behaviour.Skunk:
 					UpdateCrab(a, a.Critter!, dt, crashPos);
+					break;
+				case Behaviour.Skunk:
+					UpdateSkunk(a, a.Critter!, dt, crashPos);
+					break;
+				case Behaviour.Piranha:
+					UpdatePiranha(a, a.Critter!, dt, crashPos);
 					break;
 				case Behaviour.Worm:
 					UpdateWorm(a, a.Critter!, dt, crashPos);
@@ -400,7 +414,11 @@ public sealed partial class TwinsanityActors
 		{
 			return Behaviour.Monkey;
 		}
-		if (n.StartsWith("act_earth_tribesman") || n.StartsWith("act_piranhaplant") || n.StartsWith("act_cortex_training_miniboss") || n.StartsWith("act_cortex_creature"))
+		if (n.StartsWith("act_piranhaplant"))
+		{
+			return Behaviour.Piranha;
+		}
+		if (n.StartsWith("act_earth_tribesman") || n.StartsWith("act_cortex_training_miniboss") || n.StartsWith("act_cortex_creature"))
 		{
 			return Behaviour.Enemy;
 		}
