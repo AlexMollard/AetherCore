@@ -21,16 +21,24 @@ public static class MechanicsWorm
 	// 29.6-30 a frame later). Measured true rise off worm1 (Crash's world matrix, logs/cameralean/
 	// bounce_rig_worm1.csv): 9.69 m, apex 0.62 s after take-off. At 30 the engine rose 8.97 in 0.55 s.
 	private static readonly float LaunchVelocity = MathF.Sqrt(2.0f * LaunchGravity * LaunchHeight);
+	// On the rig he lands on the popped worm's top, 1.94 m over its hole (h 2.078 on hubb worm 35 at
+	// 0.141), rides the squash and leaves from there: the apex is the same over every worm (hubb 35
+	// and 20: 11.2 and 11.1 over the hole, logs/hubroute/rig_launch35.csv, rig_bounce2). The engine
+	// worm has no top to stand on, so he is caught anywhere 0.3-1.6 m over the hole; launch him as if
+	// from the top so a late catch (a low frame rate) does not cost height (hubb worm 20 lost 1 m).
+	private const float WormTop = 1.94f;
 
-	/// <summary>Launch Crash off the worm at <paramref name="wormPos"/>. Returns false when he is not
-	/// falling onto it (rising through it, or already launched this contact).</summary>
-	public static bool TryLaunch(CrashPlayer player, Vector3 wormPos)
+	/// <summary>Launch Crash, feet at <paramref name="crashY"/>, off the worm whose hole is at
+	/// <paramref name="wormPos"/>. Returns false when he is not falling onto it (rising through it, or
+	/// already launched this contact).</summary>
+	public static bool TryLaunch(CrashPlayer player, Vector3 wormPos, float crashY)
 	{
 		if (player.Velocity.Y > 0.0f)
 		{
 			return false;
 		}
-		player.Bounce(LaunchVelocity);
+		float below = MathF.Max(0.0f, wormPos.Y + WormTop - crashY);
+		player.Bounce(MathF.Sqrt(LaunchVelocity * LaunchVelocity + 2.0f * LaunchGravity * below));
 		return true;
 	}
 }

@@ -108,6 +108,7 @@ public sealed partial class TwinsanityActors
 	private const float WormTravelSpeed = 13.0f; // MOVE S4/S12: to the next key, 2 m under
 	private const float WormRiseSpeed = 10.0f;   // MOVE S7: up 2.5 m
 	private const float WormLoneWait = 1.0f;     // MOVE S5: a worm with no other hole waits 1 s
+	private const float WormAwayDwell = 10.0f;   // START S9 TimeInUnit 10 away from its first key
 	// Monkey (script COM_GLOBAL_MONKEY_ECOLOGY_IDLE, rig track_monkey.csv).
 	private const float MonkeyAggro = 20.6f;
 	private const float MonkeyMinRange = 4.0f;
@@ -162,6 +163,8 @@ public sealed partial class TwinsanityActors
 		public float Notice, GiveUp;
 		public float Timer2;
 		public float Speed;
+		public float Dwell;     // worm: time up since it came out of a hole after a move
+		public bool AfterMove;  // worm: idling in START S0 after a move (no hide check)
 		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1;
 	}
 
@@ -1389,6 +1392,10 @@ public sealed partial class TwinsanityActors
 		float d = Vector3.Distance(a.Home, crashPos);
 		Vector3 down = a.Home - new Vector3(0.0f, WormDepth, 0.0f);
 		Vector3 p = a.Model.Position;
+		if (c.Mode != Mode.Up)
+		{
+			c.Dwell = 0.0f;
+		}
 		switch (c.Mode)
 		{
 			case Mode.Down:
@@ -1423,7 +1430,30 @@ public sealed partial class TwinsanityActors
 					PlayClip(a, a.IdleClip);
 				}
 				c.Timer = MathF.Max(0.0f, c.Timer - dt);
-				if (d > WormHideRadius && a.Model.Position.Y >= a.Home.Y)
+				// After a move the worm idles in START S0, which has no hide check, and S0's TimeInUnit 10
+				// sends it on to the next key unless it is at its first (rig: worm 35 stayed up 10.3 s at
+				// hole 2 with Crash 5 m and 19 m off, then went back to hole 1 and stayed there -
+				// logs/hubroute/rig_worm_dwell.csv, rig_worm_dwell2.csv). A squash or a spin restarts
+				// START, and so the count.
+				if (c.AfterMove && a.Model.Position.Y >= a.Home.Y && !TwinsanityCutscenes.Active)
+				{
+					c.Dwell += dt;
+					if (c.Dwell >= WormAwayDwell)
+					{
+						c.Dwell = 0.0f;
+						if (c.PathIndex != 0)
+						{
+							c.Mode = Mode.Sink;
+							c.Landed = false;
+							PlayClip(a, c.SinkClip);
+							TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);
+							break;
+						}
+						c.AfterMove = false;
+					}
+				}
+				// A scene holds a popped worm up (rig: scene B's worm 35 stays up at hole 2, Crash 31 m off).
+				if (d > WormHideRadius && a.Model.Position.Y >= a.Home.Y && !c.AfterMove && !TwinsanityCutscenes.Active)
 				{
 					c.Mode = Mode.Down;
 					c.Timer2 = -1.0f;
@@ -1443,18 +1473,20 @@ public sealed partial class TwinsanityActors
 						PlayClip(a, c.SinkClip);
 						TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);
 					}
-					else if (h < 0.8f && crashPos.Y > a.Home.Y + 0.3f && crashPos.Y < a.Home.Y + 1.6f && MechanicsWorm.TryLaunch(player, a.Home))
+					else if (h < 0.8f && crashPos.Y > a.Home.Y + 0.3f && crashPos.Y < a.Home.Y + 1.6f && MechanicsWorm.TryLaunch(player, a.Home, crashPos.Y))
 					{
 						PlayClip(a, c.SquashClip);
 						c.Landed = false;
 						c.Timer = 1.7f;
 						c.Timer2 = 0.0f;
+						c.Dwell = 0.0f;
 					}
 					else if (h < 1.3f && player.IsSpinning && c.Timer <= 0.0f)
 					{
 						PlayClip(a, c.SpunClip);
 						c.Landed = false;
 						c.Timer = 1.7f;
+						c.Dwell = 0.0f;
 					}
 					else if (c.Timer <= 0.0f)
 					{
@@ -1570,11 +1602,49 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
+	/// <summary>A scene actor's blow on a live worm (Coco's landings in hubb scene B, the impact messages of
+	/// COM_COCO_CUTSCENE_L01B's cmd 158): `slam` is 230 -> COM_EARTH_WORM_SLAMMED (sink and move to the next
+	/// hole, as Crash's slam), otherwise 226 -> _SQUASHLAUNCH_NOIMPULSE (the squash dip, no launch of Crash).
+	/// The nearest worm within 2 m of `at` takes it.</summary>
+	public void ScriptedWormHit(Vector3 at, bool slam)
+	{
+		Actor? a = null;
+		float best = 4.0f;
+		foreach (Actor x in _actors)
+		{
+			float d = Horizontal(x.Home, at);
+			if (x.Kind == Behaviour.Worm && x.Critter != null && d * d < best)
+			{
+				(a, best) = (x, d * d);
+			}
+		}
+		if (a == null)
+		{
+			return;
+		}
+		Critter c = a.Critter!;
+		c.Landed = false;
+		if (slam)
+		{
+			c.Mode = Mode.Sink;
+			c.Timer2 = -1.0f;
+			PlayClip(a, c.SinkClip);
+			TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);
+		}
+		else
+		{
+			PlayClip(a, c.SquashClip);
+			c.Timer = 1.7f;
+			c.Timer2 = 0.0f;
+		}
+	}
+
 	// MOVE S6/S7: a005 and up 2.5 m at 10 m/s out of the (new) hole; START takes over from there.
 	private static void Emerge(Actor a, Critter c)
 	{
 		c.Mode = Mode.Up;
 		c.Timer = 0.0f;
+		c.AfterMove = true;
 		if (c.PopClip >= 0)
 		{
 			Animation.CrossFade(a.Model, c.PopClip, 0.2f);
