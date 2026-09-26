@@ -291,6 +291,13 @@ AE_SCRIPT_API void aether_ui_set_image_texture(std::uint32_t id, const char* pat
 	{
 		return;
 	}
+	// The image owns one registry ref; hand the old one back before replacing or clearing it,
+	// or every swap (HUD digits, movie frames) leaks a texture for the rest of the session.
+	auto& textures = ctx.assets->GetTextureRegistry();
+	if (img->texture.IsValid())
+	{
+		textures.Release(img->texture);
+	}
 	if (path == nullptr || path[0] == '\0')
 	{
 		img->texture = aether::TextureHandle{};
@@ -299,7 +306,7 @@ AE_SCRIPT_API void aether_ui_set_image_texture(std::uint32_t id, const char* pat
 		return;
 	}
 	img->texturePath = path;
-	img->texture = ctx.assets->GetTextureRegistry().Acquire(path);
+	img->texture = textures.Acquire(path);
 	img->textureDirty = false;
 	});
 }
