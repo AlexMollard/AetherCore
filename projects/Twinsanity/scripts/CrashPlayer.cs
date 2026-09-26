@@ -349,6 +349,9 @@ public sealed class CrashPlayer : EntityScript
 	/// <summary>The y the drowning body floats up to (the water surface). Set by the level.</summary>
 	public float DrownSurfaceY { get; set; } = -1.5f;
 
+	private const float DrownDrift = 0.9f;
+	private Vector3 _deathDrift;
+
 	/// <summary>Kills Crash: takes control away, keeps the model visible and plays the original
 	/// death clip for the kind. Returns the seconds until the level should respawn him.</summary>
 	public float Die(DeathKind kind)
@@ -367,6 +370,9 @@ public sealed class CrashPlayer : EntityScript
 			DeathKind.Fall => DeathPlan.Fall,
 			_ => DeathPlan.Generic,
 		};
+		// A drowning keeps his run for DrownDrift: on the rig (logs/camera c_drownN in rig_samples.csv) he
+		// carries on out to sea at the speed he went under (~8.9/s, ~8 units) and stops dead 0.9 s later.
+		_deathDrift = _deathPlan.FloatToSurface ? _horizontal with { Y = 0.0f } : Vector3.Zero;
 		_horizontal = Vector3.Zero;
 		_vy = 0.0f;
 		_spinTime = 0.0f;
@@ -423,6 +429,10 @@ public sealed class CrashPlayer : EntityScript
 	// face-down on the surface, rippling). The level respawns him after the seconds Die returned.
 	private void StepDeath(float deltaTime)
 	{
+		if (_deathClock <= DrownDrift && _deathDrift != Vector3.Zero)
+		{
+			Self.Position += _deathDrift * deltaTime;
+		}
 		PlaceModel(deltaTime);
 		PlaceCamera(deltaTime);
 	}
@@ -1064,12 +1074,18 @@ public sealed class CrashPlayer : EntityScript
 
 	private void PlaceCamera(float deltaTime)
 	{
-		// A drowning pulls the view up with the floating body (the rig ends looking down at him
-		// on the surface, not at the controller still on the drowning plane below).
-		float lift = _dead && _deathPlan.FloatToSurface ? _deathLift : 0.0f;
-		if (!TwinsanityCutscenes.OwnsCamera) // an in-engine cutscene's scripted camera holds the view
+		if (TwinsanityCutscenes.OwnsCamera) // an in-engine cutscene's scripted camera holds the view
 		{
-			_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_facing), _horizontal, _lookTurn, _lookPitch, _dead ? Vector2.Zero : _lookStick, lift);
+			// nothing: the scene drives the camera
+		}
+		else if (_dead && _deathPlan.FloatToSurface)
+		{
+			// A drowning hands the view to the rig's drowning shot, framed on the floating body.
+			_camera.Drown(deltaTime, Self.Position, DrownSurfaceY);
+		}
+		else
+		{
+			_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_facing), _horizontal, _lookTurn, _lookPitch, _dead ? Vector2.Zero : _lookStick);
 		}
 		_lookTurn = 0.0f;
 		_lookPitch = 0.0f;

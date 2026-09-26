@@ -56,6 +56,17 @@ public sealed class CrashCamera
 	private static readonly float[] s_radius = { 2.88f, 6.04f, 7.47f, 10.13f, 12.87f };
 	private static readonly float[] s_aim = { 1.65f, 2.14f, 2.5f, 3.04f, 3.5f };
 
+	// Drowning (rig c_drownN in rig_samples.csv, logs/camera/drown_*.png): the follow stops and a fixed move
+	// takes over, sampled every 0.1 s from the moment he goes under the drowning plane, against his body and
+	// the water surface. The eye keeps its follow pose for 0.2 s, rises over him to look almost straight down
+	// (87 deg, 11.4 above the water, at 0.9 s), then swings back out along the same bearing and settles 9.3
+	// back and 3.3 above the water, looking 26 deg down at him (2.8 s), where it holds until the respawn.
+	private const float DrownStep = 0.1f;
+	private const float DrownBlend = 0.3f;
+	private static readonly float[] s_drownBack = { 7.13f, 7.21f, 7.28f, 7.19f, 6.89f, 6.40f, 5.70f, 4.40f, 2.84f, 1.98f, 2.40f, 3.14f, 4.05f, 5.07f, 6.15f, 7.16f, 7.92f, 8.49f, 8.89f, 9.17f, 9.31f, 9.34f, 9.31f, 9.29f, 9.28f, 9.28f, 9.27f, 9.27f, 9.27f, 9.27f, 9.27f };
+	private static readonly float[] s_drownHeight = { 4.90f, 4.82f, 4.72f, 5.19f, 6.17f, 7.32f, 8.52f, 9.84f, 10.90f, 11.41f, 11.66f, 11.84f, 11.93f, 11.91f, 11.78f, 11.41f, 10.66f, 9.74f, 8.69f, 7.61f, 6.51f, 5.43f, 4.48f, 3.94f, 3.66f, 3.51f, 3.42f, 3.38f, 3.36f, 3.35f, 3.34f };
+	private static readonly float[] s_drownPitch = { 26.6f, 27.2f, 27.7f, 31.7f, 39.0f, 47.7f, 57.0f, 68.9f, 80.6f, 86.9f, 86.8f, 83.5f, 79.3f, 74.8f, 70.1f, 65.4f, 60.8f, 56.1f, 51.3f, 46.6f, 41.8f, 36.9f, 32.5f, 29.7f, 28.1f, 27.3f, 26.8f, 26.6f, 26.4f, 26.4f, 26.3f };
+
 	public Entity Entity { get; }
 
 	private Vector3 _eye;
@@ -67,6 +78,10 @@ public sealed class CrashCamera
 	private float _pitchRate;
 	private float _yawRate;
 	private float _flat = Flat(DefaultPitch);
+	private Vector3 _aim;
+	private float _drownClock = -1.0f;
+	private Vector2 _drownBearing;
+	private Vector3 _drownFrom;
 
 	public CrashCamera(Vector3 feet, float facingDegrees)
 	{
@@ -93,10 +108,10 @@ public sealed class CrashCamera
 	}
 
 	/// <summary>One frame. <paramref name="turnDegrees"/> and <paramref name="pitchDegrees"/> are this
-	/// frame's manual orbit and pitch (mouse); <paramref name="stick"/> is the right stick (Y up);
-	/// <paramref name="lift"/> raises the whole view (a drowning body floating up).</summary>
-	public void Update(float dt, Vector3 feet, bool grounded, Vector3 facing, Vector3 velocity, float turnDegrees, float pitchDegrees, Vector2 stick, float lift)
+	/// frame's manual orbit and pitch (mouse); <paramref name="stick"/> is the right stick (Y up).</summary>
+	public void Update(float dt, Vector3 feet, bool grounded, Vector3 facing, Vector3 velocity, float turnDegrees, float pitchDegrees, Vector2 stick)
 	{
+		_drownClock = -1.0f;
 		if (grounded || feet.Y < _heldGroundY - DropFollow)
 		{
 			_heldGroundY = feet.Y;
@@ -144,9 +159,35 @@ public sealed class CrashCamera
 		float rise = Table(s_radius, _pitch) * MathF.Sin(_pitch * (MathF.PI / 180.0f));
 		_eye = new Vector3(eye.X, _groundY + aimHeight + rise, eye.Y);
 
-		Vector3 aim = new(focus.X, _groundY + aimHeight + lift, focus.Y);
-		Vector3 wanted = _eye + new Vector3(0.0f, lift, 0.0f);
-		Apply(aim, Collide(aim, wanted, dt));
+		Vector3 aim = new(focus.X, _groundY + aimHeight, focus.Y);
+		Apply(aim, Collide(aim, _eye, dt));
+	}
+
+	/// <summary>One frame of the drowning shot: <paramref name="body"/> is where he went under,
+	/// <paramref name="surfaceY"/> the water surface above him.</summary>
+	public void Drown(float dt, Vector3 body, float surfaceY)
+	{
+		if (_drownClock < 0.0f)
+		{
+			Vector2 away = new(_eye.X - body.X, _eye.Z - body.Z);
+			_drownBearing = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : new Vector2(0.0f, 1.0f);
+			Vector3 look = Vector3.Normalize(_aim - _eye);
+			_drownFrom = new Vector3(away.Length(), _eye.Y - surfaceY, MathF.Asin(-look.Y) * (180.0f / MathF.PI));
+			_drownClock = 0.0f;
+		}
+		else
+		{
+			_drownClock += dt;
+		}
+		float k = _drownClock / DrownStep;
+		int i = Math.Min((int)k, s_drownBack.Length - 2);
+		float f = Math.Min(k - i, 1.0f);
+		Vector3 row = Vector3.Lerp(new Vector3(s_drownBack[i], s_drownHeight[i], s_drownPitch[i]), new Vector3(s_drownBack[i + 1], s_drownHeight[i + 1], s_drownPitch[i + 1]), f);
+		// Our follow pose at the moment of death eases into the rig's over the first 0.3 s.
+		row += (_drownFrom - new Vector3(s_drownBack[0], s_drownHeight[0], s_drownPitch[0])) * Math.Max(0.0f, 1.0f - _drownClock / DrownBlend);
+		float p = row.Z * (MathF.PI / 180.0f);
+		_eye = new Vector3(body.X + _drownBearing.X * row.X, surfaceY + row.Y, body.Z + _drownBearing.Y * row.X);
+		Apply(_eye + new Vector3(-_drownBearing.X * MathF.Cos(p), -MathF.Sin(p), -_drownBearing.Y * MathF.Cos(p)) * 10.0f, _eye);
 	}
 
 	private static float Flat(float pitch) => Table(s_radius, pitch) * MathF.Cos(pitch * (MathF.PI / 180.0f));
@@ -180,6 +221,7 @@ public sealed class CrashCamera
 
 	private void Apply(Vector3 aim, Vector3 eye)
 	{
+		_aim = aim;
 		Camera.SetTarget(Entity, aim);
 		Camera.SetPosition(Entity, eye);
 	}

@@ -149,6 +149,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			}
 		}
 		CrateFx.RegisterObjectModels(_objectModels);
+		OpenStartCheckpoint();
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
 		if (!IntroMovie || !_movie.Play("H01_A", () => TwinsanityAudio.Start(LevelPath)))
 		{
@@ -302,6 +303,25 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			AddInstance(instance, transform);
 		}
 		Log.Info($"[Twinsanity] chunk {name}: {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly pieces so far");
+	}
+
+	// On the rig a fresh beach load already shows the level-start checkpoint open (flat pieces, no crate
+	// to hit; logs/camera/_rig_cp.png), and a death before any other checkpoint respawns him standing on
+	// those pieces (game (-1.07, 0.07, -39.41); the crate is at engine (1.07, -39.41)). So it opens at load,
+	// silently, and is the first checkpoint rather than the spawn.
+	// ponytail: "nearest checkpoint to the spawn" stands in for the level's own start-checkpoint link.
+	private void OpenStartCheckpoint()
+	{
+		Crate? first = _crates.Where(c => c.Kind == Kind.Checkpoint && c.Alive).MinBy(c => Vector3.DistanceSquared(c.Base, _spawn));
+		if (first == null)
+		{
+			return;
+		}
+		first.Activated = true;
+		first.Alive = false;
+		first.Body.Destroy();
+		CrateFx.ShowOpened(first.Model, first.ObjectId);
+		_checkpoint = first.Base;
 	}
 
 	// A level.json link entry -> the chunk's local transform (rotation, then offset), in

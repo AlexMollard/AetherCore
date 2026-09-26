@@ -177,6 +177,18 @@ public static class CrateFx
 		After(crateModel, PlayOnce(crateModel, "a005"), m => ShowState(m, objectId, 3));
 	}
 
+	/// <summary>
+	/// Show a checkpoint crate already opened (OGI 246, state k3) with no clip and no sound: the
+	/// level-start checkpoint, which the original has open on a fresh load.
+	/// </summary>
+	public static void ShowOpened(Entity crateModel, int objectId)
+	{
+		if (objectId == 266 && s_opened.Add(crateModel.Id))
+		{
+			ShowState(crateModel, objectId, 3);
+		}
+	}
+
 	/// <summary>Play a crate state's clip once from the start; returns its length (0 = no clip).</summary>
 	private static float PlayOnce(Entity crate, string clip)
 	{
