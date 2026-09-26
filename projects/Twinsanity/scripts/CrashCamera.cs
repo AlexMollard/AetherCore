@@ -32,8 +32,12 @@ public sealed class CrashCamera
 	private const float LeadFacing = 0.55f;
 	private const float LeadVelocity = 0.08f;
 	private const float LeadLag = 0.5f;
-	private const float PullOutLag = 0.2f;
-	private const float WallMargin = 0.3f;
+	// Collision: a 0.3 sphere cast (the near plane must stay outside terrain) pulls the eye in at once and
+	// eases back out over about 1.3 s - the rig holds a pull for a good second before it settles (rig
+	// orb_cliff/orb_pillar in rig_samples.csv: in within a frame, out over ~1.4 s).
+	private const float PullOutLag = 0.45f;
+	private const float WallMargin = 0.05f;
+	private const float CameraSkin = 0.3f;
 	private const float StickTurnRate = 115.0f;
 	// Airborne, the height reference holds; it only follows him down once he falls this far below it.
 	private const float DropFollow = 1.0f;
@@ -204,13 +208,14 @@ public sealed class CrashCamera
 	}
 
 	// Scenery between the look point and the eye pulls the eye in to just short of it at once; it
-	// eases back out when the way clears. Only level collision counts, not crates or wildlife.
+	// eases back out when the way clears. Only level collision counts, not crates or wildlife. The
+	// cast carries a skin so the near plane never enters terrain even on a grazing pass.
 	private Vector3 Collide(Vector3 aim, Vector3 eye, float dt)
 	{
 		Vector3 ray = eye - aim;
 		float length = ray.Length();
 		float allowed = 1.0f;
-		RaycastHit hit = Physics.Raycast(aim, ray / length, length);
+		RaycastHit hit = Physics.SphereCast(aim, ray / length, CameraSkin, length);
 		if (hit.DidHit && hit.Entity.Name == "Collision")
 		{
 			allowed = Math.Max(0.0f, hit.Fraction * length - WallMargin) / length;

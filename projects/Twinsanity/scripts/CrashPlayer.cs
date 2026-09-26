@@ -42,6 +42,9 @@ public sealed class CrashPlayer : EntityScript
 
 	public float MouseSensitivity = 0.15f;
 
+	// The rig's camera stick does nothing below 0.30 deflection (see Look).
+	private const float StickDeadzone = 0.30f;
+
 	// CharacterInstanceFloats defaults: Crash's values from the beach instance, used until Configure.
 	private float _airGravity = 50.0f;
 	private float _walkSpeed = 2.5f;
@@ -1023,12 +1026,19 @@ public sealed class CrashPlayer : EntityScript
 		return input.LengthSquared() > 1e-6f ? (Vector3.Normalize(input), amount) : (Vector3.Zero, 0.0f);
 	}
 
-	// Manual orbit: the mouse as before, the right stick at the rig's rate (CrashCamera).
+	// Manual orbit: the mouse as before, the right stick at the rig's rate (CrashCamera). The rig's
+	// stick is dead below 0.30 raw deflection and linear above it (rig dz/sweep runs in rig_samples.csv:
+	// 0.15 and 0.3 give nothing, 0.6 gives about a third of the full rate). Gamepad.RightStick already
+	// carries the SDK's 0.24 deadzone and renormalisation, so undo that to the raw magnitude and shape
+	// it with the rig's 0.30.
 	private void Look(float deltaTime)
 	{
 		_lookTurn -= Input.MouseDelta.X * MouseSensitivity;
 		_lookPitch += Input.MouseDelta.Y * MouseSensitivity;
-		_lookStick = Gamepad.RightStick;
+		Vector2 stick = Gamepad.RightStick;
+		float magnitude = 0.76f * stick.Length() + 0.24f;
+		float weight = Math.Max(0.0f, (magnitude - StickDeadzone) / (1.0f - StickDeadzone));
+		_lookStick = weight > 0.0f ? stick / stick.Length() * weight : Vector2.Zero;
 	}
 
 	private void PlaceModel(float deltaTime)
