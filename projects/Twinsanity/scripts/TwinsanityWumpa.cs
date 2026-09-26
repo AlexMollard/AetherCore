@@ -76,6 +76,19 @@ public sealed class TwinsanityWumpa
 		_fruits.Add(f);
 	}
 
+	/// <summary>Adopts a fruit the bake already placed: the entity carries the model at the
+	/// instance origin, so the bind state is derived from it exactly as a spawn would.</summary>
+	public void Bind(Entity existing, Vector3 position)
+	{
+		var f = new Fruit
+		{
+			Model = existing,
+			Base = position + new Vector3(0.0f, 1.0f, 0.0f),
+		};
+		f.Phase = PhaseFor(position);
+		_fruits.Add(f);
+	}
+
 	/// <summary>A broken crate releases `count` fruits that pop out and settle around `crateBase`
 	/// (the crate's bottom-centre) before joining the idle motion.</summary>
 	public void Burst(string modelPath, Vector3 crateBase, int count)

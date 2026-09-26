@@ -88,6 +88,7 @@ internal static unsafe class Bootstrap
 
             // Appended at the end - see Abi.cs's InvokeOwnershipChanged for why.
             outApi->InvokeOwnershipChanged = &ScriptRegistry.InvokeOwnershipChanged;
+            outApi->InvokeScriptCommand = &ScriptRegistry.InvokeScriptCommand;
 
             Log.Info($"AetherCore bootstrap OK (.NET {Environment.Version})");
             return 0;

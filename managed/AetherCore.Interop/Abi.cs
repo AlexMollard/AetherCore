@@ -104,4 +104,11 @@ internal unsafe struct ManagedScriptApi
     // and `isOwner` is whether THIS peer is that owner. Appended at the end so no
     // existing ordinal shifts.
     public delegate* unmanaged<ulong, uint, int, void> InvokeOwnershipChanged;
+
+    // Editor commands: runs a project type's public static parameterless Run() method
+    // by type name (e.g. a level baker), at edit time, outside the entity-script
+    // lifecycle. Returns 0 on success, nonzero on failure (unknown type, no Run,
+    // or the method threw - the exception goes to ReportError). Appended at the end,
+    // like every ABI addition here.
+    public delegate* unmanaged<byte*, int> InvokeScriptCommand;
 }

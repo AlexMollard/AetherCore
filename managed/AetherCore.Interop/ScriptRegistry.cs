@@ -269,6 +269,7 @@ internal static unsafe class ScriptRegistry
         s_replicated.Clear();
         s_rpcMethods.Clear();
         s_defaults.Clear();
+        s_commands.Clear();
         // The live-instance table holds strong references into the context being
         // unloaded. The native side frees every handle (ScriptComponentSystem::
         // Invalidate) before getting here, so this is a backstop - but a missed
@@ -335,6 +336,15 @@ internal static unsafe class ScriptRegistry
                 catch (Exception ex) { Bootstrap.ReportError($"IEditorWindow {type.Name} ctor: {ex}"); }
             }
 
+            // Static editor commands: a public static parameterless Run() on any type. Note a
+            // `static class` is abstract+sealed in IL, so the IsAbstract check that guards the
+            // EntityScript scan must NOT gate this one.
+            System.Reflection.MethodInfo? run = type.GetMethod("Run", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static, null, Type.EmptyTypes, null);
+            if (run != null)
+            {
+                s_commands[type.Name] = run;
+            }
+
             if (type.IsAbstract || !typeof(EntityScript).IsAssignableFrom(type))
             {
                 continue;
@@ -389,6 +399,32 @@ internal static unsafe class ScriptRegistry
 
     [UnmanagedCallersOnly]
     internal static void UnloadScripts() => ResetRegistry();
+
+    // Editor commands: type name -> its public static parameterless Run(). Collected in
+    // Load alongside the EntityScript types; driven by InvokeScriptCommand (the editor's
+    // project-command hook - e.g. the Twinsanity level baker).
+    private static readonly Dictionary<string, System.Reflection.MethodInfo> s_commands = new();
+
+    [UnmanagedCallersOnly]
+    internal static int InvokeScriptCommand(byte* typeNameUtf8)
+    {
+        try
+        {
+            string typeName = Utf8.ToString(typeNameUtf8);
+            if (!s_commands.TryGetValue(typeName ?? "", out System.Reflection.MethodInfo? run))
+            {
+                Bootstrap.ReportError($"Unknown C# command type '{typeName}' (a command is a type with a public static parameterless Run()).");
+                return -1;
+            }
+            run.Invoke(null, null);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Bootstrap.ReportError($"InvokeScriptCommand failed: {ex}");
+            return -2;
+        }
+    }
 
     [UnmanagedCallersOnly]
     internal static int GetScriptTypeCount() => s_typeNames.Length;

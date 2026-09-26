@@ -78,3 +78,16 @@ scale = [ 1.0, 1.0, 1.0 ]
 
     [[entities.scripts]]
     type = 'CrashPlayer'
+
+# The pre-baked level (the editor's "Level Bake" panel / twinsanity.bake_level command runs the
+# same builder TwinsanityLevel runs at play, and writes the gitignored
+# assets/prefabs/beach.prefab.toml). The scene stores the reference, not the 3.5k entities; your
+# edits to baked entities are captured here as per-entity overrides when the scene is saved, and
+# a re-bake keeps them. Without the prefab file (a fresh checkout, no bake) TwinsanityLevel
+# falls back to building the level from the extracted JSON exactly as it always did.
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'Twinsanity Beach Bake'
+position = [ 0.0, 0.0, 0.0 ]
+prefab = 'beach'
+scale = [ 1.0, 1.0, 1.0 ]

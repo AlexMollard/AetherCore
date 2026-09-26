@@ -484,3 +484,21 @@ AE_FIELD_REP("display_name", displayName, String)
 AE_FIELD_REP("ping_ms", pingMs, UInt)
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
+
+// Twinsanity flavor: the bake identity one of the beach bake's entities carries. Written by
+// TwinsanityBake (the project's C#), read back by TwinsanityLevel at play - usually never
+// hand-edited, but the inspector shows it so a baked entity's disc identity is visible.
+AE_COMPONENT(TwinsanityMarkerComponent, "Twinsanity Marker", "Core", ICON_FA_MAP)
+AE_FIELD_NT("role", role, Int, "What the bake made this entity: 0 bake root, 1 crate, 2 wumpa, 3 actor, 4 creature spawner, 5 parrot spawner, 6 cutscene agent, 7 cutscene trigger, 8 deadly collision, 9 spawn, 10 sky.")
+AE_FIELD_NT("identity", identity, String, "World-space instance JSON from the level export (object id, name, floats, points, chunk) - what the play-time level script binds to.")
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+// Viewport click-through, now persisted. The hierarchy's pointer toggle has always set this
+// tag and ScenePicker has always honoured it, but the tag itself was not reflected - so the
+// toggle was lost on every save/load, and code that spawns a click-through object (the
+// Twinsanity bake's camera-following sky dome, which otherwise swallows every viewport pick)
+// could not add it. Serializable so the flag survives like any other authored state.
+AE_COMPONENT(NotPickableTag, "Not Pickable", "Core", ICON_FA_EYE_SLASH)
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()

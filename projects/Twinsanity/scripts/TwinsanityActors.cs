@@ -118,7 +118,15 @@ public sealed partial class TwinsanityActors
 				MeshRenderer.SetCastShadows(e.GetChild(i), false);
 			}
 		}
+		RegisterActor(e, objectId, objectName, model, instance, transform, position, eulerDegrees);
+		return true;
+	}
 
+	// Everything an actor needs after its model entity exists: clips, behaviour, one-shot or
+	// looping animation, critter state. Shared by the play-time spawn (above) and the bake bind
+	// (TryBind, whose entity came from the bake with its model already loaded).
+	private void RegisterActor(Entity e, int objectId, string objectName, string model, JsonElement instance, Matrix4x4 transform, Vector3 position, Vector3 eulerDegrees)
+	{
 		Actor a = new()
 		{
 			Model = e,
@@ -131,7 +139,7 @@ public sealed partial class TwinsanityActors
 
 		a.Kind = BehaviourOf(objectName);
 		// One-shot props (TwinsanityProps.cs) rest until their cue; everything else loops its idle.
-		if (a.Kind != Behaviour.Prop || !SetupOneShot(a, objectName, subtype, model))
+		if (a.Kind != Behaviour.Prop || !SetupOneShot(a, objectName, SubtypeOf(instance), model))
 		{
 			SetLooping(e, true);
 			if (a.IdleClip >= 0)
@@ -154,7 +162,56 @@ public sealed partial class TwinsanityActors
 				SpawnFlock(a, model);
 			}
 		}
+	}
+
+	// The bake bind: one pre-built entity with its marker role and world-space identity JSON.
+	// Spawner roles register the spawner (the marker entity is just their position holder);
+	// everything else registers the actor around the existing model entity.
+	public bool TryBind(Entity e, int role, JsonElement instance)
+	{
+		if (role is SpawnerCreature or SpawnerParrot)
+		{
+			Vector3 at = instance.TryGetProperty("position", out JsonElement p) ? Vec3(p) : e.Position;
+			TryRegisterSpawner(ObjectNameOf(instance), instance, Matrix4x4.Identity, at);
+			return true;
+		}
+		int objectId = instance.TryGetProperty("object", out JsonElement ob) ? ob.GetInt32() : 0;
+		string objectName = ObjectNameOf(instance);
+		string? model = instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : ModelFor(objectName);
+		Vector3 position = instance.TryGetProperty("position", out JsonElement pp) ? Vec3(pp) : e.Position;
+		Vector3 euler = instance.TryGetProperty("euler", out JsonElement el) ? Vec3(el) : e.EulerDegrees;
+		RememberInstance(instance, Matrix4x4.Identity, objectId, objectName, model, euler, FloatsOf(instance));
+		string key = NameKey(objectName);
+		if ((key.StartsWith("act_wumpa_tree") || key.StartsWith("old_act_wumpa_tree")) && SubtypeOf(instance) == 20)
+		{
+			_monkeyTrees.Add(position);
+		}
+		if (TryBindPushable(e, objectName, position, euler, model))
+		{
+			return true;
+		}
+		RegisterActor(e, objectId, objectName, model ?? "", instance, Matrix4x4.Identity, position, euler);
 		return true;
+	}
+
+	private static string ObjectNameOf(JsonElement instance)
+		=> instance.TryGetProperty("name", out JsonElement n) ? n.GetString()! : $"object_{(instance.TryGetProperty("object", out JsonElement o) ? o.GetInt32() : 0)}";
+
+	private static uint SubtypeOf(JsonElement instance)
+		=> instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("subtype", out JsonElement st) ? st.GetUInt32() : 0u;
+
+	private static float[] FloatsOf(JsonElement instance)
+	{
+		if (instance.ValueKind != JsonValueKind.Object || !instance.TryGetProperty("floats", out JsonElement fl) || fl.ValueKind != JsonValueKind.Array)
+		{
+			return Array.Empty<float>();
+		}
+		var list = new List<float>();
+		foreach (JsonElement f in fl.EnumerateArray())
+		{
+			list.Add(f.GetSingle());
+		}
+		return list.ToArray();
 	}
 
 	public void Update(float dt, CrashPlayer player, ITwinsanityHost host)

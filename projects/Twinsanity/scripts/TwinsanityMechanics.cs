@@ -158,13 +158,35 @@ public sealed partial class TwinsanityActors
 		{
 			return false;
 		}
-		var (radius, rest, rolls, accel, damping) = kind.Value;
 
 		Entity e = World.Create();
 		e.Name = objectName;
 		e.AddTransform();
 		e.EulerDegrees = eulerDegrees;
 		e.LoadModel(model);
+		RegisterPushable(e, objectName, key, kind.Value, position, eulerDegrees, model);
+		return true;
+	}
+
+	// The bake bind: the model entity came from the bake; its collision body, hulls and (for the
+	// cannon) button are runtime state, created here exactly as a spawn would. `model` is the
+	// marker's resolved model path (the cannon's hulls.json hangs off it).
+	private bool TryBindPushable(Entity e, string objectName, Vector3 position, Vector3 eulerDegrees, string? model)
+	{
+		string key = NameKey(objectName);
+		var kind = PushableKind(key);
+		if (kind == null)
+		{
+			return false;
+		}
+		e.EulerDegrees = eulerDegrees;
+		RegisterPushable(e, objectName, key, kind.Value, position, eulerDegrees, model);
+		return true;
+	}
+
+	private void RegisterPushable(Entity e, string objectName, string key, (float Radius, float RestHeight, bool Rolls, float PushAccel, float Damping) kind, Vector3 position, Vector3 eulerDegrees, string? model)
+	{
+		var (radius, rest, rolls, accel, damping) = kind;
 
 		// The balls, the nut, the bale and the barrel sit their centre RestHeight above the ground
 		// (all modelled around their centre); the cannon keeps its placed height and origin.
@@ -185,7 +207,7 @@ public sealed partial class TwinsanityActors
 		{
 			// The cannon turns in place, so it collides with its own disc hulls (the body box with
 			// the button on top at +2.79, the barrel and the trail), turned with it, not a sphere.
-			string? text = Assets.ReadText(model.Substring(0, model.Length - ".gltf".Length) + ".hulls.json");
+			string? text = model != null ? Assets.ReadText(model.Substring(0, model.Length - ".gltf".Length) + ".hulls.json") : null;
 			if (text != null)
 			{
 				using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(text);
@@ -230,7 +252,6 @@ public sealed partial class TwinsanityActors
 			Hulls = hulls,
 			Button = button,
 		});
-		return true;
 	}
 
 	private void UpdatePushables(float dt, CrashPlayer player)

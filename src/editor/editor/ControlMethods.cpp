@@ -3007,6 +3007,7 @@ namespace aether::editor
 		Append2DAuthoringMethods(methods);
 		AppendPixelArtMethods(methods);
 		AppendUiAutomationMethods(methods);
+		AppendTwinsanityMethods(methods);
 
 		// Undo / redo endpoints (mirror Ctrl+Z / Ctrl+Y). They run the editor
 		// command history and remap the selection through the applied command so it

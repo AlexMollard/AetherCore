@@ -40,6 +40,9 @@ namespace aether::editor
 	// editor camera, asset discovery) - defined in ControlMethods2D.cpp.
 	void Append2DAuthoringMethods(std::vector<ControlMethod>& methods);
 
+	// Twinsanity flavor group (the beach level bake) - defined in ControlMethodsTwinsanity.cpp.
+	void AppendTwinsanityMethods(std::vector<ControlMethod>& methods);
+
 	// Pixel-art canvas group (new/open/save, per-pixel + shape edits, read-back) -
 	// defined in ControlMethodsPixel.cpp. Operates on the shared PixelArtDocument.
 	void AppendPixelArtMethods(std::vector<ControlMethod>& methods);

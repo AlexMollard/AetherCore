@@ -89,6 +89,13 @@ namespace aether::app::scripting
 		// Invokes RPC method `methodIndex` on the live instance `handle` names. A
 		// no-op if the api is unavailable or the handle is 0.
 		void InvokeNetRpc(std::uint64_t handle, int methodIndex, std::span<const std::byte> args) const;
+
+		// Runs a project type's public static parameterless Run() at edit time (the
+		// project-command hook - e.g. the Twinsanity level baker). Returns false when the
+		// runtime is unavailable, the type is unknown, or the command threw (the managed
+		// side reports the exception); `error` says which.
+		bool InvokeScriptCommand(const std::string& typeName, std::string& error);
+
 		[[nodiscard]] bool GetPropertyValue(std::uint64_t handle, int index, aether::ScriptPropertyValue& out) const;
 		void SetPropertyValue(std::uint64_t handle, int index, const aether::ScriptPropertyValue& value) const;
 		[[nodiscard]] bool GetDefaultPropertyValue(const std::string& typeName, int index, aether::ScriptPropertyValue& out) const;

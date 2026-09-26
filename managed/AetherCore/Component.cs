@@ -94,10 +94,22 @@ public readonly struct ComponentAccess
 
     public unsafe string GetString(string field, string fallback = "")
     {
+        // Stack fast path for the common short field; a full-length read when the value
+        // filled the buffer (which may be a truncation) - a baked TwinsanityMarker's
+        // identity JSON runs well past 512 bytes.
         Span<byte> buffer = stackalloc byte[512];
         fixed (byte* ptr = buffer)
         {
             int written = Native.aether_component_get_string(Owner.Id, Type, field, ptr, buffer.Length);
+            if (written < buffer.Length)
+            {
+                return written >= 0 ? Encoding.UTF8.GetString(ptr, written) : fallback;
+            }
+        }
+        byte[] big = new byte[1024 * 1024];
+        fixed (byte* ptr = big)
+        {
+            int written = Native.aether_component_get_string(Owner.Id, Type, field, ptr, big.Length);
             return written >= 0 ? Encoding.UTF8.GetString(ptr, written) : fallback;
         }
     }

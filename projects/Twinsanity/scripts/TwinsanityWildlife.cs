@@ -175,12 +175,41 @@ public sealed partial class TwinsanityActors
 		return list;
 	}
 
+	// ---- classification (shared with TwinsanityBake, which dispatches on these) ----
+
+	// Marker roles TwinsanityBake assigns actor-side things; must match TwinsanityBake's constants.
+	internal const int SpawnerCreature = 4;
+	internal const int SpawnerParrot = 5;
+
+	// Name-based spawner classification without side effects. True spawner-hood also needs the
+	// instance shape (a creature spawner carries links); TryRegisterSpawner checks that part.
+	internal static int SpawnerRoleFor(string objectName)
+	{
+		string n = NameKey(objectName);
+		if (n.StartsWith("act_parrot_spawner"))
+		{
+			return SpawnerParrot;
+		}
+		if (n.StartsWith("act_creature_spawner") || n.StartsWith("act_util_ecology_manager"))
+		{
+			return SpawnerCreature;
+		}
+		return 0;
+	}
+
+	// The bake skips exactly what play-time spawning skips; internal so both share the rule.
+	internal static bool Skipped(string objectName) => ShouldSkip(objectName);
+
+	// Lower-case, family name with trailing instance numbers stripped. (The bake reads it to
+	// mirror the wumpa-tree shadow rule.)
+	internal static string NameKeyOf(string objectName) => NameKey(objectName);
+
 	// Creature spawners and the ecology manager have no model: they spawn copies of the instance
 	// they link. True when this instance is one (it is then consumed).
 	private bool TryRegisterSpawner(string objectName, JsonElement instance, Matrix4x4 transform, Vector3 position)
 	{
-		string n = NameKey(objectName);
-		if (n.StartsWith("act_parrot_spawner"))
+		int role = SpawnerRoleFor(objectName);
+		if (role == SpawnerParrot)
 		{
 			_parrotSpawners.Add(new ParrotSpawner
 			{
@@ -190,22 +219,20 @@ public sealed partial class TwinsanityActors
 			});
 			return true;
 		}
-		bool coop = n.StartsWith("act_creature_spawner");
-		bool ecology = n.StartsWith("act_util_ecology_manager");
-		if ((!coop && !ecology) || instance.ValueKind != JsonValueKind.Object || !instance.TryGetProperty("links", out JsonElement links))
+		if (role != SpawnerCreature || instance.ValueKind != JsonValueKind.Object || !instance.TryGetProperty("links", out JsonElement links))
 		{
 			return false;
 		}
 		var s = new Spawner
 		{
-			Ecology = ecology,
+			Ecology = NameKey(objectName).StartsWith("act_util_ecology_manager"),
 			TemplateKey = ChunkKey(transform, instance, links[0].GetInt32()),
 			Position = position,
 			Points = PointList(instance, "points", transform),
 		};
 		// Coop: the instance's own count (params[2], 4 at the beach coop - 4 chickens on the rig).
 		// Ecology: COM_UTIL_ECOLOGY_MANAGER_DEFAULT sets counter 40 and spends 8 per spawn.
-		s.Count = ecology ? 5 : (instance.TryGetProperty("params", out JsonElement pr) && pr.GetArrayLength() > 2 ? pr[2].GetInt32() : 1);
+		s.Count = NameKey(objectName).StartsWith("act_util_ecology_manager") ? 5 : (instance.TryGetProperty("params", out JsonElement pr) && pr.GetArrayLength() > 2 ? pr[2].GetInt32() : 1);
 		s.KeyUsed = new bool[Math.Max(1, s.Points.Count)];
 		_spawners.Add(s);
 		return true;

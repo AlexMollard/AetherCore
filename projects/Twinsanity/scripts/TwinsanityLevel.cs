@@ -31,7 +31,29 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private const float kCrashHeight = 1.8f;
 	private const float kExplosionRadius = 2.5f;
 
-	private enum Kind { Basic, Nitro, Tnt, ExtraLife, WoodenSpring, IronSpring, Iron, Checkpoint, AkuAku, MultiHit, Level, Surprise, Detonator, Reinforced }
+	// Crate kinds; internal so TwinsanityBake classifies with the same table.
+	internal enum Kind { Basic, Nitro, Tnt, ExtraLife, WoodenSpring, IronSpring, Iron, Checkpoint, AkuAku, MultiHit, Level, Surprise, Detonator, Reinforced }
+
+	/// <summary>The crate kind for a level instance, or null when it is not a crate the level
+	/// rules handle (it then belongs to the actor system). Shared with the bake.</summary>
+	internal static Kind? KindFor(int objectId, string? model)
+	{
+		Kind? kind = objectId switch
+		{
+			3 => Kind.Basic,
+			4 => Kind.Nitro,
+			5 => Kind.Tnt,
+			12 => Kind.ExtraLife,
+			13 => Kind.WoodenSpring,
+			14 => Kind.IronSpring,
+			15 => Kind.Iron,
+			19 => Kind.MultiHit,
+			266 => Kind.Checkpoint,
+			297 => Kind.AkuAku,
+			_ => null,
+		};
+		return kind ?? NameKind(model);
+	}
 
 	private sealed class Crate
 	{
@@ -47,6 +69,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		public bool CheckSupport;              // the crate under it broke or moved: see if it must fall
 		public bool Falling;
 		public float FallSpeed;
+		// Baked crates: the body is a CHILD of the model (one selectable unit in the editor), so
+		// it follows the model's transform and must not be moved again by the fall code.
+		public bool BodyIsChild;
 	}
 
 	private readonly List<Crate> _crates = new();
@@ -85,6 +110,37 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	{
 		_lives = StartLives;
 		_fruit = new TwinsanityWumpa(AddWumpa);
+		LoadObjectModels();
+
+		// A baked level (the editor's Twinsanity bake, saved with the scene as a prefab
+		// instance) is bound to, not rebuilt: every entity already exists and carries its
+		// disc identity in a Twinsanity Marker. Without one - a fresh checkout, no bake -
+		// the level builds from the extracted JSON exactly as it always did.
+		Entity bakeRoot = Scene.Find(TwinsanityBake.BakeRootName);
+		if (bakeRoot.IsValid && bakeRoot.Component("Twinsanity Marker").Exists)
+		{
+			BindBaked(bakeRoot);
+		}
+		else
+		{
+			BuildFromJson();
+		}
+
+		CrateFx.RegisterObjectModels(_objectModels);
+		OpenStartCheckpoint();
+		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
+		if (!IntroMovie || !_movie.Play("H01_A", () => TwinsanityAudio.Start(LevelPath)))
+		{
+			TwinsanityAudio.Start(LevelPath);
+		}
+		TwinsanityAku.Start();
+		_cutscenes.Start();
+		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
+		// summary has the rig evidence for when the original shows it.
+	}
+
+	private void LoadObjectModels()
+	{
 		string? objects = Assets.ReadText(ObjectsPath);
 		if (objects != null)
 		{
@@ -101,13 +157,16 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			Log.Warn($"[Twinsanity] {ObjectsPath} missing - run tw-extract over the whole disc; crates and wumpa from other files will be invisible.");
 		}
+	}
 
-		// Load the start chunk plus every chunk reachable over its chunk links (BFS, each chunk
-		// once). A link's transform is relative to its own chunk, so a child's world transform is
-		// local * parent (row vectors). Link targets outside the extracted set are skipped. Only
-		// seamless-neighbour links (flags low byte 1) in the start chunk's own level folder stream
-		// in; kind 2 is a door into another space (Doc's lab, the totem, level entrances) and kind 0
-		// the boat trip - their transforms do not agree with the hub's loops.
+	// The play-time build: the start chunk plus every chunk reachable over its chunk links
+	// (BFS, each chunk once). A link's transform is relative to its own chunk, so a child's
+	// world transform is local * parent (row vectors). Link targets outside the extracted set
+	// are skipped. Only seamless-neighbour links (flags low byte 1) in the start chunk's own
+	// level folder stream in; kind 2 is a door into another space (Doc's lab, the totem, level
+	// entrances) and kind 0 the boat trip - their transforms do not agree with the hub's loops.
+	private void BuildFromJson()
+	{
 		string levelFolder = LevelPath[..(LevelPath.LastIndexOf('/') + 1)];
 		var queue = new Queue<(string Path, Matrix4x4 Transform)>();
 		var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -148,17 +207,173 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				}
 			}
 		}
-		CrateFx.RegisterObjectModels(_objectModels);
-		OpenStartCheckpoint();
-		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
-		if (!IntroMovie || !_movie.Play("H01_A", () => TwinsanityAudio.Start(LevelPath)))
+	}
+
+	// The baked path: adopt every marker entity into the same runtime state BuildFromJson fills
+	// - crates, wumpa, actors, deadly collision, spawn, sky - and hand the cutscene agents and
+	// triggers to the cutscene system grouped by their chunk (each chunk's scripts.json loads
+	// once). The scan is scene-wide, not just the bake root's subtree: a hand-placed COPY of a
+	// baked entity (editor duplicate) re-roots outside it, and must behave identically. The
+	// JSON paths are never read here; the markers carry the world-space instance data.
+	private void BindBaked(Entity bakeRoot)
+	{
+		// A generous fixed buffer: the beach runs ~3.5k entities with transforms; the native
+		// side clamps to the capacity and returns the written count.
+		var buffer = new Entity[16384];
+		int written = World.GetEntitiesWithTransform(buffer);
+		var entities = new List<Entity>(Math.Max(0, written));
+		for (int i = 0; i < written; i++)
 		{
-			TwinsanityAudio.Start(LevelPath);
+			entities.Add(buffer[i]);
 		}
-		TwinsanityAku.Start();
-		_cutscenes.Start();
-		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
-		// summary has the rig evidence for when the original shows it.
+		var agentsByChunk = new SortedDictionary<string, List<JsonElement>>();
+		var triggersByChunk = new SortedDictionary<string, List<(JsonElement Json, Vector3 Center, Vector3 Extents)>>();
+		int actors = 0, spawners = 0, cutsceneAgents = 0;
+		var openDocs = new List<JsonDocument>();
+		foreach (Entity e in entities)
+		{
+			ComponentAccess marker = e.Component("Twinsanity Marker");
+			if (!marker.Exists)
+			{
+				continue;
+			}
+			int role = marker.GetInt("role");
+			string identity = marker.GetString("identity");
+			if (role == TwinsanityBake.RoleRoot || identity.Length == 0)
+			{
+				continue;
+			}
+			JsonDocument doc;
+			try
+			{
+				doc = JsonDocument.Parse(identity);
+			}
+			catch (Exception ex)
+			{
+				// A hand-edited or stale marker must cost itself, not the whole bind.
+				Log.Warn($"[Twinsanity] bad marker JSON on '{e.Name}' - skipped ({ex.Message})");
+				continue;
+			}
+			openDocs.Add(doc);
+			JsonElement json = doc.RootElement;
+			try
+			{
+				switch (role)
+				{
+				case TwinsanityBake.RoleCrate:
+				{
+					string kindName = json.TryGetProperty("crate", out JsonElement ck) ? ck.GetString()! : Kind.Basic.ToString();
+					Kind kind = Enum.TryParse(kindName, out Kind parsed) ? parsed : Kind.Basic;
+					Entity body = default;
+					for (int i = 0; i < e.ChildCount; i++)
+					{
+						Entity child = e.GetChild(i);
+						if (child.Component("Rigid Body").Exists)
+						{
+							body = child;
+							break;
+						}
+					}
+					_crates.Add(new Crate
+					{
+						Kind = kind,
+						Body = body,
+						Model = e,
+						Base = e.Position,
+						Hits = kind == Kind.MultiHit ? 3 : 1,
+						ObjectId = json.TryGetProperty("objectId", out JsonElement oi) ? oi.GetInt32() : 0,
+						BodyIsChild = true,
+					});
+					break;
+				}
+				case TwinsanityBake.RoleWumpa:
+					_fruit.Bind(e, e.Position);
+					break;
+				case TwinsanityBake.RoleDeadlyCollision:
+					_deadly.Add(e.Id);
+					break;
+				case TwinsanityBake.RoleSpawn:
+					_spawn = e.Position;
+					_spawnFacing = json.TryGetProperty("facing", out JsonElement f) ? f.GetSingle() : e.EulerDegrees.Y;
+					if (json.TryGetProperty("floats", out JsonElement floats) && floats.ValueKind == JsonValueKind.Array)
+					{
+						var list = new List<float>();
+						foreach (JsonElement v in floats.EnumerateArray())
+						{
+							list.Add(v.GetSingle());
+						}
+						_crashFloats = list.ToArray();
+					}
+					_checkpoint = _spawn;
+					_checkpointFacing = _spawnFacing;
+					break;
+				case TwinsanityBake.RoleSky:
+					_sky = e;
+					break;
+				case TwinsanityBake.RoleCutsceneAgent:
+				{
+					string chunk = json.TryGetProperty("chunk", out JsonElement c) ? c.GetString()! : "";
+					if (chunk.Length > 0)
+					{
+						(agentsByChunk.TryGetValue(chunk, out List<JsonElement>? list) ? list : agentsByChunk[chunk] = new List<JsonElement>()).Add(json);
+						cutsceneAgents++;
+					}
+					break;
+				}
+				case TwinsanityBake.RoleTrigger:
+				{
+					string chunk = json.TryGetProperty("chunk", out JsonElement c) ? c.GetString()! : "";
+					if (chunk.Length > 0)
+					{
+						if (!triggersByChunk.TryGetValue(chunk, out var list))
+						{
+							list = triggersByChunk[chunk] = new List<(JsonElement, Vector3, Vector3)>();
+						}
+						list.Add((json, e.Position, e.Scale));
+					}
+					break;
+				}
+				default:
+					// Actors, creature spawners and parrot spawners: the actor system adopts them.
+					if (_actors.TryBind(e, role, json))
+					{
+						if (role is TwinsanityBake.RoleSpawner or TwinsanityBake.RoleParrotSpawner)
+						{
+							spawners++;
+						}
+						else
+						{
+							actors++;
+						}
+					}
+					break;
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Warn($"[Twinsanity] marker bind failed on '{e.Name}' (role {role}) - skipped ({ex.Message})");
+			}
+		}
+		foreach ((string chunkPath, List<JsonElement> agents) in agentsByChunk)
+		{
+			_cutscenes.BindChunkScripts(chunkPath);
+			foreach (JsonElement agent in agents)
+			{
+				_cutscenes.BindAgent(agent);
+			}
+			if (triggersByChunk.TryGetValue(chunkPath, out var triggers))
+			{
+				foreach ((JsonElement json, Vector3 center, Vector3 extents) in triggers)
+				{
+					_cutscenes.BindTrigger(json, center, extents);
+				}
+			}
+		}
+		foreach (JsonDocument doc in openDocs)
+		{
+			doc.Dispose();
+		}
+		Log.Info($"[Twinsanity] bound baked level: {actors} actors, {spawners} spawners, {cutsceneAgents} cutscene agents");
 	}
 
 	public override void OnUpdate(float deltaTime)
@@ -325,8 +540,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	}
 
 	// A level.json link entry -> the chunk's local transform (rotation, then offset), in
-	// System.Numerics row-vector form.
-	private static Matrix4x4 ChunkTransform(JsonElement link)
+	// System.Numerics row-vector form. Internal: TwinsanityBake walks the same links.
+	internal static Matrix4x4 ChunkTransform(JsonElement link)
 	{
 		Matrix4x4 m = Matrix4x4.CreateTranslation(Vec(link.GetProperty("offset")));
 		if (link.TryGetProperty("rotation", out JsonElement r))
@@ -340,7 +555,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	// The engine composes EulerDegrees as R = Ry * Rx * Rz (column vectors); System.Numerics works
 	// with row vectors, so a rotation crosses between the two as the transpose. EulerOf takes a
 	// row-vector transform and returns the engine's Euler degrees of its rotation.
-	private static Vector3 EulerOf(Matrix4x4 sys)
+	// (Internal: the bake transforms instance transforms with the same pair.)
+	internal static Vector3 EulerOf(Matrix4x4 sys)
 	{
 		const float deg = 180.0f / MathF.PI;
 		float x = MathF.Asin(Math.Clamp(-sys.M32, -1.0f, 1.0f));
@@ -350,7 +566,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	}
 
 	// Euler degrees (engine convention) -> row-vector rotation matrix: the transpose of Ry * Rx * Rz.
-	private static Matrix4x4 SysRotation(Vector3 euler)
+	internal static Matrix4x4 SysRotation(Vector3 euler)
 	{
 		float x = euler.X * MathF.PI / 180.0f, y = euler.Y * MathF.PI / 180.0f, z = euler.Z * MathF.PI / 180.0f;
 		return Matrix4x4.CreateRotationZ(z) * Matrix4x4.CreateRotationX(x) * Matrix4x4.CreateRotationY(y);
@@ -371,20 +587,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			}
 			return;
 		}
-		Kind? kind = objectId switch
-		{
-			3 => Kind.Basic,
-			4 => Kind.Nitro,
-			5 => Kind.Tnt,
-			12 => Kind.ExtraLife,
-			13 => Kind.WoodenSpring,
-			14 => Kind.IronSpring,
-			15 => Kind.Iron,
-			19 => Kind.MultiHit,
-			266 => Kind.Checkpoint,
-			297 => Kind.AkuAku,
-			_ => NameKind(model),
-		};
+		Kind? kind = KindFor(objectId, model);
 		if (kind == null)
 		{
 			// Not a crate: hand it to the actor system (enemies, birds, butterflies, chickens...).
@@ -790,7 +993,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			}
 			Vector3 move = new(0.0f, y - c.Base.Y, 0.0f);
 			c.Base += move;
-			c.Body.Position += move;
+			if (!c.BodyIsChild)
+			{
+				c.Body.Position += move; // baked crates: the body is a child, it follows the model
+			}
 			c.Model.Position += move;
 			CrateFx.Moved(c.Model, c.Base); // nitro hops snap back to their cached rest position
 		}
@@ -932,5 +1138,5 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		return ground.IsValid && _deadly.Contains(ground.Id);
 	}
 
-	private static Vector3 Vec(JsonElement a) => new(a[0].GetSingle(), a[1].GetSingle(), a[2].GetSingle());
+	internal static Vector3 Vec(JsonElement a) => new(a[0].GetSingle(), a[1].GetSingle(), a[2].GetSingle());
 }

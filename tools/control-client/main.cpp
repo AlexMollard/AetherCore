@@ -167,7 +167,7 @@ int main(int argc, char** argv)
 
 	if (!got)
 	{
-		return Fail("error: no reply from control endpoint within 6s");
+		return Fail("error: no reply from control endpoint within 30s");
 	}
 
 	const json envelope = json::parse(reply, nullptr, false);

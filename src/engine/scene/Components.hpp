@@ -189,6 +189,18 @@ namespace aether
 		std::string name;
 	};
 
+	// Twinsanity flavor: the disc identity a baked level entity carries. TwinsanityBake writes
+	// one on everything the beach bake spawns; TwinsanityLevel binds to these at play instead of
+	// rebuilding the level from JSON. `role` is a BakeRoles value and `identity` is the
+	// world-space instance/trigger JSON from the level export (see the bake's header comment).
+	// A component rather than script properties because scripts attach in unspecified order at
+	// play start - the binder must read every marker before any of them is attached.
+	struct TwinsanityMarkerComponent
+	{
+		std::int32_t role = 0;
+		std::string identity;
+	};
+
 	struct SceneTransientComponent
 	{
 	};

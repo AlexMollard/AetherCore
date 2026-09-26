@@ -186,14 +186,90 @@ public sealed class TwinsanityCutscenes
 	/// matching .scripts.json and starts every cutscene director's slot-0 script.</summary>
 	public void AddChunk(string levelPath, JsonElement level, Matrix4x4 transform)
 	{
+		Chunk? chunk = LoadChunkScripts(levelPath);
+		if (chunk == null)
+		{
+			return;
+		}
+		chunk.Transform = transform; // the rig-shot camera table frames through it
+		IngestAgents(chunk, level.GetProperty("instances"), transform);
+		if (level.TryGetProperty("triggers", out JsonElement triggers))
+		{
+			IngestTriggers(chunk, triggers, transform);
+		}
+	}
+
+	/// <summary>The object ids this chunk's scripts.json defines. TwinsanityBake offers
+	/// cutscene-agent markers for the instances on these objects (and only these - the rest are
+	/// pure gameplay or pure logic objects the cutscene system never touches).</summary>
+	public HashSet<int> CutsceneObjectIds(string levelPath)
+	{
+		var ids = new HashSet<int>();
+		string scriptsPath = levelPath.Replace(".level.json", ".scripts.json");
+		string? text = Assets.ReadText(scriptsPath);
+		if (text == null)
+		{
+			return ids;
+		}
+		using JsonDocument doc = JsonDocument.Parse(text);
+		foreach (JsonProperty o in doc.RootElement.GetProperty("objects").EnumerateObject())
+		{
+			ids.Add(int.Parse(o.Name));
+		}
+		return ids;
+	}
+
+	/// <summary>Bake path: load a chunk's script data so BindAgent/BindTrigger can ingest the
+	/// baked markers that name it. The markers carry world-space data; no transform is applied.</summary>
+	public void BindChunkScripts(string levelPath) => LoadChunkScripts(levelPath);
+
+	/// <summary>Bake path: one cutscene agent from its world-space marker JSON.</summary>
+	public void BindAgent(JsonElement worldInstance)
+	{
+		if (!worldInstance.TryGetProperty("chunk", out JsonElement chunkEl))
+		{
+			return;
+		}
+		Chunk? chunk = _chunks.Find(c => c.Name == chunkEl.GetString());
+		if (chunk != null)
+		{
+			IngestAgent(chunk, worldInstance, Matrix4x4.Identity);
+		}
+	}
+
+	/// <summary>Bake path: one trigger volume. Center/extents come from the marker entity's
+	/// transform (what the editor gizmo edits); the rest of the record is the marker JSON.</summary>
+	public void BindTrigger(JsonElement worldTrigger, Vector3 center, Vector3 extents)
+	{
+		if (!worldTrigger.TryGetProperty("chunk", out JsonElement chunkEl))
+		{
+			return;
+		}
+		Chunk? chunk = _chunks.Find(c => c.Name == chunkEl.GetString());
+		if (chunk == null)
+		{
+			return;
+		}
+		Trigger? tr = IngestTrigger(chunk, worldTrigger, Matrix4x4.Identity);
+		if (tr != null)
+		{
+			tr.Center = center;
+			tr.Extents = extents;
+		}
+	}
+
+	// The chunk's .scripts.json - its state machines, object defs and the BEGIN script id.
+	// Null (with a warning) when the chunk has no extracted scripts.
+	private Chunk? LoadChunkScripts(string levelPath)
+	{
 		string scriptsPath = levelPath.Replace(".level.json", ".scripts.json");
 		string? text = Assets.ReadText(scriptsPath);
 		if (text == null)
 		{
 			Log.Warn($"[Cutscenes] {scriptsPath} missing - re-run tw-extract for the chunk's scripts.");
-			return;
+			return null;
 		}
-		var chunk = new Chunk { Name = levelPath, Transform = transform };
+		var chunk = new Chunk { Name = levelPath, Transform = Matrix4x4.Identity };
 		using (JsonDocument doc = JsonDocument.Parse(text))
 		{
 			foreach (JsonProperty s in doc.RootElement.GetProperty("scripts").EnumerateObject())
@@ -210,64 +286,88 @@ public sealed class TwinsanityCutscenes
 			}
 		}
 		_chunks.Add(chunk);
+		return chunk;
+	}
 
-		foreach (JsonElement i in level.GetProperty("instances").EnumerateArray())
+	private void IngestAgents(Chunk chunk, JsonElement instances, Matrix4x4 transform)
+	{
+		foreach (JsonElement i in instances.EnumerateArray())
 		{
-			int obj = i.GetProperty("object").GetInt32();
-			if (!chunk.Objects.TryGetValue(obj, out ObjectDef? def))
-			{
-				continue;
-			}
-			var a = new Agent
-			{
-				Chunk = chunk,
-				Layer = i.GetProperty("layer").GetInt32(),
-				Id = i.GetProperty("id").GetInt32(),
-				Object = obj,
-				Name = i.GetProperty("name").GetString() ?? "",
-				Position = Vector3.Transform(Vec(i.GetProperty("position")), transform),
-				Yaw = i.GetProperty("euler")[1].GetSingle(),
-				Subtype = i.TryGetProperty("subtype", out JsonElement st) ? st.GetInt32() : 0,
-			};
-			if (i.TryGetProperty("links", out JsonElement links))
-			{
-				a.Links = Array.ConvertAll(ToArray(links), e => e.GetInt32());
-			}
-			if (i.TryGetProperty("points", out JsonElement points))
-			{
-				a.Keys = Array.ConvertAll(ToArray(points), p => Vector3.Transform(Vec(p), transform));
-			}
-			chunk.Instances[(a.Layer, a.Id)] = a;
-			if (IsDirector(chunk, def))
-			{
-				a.IsDirector = true;
-				a.Owner = a;
-				_directors.Add(a);
-			}
+			IngestAgent(chunk, i, transform);
 		}
-		if (level.TryGetProperty("triggers", out JsonElement triggers))
+	}
+
+	private void IngestTriggers(Chunk chunk, JsonElement triggers, Matrix4x4 transform)
+	{
+		foreach (JsonElement t in triggers.EnumerateArray())
 		{
-			foreach (JsonElement t in triggers.EnumerateArray())
-			{
-				int header = t.GetProperty("header").GetInt32();
-				var tr = new Trigger
-				{
-					Chunk = chunk,
-					Layer = t.GetProperty("layer").GetInt32(),
-					Message = (header & 0x800) != 0 ? t.GetProperty("args")[0].GetInt32() : -1,
-					Center = Vector3.Transform(Vec(t.GetProperty("center")), transform),
-					Extents = Vec(t.GetProperty("extents")),
-					Targets = Array.ConvertAll(ToArray(t.GetProperty("targets")), e => e.GetInt32()),
-				};
-				JsonElement q = t.GetProperty("rotation");
-				tr.Rotation = Quaternion.Normalize(new Quaternion(q[0].GetSingle(), q[1].GetSingle(), q[2].GetSingle(), q[3].GetSingle()));
-				// Only triggers aimed at a director matter here; crates and spawners are other code's.
-				if (tr.Message >= 0 && Array.Exists(tr.Targets, id => chunk.Instances.TryGetValue((tr.Layer, id), out Agent? d) && d.IsDirector))
-				{
-					_triggers.Add(tr);
-				}
-			}
+			IngestTrigger(chunk, t, transform);
 		}
+	}
+
+	// One level.json instance -> an Agent when its object carries script defs; directors are
+	// flagged and collected. Returns the agent, or null when the object has no scripts.
+	private Agent? IngestAgent(Chunk chunk, JsonElement i, Matrix4x4 transform)
+	{
+		int obj = i.GetProperty("object").GetInt32();
+		if (!chunk.Objects.TryGetValue(obj, out ObjectDef? def))
+		{
+			return null;
+		}
+		var a = new Agent
+		{
+			Chunk = chunk,
+			Layer = i.GetProperty("layer").GetInt32(),
+			Id = i.GetProperty("id").GetInt32(),
+			Object = obj,
+			Name = i.GetProperty("name").GetString() ?? "",
+			Position = Vector3.Transform(Vec(i.GetProperty("position")), transform),
+			Yaw = i.GetProperty("euler")[1].GetSingle(),
+			Subtype = i.TryGetProperty("subtype", out JsonElement st) ? st.GetInt32() : 0,
+		};
+		if (i.TryGetProperty("links", out JsonElement links))
+		{
+			a.Links = Array.ConvertAll(ToArray(links), e => e.GetInt32());
+		}
+		if (i.TryGetProperty("points", out JsonElement points))
+		{
+			a.Keys = Array.ConvertAll(ToArray(points), p => Vector3.Transform(Vec(p), transform));
+		}
+		chunk.Instances[(a.Layer, a.Id)] = a;
+		if (IsDirector(chunk, def))
+		{
+			a.IsDirector = true;
+			a.Owner = a;
+			_directors.Add(a);
+		}
+		return a;
+	}
+
+	// One level.json trigger volume; only triggers aimed at a director matter here (crates and
+	// spawners are other code's). Returns the trigger, or null when it was not kept. Center and
+	// extents may be absent (the bake stores them on the marker entity's transform instead) -
+	// BindTrigger overwrites both right after.
+	private Trigger? IngestTrigger(Chunk chunk, JsonElement t, Matrix4x4 transform)
+	{
+		int header = t.GetProperty("header").GetInt32();
+		var tr = new Trigger
+		{
+			Chunk = chunk,
+			Layer = t.GetProperty("layer").GetInt32(),
+			Message = (header & 0x800) != 0 ? t.GetProperty("args")[0].GetInt32() : -1,
+			Center = t.TryGetProperty("center", out JsonElement center) ? Vector3.Transform(Vec(center), transform) : default,
+			Extents = t.TryGetProperty("extents", out JsonElement extents) ? Vec(extents) : Vector3.One,
+			Targets = Array.ConvertAll(ToArray(t.GetProperty("targets")), e => e.GetInt32()),
+		};
+		JsonElement q = t.GetProperty("rotation");
+		tr.Rotation = Quaternion.Normalize(new Quaternion(q[0].GetSingle(), q[1].GetSingle(), q[2].GetSingle(), q[3].GetSingle()));
+		// Only triggers aimed at a director matter here; crates and spawners are other code's.
+		if (tr.Message >= 0 && Array.Exists(tr.Targets, id => chunk.Instances.TryGetValue((tr.Layer, id), out Agent? d) && d.IsDirector))
+		{
+			_triggers.Add(tr);
+			return tr;
+		}
+		return null;
 	}
 
 	private static ObjectDef ReadObject(JsonElement o)

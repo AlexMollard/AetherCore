@@ -109,6 +109,12 @@ namespace aether::scripting
 		// here - reordering an existing slot would desync every already-built managed
 		// build from this header without either side's size check noticing why.
 		void (*InvokeOwnershipChanged)(std::uint64_t handle, std::uint32_t owner, std::int32_t isOwner) = nullptr;
+
+		// Editor commands: runs a project type's public static parameterless Run() by
+		// type name, at edit time, outside the entity-script lifecycle (the Twinsanity
+		// level baker). Returns 0 on success, nonzero on failure - the managed side has
+		// already reported the exception. Appended at the end, like every ABI addition.
+		std::int32_t (*InvokeScriptCommand)(const char* typeNameUtf8) = nullptr;
 	};
 
 	// Returns 0 on success; nonzero signals an ABI/version mismatch (the sizes

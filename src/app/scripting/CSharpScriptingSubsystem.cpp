@@ -675,6 +675,23 @@ namespace aether::app::scripting
 		        static_cast<std::int32_t>(args.size()));
 	}
 
+	bool CSharpScriptingSubsystem::InvokeScriptCommand(const std::string& typeName, std::string& error)
+	{
+		const auto* api = Api();
+		if (api == nullptr || api->InvokeScriptCommand == nullptr)
+		{
+			error = "The C# host is not available.";
+			return false;
+		}
+		const int rc = api->InvokeScriptCommand(typeName.c_str());
+		if (rc != 0)
+		{
+			error = "command '" + typeName + "' failed (rc " + std::to_string(rc) + ") - see the console for the managed exception";
+			return false;
+		}
+		return true;
+	}
+
 	bool CSharpScriptingSubsystem::GetPropertyValue(std::uint64_t handle, int index, aether::ScriptPropertyValue& out) const
 	{
 		const auto* api = Api();
