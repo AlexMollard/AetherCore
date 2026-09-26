@@ -35,6 +35,7 @@ public sealed partial class TwinsanityActors
 		public float Remaining = -1.0f; // seconds left of the clip playing now; -1 = resting
 		public string Playing = "";
 		public readonly List<PropHull> Hulls = new();
+		public bool Crown; // an idol head: its spiky crown kills while the head is still raised
 	}
 
 	// One of the object's disc collision hulls (GI_CollisionData, exported by tw-extract to
@@ -67,6 +68,7 @@ public sealed partial class TwinsanityActors
 	// are not in the scripts. Tuned to the rig; no collision while rolling (flat ground only).
 	private const float BombKickSpeed = 8.0f;
 	private const float BombDrag = 2.0f;
+	private const float BombRest = 0.596f;
 
 	// act_RIGID_CANNON: belly-flopping its red button fires a GLOBAL_BOMB (the cannon's object list
 	// holds it) that COM_GLOBAL_BOMB_DEFAULT subtype 7 launches with cmd193(.., 8.0, .., 20.0) and that
@@ -107,6 +109,7 @@ public sealed partial class TwinsanityActors
 		{
 			s.Cue = PropCue.Explosion;
 			s.ClipNames = new[] { "a001", "a002" };
+			s.Crown = true;
 		}
 		else if (n.StartsWith("act_training_falling_log"))
 		{
@@ -145,6 +148,10 @@ public sealed partial class TwinsanityActors
 		}
 		else if (n.StartsWith("act_global_bomb"))
 		{
+			// COM_GLOBAL_BOMB_DEFAULT's rigid body (SetLogicalRadius 0.6) rests on the ground: rig
+			// (logs/audit/bomb_rig.txt) the placed y=0 bomb's live centre is 0.596 up, and the model
+			// is built around its centre.
+			e.Position = e.Position with { Y = GroundY(e.Position, e.Position.Y) + BombRest };
 			_bombs.Add(new Bomb { Actor = a });
 			return true;
 		}
@@ -252,7 +259,7 @@ public sealed partial class TwinsanityActors
 			{
 				continue;
 			}
-			Vector3 center = e.Position + new Vector3(0.0f, 0.5f, 0.0f);
+			Vector3 center = e.Position;
 			CrateFx.Exploded(e.Position, 5);
 			Explosion(center, BombDamageRadius);
 			if (Vector3.Distance(center, crashPos + new Vector3(0.0f, 0.9f, 0.0f)) < BombDamageRadius)
@@ -510,7 +517,29 @@ public sealed partial class TwinsanityActors
 			{
 				PlayOnce(s);
 			}
+			if (s.Crown && s.Next == 0 && OnCrown(s.Actor.Model, crashPos))
+			{
+				// Rig (idol_rig_top1.png): landing on a raised head's crown kills him (the angel
+				// death, lives 4 -> 3). Once a cannonball has lowered it the crown is safe to stand in.
+				_host?.DamagePlayer(crashPos, DeathKind.Generic);
+			}
 		}
+	}
+
+	// The raised head's top (disc hull 0 rest pose: local x +-2.64, z +-1.98, top 8.53 above the origin).
+	private const float CrownHalfX = 2.64f, CrownHalfZ = 1.98f, CrownTop = 8.53f;
+
+	private static bool OnCrown(Entity head, Vector3 feet)
+	{
+		Vector3 d = feet - head.Position;
+		if (d.Y < CrownTop - 0.3f || d.Y > CrownTop + 0.5f)
+		{
+			return false;
+		}
+		float yaw = head.EulerDegrees.Y * MathF.PI / 180.0f;
+		float lx = d.X * MathF.Cos(yaw) - d.Z * MathF.Sin(yaw);
+		float lz = d.X * MathF.Sin(yaw) + d.Z * MathF.Cos(yaw);
+		return MathF.Abs(lx) <= CrownHalfX && MathF.Abs(lz) <= CrownHalfZ;
 	}
 
 	private static void PlayOnce(OneShot s)

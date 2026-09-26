@@ -77,6 +77,7 @@ public sealed partial class TwinsanityActors
 		public float LaunchFloor;    // ground height it was launched from
 		public bool Pivots;          // turns about its origin instead of sliding (the cannon)
 		public List<Entity> Hulls = new(); // collision that turns with a pivoting object
+		public bool Settled;         // RestHeight known against real ground (collision may load late)
 	}
 
 	private readonly List<Pushable> _pushables = new();
@@ -122,6 +123,18 @@ public sealed partial class TwinsanityActors
 		// The cannon's radius is only its push-contact reach (it collides with its hulls): the body box
 		// is 1.5 m half-wide, so Crash's centre touches it ~1.9 m out.
 		"act_rigid_cannon" => (1.8f, 1.3f, false, 80.0f, 0.0f),
+		// Hay bale and barrel (COM_GLOBAL_HAYBALE_DEFAULT / COM_GLOBAL_BARREL_DEFAULT: SetContactRigid),
+		// rig logs/audit/push_rig_hay3.csv: a head-on push drives the bale at his run speed (~9.4 m/s)
+		// after the same ~0.15 s ramp as the nut, centres 1.5-2.2 m apart; let go it slides to a stop,
+		// decaying at ~5.6/s. It does not roll, a spin only rocks it (push_rig_hayspin.csv), and a
+		// glancing walk slides Crash round it. Both sit their centre RestHeight above the ground: the
+		// bale's model half-height 0.72 (rig: placed 0.687 on flat grass, kept), the barrel 0.91 (rig:
+		// it drops from its placed 1.62). A learned height (centre minus the rim ground at spawn) read
+		// ~0 wherever a rim ray found a surface level with the centre, and the bale then sank 0.9 m.
+		// ponytail: the barrel reuses the bale's push/decay - on the rig only glancing bumps (it moved
+		// 0.5 m) were captured. Upgrade path: a head-on barrel push with goto_log.py.
+		"act_global_haybale" => (1.05f, 0.72f, false, 80.0f, 5.6f),
+		"act_global_barrel" => (1.0f, 0.91f, false, 80.0f, 5.6f),
 		_ => null,
 	};
 
@@ -141,11 +154,13 @@ public sealed partial class TwinsanityActors
 		e.EulerDegrees = eulerDegrees;
 		e.LoadModel(model);
 
-		// The balls and the nut are modelled around their centre, which the game keeps RestHeight
-		// above the ground; the cannon keeps its placed height and origin.
-		float ground = Ground(position, radius, position.Y + 1.0f, default, default, out _) ?? position.Y - rest;
-		Vector3 center = rolls ? new Vector3(position.X, ground + rest, position.Z) : position + new Vector3(0.0f, 0.3f, 0.0f);
-		Vector3 modelOffset = rolls ? Vector3.Zero : position - center;
+		// The balls, the nut, the bale and the barrel sit their centre RestHeight above the ground
+		// (all modelled around their centre); the cannon keeps its placed height and origin.
+		bool pivots = key == "act_rigid_cannon";
+		float? found = Ground(position, radius, position.Y + 1.0f, default, default, out _);
+		float ground = found ?? position.Y - rest;
+		Vector3 center = pivots ? position + new Vector3(0.0f, 0.3f, 0.0f) : new Vector3(position.X, ground + rest, position.Z);
+		Vector3 modelOffset = pivots ? position - center : Vector3.Zero;
 		e.Position = center + modelOffset;
 
 		Entity body = World.Create();
@@ -183,12 +198,13 @@ public sealed partial class TwinsanityActors
 			ModelOffset = modelOffset,
 			Radius = radius,
 			RestHeight = center.Y - ground,
+			Settled = found != null || pivots || rolls,
 			Rolls = rolls,
 			PushAccel = accel,
 			Damping = damping,
 			FreeDamping = damping,
 			Base = Quaternion.CreateFromYawPitchRoll(eulerDegrees.Y * MathF.PI / 180.0f, eulerDegrees.X * MathF.PI / 180.0f, eulerDegrees.Z * MathF.PI / 180.0f),
-			Pivots = key == "act_rigid_cannon",
+			Pivots = pivots,
 			Hulls = hulls,
 		});
 		return true;
@@ -272,7 +288,7 @@ public sealed partial class TwinsanityActors
 			}
 			if (!pushed)
 			{
-				p.Velocity *= p.Rolls ? MathF.Exp(-p.FreeDamping * dt) : 0.0f;
+				p.Velocity *= p.Damping > 0.0f ? MathF.Exp(-p.FreeDamping * dt) : 0.0f;
 			}
 			Step(p, dt, player.Self);
 		}
@@ -301,6 +317,12 @@ public sealed partial class TwinsanityActors
 			return;
 		}
 		float? groundHere = Ground(p.Center, p.Radius, p.Center.Y + 1.0f, p.Body, crash, out Vector2 grad);
+		if (!p.Settled && groundHere != null)
+		{
+			// Spawned before its chunk's collision answered rays: settle onto the ground now.
+			p.Settled = true;
+			Place(p, p.Center with { Y = groundHere.Value + p.RestHeight }, Vector3.Zero, 0.0f);
+		}
 		if (p.Rolls && groundHere != null)
 		{
 			// Downhill pull on a rolling sphere. Gradient is clamped: a rim ray that clipped
