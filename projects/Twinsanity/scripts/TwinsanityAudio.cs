@@ -210,6 +210,8 @@ public static class TwinsanityAudio
 		TreeShake,  // WUMPA_TREE -> 235
 		WormPop,    // EARTH_WORM_IDLE -> 779/780
 		CrabCharge, // GLOBAL_CRAB -> 70
+		Pop,        // GENERIC_CREATURE_DEAD_BODYPOP -> Sounds[5] = 19 (crab, monkey); the worm's is 27
+		ChickenPop, // GLOBAL_CHICKEN_POP -> Sounds[5,6] = 87/88
 	}
 
 	public static void Creature(Call call, Vector3 at)
@@ -223,6 +225,8 @@ public static class TwinsanityAudio
 			Call.Throw => "77",
 			Call.TreeShake => "235",
 			Call.WormPop => Pick(779, 780).ToString(),
+			Call.Pop => "19",
+			Call.ChickenPop => Pick(87, 88).ToString(),
 			_ => "70",
 		};
 		At(LevelBank + id + ".wav", at, 3.0f, 40.0f);

@@ -178,6 +178,11 @@ public sealed partial class TwinsanityActors
 				a.DeathTimer -= dt;
 				if (a.DeathTimer < 0.0f)
 				{
+					// The pop: its disc particles and sound, and the body is gone at once.
+					bool chicken = a.Kind == Behaviour.Chicken;
+					Vector3 at = a.Model.Position + new Vector3(0.0f, chicken ? 0.35f : 0.5f, 0.0f);
+					CrateFx.CreaturePop(at, chicken);
+					TwinsanityAudio.Creature(chicken ? TwinsanityAudio.Call.ChickenPop : TwinsanityAudio.Call.Pop, at);
 					a.Alive = false;
 					a.Model.Destroy();
 				}

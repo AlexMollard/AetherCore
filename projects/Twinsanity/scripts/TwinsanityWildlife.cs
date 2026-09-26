@@ -310,6 +310,7 @@ public sealed partial class TwinsanityActors
 				c.Timer2 = -1.0f;
 				c.Mode = Mode.Down;
 				a.Model.Position = a.Home - new Vector3(0.0f, WormDepth, 0.0f);
+				a.Angle = a.HomeYaw;
 				break;
 			case Behaviour.Monkey:
 				// Clips from the monkey scripts: a002 walk, a003 pick up (ECOLOGY_IDLE s5), a022
@@ -1172,19 +1173,26 @@ public sealed partial class TwinsanityActors
 						// COM_EARTH_WORM_SLAMMED -> _MOVE: a006, down 2.5 m at 16.66 m/s, then off to
 						// its next hole (or back up the same one after 1 s if it has only one).
 						c.Mode = Mode.Sink;
+						c.Landed = false; // an attack in progress is cut short
 						PlayClip(a, c.SinkClip);
 						TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);
 					}
 					else if (h < 0.8f && crashPos.Y > a.Home.Y + 0.3f && crashPos.Y < a.Home.Y + 1.6f && MechanicsWorm.TryLaunch(player, a.Home))
 					{
 						PlayClip(a, c.SquashClip);
+						c.Landed = false;
 						c.Timer = 1.7f;
 						c.Timer2 = 0.0f;
 					}
 					else if (h < 1.3f && player.IsSpinning && c.Timer <= 0.0f)
 					{
 						PlayClip(a, c.SpunClip);
+						c.Landed = false;
 						c.Timer = 1.7f;
+					}
+					else if (c.Timer <= 0.0f)
+					{
+						WormAttack(a, c, dt, crashPos, h);
 					}
 				}
 				break;
@@ -1230,6 +1238,62 @@ public sealed partial class TwinsanityActors
 					Emerge(a, c);
 				}
 				break;
+		}
+	}
+
+	// Worm attack (COM_EARTH_WORM_IDLE S1-S5; rig logs/gameplay/rig_worm_attack.csv): with Crash
+	// inside 3 m (MeToPlayerSqrDist 9) it turns to face him at 90 deg/s (S3, TURN_SPEED 1.5708),
+	// lunges with a013 and its Sounds[8,9] (779/780), and 0.3 s in (S5 DELAY 0.3, then the
+	// CreateDamage cmd 514) the hit lands: on the rig it took a mask and shoved Crash off, 1.53 s
+	// after he arrived 2 m away. It waits out the clip (S4, AnimationFinished) and the idle's 1 s
+	// (S1 -> COM_GENERIC_CREATURE_IDLE_BASIC, DELAY 1) before it can strike again.
+	private const float WormAttackRadius = 3.0f;
+	private const float WormTurnRate = 90.0f;
+	private const float WormHitAt = 0.3f;
+	private const float WormAttackClip = 1.24f; // a013
+	private const float WormAttackRest = 1.0f;
+
+	// c.Landed: lunging; c.FruitLife: time into the lunge; c.Speed: rest left after one.
+	private void WormAttack(Actor a, Critter c, float dt, Vector3 crashPos, float h)
+	{
+		if (c.Landed)
+		{
+			float before = c.FruitLife;
+			c.FruitLife += dt;
+			if (before < WormHitAt && c.FruitLife >= WormHitAt && h < WormAttackRadius && MathF.Abs(crashPos.Y - a.Home.Y) < 2.0f)
+			{
+				_host?.DamagePlayer(a.Home, DeathKind.Generic);
+			}
+			if (c.FruitLife >= WormAttackClip)
+			{
+				c.Landed = false;
+				c.Speed = WormAttackRest;
+				PlayClip(a, a.IdleClip);
+			}
+			return;
+		}
+		c.Speed -= dt;
+		if (h >= WormAttackRadius || c.Speed > 0.0f)
+		{
+			return;
+		}
+		// Its own yaw (a.Angle, set to HomeYaw at spawn): EulerDegrees reads back a yaw past 90 as
+		// (180, 180 - yaw, 180), so turning from the read-back value started from the wrong heading.
+		float want = MathF.Atan2(crashPos.X - a.Home.X, crashPos.Z - a.Home.Z) * (180.0f / MathF.PI);
+		float diff = ((want - a.Angle) % 360.0f + 540.0f) % 360.0f - 180.0f;
+		float step = WormTurnRate * dt;
+		a.Angle = MathF.Abs(diff) <= step ? want : a.Angle + MathF.Sign(diff) * step;
+		a.Model.EulerDegrees = new Vector3(0.0f, a.Angle, 0.0f);
+		if (MathF.Abs(diff) <= step)
+		{
+			c.Landed = true;
+			c.FruitLife = 0.0f;
+			int clip = Animation.Find(a.Model, "a013");
+			if (clip >= 0)
+			{
+				Animation.CrossFade(a.Model, clip, 0.1f);
+			}
+			TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Home);
 		}
 	}
 

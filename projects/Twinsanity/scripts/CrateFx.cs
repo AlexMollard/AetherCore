@@ -393,6 +393,43 @@ public static class CrateFx
 			unkByte7: 3);
 	}
 
+	/// <summary>A dead creature's pop (logs/gameplay/pop_sheet.md, defs in pop_particles.json).
+	/// COM_GENERIC_CREATURE_DEAD_BODYPOP fires ENEMY_POP1 (210, sparks) and ENEMY_POP2 (211, grey
+	/// puff); COM_GLOBAL_CHICKEN_POP fires SEAGULLPOP (254, feathers) and ENEMY_POP2. As for the crate
+	/// explosions, the DoParticle direction words carry no velocity, so the disc Velocity/Gravity
+	/// are kept as comments and only the Random_Emit / Random_Start jitter moves the particles.</summary>
+	public static void CreaturePop(Vector3 center, bool feathers)
+	{
+		if (feathers)
+		{
+			SpawnEmitter("SeagullPop", center, "0", new Vector4(62.1f, 61.9f, 34.8f, 33.6f) / 128.0f,
+				30, 120.0f, 15.0f / 60.0f, 0.4910268f,
+				Vector3.Zero, new Vector3(5.0f), new Vector3(0.5318164f, 0.5249013f, 0.5403631f), 0.0f,
+				new[] { CK(0f, 255f, 255f, 255f), CK(1f, 255f, 255f, 255f) },
+				new[] { 0f, 118.193f, 1f, 59.431f },
+				new[] { 0f, 2544.265f * 1e-4f, 0.511f, 2544.265f * 1e-4f, 1f, 0f },
+				new[] { 0f, -293.4408f, 0.049f, 412.3929f, 1f, -293.4408f },
+				additive: false);
+		}
+		else
+		{
+			SpawnEmitter("EnemyPop1", center, "1", new Vector4(33.3f, 0.0f, 64.5f, 31.6f) / 128.0f,
+				20, 600.0f, 2.0f / 60.0f, 0.4687497f,
+				Vector3.Zero /* Velocity 7.710999 */, new Vector3(6.420215f, 6.864955f, 6.216114f), new Vector3(0.1717121f, 0.187581f, 0.1676432f), 0.0f /* Gravity -20.77084 */,
+				new[] { CK(0f, 64f, 64f, 64f), CK(0.9538402f, 64f, 64f, 64f), CK(1f, 0f, 0f, 0f) },
+				new[] { 0f, 246.369f, 0.453f, 130.67f, 1f, 0f },
+				new[] { 0f, 6599.096f * 1e-4f, 1f, 0f },
+				new[] { 0f, 0f, 1f, 0f });
+		}
+		SpawnEmitter("EnemyPop2", center, "0", new Vector4(1.9f, 65.3f, 64.1f, 128.0f) / 128.0f,
+			18, 540.0f, 2.0f / 60.0f, 0.6184861f,
+			Vector3.Zero, new Vector3(0.5481768f, 0.5494788f, 0.4915363f), new Vector3(0.7690419f, 0.7539868f, 0.7714835f), 0.0f /* Gravity 2.981393 */,
+			new[] { CK(0f, 112.74633f, 112.74633f, 112.74633f), CK(0.9538402f, 64f, 64f, 64f), CK(1f, 0f, 0f, 0f) },
+			new[] { 0f, 149.71f, 1f, 0f },
+			new[] { 0f, 1651.204f * 1e-4f, 0.058f, 12464.893f * 1e-4f, 1f, 4646.123f * 1e-4f },
+			new[] { 0f, 0f, 1f, 27165f / 65536f * 360f });
+	}
+
 	// DoParticle(type, 0x3FFFFFC0, 0, 0, 0, 0, 0, 0, 0) - every crate explosion passes a zero
 	// direction, and the disc's Velocity and Gravity act along it, so only the Random_Emit /
 	// Random_Start jitter moves these particles. The rig agrees (rig_nboomr_*): the nitro cloud
