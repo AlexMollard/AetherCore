@@ -1023,6 +1023,17 @@ namespace aether::app::scene
 				if (wants("alpha_mask")) { m.insert("alpha_mask", a.alphaMask); }
 				if (wants("vertex_color")) { m.insert("vertex_color", a.modulateVertexColor); }
 				if (wants("receive_shadows")) { m.insert("receive_shadows", a.receiveShadows); }
+				// The lighting flags, written only when set so ordinary sun-lit materials' captured
+				// tables stay byte-identical (the same rule as uv_scroll below). Dropped, every
+				// baked entity's material loads as plain sun-lit PBR: a prefab bake of a level whose
+				// models carry PS2 lighting (object_lit props - crates, wumpa, gems - prelit
+				// scenery, the sky dome, foliage cards, additive water) then lights differently
+				// from the same level built from JSON at play.
+				if (wants("baked_lighting") && a.bakedLighting) { m.insert("baked_lighting", true); }
+				if (wants("object_lit") && a.objectLit) { m.insert("object_lit", true); }
+				if (wants("foliage") && a.foliage) { m.insert("foliage", true); }
+				if (wants("sky") && a.sky) { m.insert("sky", true); }
+				if (wants("additive_blend") && a.additiveBlend) { m.insert("additive_blend", true); }
 				// Written only when it scrolls, so every static material's captured table stays
 				// byte-identical (the same rule as the .material asset format's uvscroll key).
 				// Dropped, a baked sea/waterfall loads with scroll 0 and never animates.
@@ -1529,6 +1540,16 @@ namespace aether::app::scene
 				mat.asset.modulateVertexColor = mv["vertex_color"].value_or(false);
 				took("receive_shadows");
 				mat.asset.receiveShadows = mv["receive_shadows"].value_or(true);
+				took("baked_lighting");
+				mat.asset.bakedLighting = mv["baked_lighting"].value_or(false);
+				took("object_lit");
+				mat.asset.objectLit = mv["object_lit"].value_or(false);
+				took("foliage");
+				mat.asset.foliage = mv["foliage"].value_or(false);
+				took("sky");
+				mat.asset.sky = mv["sky"].value_or(false);
+				took("additive_blend");
+				mat.asset.additiveBlend = mv["additive_blend"].value_or(false);
 				took("uv_scroll");
 				mat.asset.uvScroll = Vec2FromToml(mv["uv_scroll"], glm::vec2(0.0f));
 				took("albedo");

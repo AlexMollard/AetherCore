@@ -36,6 +36,11 @@ namespace aether::app::scene
 				else if (key == "alpha_mask") { onto.alphaMask = from.alphaMask; }
 				else if (key == "vertex_color") { onto.modulateVertexColor = from.modulateVertexColor; }
 				else if (key == "receive_shadows") { onto.receiveShadows = from.receiveShadows; }
+				else if (key == "baked_lighting") { onto.bakedLighting = from.bakedLighting; }
+				else if (key == "object_lit") { onto.objectLit = from.objectLit; }
+				else if (key == "foliage") { onto.foliage = from.foliage; }
+				else if (key == "sky") { onto.sky = from.sky; }
+				else if (key == "additive_blend") { onto.additiveBlend = from.additiveBlend; }
 				else if (key == "uv_scroll") { onto.uvScroll = from.uvScroll; }
 			}
 		}
