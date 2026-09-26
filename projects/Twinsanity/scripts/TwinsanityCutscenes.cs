@@ -93,8 +93,8 @@ public sealed class TwinsanityCutscenes
 		public string Name = "";
 		public int[] Scripts = Array.Empty<int>();
 		public List<(int Message, int Script)> Recv = new();
-		public int[] AnimJoints = Array.Empty<int>();
-		public List<(int Ogi, int Joints, string Model)> Models = new();
+		public int[] AnimOgi = Array.Empty<int>();   // anim slot i draws with the OGI in OGI slot i
+		public Dictionary<int, string> Models = new();
 	}
 
 	private sealed class Chunk
@@ -275,18 +275,13 @@ public sealed class TwinsanityCutscenes
 		{
 			def.Recv.Add((r[0].GetInt32(), r[1].GetInt32()));
 		}
-		def.AnimJoints = Array.ConvertAll(ToArray(o.GetProperty("anims")), e => e[1].GetInt32());
-		var ogiJoints = new Dictionary<int, int>();
-		foreach (JsonElement g in o.GetProperty("ogis").EnumerateArray())
-		{
-			ogiJoints[g[0].GetInt32()] = g[1].GetInt32();
-		}
+		def.AnimOgi = Array.ConvertAll(ToArray(o.GetProperty("ogis")), e => e[0].GetInt32());
 		if (o.TryGetProperty("models", out JsonElement models))
 		{
 			foreach (JsonElement m in models.EnumerateArray())
 			{
 				int ogi = m.GetProperty("ogi").GetInt32();
-				def.Models.Add((ogi, ogiJoints.GetValueOrDefault(ogi), m.GetProperty("model").GetString()!));
+				def.Models[ogi] = m.GetProperty("model").GetString()!;
 			}
 		}
 		return def;
@@ -864,11 +859,10 @@ public sealed class TwinsanityCutscenes
 			return;
 		}
 		int slot = slots[slots.Count == 1 ? 0 : AetherCore.Random.Range(0, slots.Count)];
-		int joints = slot < def.AnimJoints.Length ? def.AnimJoints[slot] : 0;
-		string? model = ModelFor(def, joints, a.IsPlayer);
-		if (model == null)
+		int ogi = slot < def.AnimOgi.Length ? def.AnimOgi[slot] : -1;
+		if (!def.Models.TryGetValue(ogi, out string? model))
 		{
-			Warn($"no model with {joints} joints for {def.Name} clip a{slot:D3}");
+			Warn($"no model for OGI {ogi} ({def.Name} clip a{slot:D3})");
 			return;
 		}
 		if (!a.Proxy.IsValid || a.ProxyModel != model)
@@ -906,25 +900,6 @@ public sealed class TwinsanityCutscenes
 			a.ClipLength = 0.0f;
 		}
 		PlaceProxy(a);
-	}
-
-	// The director's model whose skeleton fits the clip; the player keeps his own mesh when it fits.
-	private static string? ModelFor(ObjectDef def, int joints, bool player)
-	{
-		string? any = null;
-		foreach ((int ogi, int j, string model) in def.Models)
-		{
-			if (j != joints)
-			{
-				continue;
-			}
-			if (player ? ogi == 0 : ogi != 0)
-			{
-				return model;
-			}
-			any ??= model;
-		}
-		return any;
 	}
 
 	private static void AdvanceClip(Agent a, float dt)

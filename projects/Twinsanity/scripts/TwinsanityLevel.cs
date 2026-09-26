@@ -23,6 +23,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	public string PlayerName = "Crash";
 	public float KillY = -35.0f;
 	public int StartLives = 4;
+	// Play the New Game movie (FMV/H01_A, tw-extract --movies H01_A) before the beach starts.
+	public bool IntroMovie = false;
 	public float SkyScale = 7.5f;
 
 	private const float kCrashRadius = 0.4f;
@@ -53,6 +55,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private readonly TwinsanityHud _hud = new();
 	private readonly TwinsanityPause _pause = new();
 	private readonly TwinsanityCutscenes _cutscenes = new();
+	private readonly TwinsanityMovie _movie = new();
 	private readonly HashSet<uint> _deadly = new();
 	private readonly Dictionary<int, string> _objectModels = new();
 
@@ -147,7 +150,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		CrateFx.RegisterObjectModels(_objectModels);
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
-		TwinsanityAudio.Start(LevelPath);
+		if (!IntroMovie || !_movie.Play("H01_A", () => TwinsanityAudio.Start(LevelPath)))
+		{
+			TwinsanityAudio.Start(LevelPath);
+		}
 		TwinsanityAku.Start();
 		_cutscenes.Start();
 		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
@@ -156,6 +162,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 	public override void OnUpdate(float deltaTime)
 	{
+		_movie.Update();
 		Entity camera = Camera.Main;
 		if (_sky.IsValid && camera.IsValid)
 		{
