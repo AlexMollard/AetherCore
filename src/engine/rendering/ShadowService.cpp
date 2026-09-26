@@ -73,8 +73,8 @@ namespace
 	// offset only has to clear the filter that is actually in use, which contact
 	// hardening keeps at a texel or two exactly where acne would otherwise show;
 	// where the penumbra opens up the shadow is soft enough that acne cannot form.
-	constexpr float kDepthBiasTexels = 1.0f;
-	constexpr float kNormalOffsetTexels = 3.0f;
+	constexpr float kDepthBiasTexels = 1.5f;
+	constexpr float kNormalOffsetTexels = 6.0f;
 
 
 	void DisableDirectionalShadows(aether::FrameConstants& fc)
