@@ -1023,6 +1023,10 @@ namespace aether::app::scene
 				if (wants("alpha_mask")) { m.insert("alpha_mask", a.alphaMask); }
 				if (wants("vertex_color")) { m.insert("vertex_color", a.modulateVertexColor); }
 				if (wants("receive_shadows")) { m.insert("receive_shadows", a.receiveShadows); }
+				// Written only when it scrolls, so every static material's captured table stays
+				// byte-identical (the same rule as the .material asset format's uvscroll key).
+				// Dropped, a baked sea/waterfall loads with scroll 0 and never animates.
+				if (wants("uv_scroll") && a.uvScroll != glm::vec2(0.0f)) { m.insert("uv_scroll", Vec2ToToml(a.uvScroll)); }
 				const auto tex = [&m, &wants](const char* key, const std::string& path)
 				{
 					if (!path.empty() && wants(key))
@@ -1525,6 +1529,8 @@ namespace aether::app::scene
 				mat.asset.modulateVertexColor = mv["vertex_color"].value_or(false);
 				took("receive_shadows");
 				mat.asset.receiveShadows = mv["receive_shadows"].value_or(true);
+				took("uv_scroll");
+				mat.asset.uvScroll = Vec2FromToml(mv["uv_scroll"], glm::vec2(0.0f));
 				took("albedo");
 				mat.albedoPath = mv["albedo"].value_or(std::string{});
 				took("normal");

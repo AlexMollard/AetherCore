@@ -185,6 +185,10 @@ namespace aether
 		out.bakedLighting = (g.flags & GpuMaterial::kBakedLighting) != 0;
 		out.objectLit = (g.flags & GpuMaterial::kObjectLit) != 0;
 		out.sky = (g.flags & GpuMaterial::kSky) != 0;
+		// Without this a captured material (scene save, prefab bake) lost its scroll
+		// velocity and the sea/waterfalls/sky dome froze - the shader animates purely
+		// from this value and the frame clock.
+		out.uvScroll = g.uvScroll;
 		out.albedoTex = e.textures[0];
 		out.normalTex = e.textures[1];
 		out.metallicRoughnessTex = e.textures[2];

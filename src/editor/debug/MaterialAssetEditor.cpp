@@ -52,6 +52,7 @@ namespace aether::editor
 			else if (key == "alpha_mask") { onto.alphaMask = from.alphaMask; }
 			else if (key == "vertex_color") { onto.modulateVertexColor = from.modulateVertexColor; }
 			else if (key == "receive_shadows") { onto.receiveShadows = from.receiveShadows; }
+			else if (key == "uv_scroll") { onto.uvScroll = from.uvScroll; }
 		}
 	}
 

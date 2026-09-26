@@ -23,6 +23,14 @@ namespace aether::editor
 
 		PickHit best{};
 		best.t = maxDist;
+		// A mesh whose AABB contains the ray origin (the camera is inside it - the beach's
+		// whole-terrain mesh, a camera-centred sky dome) has no meaningful box-entry distance:
+		// the slab test returns ~0, which beats every real hit and made one giant mesh win
+		// EVERY click. Meshes are GPU-resident, so a triangle test is not available here; such
+		// candidates are demoted to a fallback that only wins when nothing rankable was hit -
+		// clicking open ground still selects the terrain, clicking a crate selects the crate.
+		PickHit fallback{};
+		fallback.t = maxDist;
 		std::uint64_t bestSpriteOrder = 0;
 		bool haveSprite = false;
 		for (const auto& [enttE, sprite, transform]: world.GetRegistry().view<SpriteRendererComponent, TransformComponent>(entt::exclude<DisabledComponent>).each())
@@ -90,6 +98,19 @@ namespace aether::editor
 			local.origin = glm::vec3(worldToLocal * glm::vec4(ray.origin, 1.0f));
 			local.dir = glm::vec3(worldToLocal * glm::vec4(ray.dir, 0.0f));
 
+			const bool originInsideAabb = glm::all(glm::greaterThanEqual(local.origin, mn - glm::vec3(1e-3f)))
+				&& glm::all(glm::lessThanEqual(local.origin, mx + glm::vec3(1e-3f)));
+			if (originInsideAabb)
+			{
+				// No rankable entry distance (see the fallback note at the top): only wins
+				// when nothing else was hit at all.
+				if (!fallback.entity.IsValid())
+				{
+					fallback.entity = e;
+				}
+				continue;
+			}
+
 			float tLocal = 0.0f;
 			if (!RayVsAabb(local, mn, mx, tLocal))
 			{
@@ -125,6 +146,6 @@ namespace aether::editor
 			}
 		}
 
-		return best.entity.IsValid() ? best : PickHit{};
+		return best.entity.IsValid() ? best : (fallback.entity.IsValid() ? fallback : PickHit{});
 	}
 } // namespace aether::editor
