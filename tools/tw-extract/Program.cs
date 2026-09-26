@@ -933,9 +933,11 @@ if (skinPrims.Count > 0 && joints.Length > 0)
 			public Quaternion RestRotation;
 		}
 
-		// A state body that runs SpawnResidentAgent (the resident is Objects[its first argument]) and then
-		// AttachFocusObject(point << 3 | flags) carries that object on the exit point from then on
-		// (COM_EARTH_TRIBESMAN_SHIELDBEARER_INIT: SpawnResidentAgent(0, ...), AttachFocusObject(0x1F8010) = exit 2).
+		// A state body that runs SpawnResidentAgent and then AttachFocusObject(point << 3 | flags) carries the
+		// resident on the exit point from then on (COM_EARTH_TRIBESMAN_SHIELDBEARER_INIT: AttachFocusObject(0x1F8010)
+		// = exit 2). The resident's object id is the low 16 bits of argument 6 (0xFF0334 -> 820 WEAPON_NATIVE_SHIELD,
+		// 0xFF030B -> 779 RIGID_CANNON_BUTTON; 0xFFFF = none). Argument 0 is not an index: the same INIT reads 0 in
+		// huba.rm2 and 0x2FFFF in hubb.rm2, and the cannon's reads 0 or 0x7E8100D3 depending on the chunk.
 		static List<Attachment> ResidentAttachments(GameObject obj, Dictionary<uint, Script> scripts, Dictionary<uint, GameObject> objects, Dictionary<uint, GraphicsInfo> ogis)
 		{
 			var list = new List<Attachment>();
@@ -959,9 +961,9 @@ if (skinPrims.Count > 0 && joints.Length > 0)
 								{
 									continue;
 								}
-								if (op == DefaultEnums.CommandID.SpawnResidentAgent && cmd.arguments[0] < obj.Objects.Count)
+								if (op == DefaultEnums.CommandID.SpawnResidentAgent && cmd.arguments.Count > 6 && (cmd.arguments[6] & 0xFFFF) != 0xFFFF)
 								{
-									objects.TryGetValue(obj.Objects[(int)cmd.arguments[0]], out resident);
+									objects.TryGetValue(cmd.arguments[6] & 0xFFFF, out resident);
 								}
 								else if (op == DefaultEnums.CommandID.AttachFocusObject && resident != null && resident.OGIs.Count > 0
 									&& ogis.TryGetValue(resident.OGIs[0], out var ogi) && !list.Any(a => a.Object == resident.Name))

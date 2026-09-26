@@ -98,6 +98,13 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     return output;
 }
 
+// Exact sRGB OETF (IEC 61966-2-1), for textured rects: see the kShapeTexturedRect branch.
+float3 LinearToSrgbUi(float3 c)
+{
+    c = saturate(c);
+    return select(c <= 0.0031308, c * 12.92, 1.055 * pow(c, 1.0 / 2.4) - 0.055);
+}
+
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
@@ -150,7 +157,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             uv = (floor(uv * texSize) + 0.5) / texSize;
         }
         const float4 texColor = g_textures[NonUniformResourceIndex(input.textureSlot)].Sample(g_linearSampler, uv);
-        return texColor * input.color;
+        // UI textures are acquired sRGB, so the fetch decodes them to linear light; but this pass
+        // writes straight to a UNORM target holding display-encoded values (input.color is one too).
+        // Re-encode, or every mid-tone is drawn gamma-darkened: the Twinsanity hint glyphs' orange
+        // (disc texel G 150) came out at G 57 against the PS2's 105 (logs/tutorialfinal/hint_colour.md).
+        return float4(LinearToSrgbUi(texColor.rgb), texColor.a) * input.color;
     }
 
     if (input.type == kShapeRect && input.cornerRadius > 0.5)

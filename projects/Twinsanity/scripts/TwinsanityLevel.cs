@@ -436,6 +436,15 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		_cutscenes.Update(deltaTime, _player!);
 		if (_cutscenes.TakeCheckpoint(out Vector3 checkpoint, out float checkpointFacing))
 		{
+			// LEVELCRATE recv 138 -> LEVEL_CRATE_OPEN: the volume's message opens the crate it names, and
+			// Crash respawns on its opened lid.
+			Crate? zoneCrate = _crates.Find(c => c.Kind is Kind.Checkpoint or Kind.Level
+				&& MathF.Abs(c.Base.X - checkpoint.X) < 0.5f && MathF.Abs(c.Base.Z - checkpoint.Z) < 0.5f);
+			if (zoneCrate != null)
+			{
+				Open(zoneCrate);
+				checkpoint = zoneCrate.Base + new Vector3(0.0f, kOpenedTop, 0.0f);
+			}
 			_checkpoint = checkpoint;
 			_checkpointFacing = checkpointFacing;
 		}
@@ -584,9 +593,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		first.Activated = true;
 		first.Alive = false;
-		first.Body.Destroy();
 		CrateFx.ShowOpened(first.Model, first.ObjectId);
-		_checkpoint = first.Base;
+		KeepOpenedCollision(first);
+		_checkpoint = first.Base + new Vector3(0.0f, kOpenedTop, 0.0f);
 		_checkpointFacing = CheckpointFacing(first);
 	}
 
@@ -992,8 +1001,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	}
 
 	// CHECKPOINT_CRATE_OPEN / LEVEL_CRATE_OPEN: the OGI flips to the opened look (245/246 and
-	// 976/975) and the respawn point moves here. The collider goes so Crash can walk through the
-	// opened crate and never lands on it again.
+	// 976/975) and the respawn point moves here, on the opened lid.
 	private void Open(Crate c)
 	{
 		if (!c.Alive)
@@ -1002,11 +1010,37 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		c.Activated = true;
 		c.Alive = false;
-		c.Body.Destroy();
-		_checkpoint = c.Base;
+		KeepOpenedCollision(c);
+		_checkpoint = c.Base + new Vector3(0.0f, kOpenedTop, 0.0f);
 		_checkpointFacing = CheckpointFacing(c);
 		Log.Info(c.Kind == Kind.Level ? "[Twinsanity] Level crate opened (level entry not implemented)." : "[Twinsanity] Checkpoint activated.");
 		CrateFx.Activated(c.Model, c.ObjectId);
+	}
+
+	// Top of the opened checkpoint / level crate (CHECKPOINTCRATE_3 / LEVELCRATE_3: the lid at 0.303, the four
+	// folded sides at 0.15, a 3 x 3 m cross).
+	private const float kOpenedTop = 0.30f;
+
+	// Project decision: an opened checkpoint or level crate keeps its collision so Crash can stand and jump
+	// on it. The closed 1 m box gives way to the exact triangles of the opened model (state 3), placed as a
+	// separate root: the state swaps replace the crate model's children. NOTE: the rig walks straight
+	// through the opened beach start checkpoint at ground height (logs/tutorialfinal/rig_cp_walk.csv); the
+	// collision is kept on the owner's standing decision, not the rig.
+	private static void KeepOpenedCollision(Crate c)
+	{
+		c.Body.Destroy();
+		if (CrateFx.StatePath(c.Model, c.ObjectId, 3) is not string opened)
+		{
+			return;
+		}
+		Entity b = World.Create();
+		b.Name = c.Kind + " Crate (opened)";
+		b.MarkTransient();
+		b.AddTransform();
+		b.Position = c.Model.Position;
+		b.EulerDegrees = c.Model.EulerDegrees;
+		Physics.AddMeshBody(b, opened);
+		c.Body = b;
 	}
 
 	// Stacked crates. Rig (logs/wildlife/stack_fall_rig_raw.csv, the iron crates on the nitro stack

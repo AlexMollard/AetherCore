@@ -582,15 +582,24 @@ public static class CrateFx
 	/// <summary>Swap a crate's visible model to OGI state slot <paramref name="k"/>.</summary>
 	private static void ShowState(Entity crate, int objectId, int k)
 	{
+		if (StatePath(crate, objectId, k) is string path)
+		{
+			LoadState(crate, path);
+		}
+	}
+
+	/// <summary>The model file of a crate's OGI state slot <paramref name="k"/>, or null when it has none.</summary>
+	public static string? StatePath(Entity crate, int objectId, int k)
+	{
 		// The crate's own model ("<Name>_0.gltf"); per-instance models (act_TNTCRATE3...) differ
 		// from the object table's.
 		string? model = s_paths.GetValueOrDefault(crate.Id) ?? CrateFragments.ObjectModel(objectId);
 		int under = model?.LastIndexOf('_') ?? -1;
 		if (k < 0 || under < 0 || !model!.EndsWith(".gltf", StringComparison.OrdinalIgnoreCase))
 		{
-			return;
+			return null;
 		}
-		LoadState(crate, model[..(under + 1)] + k + ".gltf");
+		return model[..(under + 1)] + k + ".gltf";
 	}
 
 	private static void LoadState(Entity crate, string path)
