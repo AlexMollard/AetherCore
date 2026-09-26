@@ -22,6 +22,9 @@ namespace TwExtract
 		// A collision triangle's Surface is a SurfaceTypes value (DefaultEnums.cs); the CollisionSurface records
 		// only carry each type's sounds and particles. These kill on contact:
 		static readonly HashSet<int> s_deadly = new HashSet<int> { 3, 4, 5, 23, 26 };
+		// The drowning plane under the seas (23) drowns him; the rest (the huba/hubb/hubc pits are 4,
+		// generic instant death) are a plain fall death on the rig. Separate pieces so the runtime can tell.
+		const int kDrowningPlane = 23;
 		// and these do not block the player: camera-only, rigid-body-only and AI-only, and the water
 		// surface (12) - on the rig Crash wades through it down the seabed and drowns on the
 		// drowning plane (23) beneath; exported solid, he walked on the sea.
@@ -198,10 +201,10 @@ namespace TwExtract
 				File.Delete(stale);
 			}
 			int written = 0, skipped = 0, turned = 0;
-			foreach (var kind in new[] { "solid", "deadly" })
+			foreach (var kind in new[] { "solid", "deadly", "drown" })
 			{
-				bool deadly = kind == "deadly";
-				var tris = Enumerable.Range(0, col.Tris.Count).Where(i => !s_ignored.Contains(col.Tris[i].Surface) && s_deadly.Contains(col.Tris[i].Surface) == deadly).OrderBy(i =>
+				bool deadly = kind != "solid", drown = kind == "drown";
+				var tris = Enumerable.Range(0, col.Tris.Count).Where(i => !s_ignored.Contains(col.Tris[i].Surface) && s_deadly.Contains(col.Tris[i].Surface) == deadly && (col.Tris[i].Surface == kDrowningPlane) == drown).OrderBy(i =>
 				{
 					var t = col.Tris[i];
 					var c = (verts[t.Vert1] + verts[t.Vert2] + verts[t.Vert3]) / 3f;
@@ -222,7 +225,7 @@ namespace TwExtract
 					g.SceneRoots.Add(g.AddNode(new Dictionary<string, object> { ["name"] = "collision", ["mesh"] = mesh }));
 					string name = $"{Path.GetFileName(level)}_col_{kind}_{written:D3}.gltf";
 					g.Save(Path.Combine(dir, name));
-					pieces.Add(new Dictionary<string, object> { ["path"] = Program.VfsPath(Path.Combine(dir, name)), ["deadly"] = deadly });
+					pieces.Add(new Dictionary<string, object> { ["path"] = Program.VfsPath(Path.Combine(dir, name)), ["deadly"] = deadly, ["drown"] = drown });
 					written++;
 					prim = null;
 					remap.Clear();
@@ -264,7 +267,8 @@ namespace TwExtract
 				Flush();
 			}
 			int flipped = pieceFlip.Count(f => f);
-			return $"collision {col.Tris.Count} tris in {written} pieces ({col.Tris.Count(t => s_deadly.Contains(t.Surface))} deadly, {skipped} non-blocking skipped, winding {(flip ? "as stored" : "reversed")}, {flipped} tris in inside-out pieces turned, {turned} down-facing floors turned up)";
+			string deadlySurfaces = string.Join(" ", col.Tris.Where(t => s_deadly.Contains(t.Surface)).GroupBy(t => t.Surface).OrderBy(g => g.Key).Select(g => $"s{g.Key}:{g.Count()}"));
+			return $"collision {col.Tris.Count} tris in {written} pieces ({col.Tris.Count(t => s_deadly.Contains(t.Surface))} deadly [{deadlySurfaces}], {skipped} non-blocking skipped, winding {(flip ? "as stored" : "reversed")}, {flipped} tris in inside-out pieces turned, {turned} down-facing floors turned up)";
 		}
 
 		// The PS2 data winds whole connected pieces inside out (a cliff top or a rock cap whose floor

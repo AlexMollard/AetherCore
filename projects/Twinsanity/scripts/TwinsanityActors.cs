@@ -41,6 +41,7 @@ public sealed partial class TwinsanityActors
 		Monkey,    // throws fruit from its tree at Crash
 		Parrot,    // spawned by a parrot spawner: perches on its keys, flies between them
 		Enemy,     // chases Crash when close; touch hurts, spin/jump/slam kills it
+		Shieldbearer, // shielded tribesman: blocks spins, bashes Crash; a slide knocks the shield off
 		Pickup,    // spins; collected on touch
 		Prop,      // plays its idle clip in place
 	}
@@ -59,6 +60,9 @@ public sealed partial class TwinsanityActors
 		public float Angle;      // bat orbit phase
 		public Critter? Critter;
 		public int Gem = -1;     // gem pickups: their TwinsanityPause gem-track slot
+		public uint Subtype;     // the instance subtype (shieldbearers: 0 advances on Crash, 1/2 stand)
+		public bool Shielded;    // shieldbearers until a slide knocks the shield off
+		public float Bash;       // shieldbearers: seconds left of the bash clip
 		// Death knockback (Knockback.cs): airborne while Flying, then DeathTimer counts the linger.
 		public bool Flying, Bounced;
 		public Vector3 FlyVelocity;
@@ -138,6 +142,15 @@ public sealed partial class TwinsanityActors
 		ReadClips(e, a);
 
 		a.Kind = BehaviourOf(objectName);
+		a.Subtype = SubtypeOf(instance);
+		if (a.Kind == Behaviour.Shieldbearer)
+		{
+			// COM_EARTH_TRIBESMAN_SHIELDBEARER_DEFEND's DoAnim slots (clip aNNN is slot NNN): 25 its guard
+			// stance, 23 the step at Crash; 21 is ATTACK_MELEE's bash.
+			a.Shielded = true;
+			a.IdleClip = Animation.Find(e, "a025");
+			a.MoveClip = Animation.Find(e, "a023");
+		}
 		// One-shot props (TwinsanityProps.cs) rest until their cue; everything else loops its idle.
 		if (a.Kind != Behaviour.Prop || !SetupOneShot(a, objectName, SubtypeOf(instance), model))
 		{
@@ -277,6 +290,9 @@ public sealed partial class TwinsanityActors
 				case Behaviour.Enemy:
 					UpdateEnemy(a, dt, crashPos);
 					break;
+				case Behaviour.Shieldbearer:
+					UpdateShieldbearer(a, dt, crashPos);
+					break;
 				case Behaviour.Pickup:
 					UpdatePickup(a, dt, crashPos, host);
 					break;
@@ -354,7 +370,7 @@ public sealed partial class TwinsanityActors
 	/// script's 4 s lie-down, which the rig's station 3 capture does not reach.</summary>
 	public void KnockEnemy(Vector3 at, Vector3 from)
 	{
-		Actor? a = _actors.Find(x => x.Alive && x.Kind == Behaviour.Enemy
+		Actor? a = _actors.Find(x => x.Alive && x.Kind is Behaviour.Enemy or Behaviour.Shieldbearer
 			&& (x.Model.Position.X - at.X) * (x.Model.Position.X - at.X) + (x.Model.Position.Z - at.Z) * (x.Model.Position.Z - at.Z) < 4.0f);
 		if (a != null)
 		{
@@ -413,6 +429,91 @@ public sealed partial class TwinsanityActors
 		{
 			_host?.DamagePlayer(p, DeathKind.Generic);
 		}
+	}
+
+	// The shieldbearers (disc COM_EARTH_TRIBESMAN_SHIELDBEARER_DEFEND/_HIT, rig logs/tutorialroute/rig_guard_*):
+	// within sqrt(200) of Crash he faces him; subtype 0 steps at him at 2.75/s but never past 6 from his post
+	// (MeToInitPosSqrDist 36) and walks back when Crash leaves. His HIT script ignores every attack while his
+	// hit points are above 10 except AgentWasSlid: spins, slams and jumps do nothing to him, while touching
+	// him any other way gets Crash bashed. A slide knocks the shield off (HP 20 -> 10) and Crash slides on
+	// past; he stays up and from then on is a plain tribesman (DEFAULT state 3) that a spin knocks away.
+	private const float GuardSightSq = 200.0f;
+	private const float GuardSpeed = 2.75f;
+	private const float GuardLeash = 6.0f;
+	private const float GuardStop = 1.6f; // he halts short of touching: Crash standing by him is not bashed
+
+	private void UpdateShieldbearer(Actor a, float dt, Vector3 crashPos)
+	{
+		CrashPlayer? player = _player;
+		if (player == null)
+		{
+			return;
+		}
+		if (!a.Shielded)
+		{
+			// The slide that took his shield carries Crash on past him: that same slide must not also
+			// count as the attack that knocks the bare tribesman away.
+			a.Bash -= dt;
+			if (a.Bash <= 0.0f)
+			{
+				UpdateEnemy(a, dt, crashPos);
+			}
+			return;
+		}
+		Vector3 p = a.Model.Position;
+		float dx = crashPos.X - p.X, dz = crashPos.Z - p.Z;
+		float distSq = dx * dx + dz * dz;
+		bool sees = distSq < GuardSightSq;
+		Vector3 step = Vector3.Zero;
+		if (sees)
+		{
+			float dist = MathF.Sqrt(distSq);
+			Vector3 dir = dist > 0.001f ? new Vector3(dx / dist, 0.0f, dz / dist) : Vector3.UnitZ;
+			FaceMovement(a, dir);
+			if (a.Subtype == 0 && dist > GuardStop)
+			{
+				Vector3 next = p + dir * MathF.Min(GuardSpeed * dt, dist - GuardStop);
+				Vector3 fromHome = new(next.X - a.Home.X, 0.0f, next.Z - a.Home.Z);
+				if (fromHome.Length() > GuardLeash)
+				{
+					next = new Vector3(a.Home.X, next.Y, a.Home.Z) + Vector3.Normalize(fromHome) * GuardLeash;
+				}
+				step = next - p;
+			}
+		}
+		else if (a.Subtype == 0)
+		{
+			Vector3 home = new(a.Home.X - p.X, 0.0f, a.Home.Z - p.Z);
+			float len = home.Length();
+			if (len > 0.05f)
+			{
+				step = home * MathF.Min(1.0f, GuardSpeed * dt / len);
+				FaceMovement(a, step);
+			}
+		}
+		a.Model.Position = p + step;
+		a.Bash = MathF.Max(0.0f, a.Bash - dt);
+		if (a.Bash <= 0.0f)
+		{
+			PlayClip(a, step.LengthSquared() > 1e-8f ? a.MoveClip : a.IdleClip);
+		}
+
+		bool touching = distSq < EnemyHitRadius * EnemyHitRadius && crashPos.Y < p.Y + 1.6f && crashPos.Y + 1.8f > p.Y;
+		if (!touching || player.IsSpinning)
+		{
+			return; // the shield takes a spin
+		}
+		if (player.IsSliding)
+		{
+			a.Shielded = false;
+			a.Bash = 0.8f;
+			CrateFx.ImpactFlash(p + new Vector3(0.0f, 0.8f, 0.0f));
+			Log.Info($"[Twinsanity] shieldbearer {a.Model.Name} lost his shield to a slide");
+			return;
+		}
+		a.Bash = 1.0f;
+		PlayClip(a, Animation.Find(a.Model, "a021"));
+		_host?.DamagePlayer(p, DeathKind.Generic);
 	}
 
 	private void UpdatePickup(Actor a, float dt, Vector3 crashPos, ITwinsanityHost host)
@@ -539,6 +640,10 @@ public sealed partial class TwinsanityActors
 		if (n.StartsWith("act_piranhaplant"))
 		{
 			return Behaviour.Piranha;
+		}
+		if (n.StartsWith("act_earth_tribesman_shieldbearer"))
+		{
+			return Behaviour.Shieldbearer;
 		}
 		if (n.StartsWith("act_earth_tribesman") || n.StartsWith("act_cortex_training_miniboss") || n.StartsWith("act_cortex_creature"))
 		{

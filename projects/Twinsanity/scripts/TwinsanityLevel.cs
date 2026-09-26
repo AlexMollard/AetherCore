@@ -84,7 +84,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private readonly TwinsanityPause _pause = new();
 	private readonly TwinsanityCutscenes _cutscenes = new();
 	private readonly TwinsanityMovie _movie = new();
-	private readonly HashSet<uint> _deadly = new();
+	// Deadly collision piece -> true for a drowning plane (surface 23), false for a pit (surface 4).
+	private readonly Dictionary<uint, bool> _deadly = new();
 	private readonly Dictionary<int, string> _objectModels = new();
 
 	private Entity _crash;
@@ -304,7 +305,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 					_fruit.Bind(e, e.Position);
 					break;
 				case TwinsanityBake.RoleDeadlyCollision:
-					_deadly.Add(e.Id);
+					_deadly[e.Id] = json.TryGetProperty("drown", out JsonElement dr) && dr.GetBoolean();
 					break;
 				case TwinsanityBake.RoleSpawn:
 					_spawn = e.Position;
@@ -470,8 +471,15 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			Die(DeathKind.Fall); // fell off the world
 		}
-		else if (OnDeadlyGround(feet, out Vector3 water))
+		else if (OnDeadlyGround(out bool drown))
 		{
+			if (!drown)
+			{
+				// A pit floor (surface 4, generic instant death: the huba channel pits) is the rig's
+				// plain fall death, respawning at the checkpoint.
+				Die(DeathKind.Fall);
+				return;
+			}
 			// What Crash stands on here is the drowning plane (surface 23); the water surface
 			// (surface 12) has no collider. In the hub collision every sea's surface sits 1.8
 			// above its drowning plane (beach, huba, hubb, hubc, hubd: -1.5 over -3.3; pier
@@ -479,8 +487,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			// own inner body first (feet + 0.5, which floated him 0.5 above the rig's -1.5).
 			// ponytail: a few inland pools differ (1.46 to 2.4 over their plane); export the
 			// surface-12 heights per piece if those ever need the exact float height.
-			_player!.DrownSurfaceY = water.Y + WaterAboveDrownPlane;
-			Die(DeathKind.Drown); // every deadly piece in the hub is the sea
+			_player!.DrownSurfaceY = feet.Y + WaterAboveDrownPlane;
+			Die(DeathKind.Drown);
 		}
 	}
 
@@ -530,7 +538,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			Physics.AddMeshBody(e, piece.GetProperty("path").GetString()!);
 			if (piece.GetProperty("deadly").GetBoolean())
 			{
-				_deadly.Add(e.Id);
+				_deadly[e.Id] = piece.TryGetProperty("drown", out JsonElement drown) && drown.GetBoolean();
 			}
 		}
 		if (start && root.TryGetProperty("spawn", out JsonElement spawn))
@@ -1169,9 +1177,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		_deathTimer = _player.Die(kind); // Die takes control and keeps the model visible
 	}
 
-	private bool OnDeadlyGround(Vector3 feet, out Vector3 hitPoint)
+	private bool OnDeadlyGround(out bool drown)
 	{
-		hitPoint = feet;
+		drown = false;
 		if (_deadly.Count == 0)
 		{
 			return false;
@@ -1180,7 +1188,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		// his own inner body, and one from under his feet starts below a plane he stands level
 		// with, so neither ever saw the sea and he never drowned.
 		Entity ground = CharacterController.GetGroundEntity(_crash);
-		return ground.IsValid && _deadly.Contains(ground.Id);
+		return ground.IsValid && _deadly.TryGetValue(ground.Id, out drown);
 	}
 
 	internal static Vector3 Vec(JsonElement a) => new(a[0].GetSingle(), a[1].GetSingle(), a[2].GetSingle());

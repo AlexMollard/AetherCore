@@ -154,7 +154,8 @@ public static class TwinsanityBake
 				}
 				if (piece.GetProperty("deadly").GetBoolean())
 				{
-					Mark(e, RoleDeadlyCollision, "{}");
+					bool drown = piece.TryGetProperty("drown", out JsonElement dr) && dr.GetBoolean();
+					Mark(e, RoleDeadlyCollision, drown ? "{\"drown\":true}" : "{}");
 				}
 			}
 

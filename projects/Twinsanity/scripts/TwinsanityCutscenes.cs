@@ -23,7 +23,8 @@ namespace AetherGame;
 ///   - a +control state runs a motion controller (SupportType1): NO_MOTION waits DELAY and the current clip,
 ///     LINEAR_INTERP moves to KEY_INDEX (252 = the focus key) at MOVE_SPEED. "Next" there, and FocusIsBusy,
 ///     mean the controller is still running (rig: the Cortex camera cut lands exactly when his move starts).
-///   - DoAnim: arg0 bit 12 loops, the last word packs director animation slots (clip aNNN).
+///   - DoAnim: arg0 bit 12 loops, 0x4000/0x8000 set the rate, 0x20000 a start fraction (PlayClip); the last word
+///     packs director animation slots (clip aNNN).
 ///   - messages pack target (bits 16-23: 0xFB focus, 0xFF every link) and number (low 10 bits).
 /// Measured on the rig (logs/cutscenes, track_*.csv): letterbox bars 15% of the frame, sliding 0.5 s.
 /// </summary>
@@ -223,11 +224,25 @@ public sealed class TwinsanityCutscenes
 	private int _speech;          // Audio voice id of the playing speech line
 	private const float SpeechVolume = 1.0f;
 	private readonly TwinsanitySkipPrompt _prompt = new();
-	// BottomTextDisplay: an AgentLab line drawn in the bottom letterbox bar (without BottomTextShow's hint
-	// strip, which no tutorial actor runs, the text only shows while the letterbox is up). Rig
+	// BottomTextDisplay: an AgentLab line drawn in the bottom letterbox bar while a scene holds it (outside
+	// one, in BottomTextShow's hint strip below). Rig
 	// (logs/tutorial/rig_s1_prompt.png, 640x485): glyph cells 28 of 485 lines tall, centred at line 434.5,
 	// i.e. 0.386 of the 15% bar's height, centred 0.306 of the way down it.
-	private string _hint = "";
+	private string _hint = ""; // '~' is the disc's line break
+	// BottomTextShow/Hide (619/620): the gameplay hint strip the text masters use outside scenes. Rig
+	// (logs/tutorialroute/rig_ch_crates.png, 640x485): the bottom bar's rect (lines 411-481) at half black,
+	// two lines of the same-size glyphs (width 293 px for 427 font units = 0.38 of the bar) centred 0.2
+	// and 0.48 of the way down it. ponytail: the strip fades over the command's time; the glyphs pop.
+	private readonly TwinsanitySkipPrompt _prompt2 = new();
+	private Entity _strip;
+	private float _stripLevel, _stripTarget, _stripRate = 5.0f;
+	private const float StripAlpha = 0.5f;
+	private const float StripCentre1 = 0.2f, StripCentre2 = 0.48f;
+	// DisplayBottomTextInstance (657) shows the agent's own line: AgentLab line subtype + 30. The text
+	// master's scripts pin it - its ActorSubtypeEquals(3) branch shows line 33 with an explicit 603 - and
+	// the rig shows the huba subtype-9 master's line 39 ("COLLECT AKU-AKU MASKS...").
+	private const int InstanceTextBase = 30;
+	private string _hintSplitFrom = "", _hintFirst = "", _hintSecond = "", _hintOneLine = "";
 	private (Vector3 Position, float Facing)? _checkpoint; // a checkpoint volume entered, for TakeCheckpoint
 	private readonly List<(Vector3 At, Vector3 From)> _hits = new(); // hits on live actors, for TakeHits
 	private string[]? _hintLines;
@@ -1146,6 +1161,15 @@ public sealed class TwinsanityCutscenes
 				Log.Info($"[Cutscenes] prompt cleared ({a.Name}) at {_sceneClock:F2} s");
 				_hint = "";
 				break;
+			case 619: // BottomTextShow(fade seconds)
+			case 620: // BottomTextHide(fade seconds)
+				_stripTarget = c[0] == 619 ? 1.0f : 0.0f;
+				_stripRate = 1.0f / MathF.Max(BitConverter.UInt32BitsToSingle(Arg(0)), 0.05f);
+				break;
+			case 657: // DisplayBottomTextInstance(x, y, r, g, b, 0)
+				_hint = HintLine(a.Subtype + InstanceTextBase);
+				Log.Info($"[Cutscenes] hint \"{_hint}\" ({a.Name}, subtype {a.Subtype})");
+				break;
 			case 11: // DoSound(flags, Sounds[] slot | flags << 16, ...)
 				PlaySound(a, (int)(Arg(1) & 0xFFFF));
 				break;
@@ -1265,7 +1289,7 @@ public sealed class TwinsanityCutscenes
 				}
 				break;
 			case 9: // DoAnim
-				PlayClip(a, Arg(0), Arg(5));
+				PlayClip(a, Arg(0), Arg(5), ArgFloat(Arg(2)), ArgFloat(Arg(3)), ArgFloat(Arg(4)));
 				break;
 			case 602: // FadeoutScreen(mode, seconds). ponytail: a dip to black and back, which is what the
 			          // hub's scene endings show; the mode bits (1, 8, 9) are not decoded.
@@ -1444,7 +1468,7 @@ public sealed class TwinsanityCutscenes
 			Warn($"AgentLab line {n} (is {HintText} extracted?)");
 			return "";
 		}
-		return _hintLines[n].Replace('~', ' ');
+		return _hintLines[n];
 	}
 
 	private Agent? Target(Agent a, uint selector) => (selector & 0xFF) switch
@@ -1532,7 +1556,10 @@ public sealed class TwinsanityCutscenes
 		Active = false;
 		s_ownsCamera = false;
 		StopSpeech();
-		_hint = ""; // its letterbox is gone (and the actor that would clear it may be released below)
+		if (_stripTarget <= 0.0f)
+		{
+			_hint = ""; // its letterbox is gone (and the actor that would clear it may be released below)
+		}
 		SetControl(true);
 		// Actors this director still holds are let go with it (the hub's damaged skip paths never send
 		// them their final message).
@@ -1558,7 +1585,12 @@ public sealed class TwinsanityCutscenes
 
 	// ---- actors' models and clips --------------------------------------------------------------
 
-	private void PlayClip(Agent a, uint flags, uint packed)
+	// DoAnim (ELF read 0x212028, run 0x211DF8, ProgressAnimation 0x294000). Header bits: 0x1000 loops; 0x4000 plays
+	// at rate arg2 (0x10000 adds a random 0..arg3); 0x8000 stretches the clip to last arg2 seconds; 0x20000 starts at
+	// arg4 (a fraction of the clip). 0x2000 (arg1) is a cross-fade time, which this port does not blend.
+	private static float ArgFloat(uint v) => BitConverter.UInt32BitsToSingle(v & ~7u);
+
+	private void PlayClip(Agent a, uint flags, uint packed, float arg2, float arg3, float start)
 	{
 		var slots = new List<int>();
 		for (int b = 0; b < 4; b++)
@@ -1608,20 +1640,29 @@ public sealed class TwinsanityCutscenes
 		}
 		a.Clip = $"a{slot:D3}";
 		a.ClipLoops = (flags & 0x1000) != 0;
-		a.ClipTime = 0.0f;
 		int index = Animation.Find(a.Proxy, a.Clip);
+		float length = 0.0f, rate = 1.0f;
 		if (index >= 0)
 		{
 			Animation.SetClip(a.Proxy, index);
-			Animation.SetTime(a.Proxy, 0.0f);
-			Animation.SetPlaybackSpeed(a.Proxy, 1.0f);
+			length = Animation.ClipDuration(a.Proxy);
+			if ((flags & 0x4000) != 0)
+			{
+				rate = arg2 + ((flags & 0x10000) != 0 ? AetherCore.Random.Range(0.0f, arg3) : 0.0f);
+			}
+			else if ((flags & 0x8000) != 0 && arg2 > 0.0f)
+			{
+				rate = length / arg2;
+			}
+			rate = rate > 0.0f ? rate : 1.0f;
+			start = (flags & 0x20000) != 0 ? Math.Clamp(start, 0.0f, 1.0f) : 0.0f;
+			Animation.SetTime(a.Proxy, start * length);
+			Animation.SetPlaybackSpeed(a.Proxy, rate);
 			SetLooping(a.Proxy, a.ClipLoops);
-			a.ClipLength = Animation.ClipDuration(a.Proxy);
 		}
-		else
-		{
-			a.ClipLength = 0.0f;
-		}
+		// Scene seconds: the game's clip length is frames / fps / rate, and play starts `start` of the way in.
+		a.ClipLength = length / rate;
+		a.ClipTime = start * a.ClipLength;
 		PlaceProxy(a);
 	}
 
@@ -1739,7 +1780,8 @@ public sealed class TwinsanityCutscenes
 		{
 			_fadeLevel = MathF.Max(0.0f, _fadeLevel - _fadeRate * dt);
 		}
-		if (_bars <= 0.0f && _fadeLevel <= 0.0f)
+		_stripLevel = Math.Clamp(_stripLevel + MathF.Sign(_stripTarget - _stripLevel) * _stripRate * dt, 0.0f, 1.0f);
+		if (_bars <= 0.0f && _fadeLevel <= 0.0f && _stripLevel <= 0.0f)
 		{
 			if (_canvas.IsValid)
 			{
@@ -1751,6 +1793,8 @@ public sealed class TwinsanityCutscenes
 		{
 			_canvas = Ui.CreateCanvas();
 			_canvas.MarkTransient();
+			_strip = Bar();
+			Ui.SetAnchors(_strip, new Vector2(0.0f, 1.0f - BarFraction), Vector2.One);
 			_top = Bar();
 			_bottom = Bar();
 			_fade = Bar();
@@ -1761,15 +1805,31 @@ public sealed class TwinsanityCutscenes
 		Ui.SetAnchors(_top, Vector2.Zero, new Vector2(1.0f, h));
 		Ui.SetAnchors(_bottom, new Vector2(0.0f, 1.0f - h), Vector2.One);
 		Ui.SetImageColor(_fade, new Vector4(0.0f, 0.0f, 0.0f, _fadeLevel));
+		Ui.SetImageColor(_strip, new Vector4(0.0f, 0.0f, 0.0f, StripAlpha * _stripLevel));
+		if (_hint != _hintSplitFrom)
+		{
+			_hintSplitFrom = _hint;
+			int tilde = _hint.IndexOf('~');
+			_hintFirst = tilde < 0 ? _hint : _hint[..tilde];
+			_hintSecond = tilde < 0 ? "" : _hint[(tilde + 1)..];
+			_hintOneLine = _hint.Replace('~', ' ');
+		}
 		// A scene's BottomTextDisplay takes the bar over from the port's own skip prompt (on the modded disc
-		// both are the same bottom-text slot).
+		// both are the same bottom-text slot). Outside a scene the text sits in the hint strip.
 		if (_hint.Length > 0 && _bars >= 1.0f)
 		{
-			_prompt.Show(_canvas, _bottom, _hint, HintScale, HintCentre);
+			_prompt.Show(_canvas, _bottom, _hintOneLine, HintScale, HintCentre);
+			_prompt2.Show(_canvas, _strip, "", HintScale, StripCentre2);
+		}
+		else if (_hint.Length > 0 && _bars <= 0.0f && _stripLevel > 0.0f)
+		{
+			_prompt.Show(_canvas, _strip, _hintFirst, HintScale, StripCentre1);
+			_prompt2.Show(_canvas, _strip, _hintSecond, HintScale, StripCentre2);
 		}
 		else
 		{
 			_prompt.Update(_canvas, _bottom, _bars >= 1.0f && CanSkip());
+			_prompt2.Show(_canvas, _strip, "", HintScale, StripCentre2);
 		}
 	}
 
