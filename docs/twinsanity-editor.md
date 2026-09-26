@@ -126,6 +126,8 @@ entities save as per-entity overrides in the committed scene. A re-bake keeps th
 an override whose entity no longer exists is dropped with a warning. Without the
 prefab (a fresh checkout), `TwinsanityLevel` builds the level from the extracted
 JSON as before. Re-bake after any re-extraction that changes level content.
+After editing the bake scripts, press Play then Stop once before baking: the bake
+runs the last-loaded script assembly, not the scripts on disk.
 
 ## Status
 

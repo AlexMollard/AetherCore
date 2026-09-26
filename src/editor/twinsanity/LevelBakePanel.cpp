@@ -22,6 +22,7 @@ namespace aether::editor::twinsanity
 			const char* scene = scenes != nullptr ? scenes->GetCurrentScene().c_str() : "";
 			ImGui::Text("Scene: %s", scene != nullptr && *scene != '\0' ? scene : "(none)");
 			ImGui::TextDisabled("%s", m_report.c_str());
+			ImGui::TextDisabled("Edited the bake scripts? Press Play then Stop once first:\nthe bake runs the last-loaded script assembly.");
 			ImGui::Separator();
 			if (playing)
 			{

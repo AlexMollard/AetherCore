@@ -393,6 +393,52 @@ namespace aether::editor
 			ImGui::DockBuilderFinish(id);
 		}
 
+		// The dock node ImGui last had a window in: the live window if it has been Begun this
+		// session, else its .ini entry (a hidden panel is never Begun, so only settings know).
+		// Zero when the window is floating or ImGui has never seen it.
+		ImGuiID KnownDockId(std::string_view title, bool& known)
+		{
+			const std::string name(title);
+			if (const ImGuiWindow* window = ImGui::FindWindowByName(name.c_str()))
+			{
+				known = true;
+				return window->DockId;
+			}
+			const ImGuiWindowSettings* settings = ImGui::FindWindowSettingsByID(ImHashStr(name.c_str()));
+			known = settings != nullptr;
+			return known ? settings->DockId : 0;
+		}
+
+		// A panel the saved layout has never heard of - one registered after the user's
+		// imgui.ini was written, like a flavor panel on a project whose layout predates it -
+		// gets no home from BuildWorkflowLayout (that only runs without a saved dockspace), so
+		// it used to float at ImGui's default spot over the Scene list. Dock it as a tab beside
+		// its nearest registered neighbour that is docked: flavor panels register together, so
+		// Level Bake lands next to Reference Images. Returns 0 when the window is known.
+		ImGuiID FirstUseDockId(std::span<const std::unique_ptr<DebugPanel>> panels, const std::size_t index)
+		{
+			bool known = false;
+			(void) KnownDockId(panels[index]->GetWindowTitle(), known);
+			if (known)
+			{
+				return 0;
+			}
+			for (std::size_t distance = 1; distance < panels.size(); ++distance)
+			{
+				for (const std::size_t neighbour: {index - distance, index + distance})
+				{
+					if (neighbour < panels.size()) // index - distance wraps past zero to huge
+					{
+						if (const ImGuiID dock = KnownDockId(panels[neighbour]->GetWindowTitle(), known); dock != 0)
+						{
+							return dock;
+						}
+					}
+				}
+			}
+			return 0;
+		}
+
 		void AppendObbEdges(std::vector<DebugVertex>& out, const glm::mat4& m, const glm::vec3& mn, const glm::vec3& mx, const glm::vec4& color)
 		{
 			glm::vec3 corners[8];
@@ -2593,10 +2639,15 @@ namespace aether::editor
 		// live whenever the game does not currently own input.
 		const auto* panelPlayState = context.TryGet<app::PlayState>();
 		const bool blockOtherPanels = panelPlayState != nullptr && panelPlayState->IsPlaying() && context.Get<Input>().GameOwnsInput();
-		for (auto& panel: m_panels)
+		for (std::size_t panelIndex = 0; panelIndex < m_panels.size(); ++panelIndex)
 		{
+			const auto& panel = m_panels[panelIndex];
 			if (panel->IsVisible())
 			{
+				if (const ImGuiID home = FirstUseDockId(m_panels, panelIndex); home != 0)
+				{
+					ImGui::SetNextWindowDockID(home, ImGuiCond_FirstUseEver);
+				}
 				ImGui::SetNextWindowSize(defaultPanelSize, ImGuiCond_FirstUseEver);
 				ImGui::SetNextWindowSizeConstraints(ImVec2(220.0f, 120.0f), maxPanelSize);
 				const bool disableThisPanel = blockOtherPanels && panel->GetName() != "Viewport";
