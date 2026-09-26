@@ -102,7 +102,7 @@ namespace TwExtract
 				{
 					string name = entry.Name.Replace('\\', '/');
 					string ext = Path.GetExtension(name).ToLowerInvariant();
-					bool text = ext == ".txt" && name.StartsWith("Language/Code/", StringComparison.OrdinalIgnoreCase);
+					bool text = ext == ".txt" && (name.StartsWith("Language/Code/", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Language/AgentLab/", StringComparison.OrdinalIgnoreCase));
 					bool frontend = name.Equals("Startup/Frontend.bin", StringComparison.OrdinalIgnoreCase);
 					if ((ext != ".sm2" && ext != ".rm2" && ext != ".psm" && ext != ".psf" && ext != ".ptc" && !text && !frontend) || (only != null && name.IndexOf(only, StringComparison.OrdinalIgnoreCase) < 0))
 					{
@@ -956,13 +956,16 @@ if (skinPrims.Count > 0 && joints.Length > 0)
 			}
 		}
 
-		// ---- menu strings (Language/Code/<Language>.txt) --------------------------------------------
+		// ---- strings (Language/Code/<Language>.txt, Language/AgentLab/<Language>.txt) ------------------
 
-		// The front end and pause menu's own text, one string per line (blank lines separate groups; '~' is
-		// a line break, and \ ^ < > { } ¦ ¬ select the font's button glyphs). Copied verbatim to ui/text/.
+		// Code is the front end and pause menu's own text; AgentLab holds the in-game hint lines the scripts'
+		// BottomTextDisplay(index, ...) shows (line index = the command's first argument). One string per line
+		// (blank lines separate groups; '~' is a line break, and \ ^ [ ] < > { } ¦ ¬ select the font's button
+		// glyphs). Copied verbatim: Code to ui/text/, AgentLab to ui/text/AgentLab/.
 		static string Strings(string path, string archiveName)
 		{
-			string dir = Path.Combine(s_out, "ui", "text");
+			bool agentLab = archiveName.Replace('\\', '/').StartsWith("Language/AgentLab/", StringComparison.OrdinalIgnoreCase);
+			string dir = agentLab ? Path.Combine(s_out, "ui", "text", "AgentLab") : Path.Combine(s_out, "ui", "text");
 			Directory.CreateDirectory(dir);
 			File.Copy(path, Path.Combine(dir, Path.GetFileName(archiveName)), true);
 			return "strings copied";

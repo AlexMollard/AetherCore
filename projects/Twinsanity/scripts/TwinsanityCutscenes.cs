@@ -42,6 +42,8 @@ public sealed class TwinsanityCutscenes
 	private const float SkipHold = 0.5f;       // Triangle held, as the mod's movie skip (30 frames at 60 Hz)
 	private const int FocusTarget = 0xFB;
 	private const int FocusKey = 252;
+	private const int FocusKey2 = 246;   // KEY_INDEX 246: the key SetFocusToKey2 picked
+	private const int CurrentKey = 254;  // KEY_INDEX 254 (and SetFocusToKey2's 0xFE): the SetKey/NextKey key
 
 	// ponytail: Cmd591 (the scripted camera) is decoded only as far as its argument layout (pitch at +0x10,
 	// extra distance at +0x14) - the framing maths (FUN_001102d0 and its helpers) is not. Each shot's eye and
@@ -71,9 +73,11 @@ public sealed class TwinsanityCutscenes
 	private sealed class Motion
 	{
 		public string Type = "";
-		public bool Translates;
-		public float Delay, Speed;
-		public int Key = -1;
+		public bool Translates, Rotates;
+		public float Delay, Speed;          // Speed is MOVE_SPEED, or RISE_HEIGHT for PROJECTILE (the same slot)
+		public float SqrTolerance, Duration, Power;
+		public int Key = -1;                // KEY_INDEX: a key of the owner, or a selector (246/252 focus key, 254 current key)
+		public int Selector = -1;           // SELECTOR: 251 the focus, 248 RequestFocus2's find
 	}
 
 	private sealed class State
@@ -108,6 +112,11 @@ public sealed class TwinsanityCutscenes
 		public Dictionary<int, ObjectDef> Objects = new();
 		public Dictionary<(int Layer, int Id), Agent> Instances = new();
 		public int BeginScript = -1;
+		// The chunk's sound bank (tw-extract audio/sfx/<area>/<chunk>/): each object's Sounds[] slots, which
+		// DoSound indexes, and every effect's length. Loaded on the first DoSound.
+		public string Bank = "";
+		public Dictionary<int, int[]>? Sounds;
+		public Dictionary<int, float> SoundSeconds = new();
 	}
 
 	private sealed class Trigger
@@ -143,6 +152,14 @@ public sealed class TwinsanityCutscenes
 		public float ClipTime, ClipLength;
 		public int Shots;                          // Cmd591s run by this agent's scene, for the shot table
 		public Agent? Requested;                   // RequestFocus2's find (message/hand target 0xF8)
+		public Agent? CameraSubject;               // Cmd595's subject (low byte a target selector: 0xF8, 0xFB)
+		public int CurKey;                         // SetKey/NextKey: the current key (KEY_INDEX 254)
+		public int Hp = 1;                         // ReduceHitPoints / AgentHitPoints
+		public float SoundEnds;                    // Time.TotalTime its last DoSound runs out (cond 122 "busy")
+		public bool ClipBlocks;                    // the clip marks the actor busy (a one-shot DoAnim without bit 15)
+		public Agent? MessageFrom;                 // who sent the last message (SetFocusToAgent's attacker)
+		public Vector3 Velocity;                   // ColliderLaunchNow flight
+		public bool Airborne;
 	}
 
 	private sealed class Machine
@@ -155,6 +172,8 @@ public sealed class TwinsanityCutscenes
 		public Machine? Sub;
 		public float MotionTime;
 		public bool MotionDone = true;
+		public Vector3 FlightFrom, FlightTo;       // PROJECTILE: the jump's ends, launch speed and length
+		public float FlightUp, FlightTime;
 		public readonly HashSet<Rule> FiredInPlace = new();
 		public bool Finished => Def.States.Length == 0 || (Def.States[State].Rules.Length == 0 && Def.States[State].Sub < 0 && Def.States[State].Motion == null);
 		public bool Started;
@@ -178,17 +197,17 @@ public sealed class TwinsanityCutscenes
 	private Vector3 _camEye, _camTarget;
 	private float _sceneClock;
 	private int _speech;          // Audio voice id of the playing speech line
-	private float _speechEnds;    // Time.TotalTime the line runs out: "dialogue busy" (condition 122)
-	// ponytail: the engine cannot report a voice's length or whether it still plays, so the hub's speech
-	// lines carry their lengths here (the extracted track_<n>.wav, 32 kHz mono). Upgrade path: an engine
-	// voice-length/playing query, then drop this table. An unlisted track counts as 3 s.
-	private static readonly Dictionary<int, float> s_speechSeconds = new()
-	{
-		[47] = 12.59f, [48] = 4.24f, [52] = 11.78f, [74] = 12.34f, [100] = 36.72f, [127] = 16.87f,
-		[129] = 5.52f, [130] = 5.17f, [132] = 5.23f, [133] = 3.28f, [141] = 4.76f,
-	};
 	private const float SpeechVolume = 1.0f;
-	private readonly TwinsanitySkipPrompt _prompt = new();    // game seconds since CutsceneStart, for the log
+	private readonly TwinsanitySkipPrompt _prompt = new();
+	// BottomTextDisplay: an AgentLab line drawn in the bottom letterbox bar (without BottomTextShow's hint
+	// strip, which no tutorial actor runs, the text only shows while the letterbox is up). Rig
+	// (logs/tutorial/rig_s1_prompt.png, 640x485): glyph cells 28 of 485 lines tall, centred at line 434.5,
+	// i.e. 0.386 of the 15% bar's height, centred 0.306 of the way down it.
+	private string _hint = "";
+	private string[]? _hintLines;
+	private const string HintText = "project://assets/ui/text/AgentLab/English.txt";
+	private const float HintScale = 0.386f;
+	private const float HintCentre = 0.306f;
 
 	// ---- loading -------------------------------------------------------------------------------
 
@@ -472,9 +491,14 @@ public sealed class TwinsanityCutscenes
 					{
 						Type = m.GetProperty("motion").GetString() ?? "",
 						Translates = m.GetProperty("translates").GetBoolean(),
+						Rotates = m.GetProperty("rotates").GetBoolean(),
 						Delay = p.TryGetProperty("DELAY", out JsonElement d) ? d.GetSingle() : 0.0f,
 						Speed = p.TryGetProperty("MOVE_SPEED", out JsonElement v) ? v.GetSingle() : 0.0f,
 						Key = p.TryGetProperty("KEY_INDEX", out JsonElement k) ? k.GetInt32() : -1,
+						Selector = p.TryGetProperty("SELECTOR", out JsonElement sel) ? sel.GetInt32() : -1,
+						SqrTolerance = p.TryGetProperty("SQR_TOLERANCE", out JsonElement tol) ? tol.GetSingle() : 0.0f,
+						Duration = p.TryGetProperty("DURATION", out JsonElement dur) ? dur.GetSingle() : 0.0f,
+						Power = p.TryGetProperty("POWER", out JsonElement pw) ? pw.GetSingle() : 0.0f,
 					};
 				}
 				var rules = new List<Rule>();
@@ -595,11 +619,41 @@ public sealed class TwinsanityCutscenes
 
 	private void StepAgent(Agent a, float dt)
 	{
+		if (a.Airborne)
+		{
+			Fly(a, dt);
+		}
 		if (a.Machine != null)
 		{
 			Step(a.Machine, dt);
 		}
 		AdvanceClip(a, dt);
+	}
+
+	// ColliderLaunchNow's flight: ballistic until it comes down on the ground (TouchingTerrain).
+	private const float LaunchGravity = 35.0f;
+
+	private void Fly(Agent a, float dt)
+	{
+		a.Velocity.Y -= LaunchGravity * dt;
+		Vector3 next = a.Position + a.Velocity * dt;
+		float ground = GroundY(next, float.NegativeInfinity);
+		if (a.Velocity.Y < 0.0f && next.Y <= ground)
+		{
+			next.Y = ground;
+			a.Airborne = false;
+			a.Velocity = Vector3.Zero;
+		}
+		a.Position = next;
+		PlaceProxy(a);
+	}
+
+	// The level collision's height under p (the scene's own collision meshes only, not crates or
+	// Crash), or fallback when there is none within reach.
+	private static float GroundY(Vector3 p, float fallback)
+	{
+		RaycastHit hit = Physics.Raycast(p + new Vector3(0.0f, 2.0f, 0.0f), -Vector3.UnitY, 8.0f);
+		return hit.DidHit && hit.Entity.Name == "Collision" ? hit.Position.Y : fallback;
 	}
 
 	private Machine NewMachine(ScriptDef def, Agent self) => new() { Def = def, Self = self, State = def.Start };
@@ -673,6 +727,7 @@ public sealed class TwinsanityCutscenes
 		m.Sub = st.Sub >= 0 && Script(m.Self.Chunk ?? _chunks[0], st.Sub) is ScriptDef sub ? NewMachine(sub, m.Self) : null;
 		m.MotionTime = 0.0f;
 		m.MotionDone = st.Motion == null;
+		m.FlightTime = -1.0f;
 	}
 
 	private void UpdateMotion(Machine m, float dt)
@@ -687,7 +742,18 @@ public sealed class TwinsanityCutscenes
 		{
 			return;
 		}
-		if (mo.Translates && mo.Speed > 0.0f && KeyPosition(a, mo.Key == FocusKey ? a.Key : mo.Key) is Vector3 goal)
+		Vector3? target = MotionTarget(a, mo);
+		if (mo.Type == "PROJECTILE" && target is Vector3 land)
+		{
+			Jump(m, mo, land, dt);
+			return;
+		}
+		if (mo.Type == "GROUND_CHASE" && mo.Speed > 0.0f && target is Vector3 chased)
+		{
+			Chase(m, mo, chased, dt);
+			return;
+		}
+		if (mo.Translates && mo.Speed > 0.0f && target is Vector3 goal)
 		{
 			// LINEAR_INTERP (and, approximated, the other translating motions): straight to the key.
 			Vector3 to = goal - a.Position;
@@ -704,8 +770,83 @@ public sealed class TwinsanityCutscenes
 			PlaceProxy(a);
 			return;
 		}
+		if (!mo.Translates && mo.Rotates && target is Vector3 look)
+		{
+			// A turn-only controller (Crash's L01A: face RequestFocus2's Coco). ponytail: snaps round
+			// rather than turning at TURN_SPEED.
+			Face(a, look);
+			PlaceProxy(a);
+		}
 		// NO_MOTION: done once the delay has passed and a one-shot clip has played out.
 		m.MotionDone = a.ClipLoops || a.Clip.Length == 0 || a.ClipTime >= a.ClipLength;
+	}
+
+	// GROUND_CHASE: run along the ground at MOVE_SPEED until within SQR_TOLERANCE of the target (which may
+	// move: a SELECTOR 251 chase follows the focus), or DURATION runs out.
+	private static void Chase(Machine m, Motion mo, Vector3 target, float dt)
+	{
+		Agent a = m.Self;
+		Vector3 to = target - a.Position;
+		to.Y = 0.0f;
+		float tolerance = MathF.Max(mo.SqrTolerance, 0.01f);
+		if (to.LengthSquared() <= tolerance || (mo.Duration > 0.0f && m.MotionTime - mo.Delay >= mo.Duration))
+		{
+			m.MotionDone = true;
+			return;
+		}
+		float length = to.Length();
+		Vector3 next = a.Position + to / length * MathF.Min(mo.Speed * dt, length);
+		next.Y = GroundY(next, a.Position.Y + (target.Y - a.Position.Y) * MathF.Min(1.0f, mo.Speed * dt / length));
+		Face(a, target);
+		a.Position = next;
+		PlaceProxy(a);
+	}
+
+	// PROJECTILE: a jump onto the target key, peaking RISE_HEIGHT above the higher end, under POWER gravity.
+	private static void Jump(Machine m, Motion mo, Vector3 land, float dt)
+	{
+		Agent a = m.Self;
+		float g = mo.Power > 0.0f ? mo.Power : 40.0f;
+		if (m.FlightTime < 0.0f)
+		{
+			m.FlightFrom = a.Position;
+			m.FlightTo = land;
+			float apex = MathF.Max(a.Position.Y, land.Y) + MathF.Max(mo.Speed, 0.1f);
+			m.FlightUp = MathF.Sqrt(2.0f * g * (apex - a.Position.Y));
+			m.FlightTime = 0.0f;
+			Face(a, land);
+		}
+		float total = m.FlightUp / g + MathF.Sqrt(2.0f * (MathF.Max(m.FlightFrom.Y, m.FlightTo.Y) + MathF.Max(mo.Speed, 0.1f) - m.FlightTo.Y) / g);
+		m.FlightTime = MathF.Min(m.FlightTime + dt, total);
+		float t = m.FlightTime;
+		Vector3 p = Vector3.Lerp(m.FlightFrom, m.FlightTo, t / total);
+		p.Y = m.FlightFrom.Y + m.FlightUp * t - 0.5f * g * t * t;
+		a.Position = t >= total ? m.FlightTo : p;
+		m.MotionDone = t >= total;
+		PlaceProxy(a);
+	}
+
+	private static void Face(Agent a, Vector3 target)
+	{
+		Vector3 d = target - a.Position;
+		if (d.X * d.X + d.Z * d.Z > 1e-6f)
+		{
+			a.Yaw = MathF.Atan2(d.X, d.Z) * 180.0f / MathF.PI;
+		}
+	}
+
+	// Where a controller heads: its SELECTOR, else its KEY_INDEX (a key of the owner, or a selector).
+	private Vector3? MotionTarget(Agent a, Motion mo)
+	{
+		int key = mo.Selector >= 0 ? mo.Selector : mo.Key;
+		return key switch
+		{
+			FocusTarget => a.Focus?.Position,
+			RequestedTarget => a.Requested?.Position,
+			FocusKey or FocusKey2 => KeyPosition(a, a.Key == CurrentKey ? a.CurKey : a.Key),
+			CurrentKey => KeyPosition(a, a.CurKey),
+			_ => KeyPosition(a, key),
+		};
 	}
 
 	// ---- conditions and commands -----------------------------------------------------------------
@@ -738,8 +879,34 @@ public sealed class TwinsanityCutscenes
 				return a.Focus?.Machine?.Busy ?? false;
 			case 77: // RequestFocus2 found its object
 				return a.Requested != null;
-			case 122: // dialogue busy: the speech line is still playing
-				return Time.TotalTime < _speechEnds;
+			case 122: // the requested object is busy, or gone (ELF 0x2523A8 reads its IsBusy flag, 1.0 when none)
+				return a.Requested == null || a.Requested.Done || ActorBusy(a.Requested);
+			case 56: // GotFocusObject (ELF 0x11E2A0: the focus is an object, not a position)
+				return a.Focus != null;
+			case 58: // GetAnimationTimeRemaining (seconds left of a one-shot clip)
+				return (a.Clip.Length == 0 || a.ClipLoops ? 0.0f : MathF.Max(0.0f, a.ClipLength - a.ClipTime)) > r.Threshold;
+			case 10: // MeToFocusSqrDist (ELF 0x240F70: 0 without a focus)
+				return (a.Focus != null ? Vector3.DistanceSquared(a.Position, a.Focus.Position) : 0.0f) > r.Threshold;
+			case 517: // MeToPlayerSqrDist
+				return Vector3.DistanceSquared(a.Position, _player.Position) > r.Threshold;
+			case 132: // on the last key (ELF 0x22ADE8: current key >= key count - 1)
+				return KeyCount(a) > 0 && a.CurKey >= KeyCount(a) - 1;
+			case 3: // Random
+				return AetherCore.Random.Range(0.0f, 1.0f) > r.Threshold;
+			case 524: // AgentHitPoints
+				return a.Hp > r.Threshold;
+			case 53: // TouchingTerrain: a launched agent has come down
+				return !a.Airborne;
+			case 37: // InCameraFrustrum. ponytail: taken as always true; nothing here hides off-screen agents
+				return true;
+			case 521: // AgentWasSpun / Slid / KneeDropped / JumpedOn: the player's attacks never reach cutscene agents
+			case 522:
+			case 523:
+			case 535:
+			case 532: // WillHitWall
+			case 78:  // (creature DROP_TOOL, HIT_NONRADIUS: their rule and its Else go to the same state)
+			case 106:
+				return false;
 			case 572: // CutsceneSkipped: taken by UpdateSkip, never polled
 			case 642: // is a cutscene already running (BEGIN skips its own start when it is)
 				return false;
@@ -762,11 +929,53 @@ public sealed class TwinsanityCutscenes
 			          // requester (the training directors find Coco, object 412, at 20/40/400)
 				a.Requested = Nearest(a.Position, (int)(Arg(5) & 0xFFFF), BitConverter.UInt32BitsToSingle(Arg(11)));
 				break;
-			case 146: // focus a linked instance. ponytail: only 256 (the first link) occurs on the hub.
-				a.Focus = Linked(a, Math.Max(0, (int)(Arg(0) >> 8) - 1));
+			case 146: // focus a linked instance (ELF Run 0x2150D0)
+				FocusLink(a, Arg(0));
 				break;
 			case 28: // SetFocusToKey
 				a.Key = (int)Arg(0);
+				break;
+			case 103: // SetFocusToKey2: low byte is the key (0xFE: the current key); 0x600 are the builder's flags
+				a.Key = (int)(Arg(0) & 0xFF);
+				break;
+			case 4: // SetKey (low byte)
+				a.CurKey = (int)(Arg(0) & 0xFF);
+				break;
+			case 5: // NextKey
+				a.CurKey = Math.Min(a.CurKey + 1, Math.Max(0, KeyCount(a) - 1));
+				break;
+			case 97: // forget RequestFocus2's find (ELF 0x224380 zeroes the requester's +0x118)
+				a.Requested = null;
+				break;
+			case 108: // SetFocusPosition2: the focus becomes a point. ponytail: the point is not decoded; the
+			          // tutorial's one use (Coco's L01A) is followed in the same list by SetFocusToPlayer.
+				a.Focus = null;
+				break;
+			case 114: // stop / restart the character's own animation driver (ELF 0x2243A0 / 0x2243D0, through
+			case 115: // its +0x10C controller). A scene actor here draws through its cutscene proxy instead.
+				break;
+			case 603: // BottomTextDisplay(AgentLab line, x, y, r, g, b, 0)
+				_hint = HintLine((int)Arg(0));
+				break;
+			case 608: // BottomTextClear
+				_hint = "";
+				break;
+			case 11: // DoSound(flags, Sounds[] slot | flags << 16, ...)
+				PlaySound(a, (int)(Arg(1) & 0xFFFF));
+				break;
+			case 528: // ReduceHitPoints
+				a.Hp -= (int)(Arg(0) >> 3);
+				break;
+			case 45: // SetFocusToAgent. ponytail: the hub's uses (the creature hit scripts) turn to the attacker;
+			         // that is the message's sender here, the argument is not decoded.
+				a.Focus = a.MessageFrom ?? a.Focus;
+				break;
+			case 72: // ColliderLaunchNow(.., .., .., back speed, .., ..., rise height (arg 14), ...): knocked away
+			         // from the focus. ponytail: the gravity is a guess (35); args past the height are not decoded.
+				Launch(a, BitConverter.UInt32BitsToSingle(Arg(3)), BitConverter.UInt32BitsToSingle(Arg(14)));
+				break;
+			case 85: // DestroyMe
+				Destroy(a);
 				break;
 			case 171: // hand the target one of this director's script slots
 				if (Target(a, Arg(0)) is Agent actor)
@@ -783,7 +992,7 @@ public sealed class TwinsanityCutscenes
 			case 54: // SendUserMessage
 				if (Target(a, Arg(0) >> 16 & 0xFF) is Agent to)
 				{
-					Deliver(to, (int)(Arg(0) & 0x3FF));
+					Deliver(to, (int)(Arg(0) & 0x3FF), a);
 				}
 				break;
 			case 65: // MessageLinkedObject
@@ -793,7 +1002,7 @@ public sealed class TwinsanityCutscenes
 				{
 					if ((link == 0xFF || link == i) && Linked(a, i) is Agent l)
 					{
-						Deliver(l, (int)(Arg(0) & 0x3FF));
+						Deliver(l, (int)(Arg(0) & 0x3FF), a);
 					}
 				}
 				break;
@@ -829,11 +1038,13 @@ public sealed class TwinsanityCutscenes
 				StopSpeech();
 				int track = (int)(Arg(0) >> 3);
 				_speech = Audio.Play($"project://assets/audio/voice/track_{track}.wav", SpeechVolume);
-				_speechEnds = Time.TotalTime + s_speechSeconds.GetValueOrDefault(track, 3.0f);
 				Log.Info($"[Cutscenes] speech {track} ({a.Name}) at {_sceneClock:F2} s");
 				break;
 			case 186: // stop the speech line
 				StopSpeech();
+				break;
+			case 595: // the camera subject, framed by an unmeasured Cmd591 (the shot table replaces it)
+				a.CameraSubject = Target(a, Arg(0));
 				break;
 			case 591: // the scripted camera shot
 				Shot(m, (int)Arg(0));
@@ -879,10 +1090,23 @@ public sealed class TwinsanityCutscenes
 				break;
 			case 78:  // SetObject: the model follows the clip's skeleton (see ProxyFor)
 			case 515: // SetAgent flags
-			case 595: // camera subject (the shot table replaces the framing)
 			case 659: // HUD / hint toggle
-			case 1:   // AddTrail / ClearTrail: Cortex's flight streak
+			case 1:   // AddTrail / ClearTrail: Cortex's flight streak, Coco's run streak
 			case 2:
+				break;
+			// ponytail: visual and physics bookkeeping the tutorial's actors run that this interpreter has no
+			// counterpart for: DoParticle (Coco's hit flash, the skunk's pop), collider shape/wobble/detach,
+			// StoreCurrentSpace, RotWarp, the creature counters. None of them gates a script.
+			case 10:  // DoParticle
+			case 12:  // SetWobble
+			case 13:  // ClearWobble
+			case 27:  // StoreCurrentSpace
+			case 29:  // RotWarp
+			case 44:  // SetCollisions
+			case 53:  // ClearCollisions
+			case 68:  // SetCounter
+			case 69:  // ModifyCounter
+			case 77:  // RequestDetach
 				break;
 			default:
 				Warn($"command {c[0]} in {m.Def.Name}");
@@ -890,12 +1114,13 @@ public sealed class TwinsanityCutscenes
 		}
 	}
 
-	private void Deliver(Agent target, int message)
+	private void Deliver(Agent target, int message, Agent? from = null)
 	{
 		if (target.Done)
 		{
 			return;
 		}
+		target.MessageFrom = from;
 		if (target.IsPlayer)
 		{
 			target.Message = message;
@@ -911,6 +1136,118 @@ public sealed class TwinsanityCutscenes
 			}
 		}
 		target.Message = message;
+	}
+
+	// Command 146 (ELF 0x2150D0). The word: low byte a link index; 0x100 pick from the source's links, with
+	// 0x8000 meaning its last link (0x200, a computed index, does not occur here); the source is the focus
+	// (0x400), RequestFocus2's find (0x800), else the agent that handed this script (the director) or the
+	// agent itself; bits 12-14 say where the pick goes: 0 the focus, 1 the requested slot (others: nothing).
+	private void FocusLink(Agent a, uint word)
+	{
+		Agent? source = (word & 0x400) != 0 ? a.Focus : (word & 0x800) != 0 ? a.Requested : a.Owner ?? a;
+		if (source == null || (word & 0x100) == 0 || (word & 0x200) != 0)
+		{
+			return;
+		}
+		int index = (word & 0x8000) != 0 ? source.Links.Length - 1 : (int)(word & 0xFF);
+		Agent? picked = Linked(source, index);
+		if (picked == null)
+		{
+			return;
+		}
+		switch (word >> 12 & 7)
+		{
+			case 0:
+				a.Focus = picked;
+				break;
+			case 1:
+				a.Requested = picked;
+				break;
+		}
+	}
+
+	private static int KeyCount(Agent a) => (a.Owner ?? a).Keys.Length;
+
+	// Busy as the requested-object check (condition 122) reads it: playing a one-shot clip that blocks, or a
+	// DoSound. ponytail: the engine's IsBusy flag (instance +4 bit 8) is set by whoever claims the actor; the
+	// rig timings fit "clip or sound" (Coco's 3.52 s talk ends scene A; her spin sound ends scene C).
+	private static bool ActorBusy(Agent x) =>
+		(x.ClipBlocks && !x.ClipLoops && x.Clip.Length > 0 && x.ClipTime < x.ClipLength) || Time.TotalTime < x.SoundEnds;
+
+	// DoSound: the owner's (or its own) object's Sounds[slot] from the chunk's bank, at the agent.
+	private void PlaySound(Agent a, int slot)
+	{
+		Agent owner = a.Owner ?? a;
+		Chunk chunk = owner.Chunk;
+		LoadSounds(chunk);
+		if (chunk.Sounds == null || !chunk.Sounds.TryGetValue(owner.Object, out int[]? slots) || slot >= slots.Length || slots[slot] == 0xFFFF)
+		{
+			return;
+		}
+		int id = slots[slot];
+		Audio.PlayAt($"{chunk.Bank}{id}.wav", a.Position, 1.0f, 1.0f, false, Audio.Bus.Sfx, 4.0f, 50.0f, Audio.AttenuationModel.Linear);
+		a.SoundEnds = Time.TotalTime + chunk.SoundSeconds.GetValueOrDefault(id, 0.5f);
+	}
+
+	private static void LoadSounds(Chunk chunk)
+	{
+		if (chunk.Sounds != null)
+		{
+			return;
+		}
+		chunk.Sounds = new Dictionary<int, int[]>();
+		chunk.Bank = chunk.Name.Replace("/levels/", "/audio/sfx/").Replace(".level.json", "/");
+		if (Assets.ReadText(chunk.Bank + "sounds.json") is not string text)
+		{
+			Log.Warn($"[Cutscenes] no sound bank at {chunk.Bank}");
+			return;
+		}
+		using JsonDocument doc = JsonDocument.Parse(text);
+		foreach (JsonElement o in doc.RootElement.GetProperty("objects").EnumerateArray())
+		{
+			chunk.Sounds[o.GetProperty("id").GetInt32()] = Array.ConvertAll(ToArray(o.GetProperty("sounds")), e => e.GetInt32());
+		}
+		foreach (JsonElement e in doc.RootElement.GetProperty("effects").EnumerateArray())
+		{
+			chunk.SoundSeconds[e.GetProperty("id").GetInt32()] = e.GetProperty("seconds").GetSingle();
+		}
+	}
+
+	// ColliderLaunchNow: away from the focus (the attacker) at `back` m/s (the script's negative forward
+	// speed), rising `height` metres.
+	private static void Launch(Agent a, float back, float height)
+	{
+		Vector3 away = a.Focus != null ? a.Position - a.Focus.Position : -new Vector3(MathF.Sin(a.Yaw * MathF.PI / 180.0f), 0.0f, MathF.Cos(a.Yaw * MathF.PI / 180.0f));
+		away.Y = 0.0f;
+		away = away.LengthSquared() > 1e-6f ? Vector3.Normalize(away) : Vector3.UnitZ;
+		a.Velocity = away * MathF.Abs(back) + Vector3.UnitY * MathF.Sqrt(2.0f * LaunchGravity * MathF.Max(height, 0.05f));
+		a.Airborne = true;
+	}
+
+	// DestroyMe: the agent leaves the world for good.
+	private void Destroy(Agent a)
+	{
+		a.Done = true;
+		a.Machine = null;
+		a.Airborne = false;
+		a.Clip = "";
+		if (a.Proxy.IsValid)
+		{
+			a.Proxy.SetActive(false);
+		}
+	}
+
+	// AgentLab line n, '~' (a line break on the disc) laid out as a space. ponytail: one line only; the
+	// tutorial's prompts are all single lines.
+	private string HintLine(int n)
+	{
+		_hintLines ??= (Assets.ReadText(HintText) ?? "").Replace("\r", "").Split('\n');
+		if (n < 0 || n >= _hintLines.Length)
+		{
+			Warn($"AgentLab line {n} (is {HintText} extracted?)");
+			return "";
+		}
+		return _hintLines[n].Replace('~', ' ');
 	}
 
 	private Agent? Target(Agent a, uint selector) => (selector & 0xFF) switch
@@ -932,7 +1269,7 @@ public sealed class TwinsanityCutscenes
 			foreach (Agent x in c.Instances.Values)
 			{
 				float d = Vector3.DistanceSquared(x.Position, from);
-				if (x.Object == obj && d <= bestSq)
+				if (x.Object == obj && !x.Done && d <= bestSq)
 				{
 					best = x;
 					bestSq = d;
@@ -954,6 +1291,7 @@ public sealed class TwinsanityCutscenes
 		}
 		actor.Owner = director;
 		actor.Key = 0;
+		actor.CurKey = 0;
 		actor.Message = -1;
 		if (actor.IsPlayer)
 		{
@@ -992,6 +1330,7 @@ public sealed class TwinsanityCutscenes
 		Active = false;
 		s_ownsCamera = false;
 		StopSpeech();
+		_hint = ""; // its letterbox is gone (and the actor that would clear it may be released below)
 		SetControl(true);
 		// Actors this director still holds are let go with it (the hub's damaged skip paths never send
 		// them their final message).
@@ -1038,8 +1377,14 @@ public sealed class TwinsanityCutscenes
 		int ogi = slot < def.AnimOgi.Length ? def.AnimOgi[slot] : -1;
 		if (!def.Models.TryGetValue(ogi, out string? model))
 		{
-			Warn($"no model for OGI {ogi} ({def.Name} clip a{slot:D3})");
-			return;
+			// The chunk does not carry that OGI (huba's director lacks 737, Coco's spin state): every OGI of
+			// the object shares the skeleton and clip set, so the actor keeps the model it already shows.
+			if (!a.Proxy.IsValid)
+			{
+				Warn($"no model for OGI {ogi} ({def.Name} clip a{slot:D3})");
+				return;
+			}
+			model = a.ProxyModel;
 		}
 		if (!a.Proxy.IsValid || a.ProxyModel != model)
 		{
@@ -1061,6 +1406,7 @@ public sealed class TwinsanityCutscenes
 		}
 		a.Clip = $"a{slot:D3}";
 		a.ClipLoops = (flags & 0x1000) != 0;
+		a.ClipBlocks = (flags & 0x8000) == 0; // Coco's pose after her run (0xAFF1) leaves her free for the next message
 		a.ClipTime = 0.0f;
 		int index = Animation.Find(a.Proxy, a.Clip);
 		if (index >= 0)
@@ -1095,10 +1441,12 @@ public sealed class TwinsanityCutscenes
 		}
 	}
 
+	// A key of the agent's owner (the director that handed it its script), or its own keys when it runs its
+	// own object's scripts (Coco after a scene, the skunk).
 	private static Vector3? KeyPosition(Agent a, int key)
 	{
-		Agent? owner = a.Owner;
-		return owner != null && key >= 0 && key < owner.Keys.Length ? owner.Keys[key] : null;
+		Agent owner = a.Owner ?? a;
+		return key >= 0 && key < owner.Keys.Length ? owner.Keys[key] : null;
 	}
 
 	private static void SetLooping(Entity entity, bool loop)
@@ -1129,7 +1477,7 @@ public sealed class TwinsanityCutscenes
 		else
 		{
 			// Unmeasured scene: frame the camera subject (the focus) from the player's side.
-			Vector3 subject = (director.Focus ?? _player).Position + new Vector3(0.0f, 1.2f, 0.0f);
+			Vector3 subject = (director.CameraSubject ?? director.Focus ?? _player).Position + new Vector3(0.0f, 1.2f, 0.0f);
 			Vector3 away = _player.Position - subject;
 			away.Y = 0.0f;
 			away = away.LengthSquared() > 1e-4f ? Vector3.Normalize(away) : Vector3.UnitZ;
@@ -1210,7 +1558,16 @@ public sealed class TwinsanityCutscenes
 		Ui.SetAnchors(_top, Vector2.Zero, new Vector2(1.0f, h));
 		Ui.SetAnchors(_bottom, new Vector2(0.0f, 1.0f - h), Vector2.One);
 		Ui.SetImageColor(_fade, new Vector4(0.0f, 0.0f, 0.0f, _fadeLevel));
-		_prompt.Update(_canvas, _bottom, _bars >= 1.0f && CanSkip());
+		// A scene's BottomTextDisplay takes the bar over from the port's own skip prompt (on the modded disc
+		// both are the same bottom-text slot).
+		if (_hint.Length > 0 && _bars >= 1.0f)
+		{
+			_prompt.Show(_canvas, _bottom, _hint, HintScale, HintCentre);
+		}
+		else
+		{
+			_prompt.Update(_canvas, _bottom, _bars >= 1.0f && CanSkip());
+		}
 	}
 
 	private void StopSpeech()

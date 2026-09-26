@@ -5,7 +5,8 @@ using AetherCore;
 
 /// "HOLD △ TO SKIP" in the bottom letterbox bar, drawn with the disc font (Crash_Euro, as the HUD and pause
 /// menu) the way the CrashModded mod shows it (wiki modding/what-changed.md, skip-prompt-beach.png): '^' is the
-/// font's triangle glyph. Without a controller the keyboard key is named too.
+/// font's triangle glyph. Without a controller the keyboard key is named too. Show draws any other line the
+/// same way (the scripts' BottomTextDisplay prompts; '[' '\' ']' are the square, cross and circle glyphs).
 public sealed class TwinsanitySkipPrompt
 {
 	private const string FontDir = "project://assets/ui/fonts/Crash_Euro/";
@@ -21,9 +22,13 @@ public sealed class TwinsanitySkipPrompt
 	private float _total;
 
 	/// <summary>Show the prompt centred in <paramref name="bar"/> (an image whose rect is the bottom bar), or hide it.</summary>
-	public void Update(Entity canvas, Entity bar, bool visible)
+	public void Update(Entity canvas, Entity bar, bool visible) =>
+		Show(canvas, bar, visible ? (Gamepad.IsConnected() ? PadText : KeyText) : "", Scale, 0.5f);
+
+	/// <summary>Draw <paramref name="text"/> centred across <paramref name="bar"/>, glyphs
+	/// <paramref name="scale"/> of the bar's height tall, their centre <paramref name="centre"/> of the way down it.</summary>
+	public void Show(Entity canvas, Entity bar, string text, float scale, float centre)
 	{
-		string text = visible ? (Gamepad.IsConnected() ? PadText : KeyText) : "";
 		if (text != _text || canvas != _canvas)
 		{
 			Build(canvas, text);
@@ -33,8 +38,8 @@ public sealed class TwinsanitySkipPrompt
 			return;
 		}
 		Vector4 r = Ui.GetRect(bar); // x, y, width, height in pixels
-		float h = r.W * Scale, s = h / 39.0f; // glyphs are 39 px tall in the font's own 480-line frame
-		float x0 = r.X + (r.Z - _total * s) * 0.5f, y = r.Y + (r.W - h) * 0.5f;
+		float h = r.W * scale, s = h / 39.0f; // glyphs are 39 px tall in the font's own 480-line frame
+		float x0 = r.X + (r.Z - _total * s) * 0.5f, y = r.Y + r.W * centre - h * 0.5f;
 		foreach ((Entity g, float x, float w) in _glyphs)
 		{
 			Ui.SetRect(g, x0 + x * s, y, w * s, h);
