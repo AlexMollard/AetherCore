@@ -31,6 +31,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private const float kCrashHeight = 1.8f;
 	private const float kExplosionRadius = 2.5f;
 	private const float kSlamLookAhead = 2.0f / 60.0f; // two physics steps of the slam drop
+	private const float kHeadContact = 0.1f;   // head within this of a lid's underside while rising = headbutt
+	private const float kHeadbuttDrop = 0.44f; // m/s down after a multi-hit headbutt (rig_multi_headbutt.csv)
 
 	// Crate kinds; internal so TwinsanityBake classifies with the same table.
 	internal enum Kind { Basic, Nitro, Tnt, ExtraLife, WoodenSpring, IronSpring, Iron, Checkpoint, AkuAku, MultiHit, Level, Surprise, Detonator, Reinforced }
@@ -441,6 +443,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			_actors.KnockEnemy(at, from);
 		}
+		foreach (Vector3 home in _cutscenes.TakeWakes())
+		{
+			_actors.WakePathCrab(home);
+		}
 		TwinsanityAku.Update(deltaTime, _player!, _aku);
 		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
 		// The pause menu ticks on the unscaled clock: it freezes the game itself (Time.Scale 0)
@@ -752,14 +758,21 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		bool whirled = _player.IsSpinning || _player.IsSliding;
 		// Headbutt (OnHeadbutt in the original's behaviour tables): a jump stopped by the underside
 		// of a crate hits that crate like a spin does. The lowest crate above Crash's footprint is
-		// the one his head met.
+		// the one his head met. The player's ceiling check only fires once the blocked body trails
+		// the arc by its slack (~0.1 s pinned under the lid at a crate bounce's speed), so a head
+		// reaching a lid's underside while rising is the headbutt too, on the frame the rig shows it
+		// (logs/tutorialfinal/rig_multi_headbutt.csv).
 		Crate? bonked = null;
-		if (_player.ConsumeCeilingHit())
+		bool ceiling = _player.ConsumeCeilingHit();
+		if (ceiling || (velocity.Y > 0.0f && !_player.IsGrounded))
 		{
+			float head = feet.Y + kCrashHeight;
+			// Rising contact uses the lid's footprint (as onTop does), so a jump beside a crate's side is no bump.
+			float reach = ceiling ? 0.5f + kCrashRadius : 0.5f + kCrashRadius * 0.75f;
 			foreach (Crate c in _crates)
 			{
-				if (c.Alive && c.Base.Y > feet.Y && c.Base.Y - feet.Y < kCrashHeight + 1.0f
-				    && MathF.Abs(feet.X - c.Base.X) < 0.5f + kCrashRadius && MathF.Abs(feet.Z - c.Base.Z) < 0.5f + kCrashRadius
+				if (c.Alive && c.Base.Y > feet.Y && (ceiling ? c.Base.Y - feet.Y < kCrashHeight + 1.0f : head > c.Base.Y - kHeadContact)
+				    && MathF.Abs(feet.X - c.Base.X) < reach && MathF.Abs(feet.Z - c.Base.Z) < reach
 				    && (bonked == null || c.Base.Y < bonked.Base.Y))
 				{
 					bonked = c;
@@ -858,6 +871,14 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 						if (landed)
 						{
 							BounceCrash(c, 3.2f);
+						}
+						else if (c.Wumpa > 0)
+						{
+							// COM_MULTIPLE_HIT_CRATE_HEADBUTTED: while it still holds wumpa, ApplyVelocity
+							// pushes him back down (the one that empties it breaks it, no push). The rig's
+							// rise goes 4.0 -> -0.44 m/s on the bump frame and he falls from there, 14
+							// frames to the lid (rig_multi_headbutt.csv), not at the script's -5.
+							_player.PushDown(kHeadbuttDrop);
 						}
 					}
 					else if (struck)

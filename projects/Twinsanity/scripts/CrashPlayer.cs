@@ -73,6 +73,9 @@ public sealed class CrashPlayer : EntityScript
 	// 0.97 on the larger axis still walks and 1.00 runs.
 	private const float StickDeadZone = 0.52f;
 	private const float StickRun = 0.98f;
+	// Rig (logs/beachreverify/rig_crawl.csv, rig_crawl_slide.csv): crouched - held, tapped or after a
+	// slide - he crawls only from 0.73 raw deflection; at 0.72 and below he holds still.
+	private const float CrawlStick = 0.725f;
 	private const float BrakeRate = 50.0f;
 	private const float AirAccel = 50.0f;
 	private const float SlideDelay = 0.04f;
@@ -467,6 +470,17 @@ public sealed class CrashPlayer : EntityScript
 		Play("a019", false);
 	}
 
+	/// <summary>Set the vertical speed while airborne, keeping arc, clip and horizontal motion: a crate
+	/// headbutt's push down (COM_MULTIPLE_HIT_CRATE_HEADBUTTED ApplyVelocity -5).</summary>
+	public void PushDown(float speed)
+	{
+		if (_state == State.Air)
+		{
+			_vy = -speed;
+			_airY = Self.Position.Y;
+		}
+	}
+
 	public void Respawn(Vector3 feet, float facing)
 	{
 		// Coming back from a death fades in from black; the first placement does not.
@@ -602,7 +616,8 @@ public sealed class CrashPlayer : EntityScript
 			}
 
 			case State.Crouch:
-				_horizontal = _hurtLeft > 0.0f ? _horizontal : moving ? stickDir * _crawlSpeed : Vector3.Zero;
+				bool crawl = stick >= CrawlStick;
+				_horizontal = _hurtLeft > 0.0f ? _horizontal : crawl ? stickDir * _crawlSpeed : Vector3.Zero;
 				if (moving && _hurtLeft <= 0.0f)
 				{
 					_moveDir = stickDir;
@@ -877,7 +892,7 @@ public sealed class CrashPlayer : EntityScript
 			return _slideSpeed * (1.0f - t / SlideStop);
 		}
 		var (_, stick) = StickInput();
-		return stick >= StickDeadZone ? _crawlSpeed : 0.0f;
+		return stick >= CrawlStick ? _crawlSpeed : 0.0f;
 	}
 
 	private void AirHorizontal(Vector3 stickDir, bool moving, float dt)

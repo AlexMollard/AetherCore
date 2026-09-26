@@ -25,6 +25,10 @@ namespace AetherGame;
 ///   within 20 m (COM_GLOBAL_CRAB_INIT, sqr 400), rise 2 m at 2 m/s, and a crab charges at once
 ///   when he is within 5 m (COM_GLOBAL_CRAB_ROAM, sqr 25; rig rig_crab_notice.csv) - touching
 ///   him hurts.
+/// - Path crab (huba old_act_GLOBAL_CRAB4, the same object 180, subtypes 1/2): stands at its
+///   spot until Crash is within √180 m or trigger 1 sends message 87 (COM_GLOBAL_CRAB_INIT
+///   S10/S11), then walks its two route keys for good (COM_GLOBAL_CRAB_IDLE). It never charges;
+///   touching it hurts and his attacks kill it like any crab.
 /// - Skunk: patrols its instance path (COM_CREATURE_BASIC_IDLE_PATROL) at the instance's walk
 ///   speed (floats[2], 2.2 m/s), pausing ~1.3 s to turn at each end; it never chases Crash
 ///   (rig: logs/audit/skunk_patrol_rig.csv). Touching it hurts; his attacks kill it.
@@ -82,6 +86,13 @@ public sealed partial class TwinsanityActors
 	private const float CrabNotice = 5.0f;
 	private const float CrabSpeed = 2.7f;
 	private const float CrabGiveUp = 20.0f;
+	// Path crab (rig logs/tutorialfinal/rig_crab4_wake.csv, crabs 9 and 10 over 30 s): the instance's
+	// floats[2] (3.4 m/s) between the keys, stopping ~0.5 m short of each; 1.0 s standing at key 1,
+	// 0.5 s at key 0. First leg: to the key farther from its spot (crab 9 went north, crab 10 south).
+	private const float PathCrabWakeSqr = 180.0f;
+	private const float PathCrabArrive = 0.5f;
+	private const float PathCrabPauseKey0 = 0.5f;
+	private const float PathCrabPauseKey1 = 1.0f;
 	// Skunk (rig: logs/audit/skunk_patrol_rig.csv). Walk speed is the instance's floats[2].
 	private const float SkunkWalk = 2.2f;
 	private const float SkunkArrive = 0.36f;
@@ -315,6 +326,16 @@ public sealed partial class TwinsanityActors
 				c.Notice = CrabNotice;
 				c.GiveUp = CrabGiveUp;
 				c.Mode = Mode.Down;
+				if (SubtypeOf(instance) is 1 or 2 && PointList(instance, "points", transform) is { Count: > 1 } keys)
+				{
+					// Path crab: stands at its spot, visible, until woken (INIT S10/S11).
+					c.Points = keys;
+					float[] floats = FloatsOf(instance);
+					c.Speed = floats.Length > 2 ? floats[2] : CrabShuttleSpeed;
+					c.PathIndex = Horizontal(a.Home, keys[0]) > Horizontal(a.Home, keys[1]) ? 0 : 1;
+					PlayClip(a, a.IdleClip);
+					break;
+				}
 				a.Model.Position = a.Home - new Vector3(0.0f, CrabBurrow, 0.0f);
 				a.Model.SetActive(false);
 				break;
@@ -1157,8 +1178,60 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
+	/// <summary>Trigger message 87 (huba trigger 1 -> crabs 9 and 10) wakes the path crab standing at
+	/// <paramref name="home"/> (COM_GLOBAL_CRAB_INIT S11 leaves its wait on it).</summary>
+	public void WakePathCrab(Vector3 home)
+	{
+		foreach (Actor a in _actors)
+		{
+			if (a.Kind == Behaviour.Crab && a.Critter is { Points.Count: > 1, Mode: Mode.Down } c && Horizontal(a.Home, home) < 0.5f)
+			{
+				c.Mode = Mode.Walk;
+			}
+		}
+	}
+
+	private void UpdatePathCrab(Actor a, Critter c, float dt, Vector3 crashPos)
+	{
+		TouchCrash(a, crashPos);
+		switch (c.Mode)
+		{
+			case Mode.Down:
+				PlayClip(a, a.IdleClip);
+				if (Vector3.DistanceSquared(a.Model.Position, crashPos) < PathCrabWakeSqr)
+				{
+					c.Mode = Mode.Walk;
+				}
+				break;
+			case Mode.Idle:
+				PlayClip(a, a.IdleClip);
+				c.Timer -= dt;
+				if (c.Timer <= 0.0f)
+				{
+					c.Mode = Mode.Walk;
+				}
+				break;
+			default:
+				PlayClip(a, c.WalkClip);
+				Vector3 key = c.Points[c.PathIndex];
+				WalkTo(a, key, c.Speed, dt, true);
+				if (Horizontal(a.Model.Position, key) <= PathCrabArrive)
+				{
+					c.Mode = Mode.Idle;
+					c.Timer = c.PathIndex == 0 ? PathCrabPauseKey0 : PathCrabPauseKey1;
+					c.PathIndex = 1 - c.PathIndex;
+				}
+				break;
+		}
+	}
+
 	private void UpdateCrab(Actor a, Critter c, float dt, Vector3 crashPos)
 	{
+		if (c.Points.Count > 1)
+		{
+			UpdatePathCrab(a, c, dt, crashPos);
+			return;
+		}
 		Vector3 p = a.Model.Position;
 		float d = Horizontal(p, crashPos);
 		switch (c.Mode)

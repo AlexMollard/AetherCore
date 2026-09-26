@@ -887,7 +887,7 @@ public sealed partial class TwinsanityActors
 		{
 			return Behaviour.Chicken;
 		}
-		if (n.StartsWith("act_global_crab"))
+		if (n.StartsWith("act_global_crab") || n.StartsWith("old_act_global_crab"))
 		{
 			return Behaviour.Crab;
 		}

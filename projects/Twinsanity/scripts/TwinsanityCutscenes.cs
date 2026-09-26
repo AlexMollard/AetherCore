@@ -43,6 +43,7 @@ public sealed class TwinsanityCutscenes
 	private const float SkipHold = 0.5f;       // Triangle held, as the mod's movie skip (30 frames at 60 Hz)
 	private const int FocusTarget = 0xFB;
 	private const int CheckpointMessage = 138; // a volume's message to a checkpoint / level crate
+	private const int WakeMessage = 87;        // huba trigger 1's message to path crabs 9 and 10 (COM_GLOBAL_CRAB_INIT S11)
 	private const int FocusKey = 252;
 	private const int FocusKey2 = 246;   // KEY_INDEX 246: the key SetFocusToKey2 picked
 	private const int CurrentKey = 254;  // KEY_INDEX 254 (and SetFocusToKey2's 0xFE): the SetKey/NextKey key
@@ -148,6 +149,7 @@ public sealed class TwinsanityCutscenes
 		// A volume starts its scene once, until a respawn at its zone's checkpoint re-arms it (Respawned).
 		public bool Fired;
 		public Agent? Checkpoint;   // message 138: the crate this volume makes the respawn point (huba trigger 7)
+		public bool Wake;           // message 87 to path crabs: wakes them instead of running a script
 	}
 
 	private sealed class Agent
@@ -240,13 +242,15 @@ public sealed class TwinsanityCutscenes
 	private float _stripLevel, _stripTarget, _stripRate = 5.0f;
 	private const float StripAlpha = 0.5f;
 	private const float StripCentre1 = 0.2f, StripCentre2 = 0.48f;
-	// DisplayBottomTextInstance (657) shows the agent's own line: AgentLab line subtype + 30. The text
-	// master's scripts pin it - its ActorSubtypeEquals(3) branch shows line 33 with an explicit 603 - and
-	// the rig shows the huba subtype-9 master's line 39 ("COLLECT AKU-AKU MASKS...").
-	private const int InstanceTextBase = 30;
+	// DisplayBottomTextInstance (657) shows the agent's own line. ELF Command_DisplayBottomTextInstance_Run
+	// (0x112990): n = the instance's int prop 0; AgentLab line n + 30 below 11, n + 41 from 11 on. Rig: the huba subtype-9 master
+	// shows line 39 ("COLLECT AKU-AKU MASKS..."), the beach subtype-2 one line 32 ("BELLY-FLOP ON THE RED
+	// BUTTON...") and the beach subtype-12 one line 53 ("JUMP ON TNT CRATES TO TRIGGER TIMER.").
+	private static int InstanceTextLine(int subtype) => subtype < 11 ? subtype + 30 : subtype + 41;
 	private string _hintSplitFrom = "", _hintFirst = "", _hintSecond = "", _hintOneLine = "";
 	private (Vector3 Position, float Facing)? _checkpoint; // a checkpoint volume entered, for TakeCheckpoint
 	private readonly List<(Vector3 At, Vector3 From)> _hits = new(); // hits on live actors, for TakeHits
+	private readonly List<Vector3> _wakes = new(); // path crabs a volume woke, for TakeWakes
 	private string[]? _hintLines;
 	private const string HintText = "project://assets/ui/text/AgentLab/English.txt";
 	private const float HintScale = 0.386f;
@@ -474,6 +478,13 @@ public sealed class TwinsanityCutscenes
 			_triggers.Add(tr);
 			return tr;
 		}
+		if (tr.Message == WakeMessage && tr.Targets.Length > 0 && Array.TrueForAll(tr.Targets, id => chunk.Instances.TryGetValue((tr.Layer, id), out Agent? c)
+			&& c.Name.Contains("GLOBAL_CRAB", StringComparison.Ordinal)))
+		{
+			tr.Wake = true;
+			_triggers.Add(tr);
+			return tr;
+		}
 		return null;
 	}
 
@@ -661,6 +672,14 @@ public sealed class TwinsanityCutscenes
 		return hits;
 	}
 
+	/// <summary>Where the path crabs a volume woke since the last call stand (message 87).</summary>
+	public List<Vector3> TakeWakes()
+	{
+		var wakes = new List<Vector3>(_wakes);
+		_wakes.Clear();
+		return wakes;
+	}
+
 	/// <summary>A checkpoint volume Crash entered since the last call (message 138): the crate's position and
 	/// the facing (camera yaw) he respawns with there.</summary>
 	public bool TakeCheckpoint(out Vector3 position, out float facing)
@@ -786,7 +805,15 @@ public sealed class TwinsanityCutscenes
 				Log.Info($"[Cutscenes] volume (layer {t.Layer}, message {t.Message}) entered at {feet}");
 				foreach (int id in t.Targets)
 				{
-					if (t.Chunk.Instances.TryGetValue((t.Layer, id), out Agent? target))
+					if (!t.Chunk.Instances.TryGetValue((t.Layer, id), out Agent? target))
+					{
+						continue;
+					}
+					if (t.Wake)
+					{
+						_wakes.Add(target.Position);
+					}
+					else
 					{
 						Deliver(target, t.Message);
 					}
@@ -1196,7 +1223,7 @@ public sealed class TwinsanityCutscenes
 				_stripRate = 1.0f / MathF.Max(BitConverter.UInt32BitsToSingle(Arg(0)), 0.05f);
 				break;
 			case 657: // DisplayBottomTextInstance(x, y, r, g, b, 0)
-				_hint = HintLine(a.Subtype + InstanceTextBase);
+				_hint = HintLine(InstanceTextLine(a.Params.Length > 0 ? a.Params[0] : a.Subtype));
 				Log.Info($"[Cutscenes] hint \"{_hint}\" ({a.Name}, subtype {a.Subtype})");
 				break;
 			case 11: // DoSound(flags, Sounds[] slot | flags << 16, ...)
