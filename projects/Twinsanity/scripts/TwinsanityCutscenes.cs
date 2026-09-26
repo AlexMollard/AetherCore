@@ -154,6 +154,8 @@ public sealed class TwinsanityCutscenes
 	{
 		public Chunk Chunk = null!;
 		public int Layer, Id, Object, Subtype;
+		public int[] Params = Array.Empty<int>(); // the level instance's int params
+		public uint Flags;                        // the level instance's flags (SoftFlagSet reads its bits)
 		public string Name = "";
 		public Vector3 Position;
 		public float Yaw;                          // engine degrees
@@ -416,6 +418,8 @@ public sealed class TwinsanityCutscenes
 			Position = Vector3.Transform(Vec(i.GetProperty("position")), transform),
 			Yaw = i.GetProperty("euler")[1].GetSingle(),
 			Subtype = i.TryGetProperty("subtype", out JsonElement st) ? st.GetInt32() : 0,
+			Params = i.TryGetProperty("params", out JsonElement ps) ? Array.ConvertAll(ToArray(ps), e => e.GetInt32()) : Array.Empty<int>(),
+			Flags = i.TryGetProperty("flags", out JsonElement fl) ? fl.GetUInt32() : 0u,
 		};
 		if (i.TryGetProperty("links", out JsonElement links))
 		{
@@ -625,6 +629,19 @@ public sealed class TwinsanityCutscenes
 			if (def.Scripts.Length > 0 && Script(d.Chunk, def.Scripts[0]) is ScriptDef s)
 			{
 				d.Machine = NewMachine(s, d);
+			}
+		}
+		// The text masters (COM_UTIL_TEXTMASTER_DEFAULT) run from level start too: range checks against Crash
+		// that show and hide their hint strip (huba's subtype-9 master: the Aku-Aku line at the channel crates).
+		foreach (Chunk c in _chunks)
+		{
+			foreach (Agent a in c.Instances.Values)
+			{
+				ObjectDef def = c.Objects[a.Object];
+				if (!a.IsDirector && def.Scripts.Length > 0 && Script(c, def.Scripts[0]) is ScriptDef s && s.Name == "COM_UTIL_TEXTMASTER_DEFAULT")
+				{
+					a.Machine = NewMachine(s, a);
+				}
 			}
 		}
 		int agents = 0;
@@ -1056,7 +1073,18 @@ public sealed class TwinsanityCutscenes
 			case 7: // AnimationFinished
 				return a.Clip.Length == 0 || (!a.ClipLoops && a.ClipTime >= a.ClipLength);
 			case 12: // IsLoadZoneStateSet: nothing in this port reloads a zone
-			case 67: // SoftFlagSet: story flags; a fresh game has none
+				return false;
+			case 67: // SoftFlagSet: bit `param` of the instance's level flags. The bits differ instance by instance
+			         // (huba's two seagull kinds, the text masters), so they are per-instance switches, not story flags.
+				return r.Param is >= 0 and < 32 && (a.Flags >> r.Param & 1u) != 0;
+			case 91: // the counter SetCounter (68) loads; the text masters' range checks read it against 6, 11, 13, 16,
+			         // 21, 26, 31 for a 5-30 m radius. ponytail: taken as the instance's third param (huba's master:
+			         // [9, 255, 5] -> 5 m) without decoding SetCounter's operands; the rig (rig_hint_tp.png) shows the
+			         // strip 3.4 m from the master.
+				return (a.Params.Length > 2 ? a.Params[2] : 0) > r.Threshold;
+			case 512: // PlayerHitPoints: 1 while Crash lives, 0 once he is dead (the masks are TwinsanityAku's)
+				return (_crash?.IsDead ?? false ? 0.0f : 1.0f) > r.Threshold;
+			case 562: // PlayerIsCoOpLinked: no co-op link in this port
 				return false;
 			case 47: // ActorSubtypeEquals
 				return a.Subtype == r.Param;

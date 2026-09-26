@@ -69,8 +69,10 @@ public sealed class CrashPlayer : EntityScript
 
 	// Measured, not in the float table.
 	private const float Tick = 0.02f;
-	private const float StickDeadZone = 0.5f;
-	private const float StickRun = 0.97f;
+	// Rig (logs/tutorialroute/rig_stick.txt, raw PS2 deflection from standing): 0.50 stands, 0.55 walks,
+	// 0.97 on the larger axis still walks and 1.00 runs.
+	private const float StickDeadZone = 0.52f;
+	private const float StickRun = 0.98f;
 	private const float BrakeRate = 50.0f;
 	private const float AirAccel = 50.0f;
 	private const float SlideDelay = 0.04f;
@@ -100,6 +102,7 @@ public sealed class CrashPlayer : EntityScript
 	public bool IsSliding => _state == State.Slide;
 	public Vector3 Velocity => new(_horizontal.X, _vy, _horizontal.Z);
 	public bool IsGrounded => _state is State.Ground or State.Crouch or State.Slide or State.SlamLand;
+	public bool IsDead => _dead;
 	public float Facing => _facing;
 
 	private bool _ceilingHit;
@@ -1021,11 +1024,17 @@ public sealed class CrashPlayer : EntityScript
 		Vector3 forward = Flat(Camera.GetForward(_camera.Entity));
 		Vector3 right = Flat(Camera.GetRight(_camera.Entity));
 		Vector2 pad = Gamepad.LeftStick;
-		float x = Input.GetAxisRaw(Key.A, Key.D) + Input.GetAxisRaw(Key.Left, Key.Right) + pad.X;
-		float z = Input.GetAxisRaw(Key.S, Key.W) + Input.GetAxisRaw(Key.Down, Key.Up) + pad.Y;
-		// The game reads deflection per axis: a half-way diagonal walks where a full push runs.
-		float amount = Math.Min(Math.Max(Math.Abs(x), Math.Abs(z)), 1.0f);
-		Vector3 input = forward * z + right * x;
+		float keyX = Input.GetAxisRaw(Key.A, Key.D) + Input.GetAxisRaw(Key.Left, Key.Right);
+		float keyZ = Input.GetAxisRaw(Key.S, Key.W) + Input.GetAxisRaw(Key.Down, Key.Up);
+		// The game reads deflection per axis: a half-way diagonal walks where a full push runs. A
+		// DualShock's larger axis saturates at full push in any direction; a circular-gate pad reaches the
+		// same full push as magnitude 1, so the pad is read by its raw magnitude. Gamepad.LeftStick carries
+		// the SDK's 0.24 deadzone and renormalisation (as RightStick in Look), so undo that first - without
+		// it a raw 0.6 read as 0.47 and did not start the walk the rig starts.
+		float padLength = pad.Length();
+		float padAmount = padLength > 0.0f ? Math.Min(0.76f * padLength + 0.24f, 1.0f) : 0.0f;
+		float amount = Math.Max(Math.Min(Math.Max(Math.Abs(keyX), Math.Abs(keyZ)), 1.0f), padAmount);
+		Vector3 input = forward * (keyZ + pad.Y) + right * (keyX + pad.X);
 		return input.LengthSquared() > 1e-6f ? (Vector3.Normalize(input), amount) : (Vector3.Zero, 0.0f);
 	}
 
