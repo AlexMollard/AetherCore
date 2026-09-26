@@ -726,8 +726,9 @@ public sealed class CrashPlayer : EntityScript
 		// left the floor two frames after take-off, and one frame of slack cancelled the jump there.
 		if (_state == State.Air && _vy > 0.0f)
 		{
+			// Against the same one-tick-behind point TrackHeight steers onto (see there).
 			float slack = 0.25f + _vy * (2.0f * Time.DeltaTime + 1.0f / 60.0f);
-			if (_airY - Self.Position.Y > slack)
+			if (_airY - _vy * Tick - Self.Position.Y > slack)
 			{
 				_vy = 0.0f;
 				_airY = Self.Position.Y;
@@ -770,6 +771,11 @@ public sealed class CrashPlayer : EntityScript
 		{
 			return _vy + Math.Clamp(gap, -0.5f, 0.5f) * HeightGain;
 		}
+		// The rise below replays the current tick's velocity from phase _accumulator, i.e. the arc one
+		// tick behind _airY (which already includes this tick's move). Steer onto that same point:
+		// against _airY itself the gap held +vy*Tick all the way up, and the pull turned it into
+		// ~0.12 m of extra apex (single 2.25 against the rig's 2.13, logs/tutorialroute/jump_flat_*).
+		gap -= _vy * Tick;
 		float dt = Math.Max(deltaTime, 1.0f / 240.0f);
 		float t = _accumulator, end = _accumulator + dt, vy = _vy, rise = 0.0f;
 		for (float tickEnd = Tick; t < end; tickEnd += Tick)
