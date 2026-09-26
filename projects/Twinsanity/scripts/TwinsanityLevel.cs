@@ -475,6 +475,22 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		Vector3 velocity = _player!.Velocity;
 		// Both the spin and the slide sweep break wooden crates in the original.
 		bool whirled = _player.IsSpinning || _player.IsSliding;
+		// Headbutt (OnHeadbutt in the original's behaviour tables): a jump stopped by the underside
+		// of a crate hits that crate like a spin does. The lowest crate above Crash's footprint is
+		// the one his head met.
+		Crate? bonked = null;
+		if (_player.ConsumeCeilingHit())
+		{
+			foreach (Crate c in _crates)
+			{
+				if (c.Alive && c.Base.Y > feet.Y && c.Base.Y - feet.Y < kCrashHeight + 1.0f
+				    && MathF.Abs(feet.X - c.Base.X) < 0.5f + kCrashRadius && MathF.Abs(feet.Z - c.Base.Z) < 0.5f + kCrashRadius
+				    && (bonked == null || c.Base.Y < bonked.Base.Y))
+				{
+					bonked = c;
+				}
+			}
+		}
 		foreach (Crate c in _crates.ToArray())
 		{
 			if (!c.Alive)
@@ -492,7 +508,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			bool onTop = dx < 0.5f + kCrashRadius * 0.75f && dz < 0.5f + kCrashRadius * 0.75f
 			             && feet.Y > top - 0.75f && feet.Y < top + 0.45f && velocity.Y < 0.5f;
 			bool touching = dx < 0.5f + kCrashRadius + 0.08f && dz < 0.5f + kCrashRadius + 0.08f && overlapsVertically;
-			bool whirledHit = whirled && dx < 1.5f && dz < 1.5f && feet.Y < top + 0.5f && feet.Y + kCrashHeight > c.Base.Y;
+			bool whirledHit = (whirled && dx < 1.5f && dz < 1.5f && feet.Y < top + 0.5f && feet.Y + kCrashHeight > c.Base.Y) || c == bonked;
 
 			switch (c.Kind)
 			{

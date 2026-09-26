@@ -97,6 +97,16 @@ public sealed class CrashPlayer : EntityScript
 	public bool IsGrounded => _state is State.Ground or State.Crouch or State.Slide or State.SlamLand;
 	public float Facing => _facing;
 
+	private bool _ceilingHit;
+	/// <summary>True once after Crash's rise was stopped by something overhead (a headbutt);
+	/// reading it clears it. The level uses it to break the crate he hit from below.</summary>
+	public bool ConsumeCeilingHit()
+	{
+		bool hit = _ceilingHit;
+		_ceilingHit = false;
+		return hit;
+	}
+
 	private Entity _model;
 	private CrashCamera _camera = null!;
 	private float _facing;
@@ -702,6 +712,7 @@ public sealed class CrashPlayer : EntityScript
 			{
 				_vy = 0.0f;
 				_airY = Self.Position.Y;
+				_ceilingHit = true;
 			}
 		}
 
