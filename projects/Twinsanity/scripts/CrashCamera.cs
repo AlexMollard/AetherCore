@@ -37,7 +37,7 @@ public sealed class CrashCamera
 	public const float FovDegrees = 45.0f;
 	private const float FollowLag = 0.17f;
 	private const float LeadFacing = 0.86f;
-	private const float LeadVelocity = 0.062f;
+	private const float LeadVelocity = 0.07f;
 	private const float LeadPush = 1.93f;
 	private const float LeadLag = 0.6f;
 	// Collision: a 0.3 sphere cast (the near plane must stay outside terrain) pulls the eye in at once and

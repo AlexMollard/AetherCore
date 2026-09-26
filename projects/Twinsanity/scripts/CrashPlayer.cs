@@ -38,7 +38,9 @@ public sealed class CrashPlayer : EntityScript
 {
 	public string ModelPath = "project://assets/models/objects/act_CRASH/act_CRASH_0.gltf";
 	public float ModelYawOffset = 180.0f;
-	public float ModelTurnRate = 1440.0f;
+	// Rig (logs/cameralean/lean_rig.csv, Crash's world matrix at 0x00CF0A70): his body turns toward the
+	// stick at 715 deg/s while he runs (357 turning on the spot); he moves along the stick at once.
+	public float ModelTurnRate = 715.0f;
 
 	public float MouseSensitivity = 0.15f;
 
@@ -1048,8 +1050,12 @@ public sealed class CrashPlayer : EntityScript
 		{
 			_facing = MathF.Atan2(-_moveDir.X, -_moveDir.Z) * (180.0f / MathF.PI);
 		}
+		// Rig (lean_rig.csv, l_across/l_holdL): the body turns at ModelTurnRate until it is within ~25 deg
+		// of the stick, then eases in (error / 0.17 s), so while the camera swings a run across it trails
+		// the stick by ~15-18 deg.
 		float delta = Wrap(_facing - _modelYaw);
-		float step = deltaTime > 0.0f ? ModelTurnRate * deltaTime : 360.0f;
+		float rate = MathF.Abs(delta) > 25.0f ? ModelTurnRate : Math.Min(ModelTurnRate, MathF.Abs(delta) / 0.17f + 10.0f);
+		float step = deltaTime > 0.0f ? rate * deltaTime : 360.0f;
 		_modelYaw += Math.Clamp(delta, -step, step);
 		_model.Position = Self.Position;
 		if (_dead && _deathPlan.FloatToSurface)
@@ -1096,7 +1102,8 @@ public sealed class CrashPlayer : EntityScript
 		}
 		else
 		{
-			_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_facing), _horizontal, _lookTurn, _lookPitch, _dead ? Vector2.Zero : _lookStick);
+			// The lead follows his body, which lags the stick (rig: lean grows as he turns on the spot).
+			_camera.Update(deltaTime, Self.Position, IsGrounded, FacingDir(_modelYaw), _horizontal, _lookTurn, _lookPitch, _dead ? Vector2.Zero : _lookStick);
 		}
 		_lookTurn = 0.0f;
 		_lookPitch = 0.0f;
