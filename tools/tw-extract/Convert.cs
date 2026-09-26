@@ -70,6 +70,8 @@ namespace TwExtract
 	}
 
 	// Textures are written once, content-addressed, into <out>/textures/ and shared by every model.
+	// An HD-pack replacement overwrites the file with the pack's art (same UV space; references are
+	// by name, so nothing else changes).
 	sealed class TextureStore
 	{
 		readonly string m_dir;
@@ -99,7 +101,12 @@ namespace TwExtract
 			{
 				name = Hash.Of(BitConverter.GetBytes(t.Width), BitConverter.GetBytes(t.Height), rgba) + ".png";
 				string path = Path.Combine(m_dir, name);
-				if (!File.Exists(path))
+				if (HdPack.Replacement(t, rgba, false, false, null, out var hd, out var hw, out var hh))
+				{
+					Pixels.SavePng(path, hw, hh, hd);
+					Written++;
+				}
+				else if (!File.Exists(path))
 				{
 					Pixels.SavePng(path, t.Width, t.Height, rgba);
 					Written++;

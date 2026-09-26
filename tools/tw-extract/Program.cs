@@ -57,6 +57,7 @@ namespace TwExtract
 					case "--iso": iso = Next(); break;
 					case "--out": s_out = Next(); break;
 					case "--cache": cache = Next(); break;
+					case "--hd-pack": HdPack.Load(Next()); break; // PCSX2 replacement zip; matched textures write HD art
 					case "--only": only = Next(); break;
 					case "--movies": movies.UnionWith(Next().Split(',')); break; // FMV names: H01_A,B01_A,...
 					case "--ffmpeg": ffmpeg = Next(); break;
@@ -75,7 +76,7 @@ namespace TwExtract
 						}
 						break;
 					default:
-						Console.Error.WriteLine("usage: tw-extract --iso <original.iso> [--out <assets dir>] [--cache <dir>] [--only <substring>] [--music <n,n,...|all>] [--movies <NAME,...> [--ffmpeg <exe>]] [--voice <n,n,...>]");
+						Console.Error.WriteLine("usage: tw-extract --iso <original.iso> [--out <assets dir>] [--cache <dir>] [--hd-pack <pcsx2 replacements.zip>] [--only <substring>] [--music <n,n,...|all>] [--movies <NAME,...> [--ffmpeg <exe>]] [--voice <n,n,...>]");
 						return 2;
 				}
 			}
@@ -155,6 +156,10 @@ namespace TwExtract
 				Json.Write(sb, s_objectTable.ToDictionary(kv => kv.Key.ToString(), kv => (object)kv.Value));
 				Directory.CreateDirectory(Path.Combine(s_out, "levels"));
 				File.WriteAllText(Path.Combine(s_out, "levels", "objects.json"), sb.ToString());
+			}
+			if (HdPack.Loaded)
+			{
+				Console.WriteLine(HdPack.Report());
 			}
 			Console.WriteLine($"done: {s_scenery} scenery glTF, {s_objects} object glTF, {s_images} images, {s_textures.Written} textures ({s_textures.Undecodable} undecodable), {s_failed} files failed");
 			return s_failed == 0 ? 0 : 1;
@@ -903,14 +908,23 @@ if (skinPrims.Count > 0 && joints.Length > 0)
 					{
 						break;
 					}
+					string file = $"{stem}_{saved:D2}.png";
+					// A pack replacement overwrites the native tile with the same UV space; UI art keeps
+					// its native-path brighten so the engine's unmodulated draw looks unchanged.
 					var rgba = Pixels.Decode(tex);
-					if (rgba != null && ui)
+					if (HdPack.Replacement(tex, rgba, ui, ui, $"{rel}#{saved}", out var hd, out var hw, out var hh))
 					{
-						Pixels.Brighten(rgba);
+						Pixels.SavePng(Path.Combine(dir, file), hw, hh, hd);
+						saved++;
+						s_images++;
 					}
-					if (rgba != null)
+					else if (rgba != null)
 					{
-						Pixels.SavePng(Path.Combine(dir, $"{stem}_{saved:D2}.png"), tex.Width, tex.Height, rgba);
+						if (ui)
+						{
+							Pixels.Brighten(rgba);
+						}
+						Pixels.SavePng(Path.Combine(dir, file), tex.Width, tex.Height, rgba);
 						saved++;
 						s_images++;
 					}
@@ -973,6 +987,7 @@ if (skinPrims.Count > 0 && joints.Length > 0)
 			var glyphs = new Dictionary<string, object>();
 			int first;
 			var decoded = new List<(byte[] Rgba, int W, int H)>();
+			var native = new List<(int W, int H)>(); // page metrics the font.json keeps (layout stays frame-relative)
 			Directory.CreateDirectory(Path.Combine(dir, stem));
 			using (var r = new BinaryReader(File.OpenRead(path)))
 			{
@@ -984,13 +999,24 @@ if (skinPrims.Count > 0 && joints.Length > 0)
 					var tex = new Texture();
 					tex.Load(r, 0);
 					SkipMaterial(r);
-					var rgba = Pixels.Decode(tex) ?? throw new InvalidDataException($"font page {i}: undecodable {tex.PixelFormat}");
-					Pixels.Brighten(rgba);
+					// A pack page replaces the native page at its own higher resolution; glyph rects are
+					// scaled onto it below, while font.json keeps the native texel metrics.
+					byte[] rgba = Pixels.Decode(tex) ?? throw new InvalidDataException($"font page {i}: undecodable {tex.PixelFormat}");
+					int pw = tex.Width, ph = tex.Height;
+					if (HdPack.Replacement(tex, rgba, true, true, $"{stem} page {i}", out var hd, out var hw, out var hh))
+					{
+						(rgba, pw, ph) = (hd, hw, hh);
+					}
+					else
+					{
+						Pixels.Brighten(rgba);
+					}
 					string file = $"{stem}_{i:D2}.png";
-					Pixels.SavePng(Path.Combine(dir, file), tex.Width, tex.Height, rgba);
+					Pixels.SavePng(Path.Combine(dir, file), pw, ph, rgba);
 					pages.Add(new Dictionary<string, object> { ["file"] = file, ["width"] = tex.Width, ["height"] = tex.Height });
 					s_images++;
-					decoded.Add((rgba, tex.Width, tex.Height));
+					decoded.Add((rgba, pw, ph));
+					native.Add((tex.Width, tex.Height));
 				}
 				int glyphCount = r.ReadInt32();
 				first = r.ReadInt32();
@@ -1003,26 +1029,30 @@ if (skinPrims.Count > 0 && joints.Length > 0)
 					}
 					int page = BitConverter.ToInt32(BitConverter.GetBytes(u), 0) - BitConverter.ToInt32(BitConverter.GetBytes((float)Math.Floor(u)), 0) - 1;
 					int gx = (int)(u / 16f), gw = (int)Math.Round(w / 16f), gh = (int)Math.Round(h / 16f);
-					int gy = page >= 0 && page < decoded.Count ? (int)(decoded[page].H - v / 16f) : 0;
+					int gy = page >= 0 && page < native.Count ? (int)(native[page].H - v / 16f) : 0;
 					glyphs[(first + i).ToString()] = new List<object> { page, gx, gy, gw, gh };
 					if (page < 0 || page >= decoded.Count)
 					{
 						continue;
 					}
 					var src = decoded[page];
-					var cut = new byte[gw * gh * 4];
-					for (int y = 0; y < gh; y++)
+					// Cut at the page's own resolution: the same rect, scaled onto the (possibly HD) page.
+					double fx = src.W / (double)native[page].W, fy = src.H / (double)native[page].H;
+					int cx = (int)Math.Round(gx * fx), cy = (int)Math.Round(gy * fy);
+					int cw = Math.Max(1, (int)Math.Round(gw * fx)), ch = Math.Max(1, (int)Math.Round(gh * fy));
+					var cut = new byte[cw * ch * 4];
+					for (int y = 0; y < ch; y++)
 					{
-						for (int x = 0; x < gw; x++)
+						for (int x = 0; x < cw; x++)
 						{
-							int sx = gx + x, sy = gy + y;
+							int sx = cx + x, sy = cy + y;
 							if (sx >= 0 && sx < src.W && sy >= 0 && sy < src.H)
 							{
-								Buffer.BlockCopy(src.Rgba, (sy * src.W + sx) * 4, cut, (y * gw + x) * 4, 4);
+								Buffer.BlockCopy(src.Rgba, (sy * src.W + sx) * 4, cut, (y * cw + x) * 4, 4);
 							}
 						}
 					}
-					Pixels.SavePng(Path.Combine(dir, stem, $"{first + i}.png"), gw, gh, cut);
+					Pixels.SavePng(Path.Combine(dir, stem, $"{first + i}.png"), cw, ch, cut);
 				}
 			}
 			var sb = new StringBuilder();
