@@ -62,6 +62,10 @@ public sealed partial class TwinsanityActors
 		public int Gem = -1;     // gem pickups: their TwinsanityPause gem-track slot
 		public uint Subtype;     // the instance subtype (shieldbearers: 0 advances on Crash, 1/2 stand)
 		public bool Shielded;    // shieldbearers until a slide knocks the shield off
+		public Entity[] ShieldParts = Array.Empty<Entity>(); // the carried shield's mesh entities (ReadShield)
+		public string? ShieldModel;
+		public Vector3 ShieldRest;         // the shield at rest, model space
+		public Quaternion ShieldRestRot;
 		public float Bash;       // shieldbearers: seconds left of the bash clip
 		// Death knockback (Knockback.cs): airborne while Flying, then DeathTimer counts the linger.
 		public bool Flying, Bounced;
@@ -114,6 +118,7 @@ public sealed partial class TwinsanityActors
 		e.Position = position;
 		e.EulerDegrees = eulerDegrees;
 		e.LoadModel(model);
+		NameAttachedParts(e, model);
 		if (key.StartsWith("act_redwumpa"))
 		{
 			// Wumpa cast no shadow (as TwinsanityWumpa.SpawnModel): at distance they show as specks.
@@ -148,6 +153,7 @@ public sealed partial class TwinsanityActors
 			// COM_EARTH_TRIBESMAN_SHIELDBEARER_DEFEND's DoAnim slots (clip aNNN is slot NNN): 25 its guard
 			// stance, 23 the step at Crash; 21 is ATTACK_MELEE's bash.
 			a.Shielded = true;
+			ReadShield(a, model);
 			a.IdleClip = Animation.Find(e, "a025");
 			a.MoveClip = Animation.Find(e, "a023");
 		}
@@ -335,6 +341,7 @@ public sealed partial class TwinsanityActors
 		UpdateParrotSpawners(crashPos);
 		_actors.AddRange(_pending);
 		_pending.Clear();
+		UpdateDroppedShields(dt);
 		UpdateOneShots(dt, crashPos);
 		UpdatePushables(dt, player);
 		_actors.RemoveAll(a => !a.Alive);
@@ -508,12 +515,135 @@ public sealed partial class TwinsanityActors
 			a.Shielded = false;
 			a.Bash = 0.8f;
 			CrateFx.ImpactFlash(p + new Vector3(0.0f, 0.8f, 0.0f));
+			DropShield(a, crashPos);
 			Log.Info($"[Twinsanity] shieldbearer {a.Model.Name} lost his shield to a slide");
 			return;
 		}
 		a.Bash = 1.0f;
 		PlayClip(a, Animation.Find(a.Model, "a021"));
 		_host?.DamagePlayer(p, DeathKind.Generic);
+	}
+
+	// The shield (WEAPON_NATIVE_SHIELD, attached on exit point 2 by his INIT script) is baked onto his
+	// arm by tw-extract as the model's last mesh entities; <model>.attach.json says how many. They are
+	// last only straight after LoadModel (a baked prefab's instances do not keep the child order), so the
+	// spawn (NameAttachedParts, here and in TwinsanityBake) names them and ReadShield finds them by name.
+	private const string AttachedPartName = " attached";
+
+	private static JsonDocument? Attachments(string? model)
+	{
+		string? text = model != null && model.EndsWith(".gltf", StringComparison.Ordinal) ? Assets.ReadText(model[..^5] + ".attach.json") : null;
+		return text != null ? JsonDocument.Parse(text) : null;
+	}
+
+	internal static void NameAttachedParts(Entity e, string? model)
+	{
+		using JsonDocument? doc = Attachments(model);
+		if (doc == null)
+		{
+			return;
+		}
+		int n = 0;
+		foreach (JsonElement at in doc.RootElement.GetProperty("attach").EnumerateArray())
+		{
+			n += at.GetProperty("prims").GetInt32();
+		}
+		for (int i = Math.Max(0, e.ChildCount - n); i < e.ChildCount; i++)
+		{
+			e.GetChild(i).Name += AttachedPartName;
+		}
+	}
+
+	private static void ReadShield(Actor a, string model)
+	{
+		using JsonDocument? doc = Attachments(model);
+		if (doc == null || doc.RootElement.GetProperty("attach").GetArrayLength() == 0)
+		{
+			return;
+		}
+		JsonElement at = doc.RootElement.GetProperty("attach")[0]; // his one attachment, the shield
+		var parts = new List<Entity>();
+		for (int i = 0; i < a.Model.ChildCount; i++)
+		{
+			if (a.Model.GetChild(i).Name.EndsWith(AttachedPartName, StringComparison.Ordinal))
+			{
+				parts.Add(a.Model.GetChild(i));
+			}
+		}
+		a.ShieldParts = parts.ToArray();
+		a.ShieldModel = at.GetProperty("model").GetString();
+		a.ShieldRest = Vec3(at.GetProperty("position"));
+		JsonElement r = at.GetProperty("rotation");
+		a.ShieldRestRot = new Quaternion(r[0].GetSingle(), r[1].GetSingle(), r[2].GetSingle(), r[3].GetSingle());
+	}
+
+	// COM_WEAPON_NATIVE_SHIELD_DROPPED: RequestDetach, the shield falls as a rigid body launched up
+	// (Cmd193 ... 10, -6), and 2 s later (TimeInUnit 2) it pops in particles and is destroyed. The rig
+	// (rig_guard_slidespin_sheet.png) shows it flung up over his head and gone before the next spin.
+	// ponytail: a knockback arc, not a rigid body: 3 m/s away from Crash, 10 m/s up under 30 m/s^2
+	// (SetContactRigid's 30), one half bounce. Upgrade path: time its flight on the rig frame by frame.
+	private static readonly KnockArc ShieldArc = new(3.0f, 10.0f, 30.0f, 0.5f, 0.5f, 12.0f, 0.0f, 0.0f);
+	private const float ShieldLife = 2.0f;
+
+	private sealed class DroppedShield
+	{
+		public Entity Body;
+		public Vector3 Velocity;
+		public bool Bounced;
+		public float Life = ShieldLife, Tumble, Yaw;
+	}
+
+	private readonly List<DroppedShield> _drops = new();
+
+	private void DropShield(Actor a, Vector3 from)
+	{
+		foreach (Entity part in a.ShieldParts)
+		{
+			MeshRenderer.SetVisible(part, false);
+		}
+		Log.Info($"[Twinsanity] shield off {a.Model.Name}: {a.ShieldParts.Length} part(s) hidden, dropping {a.ShieldModel ?? "nothing"}");
+		if (a.ShieldModel == null)
+		{
+			return;
+		}
+		Matrix4x4 model = TwinsanityLevel.SysRotation(a.Model.EulerDegrees);
+		Vector3 at = a.Model.Position + Vector3.Transform(a.ShieldRest, model);
+		Entity s = World.Create();
+		s.Name = "WEAPON_NATIVE_SHIELD (dropped)";
+		s.AddTransform();
+		s.Position = at;
+		s.EulerDegrees = TwinsanityLevel.EulerOf(Matrix4x4.CreateFromQuaternion(a.ShieldRestRot) * model);
+		s.LoadModel(a.ShieldModel);
+		_drops.Add(new DroppedShield
+		{
+			Body = s,
+			Velocity = Knockback.Launch(from, at, ShieldArc, Vector3.Transform(Vector3.UnitZ, model)),
+			Yaw = s.EulerDegrees.Y,
+		});
+	}
+
+	private void UpdateDroppedShields(float dt)
+	{
+		foreach (DroppedShield d in _drops)
+		{
+			Vector3 p = d.Body.Position, v = d.Velocity;
+			bool bounced = d.Bounced;
+			if (!Knockback.Step(ref p, ref v, ref bounced, ShieldArc, GroundY(p, p.Y - 40.0f, 0.3f), dt))
+			{
+				d.Tumble += ShieldArc.Tumble * dt;
+				d.Body.EulerDegrees = new Vector3(d.Tumble * (180.0f / MathF.PI), d.Yaw, 0.0f);
+			}
+			d.Body.Position = p;
+			d.Velocity = v;
+			d.Bounced = bounced;
+			d.Life -= dt;
+			if (d.Life <= 0.0f)
+			{
+				CrateFx.CreaturePop(p + new Vector3(0.0f, 0.3f, 0.0f), false);
+				d.Body.Destroy();
+			}
+		}
+		_drops.RemoveAll(d => d.Life <= 0.0f);
 	}
 
 	private void UpdatePickup(Actor a, float dt, Vector3 crashPos, ITwinsanityHost host)

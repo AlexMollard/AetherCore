@@ -253,6 +253,7 @@ public static class TwinsanityBake
 				if (model != null)
 				{
 					Entity e = SpawnModel(root, objectName + "#" + objectId, model, position, euler);
+					TwinsanityActors.NameAttachedParts(e, model);
 					if (TwinsanityActors.NameKeyOf(objectName).StartsWith("act_redwumpa"))
 					{
 						for (int i = 0; i < e.ChildCount; i++)

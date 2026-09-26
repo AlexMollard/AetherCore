@@ -129,6 +129,8 @@ namespace TwExtract
 			return m_meshes.Count - 1;
 		}
 
+		public int PrimitiveCount(int mesh) => ((List<object>)((Dictionary<string, object>)m_meshes[mesh])["primitives"]).Count;
+
 		public int AddSkin(List<int> joints, float[] inverseBindMatrices, int skeletonRoot)
 		{
 			int ibm = Accessor(View(ToBytes(inverseBindMatrices), null), 5126, joints.Count, "MAT4", null, null);

@@ -165,23 +165,8 @@ namespace TwExtract
 				{
 					continue;
 				}
-				var mains = new List<Script.MainScript>();
-				if (script.Main != null)
-				{
-					mains.Add(script.Main);
-				}
-				if (script.Header != null)
-				{
-					foreach (var pair in script.Header.pairs)
-					{
-						if (scripts.TryGetValue((uint)(pair.mainScriptIndex - 1), out var main) && main.Main != null)
-						{
-							mains.Add(main.Main);
-						}
-					}
-				}
 				var plays = new List<object>();
-				foreach (var main in mains)
+				foreach (var main in Mains(script, scripts))
 				{
 					for (var state = main.scriptState1; state != null; state = state.nextState)
 					{
@@ -213,6 +198,27 @@ namespace TwExtract
 				}
 			}
 			return states;
+		}
+
+		// The main scripts a script slot runs: itself, or a header's pairs' mains.
+		public static List<Script.MainScript> Mains(Script script, Dictionary<uint, Script> scripts)
+		{
+			var mains = new List<Script.MainScript>();
+			if (script.Main != null)
+			{
+				mains.Add(script.Main);
+			}
+			if (script.Header != null)
+			{
+				foreach (var pair in script.Header.pairs)
+				{
+					if (scripts.TryGetValue((uint)(pair.mainScriptIndex - 1), out var main) && main.Main != null)
+					{
+						mains.Add(main.Main);
+					}
+				}
+			}
+			return mains;
 		}
 
 		static (Vector3, Quaternion, Vector3) Evaluate(Animation anim, Animation.JointSettings js, int frame)

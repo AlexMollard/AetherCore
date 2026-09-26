@@ -439,6 +439,7 @@ namespace TwExtract
 			{
 				scripts[s.ID] = s;
 			}
+			var gameObjects = items.OfType<GameObject>().GroupBy(o => o.ID).ToDictionary(g => g.Key, g => g.First());
 			int written = 0, shared = 0;
 			foreach (var obj in items.OfType<GameObject>())
 			{
@@ -447,13 +448,18 @@ namespace TwExtract
 				var clips = obj.Anims.Select((id, slot) => (Id: id, Slot: slot))
 					.Where(a => animations.ContainsKey(a.Id))
 					.Select(a => ($"a{a.Slot:D3}", animations[a.Id])).ToList();
+				var attach = ResidentAttachments(obj, scripts, gameObjects, ogis);
 				for (int k = 0; k < used.Count; k++)
 				{
 					string name = Safe(obj.Name) + (used.Count > 1 ? $"_{k}" : "");
 					string dir = Path.Combine(s_out, "models", "objects", Safe(obj.Name));
 					var ex = NewObjectExport(gfx, dir);
 					var hulls = new List<(string Suffix, Prim Hull)>();
-					if (!BuildObject(ex, gfx, ogis[used[k]], name, clips, hulls))
+					foreach (var at in attach)
+					{
+						at.Prims = 0;
+					}
+					if (!BuildObject(ex, gfx, ogis[used[k]], name, clips, hulls, attach))
 					{
 						continue;
 					}
@@ -469,6 +475,7 @@ namespace TwExtract
 						seen[hash] = fileName;
 						ex.Save(Path.Combine(dir, fileName + ".gltf"));
 						SaveHulls(dir, fileName, hulls);
+						SaveAttachments(dir, fileName, attach);
 						written++;
 						s_objects++;
 					}
@@ -567,7 +574,7 @@ namespace TwExtract
 		// "hull<k>" at the bind pose, "hull<k>_<clip>" for the pose a rigid prop holds at the end of a clip
 		// and "hull<k>_<clip>@0" for the clip's first frame (where a prop resting on that clip stands),
 		// each only when that pose moves the hull.
-		static bool BuildObject(Export ex, Gfx gfx, GraphicsInfo gi, string name, List<(string, Animation)> clips, List<(string Suffix, Prim Hull)> hulls)
+		static bool BuildObject(Export ex, Gfx gfx, GraphicsInfo gi, string name, List<(string, Animation)> clips, List<(string Suffix, Prim Hull)> hulls, List<Attachment> attach)
 		{
 			var g = ex.Gltf;
 			var joints = gi.Joints ?? Array.Empty<GraphicsInfo.Joint>();
@@ -622,7 +629,77 @@ namespace TwExtract
 
 			bool hasSkin = (gi.SkinID != 0 && gfx.Skins.ContainsKey(gi.SkinID)) || (gi.BlendSkinID != 0 && gfx.BlendSkins.ContainsKey(gi.BlendSkinID));
 			bool any = false;
-// Skin + blend skin: bind-pose model-space vertices weighted to up to three joints.
+			// Unskinned objects (crates, the tribesmen): each rigid part is its own mesh node, a child of its
+			// joint's node (the vertices are joint-local); the mesh bake binds a jointless node to its own bone.
+			if (!hasSkin)
+			{
+				int partCount = 0;
+				foreach (var link in gi.ModelIDs.Values)
+				{
+					if (!gfx.Rigids.TryGetValue(link.ModelID, out var rigid) || !gfx.Models.TryGetValue(rigid.MeshID, out var model))
+					{
+						continue;
+					}
+					var prims = new Dictionary<(uint mat, int layer), Prim>();
+					AppendRigid(ex, prims, rigid, model, Matrix4x4.Identity);
+					// Names carry no record IDs: those differ per level and would defeat the cross-level dedupe.
+					string part = $"part{partCount++}_joint{link.JointIndex}";
+					int mesh = AddMesh(ex, $"{name}_{part}", prims);
+					if (mesh < 0)
+					{
+						continue;
+					}
+					int node = g.AddNode(new Dictionary<string, object> { ["name"] = part, ["mesh"] = mesh });
+					if (slot.TryGetValue(link.JointIndex, out int j))
+					{
+						Gltf.AddChild(g.Nodes[nodes[j]], node);
+					}
+					else
+					{
+						g.SceneRoots.Add(node);
+					}
+					any = true;
+				}
+				// Resident attachments ride an exit point: a node at the exit's local matrix under its joint,
+				// holding the attached object's rigid parts. Added last, so their primitives are the model's
+				// last mesh entities (Attachment.Prims counts them for the runtime to hide or drop).
+				var exits = gi.ExitPoints ?? Array.Empty<GraphicsInfo.ExitPoint>();
+				foreach (var at in attach)
+				{
+					int e = Array.FindIndex(exits, p => p.ID == at.Point);
+					if (e < 0 || !slot.TryGetValue(exits[e].ParentJointIndex, out int pj))
+					{
+						continue;
+					}
+					var prims = new Dictionary<(uint mat, int layer), Prim>();
+					foreach (var link in at.Ogi.ModelIDs.Values)
+					{
+						if (gfx.Rigids.TryGetValue(link.ModelID, out var rigid) && gfx.Models.TryGetValue(rigid.MeshID, out var model))
+						{
+							AppendRigid(ex, prims, rigid, model, OgiJointWorld(at.Ogi, link.JointIndex));
+						}
+					}
+					int mesh = AddMesh(ex, $"{name}_attach{at.Point}", prims);
+					if (mesh < 0)
+					{
+						continue;
+					}
+					var local = ExitLocal(exits[e]);
+					Matrix4x4.Decompose(local, out _, out var r, out var t);
+					int node = g.AddNode(new Dictionary<string, object>
+					{
+						["name"] = $"attach{at.Point}",
+						["translation"] = new[] { t.X, t.Y, t.Z },
+						["rotation"] = new[] { r.X, r.Y, r.Z, r.W },
+					});
+					Gltf.AddChild(g.Nodes[nodes[pj]], node);
+					Gltf.AddChild(g.Nodes[node], g.AddNode(new Dictionary<string, object> { ["name"] = $"attach{at.Point}_parts", ["mesh"] = mesh }));
+					at.Prims = g.PrimitiveCount(mesh);
+					Matrix4x4.Decompose(local * World(pj), out _, out at.RestRotation, out at.RestPosition);
+					any = true;
+				}
+			}
+			// Skin + blend skin: bind-pose model-space vertices weighted to up to three joints.
 			// Skins are characters: single layer (multi-layer records only occur on scenery).
 			var skinPrims = new Dictionary<(uint mat, int layer), Prim>();
 			if (gi.SkinID != 0 && gfx.Skins.TryGetValue(gi.SkinID, out var skin))
@@ -809,6 +886,122 @@ if (skinPrims.Count > 0 && joints.Length > 0)
 			var q = new Quaternion(j.Matrix[2].X, j.Matrix[2].Y, j.Matrix[2].Z, j.Matrix[2].W);
 			q = q.LengthSquared() > 1e-8f ? Quaternion.Normalize(Space.Mirror(q)) : Quaternion.Identity;
 			return (t, q);
+		}
+
+		// An exit point's Matrix: rows are the X/Y/Z basis and the translation (p' = p * M) in its parent joint's
+		// space, mirrored into glTF space as the joints are (S * M * S, S = the X flip).
+		static Matrix4x4 ExitLocal(GraphicsInfo.ExitPoint p)
+		{
+			var s = Matrix4x4.CreateScale(-1f, 1f, 1f);
+			return s * InstanceMatrix(p.Matrix) * s;
+		}
+
+		// A joint's rest pose in its OGI's model space (the chain of JointLocal up to the root).
+		static Matrix4x4 OgiJointWorld(GraphicsInfo gi, uint jointIndex)
+		{
+			var m = Matrix4x4.Identity;
+			var joints = gi.Joints ?? Array.Empty<GraphicsInfo.Joint>();
+			for (int depth = 0; depth < joints.Length; depth++)
+			{
+				int i = Array.FindIndex(joints, j => j.JointIndex == jointIndex);
+				if (i < 0)
+				{
+					break;
+				}
+				var (t, q) = JointLocal(joints[i]);
+				m *= Matrix4x4.CreateFromQuaternion(q) * Matrix4x4.CreateTranslation(t);
+				if (joints[i].ParentJointIndex == jointIndex)
+				{
+					break;
+				}
+				jointIndex = joints[i].ParentJointIndex;
+			}
+			return m;
+		}
+
+		// An object the character carries from spawn (the shieldbearer's WEAPON_NATIVE_SHIELD): exit point
+		// Point of the carrier's model, the carried object's name, model and first OGI, and what BuildObject
+		// made of it - Prims mesh entities at the end of the model, resting at RestPosition/RestRotation.
+		sealed class Attachment
+		{
+			public uint Point;
+			public string Object;
+			public string Model;
+			public GraphicsInfo Ogi;
+			public int Prims;
+			public Vector3 RestPosition;
+			public Quaternion RestRotation;
+		}
+
+		// A state body that runs SpawnResidentAgent (the resident is Objects[its first argument]) and then
+		// AttachFocusObject(point << 3 | flags) carries that object on the exit point from then on
+		// (COM_EARTH_TRIBESMAN_SHIELDBEARER_INIT: SpawnResidentAgent(0, ...), AttachFocusObject(0x1F8010) = exit 2).
+		static List<Attachment> ResidentAttachments(GameObject obj, Dictionary<uint, Script> scripts, Dictionary<uint, GameObject> objects, Dictionary<uint, GraphicsInfo> ogis)
+		{
+			var list = new List<Attachment>();
+			foreach (ushort id in obj.Scripts.Distinct())
+			{
+				if (!scripts.TryGetValue(id, out var script))
+				{
+					continue;
+				}
+				foreach (var main in AnimExport.Mains(script, scripts))
+				{
+					for (var state = main.scriptState1; state != null; state = state.nextState)
+					{
+						for (var body = state.scriptStateBody; body != null; body = body.nextScriptStateBody)
+						{
+							GameObject resident = null;
+							for (var cmd = body.command; cmd != null; cmd = cmd.nextCommand)
+							{
+								var op = (DefaultEnums.CommandID)(cmd.internalIndex & 0xFFFF);
+								if (cmd.arguments == null || cmd.arguments.Count == 0)
+								{
+									continue;
+								}
+								if (op == DefaultEnums.CommandID.SpawnResidentAgent && cmd.arguments[0] < obj.Objects.Count)
+								{
+									objects.TryGetValue(obj.Objects[(int)cmd.arguments[0]], out resident);
+								}
+								else if (op == DefaultEnums.CommandID.AttachFocusObject && resident != null && resident.OGIs.Count > 0
+									&& ogis.TryGetValue(resident.OGIs[0], out var ogi) && !list.Any(a => a.Object == resident.Name))
+								{
+									list.Add(new Attachment
+									{
+										Point = (cmd.arguments[0] >> 3) & 0x3F,
+										Object = resident.Name,
+										Model = VfsPath(Path.Combine(s_out, "models", "objects", Safe(resident.Name), Safe(resident.Name) + ".gltf")),
+										Ogi = ogi,
+									});
+								}
+							}
+						}
+					}
+				}
+			}
+			return list;
+		}
+
+		// <model>.attach.json next to the model, for the attachments BuildObject placed:
+		// {"attach": [{"point", "object", "model", "prims", "position", "rotation"}]} (rest pose, model space).
+		static void SaveAttachments(string dir, string fileName, List<Attachment> attach)
+		{
+			var rows = attach.Where(a => a.Prims > 0).Select(a => (object)new Dictionary<string, object>
+			{
+				["point"] = (int)a.Point,
+				["object"] = a.Object,
+				["model"] = a.Model,
+				["prims"] = a.Prims,
+				["position"] = new[] { a.RestPosition.X, a.RestPosition.Y, a.RestPosition.Z },
+				["rotation"] = new[] { a.RestRotation.X, a.RestRotation.Y, a.RestRotation.Z, a.RestRotation.W },
+			}).ToList();
+			if (rows.Count == 0)
+			{
+				return;
+			}
+			var sb = new StringBuilder();
+			Json.Write(sb, new Dictionary<string, object> { ["attach"] = rows });
+			File.WriteAllText(Path.Combine(dir, fileName + ".attach.json"), sb.ToString());
 		}
 
 		static Prim Get(Dictionary<(uint mat, int layer), Prim> prims, uint material)

@@ -12,6 +12,10 @@ public sealed class TwinsanitySkipPrompt
 	private const string FontDir = "project://assets/ui/fonts/Crash_Euro/";
 	private const string FontMetrics = "project://assets/ui/fonts/Crash_Euro.font.json";
 	private const float Scale = 0.32f;          // glyph height as a fraction of the bar height
+	// The rig's glyphs are dimmer than the extracted pages (brightened for the HUD): their brightest pixels peak at
+	// 184/255 in the hint strip and the scene prompts alike (logs/tutorialroute/rig_hint_tp.png,
+	// logs/tutorial/rig_s1_prompt.png) against 255 here.
+	private static readonly Vector4 GlyphTint = new(0.72f, 0.72f, 0.72f, 1.0f);
 	private const string PadText = "HOLD ^ TO SKIP";
 	private const string KeyText = "HOLD ^ / eNTeR TO SKIP"; // the font's 'E' slot is the circle button: 'e' is its E
 
@@ -67,7 +71,7 @@ public sealed class TwinsanitySkipPrompt
 			{
 				Entity e = Ui.CreateImage(canvas);
 				Ui.SetAnchors(e, Vector2.Zero, Vector2.Zero);
-				Ui.SetImageColor(e, Vector4.One);
+				Ui.SetImageColor(e, GlyphTint);
 				Ui.SetImageTexture(e, $"{FontDir}{(int)c}.png");
 				_glyphs.Add((e, _total, w));
 			}
