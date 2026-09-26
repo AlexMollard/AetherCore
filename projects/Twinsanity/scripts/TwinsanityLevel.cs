@@ -78,6 +78,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		// Where the bottom of its column stood at load: the fall's floor when the ground ray sees no
 		// terrain (it hit a crate body still being destroyed, or started under the ground).
 		public float ColumnFloor;
+		// The disc instance's (layer, id), which other instances' links name, and its own links
+		// (a detonator's MessageLinkedObject targets).
+		public int Id = -1, Layer = -1;
+		public int[] Links = Array.Empty<int>();
+		public bool Detonated;                 // a detonator fires once (its DETONATE script ends in a control state)
 	}
 
 	private readonly List<Crate> _crates = new();
@@ -292,7 +297,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 							break;
 						}
 					}
-					_crates.Add(new Crate
+					_crates.Add(WithIdentity(new Crate
 					{
 						Kind = kind,
 						Body = body,
@@ -300,7 +305,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 						Base = e.Position,
 						ObjectId = json.TryGetProperty("objectId", out JsonElement oi) ? oi.GetInt32() : 0,
 						BodyIsChild = true,
-					});
+					}, json));
 					break;
 				}
 				case TwinsanityBake.RoleWumpa:
@@ -680,7 +685,18 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		Physics.AddBoxBody(body, new Vector3(0.5f, 0.5f, 0.5f), dynamic: false);
 		Entity crateModel = Spawn(body.Name, model, position, euler);
 		CrateFx.Spawned(crateModel, objectId, model);
-		_crates.Add(new Crate { Kind = kind.Value, Body = body, Model = crateModel, Base = position, ObjectId = objectId });
+		_crates.Add(WithIdentity(new Crate { Kind = kind.Value, Body = body, Model = crateModel, Base = position, ObjectId = objectId }, instance));
+	}
+
+	private static Crate WithIdentity(Crate c, JsonElement instance)
+	{
+		c.Id = instance.TryGetProperty("id", out JsonElement id) ? id.GetInt32() : -1;
+		c.Layer = instance.TryGetProperty("layer", out JsonElement layer) ? layer.GetInt32() : -1;
+		if (instance.TryGetProperty("links", out JsonElement links) && links.ValueKind == JsonValueKind.Array)
+		{
+			c.Links = links.EnumerateArray().Select(l => l.GetInt32()).ToArray();
+		}
+		return c;
 	}
 
 	// Some crate kinds are only distinguishable by model name (their object ids differ per chunk
@@ -910,18 +926,18 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 					}
 					break;
 				case Kind.Detonator:
-					// DETONATOR_CRATE_SPUN (4790) in the engine's state table: a spin sets it off;
-					// in practice any break does, and it lights every TNT in the level.
-					if (onTop || whirledHit || headbutt)
+					// DETONATOR_CRATE (802, logs/craterules): it never breaks and never bounces Crash (rig:
+					// he stands on it, logs/hubroute/rig2_det_sheet.png). Landing on it (slot 5) runs
+					// DETONATE at once; a spin (slot 6, COM_DETONATOR_CRATE_SPUN) plays a008 first. Its
+					// headbutt, slam and slide slots are empty.
+					if (!c.Detonated && landed)
 					{
-						Break(c);
-						foreach (Crate tnt in _crates)
-						{
-							if (tnt.Alive && tnt.Kind == Kind.Tnt && tnt.Fuse < 0.0f)
-							{
-								tnt.Fuse = 0.3f;
-							}
-						}
+						Detonate(c);
+					}
+					else if (!c.Detonated && whirledHit && _player.IsSpinning)
+					{
+						c.Detonated = true;
+						c.Fuse = CrateFx.DetonatorSpun(c.Model); // UpdateFuses detonates it once a008 ends
 					}
 					break;
 				case Kind.Reinforced:
@@ -1163,11 +1179,62 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			{
 				Open(other); // their damage slot is the OPEN script too
 			}
+			else if (other.Kind == Kind.Detonator)
+			{
+				if (!other.Detonated)
+				{
+					Detonate(other); // its damage slot (2) is DETONATE too; it is not broken
+				}
+			}
 			else if (other.Kind is not (Kind.Iron or Kind.IronSpring))
 			{
 				Break(other);
 			}
 		}
+	}
+
+	// COM_DETONATOR_CRATE_DETONATE: the plunger goes down (a009) and MessageLinkedObject(0xFF00A9) sends
+	// message 169 to every link, which nitro and TNT crates receive as *_CRATE_EXPLODE (logs/craterules:
+	// NITROCRATE / TNTCRATE recv 169). Rig (logs/hubroute/rig2_det_sheet.png): landing on the Hub B
+	// detonator blows its linked nitro at once, the stack beside it goes in the chain, and the blast
+	// fells log 4.
+	private void Detonate(Crate c)
+	{
+		c.Detonated = true;
+		c.Fuse = -1.0f;
+		CrateFx.Detonated(c.Model);
+		foreach (int link in c.Links)
+		{
+			Crate? target = LinkedCrate(c, link);
+			if (target == null)
+			{
+				Log.Warn($"[Twinsanity] detonator (layer {c.Layer}, id {c.Id}) link {link} is not a crate here");
+				continue;
+			}
+			Log.Info($"[Twinsanity] detonator (layer {c.Layer}, id {c.Id}) fires {target.Kind} {link} at {Vector3.Distance(c.Base, target.Base):F1} m");
+			if (target.Kind is Kind.Nitro or Kind.Tnt)
+			{
+				Explode(target);
+			}
+		}
+	}
+
+	// A link names an instance of the same chunk by (layer, id). ponytail: the baked crate markers do not
+	// carry their chunk, so the nearest crate with that (layer, id) stands in for the same-chunk one (every
+	// hub detonator's link is a nitro 7-28 m off); record the chunk in the crate marker if two chunks' ids
+	// ever collide that close.
+	private Crate? LinkedCrate(Crate from, int id)
+	{
+		Crate? best = null;
+		foreach (Crate c in _crates)
+		{
+			if (c != from && c.Id == id && c.Layer == from.Layer
+				&& (best == null || Vector3.DistanceSquared(c.Base, from.Base) < Vector3.DistanceSquared(best.Base, from.Base)))
+			{
+				best = c;
+			}
+		}
+		return best;
 	}
 
 	private void UpdateFuses(float deltaTime)
@@ -1179,7 +1246,14 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				c.Fuse -= deltaTime;
 				if (c.Fuse < 0.0f)
 				{
-					Explode(c);
+					if (c.Kind == Kind.Detonator)
+					{
+						Detonate(c); // a spin's a008 has played out
+					}
+					else
+					{
+						Explode(c);
+					}
 				}
 			}
 		}

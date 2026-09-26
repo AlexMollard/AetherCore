@@ -61,6 +61,10 @@ public sealed partial class TwinsanityActors
 		public Critter? Critter;
 		public int Gem = -1;     // gem pickups: their TwinsanityPause gem-track slot
 		public uint Subtype;     // the instance subtype (shieldbearers: 0 advances on Crash, 1/2 stand)
+		// Shieldbearers: instance flag bit 19 (SoftFlagSet 19). COM_EARTH_TRIBESMAN_SHIELDBEARER_DEFAULT and
+		// COM_CREATURE_BASIC_DEFAULT only run their active branch (DEFEND / the bare tribesman's approach)
+		// with it set; clear, they park in the idle starter (s5 / s3) and he stands his post.
+		public bool Engages;
 		public bool Shielded;    // shieldbearers until a slide knocks the shield off
 		public Entity[] ShieldParts = Array.Empty<Entity>(); // the carried shield's mesh entities (ReadShield)
 		public string? ShieldModel;
@@ -155,6 +159,8 @@ public sealed partial class TwinsanityActors
 			// COM_EARTH_TRIBESMAN_SHIELDBEARER_DEFEND's DoAnim slots (clip aNNN is slot NNN): 25 its guard
 			// stance, 23 the step at Crash; 21 is ATTACK_MELEE's bash.
 			a.Shielded = true;
+			a.Engages = instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("flags", out JsonElement fl)
+				&& (fl.GetUInt32() >> 19 & 1u) != 0;
 			ReadShield(a, model);
 			a.IdleClip = Animation.Find(e, "a025");
 			a.MoveClip = Animation.Find(e, "a023");
@@ -466,7 +472,9 @@ public sealed partial class TwinsanityActors
 	// hit points are above 10 except AgentWasSlid: spins, slams and jumps do nothing to him, while touching
 	// him any other way gets Crash bashed. A slide knocks the shield off (HP 20 -> 10) and Crash slides on
 	// past; he stays up and from then on is a plain tribesman (DEFAULT state 3, UpdateBareGuard) who shoves
-	// Crash out of his ground and whom a spin knocks away.
+	// Crash out of his ground and whom a spin knocks away. All of the stepping, turning and shoving needs
+	// instance flag bit 19 (Actor.Engages): huba's guards have it and come at Crash; Hub B's guard 38 does
+	// not and stands his post (logs/hubb/rig_w6_sheet.png).
 	private const float GuardSightSq = 200.0f;
 	private const float GuardSpeed = 2.75f;
 	private const float GuardLeash = 6.0f;
@@ -498,7 +506,7 @@ public sealed partial class TwinsanityActors
 		Vector3 p = a.Model.Position;
 		float dx = crashPos.X - p.X, dz = crashPos.Z - p.Z;
 		float distSq = dx * dx + dz * dz;
-		bool sees = distSq < GuardSightSq;
+		bool sees = a.Engages && distSq < GuardSightSq; // not engaged: no DEFEND, he neither turns nor steps
 		Vector3 step = Vector3.Zero;
 		if (sees)
 		{
@@ -516,7 +524,7 @@ public sealed partial class TwinsanityActors
 				step = next - p;
 			}
 		}
-		else if (a.Subtype == 0)
+		else if (a.Engages && a.Subtype == 0)
 		{
 			Vector3 home = new(a.Home.X - p.X, 0.0f, a.Home.Z - p.Z);
 			float len = home.Length();
@@ -576,6 +584,11 @@ public sealed partial class TwinsanityActors
 		{
 			Kill(a, crashPos);
 			_host?.AddWumpa(1);
+			return;
+		}
+		if (!a.Engages)
+		{
+			PlayClip(a, a.IdleClip); // CREATURE_BASIC_DEFAULT s2 -> s3 without flag 19: he stands, spinnable
 			return;
 		}
 		Vector3 fromPost = new(crashPos.X - a.Home.X, 0.0f, crashPos.Z - a.Home.Z);

@@ -190,6 +190,13 @@ public static class CrateFx
 		}
 	}
 
+	/// <summary>DETONATOR_CRATE (802) spun: COM_DETONATOR_CRATE_SPUN plays a008 (anim 1172) before it
+	/// detonates. Returns the clip's length.</summary>
+	public static float DetonatorSpun(Entity crateModel) => PlayOnce(crateModel, "a008");
+
+	/// <summary>COM_DETONATOR_CRATE_DETONATE: the plunger goes down (a009, anim 1173) and stays.</summary>
+	public static void Detonated(Entity crateModel) => PlayOnce(crateModel, "a009");
+
 	/// <summary>Play a crate state's clip once from the start; returns its length (0 = no clip).</summary>
 	private static float PlayOnce(Entity crate, string clip)
 	{
