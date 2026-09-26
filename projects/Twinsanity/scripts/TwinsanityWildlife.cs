@@ -59,6 +59,7 @@ public sealed partial class TwinsanityActors
 	private const float GullRandomTakeOffMean = 300.0f;
 	// Butterfly (rig: track_b0.csv).
 	private const float ButterflySpeed = 3.0f;
+	private const float ButterflyFlee = 6.0f;
 	// Bird clump (rig: track_b0.csv k1-k3).
 	private const float FlockSpeed = 19.7f;
 	// Chicken (script COM_GLOBAL_CHICKEN_DEFAULT; rig track_long.csv).
@@ -277,7 +278,9 @@ public sealed partial class TwinsanityActors
 				c.FlyClip = Animation.Find(e, "a008");
 				a.DeathClip = Animation.Find(e, "a010");
 				c.Mode = Mode.Idle;
-				c.Timer = RandomRange(1.0f, 10.0f);
+				// Rig: the coop chickens are usually on the move (2 of 4 mid-step in any 2 s sample),
+				// while a 1-10 s idle parked ours on the peck clip - read as "the feet don't move".
+				c.Timer = RandomRange(1.0f, 4.0f);
 				break;
 			case Behaviour.Crab:
 				// Dormant under the sand until Crash comes near (COM_GLOBAL_CRAB_INIT S17).
@@ -889,10 +892,12 @@ public sealed partial class TwinsanityActors
 			case Mode.Idle:
 			case Mode.Walk:
 				// Rig: a gull 4.4 m from a standing Crash stayed put for minutes, while ones Crash
-				// walked toward left at 15.5 m - it takes a moving Crash to scare them.
+				// walked toward left at 15.5 m (gull_approach_rig.csv: take-off at 16.2 m into a slow
+				// walk) - it takes a moving Crash to scare them, and he can never reach one.
 				Vector3 cv = _player?.Velocity ?? Vector3.Zero;
 				c.Timer2 -= dt;
-				if ((Horizontal(p, crashPos) < GullTakeOffRadius && cv.X * cv.X + cv.Z * cv.Z > 0.25f) || c.Timer2 <= 0.0f)
+				bool scare = Horizontal(p, crashPos) < GullTakeOffRadius && cv.X * cv.X + cv.Z * cv.Z > 0.02f;
+				if (scare || c.Timer2 <= 0.0f)
 				{
 					float ang = RandomRange(0.0f, MathF.PI * 2.0f);
 					c.Target = new Vector3(MathF.Cos(ang), 0.0f, MathF.Sin(ang));
@@ -958,6 +963,19 @@ public sealed partial class TwinsanityActors
 
 	private Vector3 ButterflyTarget(Actor a)
 	{
+		// Never let Crash touch one: rig approaches always ended with the butterfly well away from
+		// him. ponytail: the trigger is a single muddy rig approach (butterflies range widely);
+		// 6 m and the measured 3 m/s are the working numbers. Upgrade path: a cleaner rig capture.
+		if (_player != null)
+		{
+			Vector3 away = a.Model.Position - _player.Self.Position;
+			away.Y = 0.0f;
+			float d = away.Length();
+			if (d < ButterflyFlee)
+			{
+				return a.Home + (d > 1e-3f ? away / d : new Vector3(0.0f, 0.0f, 1.0f)) * (ButterflyFlee + 2.0f);
+			}
+		}
 		// Rig: legs spread ~15 m around the spawn, 0-6 m above the ground.
 		float ang = RandomRange(0.0f, MathF.PI * 2.0f), r = RandomRange(0.0f, 7.5f);
 		Vector3 t = a.Home + new Vector3(MathF.Cos(ang) * r, 0.0f, MathF.Sin(ang) * r);
@@ -1402,7 +1420,7 @@ public sealed partial class TwinsanityActors
 	// the script's TURN_SPEED 1.5708 is not per second here; 180 deg/s matches the four times.
 	private const float WormTurnRate = 180.0f;
 	private const float WormHitAt = 0.3f;
-	private const float WormAttackClip = 1.24f; // a013
+	private const float WormAttackClip = 1.72f; // a012, the strike coil
 	private const float WormAttackRest = 1.0f;
 
 	// c.Landed: lunging; c.FruitLife: time into the lunge; c.Speed: rest left after one.
@@ -1440,10 +1458,10 @@ public sealed partial class TwinsanityActors
 		{
 			c.Landed = true;
 			c.FruitLife = 0.0f;
-			// The idle attack DoAnim(0x...06) picks Anims[6] = id 296; in the animset the sorted ids are
-			// 56,76,100,296,297,298,299,300,309,310,533 for a001-a013, so 296 is a004 (slot 1 297 = a005
-			// and slot 5 298 = a006 are the verified pop and sink).
-			int clip = Animation.Find(a.Model, "a004");
+			// Render-every-clip check (logs/wildlife/worm_clip_sheet.png) against the rig strike frames
+			// (logs/gameplay/rig_worm_attack_02..04.png): the rig strike is the upright coil with the
+			// closed eyes and the zigzag tooth row - a012, not a013/a004.
+			int clip = Animation.Find(a.Model, "a012");
 			if (clip >= 0)
 			{
 				Animation.CrossFade(a.Model, clip, 0.1f);
@@ -1504,12 +1522,29 @@ public sealed partial class TwinsanityActors
 				PlayClip(a, c.WalkClip);
 				if (WalkTo(a, c.Tree + new Vector3(0.0f, 0.0f, -0.6f), MonkeyWalk, dt, true))
 				{
+					c.Center = Vector3.Zero; // climb anchor, set when the climb starts
 					c.Mode = Mode.ClimbUp;
 					PlayClip(a, c.ClimbClip);
 				}
 				break;
 			case Mode.ClimbUp:
-				a.Model.Position = p + new Vector3(0.0f, MonkeyClimbUp * dt, 0.0f);
+				// Slide onto the trunk while rising: WalkTo stops 0.6 m short of it (and Separate
+				// pushes them back further), so a straight vertical climb floated in the air beside
+				// the trunk. Rig: the monkey hugs the trunk (cmp_monkey.png).
+				if (c.Center == Vector3.Zero)
+				{
+					Vector3 off = p - c.Tree;
+					off.Y = 0.0f;
+					c.Center = c.Tree + (off.LengthSquared() > 1e-4f ? Vector3.Normalize(off) * 0.45f : new Vector3(0.0f, 0.0f, -0.45f));
+				}
+				Vector3 hug = c.Center - p;
+				hug.Y = 0.0f;
+				float hl = hug.Length();
+				if (hl > 0.0f)
+				{
+					hug *= MathF.Min(hl, MonkeyWalk * 0.8f * dt);
+				}
+				a.Model.Position = p + hug + new Vector3(0.0f, MonkeyClimbUp * dt, 0.0f);
 				if (a.Model.Position.Y >= c.Tree.Y + MonkeyTreeTop)
 				{
 					c.Mode = Mode.Shake;
