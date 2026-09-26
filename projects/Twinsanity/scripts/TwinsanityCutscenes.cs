@@ -30,7 +30,9 @@ namespace AetherGame;
 public sealed class TwinsanityCutscenes
 {
 	/// <summary>True while a scene holds the camera (ToggleCutsceneCamera); CrashPlayer leaves it alone.</summary>
-	public static bool OwnsCamera { get; private set; }
+	// Only inside a running scene: a camera toggle left on by a skipped or aborted scene can never strand the view.
+	public static bool OwnsCamera => s_ownsCamera && Active;
+	private static bool s_ownsCamera;
 
 	/// <summary>True between CutsceneStart and CutsceneEnd: the letterbox is up.</summary>
 	public static bool Active { get; private set; }
@@ -116,6 +118,7 @@ public sealed class TwinsanityCutscenes
 		public Vector3 Center, Extents;
 		public int[] Targets = Array.Empty<int>();
 		public bool Inside;
+		public bool Fired;   // a volume starts its scene once per level load (a respawn inside it re-fires nothing)
 	}
 
 	private sealed class Agent
@@ -172,7 +175,10 @@ public sealed class TwinsanityCutscenes
 	private float _skipHeld;
 	private Agent? _scene;        // the director whose cutscene holds the letterbox
 	private Vector3 _camEye, _camTarget;
-	private float _sceneClock;    // game seconds since CutsceneStart, for the log
+	private float _sceneClock;
+	private int _speech;          // Audio voice id of the playing speech line
+	private const float SpeechVolume = 1.0f;
+	private readonly TwinsanitySkipPrompt _prompt = new();    // game seconds since CutsceneStart, for the log
 
 	// ---- loading -------------------------------------------------------------------------------
 
@@ -399,8 +405,12 @@ public sealed class TwinsanityCutscenes
 	/// <summary>Level start (after every chunk is added): the directors' default scripts start.</summary>
 	public void Start()
 	{
-		OwnsCamera = false;
+		s_ownsCamera = false;
 		Active = false;
+		foreach (Trigger t in _triggers)
+		{
+			t.Inside = t.Fired = false;
+		}
 		foreach (Agent d in _directors)
 		{
 			ObjectDef def = d.Chunk.Objects[d.Object];
@@ -425,8 +435,9 @@ public sealed class TwinsanityCutscenes
 		{
 			Vector3 local = Vector3.Transform(feet + new Vector3(0.0f, 0.5f, 0.0f) - t.Center, Quaternion.Conjugate(t.Rotation));
 			bool inside = MathF.Abs(local.X) <= t.Extents.X && MathF.Abs(local.Y) <= t.Extents.Y && MathF.Abs(local.Z) <= t.Extents.Z;
-			if (inside && !t.Inside)
+			if (inside && !t.Inside && !t.Fired)
 			{
+				t.Fired = true;
 				foreach (int id in t.Targets)
 				{
 					if (t.Chunk.Instances.TryGetValue((t.Layer, id), out Agent? target))
@@ -675,12 +686,20 @@ public sealed class TwinsanityCutscenes
 			case 594: // ToggleCutsceneCamera: bit 0 on, bit 4 off
 				if ((Arg(0) & 0x10) != 0)
 				{
-					OwnsCamera = false;
+					s_ownsCamera = false;
 				}
 				else if ((Arg(0) & 1) != 0)
 				{
-					OwnsCamera = true;
+					s_ownsCamera = true;
 				}
+				break;
+			case 185: // start a speech line: ENGLISH.MB stream <int arg> (tw-extract --voice -> audio/voice/track_<n>.wav)
+				StopSpeech();
+				_speech = Audio.Play($"project://assets/audio/voice/track_{Arg(0) >> 3}.wav", SpeechVolume);
+				Log.Info($"[Cutscenes] speech {Arg(0) >> 3} ({a.Name}) at {_sceneClock:F2} s");
+				break;
+			case 186: // stop the speech line
+				StopSpeech();
 				break;
 			case 591: // the scripted camera shot
 				Shot(m, (int)Arg(0));
@@ -726,8 +745,6 @@ public sealed class TwinsanityCutscenes
 				break;
 			case 78:  // SetObject: the model follows the clip's skeleton (see ProxyFor)
 			case 515: // SetAgent flags
-			case 185: // agent state flags (PRO_STATE_INVISIBLE while it warps; 186 clears)
-			case 186:
 			case 595: // camera subject (the shot table replaces the framing)
 			case 659: // HUD / hint toggle
 			case 1:   // AddTrail / ClearTrail: Cortex's flight streak
@@ -816,6 +833,8 @@ public sealed class TwinsanityCutscenes
 	private void EndScene()
 	{
 		Active = false;
+		s_ownsCamera = false;
+		StopSpeech();
 		SetControl(true);
 		// Actors this director still holds are let go with it (the hub's damaged skip paths never send
 		// them their final message).
@@ -1034,6 +1053,36 @@ public sealed class TwinsanityCutscenes
 		Ui.SetAnchors(_top, Vector2.Zero, new Vector2(1.0f, h));
 		Ui.SetAnchors(_bottom, new Vector2(0.0f, 1.0f - h), Vector2.One);
 		Ui.SetImageColor(_fade, new Vector4(0.0f, 0.0f, 0.0f, _fadeLevel));
+		_prompt.Update(_canvas, _bottom, _bars >= 1.0f && CanSkip());
+	}
+
+	private void StopSpeech()
+	{
+		if (_speech != 0)
+		{
+			Audio.Stop(_speech);
+			_speech = 0;
+		}
+	}
+
+	// The prompt shows only while the running scene's director has a live skip rule (condition 572).
+	private bool CanSkip()
+	{
+		if (!Active || _scene?.Machine is not Machine m)
+		{
+			return false;
+		}
+		foreach (State st in m.Def.States)
+		{
+			foreach (Rule r in st.Rules)
+			{
+				if (r.Cond == 572 && r.To >= 0)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private Entity Bar()

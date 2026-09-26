@@ -195,12 +195,12 @@ namespace TwExtract
 
 		// /CRASH6/MUSIC.MH: count, interleave, then per track {type, size, offset, rate, unk}. Type 1 = stereo
 		// ADPCM interleaved in `interleave`-byte blocks, 0 = mono "MSVp" with a 0x30 header, 2 = no track.
-		// assets/audio/music/track_<n>.wav
-		public static string Music(Disc disc, string outDir, IEnumerable<int> tracks)
+		// assets/audio/music/track_<n>.wav. ENGLISH.MH/.MB (cutscene speech, same layout) -> audio/voice/track_<n>.wav.
+		public static string Music(Disc disc, string outDir, IEnumerable<int> tracks, string bank = "MUSIC")
 		{
-			var mh = disc.ReadIsoFile("/CRASH6/MUSIC.MH");
+			var mh = disc.ReadIsoFile($"/CRASH6/{bank}.MH");
 			int count = BitConverter.ToInt32(mh, 0), interleave = BitConverter.ToInt32(mh, 4);
-			string dir = Path.Combine(outDir, "audio", "music");
+			string dir = Path.Combine(outDir, "audio", bank == "MUSIC" ? "music" : "voice");
 			Directory.CreateDirectory(dir);
 			var done = new List<int>();
 			foreach (int t in tracks.Distinct().OrderBy(t => t))
@@ -215,7 +215,7 @@ namespace TwExtract
 				{
 					continue;
 				}
-				var raw = disc.ReadIsoRange("/CRASH6/MUSIC.MB", offset, size);
+				var raw = disc.ReadIsoRange($"/CRASH6/{bank}.MB", offset, size);
 				// Unassigned slots all share one mono MSVp stream named "undefined": a 335 Hz test tone, not music.
 				if (type == 0 && Encoding.ASCII.GetString(raw, 0x20, 0x10).TrimEnd('\0') == "undefined")
 				{
@@ -227,7 +227,7 @@ namespace TwExtract
 				File.WriteAllBytes(Path.Combine(dir, $"track_{t}.wav"), wav);
 				done.Add(t);
 			}
-			return $"music tracks {string.Join(",", done)}";
+			return $"{bank} tracks {string.Join(",", done)}";
 		}
 	}
 }

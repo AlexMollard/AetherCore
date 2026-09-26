@@ -14,7 +14,8 @@ public sealed class TwinsanityMovie
 	private const float SkipHold = 0.5f;
 	private const string Dir = "project://assets/movies/";
 
-	private Entity _canvas, _image;
+	private Entity _canvas, _image, _bar;
+	private readonly TwinsanitySkipPrompt _prompt = new();
 	private string _name = "";
 	private int _frames, _shown, _missed;
 	private double _worstGap, _lastShow;
@@ -48,6 +49,10 @@ public sealed class TwinsanityMovie
 			Ui.SetAnchors(_image, Vector2.Zero, Vector2.One);
 			Ui.SetOffsets(_image, Vector2.Zero, Vector2.Zero);
 			Ui.SetImageColor(_image, Vector4.One);
+			_bar = Ui.CreateImage(_canvas); // layout box for the skip prompt: the bottom 15%, as a letterbox bar
+			Ui.SetAnchors(_bar, new Vector2(0.0f, 0.85f), Vector2.One);
+			Ui.SetOffsets(_bar, Vector2.Zero, Vector2.Zero);
+			Ui.SetImageColor(_bar, Vector4.Zero);
 		}
 		_name = name;
 		_done = done;
@@ -77,6 +82,7 @@ public sealed class TwinsanityMovie
 		_lastUnscaled = now;
 		bool held = Gamepad.IsDown(GamepadButton.Y) || Gamepad.IsDown(GamepadButton.A) || Input.IsKeyDown(Key.Enter) || Input.IsKeyDown(Key.Space);
 		_held = held ? _held + dt : 0.0f;
+		_prompt.Update(_canvas, _bar, true);
 		double t = _clock.Elapsed.TotalSeconds;
 		int frame = (int)(t * Fps) + 1;
 		if (_held >= SkipHold || frame > _frames)
@@ -113,6 +119,7 @@ public sealed class TwinsanityMovie
 		Playing = false;
 		Audio.StopMusic(0.0f);
 		Ui.SetImageTexture(_image, string.Empty);
+		_prompt.Update(_canvas, _bar, false);
 		_canvas.SetActive(false);
 		Time.Resume();
 		Action? done = _done;

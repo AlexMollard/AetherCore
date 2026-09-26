@@ -47,6 +47,7 @@ namespace TwExtract
 		{
 			string iso = null, only = null, cache = null, ffmpeg = "ffmpeg";
 			var movies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			var voice = new List<int>();
 			s_out = Path.Combine("projects", "Twinsanity", "assets");
 			for (int i = 0; i < args.Length; i++)
 			{
@@ -59,6 +60,7 @@ namespace TwExtract
 					case "--only": only = Next(); break;
 					case "--movies": movies.UnionWith(Next().Split(',')); break; // FMV names: H01_A,B01_A,...
 					case "--ffmpeg": ffmpeg = Next(); break;
+					case "--voice": voice.AddRange(Next().Split(',').Select(int.Parse)); break; // ENGLISH.MB speech tracks
 					case "--music":
 						foreach (string t in Next().Split(','))
 						{
@@ -73,7 +75,7 @@ namespace TwExtract
 						}
 						break;
 					default:
-						Console.Error.WriteLine("usage: tw-extract --iso <original.iso> [--out <assets dir>] [--cache <dir>] [--only <substring>] [--music <n,n,...|all>] [--movies <NAME,...|all> [--ffmpeg <exe>]]");
+						Console.Error.WriteLine("usage: tw-extract --iso <original.iso> [--out <assets dir>] [--cache <dir>] [--only <substring>] [--music <n,n,...|all>] [--movies <NAME,...> [--ffmpeg <exe>]] [--voice <n,n,...>]");
 						return 2;
 				}
 			}
@@ -136,6 +138,10 @@ namespace TwExtract
 						s_failed++;
 						Console.Error.WriteLine($"FMV/{movie}.PSS: FAILED {e.GetType().Name}: {e.Message}");
 					}
+				}
+				if (voice.Count > 0)
+				{
+					Console.WriteLine(AudioExport.Music(disc, s_out, voice, "ENGLISH"));
 				}
 				if (s_musicTracks.Count > 0)
 				{
