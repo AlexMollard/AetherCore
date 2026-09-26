@@ -99,8 +99,9 @@ public sealed partial class TwinsanityActors
 	private const float SkunkTurnPause = 1.3f;
 	// Worm (script COM_EARTH_WORM_START / _SQUASHLAUNCH / _SLAMMED / _MOVE, rig track_worm.csv,
 	// logs/gameplay/rig_worm_slam.csv).
-	private const float WormPopRadius = 14.14f;
-	private const float WormHideRadius = 13.42f;
+	// START S10 (down) pops on NOT MeToPlayerSqrDist 180; S9 (up) sinks on MeToPlayerSqrDist 200.
+	private const float WormPopRadius = 13.42f;
+	private const float WormHideRadius = 14.14f;
 	private const float WormDepth = 2.5f;
 	private const float WormSquashDip = 1.2f;    // SQUASHLAUNCH: RAWPOS_Y -1.2 then +1.2 ...
 	private const float WormSquashSpeed = 7.6f;  // ... at MOVE_SPEED 7.6 (rig: root 6.18 -> 4.98 -> 6.18)
@@ -733,6 +734,22 @@ public sealed partial class TwinsanityActors
 			Animation.CrossFade(a.Model, a.DeathClip, 0.1f);
 		}
 		TwinsanityAudio.Creature(TwinsanityAudio.Call.Death, a.Model.Position);
+	}
+
+	/// <summary>Crash respawned at a zone checkpoint: a piranha plant spun flat stands again, as on the rig
+	/// (logs/hubb rig_w3_sheet.png: flattened, then standing after the death at the swinging log).</summary>
+	public void ResetPiranhas()
+	{
+		foreach (Actor a in _actors)
+		{
+			if (a.Kind == Behaviour.Piranha && a.Critter is { Mode: Mode.Rest } c)
+			{
+				c.Mode = Mode.Idle;
+				a.Model.EulerDegrees = new Vector3(0.0f, a.HomeYaw, 0.0f);
+				SetLooping(a.Model, true);
+				PlayClip(a, a.IdleClip);
+			}
+		}
 	}
 
 	// Ground creatures set off nitro crates on contact (TwinsanityLevel implements the crate side).
@@ -1399,7 +1416,8 @@ public sealed partial class TwinsanityActors
 		switch (c.Mode)
 		{
 			case Mode.Down:
-				if (d < WormPopRadius)
+				// START S13 (the sink) plays out before S10 can pop it again.
+				if (d < WormPopRadius && p.Y <= down.Y)
 				{
 					c.Mode = Mode.Up;
 					TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);

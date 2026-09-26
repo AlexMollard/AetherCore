@@ -95,6 +95,9 @@ public sealed class TwinsanityCutscenes
 		public int Cond, Param, To;
 		public bool Not;
 		public float Threshold;
+		// The condition's first float: GotUserMessageEquals (ELF 0x22A708 -> 0x23D340) only sees a message
+		// at most this many seconds old (ticks / 9000).
+		public float Interval;
 		public uint[][] Cmds = Array.Empty<uint[]>();
 	}
 
@@ -106,6 +109,8 @@ public sealed class TwinsanityCutscenes
 		public float SqrTolerance, Duration, Power;
 		public int Key = -1;                // KEY_INDEX: a key of the owner, or a selector (246/252 focus key, 254 current key)
 		public int Selector = -1;           // SELECTOR: 251 the focus, 248 RequestFocus2's find
+		public bool TargetSpace;            // TARGET_SPACE: RAWPOS offsets the chased target
+		public Vector3 RawPos;              // RAWPOS_X/Y/Z, engine axes (x negated)
 	}
 
 	private sealed class State
@@ -182,6 +187,7 @@ public sealed class TwinsanityCutscenes
 		public string ProxyModel = "";
 		public string Clip = "";
 		public bool ClipLoops;
+		public bool ClipBlocks = true;             // a one-shot holds its NO_MOTION state (DoAnim without 0x2000)
 		public float ClipTime, ClipLength;
 		public readonly Dictionary<string, int> Shots = new(); // Cmd591s each scene script has run, for the shot table
 		public Vector3 Home;                       // where the level placed it (a respawn reset puts it back)
@@ -198,6 +204,9 @@ public sealed class TwinsanityCutscenes
 		public Agent? MessageFrom;                 // who sent the last message (SetFocusToAgent's attacker)
 		public Vector3 Velocity;                   // ColliderLaunchNow flight
 		public bool Airborne;
+		public float MessageTime;                  // when Message arrived (Clock), for GotUserMessageEquals' age
+		public int ImpactMessage;                  // cmd 158: the message a launched agent sends its focus on landing
+		public float LandFloor;                    // the flight's landing height where the ground probe finds none
 	}
 
 	private sealed class Machine
@@ -210,6 +219,7 @@ public sealed class TwinsanityCutscenes
 		public Machine? Sub;
 		public float MotionTime;
 		public bool MotionDone = true;
+		public int LastTick = -1;                  // the script tick of its last rule firing (one per tick)
 		public Vector3 FlightFrom, FlightTo;       // PROJECTILE: the jump's ends, launch speed and length
 		public float FlightUp, FlightTime;
 		public readonly HashSet<Rule> FiredInPlace = new();
@@ -262,6 +272,15 @@ public sealed class TwinsanityCutscenes
 	private (Vector3 Position, float Facing)? _checkpoint; // a checkpoint volume entered, for TakeCheckpoint
 	private readonly List<(Vector3 At, Vector3 From)> _hits = new(); // hits on live actors, for TakeHits
 	private readonly List<Vector3> _wakes = new(); // path crabs a volume woke, for TakeWakes
+	private readonly List<(Vector3 At, bool Slam)> _wormHits = new(); // scene blows on live worms, for TakeWormHits
+	// Script time: rules fire at most once per 50 Hz tick per machine, as on the rig (scene B's director
+	// reaches its first shot 5 transitions = 0.10 s after the volume; the engine's same-frame chain gave 0.02).
+	private const float ScriptTick = 0.02f;
+	// A controlled state (a motion or a DELAY) runs 2 ticks longer than its parameters say. Rig (scene B,
+	// rig_cam_sB.csv / rig_sB_actors.csv): the director's DELAY 0.75 + 1.0 pair takes 1.83 s, and each of the
+	// scene's timed stretches runs ~0.04 s per controlled state past the engine without it.
+	private const float ControlLag = 2.0f * ScriptTick;
+	private float _clock;
 	private string[]? _hintLines;
 	private const string HintText = "project://assets/ui/text/AgentLab/English.txt";
 	private const float HintScale = 0.386f;
@@ -600,6 +619,12 @@ public sealed class TwinsanityCutscenes
 						SqrTolerance = p.TryGetProperty("SQR_TOLERANCE", out JsonElement tol) ? tol.GetSingle() : 0.0f,
 						Duration = p.TryGetProperty("DURATION", out JsonElement dur) ? dur.GetSingle() : 0.0f,
 						Power = p.TryGetProperty("POWER", out JsonElement pw) ? pw.GetSingle() : 0.0f,
+						TargetSpace = m.GetProperty("space").GetString() == "TARGET_SPACE",
+						// ponytail: the rig's scene B chases (L01B s14 / s7) land on the worm + (RAWPOS_X, RAWPOS_Z)
+						// along the game's world axes (worm 35's yaw does not turn them), so no rotation here.
+						RawPos = new Vector3(p.TryGetProperty("RAWPOS_X", out JsonElement rx) ? -rx.GetSingle() : 0.0f,
+							p.TryGetProperty("RAWPOS_Y", out JsonElement ry) ? ry.GetSingle() : 0.0f,
+							p.TryGetProperty("RAWPOS_Z", out JsonElement rz) ? rz.GetSingle() : 0.0f),
 					};
 				}
 				var rules = new List<Rule>();
@@ -611,6 +636,7 @@ public sealed class TwinsanityCutscenes
 						Param = r.GetProperty("param").GetInt32(),
 						Not = r.GetProperty("not").GetBoolean(),
 						Threshold = r.GetProperty("threshold").GetSingle(),
+						Interval = r.GetProperty("interval").GetSingle(),
 						To = r.GetProperty("to").GetInt32(),
 					};
 					var cmds = new List<uint[]>();
@@ -690,6 +716,15 @@ public sealed class TwinsanityCutscenes
 		var wakes = new List<Vector3>(_wakes);
 		_wakes.Clear();
 		return wakes;
+	}
+
+	/// <summary>Scene blows on live worms since the last call: where the worm stands and whether it was the
+	/// slam (message 230, SLAMMED: it moves to its next hole) or the squash (226, SQUASHLAUNCH_NOIMPULSE).</summary>
+	public List<(Vector3 At, bool Slam)> TakeWormHits()
+	{
+		var hits = new List<(Vector3, bool)>(_wormHits);
+		_wormHits.Clear();
+		return hits;
 	}
 
 	/// <summary>A checkpoint volume Crash entered since the last call (message 138): the crate's position and
@@ -793,6 +828,7 @@ public sealed class TwinsanityCutscenes
 		a.Hp = 1;
 		a.Claimed = false;
 		a.Airborne = false;
+		a.ImpactMessage = 0;
 		a.Velocity = Vector3.Zero;
 		a.Clip = "";
 		if (a.Proxy.IsValid)
@@ -813,6 +849,7 @@ public sealed class TwinsanityCutscenes
 	{
 		_crash = crash;
 		_player.Position = crash.Self.Position;
+		_clock += dt;
 		if (_player.Chunk == null && _chunks.Count > 0)
 		{
 			_player.Chunk = _chunks[0];
@@ -901,12 +938,19 @@ public sealed class TwinsanityCutscenes
 	{
 		a.Velocity.Y -= LaunchGravity * dt;
 		Vector3 next = a.Position + a.Velocity * dt;
-		float ground = GroundY(next, float.NegativeInfinity);
+		// The probe can miss (it only counts the level's own collision, and a worm or a crate can stand
+		// between): the flight then comes down at its landing height, the take-off's or the aimed focus'.
+		float ground = GroundY(next, a.LandFloor);
 		if (a.Velocity.Y < 0.0f && next.Y <= ground)
 		{
 			next.Y = ground;
 			a.Airborne = false;
 			a.Velocity = Vector3.Zero;
+			if (a.ImpactMessage > 0 && a.Focus != null)
+			{
+				Deliver(a.Focus, a.ImpactMessage, a);
+				a.ImpactMessage = 0;
+			}
 		}
 		a.Position = next;
 		PlaceProxy(a);
@@ -939,6 +983,11 @@ public sealed class TwinsanityCutscenes
 				Enter(m, st);
 				continue;
 			}
+			int tick = (int)(_clock / ScriptTick);
+			if (m.LastTick == tick)
+			{
+				return;
+			}
 			Rule? fired = null;
 			// Else (condition 2) is the fall-through wherever the list puts it: the training director's
 			// subtype switch lists it first (COM_TRAINING_CUTSCENE_DIRECTOR_ACTIVATED s1).
@@ -965,6 +1014,7 @@ public sealed class TwinsanityCutscenes
 			{
 				return;
 			}
+			m.LastTick = tick;
 			foreach (uint[] c in fired.Cmds)
 			{
 				Command(m, c);
@@ -1002,7 +1052,7 @@ public sealed class TwinsanityCutscenes
 		}
 		Agent a = m.Self;
 		m.MotionTime += dt;
-		if (m.MotionTime < mo.Delay)
+		if (m.MotionTime < mo.Delay + ControlLag)
 		{
 			return;
 		}
@@ -1014,7 +1064,7 @@ public sealed class TwinsanityCutscenes
 		}
 		if (mo.Type == "GROUND_CHASE" && mo.Speed > 0.0f && target is Vector3 chased)
 		{
-			Chase(m, mo, chased, dt);
+			Chase(m, mo, mo.TargetSpace ? chased + mo.RawPos : chased, dt);
 			return;
 		}
 		if (mo.Translates && mo.Speed > 0.0f && target is Vector3 goal)
@@ -1041,8 +1091,10 @@ public sealed class TwinsanityCutscenes
 			Face(a, look);
 			PlaceProxy(a);
 		}
-		// NO_MOTION: done once the delay has passed and a one-shot clip has played out.
-		m.MotionDone = a.ClipLoops || a.Clip.Length == 0 || a.ClipTime >= a.ClipLength;
+		// NO_MOTION: done once the delay has passed and a one-shot clip has played out, unless its DoAnim set
+		// 0x2000. Rig: scene B's Coco (DoAnim 0x2FF1) leaves her 0.1 s states 0.1 s in (rig_sB_actors.csv);
+		// the beach Aku (0x0FF1) holds his 0.7 s state for his whole 13 s clip.
+		m.MotionDone = a.ClipLoops || !a.ClipBlocks || a.Clip.Length == 0 || a.ClipTime >= a.ClipLength;
 	}
 
 	// GROUND_CHASE: run along the ground at MOVE_SPEED until within SQR_TOLERANCE of the target (which may
@@ -1146,8 +1198,11 @@ public sealed class TwinsanityCutscenes
 				return false;
 			case 47: // ActorSubtypeEquals
 				return a.Subtype == r.Param;
-			case 51: // GotUserMessageEquals
-				return a.Message == r.Param;
+			case 51: // GotUserMessageEquals: a message no older than the rule's interval (ELF 0x23D340), plus a
+			         // frame's slack for the order agents step in and the tick gate (interval 0 is "this frame").
+			         // Rig: the prompt's 207 reaches Coco mid-jump and is gone by her s12, which waits for the
+			         // director's next one (her chase starts 7.9 s in, rig_sB_actors.csv).
+				return a.Message == r.Param && _clock - a.MessageTime <= r.Interval + 0.05f;
 			case 65: // IsBusy
 				return m.Busy;
 			case 66: // FocusIsBusy
@@ -1178,6 +1233,9 @@ public sealed class TwinsanityCutscenes
 				return a.Hp > r.Threshold;
 			case 53: // TouchingTerrain: a launched agent has come down
 				return !a.Airborne;
+			case 147: // (ELF 0x2296E8, the collider's flight state) rig: Coco's L01B s6 passes at the top of her
+			          // 20 m launch, 1.07 s up (rig_sB_actors.csv), so: falling or down
+				return !a.Airborne || a.Velocity.Y <= 0.0f;
 			case 37: // InCameraFrustrum. ponytail: taken as always true; nothing here hides off-screen agents
 				return true;
 			case 521: // AgentWasSpun / Slid / KneeDropped / JumpedOn: the player's attacks never reach cutscene agents
@@ -1267,8 +1325,33 @@ public sealed class TwinsanityCutscenes
 				a.Focus = a.MessageFrom ?? a.Focus;
 				break;
 			case 72: // ColliderLaunchNow(.., .., .., back speed, .., ..., rise height (arg 14), ...): knocked away
-			         // from the focus. ponytail: the gravity is a guess (35); args past the height are not decoded.
+			         // from the focus. Gravity 35: Coco's 12 m launch in scene B peaks 0.84 s up on the rig
+			         // (rig_sB_actors.csv). ponytail: args past the height are not decoded.
 				Launch(a, BitConverter.UInt32BitsToSingle(Arg(3)), BitConverter.UInt32BitsToSingle(Arg(14)));
+				a.ImpactMessage = 0;
+				break;
+			case 158: // (ELF Run 0x253CF0) the collider's impact message: arg 0 goes to what the launched agent lands
+			          // on (Coco's L01B: 230 slams worm 35, 226 squashes it). Rig (rig_sB_actors.csv): both of
+			          // her launches land on the worm - 3.2 m in 1.69 s, 5 m in 0.92 s - whatever their speed
+			          // argument, so the flight is aimed at the focus.
+				a.ImpactMessage = (int)Arg(0);
+				if (a.Airborne && a.Focus != null)
+				{
+					Aim(a, a.Focus.Position);
+				}
+				break;
+			case 159: // (ELF Run 0x253D50) clears it
+				a.ImpactMessage = 0;
+				break;
+			case 52: // ClearFocus (ELF 0x222660 clears the focus bits)
+				a.Focus = null;
+				break;
+			case 63: // RestartDefaultBehaviour (ELF 0x221120 reruns the object's spawn script): the scene lets go
+			         // and the live world's actor carries on (worm 35 after COM_EARTH_WORM_TOGGLE_COLLISIONS)
+				if (!a.IsPlayer && !a.IsDirector)
+				{
+					a.Machine = null;
+				}
 				break;
 			case 85: // DestroyMe
 				Destroy(a);
@@ -1427,6 +1510,7 @@ public sealed class TwinsanityCutscenes
 			return;
 		}
 		target.MessageFrom = from;
+		target.MessageTime = _clock;
 		if (target.IsPlayer)
 		{
 			target.Message = message;
@@ -1443,6 +1527,21 @@ public sealed class TwinsanityCutscenes
 					// whom Coco slides into). The level knocks that actor down; running the script here would
 					// only draw a second copy of it.
 					_hits.Add((target.Position, from.Position));
+					return;
+				}
+				if (!target.Proxy.IsValid && s.Name is "COM_EARTH_WORM_SLAMMED" or "COM_EARTH_WORM_MOVE" or "COM_EARTH_WORM_SQUASHLAUNCH_NOIMPULSE")
+				{
+					// Scene B: Coco lands on the live worm (her cmd 158 message), and the director's last state
+					// sends it 236 (MOVE). The level's worm sinks and moves to its next hole (230, 236) or
+					// squashes (226); this agent, which her next chase follows, goes to that hole at once (rig:
+					// the worm is there 2 s before she sets off, and sinks 0.05 s after the scene ends).
+					bool slam = !s.Name.EndsWith("_NOIMPULSE", StringComparison.Ordinal);
+					_wormHits.Add((target.Position, slam));
+					if (slam && target.Keys.Length > 1)
+					{
+						target.CurKey = (target.CurKey + 1) % target.Keys.Length;
+						target.Position = target.Keys[target.CurKey];
+					}
 					return;
 				}
 				// Its own object's script: its own keys and animation tables, and no longer the director's to
@@ -1529,6 +1628,20 @@ public sealed class TwinsanityCutscenes
 		away = away.LengthSquared() > 1e-6f ? Vector3.Normalize(away) : Vector3.UnitZ;
 		a.Velocity = away * MathF.Abs(back) + Vector3.UnitY * MathF.Sqrt(2.0f * LaunchGravity * MathF.Max(height, 0.05f));
 		a.Airborne = true;
+		a.LandFloor = a.Position.Y;
+	}
+
+	// Re-aim a launch's level speed so it comes down on `target` (its rise kept, gravity LaunchGravity).
+	private static void Aim(Agent a, Vector3 target)
+	{
+		float vy = a.Velocity.Y;
+		float t = (vy + MathF.Sqrt(MathF.Max(0.0f, vy * vy - 2.0f * LaunchGravity * (target.Y - a.Position.Y)))) / LaunchGravity;
+		if (t <= 0.0f)
+		{
+			return;
+		}
+		a.Velocity = new Vector3((target.X - a.Position.X) / t, vy, (target.Z - a.Position.Z) / t);
+		a.LandFloor = target.Y;
 	}
 
 	// DestroyMe: the agent leaves the world for good.
@@ -1726,6 +1839,7 @@ public sealed class TwinsanityCutscenes
 		}
 		a.Clip = $"a{slot:D3}";
 		a.ClipLoops = (flags & 0x1000) != 0;
+		a.ClipBlocks = (flags & 0x2000) == 0;
 		int index = Animation.Find(a.Proxy, a.Clip);
 		float length = 0.0f, rate = 1.0f;
 		if (index >= 0)

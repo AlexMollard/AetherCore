@@ -456,6 +456,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			_actors.Wake(home);
 		}
+		foreach ((Vector3 at, bool slam) in _cutscenes.TakeWormHits())
+		{
+			_actors.ScriptedWormHit(at, slam);
+		}
 		TwinsanityAku.Update(deltaTime, _player!, _aku);
 		_hud.Update(_wumpaCount, _lives, _deathTimer >= 0.0f);
 		// The pause menu ticks on the unscaled clock: it freezes the game itself (Time.Scale 0)
@@ -477,6 +481,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				if (_cutscenes.Respawned(_checkpoint + new Vector3(0.0f, 0.1f, 0.0f)))
 				{
 					_actors.ResetGuards();
+					_actors.ResetPiranhas();
 				}
 				Log.Info("[Twinsanity] Crash respawned at checkpoint");
 			}
