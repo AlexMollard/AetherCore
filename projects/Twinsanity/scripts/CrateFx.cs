@@ -164,11 +164,12 @@ public static class CrateFx
 	/// <summary>
 	/// A checkpoint crate was activated. The original swaps to OGI 245 (state k2) and plays its
 	/// a005 clip once (the lid drops into the crate as the sides fold down, 1.08 s), then
-	/// rests on the opened OGI 246 (k3). Idempotent per crate.
+	/// rests on the opened OGI 246 (k3). The level crate (268) has the same layout (OGIs
+	/// 974/976/975, anim 15). Idempotent per crate.
 	/// </summary>
 	public static void Activated(Entity crateModel, int objectId)
 	{
-		if (objectId != 266 || !s_opened.Add(crateModel.Id))
+		if (objectId is not (266 or 268) || !s_opened.Add(crateModel.Id))
 		{
 			return;
 		}

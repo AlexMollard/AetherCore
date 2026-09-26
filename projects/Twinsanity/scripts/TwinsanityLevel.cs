@@ -30,6 +30,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private const float kCrashRadius = 0.4f;
 	private const float kCrashHeight = 1.8f;
 	private const float kExplosionRadius = 2.5f;
+	private const float kSlamLookAhead = 2.0f / 60.0f; // two physics steps of the slam drop
 
 	// Crate kinds; internal so TwinsanityBake classifies with the same table.
 	internal enum Kind { Basic, Nitro, Tnt, ExtraLife, WoodenSpring, IronSpring, Iron, Checkpoint, AkuAku, MultiHit, Level, Surprise, Detonator, Reinforced }
@@ -63,7 +64,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		public Vector3 Base;
 		public bool Alive = true;
 		public float Fuse = -1.0f;
-		public int Hits;                       // remaining hits for MultiHit crates
+		public int Wumpa = 10;                 // MultiHit: wumpa still inside (SetCrate(0, 10))
 		public int ObjectId;                   // the original data's object id (CrateFx keys on it)
 		public bool Activated;                 // checkpoint crates open (keep their model) instead of breaking
 		public bool CheckSupport;              // the crate under it broke or moved: see if it must fall
@@ -295,7 +296,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 						Body = body,
 						Model = e,
 						Base = e.Position,
-						Hits = kind == Kind.MultiHit ? 3 : 1,
 						ObjectId = json.TryGetProperty("objectId", out JsonElement oi) ? oi.GetInt32() : 0,
 						BodyIsChild = true,
 					});
@@ -660,7 +660,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		Physics.AddBoxBody(body, new Vector3(0.5f, 0.5f, 0.5f), dynamic: false);
 		Entity crateModel = Spawn(body.Name, model, position, euler);
 		CrateFx.Spawned(crateModel, objectId, model);
-		_crates.Add(new Crate { Kind = kind.Value, Body = body, Model = crateModel, Base = position, Hits = kind.Value == Kind.MultiHit ? 3 : 1, ObjectId = objectId });
+		_crates.Add(new Crate { Kind = kind.Value, Body = body, Model = crateModel, Base = position, ObjectId = objectId });
 	}
 
 	// Some crate kinds are only distinguishable by model name (their object ids differ per chunk
@@ -783,110 +783,101 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			bool onTop = dx < 0.5f + kCrashRadius * 0.75f && dz < 0.5f + kCrashRadius * 0.75f
 			             && feet.Y > top - 0.75f && feet.Y < top + 0.45f && velocity.Y < 0.5f;
 			bool touching = dx < 0.5f + kCrashRadius + 0.08f && dz < 0.5f + kCrashRadius + 0.08f && overlapsVertically;
-			bool whirledHit = (whirled && dx < 1.5f && dz < 1.5f && feet.Y < top + 0.5f && feet.Y + kCrashHeight > c.Base.Y) || c == bonked;
+			// The disc's crate behaviour slots (DefaultEnums.GameObjectScriptOrder; per-kind tables in
+			// logs/craterules/crate_objects.txt): 3 touch, 4 headbutt, 5 landed on, 6 spin, 7 body slam,
+			// 8 slide.
+			// OnLand fires on touchdown: bouncing him while he is still dropping onto the lid left the
+			// body a frame behind the new rise, which the player's ceiling check read as a bump and cut
+			// a 2.5 m basic-crate bounce to ~0.9 m.
+			bool landed = onTop && !_player.IsSlamming && _player.IsGrounded;
+			// A body slam goes through a whole stack (rig, logs/craterules/rig_reinf_sheet.png: one slam
+			// broke both reinforced crates and landed on the ground). The drop covers ~1 m a frame, so
+			// the lid is struck while still ahead of the feet: the collider is gone before he lands on
+			// it and the slam carries on to the next one.
+			float slamReach = MathF.Max(0.0f, -velocity.Y) * kSlamLookAhead;
+			bool slammed = _player.IsSlamming && dx < 0.5f + kCrashRadius * 0.75f && dz < 0.5f + kCrashRadius * 0.75f
+			               && feet.Y > top - 0.75f && feet.Y - slamReach < top + 0.45f && velocity.Y < 0.5f;
+			bool whirledHit = whirled && dx < 1.5f && dz < 1.5f && feet.Y < top + 0.5f && feet.Y + kCrashHeight > c.Base.Y;
+			bool headbutt = c == bonked;
+			bool struck = whirledHit || slammed || headbutt;
 
 			switch (c.Kind)
 			{
 				case Kind.Nitro:
-					// Nitro goes up on any contact, including a landing from above or a spin.
-					if (onTop || touching || whirledHit)
+					// NITRO_CRATE_EXPLODE on every slot, touch included.
+					if (landed || struck || touching)
 					{
 						Explode(c);
 					}
 					break;
 				case Kind.Tnt:
-					// Jumping on top starts the fuse and bounces Crash; spins and slides do nothing.
-					if (onTop)
+					// TNT_CRATE_LANDED_ON bounces Crash 1.6 m and starts the fuse; every other hit is
+					// TNT_CRATE_EXPLODE at once.
+					if (landed)
 					{
-						_player.Bounce(9.0f);
-						CrateFx.Bounced(c.Model, c.ObjectId);
+						BounceCrash(c, 1.6f);
 						if (c.Fuse < 0.0f)
 						{
 							c.Fuse = 2.2f; // rig: boom 2.2 s after the landing bounce (tnt_fuse_sheet)
 						}
 					}
+					else if (struck)
+					{
+						Explode(c);
+					}
 					break;
 				case Kind.Basic:
-					// The original's single wooden crate pops the moment it is touched from above,
-					// giving Crash a small bounce as it breaks.
-					if (onTop)
+				case Kind.Surprise:
+				case Kind.ExtraLife:
+				case Kind.AkuAku:
+					// *_LANDED_ON bounces Crash and breaks the crate; every other hit is *_BREAK, with
+					// no bounce.
+					if (landed)
 					{
 						Break(c);
-						_player.Bounce(9.0f);
-						CrateFx.Bounced(c.Model, c.ObjectId);
+						BounceCrash(c, c.Kind switch { Kind.Surprise => 1.6f, Kind.ExtraLife => 2.0f, _ => 2.5f });
 					}
-					else if (whirledHit)
+					else if (struck)
 					{
 						Break(c);
 					}
 					break;
 				case Kind.MultiHit:
-					if (onTop || whirledHit)
+					// SetCrate(0, 10): it holds 10 wumpa. A landing (bounce 3.2 m) or a headbutt pays 2
+					// straight into the counter (CA_PickUpWumpa), and the one that empties it breaks it
+					// (rig: two crates, 20 wumpa, both gone). A spin, slide or slam is
+					// MULTIPLE_HIT_CRATE_BREAK at once, and whatever it still held is lost.
+					if (landed || headbutt)
 					{
-						c.Hits--;
-						_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, 5); // a handful of wumpa per hit, as in the original
-						if (c.Hits <= 0)
+						c.Wumpa -= 2;
+						AddWumpa(2);
+						if (c.Wumpa <= 0)
 						{
 							Break(c);
 						}
-						if (onTop)
+						if (landed)
 						{
-							_player.Bounce(9.0f);
-							CrateFx.Bounced(c.Model, c.ObjectId);
+							BounceCrash(c, 3.2f);
 						}
 					}
-					break;
-				case Kind.Surprise:
-					if (onTop)
-					{
-						Break(c);
-						_player.Bounce(9.0f);
-						CrateFx.Bounced(c.Model, c.ObjectId);
-					}
-					else if (whirledHit)
-					{
-						Break(c);
-					}
-					break;
-				case Kind.Level:
-					// Smashing a level crate is the hub's door into that level; entering the level
-					// itself is out of scope, so the crate simply breaks.
-					if (onTop)
-					{
-						Break(c);
-						_player.Bounce(9.0f);
-						CrateFx.Bounced(c.Model, c.ObjectId);
-						Log.Info("[Twinsanity] Level crate smashed (level entry not implemented).");
-					}
-					else if (whirledHit)
+					else if (struck)
 					{
 						Break(c);
 					}
 					break;
 				case Kind.Checkpoint:
-					// The checkpoint breaks open on the first hit (the OGI flips to the opened look,
-					// 245/246): the bounce still happens, then its collider goes so Crash can walk
-					// through the opened crate and never lands on it again.
-					if (onTop || whirledHit)
+				case Kind.Level:
+					// CHECKPOINT_CRATE_OPEN / LEVEL_CRATE_OPEN on every slot, touch included: it opens
+					// and sets the respawn point. Neither script bounces Crash.
+					if (landed || struck || touching)
 					{
-						c.Activated = true;
-						_checkpoint = c.Base;
-						_checkpointFacing = CheckpointFacing(c);
-						Log.Info("[Twinsanity] Checkpoint activated.");
-						CrateFx.Activated(c.Model, c.ObjectId);
-						if (onTop)
-						{
-							_player.Bounce(9.0f);
-							CrateFx.Bounced(c.Model, c.ObjectId);
-						}
-						c.Alive = false;
-						c.Body.Destroy();
+						Open(c);
 					}
 					break;
 				case Kind.Detonator:
 					// DETONATOR_CRATE_SPUN (4790) in the engine's state table: a spin sets it off;
 					// in practice any break does, and it lights every TNT in the level.
-					if (onTop || whirledHit)
+					if (onTop || whirledHit || headbutt)
 					{
 						Break(c);
 						foreach (Crate tnt in _crates)
@@ -899,14 +890,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 					}
 					break;
 				case Kind.Reinforced:
-					// REINFORCED_WOODEN_CRATE_BREAK (654): breakable like a wooden crate.
-					if (onTop)
-					{
-						Break(c);
-						_player.Bounce(9.0f);
-						CrateFx.Bounced(c.Model, c.ObjectId);
-					}
-					else if (whirledHit)
+					// REINFORCED_WOODEN_CRATE_BREAK is only on the damage (explosions), body slam and
+					// physics slots; a landing, spin, slide or headbutt is GENERIC_CRATE_SQUASH.
+					if (slammed)
 					{
 						Break(c);
 					}
@@ -914,25 +900,18 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				case Kind.Iron:
 					break;
 				case Kind.IronSpring:
-					if (onTop)
+					// IRON_SPRING_CRATE_LANDED_ON is on both the landing and the body slam slots.
+					if (landed || slammed)
 					{
-						_player.Bounce(16.0f);
-						CrateFx.Bounced(c.Model, c.ObjectId);
+						BounceCrash(c, 5.0f);
 					}
 					break;
 				case Kind.WoodenSpring:
-					if (whirledHit)
+					if (landed)
 					{
-						Break(c);
+						BounceCrash(c, 5.0f);
 					}
-					else if (onTop)
-					{
-						_player.Bounce(16.0f);
-						CrateFx.Bounced(c.Model, c.ObjectId);
-					}
-					break;
-				default:
-					if (whirledHit || onTop)
+					else if (struck)
 					{
 						Break(c);
 					}
@@ -945,6 +924,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 	}
 
+	private static readonly System.Random s_contents = new();
+
 	private void Break(Crate c)
 	{
 		if (!c.Alive)
@@ -955,13 +936,17 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		c.Body.Destroy();
 		CrateFx.Broken(c.Model, c.ObjectId); // plays the fragment clip, then destroys the model
 		QueueAbove(c);
+		// CreateCrateContents' second operand packs the wumpa count range, low nibble to high nibble:
+		// basic 0x51 (1-5), surprise and reinforced 0xA5 (5-10). Rig (logs/craterules/crates.md): basic
+		// crates paid 3 and 2, surprise crates 5, 5 and 8, two reinforced crates 11.
 		switch (c.Kind)
 		{
 			case Kind.Basic:
-				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, 5);
+				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, s_contents.Next(1, 6));
 				break;
-			case Kind.Surprise: // the "?" crate bursts into wumpa
-				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, 5);
+			case Kind.Surprise:   // the "?" crate bursts into wumpa
+			case Kind.Reinforced: // the same CreateCrateContents(0x20001, 165) as the surprise crate
+				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, s_contents.Next(5, 11));
 				break;
 			case Kind.ExtraLife:
 				_lives++;
@@ -971,6 +956,36 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				_aku = TwinsanityAku.Collect(_aku);
 				break;
 		}
+	}
+
+	// The height operand of each LANDED_ON script's ApplyVelocity is Crash's rise in metres (rig,
+	// logs/craterules/crates.md: basic and Aku 2.5 -> 2.46, surprise 1.6 -> 1.60, TNT 1.6 -> 1.57,
+	// extra life 2 -> 1.98, iron and wooden springs 5 -> 4.95). The bounce arc falls under Crash's
+	// air gravity, 50 (rig 49.7 m/s^2).
+	private const float kBounceGravity = 50.0f;
+
+	private void BounceCrash(Crate c, float rise)
+	{
+		_player!.Bounce(MathF.Sqrt(2.0f * kBounceGravity * rise));
+		CrateFx.Bounced(c.Model, c.ObjectId);
+	}
+
+	// CHECKPOINT_CRATE_OPEN / LEVEL_CRATE_OPEN: the OGI flips to the opened look (245/246 and
+	// 976/975) and the respawn point moves here. The collider goes so Crash can walk through the
+	// opened crate and never lands on it again.
+	private void Open(Crate c)
+	{
+		if (!c.Alive)
+		{
+			return;
+		}
+		c.Activated = true;
+		c.Alive = false;
+		c.Body.Destroy();
+		_checkpoint = c.Base;
+		_checkpointFacing = CheckpointFacing(c);
+		Log.Info(c.Kind == Kind.Level ? "[Twinsanity] Level crate opened (level entry not implemented)." : "[Twinsanity] Checkpoint activated.");
+		CrateFx.Activated(c.Model, c.ObjectId);
 	}
 
 	// Stacked crates. Rig (logs/wildlife/stack_fall_rig_raw.csv, the iron crates on the nitro stack
@@ -1084,6 +1099,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			{
 				other.Fuse = 0.05f; // chain on the next frames, not recursively
 			}
+			else if (other.Kind is Kind.Checkpoint or Kind.Level)
+			{
+				Open(other); // their damage slot is the OPEN script too
+			}
 			else if (other.Kind is not (Kind.Iron or Kind.IronSpring))
 			{
 				Break(other);
@@ -1143,6 +1162,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			_hurtGrace = HurtGrace;
 			TwinsanityAudio.AkuLost();
 			_player!.Hurt(from);
+			Log.Info($"[Twinsanity] Crash hurt ({kind}) from ({from.X:F2}, {from.Y:F2}, {from.Z:F2}), masks now {_aku}");
 			return;
 		}
 		Die(kind);
