@@ -180,7 +180,19 @@ public static class TwinsanityBake
 				string? model = instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : objectModels.GetValueOrDefault(objectId);
 				Vector3 position = Vector3.Transform(TwinsanityLevel.Vec(instance.GetProperty("position")), transform);
 				Vector3 euler = TwinsanityLevel.EulerOf(TwinsanityLevel.SysRotation(TwinsanityLevel.Vec(instance.GetProperty("euler"))) * transform);
-				string identity = IdentityJson(instance, position, euler, transform, model, start ? null : path);
+				string identity = IdentityJson(instance, position, euler, transform, model, path);
+
+				// Every scripted instance is a cutscene agent whatever else it bakes to (crate,
+				// wumpa, spawner): the JSON build ingests them all and directors address them by
+				// (layer, id). The agent is a separate invisible point so one entity never
+				// carries two identities.
+				if (ScriptedIdsFor(path).Contains(objectId))
+				{
+					bool skipped = TwinsanityActors.Skipped(objectName);
+					Entity agent = MarkerEntity(root, skipped ? objectName : objectName + " Agent", position);
+					Mark(agent, RoleCutsceneAgent, identity);
+					agents++;
+				}
 
 				if (objectId == 1)
 				{
@@ -232,15 +244,8 @@ public static class TwinsanityBake
 					continue;
 				}
 
-				bool scripted = ScriptedIdsFor(path).Contains(objectId);
 				if (TwinsanityActors.Skipped(objectName))
 				{
-					if (scripted)
-					{
-						Entity e = MarkerEntity(root, objectName, position);
-						Mark(e, RoleCutsceneAgent, identity);
-						agents++;
-					}
 					continue;
 				}
 
@@ -256,14 +261,6 @@ public static class TwinsanityBake
 					}
 					Mark(e, RoleActor, identity);
 					actors++;
-				}
-				if (scripted)
-				{
-					// An actor can also be a cutscene agent; the agent marker is a separate,
-					// invisible point so one entity never carries two identities.
-					Entity e = MarkerEntity(root, objectName + " Agent", position);
-					Mark(e, RoleCutsceneAgent, identity);
-					agents++;
 				}
 			}
 

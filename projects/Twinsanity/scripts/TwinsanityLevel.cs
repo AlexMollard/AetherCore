@@ -361,12 +361,20 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				Log.Warn($"[Twinsanity] marker bind failed on '{e.Name}' (role {role}) - skipped ({ex.Message})");
 			}
 		}
-		foreach ((string chunkPath, List<JsonElement> agents) in agentsByChunk)
+		// Every chunk that has agents OR triggers: a chunk whose agent markers were all
+		// skipped still owns its trigger volumes, and dropping them strands the scenes
+		// those volumes start (the start chunk's cutscenes, before the bake named it).
+		var chunks = new SortedSet<string>(agentsByChunk.Keys, StringComparer.Ordinal);
+		chunks.UnionWith(triggersByChunk.Keys);
+		foreach (string chunkPath in chunks)
 		{
 			_cutscenes.BindChunkScripts(chunkPath);
-			foreach (JsonElement agent in agents)
+			if (agentsByChunk.TryGetValue(chunkPath, out List<JsonElement>? agents))
 			{
-				_cutscenes.BindAgent(agent);
+				foreach (JsonElement agent in agents)
+				{
+					_cutscenes.BindAgent(agent);
+				}
 			}
 			if (triggersByChunk.TryGetValue(chunkPath, out var triggers))
 			{

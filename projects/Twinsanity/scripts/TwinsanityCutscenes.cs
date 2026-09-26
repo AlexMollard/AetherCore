@@ -519,7 +519,12 @@ public sealed class TwinsanityCutscenes
 				d.Machine = NewMachine(s, d);
 			}
 		}
-		Log.Info($"[Cutscenes] {_directors.Count} directors, {_triggers.Count} trigger volumes");
+		int agents = 0;
+		foreach (Chunk c in _chunks)
+		{
+			agents += c.Instances.Count;
+		}
+		Log.Info($"[Cutscenes] {agents} agents, {_directors.Count} directors, {_triggers.Count} trigger volumes");
 	}
 
 	public void Update(float dt, CrashPlayer crash)
