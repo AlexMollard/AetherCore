@@ -152,6 +152,9 @@ public static class TwinsanityAudio
 
 	public static void ExtraLife() => Audio.Play(GlobalBank + "266.wav", WorldVolume);
 
+	/// <summary>COM_GEM_PICKUP's DoSound(0x7800F1, 1): every gem object's Sounds[1] = 266.</summary>
+	public static void GemPickup() => Audio.Play(GlobalBank + "266.wav", WorldVolume);
+
 	// Aku Aku (AKUMASK Sounds[] = 59, 200, 59, 200, 59, -, 200; no script plays them, the engine
 	// does): 59 on gaining a mask, 200 on losing one. The split is read from the slot order, not
 	// isolated on the rig; the level is not measured either.

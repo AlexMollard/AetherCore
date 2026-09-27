@@ -447,6 +447,28 @@ public static class CrateFx
 			shape: 2);
 	}
 
+	/// <summary>COM_GEM_PICKUP's two DoParticle calls (logs/gemreward/particle_GEM_PICKUP_1A/1B.json): GEM_PICKUP_1A
+	/// (bank 173), one white star flash shrinking over 0.28 s, and GEM_PICKUP_1B (bank 188), 30 sparks thrown out
+	/// over 3 frames that fade within 0.82 s. Rig: logs/gemreward/rig_red10_sheet.png, 0.08-0.35 s after the pickup.
+	/// 1B's quads are tall (53407 raw high, 5822 wide); the engine quad is square, so it takes the width.</summary>
+	public static void GemPickup(Vector3 center)
+	{
+		SpawnEmitter("GemFlash", center, "2", new Vector4(4.1f, 35.4f, 29.4f, 61.4f) / 128.0f,
+			1, 0.0f, 1.0f / 60.0f, 0.2777417f,
+			Vector3.Zero, Vector3.Zero, Vector3.Zero, 0.0f,
+			new[] { CK(0f, 3.77f, 4.33f, 24.09f), CK(0.2819488f, 84.63f, 88.40f, 89.77f), CK(0.8487934f, 211.7f, 211.7f, 211.7f), CK(1f, 0f, 0f, 0f) },
+			new[] { 0f, 0f, 0.7811512f, 255f, 1f, 255f },
+			new[] { 0f, 23565.32f * 1e-4f, 1f, 2002.51f * 1e-4f },
+			new[] { 0f, 41062f / 65536f * 360f, 1f, 459f / 65536f * 360f });
+		SpawnEmitter("GemSparks", center, "1", new Vector4(33.3f, 0.0f, 64.5f, 31.6f) / 128.0f,
+			30, 600.0f, 3.0f / 60.0f, 0.8232403f,
+			Vector3.Zero, new Vector3(3.689851f, 3.654536f, 3.691157f), new Vector3(0.1717121f, 0.187581f, 0.1676432f), 0.0f,
+			new[] { CK(0f, 64f, 64f, 64f), CK(1f, 64f, 64f, 64f) },
+			new[] { 0f, 0f, 0.1763019f, 246.3686f, 0.4526041f, 130.6698f, 1f, 0f },
+			new[] { 0f, 5822.218f * 1e-4f, 0.1238282f, 3427.047f * 1e-4f, 1f, 0f },
+			new[] { 0f, 0f, 1f, 0f });
+	}
+
 	/// <summary>A dead creature's pop (logs/gameplay/pop_sheet.md, defs in pop_particles.json).
 	/// COM_GENERIC_CREATURE_DEAD_BODYPOP fires ENEMY_POP1 (210, sparks) and ENEMY_POP2 (211, grey
 	/// puff); COM_GLOBAL_CHICKEN_POP fires SEAGULLPOP (254, feathers) and ENEMY_POP2. As for the crate

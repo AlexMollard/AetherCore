@@ -21,7 +21,8 @@
 // Colours are the rig's on-screen values (the whole menu reads at ~0.75 brightness on the PS2:
 // its white is 187).
 //
-// params = (time, shape, 0, 0) with shape: 0 swirl, 1 disc, 2 ball, 3 track.
+// params = (time, shape, 0, 0) with shape: 0 swirl, 1 disc, 2 ball, 3 track, 4 sparkle (the HUD's
+// gem-pickup sparkles, TwinsanityHud.LayoutGemPop: a soft four-point star in color0 with a white core).
 // color0/color1 are a disc's or the ball's lit and shaded fill. The element's image alpha
 // (input.color.a) fades the whole shape, so C# fades the menu in and out.
 //
@@ -87,6 +88,16 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         const float lit = saturate(0.5 - 0.5 * (input.local.x + input.local.y));
         col = d > rim ? PALE : lerp(pc.color1.rgb, pc.color0.rgb, lit);
         alpha = smoothstep(1.0, 0.97, d);
+    }
+    else if (shape == 4)
+    {
+        const float2 q = abs(input.local);
+        const float r = length(input.local);
+        const float rays = saturate(1.0 - r) * saturate(1.0 - min(q.x, q.y) * 7.0);
+        const float core = saturate(1.0 - r * 2.5);
+        alpha = saturate(rays + core);
+        if (alpha <= 0.0) { discard; }
+        col = lerp(pc.color0.rgb, float3(1.0, 1.0, 1.0), core);
     }
     else
     {

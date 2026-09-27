@@ -30,7 +30,7 @@ public sealed partial class TwinsanityActors
 
 	private enum Behaviour
 	{
-		Flyer,     // bats: circle their spawn point above its height (not yet rig-measured)
+		Flyer,     // bats: hang on their spawn point (COM_GLOBAL_BAT_LOOKAROUND)
 		Seagull,   // stands on its perch; takes off and circles when Crash comes near
 		Butterfly, // straight legs around its spawn, lands to rest now and then
 		Flock,     // bird clump: its birds fly the clump's path
@@ -148,7 +148,6 @@ public sealed partial class TwinsanityActors
 			Model = e,
 			Home = position,
 			HomeYaw = eulerDegrees.Y,
-			Angle = (objectId % 17) * 0.7f,
 			Gem = TwinsanityPause.GemSlot(objectName),
 		};
 		ReadClips(e, a);
@@ -369,22 +368,17 @@ public sealed partial class TwinsanityActors
 
 	private void UpdateFlyer(Actor a, float dt)
 	{
-		// Circle the spawn point, bobbing above (never below) its height so ground-level
-		// butterflies do not dip into the sand.
-		Vector3 p = a.Model.Position;
-		a.Angle += dt * 0.7f;
-		Vector3 target = a.Home + new Vector3(MathF.Cos(a.Angle) * 2.5f, 0.25f + MathF.Sin(a.Angle * 2.3f) * 0.25f, MathF.Sin(a.Angle) * 2.5f);
-		Vector3 step = target - p;
-		float len = step.Length();
-		if (len > 0.001f)
+		// COM_GLOBAL_BAT_DEFAULT -> COM_GLOBAL_BAT_IDLE -> COM_GLOBAL_BAT_LOOKAROUND (logs/gemreward/bat-scripts-hubb.txt):
+		// every hub bat carries instance flag 30, so it hangs on its spawn point looping a001. Only user message 87
+		// would send the path bats off along their spline (FLY_SPLINE, 15 m/s, DestroyMe at 90%), and nothing in
+		// the hub sends it to them (logs/gemreward/find_msg87.py). Rig: the eleven hubb tree bats' contexts stay on
+		// their spawn points, only their animated bounds wobbling, with Crash 13-17 m below
+		// (logs/gemreward/bat_watch.csv, near_homes.py).
+		a.Model.Position = a.Home;
+		int hang = Animation.Find(a.Model, "a001"); // OnIdle DoAnim slot 1; a000 is the fly loop
+		if (hang >= 0 && Animation.CurrentClip(a.Model) != hang)
 		{
-			float max = 1.8f * dt;
-			if (len > max)
-			{
-				step *= max / len;
-			}
-			a.Model.Position = p + step;
-			FaceMovement(a, step);
+			Animation.SetClip(a.Model, hang);
 		}
 	}
 
@@ -799,13 +793,19 @@ public sealed partial class TwinsanityActors
 		if (Vector3.DistanceSquared(center, a.Model.Position + new Vector3(0.0f, 0.5f, 0.0f)) < PickupRadius * PickupRadius)
 		{
 			a.Alive = false;
-			a.Model.Destroy();
 			if (a.Gem >= 0)
 			{
+				// COM_GEM_PICKUP: AddGem, DoSound Sounds[1] (266), GEM_PICKUP_1A/1B, DestroyMe - the gem
+				// is gone at once; the reward is the HUD pop AddGem starts (TwinsanityHud.PopGem).
+				Vector3 at = a.Model.Position + new Vector3(0.0f, 0.5f, 0.0f);
+				TwinsanityAudio.GemPickup();
+				CrateFx.GemPickup(at);
+				a.Model.Destroy();
 				host.CollectGem(a.Gem);
 			}
 			else
 			{
+				a.Model.Destroy();
 				host.AddWumpa(1);
 			}
 		}

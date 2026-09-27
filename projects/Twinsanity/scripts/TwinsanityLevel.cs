@@ -1352,8 +1352,13 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		Die(kind);
 	}
 
-	// TwinsanityActors.ITwinsanityHost: a gem pickup fills its slot in the pause-menu gem track.
-	public void CollectGem(int slot) => _gems |= 1 << slot;
+	// TwinsanityActors.ITwinsanityHost: a gem pickup fills its slot in the pause-menu gem track and
+	// pops the collected gem on the HUD (AddGem).
+	public void CollectGem(int slot)
+	{
+		_gems |= 1 << slot;
+		_hud.PopGem(slot);
+	}
 
 	// TwinsanityActors.ITwinsanityHost: enemies and hazards funnel their hits through here.
 	public void DamagePlayer(Vector3 from, DeathKind kind)

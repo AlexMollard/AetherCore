@@ -34,6 +34,22 @@ public sealed class TwinsanityHud
 	private const float DigitsY = 37.0f, GlyphScaleX = 1.9f, GlyphScaleY = 1.12f;
 	private const float SlideTime = 0.25f, HoldTime = 3.0f;
 
+	// The gem pickup pop (COM_GEM_PICKUP's AddGem). Rig: logs/gemreward/rig_red10_*.png, a 0.1x-speed capture
+	// timed from the level's gem word (0x98EFA4) changing. The collected gem's icon (Icons_12..07, as the pause
+	// track) grows and fades in at the top centre 0.07-0.30 s after the pickup, holds, then shrinks and fades
+	// out 1.90-2.13 s; sparkles in the gem's colour burst out of it in a ring from ~0.2 s, drift and are gone by
+	// ~1.9 s. Box from the 1.9 s frame: ink x 268..370, y 66..136 = the 256x256 icon (ink rows 38..231) drawn
+	// 102 x 93 about (319, 98.5), i.e. centred on the frame. Crash keeps control (the script sets no input).
+	private const float GemPopW = 102.0f, GemPopH = 93.0f, GemPopCy = 98.5f;
+	private const float GemPopIn0 = 0.07f, GemPopIn1 = 0.30f, GemPopOut0 = 1.90f, GemPopOut1 = 2.13f;
+	private const int GemSparkCount = 24;
+	// Sparkle tints per TwinsanityPause.GemSlot: yellow, red, purple, green, clear, blue.
+	private static readonly Vector4[] GemSparkTint =
+	{
+		new(1.0f, 0.9f, 0.3f, 1.0f), new(1.0f, 0.22f, 0.2f, 1.0f), new(0.8f, 0.4f, 1.0f, 1.0f),
+		new(0.45f, 1.0f, 0.3f, 1.0f), new(0.9f, 0.95f, 1.0f, 1.0f), new(0.35f, 0.6f, 1.0f, 1.0f),
+	};
+
 	private sealed class Counter
 	{
 		public Entity Icon;
@@ -72,6 +88,30 @@ public sealed class TwinsanityHud
 	private Counter? _lives;
 	private float _lastTime = -1.0f;
 	private bool _wasDead;
+	private Entity _gemPop;
+	private readonly Entity[] _gemSparks = new Entity[GemSparkCount];
+	private readonly (float Angle, float Born, float Life, float Reach, float Size, float Drift)[] _sparkSeeds = new (float, float, float, float, float, float)[GemSparkCount];
+	private float _gemPopStart = -1.0f;
+	private int _gemPopSlot;
+
+	/// <summary>AddGem: pop gem <paramref name="slot"/> (TwinsanityPause.GemSlot) on the HUD.</summary>
+	public void PopGem(int slot)
+	{
+		_gemPopSlot = slot;
+		_gemPopStart = Time.TotalTime;
+		var rng = new System.Random(0x6E3 + slot);
+		float R(float lo, float hi) => lo + (hi - lo) * (float)rng.NextDouble();
+		for (int i = 0; i < GemSparkCount; i++)
+		{
+			float born = R(0.18f, 0.5f);
+			_sparkSeeds[i] = (MathF.Tau * i / GemSparkCount + R(-0.15f, 0.15f), born, MathF.Min(R(0.9f, 1.6f), 1.9f - born),
+				R(50.0f, 110.0f), R(10.0f, 18.0f), R(-15.0f, 25.0f));
+		}
+		if (_gemPop.IsValid)
+		{
+			Ui.SetImageTexture(_gemPop, $"{IconDir}Icons_{12 - slot:00}.png");
+		}
+	}
 
 	/// <summary>Per frame. A changed count pops its counter; the respawn pops both, as in the original.</summary>
 	public void Update(int wumpa, int lives, bool dead)
@@ -102,6 +142,7 @@ public sealed class TwinsanityHud
 		Layout(_wumpa!, dt, scale, screen.Z);
 		Layout(_lives!, dt, scale, screen.Z);
 		WumpaCounterScreen = new Vector2((WumpaIconX + WumpaIconW * 0.5f) * scale / screen.Z, (WumpaIconY + WumpaIconH * 0.5f) / FrameHeight);
+		LayoutGemPop(scale, screen.Z);
 	}
 
 	private bool Build()
@@ -128,6 +169,21 @@ public sealed class TwinsanityHud
 		Ui.SetImageColor(_frame, Vector4.Zero);
 		_wumpa = NewCounter("Icons_13.png", true);
 		_lives = NewCounter("Icons_00.png", false);
+		for (int i = 0; i < GemSparkCount; i++)
+		{
+			// ui_pause shape 4: a soft star in material colour 0, faded by the image alpha.
+			Entity e = Image(null);
+			Ui.SetMaterial(e, "ui_pause");
+			Ui.SetMaterialParams(e, new Vector4(0.0f, 4.0f, 0.0f, 0.0f));
+			e.SetActive(false);
+			_gemSparks[i] = e;
+		}
+		_gemPop = Image(IconDir + "Icons_06.png");
+		_gemPop.SetActive(false);
+		if (_gemPopStart >= 0.0f)
+		{
+			Ui.SetImageTexture(_gemPop, $"{IconDir}Icons_{12 - _gemPopSlot:00}.png");
+		}
 		return true;
 	}
 
@@ -252,6 +308,46 @@ public sealed class TwinsanityHud
 			var g = _glyphs[text[i]];
 			Place(d, x * s, DigitsY * s, g.W * GlyphScaleX * s, g.H * GlyphScaleY * s);
 			x += g.W * GlyphScaleX;
+		}
+	}
+
+	private void LayoutGemPop(float s, float screenW)
+	{
+		float t = _gemPopStart < 0.0f ? float.MaxValue : Time.TotalTime - _gemPopStart;
+		bool live = t < GemPopOut1;
+		// Grow and fade in, hold, shrink (to ~0.3, rig 2.10 s) and fade out.
+		float k = t < GemPopIn0 ? 0.0f : t < GemPopIn1 ? (t - GemPopIn0) / (GemPopIn1 - GemPopIn0)
+			: t < GemPopOut0 ? 1.0f : 1.0f - (t - GemPopOut0) / (GemPopOut1 - GemPopOut0);
+		k = Math.Clamp(k, 0.0f, 1.0f);
+		float size = t < GemPopIn1 ? k : 0.3f + 0.7f * k;
+		float cx = screenW / s * 0.5f; // frame px, centred on the screen
+		_gemPop.SetActive(live && k > 0.0f);
+		if (live)
+		{
+			float w = GemPopW * size, h = GemPopH * size;
+			Place(_gemPop, (cx - w * 0.5f) * s, (GemPopCy - h * 0.5f) * s, w * s, h * s);
+			Ui.SetImageColor(_gemPop, new Vector4(1.0f, 1.0f, 1.0f, k));
+		}
+		Vector4 tint = GemSparkTint[Math.Clamp(_gemPopSlot, 0, GemSparkTint.Length - 1)];
+		for (int i = 0; i < GemSparkCount; i++)
+		{
+			var p = _sparkSeeds[i];
+			float age = t - p.Born;
+			bool on = live && age >= 0.0f && age < p.Life;
+			Entity e = _gemSparks[i];
+			e.SetActive(on);
+			if (!on)
+			{
+				continue;
+			}
+			// Out of the gem's rim in a ring that slows, then drifts; twinkles as it fades.
+			float r = 40.0f + p.Reach * (1.0f - MathF.Exp(-3.0f * age));
+			float x = cx + MathF.Cos(p.Angle) * r;
+			float y = GemPopCy + MathF.Sin(p.Angle) * r * 0.75f + p.Drift * age;
+			float a = MathF.Min(age / 0.05f, 1.0f) * (1.0f - age / p.Life) * (0.7f + 0.3f * MathF.Sin(age * 25.0f + i));
+			Place(e, (x - p.Size * 0.5f) * s, (y - p.Size * 0.5f) * s, p.Size * s, p.Size * s);
+			Ui.SetMaterialColors(e, tint, tint);
+			Ui.SetImageColor(e, new Vector4(1.0f, 1.0f, 1.0f, a));
 		}
 	}
 
