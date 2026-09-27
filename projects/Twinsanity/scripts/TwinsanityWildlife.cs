@@ -114,8 +114,18 @@ public sealed partial class TwinsanityActors
 	private const float MonkeyClimbUp = 5.0f;
 	private const float MonkeyClimbDown = 4.0f;
 	private const float MonkeyTreeTop = 5.58f;
-	private const float FruitAcross = 20.0f;
-	private const float FruitGravity = 42.0f;
+	private const float FruitAcross = 19.5f; // rig: ~19.5 m/s across; a 17 m throw flies 0.9 s, peaks 3.5 m up
+	private const float FruitGravity = 40.0f;
+	private const float FruitFallGravity = 15.0f; // rig: shaken fruit falls ~6 m in ~0.9 s
+	private const float FruitHangY = 6.0f;
+	private const float FruitRoll = 3.0f;         // rig: a landed miss rolls at <= 3 m/s ...
+	private const float FruitRollDecel = 0.7f;    // ... for 5-8 m
+	private const float FruitPickup = 2.0f;       // TwinsanityWumpa's pickup radius
+	private const float MonkeyFruitSeek = 10.0f;  // rig: a monkey goes for ground fruit within 10 m
+	private const float MonkeyRun = 6.7f;         // rig: 6.7-11 m/s sprinting after fruit
+	private const int FruitHangMax = 5;           // rig: five fruit hang in a full tree ...
+	private const float FruitRegrow = 5.0f;       // ... one regrows every 5 s ...
+	private const int FruitTreeTotal = 20;        // ... until the tree has grown 20 in all
 
 	private sealed class Spawner
 	{
@@ -1620,12 +1630,19 @@ public sealed partial class TwinsanityActors
 		Vector3 p = a.Model.Position;
 		float d = Horizontal(p, crashPos);
 		UpdateFruit(a, c, dt, crashPos);
+		TouchCrash(a, crashPos); // rig (c2_monkey_bump.png): bumping into a monkey costs a mask
 		switch (c.Mode)
 		{
 			case Mode.Idle:
 				PlayClip(a, a.IdleClip);
 				c.Timer -= dt;
-				if (d < MonkeyAggro && d > MonkeyMinRange && !c.FruitFlying && TryClaimTree(c, p, out Vector3 tree))
+				Entity near = d < MonkeyAggro && !c.FruitFlying ? NearestGroundFruit(p) : default;
+				if (near.IsValid)
+				{
+					c.Fruit = near;
+					c.Mode = Mode.GoFruit;
+				}
+				else if (d < MonkeyAggro && d > MonkeyMinRange && !c.FruitFlying && TryClaimTree(c, p, out Vector3 tree))
 				{
 					c.Tree = tree;
 					c.Mode = Mode.GoTree;
@@ -1687,48 +1704,51 @@ public sealed partial class TwinsanityActors
 				}
 				break;
 			case Mode.Shake:
+			{
+				// Rig: the fruit falls in two pairs, 2.1 s and 4.6 s after the monkey reaches the top.
+				float before = c.Timer;
 				c.Timer -= dt;
+				if (before > 4.9f && c.Timer <= 4.9f)
+				{
+					ShakeFruit(c.Tree, 0);
+				}
+				if (before > 2.4f && c.Timer <= 2.4f)
+				{
+					ShakeFruit(c.Tree, 2);
+				}
 				if (c.Timer <= 0.0f)
 				{
-					// A fruit drops from the tree top to the ground beside the trunk.
-					float ang = RandomRange(0.0f, MathF.PI * 2.0f);
-					Vector3 at = c.Tree + new Vector3(MathF.Cos(ang), 6.0f, MathF.Sin(ang)) * 1.0f;
-					at.Y = c.Tree.Y + 6.0f;
-					if (!c.Fruit.IsValid && FruitModel() is string fm)
-					{
-						c.Fruit = World.Create();
-						c.Fruit.Name = "MonkeyFruit";
-						c.Fruit.AddTransform();
-						c.Fruit.Position = at;
-						c.Fruit.LoadModel(fm);
-					}
-					if (c.Fruit.IsValid)
-					{
-						c.Fruit.Position = at;
-					}
 					c.Mode = Mode.ClimbDown;
 					PlayClip(a, c.ClimbClip);
 				}
 				break;
+			}
 			case Mode.ClimbDown:
 			{
-				float ground = GroundY(p, c.Tree.Y);
+				// Ray from the trunk base, not from the monkey: from up in the tree the ray hits the
+				// canopy and the monkey snapped to the ground at once.
+				float ground = GroundY(new Vector3(p.X, c.Tree.Y, p.Z), c.Tree.Y);
 				a.Model.Position = p - new Vector3(0.0f, MonkeyClimbDown * dt, 0.0f);
 				if (a.Model.Position.Y <= ground)
 				{
 					a.Model.Position = new Vector3(p.X, ground, p.Z);
+					c.Fruit = NearestGroundFruit(p);
 					c.Mode = c.Fruit.IsValid ? Mode.GoFruit : Mode.Idle;
 				}
 				break;
 			}
 			case Mode.GoFruit:
 				PlayClip(a, c.WalkClip);
-				if (c.FruitFlying)
+				if (!IsGroundFruit(c.Fruit))
 				{
+					c.Fruit = default; // Crash (or another monkey) got it first
+					c.Mode = Mode.Idle;
+					c.Timer = RandomRange(0.5f, 1.5f);
 					break;
 				}
-				if (WalkTo(a, c.Fruit.Position, MonkeyWalk, dt, true))
+				if (WalkTo(a, c.Fruit.Position, MonkeyRun, dt, true))
 				{
+					_treeFruit.RemoveAll(f => f.E.Equals(c.Fruit));
 					c.Mode = Mode.Pickup;
 					c.Timer = 0.5f;
 					PlayClip(a, c.PickClip);
@@ -1776,7 +1796,8 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	// The fruit a monkey knocks down or throws. FruitLife < 0: dropped from the tree (no damage).
+	// A thrown fruit in flight. Touching Crash it is collected (the user's account and the rig):
+	// +1 wumpa, the hurt flinch and a rumble, but no mask. A miss lands and rolls on as ground fruit.
 	private void UpdateFruit(Actor a, Critter c, float dt, Vector3 crashPos)
 	{
 		if (!c.FruitFlying || !c.Fruit.IsValid)
@@ -1786,60 +1807,163 @@ public sealed partial class TwinsanityActors
 		c.FruitVelocity.Y -= FruitGravity * dt;
 		Vector3 p = c.Fruit.Position + c.FruitVelocity * dt;
 		c.Fruit.Position = p;
-		bool thrown = c.FruitLife >= 0.0f;
-		if (thrown && Vector3.Distance(p, crashPos + new Vector3(0.0f, 0.8f, 0.0f)) < 1.0f)
+		if (Vector3.Distance(p, crashPos + new Vector3(0.0f, 0.8f, 0.0f)) < 1.0f)
 		{
-			_host?.DamagePlayer(p, DeathKind.Generic);
-			DropFruit(c);
+			_host?.AddWumpa(1);
+			_player?.Flinch();
+			// The disc's rumble strength/duration are not observable on the rig: a short light pulse.
+			Gamepad.Rumble(0.3f, 0.3f, 0.2f);
+			Log.Info($"[Twinsanity] monkey fruit caught in flight at ({p.X:F2}, {p.Y:F2}, {p.Z:F2}): +1 wumpa, flinch, rumble");
+			c.Fruit.Destroy();
+			c.Fruit = default;
+			c.FruitFlying = false;
 			return;
 		}
 		float ground = GroundY(p, c.Tree.Y);
 		if (p.Y <= ground)
 		{
-			// Rig (track_monkey.csv f1): the fruit bounces (restitution ~1/3) and then rolls away,
-			// 3.0 -> 1.6 m/s over ~4 s and ~15 m, then despawns.
-			p = new Vector3(p.X, ground, p.Z);
-			c.Fruit.Position = p;
-			if (!c.Landed)
-			{
-				c.Landed = true;
-				c.FruitVelocity.Y = MathF.Max(0.0f, -c.FruitVelocity.Y / 3.0f);
-				// Rig: after landing the fruit rolls at 3.0 -> 1.6 m/s, never at throw speed.
-				float sp = new Vector2(c.FruitVelocity.X, c.FruitVelocity.Z).Length();
-				if (sp > 3.0f)
-				{
-					c.FruitVelocity.X *= 3.0f / sp;
-					c.FruitVelocity.Z *= 3.0f / sp;
-				}
-				c.FruitFlying = c.FruitVelocity.Y > 0.5f;
-				if (!c.FruitFlying && thrown)
-				{
-					DropFruit(c);
-				}
-			}
-			else
-			{
-				c.FruitVelocity.Y = 0.0f;
-				float sp = new Vector2(c.FruitVelocity.X, c.FruitVelocity.Z).Length();
-				float ns = MathF.Max(0.0f, sp - 0.35f * dt);
-				c.FruitVelocity.X *= ns / MathF.Max(sp, 0.001f);
-				c.FruitVelocity.Z *= ns / MathF.Max(sp, 0.001f);
-				c.FruitLife += dt;
-				if (c.FruitLife > 4.0f || (thrown && ns <= 0.1f))
-				{
-					DropFruit(c);
-				}
-			}
-		}
-		{
+			c.Fruit.Position = new Vector3(p.X, ground, p.Z);
+			DropFruit(c);
 		}
 	}
 
-	private static void DropFruit(Critter c)
+	// Hands the monkey's fruit to the ground: in hand it falls, a landed throw rolls on.
+	private void DropFruit(Critter c)
 	{
+		if (c.Fruit.IsValid)
 		{
+			Vector3 p = c.Fruit.Position;
+			Vector3 v = c.FruitFlying ? c.FruitVelocity : Vector3.Zero;
+			float sp = new Vector2(v.X, v.Z).Length();
+			if (sp > FruitRoll)
+			{
+				v *= FruitRoll / sp;
+			}
+			v.Y = 0.0f;
+			_treeFruit.Add(new TreeFruit { E = c.Fruit, V = v, Falling = !c.FruitFlying, Floor = GroundY(p, p.Y - 2.0f) });
 		}
+		c.Fruit = default;
 		c.FruitFlying = false;
+	}
+
+	// Fruit on the ground (shaken out of a tree or thrown and missed): Crash collects it on
+	// touch, a monkey within 10 m picks it up to throw.
+	private sealed class TreeFruit
+	{
+		public Entity E;
+		public Vector3 V;
+		public bool Falling;
+		public float Floor;
+	}
+
+	private readonly List<TreeFruit> _treeFruit = new();
+
+	// Rig: where the five fruit hang around the trunk (engine x = -game x), ~6 m up.
+	private static readonly Vector3[] FruitHang =
+	{
+		new(0.07f, 0.0f, -0.08f), new(-0.55f, 0.0f, -0.11f), new(-0.76f, 0.0f, 0.48f), new(0.24f, 0.0f, 0.51f), new(-0.27f, 0.0f, 0.86f),
+	};
+
+	// Per tree: how many fruit hang now, how many it has grown in all, time towards the next.
+	private sealed class TreeStock
+	{
+		public int Hang = FruitHangMax;
+		public int Grown = FruitHangMax;
+		public float Regrow;
+	}
+
+	private readonly Dictionary<Vector3, TreeStock> _treeStock = new();
+
+	// A shake knocks down the pair of hang slots [first, first + 1] that still hold fruit.
+	private void ShakeFruit(Vector3 tree, int first)
+	{
+		if (FruitModel() is not string fm)
+		{
+			return;
+		}
+		if (!_treeStock.TryGetValue(tree, out TreeStock? stock))
+		{
+			_treeStock[tree] = stock = new TreeStock();
+		}
+		for (int k = first; k < first + 2 && stock.Hang > 0; k++)
+		{
+			stock.Hang--;
+			Vector3 at = tree + FruitHang[k] + new Vector3(0.0f, FruitHangY, 0.0f);
+			Entity e = World.Create();
+			e.Name = "MonkeyFruit";
+			e.AddTransform();
+			e.Position = at;
+			e.LoadModel(fm);
+			_treeFruit.Add(new TreeFruit { E = e, Falling = true, Floor = GroundY(new Vector3(at.X, tree.Y, at.Z), tree.Y) });
+		}
+	}
+
+	private void UpdateTreeFruit(float dt, Vector3 crashPos)
+	{
+		foreach (TreeStock s in _treeStock.Values)
+		{
+			if (s.Hang < FruitHangMax && s.Grown < FruitTreeTotal && (s.Regrow += dt) >= FruitRegrow)
+			{
+				s.Regrow = 0.0f;
+				s.Hang++;
+				s.Grown++;
+			}
+		}
+		for (int i = _treeFruit.Count - 1; i >= 0; i--)
+		{
+			TreeFruit f = _treeFruit[i];
+			if (!f.E.IsValid)
+			{
+				_treeFruit.RemoveAt(i);
+				continue;
+			}
+			Vector3 p = f.E.Position;
+			if (f.Falling)
+			{
+				f.V.Y -= FruitFallGravity * dt;
+				p += f.V * dt;
+				if (p.Y <= f.Floor)
+				{
+					p.Y = f.Floor;
+					f.V = Vector3.Zero;
+					f.Falling = false;
+				}
+			}
+			else if (f.V != Vector3.Zero)
+			{
+				float sp = f.V.Length();
+				float ns = MathF.Max(0.0f, sp - FruitRollDecel * dt);
+				f.V *= ns / sp;
+				p += f.V * dt;
+				p.Y = GroundY(p, p.Y, 0.6f);
+			}
+			f.E.Position = p;
+			if (Vector3.Distance(p, crashPos + new Vector3(0.0f, 0.8f, 0.0f)) < FruitPickup)
+			{
+				_host?.AddWumpa(1);
+				Log.Info($"[Twinsanity] ground fruit collected at ({p.X:F2}, {p.Y:F2}, {p.Z:F2}): +1 wumpa");
+				f.E.Destroy();
+				_treeFruit.RemoveAt(i);
+			}
+		}
+	}
+
+	private bool IsGroundFruit(Entity e) => e.IsValid && _treeFruit.Exists(f => f.E.Equals(e));
+
+	private Entity NearestGroundFruit(Vector3 p)
+	{
+		Entity best = default;
+		float bd = MonkeyFruitSeek;
+		foreach (TreeFruit f in _treeFruit)
+		{
+			float h = f.E.IsValid && !f.Falling ? Horizontal(f.E.Position, p) : float.MaxValue;
+			if (h < bd)
+			{
+				bd = h;
+				best = f.E;
+			}
+		}
+		return best;
 	}
 
 	private static string? FruitModel()

@@ -123,9 +123,21 @@ public sealed partial class TwinsanityActors
 	private void NoteMonkeyTree(TwInstance i)
 	{
 		string key = NameKey(i.Name);
-		if ((key.StartsWith("act_wumpa_tree") || key.StartsWith("old_act_wumpa_tree")) && i.Subtype == 20)
+		if ((!key.StartsWith("act_wumpa_tree") && !key.StartsWith("old_act_wumpa_tree")) || i.Subtype != 20)
+		{
+			return;
+		}
+		// A trunk reaches the bind twice since the prefab cutover (once ~1.7 m up). Keep one entry,
+		// the one at the ground: two sent two monkeys up one trunk, and the raised one topped out
+		// at 7.3 m instead of the rig's 5.6.
+		int same = _monkeyTrees.FindIndex(t => new Vector2(t.X - i.Position.X, t.Z - i.Position.Z).Length() < 2.0f);
+		if (same < 0)
 		{
 			_monkeyTrees.Add(i.Position);
+		}
+		else if (i.Position.Y < _monkeyTrees[same].Y)
+		{
+			_monkeyTrees[same] = i.Position;
 		}
 	}
 
@@ -210,6 +222,7 @@ public sealed partial class TwinsanityActors
 		_host = host;
 		_player = player;
 		Vector3 crashPos = player.Self.IsValid ? player.Self.Position : Vector3.Zero;
+		UpdateTreeFruit(dt, crashPos);
 
 		foreach (Actor a in _actors)
 		{

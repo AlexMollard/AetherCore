@@ -498,6 +498,19 @@ public sealed class CrashPlayer : EntityScript
 		_oneShotLeft = 0.4f;
 	}
 
+	/// <summary>A hit that costs nothing - a monkey's fruit (rig: Crash collects it and recoils in
+	/// place): the a084 recoil alone, no shove and no mask.</summary>
+	public void Flinch()
+	{
+		if (_dead || _hurtLeft > 0.0f)
+		{
+			return;
+		}
+		Play("a084", false);
+		_landClip = "a084";
+		_oneShotLeft = 0.4f;
+	}
+
 	// The respawn fade (timings above DeathPlan).
 	private void UpdateFade(float deltaTime)
 	{
