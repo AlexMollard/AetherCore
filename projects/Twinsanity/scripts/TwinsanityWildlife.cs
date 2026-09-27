@@ -166,7 +166,7 @@ public sealed partial class TwinsanityActors
 		public float Speed;
 		public float Dwell;     // worm: time up since it came out of a hole after a move
 		public bool AfterMove;  // worm: idling in START S0 after a move (no hide check)
-		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1;
+		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1, BiteClip = -1;
 	}
 
 	// Instance ids are per chunk layer, and links point within the layer.
@@ -368,9 +368,12 @@ public sealed partial class TwinsanityActors
 				break;
 			case Behaviour.Worm:
 				// COM_EARTH_WORM_START: a005 pops up (S10 before the S11 rise), a006 sinks (S12 before
-				// the S13 drop); a012 squash-launch, a011 spun. Its holes are the instance's points.
+				// the S13 drop); IDLE: a002 idle loop (S0), a003 bite (S3); a012 squash-launch, a011 spun.
+				// Its holes are the instance's points.
+				a.IdleClip = Animation.Find(e, "a002");
 				c.PopClip = Animation.Find(e, "a005");
 				c.SinkClip = Animation.Find(e, "a006");
+				c.BiteClip = Animation.Find(e, "a003");
 				c.SquashClip = Animation.Find(e, "a012");
 				c.SpunClip = Animation.Find(e, "a011");
 				c.Points = PointList(instance, "points", transform);
@@ -505,20 +508,21 @@ public sealed partial class TwinsanityActors
 	private readonly List<Actor> _pending = new();
 
 	// Ground creatures never overlap (rig: crabs and chickens keep their spacing). Circle push,
-	// half the overlap per side, horizontally only.
+	// half the overlap per side, horizontally only. Rooted ones (piranhas, worms in their holes) never
+	// move: a passing critter had shoved beach worm 2 0.9 m off its hole.
 	private void Separate()
 	{
 		for (int i = 0; i < _actors.Count; i++)
 		{
 			Actor? x = _actors[i];
-			if (!x.Alive || x.Critter == null || x.DeathTimer >= 0.0f || x.Kind == Behaviour.Piranha)
+			if (!x.Alive || x.Critter == null || x.DeathTimer >= 0.0f || x.Kind is Behaviour.Piranha or Behaviour.Worm)
 			{
 				continue;
 			}
 			for (int j = i + 1; j < _actors.Count; j++)
 			{
 				Actor? y = _actors[j];
-				if (!y.Alive || y.Critter == null || y.DeathTimer >= 0.0f || y.Kind == Behaviour.Piranha)
+				if (!y.Alive || y.Critter == null || y.DeathTimer >= 0.0f || y.Kind is Behaviour.Piranha or Behaviour.Worm)
 				{
 					continue;
 				}
@@ -1443,7 +1447,12 @@ public sealed partial class TwinsanityActors
 					}
 				}
 				a.Model.Position = new Vector3(p.X, y, p.Z);
-				if (a.Model.Position.Y >= a.Home.Y && Animation.CurrentClip(a.Model) == c.PopClip && c.Timer <= 0.0f)
+				// The pop, squash and spun clips each hand back to the idle once they are over (START S8 ->
+				// IDLE S0 a002; SQUASHLAUNCH / SPUN end in RestartDefaultBehaviour). Left looping, a squash
+				// kept replaying a012 - the bounce - over a worm that was only standing there.
+				int current = Animation.CurrentClip(a.Model);
+				if (a.Model.Position.Y >= a.Home.Y && c.Timer <= 0.0f && !c.Landed
+					&& (current == c.PopClip || current == c.SquashClip || current == c.SpunClip))
 				{
 					PlayClip(a, a.IdleClip);
 				}
@@ -1508,7 +1517,7 @@ public sealed partial class TwinsanityActors
 					}
 					else if (c.Timer <= 0.0f)
 					{
-						WormAttack(a, c, dt, crashPos, h);
+						WormAttack(a, c, dt, crashPos);
 					}
 				}
 				break;
@@ -1557,43 +1566,44 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	// Worm attack (COM_EARTH_WORM_IDLE S1-S5; rig logs/gameplay/rig_worm_attack.csv): with Crash
-	// inside 3 m (MeToPlayerSqrDist 9) it turns to face him at 90 deg/s (S3, TURN_SPEED 1.5708),
-	// lunges with a013 and its Sounds[8,9] (779/780), and 0.3 s in (S5 DELAY 0.3, then the
-	// CreateDamage cmd 514) the hit lands: on the rig it took a mask and shoved Crash off, 1.53 s
-	// after he arrived 2 m away. It waits out the clip (S4, AnimationFinished) and the idle's 1 s
-	// (S1 -> COM_GENERIC_CREATURE_IDLE_BASIC, DELAY 1) before it can strike again.
+	// Worm bite (COM_EARTH_WORM_IDLE S1-S5, logs/wormbite): with Crash inside 3 m (MeToPlayerSqrDist 9, a 3D
+	// distance) S3 plays a003 - it rears back with its mouth open, then lunges - with Sounds[8,9], and S5's
+	// CreateDamage lands the bite on the lunge: rig, 9-11 frames after the rear starts, which is a003 at 0.3 s
+	// (engine pose sheet logs/wormbite/pose_a003_*). No bounce clip: a012 is the squash-launch only. S4 waits
+	// the clip out (AnimationFinished) and S1 strikes again at once if he is still inside 3 m.
+	// Before the rear the rig worm faces him and waits out its idle loop: 0.14-1.34 s from his arrival 2 m off
+	// to the rear over 14 trials on four sides (rig_capture/rig_turn/rig_turnshots.csv). Turning at 180 deg/s
+	// (logs/wildlife/worm_turn_rig.txt) and then waiting for the end of the a002 loop spans 0-1.4 s.
 	private const float WormAttackRadius = 3.0f;
-	// Rig (logs/wildlife/worm_turn_rig.txt): Crash dropped 2 m from the beach worm on each side;
-	// the mask went after 0.64 s (-z), 1.01 s (-x), 1.16 s (+x) and 1.50 s (+z). That fits a start
-	// heading of 167 deg (the instance yaw) and a turn of ~174-180 deg/s after a 0.57 s base, so
-	// the script's TURN_SPEED 1.5708 is not per second here; 180 deg/s matches the four times.
 	private const float WormTurnRate = 180.0f;
 	private const float WormHitAt = 0.3f;
-	private const float WormAttackClip = 1.72f; // a012, the strike coil
-	private const float WormAttackRest = 1.0f;
+	private const float WormBiteClip = 1.12f; // a003
 
-	// c.Landed: lunging; c.FruitLife: time into the lunge; c.Speed: rest left after one.
-	private void WormAttack(Actor a, Critter c, float dt, Vector3 crashPos, float h)
+	// c.Landed: biting; c.FruitLife: time into a003; c.Speed: the idle loop's phase last frame.
+	private void WormAttack(Actor a, Critter c, float dt, Vector3 crashPos)
 	{
+		float d = Vector3.Distance(a.Home, crashPos);
 		if (c.Landed)
 		{
 			float before = c.FruitLife;
 			c.FruitLife += dt;
-			if (before < WormHitAt && c.FruitLife >= WormHitAt && h < WormAttackRadius && MathF.Abs(crashPos.Y - a.Home.Y) < 2.0f)
+			if (before < WormHitAt && c.FruitLife >= WormHitAt && d < WormAttackRadius)
 			{
 				_host?.DamagePlayer(a.Home, DeathKind.Generic);
 			}
-			if (c.FruitLife >= WormAttackClip)
+			if (c.FruitLife < WormBiteClip)
 			{
-				c.Landed = false;
-				c.Speed = WormAttackRest;
-				PlayClip(a, a.IdleClip);
+				return;
 			}
-			return;
+			c.Landed = false;
+			PlayClip(a, a.IdleClip);
+			c.Speed = float.MaxValue; // S4 -> S1 -> S3: no idle loop to wait out before the next bite
 		}
-		c.Speed -= dt;
-		if (h >= WormAttackRadius || c.Speed > 0.0f)
+		float length = Animation.ClipDuration(a.Model);
+		float phase = length > 0.0f ? Animation.GetTime(a.Model) % length : 0.0f;
+		bool loopEnd = Animation.CurrentClip(a.Model) != a.IdleClip || phase < c.Speed;
+		c.Speed = phase;
+		if (d >= WormAttackRadius)
 		{
 			return;
 		}
@@ -1604,20 +1614,14 @@ public sealed partial class TwinsanityActors
 		float step = WormTurnRate * dt;
 		a.Angle = MathF.Abs(diff) <= step ? want : a.Angle + MathF.Sign(diff) * step;
 		a.Model.EulerDegrees = new Vector3(0.0f, a.Angle, 0.0f);
-		if (MathF.Abs(diff) <= step)
+		if (MathF.Abs(diff) > step || !loopEnd)
 		{
-			c.Landed = true;
-			c.FruitLife = 0.0f;
-			// Render-every-clip check (logs/wildlife/worm_clip_sheet.png) against the rig strike frames
-			// (logs/gameplay/rig_worm_attack_02..04.png): the rig strike is the upright coil with the
-			// closed eyes and the zigzag tooth row - a012, not a013/a004.
-			int clip = Animation.Find(a.Model, "a012");
-			if (clip >= 0)
-			{
-				Animation.CrossFade(a.Model, clip, 0.1f);
-			}
-			TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Home);
+			return;
 		}
+		c.Landed = true;
+		c.FruitLife = 0.0f;
+		Animation.CrossFade(a.Model, c.BiteClip, 0.1f); // DoAnim a003, blend 0.1
+		TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Home);
 	}
 
 	/// <summary>A scene actor's blow on a live worm (Coco's landings in hubb scene B, the impact messages of
