@@ -29,6 +29,9 @@ namespace AetherGame;
 ///     (rig lean_rig.csv, Crash's world matrix at 0x00CF0A70, logs/cameralean).
 ///   - The right stick orbits it round him at ~115 deg/s at full deflection.
 ///   - Scenery between Crash and the eye pulls the eye in along the line; it eases back out (0.2 s).
+///     Against Hub B's cliff by worm 18 (rig slot 13, logs/camcollapse) an orbit into the rock pulls the eye
+///     to ~1.9 flat, still on the line and still at the same pitch, and it holds there: it neither rises
+///     nor swings, and Crash drops out of the bottom of the frame.
 /// The beach's camera section holds 13 trigger boxes, all with both camera types None (3): no
 /// authored cameras replace this one anywhere on the beach.
 /// </summary>
@@ -188,8 +191,22 @@ public sealed class CrashCamera
 		_eye = new Vector3(eye.X, _groundY + aimHeight + rise, eye.Y);
 
 		// The look point never lags below his feet: on a launch it rides with him while the eye catches up.
+		// The lead and the toward-camera slide must not carry it into scenery: it stops short of whatever lies
+		// between it and the point over his head (facing the camera against a cliff pushed it into the rock,
+		// every cast then started inside and the eye collapsed onto it; HubRun5 worm 18).
 		Vector3 aim = new(focus.X, MathF.Max(_aimGroundY + aimHeight, feet.Y), focus.Y);
-		Apply(aim, Collide(aim, _eye, dt));
+		aim = Clear(new Vector3(feet.X, aim.Y, feet.Z), aim);
+		Vector3 ray = _eye - aim;
+		float length = ray.Length();
+		if (length < 1e-3f)
+		{
+			Apply(aim, _eye);
+			return;
+		}
+		// However far scenery pulls the eye in, it looks along the string's line: a pull right onto the look
+		// point must not leave the view (and the stick basis read from it) without a direction.
+		Vector3 seen = Collide(aim, ray, length, dt);
+		Apply(seen - ray, seen);
 	}
 
 	/// <summary>One frame of the drowning shot: <paramref name="body"/> is where he went under,
@@ -235,18 +252,42 @@ public sealed class CrashCamera
 	// Scenery between the look point and the eye pulls the eye in to just short of it at once; it
 	// eases back out when the way clears. Only level collision counts, not crates or wildlife. The
 	// cast carries a skin so the near plane never enters terrain even on a grazing pass.
-	private Vector3 Collide(Vector3 aim, Vector3 eye, float dt)
+	private Vector3 Collide(Vector3 aim, Vector3 ray, float length, float dt)
 	{
-		Vector3 ray = eye - aim;
-		float length = ray.Length();
-		float allowed = 1.0f;
-		RaycastHit hit = Physics.SphereCast(aim, ray / length, CameraSkin, length);
-		if (hit.DidHit && hit.Entity.Name == "Collision")
-		{
-			allowed = Math.Max(0.0f, hit.Fraction * length - WallMargin) / length;
-		}
+		float allowed = Blocked(aim, ray / length, length) / length;
 		_pull = allowed < _pull ? allowed : _pull + (allowed - _pull) * (1.0f - MathF.Exp(-dt / PullOutLag));
 		return aim + ray * _pull;
+	}
+
+	// The look point, stopped short of level collision between the point over his head and it.
+	private static Vector3 Clear(Vector3 from, Vector3 to)
+	{
+		Vector3 ray = to - from;
+		float length = ray.Length();
+		return length < 1e-3f ? to : from + ray * (Blocked(from, ray / length, length) / length);
+	}
+
+	// How far a skinned sphere gets along a ray before level collision, less the wall margin. The cast reports
+	// only its closest body, so a crate, creature or pickup in the way is stepped past and the rest recast:
+	// otherwise it would hide the rock behind it.
+	private static float Blocked(Vector3 from, Vector3 direction, float length)
+	{
+		float along = 0.0f;
+		for (int i = 0; i < 4 && along < length; i++)
+		{
+			RaycastHit hit = Physics.SphereCast(from + direction * along, direction, CameraSkin, length - along);
+			if (!hit.DidHit)
+			{
+				return length;
+			}
+			float at = along + hit.Fraction * (length - along);
+			if (hit.Entity.Name == "Collision")
+			{
+				return Math.Max(0.0f, at - WallMargin);
+			}
+			along = at + 2.0f * CameraSkin;
+		}
+		return length;
 	}
 
 	private void Apply(Vector3 aim, Vector3 eye)
