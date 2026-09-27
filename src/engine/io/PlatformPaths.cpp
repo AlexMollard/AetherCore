@@ -122,6 +122,20 @@ namespace aether::io
 		return exePath.empty() ? std::string{} : exePath.stem().string();
 	}
 
+	bool PlatformPaths::IsAgentSession()
+	{
+		static const bool agent = []
+		{
+			if (const char* env = std::getenv("AETHER_AGENT_SESSION"); env != nullptr && *env != '\0' && std::string_view(env) != "0")
+			{
+				return true;
+			}
+			std::error_code ec;
+			return std::filesystem::exists(GetExecutableDir() / "agent-session", ec);
+		}();
+		return agent;
+	}
+
 	std::filesystem::path PlatformPaths::ResolveToolExecutable(std::string_view envVar, std::string_view devHint, std::string_view fileName)
 	{
 		std::error_code ec;

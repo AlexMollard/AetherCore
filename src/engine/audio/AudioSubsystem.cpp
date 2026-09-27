@@ -13,6 +13,7 @@
 #include <miniaudio.h>
 
 #include "io/FileSystem.hpp"
+#include "io/PlatformPaths.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
@@ -597,7 +598,13 @@ namespace aether::audio
 			return;
 		}
 		m_impl->masterVolume = glm::clamp(settings.masterVolume, 0.0f, 1.0f);
-		m_impl->muted = settings.muted;
+		// Agent-launched processes are always silent, whatever the user's settings say.
+		const bool agent = io::PlatformPaths::IsAgentSession();
+		if (agent && !m_impl->muted && !settings.muted)
+		{
+			AE_INFO(LogCategory::Audio, "Audio muted: agent session (AETHER_AGENT_SESSION or an agent-session marker).");
+		}
+		m_impl->muted = settings.muted || agent;
 		SetBusVolume(Bus::Music, settings.musicVolume);
 		SetBusVolume(Bus::Sfx, settings.sfxVolume);
 		SetBusVolume(Bus::Ambience, settings.ambienceVolume);

@@ -15,6 +15,14 @@ namespace aether::io
 
 		[[nodiscard]] static std::string GetExecutableName();
 
+		// True for a process an automated agent launched: AETHER_AGENT_SESSION is set to a
+		// non-empty value other than "0", or an `agent-session` marker file sits next to the
+		// executable (agent snapshots carry one). Such a process is muted and, in the editor,
+		// neither writes nor offers scene recovery copies: the recovery folder is shared by
+		// every editor on the project, so an agent's scratch edits would otherwise overwrite
+		// the user's own recovery copy.
+		[[nodiscard]] static bool IsAgentSession();
+
 		[[nodiscard]] static std::filesystem::path ResolveToolExecutable(std::string_view envVar, std::string_view devHint, std::string_view fileName);
 
 		// A file or directory the engine SHIPS - scene templates, prefab templates, the

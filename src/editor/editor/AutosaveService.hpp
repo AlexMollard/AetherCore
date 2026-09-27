@@ -48,14 +48,6 @@ namespace aether::editor
 		// no project, mid-Play, no unsaved edits, or the interval has not elapsed.
 		void Tick(app::LayerContext& context);
 
-		// True for an editor an automated agent launched: AETHER_AGENT_SESSION is set to a
-		// non-empty value other than "0", or an `agent-session` marker file sits next to the
-		// executable (agent snapshots carry one). Such an editor neither writes recovery
-		// copies nor offers them: the recovery folder is shared by every editor on the
-		// project, so an agent's scratch edits would otherwise overwrite the user's own
-		// recovery copy and nag every later session to restore them.
-		[[nodiscard]] static bool IsAgentSession();
-
 		// Recovery copies that are newer than the scene they shadow, newest first. Empty
 		// when there is nothing to offer, which is the normal case after a clean exit.
 		[[nodiscard]] static std::vector<RecoveredScene> FindRecoverable(const app::EditorProjectContext& project);
