@@ -29,6 +29,10 @@ namespace aether
 		// Skydome surface: the vertex shaders put it at infinite depth (clip z = w). Mirrors
 		// kFlagSky in GpuMaterial.slangh.
 		static constexpr std::uint32_t kSky = 1u << 9;
+		// Volumetric light shaft card (Twinsanity god rays): the shader fades it at its sheet's
+		// edges (TEXCOORD_1), edge-on, near the camera and where it meets geometry, and makes the
+		// rays breathe in place. Mirrors kFlagLightShaft in GpuMaterial.slangh.
+		static constexpr std::uint32_t kLightShaft = 1u << 10;
 
 		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor{1.0f};

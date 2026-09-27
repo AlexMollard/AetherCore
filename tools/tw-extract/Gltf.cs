@@ -14,6 +14,8 @@ namespace TwExtract
 		public readonly List<float> Pos = new List<float>();
 		public readonly List<float> Nrm = new List<float>();
 		public readonly List<float> Uv = new List<float>();
+		// Only light shafts carry it (Meshes.SheetUv, filled after merging), so Append ignores it.
+		public readonly List<float> Uv2 = new List<float>();
 		public readonly List<float> Col = new List<float>();
 		public readonly List<ushort> Joints = new List<ushort>();
 		public readonly List<float> Weights = new List<float>();
@@ -104,6 +106,10 @@ namespace TwExtract
 				if (p.Uv.Count == p.VertexCount * 2)
 				{
 					attrs["TEXCOORD_0"] = Floats(p.Uv, 2, "VEC2", false);
+				}
+				if (p.Uv2.Count == p.VertexCount * 2)
+				{
+					attrs["TEXCOORD_1"] = Floats(p.Uv2, 2, "VEC2", false);
 				}
 				if (p.Col.Count == p.VertexCount * 4)
 				{

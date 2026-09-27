@@ -259,6 +259,7 @@ namespace aether
 					material.foliage = hdr.foliage != 0;
 					material.bakedLighting = (hdr.bakedLighting & kMaterialDiskBaked) != 0;
 					material.sky = (hdr.bakedLighting & kMaterialDiskSky) != 0;
+					material.lightShaft = (hdr.bakedLighting & kMaterialDiskLightShaft) != 0;
 					material.objectLit = hdr.objectLit != 0;
 					material.uvScroll = glm::vec2(hdr.uvScroll[0], hdr.uvScroll[1]);
 
@@ -492,6 +493,7 @@ namespace aether
 				mat.foliage = srcMat.foliage;
 				mat.bakedLighting = srcMat.bakedLighting;
 				mat.sky = srcMat.sky;
+				mat.lightShaft = srcMat.lightShaft;
 				mat.objectLit = srcMat.objectLit;
 				mat.uvScroll = srcMat.uvScroll;
 

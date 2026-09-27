@@ -34,6 +34,9 @@ namespace aether
 		// Skydome surface: drawn before everything else in primitive order, at infinite depth
 		// (clip z = w) with no depth write, so it only fills what no geometry covers.
 		bool sky = false;
+		// Volumetric light shaft card (tw-extract's "light_shaft", the god rays): soft-faded,
+		// shimmering in place instead of scrolling. Only meaningful on a blended material.
+		bool lightShaft = false;
 		// PS2 object lighting: lit by the scene's object light records.
 		bool objectLit = false;
 

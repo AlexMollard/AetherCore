@@ -20,19 +20,21 @@ namespace
 	// "leaf" carries alphaMode MASK plus tw-extract's {"foliage":true} extras, "lit" only
 	// {"baked_lighting":true}, "plain" is opaque with no extras. "foam" is BLEND with the PS2
 	// "blend add" preset tw-extract marks {"additive":true}, "glass" a plain BLEND that is also a
-	// skydome layer ({"sky":true}), and "solid" an opaque material wrongly carrying the additive mark.
+	// skydome layer ({"sky":true}), "solid" an opaque material wrongly carrying the additive mark,
+	// and "beam" an additive prelit god-ray card ({"light_shaft":true}).
 	constexpr const char* kGltf = R"({
   "asset": {"version": "2.0"},
   "scene": 0,
-  "scenes": [{"nodes": [0, 1, 2, 3, 4, 5]}],
-  "nodes": [{"mesh": 0}, {"mesh": 1}, {"mesh": 2}, {"mesh": 3}, {"mesh": 4}, {"mesh": 5}],
+  "scenes": [{"nodes": [0, 1, 2, 3, 4, 5, 6]}],
+  "nodes": [{"mesh": 0}, {"mesh": 1}, {"mesh": 2}, {"mesh": 3}, {"mesh": 4}, {"mesh": 5}, {"mesh": 6}],
   "meshes": [
     {"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 0}]},
     {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 1}]},
     {"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 2}]},
     {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 3}]},
     {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 4}]},
-    {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 5}]}
+    {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 5}]},
+    {"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 6}]}
   ],
   "materials": [
     {"name": "leaf", "alphaMode": "MASK", "alphaCutoff": 0.5, "extras": {"foliage": true}},
@@ -40,7 +42,8 @@ namespace
     {"name": "lit", "extras": {"baked_lighting": true}},
     {"name": "foam", "alphaMode": "BLEND", "extras": {"additive": true}},
     {"name": "glass", "alphaMode": "BLEND", "extras": {"sky": true}},
-    {"name": "solid", "extras": {"additive": true}}
+    {"name": "solid", "extras": {"additive": true}},
+    {"name": "beam", "alphaMode": "BLEND", "extras": {"additive": true, "light_shaft": true, "baked_lighting": true}}
   ],
   "accessors": [
     {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
@@ -96,6 +99,9 @@ TEST_CASE("Baked glTF materials carry the foliage, baked-lighting and additive-b
 	// Sky and baked lighting share one byte as separate bits; neither mark sets the other.
 	CHECK(Header(result.materialFiles, "lit").bakedLighting == kMaterialDiskBaked);
 	CHECK(Header(result.materialFiles, "glass").bakedLighting == kMaterialDiskSky);
+	// The light-shaft bit rides the same byte and keeps the baked bit beside it.
+	CHECK(Header(result.materialFiles, "beam").bakedLighting == (kMaterialDiskBaked | kMaterialDiskLightShaft));
+	CHECK(Header(result.materialFiles, "beam").alphaBlend == 2);
 	CHECK(Header(result.materialFiles, "lit").foliage == 0);
 	CHECK(Header(result.materialFiles, "plain").foliage == 0);
 	CHECK(Header(result.materialFiles, "plain").bakedLighting == 0);

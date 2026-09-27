@@ -123,6 +123,7 @@ inline constexpr uint32_t MATL_VERSION = 2;
 // MaterialHeaderDisk::bakedLighting bits (see there).
 inline constexpr uint8_t kMaterialDiskBaked = 1;
 inline constexpr uint8_t kMaterialDiskSky = 2;
+inline constexpr uint8_t kMaterialDiskLightShaft = 4;
 
 enum class TextureTypeDisk : uint8_t
 {
@@ -159,8 +160,10 @@ struct MaterialHeaderDisk
 	// the lighting, so the renderer shows it as is and only lets the shadow maps pull it down to
 	// the scene's shade colour. Carved from the same padding - old files read 0, i.e. lit as PBR.
 	// Bit 0 is that flag (kMaterialDiskBaked). Bit 1 (kMaterialDiskSky, tw-extract's "sky") is a
-	// skydome surface: drawn first, behind everything, at infinite depth. It shares this byte
-	// because the header has no padding left; files written before it only ever held 0/1.
+	// skydome surface: drawn first, behind everything, at infinite depth. Bit 2
+	// (kMaterialDiskLightShaft, tw-extract's "light_shaft") is a soft volumetric god-ray card.
+	// They share this byte because the header has no padding left; files written before them
+	// only ever held 0/1.
 	uint8_t bakedLighting = 0;
 	// PS2 object lighting (tw-extract marks object models "object_lit"): lit by the level's
 	// light records instead of the sun. Carved from the same padding - old files read 0.

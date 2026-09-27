@@ -1027,12 +1027,13 @@ namespace aether::app::scene
 				// tables stay byte-identical (the same rule as uv_scroll below). Dropped, every
 				// baked entity's material loads as plain sun-lit PBR: a prefab bake of a level whose
 				// models carry PS2 lighting (object_lit props - crates, wumpa, gems - prelit
-				// scenery, the sky dome, foliage cards, additive water) then lights differently
+				// scenery, the sky dome, foliage cards, additive water, god rays) then lights differently
 				// from the same level built from JSON at play.
 				if (wants("baked_lighting") && a.bakedLighting) { m.insert("baked_lighting", true); }
 				if (wants("object_lit") && a.objectLit) { m.insert("object_lit", true); }
 				if (wants("foliage") && a.foliage) { m.insert("foliage", true); }
 				if (wants("sky") && a.sky) { m.insert("sky", true); }
+				if (wants("light_shaft") && a.lightShaft) { m.insert("light_shaft", true); }
 				if (wants("additive_blend") && a.additiveBlend) { m.insert("additive_blend", true); }
 				// Written only when it scrolls, so every static material's captured table stays
 				// byte-identical (the same rule as the .material asset format's uvscroll key).
@@ -1548,6 +1549,8 @@ namespace aether::app::scene
 				mat.asset.foliage = mv["foliage"].value_or(false);
 				took("sky");
 				mat.asset.sky = mv["sky"].value_or(false);
+				took("light_shaft");
+				mat.asset.lightShaft = mv["light_shaft"].value_or(false);
 				took("additive_blend");
 				mat.asset.additiveBlend = mv["additive_blend"].value_or(false);
 				took("uv_scroll");

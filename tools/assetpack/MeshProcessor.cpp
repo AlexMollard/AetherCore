@@ -656,6 +656,12 @@ namespace aether::assetpipeline
 					{
 						hdr.bakedLighting |= kMaterialDiskSky;
 					}
+					// {"light_shaft":true} - a volumetric god-ray card (tw-extract marks the
+					// Twinsanity god beams): soft-faded and shimmering in place.
+					if (std::strstr(extras, "\"light_shaft\"") != nullptr)
+					{
+						hdr.bakedLighting |= kMaterialDiskLightShaft;
+					}
 					// {"object_lit":true} - PS2 object lighting: the level's light records
 					// light it (ambient + two directional), like the GS lit objects.
 					if (std::strstr(extras, "\"object_lit\"") != nullptr)

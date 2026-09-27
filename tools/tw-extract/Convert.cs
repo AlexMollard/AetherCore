@@ -245,6 +245,8 @@ namespace TwExtract
 		readonly TextureStore m_textures;
 		readonly Dictionary<(uint, bool, int), int> m_materialIndex = new Dictionary<(uint, bool, int), int>();
 		readonly Dictionary<string, int> m_byName = new Dictionary<string, int>();
+		// glTF material indices marked "light_shaft": their primitives also get TEXCOORD_1 (Meshes.SheetUv).
+		public readonly HashSet<int> LightShafts = new HashSet<int>();
 		readonly string m_texturesRel;
 		// Object models (Program.Objects): lit by the level's light records, not prelit.
 		readonly bool m_isObject;
@@ -269,7 +271,7 @@ namespace TwExtract
 			return index;
 		}
 		string texture = null;
-		bool blend = false, mask = false, additive = false;
+		bool blend = false, mask = false, additive = false, lightShaft = false;
 		float cutoff = 0.5f;
 		float scrollU = 0f, scrollV = 0f;
 		if (m_gfx.Materials.TryGetValue(materialId, out var mat))
@@ -319,11 +321,21 @@ namespace TwExtract
 				scrollU = shader.UnkVal2 == 2 ? -shader.UnkVector3.Z : 0f;
 				scrollV = shader.UnkVal3 == 2 ? -shader.UnkVector3.W : 0f;
 			}
+			// The god rays ("godbeam_lambert9", Hub A/B forest): four nested additive sheets per beam
+			// under a stripe texture. Their record says only blend-add and the 0.2 U/s slide above -
+			// no clamp, no V motion - and that slide read as bars moving across hard-edged cards
+			// (user report, logs/godrays). The engine draws them as soft light shafts instead, which
+			// breathe in place, so the slide is dropped.
+			if (blend && !m_isObject && mat.Name.StartsWith("godbeam", StringComparison.OrdinalIgnoreCase))
+			{
+				lightShaft = true;
+				scrollU = scrollV = 0f;
+			}
 		}
 		// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
 		// the model, so equal names must mean equal content.
 		// Additive only joins the key when set, so every other material keeps its name.
-		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{m_isObject}|{scrollU:R}|{scrollV:R}" + (additive ? "|add" : "")));
+		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{m_isObject}|{scrollU:R}|{scrollV:R}" + (additive ? "|add" : "") + (lightShaft ? "|shaft" : "")));
 		if (m_byName.TryGetValue(name, out index))
 		{
 			return m_materialIndex[(materialId, vertexLit, layer)] = index;
@@ -381,6 +393,11 @@ namespace TwExtract
 			{
 				extras["additive"] = true;
 			}
+			// Read by MeshProcessor into the material's light-shaft bit (see above).
+			if (lightShaft)
+			{
+				extras["light_shaft"] = true;
+			}
 			// PS2 vertex colour is prelit on scenery: it carries the level's whole lighting, so
 			// the renderer shows it as is instead of lighting it again (only real-time shadows
 			// pull it down to the scene's ambient). Object models instead carry a constant
@@ -397,7 +414,12 @@ namespace TwExtract
 				gltfMat["extras"] = extras;
 			}
 		}
-		return m_materialIndex[(materialId, vertexLit, layer)] = m_byName[name] = Gltf.AddMaterial(gltfMat);
+		index = m_materialIndex[(materialId, vertexLit, layer)] = m_byName[name] = Gltf.AddMaterial(gltfMat);
+		if (lightShaft)
+		{
+			LightShafts.Add(index);
+		}
+		return index;
 	}
 
 	// How many DISTINCT texture-mapped layers a material exports (>= 1; texture-less
@@ -529,6 +551,47 @@ namespace TwExtract
 				{
 					p.Nrm[v * 3] = n.X; p.Nrm[v * 3 + 1] = n.Y; p.Nrm[v * 3 + 2] = n.Z;
 				}
+			}
+		}
+
+		// TEXCOORD_1 for a light shaft: each connected sheet's own UV extent normalised to 0..1
+		// (x across, y down from its top), so the shader can fade every sheet at its edges - the
+		// beams' four nested sheets each use a different corner of the texture (0..0.25 up to 0..1).
+		public static void SheetUv(Prim p)
+		{
+			int n = p.VertexCount;
+			var parent = Enumerable.Range(0, n).ToArray();
+			int Find(int x)
+			{
+				while (parent[x] != x)
+				{
+					x = parent[x] = parent[parent[x]];
+				}
+				return x;
+			}
+			for (int i = 0; i + 2 < p.Idx.Count; i += 3)
+			{
+				int a = Find((int)p.Idx[i]);
+				parent[Find((int)p.Idx[i + 1])] = a;
+				parent[Find((int)p.Idx[i + 2])] = a;
+			}
+			var min = new Dictionary<int, Vector2>();
+			var max = new Dictionary<int, Vector2>();
+			for (int v = 0; v < n; v++)
+			{
+				int r = Find(v);
+				var uv = new Vector2(p.Uv[v * 2], p.Uv[v * 2 + 1]);
+				min[r] = min.TryGetValue(r, out var lo) ? Vector2.Min(lo, uv) : uv;
+				max[r] = max.TryGetValue(r, out var hi) ? Vector2.Max(hi, uv) : uv;
+			}
+			p.Uv2.Clear();
+			for (int v = 0; v < n; v++)
+			{
+				int r = Find(v);
+				var size = Vector2.Max(max[r] - min[r], new Vector2(1e-6f));
+				var s = (new Vector2(p.Uv[v * 2], p.Uv[v * 2 + 1]) - min[r]) / size;
+				p.Uv2.Add(s.X);
+				p.Uv2.Add(s.Y);
 			}
 		}
 

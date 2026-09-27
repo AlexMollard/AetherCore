@@ -13,6 +13,7 @@ static const uint kFlagFoliage = 32u; // PS2 foliage/cutout card: offset casters
 static const uint kFlagBakedLighting = 64u; // PS2 prelit: vertex colour is the lighting
 static const uint kFlagObjectLit = 128u;    // PS2 object lighting from the level's light records
 static const uint kFlagSky = 512u;          // skydome: drawn at infinite depth (clip z = w)
+static const uint kFlagLightShaft = 1024u; // volumetric god-ray card: soft-faded, shimmers in place
 
 struct GpuMaterial
 {

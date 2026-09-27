@@ -66,6 +66,60 @@ float BlobShadowVisibility(FrameConstantsData* fc, float3 worldPos, float upFaci
     return 1.0 - kBlobDarkness * shade * upFacing;
 }
 
+// Twinsanity's god rays are nested additive sheets (four per beam, each shorter than the last)
+// carrying a stripe texture the disc slides sideways at 0.2 U/s. Drawn as is that read as
+// bars sliding across hard-edged cards. A light shaft instead keeps its rays in place and
+// makes them breathe, and fades out wherever the card would show itself: its sheet's own
+// edges (TEXCOORD_1 is the sheet's normalised 0..1 extent, x across, y from its top), seen
+// edge-on, right in front of the camera, and where it cuts into the ground or a wall.
+// Returned as a coverage multiplier: the blend is additive, so coverage is brightness.
+// ponytail: every rate and width here is a look choice, not measured - the PS2 only slid.
+float LightShaftFade(FrameConstantsData* fc, float2 uv, float2 sheet, float3 worldPos, float3 geomNormal)
+{
+    // Across the sheet a wide soft shoulder; along it, the top is already dark in the texture
+    // and the bottom fades over half the sheet, so the staggered sheet ends merge into one
+    // gradient down the beam instead of four steps.
+    const float edges = smoothstep(0.0, 0.3, sheet.x) * smoothstep(1.0, 0.7, sheet.x)
+        * smoothstep(0.0, 0.15, sheet.y) * smoothstep(1.0, 0.5, sheet.y);
+
+    const float3 toEye = fc->cameraWorldPos.xyz - worldPos;
+    const float eyeDist = length(toEye);
+    const float3 V = toEye / max(eyeDist, 1e-4);
+    const float nLen2 = dot(geomNormal, geomNormal);
+    const float facing = nLen2 > 1e-12 ? abs(dot(geomNormal * rsqrt(nLen2), V)) : 1.0;
+    // A card seen edge-on is a thin bright line; a card the camera is inside is a flat wall.
+    const float view = smoothstep(0.08, 0.45, facing) * smoothstep(2.0, 9.0, eyeDist);
+
+    // Soft intersection: fade over the last 1.5 m in front of the opaque scene behind.
+    float soft = 1.0;
+    const ResourceEntry depthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
+    if (depthEntry.type == kResourceTypeBindlessTexture && depthEntry.address != 0xFFFFFFFFu && depthEntry.width > 0u && depthEntry.height > 0u)
+    {
+        const float4 clip = mul(fc->viewProj, float4(worldPos, 1.0));
+        if (clip.w > 0.0)
+        {
+            const float3 ndc = clip.xyz / clip.w;
+            const int2 texel = int2(saturate(ndc.xy * 0.5 + 0.5) * float2(depthEntry.width - 1u, depthEntry.height - 1u));
+            const float sceneDepth = g_textures[uint(depthEntry.address)].Load(int3(texel, 0)).r;
+            float4 sceneWorld = mul(fc->invViewProj, float4(ndc.xy, sceneDepth, 1.0));
+            sceneWorld.xyz /= max(sceneWorld.w, 1e-6);
+            soft = saturate((distance(fc->cameraWorldPos.xyz, sceneWorld.xyz) - eyeDist) / 1.5);
+        }
+    }
+
+    // Shimmer: standing waves across the rays (no travelling term, so nothing slides), each
+    // pulsing on its own slow clock, plus a gentle breath of the whole beam. The phase comes
+    // from where the beam stands so neighbouring beams do not pulse in step.
+    const float t = fc->elapsedTime;
+    const float phase = (worldPos.x + worldPos.z) * 0.04;
+    const float shimmer = 0.78
+        + 0.14 * sin(uv.x * 18.85 + 1.3) * sin(t * 0.9 + phase)
+        + 0.08 * sin(uv.x * 43.98 + 4.1) * sin(t * 1.37 + phase * 1.7);
+    const float breath = 0.85 + 0.15 * sin(t * 0.45 + phase * 2.3);
+
+    return edges * view * soft * shimmer * breath;
+}
+
 [shader("fragment")]
 float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Target0
 {
@@ -118,6 +172,12 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         vertexColor = float3(1.0, 1.0, 1.0);
     }
     baseColor.rgb *= vertexColor;
+
+    const bool lightShaft = (mat.flags & kFlagLightShaft) != 0u;
+    if (lightShaft)
+    {
+        baseColor.a *= LightShaftFade(fc, input.uv, input.uv2, input.worldPos, input.worldNormal);
+    }
 
     // Alpha test.
     if ((mat.flags & kFlagAlphaMask) != 0u && baseColor.a < mat.alphaCutoff)
@@ -363,7 +423,13 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     // what the bake already darkened: ground in baked shade stays as it was instead of
     // shading twice.
     float3 finalColor;
-    if ((mat.flags & kFlagBakedLighting) != 0u)
+    // A light shaft IS light: it is neither shadowed nor turned from the sun (the baked path's
+    // sun-facing term would blacken a beam card seen from its far side), so it shows its bake.
+    if (lightShaft)
+    {
+        finalColor = baseColor.rgb + emissive;
+    }
+    else if ((mat.flags & kFlagBakedLighting) != 0u)
     {
         // The material factor carries the part of the vertex colour COLOR_0 cannot (the
         // PS2's 0x80 = 1.0 range), so the two together are the vertex colour in lighting units.

@@ -48,6 +48,10 @@ namespace aether
 		{
 			flags |= GpuMaterial::kSky;
 		}
+		if (a.lightShaft)
+		{
+			flags |= GpuMaterial::kLightShaft;
+		}
 		if (a.bakedLighting)
 		{
 			flags |= GpuMaterial::kBakedLighting;

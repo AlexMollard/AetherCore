@@ -356,6 +356,10 @@ namespace TwExtract
 					merged[material] = kv.Value;
 				}
 			}
+			foreach (var kv in merged.Where(kv => ex.LightShafts.Contains(kv.Key)))
+			{
+				Meshes.SheetUv(kv.Value);
+			}
 			return ex.Gltf.AddMesh(name, merged.Select(kv => (kv.Value, kv.Key)).ToList());
 		}
 
