@@ -183,6 +183,9 @@ CPMAddPackage(
     OPTIONS
         "TRACY_ENABLE ON"
         "TRACY_ON_DEMAND ON"
+        # Loopback only: an all-interface listener makes Windows Firewall prompt for every
+        # new Editor.exe path (each agent snapshot is one). The local profiler still connects.
+        "TRACY_ONLY_LOCALHOST ON"
 )
 if(TARGET TracyClient)
     set_target_properties(TracyClient PROPERTIES EXCLUDE_FROM_ALL ON)

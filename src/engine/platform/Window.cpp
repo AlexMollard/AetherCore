@@ -8,6 +8,7 @@
 #include "utils/AetherExceptions.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "io/PlatformPaths.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -20,6 +21,8 @@
 #		define WIN32_LEAN_AND_MEAN
 #	endif
 #	include <Windows.h>
+#	define GLFW_EXPOSE_NATIVE_WIN32
+#	include <GLFW/glfw3native.h>
 #endif
 
 namespace aether
@@ -70,7 +73,15 @@ namespace aether
 			monitor = nullptr;
 		}
 
-		if (startHidden)
+		// An agent-launched editor must never pull focus or land on top of whatever the user
+		// is working in: create it hidden and unfocused, and show it from the back.
+		const bool background = io::PlatformPaths::IsAgentSession();
+		if (background)
+		{
+			glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
+			glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);
+		}
+		if (startHidden || background)
 		{
 			glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 		}
@@ -119,6 +130,11 @@ namespace aether
 		int fbH = 0;
 		glfwGetFramebufferSize(m_window, &fbW, &fbH);
 		AE_INFO(LogCategory::Window, "Window created: {}x{} framebuffer, content scale {:.2f}x.", fbW, fbH, xScale);
+
+		if (background && !startHidden)
+		{
+			Show();
+		}
 	}
 
 	void Window::FramebufferSizeCallback(GLFWwindow* window, int /*width*/, int /*height*/)
@@ -319,6 +335,14 @@ namespace aether
 	{
 		if (m_window != nullptr)
 		{
+			if (io::PlatformPaths::IsAgentSession())
+			{
+#ifdef _WIN32
+				// Behind every other window, without activating it; GLFW then shows it with
+				// SW_SHOWNA, which keeps that z-order and the user's focus.
+				SetWindowPos(glfwGetWin32Window(m_window), HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+#endif
+			}
 			glfwShowWindow(m_window);
 		}
 	}
