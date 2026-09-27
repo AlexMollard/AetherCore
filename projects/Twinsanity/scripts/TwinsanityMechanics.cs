@@ -139,6 +139,7 @@ public sealed partial class TwinsanityActors
 	// stands in, scaled by 5/7 for a rolling sphere. It only matters on slopes.
 	private const float SlopeGravity = 50.0f * 5.0f / 7.0f;
 	private const float RestSpeed = 0.05f;
+	private const float WallNormalY = 0.7f;               // steeper than this is a wall, not ground
 	// Spin / slide launches (rig, see the summary; 50 Hz fits - the first fit read the frames as
 	// 60 Hz and ran every launch 20% fast). A slide into a free roller throws each kind alike (the
 	// nut's arc; ponytail: the ball's free slide was not captured, and the rock's one capture only
@@ -284,7 +285,7 @@ public sealed partial class TwinsanityActors
 		// The balls, the nut, the bale and the barrel sit their centre RestHeight above the ground
 		// (all modelled around their centre); the cannon keeps its placed height and origin.
 		bool pivots = key == "act_rigid_cannon";
-		float? found = Ground(position, radius, position.Y + 1.0f, default, default, out _);
+		float? found = Ground(position, radius, position.Y + 1.0f, default, default, out _, out _);
 		float ground = found ?? position.Y - rest;
 		Vector3 center = pivots ? position + new Vector3(0.0f, 0.3f, 0.0f) : new Vector3(position.X, ground + rest, position.Z);
 		Vector3 modelOffset = pivots ? position - center : Vector3.Zero;
@@ -549,7 +550,7 @@ public sealed partial class TwinsanityActors
 			Fly(p, dt, crash);
 			return;
 		}
-		float? groundHere = Ground(p.Center, p.Radius, p.Center.Y + 1.0f, p.Body, crash, out Vector2 grad);
+		float? groundHere = Ground(p.Center, p.Radius, p.Center.Y + 1.0f, p.Body, crash, out Vector2 grad, out _);
 		if (!p.Settled && groundHere != null)
 		{
 			// Spawned before its chunk's collision answered rays: settle onto the ground now.
@@ -580,13 +581,21 @@ public sealed partial class TwinsanityActors
 		Vector3 dir = step / len;
 		// Stop at scenery: probe ahead from just outside the body so the ray cannot hit it.
 		RaycastHit wall = Physics.Raycast(p.Center + dir * (p.Radius + 0.02f), dir, len + 0.05f);
-		if (wall.DidHit && wall.Entity != p.Body && wall.Normal.Y < 0.7f)
+		if (wall.DidHit && wall.Entity != p.Body && wall.Normal.Y < WallNormalY)
 		{
 			p.Velocity = Vector3.Zero;
 			return;
 		}
 		Vector3 next = p.Center + step;
-		float? ground = Ground(next, p.Radius, next.Y + 1.0f, p.Body, crash, out _);
+		// Only walkable ground lifts it: a steep face above the ground it is on (a tree root, a
+		// rock flank) is not climbed - the rig's bale stops at the root the old rim test ran it
+		// 5 m up (logs/baleclimb). Flat tops it still mounts (the rig: a 0.6 m lip, the tongue).
+		float? ground = Ground(next, p.Radius, next.Y + 1.0f, p.Body, crash, out _, out bool blocked, climbFrom: p.Center.Y - p.RestHeight, ahead: dir);
+		if (blocked)
+		{
+			p.Velocity = Vector3.Zero;
+			return;
+		}
 		if (ground == null || ground.Value < p.Center.Y - p.RestHeight - 1.0f)
 		{
 			// ponytail: no falling sim - a pushable stops at a drop instead of going over it.
@@ -608,7 +617,7 @@ public sealed partial class TwinsanityActors
 		if (len > 1e-5f)
 		{
 			RaycastHit wall = Physics.Raycast(p.Center + dir * (p.Radius + 0.02f), dir, len + 0.05f);
-			if (wall.DidHit && wall.Entity != p.Body && wall.Normal.Y < 0.7f)
+			if (wall.DidHit && wall.Entity != p.Body && wall.Normal.Y < WallNormalY)
 			{
 				p.Velocity = Vector3.Zero;
 				step = Vector3.Zero;
@@ -618,7 +627,7 @@ public sealed partial class TwinsanityActors
 		Vector3 next = p.Center + step + new Vector3(0.0f, p.VelocityY * dt, 0.0f);
 		// The arc tops out ~3 m up: probe well below it. ponytail: over a void (nothing within 40 m)
 		// it lands level with the ground it left - there is no falling sim below the launch.
-		float floor = Ground(next, p.Radius, MathF.Max(next.Y, p.Center.Y) + 1.0f, p.Body, crash, out _, 40.0f) ?? p.LaunchFloor;
+		float floor = Ground(next, p.Radius, MathF.Max(next.Y, p.Center.Y) + 1.0f, p.Body, crash, out _, out _, 40.0f) ?? p.LaunchFloor;
 		if (p.VelocityY < 0.0f && next.Y <= floor + p.RestHeight)
 		{
 			next.Y = floor + p.RestHeight;
@@ -649,15 +658,19 @@ public sealed partial class TwinsanityActors
 	// kinematic body trails its target by a physics step) or anything above its centre (Crash's
 	// capsule) is not ground; a hit level with the centre is (the bomb's instance puts its centre on
 	// the ground, and it must still find that ground to settle its rest height above it).
+	// With climbFrom (the height it stands on), a steep hit above it is not ground either, and
+	// 'blocked' reports one on the rim ahead (moving along 'ahead').
 	// Returns the highest hit and the height gradient (dh/dx, dh/dz).
 	// ponytail: four rim samples - a ball resting on a crest between them reads slightly low; upgrade
 	// to a shape cast that can filter the body out.
-	private static float? Ground(Vector3 center, float radius, float fromY, Entity self, Entity crash, out Vector2 grad, float reach = 1.5f)
+	private static float? Ground(Vector3 center, float radius, float fromY, Entity self, Entity crash, out Vector2 grad, out bool blocked,
+		float reach = 1.5f, float climbFrom = float.PositiveInfinity, Vector3 ahead = default)
 	{
 		float r = radius + 0.05f;
 		Span<float> h = stackalloc float[4];
 		Span<Vector2> offsets = stackalloc Vector2[] { new(r, 0), new(-r, 0), new(0, r), new(0, -r) };
 		float? best = null;
+		blocked = false;
 		for (int i = 0; i < 4; i++)
 		{
 			h[i] = float.NaN;
@@ -665,6 +678,11 @@ public sealed partial class TwinsanityActors
 			bool ignored = hit.Entity == self || hit.Entity == crash;
 			if (hit.DidHit && !ignored && hit.Position.Y < center.Y + 0.05f)
 			{
+				if (hit.Normal.Y < WallNormalY && hit.Position.Y > climbFrom + 0.05f)
+				{
+					blocked |= offsets[i].X * ahead.X + offsets[i].Y * ahead.Z > 0.0f;
+					continue;
+				}
 				h[i] = hit.Position.Y;
 				best = best == null ? h[i] : MathF.Max(best.Value, h[i]);
 			}
