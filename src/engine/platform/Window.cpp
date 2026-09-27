@@ -85,7 +85,13 @@ namespace aether
 		{
 			glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 		}
-		m_window = glfwCreateWindow(width, height, title, monitor, nullptr);
+		// Name the window after the agent that owns it, so the user can tell agent editors apart.
+		std::string windowTitle = title;
+		if (const std::string agent = io::PlatformPaths::AgentSessionName(); !agent.empty())
+		{
+			windowTitle += " [agent: " + agent + "]";
+		}
+		m_window = glfwCreateWindow(width, height, windowTitle.c_str(), monitor, nullptr);
 		if (m_window == nullptr)
 		{
 			glfwTerminate();

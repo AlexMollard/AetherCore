@@ -23,6 +23,11 @@ namespace aether::io
 		// the user's own recovery copy.
 		[[nodiscard]] static bool IsAgentSession();
 
+		// Which agent owns this process, for telling agent editors apart on screen:
+		// AETHER_AGENT_NAME if set, else <Name> from an enclosing `editor-snap-<Name>`
+		// snapshot folder. Empty when unknown or not an agent session.
+		[[nodiscard]] static std::string AgentSessionName();
+
 		[[nodiscard]] static std::filesystem::path ResolveToolExecutable(std::string_view envVar, std::string_view devHint, std::string_view fileName);
 
 		// A file or directory the engine SHIPS - scene templates, prefab templates, the

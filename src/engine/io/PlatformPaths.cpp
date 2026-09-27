@@ -136,6 +136,32 @@ namespace aether::io
 		return agent;
 	}
 
+	std::string PlatformPaths::AgentSessionName()
+	{
+		static const std::string name = []
+		{
+			if (!IsAgentSession())
+			{
+				return std::string{};
+			}
+			if (const char* env = std::getenv("AETHER_AGENT_NAME"); env != nullptr && *env != '\0')
+			{
+				return std::string{env};
+			}
+			constexpr std::string_view kSnapPrefix = "editor-snap-";
+			for (std::filesystem::path dir = GetExecutableDir(); !dir.empty() && dir != dir.parent_path(); dir = dir.parent_path())
+			{
+				const std::string leaf = dir.filename().string();
+				if (leaf.starts_with(kSnapPrefix) && leaf.size() > kSnapPrefix.size())
+				{
+					return leaf.substr(kSnapPrefix.size());
+				}
+			}
+			return std::string{};
+		}();
+		return name;
+	}
+
 	std::filesystem::path PlatformPaths::ResolveToolExecutable(std::string_view envVar, std::string_view devHint, std::string_view fileName)
 	{
 		std::error_code ec;
