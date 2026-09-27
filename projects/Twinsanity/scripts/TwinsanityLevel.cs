@@ -1000,11 +1000,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		switch (c.Kind)
 		{
 			case Kind.Basic:
-				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, s_contents.Next(1, 6));
+				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, s_contents.Next(1, 5)); // GetRandRange(1, 4): 1-4
 				break;
 			case Kind.Surprise:   // the "?" crate bursts into wumpa
 			case Kind.Reinforced: // the same CreateCrateContents(0x20001, 165) as the surprise crate
-				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, s_contents.Next(5, 11));
+				_fruit.Burst(_objectModels.GetValueOrDefault(1) ?? "", c.Base, s_contents.Next(5, 10)); // GetRandRange(5, 5): 5-9
 				break;
 			case Kind.ExtraLife:
 				_lives++;
