@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using System.Text.Json;
 using AetherCore;
+using Kind = AetherGame.CrateKind;
 
 namespace AetherGame;
 
@@ -34,8 +35,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private const float kHeadContact = 0.1f;   // head within this of a lid's underside while rising = headbutt
 	private const float kHeadbuttDrop = 0.44f; // m/s down after a multi-hit headbutt (rig_multi_headbutt.csv)
 
-	// Crate kinds; internal so TwinsanityBake classifies with the same table.
-	internal enum Kind { Basic, Nitro, Tnt, ExtraLife, WoodenSpring, IronSpring, Iron, Checkpoint, AkuAku, MultiHit, Level, Surprise, Detonator, Reinforced }
+	// Crate kinds are CrateKind (TwinsanityObjects.cs), aliased Kind here: TwCrate serializes the same enum.
 
 	/// <summary>The crate kind for a level instance, or null when it is not a crate the level
 	/// rules handle (it then belongs to the actor system). Shared with the bake.</summary>
@@ -82,6 +82,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		// (a detonator's MessageLinkedObject targets).
 		public int Id = -1, Layer = -1;
 		public int[] Links = Array.Empty<int>();
+		// Registry-bound crates: the disc links as the target instance roots (TwCrate.Link0..9), which
+		// replace the (layer, id) lookup of Links; and StartOpen, the checkpoint that opens at load.
+		public Entity[] LinkRoots = Array.Empty<Entity>();
+		public bool StartOpen;
 		public bool Detonated;                 // a detonator fires once (its DETONATE script ends in a control state)
 	}
 
@@ -117,6 +121,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private float _hurtGrace;
 	private int _gems; // collected gems, one bit per TwinsanityPause.GemSlot
 	private Entity _sky;
+	// Converted content (area scenes of prefab instances whose roots carry TwinsanityObjects descriptors) is
+	// bound on the second OnUpdate, once every scene-loaded script has attached (attach order is unspecified).
+	// ponytail: the bake and JSON paths stay beside it until the wave-2 cutover deletes them.
+	private int _bindFrames = -1;
+	private bool _fromRegistry;
 
 	public override void OnAttach()
 	{
@@ -126,17 +135,19 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 		// A baked level (the editor's Twinsanity bake, saved with the scene as a prefab
 		// instance) is bound to, not rebuilt: every entity already exists and carries its
-		// disc identity in a Twinsanity Marker. Only when there is no bake at all - a fresh
-		// checkout - does the level build from the extracted JSON. A bake root whose marker
-		// cannot be read (an editor binary older than the marker component) must not fall
-		// back: the baked entities are already in the scene and a JSON build would stack a
-		// second copy of the whole level on top of them.
+		// disc identity in a Twinsanity Marker. A bake root whose marker cannot be read (an
+		// editor binary older than the marker component) must not fall back: the baked
+		// entities are already in the scene and a JSON build would stack a second copy of
+		// the whole level on top of them. Converted content, or no bake at all, waits for
+		// the registry bind (OnUpdate), which falls back to the extracted JSON only when
+		// the scene holds no descriptors either - a fresh checkout.
 		Entity bakeRoot = Scene.Find(TwinsanityBake.BakeRootName);
-		if (!bakeRoot.IsValid)
+		if (!bakeRoot.IsValid || HasConvertedContent())
 		{
-			BuildFromJson();
+			_bindFrames = 0;
+			return;
 		}
-		else if (bakeRoot.Component("Twinsanity Marker").Exists)
+		if (bakeRoot.Component("Twinsanity Marker").Exists)
 		{
 			BindBaked(bakeRoot);
 		}
@@ -144,7 +155,36 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			Log.Error("[Twinsanity] the baked level has no readable Twinsanity Marker (editor build predates the bake?) - rebuild the editor; not building the level a second time.");
 		}
+		FinishBuild();
+	}
 
+	// Frame 2 of play: every descriptor has registered. Returns false while still waiting.
+	private bool BindWhenAttached()
+	{
+		if (_bindFrames < 0)
+		{
+			return true;
+		}
+		if (++_bindFrames < 2)
+		{
+			return false;
+		}
+		_bindFrames = -1;
+		if (TwRegistry.All.Count > 0 || TwRegistry.Triggers.Count > 0 || TwRegistry.Spawns.Count > 0 || HasConvertedContent())
+		{
+			_fromRegistry = true;
+			BindRegistry();
+		}
+		else
+		{
+			BuildFromJson();
+		}
+		FinishBuild();
+		return true;
+	}
+
+	private void FinishBuild()
+	{
 		CrateFx.RegisterObjectModels(_objectModels);
 		foreach (Crate c in _crates)
 		{
@@ -153,14 +193,145 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		OpenStartCheckpoint();
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
-		if (!IntroMovie || !_movie.Play("H01_A", () => TwinsanityAudio.Start(LevelPath)))
+		Action startAudio = _fromRegistry ? () => TwinsanityAudio.Start(TwRegistry.All, StartArea) : () => TwinsanityAudio.Start(LevelPath);
+		if (!IntroMovie || !_movie.Play("H01_A", startAudio))
 		{
-			TwinsanityAudio.Start(LevelPath);
+			startAudio();
 		}
 		TwinsanityAku.Start();
 		_cutscenes.Start();
 		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
 		// summary has the rig evidence for when the original shows it.
+	}
+
+	// The start chunk's stem ("beach"): the area whose DJ and ambience play, as LevelPath's level.json did.
+	private string StartArea => System.IO.Path.GetFileName(LevelPath).Replace(".level.json", "", StringComparison.OrdinalIgnoreCase);
+
+	private static bool HasConvertedContent() => Tagged("tw_collision", 1).Length > 0 || Tagged("tw_wumpa", 1).Length > 0;
+
+	// Every entity carrying the tag (none when the tag was never registered).
+	private static Entity[] Tagged(string name, int capacity = 16384)
+	{
+		TagId tag = Tags.Find(name);
+		if (!tag.IsValid)
+		{
+			return Array.Empty<Entity>();
+		}
+		var buffer = new Entity[capacity];
+		return buffer[..Tags.GetEntitiesWith(tag, buffer)];
+	}
+
+	// The registry path: the same runtime state BindBaked fills, from the descriptors (crates, actors,
+	// spawners, cutscene agents, triggers, spawn) and tags (wumpa, deadly collision, sky). Each item
+	// costs only itself if it fails.
+	private void BindRegistry()
+	{
+		int wumpa = 0, crates = 0, actors = 0, spawners = 0;
+		foreach (Entity e in Tagged("tw_wumpa"))
+		{
+			_fruit.Bind(e, e.Position);
+			wumpa++;
+		}
+		TagId drownTag = Tags.Find("tw_drown");
+		foreach (Entity e in Tagged("tw_deadly"))
+		{
+			_deadly[e.Id] = drownTag.IsValid && Tags.Has(e, drownTag);
+		}
+		Entity[] skies = Tagged("tw_sky");
+		_sky = skies.Length > 0 ? skies[0] : default;
+		if (skies.Length > 1)
+		{
+			Log.Warn($"[Twinsanity] {skies.Length} entities tagged tw_sky - following the camera with '{_sky.Name}' only.");
+		}
+
+		TwSpawn? spawn = null;
+		foreach (TwSpawn s in TwRegistry.Spawns)
+		{
+			if (s.Primary)
+			{
+				if (spawn != null)
+				{
+					Log.Warn($"[Twinsanity] more than one primary TwSpawn - using '{spawn.Self.Name}'.");
+					continue;
+				}
+				spawn = s;
+			}
+		}
+		if (spawn != null)
+		{
+			_spawn = spawn.Self.Position;
+			_spawnFacing = spawn.Self.EulerDegrees.Y;
+			float[] floats = TwRegistry.Floats(spawn.Floats);
+			_crashFloats = floats.Length > 0 ? floats : null;
+			_checkpoint = _spawn;
+			_checkpointFacing = _spawnFacing;
+		}
+		else
+		{
+			Log.Error("[Twinsanity] no TwSpawn with Primary set - Crash keeps his scene position and default tuning.");
+		}
+
+		foreach (TwObject o in TwRegistry.All.ToArray())
+		{
+			try
+			{
+				if (o is TwCrate c)
+				{
+					BindCrate(c);
+					crates++;
+				}
+				else if (o is TwActor or TwSpawner && _actors.TryBind(o))
+				{
+					if (o is TwSpawner)
+					{
+						spawners++;
+					}
+					else
+					{
+						actors++;
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Warn($"[Twinsanity] descriptor bind failed on '{o.Self.Name}' ({o.GetType().Name}) - skipped ({ex.Message})");
+			}
+		}
+		int agents = _cutscenes.BindRegistry(LevelPath[..(LevelPath.LastIndexOf('/') + 1)]);
+		Log.Info($"[Twinsanity] bound registry: {actors} actors, {spawners} spawners, {crates} crates, {wumpa} wumpa, {agents} cutscene agents");
+	}
+
+	private void BindCrate(TwCrate c)
+	{
+		Entity e = c.Self;
+		Entity body = default;
+		for (int i = 0; i < e.ChildCount; i++)
+		{
+			Entity child = e.GetChild(i);
+			if (child.Component("Rigid Body").Exists)
+			{
+				body = child;
+				break;
+			}
+		}
+		_crates.Add(new Crate
+		{
+			Kind = c.Kind,
+			Body = body,
+			Model = e,
+			Base = e.Position,
+			ObjectId = c.ObjectId,
+			BodyIsChild = true,
+			Id = c.Id,
+			Layer = c.Layer,
+			LinkRoots = Array.FindAll(c.Links(), l => l.IsValid),
+			StartOpen = c.StartOpen,
+		});
+		// As the JSON build's spawn: the OGI state swaps key on the crate's own model, and nitros hop.
+		if (c.Model.Length > 0)
+		{
+			CrateFx.Spawned(e, c.ObjectId, c.Model);
+		}
 	}
 
 	private void LoadObjectModels()
@@ -409,6 +580,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 	public override void OnUpdate(float deltaTime)
 	{
+		if (!BindWhenAttached())
+		{
+			return;
+		}
 		_movie.Update();
 		Entity camera = Camera.Main;
 		if (_sky.IsValid && camera.IsValid)
@@ -461,6 +636,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		foreach (Vector3 home in _cutscenes.TakeWakes())
 		{
 			_actors.Wake(home);
+		}
+		foreach (Entity root in _cutscenes.TakeWakeRoots())
+		{
+			_actors.Wake(root);
 		}
 		foreach ((Vector3 at, bool slam) in _cutscenes.TakeWormHits())
 		{
@@ -594,10 +773,13 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	// those pieces (game (-1.07, 0.07, -39.41); the crate is at engine (1.07, -39.41)). So it opens at load,
 	// silently, and is the first checkpoint rather than the spawn. He respawns facing the crate's own
 	// yaw: the rig runs off at heading 140.9 after a respawn, the crate's instance yaw is 140.87.
-	// ponytail: "nearest checkpoint to the spawn" stands in for the level's own start-checkpoint link.
+	// ponytail: "nearest checkpoint to the spawn" stands in for the level's own start-checkpoint link on the
+	// bake and JSON paths; converted content names it (TwCrate.StartOpen, set by the converter on that crate).
 	private void OpenStartCheckpoint()
 	{
-		Crate? first = _crates.Where(c => c.Kind == Kind.Checkpoint && c.Alive).MinBy(c => Vector3.DistanceSquared(c.Base, _spawn));
+		Crate? first = _fromRegistry
+			? _crates.Find(c => c.StartOpen && c.Alive)
+			: _crates.Where(c => c.Kind == Kind.Checkpoint && c.Alive).MinBy(c => Vector3.DistanceSquared(c.Base, _spawn));
 		if (first == null)
 		{
 			return;
@@ -1252,6 +1434,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		c.Detonated = true;
 		c.Fuse = -1.0f;
 		CrateFx.Detonated(c.Model);
+		if (c.LinkRoots.Length > 0)
+		{
+			DetonateLinkRoots(c);
+			return;
+		}
 		foreach (int link in c.Links)
 		{
 			Crate? target = LinkedCrate(c, link);
@@ -1261,6 +1448,26 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				continue;
 			}
 			Log.Info($"[Twinsanity] detonator (layer {c.Layer}, id {c.Id}) fires {target.Kind} {link} at {Vector3.Distance(c.Base, target.Base):F1} m");
+			if (target.Kind is Kind.Nitro or Kind.Tnt)
+			{
+				Explode(target);
+			}
+		}
+	}
+
+	// Registry-bound detonators: each link is the target instance root itself (TwCrate.Link*), so the
+	// crate is the one whose model is that root - no (layer, id) match, no nearest pick.
+	private void DetonateLinkRoots(Crate c)
+	{
+		foreach (Entity root in c.LinkRoots)
+		{
+			Crate? target = _crates.Find(t => t != c && t.Model.Id == root.Id);
+			if (target == null)
+			{
+				Log.Warn($"[Twinsanity] detonator '{c.Model.Name}' link '{root.Name}' is not a crate");
+				continue;
+			}
+			Log.Info($"[Twinsanity] detonator (layer {c.Layer}, id {c.Id}) fires {target.Kind} {target.Id} at {Vector3.Distance(c.Base, target.Base):F1} m");
 			if (target.Kind is Kind.Nitro or Kind.Tnt)
 			{
 				Explode(target);

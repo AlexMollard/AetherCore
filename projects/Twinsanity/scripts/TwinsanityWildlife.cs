@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Text.Json;
 using AetherCore;
 
 namespace AetherGame;
@@ -42,8 +41,6 @@ public sealed partial class TwinsanityActors
 {
 	private readonly System.Random _rng = new(0x7715);
 	private readonly List<Vector3> _monkeyTrees = new();
-	private readonly Dictionary<string, SpawnInfo> _instances = new();
-	private readonly Dictionary<string, Actor> _byInstance = new();
 	private readonly List<Spawner> _spawners = new();
 
 	// Seagull (rig: logs/wildlife/track_takeoff.csv, track_b0.csv).
@@ -120,25 +117,17 @@ public sealed partial class TwinsanityActors
 	private const float FruitAcross = 20.0f;
 	private const float FruitGravity = 42.0f;
 
-	private sealed class SpawnInfo
-	{
-		public int ObjectId;
-		public string Name = "";
-		public string? Model;
-		public Vector3 Euler;
-		public float[] Floats = Array.Empty<float>();
-	}
-
 	private sealed class Spawner
 	{
 		public bool Ecology;
-		public string TemplateKey = "";
+		public Entity TemplateRoot;        // Link0: the instance the spawner copies (the coop's chicken)
+		public string? LegacyKey;          // JSON adapter only: the template's legacy instance key
 		public Vector3 Position;
 		public List<Vector3> Points = new();
 		public int Count;
 		public bool Resolved;
 		public bool[] KeyUsed = Array.Empty<bool>();
-		public SpawnInfo? Template;
+		public TwInstance? Template;
 		public List<Actor> Live = new();
 		public float Refill = -1.0f;
 	}
@@ -167,27 +156,6 @@ public sealed partial class TwinsanityActors
 		public float Dwell;     // worm: time up since it came out of a hole after a move
 		public bool AfterMove;  // worm: idling in START S0 after a move (no hide check)
 		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1, BiteClip = -1;
-	}
-
-	// Instance ids are per chunk layer, and links point within the layer.
-	private static string ChunkKey(Matrix4x4 t, JsonElement instance, int id)
-		=> $"{t.M41:F2},{t.M42:F2},{t.M43:F2}#{(instance.TryGetProperty("layer", out JsonElement l) ? l.GetInt32() : 0)}#{id}";
-
-	private static Vector3 Vec3(JsonElement e) => new(e[0].GetSingle(), e[1].GetSingle(), e[2].GetSingle());
-
-	private static uint Flags(JsonElement instance) => instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("flags", out JsonElement f) ? f.GetUInt32() : 0u;
-
-	private static List<Vector3> PointList(JsonElement instance, string name, Matrix4x4 transform)
-	{
-		var list = new List<Vector3>();
-		if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty(name, out JsonElement arr))
-		{
-			foreach (JsonElement p in arr.EnumerateArray())
-			{
-				list.Add(Vector3.Transform(Vec3(p), transform));
-			}
-		}
-		return list;
 	}
 
 	// ---- classification (shared with TwinsanityBake, which dispatches on these) ----
@@ -220,57 +188,44 @@ public sealed partial class TwinsanityActors
 	internal static string NameKeyOf(string objectName) => NameKey(objectName);
 
 	// Creature spawners and the ecology manager have no model: they spawn copies of the instance
-	// they link. True when this instance is one (it is then consumed).
-	private bool TryRegisterSpawner(string objectName, JsonElement instance, Matrix4x4 transform, Vector3 position)
+	// they link (Link0; the JSON adapter passes the link's legacy key instead). True when this
+	// instance is one (it is then consumed).
+	private bool TryRegisterSpawner(TwInstance i, string? legacyTemplateKey)
 	{
-		int role = SpawnerRoleFor(objectName);
+		int role = SpawnerRoleFor(i.Name);
 		if (role == SpawnerParrot)
 		{
 			_parrotSpawners.Add(new ParrotSpawner
 			{
-				Position = position,
-				Keys = PointList(instance, "points", transform),
-				Count = instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("params", out JsonElement pp) && pp.GetArrayLength() > 2 ? pp[2].GetInt32() : 1,
+				Position = i.Position,
+				Keys = new List<Vector3>(i.Points),
+				Count = i.Params.Length > 2 ? i.Params[2] : 1,
 			});
 			return true;
 		}
-		if (role != SpawnerCreature || instance.ValueKind != JsonValueKind.Object || !instance.TryGetProperty("links", out JsonElement links))
+		Entity template = i.Links.Length > 0 ? i.Links[0] : default;
+		if (role != SpawnerCreature || (legacyTemplateKey == null && !template.IsValid))
 		{
 			return false;
 		}
 		var s = new Spawner
 		{
-			Ecology = NameKey(objectName).StartsWith("act_util_ecology_manager"),
-			TemplateKey = ChunkKey(transform, instance, links[0].GetInt32()),
-			Position = position,
-			Points = PointList(instance, "points", transform),
+			Ecology = NameKey(i.Name).StartsWith("act_util_ecology_manager"),
+			TemplateRoot = template,
+			LegacyKey = legacyTemplateKey,
+			Position = i.Position,
+			Points = new List<Vector3>(i.Points),
 		};
 		// Coop: the instance's own count (params[2], 4 at the beach coop - 4 chickens on the rig).
 		// Ecology: COM_UTIL_ECOLOGY_MANAGER_DEFAULT sets counter 40 and spends 8 per spawn.
-		s.Count = NameKey(objectName).StartsWith("act_util_ecology_manager") ? 5 : (instance.TryGetProperty("params", out JsonElement pr) && pr.GetArrayLength() > 2 ? pr[2].GetInt32() : 1);
+		s.Count = s.Ecology ? 5 : (i.Params.Length > 2 ? i.Params[2] : 1);
 		s.KeyUsed = new bool[Math.Max(1, s.Points.Count)];
 		_spawners.Add(s);
 		return true;
 	}
 
-	private void RememberInstance(JsonElement instance, Matrix4x4 transform, int objectId, string objectName, string? model, Vector3 euler, float[] floats)
-	{
-		if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("id", out JsonElement id))
-		{
-			_instances[ChunkKey(transform, instance, id.GetInt32())] = new SpawnInfo { ObjectId = objectId, Name = objectName, Model = model, Euler = euler, Floats = floats };
-		}
-	}
-
-	private void TrackInstance(JsonElement instance, Matrix4x4 transform, Actor a)
-	{
-		if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("id", out JsonElement id))
-		{
-			_byInstance[ChunkKey(transform, instance, id.GetInt32())] = a;
-		}
-	}
-
 	// Set up a creature's per-kind state after its model and clips are loaded.
-	private void SetupCritter(Actor a, string objectName, JsonElement instance, Matrix4x4 transform)
+	private void SetupCritter(Actor a, TwInstance i)
 	{
 		Entity e = a.Model;
 		var c = new Critter();
@@ -282,7 +237,7 @@ public sealed partial class TwinsanityActors
 				c.WalkClip = Animation.Find(e, "a002");
 				c.ClimbClip = Animation.Find(e, "a011");
 				c.FlyClip = Animation.Find(e, "a012");
-				if ((Flags(instance) & 0x80000u) != 0)
+				if ((i.Flags & 0x80000u) != 0)
 				{
 					// Already airborne: circles at perch height around a point ~1.41 m off the perch
 					// (rig: g47/g50/g51).
@@ -308,7 +263,7 @@ public sealed partial class TwinsanityActors
 				PlayClip(a, c.FlyClip);
 				break;
 			case Behaviour.Flock:
-				c.Points = PointList(instance, "path", transform);
+				c.Points = new List<Vector3>(i.Path);
 				c.FlyClip = Animation.Find(e, "a007");
 				PlayClip(a, c.FlyClip);
 				break;
@@ -330,12 +285,12 @@ public sealed partial class TwinsanityActors
 				c.Notice = CrabNotice;
 				c.GiveUp = CrabGiveUp;
 				c.Mode = Mode.Down;
-				if (SubtypeOf(instance) is 1 or 2 && PointList(instance, "points", transform) is { Count: > 1 } keys)
+				if (i.Subtype is 1 or 2 && i.Points.Length > 1)
 				{
 					// Path crab: stands at its spot, visible, until woken (INIT S10/S11).
+					List<Vector3> keys = new(i.Points);
 					c.Points = keys;
-					float[] floats = FloatsOf(instance);
-					c.Speed = floats.Length > 2 ? floats[2] : CrabShuttleSpeed;
+					c.Speed = i.Floats.Length > 2 ? i.Floats[2] : CrabShuttleSpeed;
 					c.PathIndex = Horizontal(a.Home, keys[0]) > Horizontal(a.Home, keys[1]) ? 0 : 1;
 					PlayClip(a, a.IdleClip);
 					break;
@@ -349,12 +304,8 @@ public sealed partial class TwinsanityActors
 				// floats[2] = 2.2), stops ~0.36 m short of each key and stands 1.3 s before heading
 				// back - a ping-pong along the keys, never off them.
 				c.WalkClip = Animation.Find(e, "a002");
-				c.Points = PointList(instance, "points", transform);
-				c.Speed = SkunkWalk;
-				if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("floats", out JsonElement fl) && fl.GetArrayLength() > 2)
-				{
-					c.Speed = fl[2].GetSingle();
-				}
+				c.Points = new List<Vector3>(i.Points);
+				c.Speed = i.Floats.Length > 2 ? i.Floats[2] : SkunkWalk;
 				c.Mode = Mode.Walk;
 				break;
 			case Behaviour.Piranha:
@@ -376,7 +327,7 @@ public sealed partial class TwinsanityActors
 				c.BiteClip = Animation.Find(e, "a003");
 				c.SquashClip = Animation.Find(e, "a012");
 				c.SpunClip = Animation.Find(e, "a011");
-				c.Points = PointList(instance, "points", transform);
+				c.Points = new List<Vector3>(i.Points);
 				c.Timer2 = -1.0f;
 				c.Mode = Mode.Down;
 				a.Model.Position = a.Home - new Vector3(0.0f, WormDepth, 0.0f);
@@ -435,15 +386,16 @@ public sealed partial class TwinsanityActors
 
 	private void UpdateCritters()
 	{
-		// Resolve spawners once their template instance is known (chunks load in any order).
+		// Resolve spawners once their template instance is known: Link0's descriptor (the JSON adapter:
+		// the legacy key, chunks loading in any order).
 		foreach (Spawner s in _spawners)
 		{
-			if (s.Resolved || !_instances.TryGetValue(s.TemplateKey, out SpawnInfo? info))
+			if (s.Resolved || ResolveTemplate(s) is not TwInstance info)
 			{
 				continue;
 			}
 			s.Resolved = true;
-			if (_byInstance.TryGetValue(s.TemplateKey, out Actor? template))
+			if (info.Root.IsValid && _actors.Find(a => a.Model == info.Root) is Actor template)
 			{
 				// The template never lives in the world itself: it is only copied.
 				template.Alive = false;
@@ -480,9 +432,18 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	private Actor? SpawnCopy(SpawnInfo info, Vector3 at)
+	private TwInstance? ResolveTemplate(Spawner s)
 	{
-		if (info.Model == null)
+		if (s.LegacyKey != null)
+		{
+			return _legacyInstances.TryGetValue(s.LegacyKey, out TwInstance legacy) ? legacy : null;
+		}
+		return TwRegistry.Of(s.TemplateRoot)?.Data();
+	}
+
+	private Actor? SpawnCopy(TwInstance info, Vector3 at)
+	{
+		if (info.Model.Length == 0)
 		{
 			return null;
 		}
@@ -500,7 +461,7 @@ public sealed partial class TwinsanityActors
 		{
 			Animation.SetClip(e, a.IdleClip);
 		}
-		SetupCritter(a, info.Name, default, Matrix4x4.Identity);
+		SetupCritter(a, Bare(e, info.Name, info.Model, a.Home, info.Euler));
 		_pending.Add(a);
 		return a;
 	}
@@ -802,7 +763,7 @@ public sealed partial class TwinsanityActors
 			{
 				// Rig: the five crabs sat within ~3 m of the key.
 				float ang = RandomRange(0.0f, MathF.PI * 2.0f), r = RandomRange(0.0f, 3.0f);
-				SpawnCopy(s.Template, s.Points[best] + new Vector3(MathF.Cos(ang) * r, 0.0f, MathF.Sin(ang) * r));
+				SpawnCopy(s.Template.Value, s.Points[best] + new Vector3(MathF.Cos(ang) * r, 0.0f, MathF.Sin(ang) * r));
 			}
 		}
 	}
@@ -830,7 +791,7 @@ public sealed partial class TwinsanityActors
 			return;
 		}
 		s.Refill = -1.0f;
-		Actor? c = SpawnCopy(s.Template!, s.Position);
+		Actor? c = SpawnCopy(s.Template!.Value, s.Position);
 		if (c == null)
 		{
 			return;

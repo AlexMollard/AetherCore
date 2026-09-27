@@ -210,7 +210,7 @@ public static class TwinsanityBake
 					continue;
 				}
 
-				TwinsanityLevel.Kind? kind = TwinsanityLevel.KindFor(objectId, model);
+				CrateKind? kind = TwinsanityLevel.KindFor(objectId, model);
 				if (kind != null)
 				{
 					if (model == null)

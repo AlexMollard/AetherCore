@@ -153,8 +153,10 @@ public sealed partial class TwinsanityActors
 	private const float WumpaTreeShakeRadius = 2.0f;
 
 	// Sets up a one-shot prop; false when the object is not one.
-	private bool SetupOneShot(Actor a, string objectName, uint subtype, string model, JsonElement instance, Matrix4x4 transform)
+	private bool SetupOneShot(Actor a, TwInstance i)
 	{
+		string objectName = i.Name, model = i.Model;
+		uint subtype = i.Subtype;
 		string n = NameKey(objectName);
 		Entity e = a.Model;
 		OneShot s = new() { Actor = a };
@@ -165,7 +167,7 @@ public sealed partial class TwinsanityActors
 			s.Cue = PropCue.Explosion;
 			s.ClipNames = new[] { "a001", "a002" };
 			// COM_TRAINING_EXPLODING_IDOL_HEAD_DEFAULT s4: SoftFlagSet(18) spawns the crown 8.5 up.
-			if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("flags", out JsonElement fl) && (fl.GetUInt32() >> 18 & 1u) != 0)
+			if ((i.Flags >> 18 & 1u) != 0)
 			{
 				s.Crown = World.Create();
 				s.Crown.Name = objectName + " Crown";
@@ -225,12 +227,12 @@ public sealed partial class TwinsanityActors
 			// No scripts of its own: hubb trigger 2's message 87 drops it from its placement (y 8, above the
 			// cave roof) onto its one key (y 0), shutting the cave to HubA behind Crash.
 			LoadHulls(s, model);
-			List<Vector3> keys = PointList(instance, "points", transform);
-			float[] floats = FloatsOf(instance);
+			Vector3[] keys = i.Points;
+			float[] floats = i.Floats;
 			_blockers.Add(new Blocker
 			{
 				Shot = s,
-				To = keys.Count > 0 ? keys[0] : e.Position,
+				To = keys.Length > 0 ? keys[0] : e.Position,
 				Speed = floats.Length > 3 ? floats[3] : 25.0f,
 				Accel = floats.Length > 4 ? floats[4] : 25.0f,
 			});
@@ -745,6 +747,27 @@ public sealed partial class TwinsanityActors
 
 	private readonly List<Blocker> _blockers = new();
 
+	/// <summary>Trigger message 87 aimed at the instance root <paramref name="root"/>: a path crab leaves its
+	/// wait (COM_GLOBAL_CRAB_INIT S11, huba trigger 1), the cave blocker drops (hubb trigger 2).</summary>
+	public void Wake(Entity root)
+	{
+		foreach (Actor a in _actors)
+		{
+			if (a.Model == root && a.Kind == Behaviour.Crab && a.Critter is { Points.Count: > 1, Mode: Mode.Down } c)
+			{
+				c.Mode = Mode.Walk;
+			}
+		}
+		foreach (Blocker b in _blockers)
+		{
+			if (!b.Moving && !b.Down && b.Shot.Actor.Model == root)
+			{
+				b.Moving = true;
+			}
+		}
+	}
+
+	// JSON adapter (TwinsanityCutscenes' position-based wakes); deleted by the wave-2 cutover.
 	/// <summary>Trigger message 87 aimed at the actor placed at <paramref name="home"/>: a path crab leaves its
 	/// wait (COM_GLOBAL_CRAB_INIT S11, huba trigger 1), the cave blocker drops (hubb trigger 2).</summary>
 	public void Wake(Vector3 home)

@@ -93,9 +93,105 @@ public sealed partial class TwinsanityActors
 	private const float EnemyHitRadius = 1.2f;
 	private const float PickupRadius = 1.3f;
 
+	/// <summary>The prefab bind: one descriptor (TwActor or TwSpawner) on a scene-loaded instance root whose
+	/// model is already loaded. Spawners register the spawner (their root only holds the position);
+	/// everything else registers the pushable or actor around the root. True when the object was adopted.</summary>
+	public bool TryBind(TwObject o)
+	{
+		TwInstance i = o.Data();
+		return o is TwSpawner ? TryRegisterSpawner(i, null) : BindActor(i);
+	}
+
+	// The model root exists (prefab instance or bake entity): pushable, else actor.
+	private bool BindActor(TwInstance i)
+	{
+		if (i.Model.Length == 0)
+		{
+			i = i with { Model = ModelFor(i.Name) ?? "" };
+		}
+		NoteMonkeyTree(i);
+		if (TryBindPushable(i.Root, i.Name, i.Position, i.Euler, i.Model.Length > 0 ? i.Model : null))
+		{
+			return true;
+		}
+		RegisterActor(i);
+		return true;
+	}
+
+	// Subtype 20 is the monkeys' tree (COM_WUMPA_TREE_DEFAULT plays a001 at spawn for it).
+	private void NoteMonkeyTree(TwInstance i)
+	{
+		string key = NameKey(i.Name);
+		if ((key.StartsWith("act_wumpa_tree") || key.StartsWith("old_act_wumpa_tree")) && i.Subtype == 20)
+		{
+			_monkeyTrees.Add(i.Position);
+		}
+	}
+
+	// Everything an actor needs after its model entity (i.Root) exists: clips, behaviour, one-shot or
+	// looping animation, critter state. Shared by the prefab bind and the JSON adapter below.
+	private void RegisterActor(TwInstance i)
+	{
+		Entity e = i.Root;
+		Actor a = new()
+		{
+			Model = e,
+			Home = i.Position,
+			HomeYaw = i.Euler.Y,
+			Gem = TwinsanityPause.GemSlot(i.Name),
+		};
+		ReadClips(e, a);
+
+		a.Kind = BehaviourOf(i.Name);
+		a.Subtype = i.Subtype;
+		if (a.Kind == Behaviour.Shieldbearer)
+		{
+			// COM_EARTH_TRIBESMAN_SHIELDBEARER_DEFEND's DoAnim slots (clip aNNN is slot NNN): 25 its guard
+			// stance, 23 the step at Crash; 21 is ATTACK_MELEE's bash.
+			a.Shielded = true;
+			a.Engages = (i.Flags >> 19 & 1u) != 0;
+			ReadShield(a, i.Model);
+			a.IdleClip = Animation.Find(e, "a025");
+			a.MoveClip = Animation.Find(e, "a023");
+			_guards.Add(a);
+		}
+		// One-shot props (TwinsanityProps.cs) rest until their cue; everything else loops its idle.
+		if (a.Kind != Behaviour.Prop || !SetupOneShot(a, i))
+		{
+			SetLooping(e, true);
+			if (a.IdleClip >= 0)
+			{
+				Animation.SetClip(e, a.IdleClip);
+			}
+		}
+		_actors.Add(a);
+		if (a.Kind == Behaviour.Pickup)
+		{
+			_pickups.Add(a);
+		}
+		if (a.Kind is Behaviour.Seagull or Behaviour.Butterfly or Behaviour.Flock or Behaviour.Chicken
+			or Behaviour.Crab or Behaviour.Skunk or Behaviour.Worm or Behaviour.Monkey or Behaviour.Piranha)
+		{
+			SetupCritter(a, i);
+			if (a.Kind == Behaviour.Flock)
+			{
+				SpawnFlock(a, i.Model);
+			}
+		}
+	}
+
+	// An instance with no disc data: spawner copies (SpawnCopy) are set up as the default instance.
+	private static TwInstance Bare(Entity root, string name, string model, Vector3 position, Vector3 euler)
+		=> new(root, "", -1, -1, 0, name, model, position, euler, Array.Empty<float>(), 0u, 0u, Array.Empty<int>(),
+			Array.Empty<Entity>(), Array.Empty<Vector3>(), Array.Empty<Vector3>());
+
+	// ---- JSON adapter: the JSON build (TrySpawn) and the bake marker bind (TryBind(Entity, role, json)).
+	// Everything below until "end JSON adapter" is deleted by the wave-2 cutover. ----
+
 	public bool TrySpawn(int objectId, string objectName, string? modelPath, Vector3 position, Vector3 eulerDegrees, float[] floats, uint subtype, JsonElement instance, Matrix4x4 transform)
 	{
-		if (TryRegisterSpawner(objectName, instance, transform, position))
+		TwInstance i = FromJson(instance, transform, default, objectId, objectName, modelPath ?? "", position, eulerDegrees);
+		if (TryRegisterSpawner(i, LegacyLinkKey(instance, transform)))
 		{
 			return true;
 		}
@@ -104,17 +200,13 @@ public sealed partial class TwinsanityActors
 			return false;
 		}
 		string? model = modelPath ?? ModelFor(objectName);
-		RememberInstance(instance, transform, objectId, objectName, model, eulerDegrees, floats);
+		i = i with { Model = model ?? "" };
+		RememberLegacy(instance, transform, i);
 		if (model == null)
 		{
 			return false;
 		}
-		string key = NameKey(objectName);
-		if ((key.StartsWith("act_wumpa_tree") || key.StartsWith("old_act_wumpa_tree")) && subtype == 20)
-		{
-			// Subtype 20 is the monkeys' tree (COM_WUMPA_TREE_DEFAULT plays a001 at spawn for it).
-			_monkeyTrees.Add(position);
-		}
+		NoteMonkeyTree(i);
 		if (TrySpawnPushable(objectName, model, position, eulerDegrees))
 		{
 			return true;
@@ -126,109 +218,115 @@ public sealed partial class TwinsanityActors
 		e.EulerDegrees = eulerDegrees;
 		e.LoadModel(model);
 		NameAttachedParts(e, model);
-		if (key.StartsWith("act_redwumpa"))
+		if (NameKey(objectName).StartsWith("act_redwumpa"))
 		{
 			// Wumpa cast no shadow (as TwinsanityWumpa.SpawnModel): at distance they show as specks.
-			for (int i = 0; i < e.ChildCount; i++)
+			for (int c = 0; c < e.ChildCount; c++)
 			{
-				MeshRenderer.SetCastShadows(e.GetChild(i), false);
+				MeshRenderer.SetCastShadows(e.GetChild(c), false);
 			}
 		}
-		RegisterActor(e, objectId, objectName, model, instance, transform, position, eulerDegrees);
+		i = i with { Root = e };
+		RememberLegacy(instance, transform, i);
+		RegisterActor(i);
 		return true;
-	}
-
-	// Everything an actor needs after its model entity exists: clips, behaviour, one-shot or
-	// looping animation, critter state. Shared by the play-time spawn (above) and the bake bind
-	// (TryBind, whose entity came from the bake with its model already loaded).
-	private void RegisterActor(Entity e, int objectId, string objectName, string model, JsonElement instance, Matrix4x4 transform, Vector3 position, Vector3 eulerDegrees)
-	{
-		Actor a = new()
-		{
-			Model = e,
-			Home = position,
-			HomeYaw = eulerDegrees.Y,
-			Gem = TwinsanityPause.GemSlot(objectName),
-		};
-		ReadClips(e, a);
-
-		a.Kind = BehaviourOf(objectName);
-		a.Subtype = SubtypeOf(instance);
-		if (a.Kind == Behaviour.Shieldbearer)
-		{
-			// COM_EARTH_TRIBESMAN_SHIELDBEARER_DEFEND's DoAnim slots (clip aNNN is slot NNN): 25 its guard
-			// stance, 23 the step at Crash; 21 is ATTACK_MELEE's bash.
-			a.Shielded = true;
-			a.Engages = instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("flags", out JsonElement fl)
-				&& (fl.GetUInt32() >> 19 & 1u) != 0;
-			ReadShield(a, model);
-			a.IdleClip = Animation.Find(e, "a025");
-			a.MoveClip = Animation.Find(e, "a023");
-			_guards.Add(a);
-		}
-		// One-shot props (TwinsanityProps.cs) rest until their cue; everything else loops its idle.
-		if (a.Kind != Behaviour.Prop || !SetupOneShot(a, objectName, SubtypeOf(instance), model, instance, transform))
-		{
-			SetLooping(e, true);
-			if (a.IdleClip >= 0)
-			{
-				Animation.SetClip(e, a.IdleClip);
-			}
-		}
-		_actors.Add(a);
-		TrackInstance(instance, transform, a);
-		if (a.Kind == Behaviour.Pickup)
-		{
-			_pickups.Add(a);
-		}
-		if (a.Kind is Behaviour.Seagull or Behaviour.Butterfly or Behaviour.Flock or Behaviour.Chicken
-			or Behaviour.Crab or Behaviour.Skunk or Behaviour.Worm or Behaviour.Monkey or Behaviour.Piranha)
-		{
-			SetupCritter(a, objectName, instance, transform);
-			if (a.Kind == Behaviour.Flock)
-			{
-				SpawnFlock(a, model);
-			}
-		}
 	}
 
 	// The bake bind: one pre-built entity with its marker role and world-space identity JSON.
-	// Spawner roles register the spawner (the marker entity is just their position holder);
-	// everything else registers the actor around the existing model entity.
 	public bool TryBind(Entity e, int role, JsonElement instance)
 	{
-		if (role is SpawnerCreature or SpawnerParrot)
-		{
-			Vector3 at = instance.TryGetProperty("position", out JsonElement p) ? Vec3(p) : e.Position;
-			TryRegisterSpawner(ObjectNameOf(instance), instance, Matrix4x4.Identity, at);
-			return true;
-		}
 		int objectId = instance.TryGetProperty("object", out JsonElement ob) ? ob.GetInt32() : 0;
 		string objectName = ObjectNameOf(instance);
-		string? model = instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : ModelFor(objectName);
 		Vector3 position = instance.TryGetProperty("position", out JsonElement pp) ? Vec3(pp) : e.Position;
 		Vector3 euler = instance.TryGetProperty("euler", out JsonElement el) ? Vec3(el) : e.EulerDegrees;
-		RememberInstance(instance, Matrix4x4.Identity, objectId, objectName, model, euler, FloatsOf(instance));
-		string key = NameKey(objectName);
-		if ((key.StartsWith("act_wumpa_tree") || key.StartsWith("old_act_wumpa_tree")) && SubtypeOf(instance) == 20)
+		string? model = instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : null;
+		TwInstance i = FromJson(instance, Matrix4x4.Identity, e, objectId, objectName, model ?? "", position, euler);
+		if (role is SpawnerCreature or SpawnerParrot)
 		{
-			_monkeyTrees.Add(position);
-		}
-		if (TryBindPushable(e, objectName, position, euler, model))
-		{
+			TryRegisterSpawner(i, LegacyLinkKey(instance, Matrix4x4.Identity));
 			return true;
 		}
-		RegisterActor(e, objectId, objectName, model ?? "", instance, Matrix4x4.Identity, position, euler);
-		return true;
+		i = i with { Model = model ?? ModelFor(objectName) ?? "" };
+		RememberLegacy(instance, Matrix4x4.Identity, i);
+		return BindActor(i);
+	}
+
+	// The one JsonElement -> TwInstance adapter. Points and path are chunk-local, placed by the chunk
+	// transform (identity for the bake's world-space marker JSON). Links stay numeric: the spawner's
+	// template resolves through LegacyLinkKey/RememberLegacy instead.
+	private static TwInstance FromJson(JsonElement instance, Matrix4x4 transform, Entity root, int objectId, string name, string model, Vector3 position, Vector3 euler)
+	{
+		if (instance.ValueKind != JsonValueKind.Object)
+		{
+			return Bare(root, name, model, position, euler) with { ObjectId = objectId };
+		}
+		static Vector3[] Points(JsonElement o, string key, Matrix4x4 t)
+		{
+			if (!o.TryGetProperty(key, out JsonElement arr))
+			{
+				return Array.Empty<Vector3>();
+			}
+			var list = new List<Vector3>();
+			foreach (JsonElement p in arr.EnumerateArray())
+			{
+				list.Add(Vector3.Transform(Vec3(p), t));
+			}
+			return list.ToArray();
+		}
+		var floats = new List<float>();
+		if (instance.TryGetProperty("floats", out JsonElement fl) && fl.ValueKind == JsonValueKind.Array)
+		{
+			foreach (JsonElement f in fl.EnumerateArray())
+			{
+				floats.Add(f.GetSingle());
+			}
+		}
+		var pars = new List<int>();
+		if (instance.TryGetProperty("params", out JsonElement ps))
+		{
+			foreach (JsonElement p in ps.EnumerateArray())
+			{
+				pars.Add(p.GetInt32());
+			}
+		}
+		return new TwInstance(root,
+			instance.TryGetProperty("chunk", out JsonElement ch) ? ch.GetString() ?? "" : "",
+			instance.TryGetProperty("layer", out JsonElement l) ? l.GetInt32() : 0,
+			instance.TryGetProperty("id", out JsonElement id) ? id.GetInt32() : -1,
+			objectId, name, model, position, euler, floats.ToArray(),
+			instance.TryGetProperty("subtype", out JsonElement st) ? st.GetUInt32() : 0u,
+			instance.TryGetProperty("flags", out JsonElement fg) ? fg.GetUInt32() : 0u,
+			pars.ToArray(), Array.Empty<Entity>(), Points(instance, "points", transform), Points(instance, "path", transform));
+	}
+
+	// Instance ids are per chunk layer, and links point within the layer.
+	private static string LegacyKey(Matrix4x4 t, JsonElement instance, int id)
+		=> $"{t.M41:F2},{t.M42:F2},{t.M43:F2}#{(instance.TryGetProperty("layer", out JsonElement l) ? l.GetInt32() : 0)}#{id}";
+
+	// A JSON creature spawner's template: its links[0], keyed as RememberLegacy keys instances.
+	private static string? LegacyLinkKey(JsonElement instance, Matrix4x4 transform)
+		=> instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("links", out JsonElement links)
+			? LegacyKey(transform, instance, links[0].GetInt32()) : null;
+
+	private readonly Dictionary<string, TwInstance> _legacyInstances = new();
+
+	private void RememberLegacy(JsonElement instance, Matrix4x4 transform, TwInstance i)
+	{
+		if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("id", out JsonElement id))
+		{
+			_legacyInstances[LegacyKey(transform, instance, id.GetInt32())] = i;
+		}
 	}
 
 	private static string ObjectNameOf(JsonElement instance)
 		=> InstanceName(instance, instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : null);
 
+	// ---- end JSON adapter ----
+
 	/// <summary>The instance's object name. Layer-5 instances (crates, fruit and the hub's colour gems
 	/// GEM_YELLOW/PURPLE/GREEN...) carry none, so they are known by their object's model file
 	/// (GEM_YELLOW/GEM_YELLOW.gltf, BASICCRATE/BASICCRATE_0.gltf); "object_N" was never a pickup, which
-	/// left those gems as dead props. Shared by the JSON build, the bake and the bake bind.</summary>
+	/// left those gems as dead props. Shared by the JSON build, the bake and the converter.</summary>
 	internal static string InstanceName(JsonElement instance, string? model)
 	{
 		if (instance.TryGetProperty("name", out JsonElement n) && n.GetString() is { Length: > 0 } name)
@@ -242,23 +340,6 @@ public sealed partial class TwinsanityActors
 			return u > 0 && int.TryParse(stem.AsSpan(u + 1), out _) ? stem[..u] : stem;
 		}
 		return $"object_{(instance.TryGetProperty("object", out JsonElement o) ? o.GetInt32() : 0)}";
-	}
-
-	private static uint SubtypeOf(JsonElement instance)
-		=> instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("subtype", out JsonElement st) ? st.GetUInt32() : 0u;
-
-	private static float[] FloatsOf(JsonElement instance)
-	{
-		if (instance.ValueKind != JsonValueKind.Object || !instance.TryGetProperty("floats", out JsonElement fl) || fl.ValueKind != JsonValueKind.Array)
-		{
-			return Array.Empty<float>();
-		}
-		var list = new List<float>();
-		foreach (JsonElement f in fl.EnumerateArray())
-		{
-			list.Add(f.GetSingle());
-		}
-		return list.ToArray();
 	}
 
 	public void Update(float dt, CrashPlayer player, ITwinsanityHost host)
@@ -716,6 +797,8 @@ public sealed partial class TwinsanityActors
 		JsonElement r = at.GetProperty("rotation");
 		a.ShieldRestRot = new Quaternion(r[0].GetSingle(), r[1].GetSingle(), r[2].GetSingle(), r[3].GetSingle());
 	}
+
+	private static Vector3 Vec3(JsonElement e) => new(e[0].GetSingle(), e[1].GetSingle(), e[2].GetSingle());
 
 	// COM_WEAPON_NATIVE_SHIELD_DROPPED: RequestDetach, the shield falls as a rigid body launched up
 	// (Cmd193 ... 10, -6), and 2 s later (TimeInUnit 2) it pops in particles and is destroyed. The rig

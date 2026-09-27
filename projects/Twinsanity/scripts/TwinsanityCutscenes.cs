@@ -170,6 +170,9 @@ public sealed class TwinsanityCutscenes
 	{
 		public Chunk Chunk = null!;
 		public int Layer, Id, Object, Subtype;
+		// The instance root when bound from a TwinsanityObjects descriptor (invalid on the bake/JSON paths).
+		// READ-ONLY for the VM (design R4): scenes move Position and the transient Proxy, never the root.
+		public Entity Root;
 		public int[] Params = Array.Empty<int>(); // the level instance's int params
 		public uint Flags;                        // the level instance's flags (SoftFlagSet reads its bits)
 		public string Name = "";
@@ -275,6 +278,7 @@ public sealed class TwinsanityCutscenes
 	private readonly List<(Vector3 At, Vector3 From)> _hits = new(); // hits on live actors, for TakeHits
 	private readonly List<Vector3> _wakes = new(); // path crabs a volume woke, for TakeWakes
 	private readonly List<(Vector3 At, bool Slam)> _wormHits = new(); // scene blows on live worms, for TakeWormHits
+	private readonly List<Entity> _wakeRoots = new(); // registry-bound path crabs / blocker a volume woke, for TakeWakeRoots
 	// Script time: rules fire at most once per 50 Hz tick per machine, as on the rig (scene B's director
 	// reaches its first shot 5 transitions = 0.10 s after the volume; the engine's same-frame chain gave 0.02).
 	private const float ScriptTick = 0.02f;
@@ -388,6 +392,74 @@ public sealed class TwinsanityCutscenes
 		}
 	}
 
+	/// <summary>Registry path (converted content): every descriptor with a disc (layer, id) whose object has
+	/// scripts in its area's scripts.json becomes an agent, and every TwTrigger a volume, grouped by area in
+	/// ordinal order as the bake bind grouped its chunks. <paramref name="levelFolder"/> + area + ".level.json"
+	/// is the chunk key (scripts.json, sound bank, rig-shot frame). Returns the agent count.</summary>
+	public int BindRegistry(string levelFolder)
+	{
+		var areas = new SortedSet<string>(StringComparer.Ordinal);
+		foreach (TwObject o in TwRegistry.All)
+		{
+			if (o.Layer >= 0 && o.Area.Length > 0)
+			{
+				areas.Add(o.Area);
+			}
+		}
+		foreach (TwTrigger t in TwRegistry.Triggers)
+		{
+			if (t.Area.Length > 0)
+			{
+				areas.Add(t.Area);
+			}
+		}
+		int agents = 0;
+		foreach (string area in areas)
+		{
+			Chunk? chunk = LoadChunkScripts(levelFolder + area + ".level.json");
+			if (chunk == null)
+			{
+				continue;
+			}
+			// (layer, id) order: the level.json file order the JSON build ingests in, whatever order the
+			// descriptors attached in.
+			var objects = new List<TwObject>();
+			foreach (TwObject o in TwRegistry.All)
+			{
+				if (o.Layer >= 0 && o.Area == area)
+				{
+					objects.Add(o);
+				}
+			}
+			objects.Sort((x, y) => x.Layer != y.Layer ? x.Layer.CompareTo(y.Layer) : x.Id.CompareTo(y.Id));
+			foreach (TwObject o in objects)
+			{
+				if (IngestAgent(chunk, o) is Agent a)
+				{
+					agents++;
+					if (!chunk.Placed)
+					{
+						PlaceChunk(chunk, a);
+					}
+				}
+			}
+			var triggers = new List<TwTrigger>();
+			foreach (TwTrigger t in TwRegistry.Triggers)
+			{
+				if (t.Area == area)
+				{
+					triggers.Add(t);
+				}
+			}
+			triggers.Sort((x, y) => x.Layer != y.Layer ? x.Layer.CompareTo(y.Layer) : x.Id.CompareTo(y.Id));
+			foreach (TwTrigger t in triggers)
+			{
+				IngestTrigger(chunk, t);
+			}
+		}
+		return agents;
+	}
+
 	// The chunk's .scripts.json - its state machines, object defs and the BEGIN script id.
 	// Null (with a warning) when the chunk has no extracted scripts.
 	private Chunk? LoadChunkScripts(string levelPath)
@@ -439,24 +511,23 @@ public sealed class TwinsanityCutscenes
 	// flagged and collected. Returns the agent, or null when the object has no scripts.
 	private Agent? IngestAgent(Chunk chunk, JsonElement i, Matrix4x4 transform)
 	{
-		int obj = i.GetProperty("object").GetInt32();
-		if (!chunk.Objects.TryGetValue(obj, out ObjectDef? def))
-		{
-			return null;
-		}
 		var a = new Agent
 		{
 			Chunk = chunk,
 			Layer = i.GetProperty("layer").GetInt32(),
 			Id = i.GetProperty("id").GetInt32(),
-			Object = obj,
-			Name = i.GetProperty("name").GetString() ?? "",
-			Position = Vector3.Transform(Vec(i.GetProperty("position")), transform),
-			Yaw = i.GetProperty("euler")[1].GetSingle(),
-			Subtype = i.TryGetProperty("subtype", out JsonElement st) ? st.GetInt32() : 0,
-			Params = i.TryGetProperty("params", out JsonElement ps) ? Array.ConvertAll(ToArray(ps), e => e.GetInt32()) : Array.Empty<int>(),
-			Flags = i.TryGetProperty("flags", out JsonElement fl) ? fl.GetUInt32() : 0u,
+			Object = i.GetProperty("object").GetInt32(),
 		};
+		if (!chunk.Objects.ContainsKey(a.Object))
+		{
+			return null;
+		}
+		a.Name = i.GetProperty("name").GetString() ?? "";
+		a.Position = Vector3.Transform(Vec(i.GetProperty("position")), transform);
+		a.Yaw = i.GetProperty("euler")[1].GetSingle();
+		a.Subtype = i.TryGetProperty("subtype", out JsonElement st) ? st.GetInt32() : 0;
+		a.Params = i.TryGetProperty("params", out JsonElement ps) ? Array.ConvertAll(ToArray(ps), e => e.GetInt32()) : Array.Empty<int>();
+		a.Flags = i.TryGetProperty("flags", out JsonElement fl) ? fl.GetUInt32() : 0u;
 		if (i.TryGetProperty("links", out JsonElement links))
 		{
 			a.Links = Array.ConvertAll(ToArray(links), e => e.GetInt32());
@@ -465,10 +536,49 @@ public sealed class TwinsanityCutscenes
 		{
 			a.Keys = Array.ConvertAll(ToArray(points), p => Vector3.Transform(Vec(p), transform));
 		}
+		return AddAgent(a);
+	}
+
+	// Registry path: one descriptor -> an Agent when its object carries script defs in its area. The agent
+	// keeps its own Position/Home (the VM moves those and a transient Proxy, never the root), and links
+	// become the targets' disc ids, trailing empty slots dropped (the VM indexes "the last link").
+	private Agent? IngestAgent(Chunk chunk, TwObject o)
+	{
+		if (!chunk.Objects.ContainsKey(o.ObjectId))
+		{
+			return null;
+		}
+		TwInstance d = o.Data();
+		int links = d.Links.Length;
+		while (links > 0 && !d.Links[links - 1].IsValid)
+		{
+			links--;
+		}
+		return AddAgent(new Agent
+		{
+			Chunk = chunk,
+			Root = d.Root,
+			Layer = d.Layer,
+			Id = d.Id,
+			Object = d.ObjectId,
+			Name = d.Name,
+			Position = d.Position,
+			Yaw = d.Euler.Y,
+			Subtype = unchecked((int)d.Subtype),
+			Params = d.Params,
+			Flags = d.Flags,
+			Links = Array.ConvertAll(d.Links[..links], e => TwRegistry.Of(e)?.Id ?? -1),
+			Keys = d.Points,
+		});
+	}
+
+	private Agent AddAgent(Agent a)
+	{
+		Chunk chunk = a.Chunk;
 		a.Home = a.Position;
 		a.HomeYaw = a.Yaw;
 		chunk.Instances[(a.Layer, a.Id)] = a;
-		if (IsDirector(chunk, def))
+		if (IsDirector(chunk, chunk.Objects[a.Object]))
 		{
 			a.IsDirector = true;
 			a.Owner = a;
@@ -484,7 +594,8 @@ public sealed class TwinsanityCutscenes
 	private Trigger? IngestTrigger(Chunk chunk, JsonElement t, Matrix4x4 transform)
 	{
 		int header = t.GetProperty("header").GetInt32();
-		var tr = new Trigger
+		JsonElement q = t.GetProperty("rotation");
+		return KeepTrigger(new Trigger
 		{
 			Chunk = chunk,
 			Layer = t.GetProperty("layer").GetInt32(),
@@ -492,9 +603,30 @@ public sealed class TwinsanityCutscenes
 			Center = t.TryGetProperty("center", out JsonElement center) ? Vector3.Transform(Vec(center), transform) : default,
 			Extents = t.TryGetProperty("extents", out JsonElement extents) ? Vec(extents) : Vector3.One,
 			Targets = Array.ConvertAll(ToArray(t.GetProperty("targets")), e => e.GetInt32()),
-		};
-		JsonElement q = t.GetProperty("rotation");
-		tr.Rotation = Quaternion.Normalize(new Quaternion(q[0].GetSingle(), q[1].GetSingle(), q[2].GetSingle(), q[3].GetSingle()));
+			Rotation = Quaternion.Normalize(new Quaternion(q[0].GetSingle(), q[1].GetSingle(), q[2].GetSingle(), q[3].GetSingle())),
+		});
+	}
+
+	// Registry path: a TwTrigger volume. Centre, rotation and extents are the root's transform; each target
+	// root's descriptor gives its disc id (-1 when the slot names no descriptor, which nothing matches).
+	private Trigger? IngestTrigger(Chunk chunk, TwTrigger t)
+	{
+		int[] args = TwRegistry.Ints(t.Args);
+		return KeepTrigger(new Trigger
+		{
+			Chunk = chunk,
+			Layer = t.Layer,
+			Message = (t.Header & 0x800) != 0 && args.Length > 0 ? args[0] : -1,
+			Center = t.Self.Position,
+			Extents = t.Self.Scale,
+			Targets = Array.ConvertAll(t.Targets(), e => TwRegistry.Of(e)?.Id ?? -1),
+			Rotation = Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(TwinsanityLevel.SysRotation(t.Self.EulerDegrees))),
+		});
+	}
+
+	private Trigger? KeepTrigger(Trigger tr)
+	{
+		Chunk chunk = tr.Chunk;
 		// Triggers aimed at a director start scenes. Message 138 aimed at a scripted crate (the hub sends it only to
 		// checkpoint and level crates) makes that crate the respawn point: huba trigger 7 and its level crate 50,
 		// where the rig respawns Crash after a death (game (-3.12, 0.02, -24.07) = the crate). Other crates and
@@ -720,6 +852,15 @@ public sealed class TwinsanityCutscenes
 		return wakes;
 	}
 
+	/// <summary>The instance roots of the path crabs / cave blocker a volume woke since the last call
+	/// (message 87), for registry-bound agents; <see cref="TakeWakes"/> has the bake and JSON ones.</summary>
+	public List<Entity> TakeWakeRoots()
+	{
+		var wakes = new List<Entity>(_wakeRoots);
+		_wakeRoots.Clear();
+		return wakes;
+	}
+
 	/// <summary>Scene blows on live worms since the last call: where the worm stands and whether it was the
 	/// slam (message 230, SLAMMED: it moves to its next hole) or the squash (226, SQUASHLAUNCH_NOIMPULSE).</summary>
 	public List<(Vector3 At, bool Slam)> TakeWormHits()
@@ -875,7 +1016,11 @@ public sealed class TwinsanityCutscenes
 					{
 						continue;
 					}
-					if (t.Wake)
+					if (t.Wake && target.Root.IsValid)
+					{
+						_wakeRoots.Add(target.Root); // registry-bound: the woken actor is the agent's own root
+					}
+					else if (t.Wake)
 					{
 						_wakes.Add(target.Position);
 					}

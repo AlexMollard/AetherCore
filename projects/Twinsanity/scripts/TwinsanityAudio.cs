@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text.Json;
@@ -54,11 +55,7 @@ public static class TwinsanityAudio
 	/// placed actors name, and the 3D waterfall loops.</summary>
 	public static void Start(string levelPath)
 	{
-		s_pending.Clear();
-		s_stepDistance = 0.0f;
-		s_paused = false;
-		CrashPlayer.Landed -= OnCrashLanded; // idempotent across play sessions
-		CrashPlayer.Landed += OnCrashLanded;
+		Reset();
 		string? text = Assets.ReadText(levelPath);
 		if (text == null)
 		{
@@ -68,27 +65,60 @@ public static class TwinsanityAudio
 		foreach (JsonElement ins in doc.RootElement.GetProperty("instances").EnumerateArray())
 		{
 			string name = ins.GetProperty("name").GetString() ?? "";
+			if (!IsAudioSource(name))
+			{
+				continue;
+			}
 			JsonElement pos = ins.GetProperty("position");
-			Vector3 at = new(pos[0].GetSingle(), pos[1].GetSingle(), pos[2].GetSingle());
-			if (name == "act_DJ" && Param(ins, 0) is int music)
+			int[] ps = ins.TryGetProperty("params", out JsonElement p) ? Array.ConvertAll(p.EnumerateArray().ToArray(), e => e.GetInt32()) : Array.Empty<int>();
+			float[] fs = ins.TryGetProperty("floats", out JsonElement f) ? Array.ConvertAll(f.EnumerateArray().ToArray(), e => e.GetSingle()) : Array.Empty<float>();
+			Place(name, new Vector3(pos[0].GetSingle(), pos[1].GetSingle(), pos[2].GetSingle()), ps, fs);
+		}
+	}
+
+	/// <summary>Level start from converted content: the same streams and loops, read from the start
+	/// area's descriptors (the start chunk's level.json instances, as <see cref="Start(string)"/>).</summary>
+	public static void Start(IReadOnlyList<TwObject> objects, string startArea)
+	{
+		Reset();
+		foreach (TwObject o in objects)
+		{
+			if (IsAudioSource(o.ObjectName) && string.Equals(o.Area, startArea, StringComparison.OrdinalIgnoreCase))
 			{
-				Audio.PlayMusic(Streams + music + ".wav", 1.0f, true, MusicVolume);
-			}
-			else if (name.StartsWith("act_GLOBAL_AMBIENT_SOUND") && Param(ins, 2) is int ambience)
-			{
-				Audio.Play(Streams + ambience + ".wav", AmbienceVolume, 1.0f, true, Audio.Bus.Ambience);
-			}
-			else if (name.StartsWith("act_SOUND_SPOT_WATERFALL"))
-			{
-				// COM_SOUND_SPOT_WATERFALL_DEFAULT loops sound 516; floats[3] is the spot's level.
-				float volume = ins.TryGetProperty("floats", out JsonElement f) && f.GetArrayLength() > 3 ? f[3].GetSingle() : 1.0f;
-				Audio.PlayAt(LevelBank + "516.wav", at, volume, 1.0f, true, Audio.Bus.Ambience, 6.0f, 45.0f, Audio.AttenuationModel.Linear);
+				Place(o.ObjectName, o.Self.Position, TwRegistry.Ints(o.Params), TwRegistry.Floats(o.Floats));
 			}
 		}
 	}
 
-	private static int? Param(JsonElement ins, int i) =>
-		ins.TryGetProperty("params", out JsonElement p) && p.GetArrayLength() > i ? p[i].GetInt32() : null;
+	private static void Reset()
+	{
+		s_pending.Clear();
+		s_stepDistance = 0.0f;
+		s_paused = false;
+		CrashPlayer.Landed -= OnCrashLanded; // idempotent across play sessions
+		CrashPlayer.Landed += OnCrashLanded;
+	}
+
+	private static bool IsAudioSource(string name) =>
+		name == "act_DJ" || name.StartsWith("act_GLOBAL_AMBIENT_SOUND") || name.StartsWith("act_SOUND_SPOT_WATERFALL");
+
+	private static void Place(string name, Vector3 at, int[] ps, float[] fs)
+	{
+		if (name == "act_DJ" && ps.Length > 0)
+		{
+			Audio.PlayMusic(Streams + ps[0] + ".wav", 1.0f, true, MusicVolume);
+		}
+		else if (name.StartsWith("act_GLOBAL_AMBIENT_SOUND") && ps.Length > 2)
+		{
+			Audio.Play(Streams + ps[2] + ".wav", AmbienceVolume, 1.0f, true, Audio.Bus.Ambience);
+		}
+		else if (name.StartsWith("act_SOUND_SPOT_WATERFALL"))
+		{
+			// COM_SOUND_SPOT_WATERFALL_DEFAULT loops sound 516; floats[3] is the spot's level.
+			float volume = fs.Length > 3 ? fs[3] : 1.0f;
+			Audio.PlayAt(LevelBank + "516.wav", at, volume, 1.0f, true, Audio.Bus.Ambience, 6.0f, 45.0f, Audio.AttenuationModel.Linear);
+		}
+	}
 
 	/// <summary>Per frame from TwinsanityLevel.OnUpdate: footsteps and delayed stings.</summary>
 	public static void Update(float dt, CrashPlayer crash)
