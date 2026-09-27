@@ -73,6 +73,8 @@ public sealed partial class TwinsanityActors
 		public Vector3 ShieldRest;         // the shield at rest, model space
 		public Quaternion ShieldRestRot;
 		public float Bash;       // shieldbearers: seconds left of the bash clip
+		public float StepWait = -1.0f; // shieldbearers: reaction time left before a sidestep (<0: none pending)
+		public bool Stepping;    // shieldbearers: sidestepping along his line to cover Crash
 		public bool Shoving;     // bare shieldbearers: carrying Crash away from the post (UpdateBareGuard)
 		// Death knockback (Knockback.cs): airborne while Flying, then DeathTimer counts the linger.
 		public bool Flying, Bounced;
@@ -419,23 +421,38 @@ public sealed partial class TwinsanityActors
 	}
 
 	// The shieldbearers (disc COM_EARTH_TRIBESMAN_SHIELDBEARER_DEFEND/_HIT, rig logs/tutorialroute/rig_guard_*):
-	// within sqrt(200) of Crash he faces him; subtype 0 steps at him at 2.75/s but never past 6 from his post
-	// (MeToInitPosSqrDist 36) and walks back when Crash leaves. His HIT script ignores every attack while his
-	// hit points are above 10 except AgentWasSlid: spins, slams and jumps do nothing to him, while touching
-	// him any other way gets Crash bashed. A slide knocks the shield off (HP 20 -> 10) and Crash slides on
-	// past; he stays up and from then on is a plain tribesman (DEFAULT state 3, UpdateBareGuard) who shoves
-	// Crash out of his ground and whom a spin knocks away. All of the stepping, turning and shoving needs
-	// instance flag bit 19 (Actor.Engages): huba's guards have it and come at Crash; Hub B's guard 38 does
-	// not and stands his post (logs/hubb/rig_w6_sheet.png).
+	// within sqrt(200) of Crash he faces him. His HIT script ignores every attack while his hit points are
+	// above 10 except AgentWasSlid: spins, slams and jumps do nothing to him. A slide knocks the shield off
+	// (HP 20 -> 10) and Crash slides on past; he stays up and from then on is a plain tribesman (DEFAULT
+	// state 3, UpdateBareGuard) who shoves Crash out of his ground and whom a spin knocks away. All of the
+	// stepping, turning and shoving needs instance flag bit 19 (Actor.Engages): huba's guards have it; Hub B's
+	// guard 38 does not and stands his post (logs/hubb/rig_w6_sheet.png).
+	// Subtype 0 BLOCKS rather than advances (rig huba guard 1, logs/hubb/guardred/rig_static_*.csv,
+	// rig_seq_*.csv): he only ever moves along the line through his post square to the way he faces (his
+	// depth never changed in any capture), sidestepping to put himself in front of Crash. A Crash standing
+	// 4.7 m out 0.7 m off that line was never covered in 7 s; 0.79 m off he stepped, and from 2.5 m off he set
+	// off 0.17-0.19 s after Crash stood there, at 2.75 m/s (0.1095 m every 2 frames at 50 Hz), and halted
+	// 0.03-0.21 m short of square, never past 6 m from his post (MeToInitPosSqrDist 36). Crash beside him
+	// (level with the post) was not covered.
+	// The bash: straight in front his shield reaches Crash 1.6 m out (1.7 m is safe, 5 s), at once; 37 deg
+	// off his front, 1.5 m. Out of that wedge only his body hurts, and only on a closing contact: Crash 1.2 m
+	// beside him or 1.25 m out at 61 deg stood unhurt until either moved in (the sidestep at 1.21 m, Crash's
+	// run at 1.10-1.14 m). Each hit knocks Crash ~3 m back (the engine's hurt knockback does that part).
+	// ponytail: the wedge is +-45 deg of his post's facing and the body a 1.25 m circle; the rig's 0.8
+	// threshold and 0.2 m halt are read off 6 captures. Upgrade path: decode cond89/cond128 and his collision.
 	private const float GuardSightSq = 200.0f;
 	private const float GuardSpeed = 2.75f;
 	private const float GuardLeash = 6.0f;
-	private const float GuardStop = 1.6f; // he halts short of touching: Crash standing by him is not bashed
-	// A slide meets the shield he holds out in front, so it reaches him from where he halts; the bare
-	// body radius alone let a slide at a guard standing at his leash end stop short or pass him by.
+	private const float GuardStepStart = 0.75f;
+	private const float GuardStepDone = 0.2f;
+	private const float GuardReact = 0.18f;
+	private const float GuardShieldReach = 1.65f;
+	private const float GuardBodyReach = 1.25f;
+	// A slide meets the shield he holds out in front, so it reaches him from where he stands; the bare
+	// body radius alone let a slide at a guard stop short or pass him by.
 	// ponytail: the rig (rig_g2_leashF_sheet.png) knocks it off from ~1.5 m and a slide ending ~2 m
 	// short does not (rig_g2_leashE_sheet.png); the disc's collision radius is not decoded.
-	private const float GuardSlideReach = GuardStop;
+	private const float GuardSlideReach = 1.6f;
 
 	private void UpdateShieldbearer(Actor a, float dt, Vector3 crashPos)
 	{
@@ -458,26 +475,51 @@ public sealed partial class TwinsanityActors
 		Vector3 p = a.Model.Position;
 		float dx = crashPos.X - p.X, dz = crashPos.Z - p.Z;
 		float distSq = dx * dx + dz * dz;
+		float yaw = a.HomeYaw * MathF.PI / 180.0f;
+		Vector3 front = new(MathF.Sin(yaw), 0.0f, MathF.Cos(yaw)); // the way his post faces (models face +Z)
+		Vector3 side = new(front.Z, 0.0f, -front.X);                // his line through the post
+		float depth = dx * front.X + dz * front.Z;
 		bool sees = a.Engages && distSq < GuardSightSq; // not engaged: no DEFEND, he neither turns nor steps
 		Vector3 step = Vector3.Zero;
 		if (sees)
 		{
 			float dist = MathF.Sqrt(distSq);
-			Vector3 dir = dist > 0.001f ? new Vector3(dx / dist, 0.0f, dz / dist) : Vector3.UnitZ;
-			FaceMovement(a, dir);
-			if (a.Subtype == 0 && dist > GuardStop)
+			FaceMovement(a, dist > 0.001f ? new Vector3(dx / dist, 0.0f, dz / dist) : front);
+			if (a.Subtype == 0)
 			{
-				Vector3 next = p + dir * MathF.Min(GuardSpeed * dt, dist - GuardStop);
-				Vector3 fromHome = new(next.X - a.Home.X, 0.0f, next.Z - a.Home.Z);
-				if (fromHome.Length() > GuardLeash)
+				// Cover Crash: the spot on his line square to Crash, no further than the leash.
+				Vector3 fromHome = new(crashPos.X - a.Home.X, 0.0f, crashPos.Z - a.Home.Z);
+				float want = Math.Clamp(Vector3.Dot(fromHome, side), -GuardLeash, GuardLeash);
+				float at = Vector3.Dot(new Vector3(p.X - a.Home.X, 0.0f, p.Z - a.Home.Z), side);
+				float off = want - at;
+				bool inFront = depth > 0.3f;
+				if (!a.Stepping && inFront && MathF.Abs(off) > GuardStepStart)
 				{
-					next = new Vector3(a.Home.X, next.Y, a.Home.Z) + Vector3.Normalize(fromHome) * GuardLeash;
+					a.StepWait = a.StepWait < 0.0f ? GuardReact : a.StepWait - dt;
+					a.Stepping = a.StepWait <= 0.0f;
 				}
-				step = next - p;
+				else if (!a.Stepping)
+				{
+					a.StepWait = -1.0f;
+				}
+				if (a.Stepping)
+				{
+					if (MathF.Abs(off) <= GuardStepDone)
+					{
+						a.Stepping = false;
+						a.StepWait = -1.0f;
+					}
+					else
+					{
+						step = side * (MathF.Sign(off) * MathF.Min(GuardSpeed * dt, MathF.Abs(off) - GuardStepDone));
+					}
+				}
 			}
 		}
 		else if (a.Engages && a.Subtype == 0)
 		{
+			a.Stepping = false;
+			a.StepWait = -1.0f;
 			Vector3 home = new(a.Home.X - p.X, 0.0f, a.Home.Z - p.Z);
 			float len = home.Length();
 			if (len > 0.05f)
@@ -493,23 +535,40 @@ public sealed partial class TwinsanityActors
 			PlayClip(a, step.LengthSquared() > 1e-8f ? a.MoveClip : a.IdleClip);
 		}
 
-		float reach = player.IsSliding ? GuardSlideReach : EnemyHitRadius;
-		bool touching = distSq < reach * reach && crashPos.Y < p.Y + 1.6f && crashPos.Y + 1.8f > p.Y;
-		if (!touching || player.IsSpinning)
+		bool level = crashPos.Y < p.Y + 1.6f && crashPos.Y + 1.8f > p.Y;
+		if (!level || player.IsSpinning)
 		{
 			return; // the shield takes a spin
 		}
 		if (player.IsSliding)
 		{
-			a.Shielded = false;
-			a.Bash = 0.8f;
-			CrateFx.ImpactFlash(p + new Vector3(0.0f, 0.8f, 0.0f));
-			DropShield(a, crashPos);
-			Log.Info($"[Twinsanity] shieldbearer {a.Model.Name} lost his shield to a slide");
+			if (distSq < GuardSlideReach * GuardSlideReach)
+			{
+				a.Shielded = false;
+				a.Bash = 0.8f;
+				a.Stepping = false;
+				CrateFx.ImpactFlash(p + new Vector3(0.0f, 0.8f, 0.0f));
+				DropShield(a, crashPos);
+				Log.Info($"[Twinsanity] shieldbearer {a.Model.Name} lost his shield to a slide");
+			}
 			return;
 		}
-		a.Bash = 1.0f;
-		PlayClip(a, Animation.Find(a.Model, "a021"));
+		// The shield's wedge in front, or a closing body contact (his sidestep or Crash's own move).
+		float lateral = MathF.Abs(dx * side.X + dz * side.Z);
+		bool shield = depth > 0.0f && lateral <= depth && distSq < GuardShieldReach * GuardShieldReach;
+		Vector3 v = player.Velocity;
+		bool closing = Vector3.Dot(step, new Vector3(dx, 0.0f, dz)) > 0.0f || v.X * dx + v.Z * dz < -0.5f * MathF.Sqrt(distSq);
+		bool body = distSq < GuardBodyReach * GuardBodyReach && closing;
+		if (!shield && !body)
+		{
+			return;
+		}
+		if (a.Bash <= 0.0f)
+		{
+			a.Bash = 1.0f;
+			PlayClip(a, Animation.Find(a.Model, "a021"));
+			Log.Info($"[Twinsanity] shieldbearer {a.Model.Name} bashes Crash {MathF.Sqrt(distSq):F2} m out ({(shield ? "shield" : "body")}, lateral {lateral:F2}, depth {depth:F2})");
+		}
 		_host?.DamagePlayer(p, DeathKind.Generic);
 	}
 
@@ -604,6 +663,8 @@ public sealed partial class TwinsanityActors
 			a.Flying = a.Bounced = false;
 			a.Shielded = true;
 			a.Bash = 0.0f;
+			a.Stepping = false;
+			a.StepWait = -1.0f;
 			a.Model.SetActive(true);
 			a.Model.Position = a.Home;
 			a.Model.EulerDegrees = new Vector3(0.0f, a.HomeYaw, 0.0f);

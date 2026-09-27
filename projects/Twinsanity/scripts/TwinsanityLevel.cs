@@ -971,10 +971,18 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			Vector3 move = new(0.0f, y - c.Base.Y, 0.0f);
 			// Crash on the lid rides it up and down (rig: his feet stay at the iron's base + 1.02 through
 			// every bounce); CrashPlayer.Carry holds him there and lets his own jump leave it.
+			// A RISING lid also scoops him up when it sweeps through his feet this frame, wherever in the
+			// crate's height they were: it climbs up to 0.76 m a frame at 30 fps (22.75 m/s), past the
+			// fixed window below the lid, and the kinematic body then hit his capsule instead and flung
+			// him off at the lid's speed (logs/hubb/guardred/eng_board_a.csv: thrown 2.5 m over the lid or
+			// 2 m off the column; 2/24 phases boarded, rig 7/11 with a double jump, rig_board_a.csv).
+			// The sweep reaches as far out as his capsule overlaps the crate's side.
 			Vector3 feet = _crash.Position;
-			bool onLid = _player != null
-				&& MathF.Abs(feet.X - c.Base.X) < 0.5f + kCrashRadius * 0.75f && MathF.Abs(feet.Z - c.Base.Z) < 0.5f + kCrashRadius * 0.75f
-				&& feet.Y > c.Base.Y + 1.0f - 0.75f && feet.Y < c.Base.Y + 1.0f + 0.45f;
+			float lid = c.Base.Y + 1.0f;
+			float reach = 0.5f + (move.Y > 0.0f ? kCrashRadius : kCrashRadius * 0.75f);
+			bool over = MathF.Abs(feet.X - c.Base.X) < reach && MathF.Abs(feet.Z - c.Base.Z) < reach;
+			bool swept = move.Y > 0.0f && feet.Y > c.Base.Y - 0.05f && feet.Y < lid + move.Y + 0.45f;
+			bool onLid = _player != null && over && (swept || (feet.Y > lid - 0.75f && feet.Y < lid + 0.45f));
 			c.Base += move;
 			c.Model.Position += move;
 			if (onLid)
