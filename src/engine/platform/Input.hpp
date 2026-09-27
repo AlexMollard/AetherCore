@@ -638,6 +638,13 @@ namespace aether
 
 		void PlayInputSequence(std::vector<InputSequenceEvent> events);
 		void StopInputSequence();
+		// Sequence times are game seconds, not wall seconds: the app advances this
+		// clock by each simulated frame's dt (0 while paused), so a tuned sequence
+		// replays identically at any frame rate or play speed.
+		void AdvanceInputSequence(double seconds)
+		{
+			m_inputSequenceElapsed += seconds;
+		}
 
 		// Parses the engine.play_input_sequence text format: lines of
 		// "<seconds> <op> [keys...]"; op is hold (keys stay down), press/tap
@@ -765,7 +772,7 @@ namespace aether
 		std::size_t m_inputSequenceNext = 0;
 		bool m_inputSequenceActive = false;
 		bool m_sequenceStickSet = false; // a sequence moved pad 0's left stick: clear/stop centre it
-		std::chrono::steady_clock::time_point m_inputSequenceStart{};
+		double m_inputSequenceElapsed = 0.0;
 
 		bool m_mouseViewportTransformActive = false;
 		glm::vec2 m_mouseViewportMin{};

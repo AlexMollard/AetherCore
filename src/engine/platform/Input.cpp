@@ -204,7 +204,7 @@ namespace aether
 		m_inputSequence = std::move(events);
 		std::sort(m_inputSequence.begin(), m_inputSequence.end(), [](const InputSequenceEvent& a, const InputSequenceEvent& b) { return a.time < b.time; });
 		m_inputSequenceNext = 0;
-		m_inputSequenceStart = std::chrono::steady_clock::now();
+		m_inputSequenceElapsed = 0.0;
 		m_inputSequenceActive = !m_inputSequence.empty();
 	}
 
@@ -403,7 +403,7 @@ namespace aether
 		{
 			return;
 		}
-		const float elapsed = std::chrono::duration<float>(std::chrono::steady_clock::now() - m_inputSequenceStart).count();
+		const double elapsed = m_inputSequenceElapsed;
 		while (m_inputSequenceNext < m_inputSequence.size() && m_inputSequence[m_inputSequenceNext].time <= elapsed)
 		{
 			const InputSequenceEvent& ev = m_inputSequence[m_inputSequenceNext];

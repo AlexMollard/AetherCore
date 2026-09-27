@@ -104,3 +104,21 @@ TEST_CASE("play_input_sequence: stick moves pad 0's left stick and clear centres
 	CHECK(glm::length(input.GetGamepadStick(GamepadStick::Left)) == doctest::Approx(0.0f));
 	CHECK_FALSE(input.IsKeyDown(Key::W));
 }
+
+// Sequence times are game seconds: an event fires only once the app has advanced the clock past it, however
+// much wall time passes. A wall clock replays tuned route timings short whenever the editor runs slow.
+TEST_CASE("play_input_sequence: events fire on the advanced game clock, not wall time")
+{
+	std::string error;
+	Input input;
+	input.PlayInputSequence(Input::ParseInputSequence("0.5 hold w", error));
+	REQUIRE(error.empty());
+	input.Update();
+	CHECK_FALSE(input.IsKeyDown(Key::W));
+	input.AdvanceInputSequence(0.4);
+	input.Update();
+	CHECK_FALSE(input.IsKeyDown(Key::W));
+	input.AdvanceInputSequence(0.2);
+	input.Update();
+	CHECK(input.IsKeyDown(Key::W));
+}

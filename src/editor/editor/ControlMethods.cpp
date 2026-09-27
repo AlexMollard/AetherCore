@@ -1955,7 +1955,7 @@ namespace aether::editor
 
 		methods.push_back({"engine.play_input_sequence",
 		        "play_input_sequence",
-		        "Play a timed input sequence for auto-testing (frame-accurate, driven on the game thread). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold (keys stay down until a "
+		        "Play a timed input sequence for auto-testing (frame-accurate, on the game clock: times are simulated seconds, so a pause or slow frames stretch it in wall time). Provide 'text' (inline) or 'file' (path to a .seq file). Each line is '<time_seconds> <op> [keys...]' where op is hold (keys stay down until a "
 		        "later release/clear), press/tap (a real key edge every time: down now, auto-released ~0.1s later - use this for repeated presses in one sequence), release/up (release keys; 'release all' clears everything), clear (keys and a "
 		        "sequence-set stick), or stick <x> <y> (gamepad 0's left stick, raw -1..1 like send_input's pad_axis left_x/left_y, held until the next stick line) - an analog direction on the same frame-accurate clock; keys use the "
 		        "same names as send_input. '#' starts a comment. Held keys stay down after the last event: end with 'clear'. Pass {stop:true} to abort a "

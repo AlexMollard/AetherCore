@@ -498,8 +498,12 @@ namespace aether::app
 			cameraSystem->SetApplyMainCamera(m_playState.IsPlaying());
 		}
 
+		// Outside Play the sequence clock follows frame time; in Play it follows
+		// simulated time only, so pauses and slow frames don't shorten a sequence.
+		double sequenceDt = gameDt;
 		if (m_playState.IsPlaying())
 		{
+			sequenceDt = 0.0;
 			// Pause/Step: TakeSimulationStep() returns false while paused (unless a
 			// single-step was requested), so the world freezes but the session stays
 			// live and the viewport keeps rendering the last simulated state.
@@ -507,6 +511,7 @@ namespace aether::app
 			{
 				ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));
 				m_playState.RecordSimulatedFrame(gameDt);
+				sequenceDt = gameDt;
 			}
 			// Outside TakeSimulationStep on purpose: Escape must still free the cursor,
 			// and losing focus must still release it, even while paused (no simulation
@@ -552,6 +557,7 @@ namespace aether::app
 				cameras->Update(editWorld, 0.0f);
 			}
 		}
+		ctx.Get<Input>().AdvanceInputSequence(sequenceDt);
 #endif
 		m_layers.UpdateAll(ctx);
 	}
