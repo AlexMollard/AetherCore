@@ -25,8 +25,8 @@ namespace aether
 		bool alphaMask = false;
 		bool modulateVertexColor = false;
 		bool receiveShadows = true;
-		// PS2 foliage/cutout card (tw-extract marks alpha-masked scenery): excluded from
-		// shadow casting/receiving.
+		// PS2 foliage/cutout card (tw-extract marks alpha-masked scenery): casts offset away
+		// from the sun, receives cascade shadows but no contact shadows.
 		bool foliage = false;
 		// PS2 prelit geometry: the vertex colour is the lighting; only the shadow maps
 		// modulate it (down to the scene's ambient/shade colour). No PBR lights, no AO.

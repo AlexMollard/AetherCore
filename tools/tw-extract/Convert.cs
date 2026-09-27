@@ -304,13 +304,20 @@ namespace TwExtract
 			additive = blend && !shader.UsePresetAlphaRegSettings && shader.AlphaRegSettingsIndex == 1;
 			mask = !blend && shader.ATest == Twinsanity.TwinsShader.AlphaTest.ON;
 			cutoff = Math.Min(shader.AlphaValueToBeComparedTo * 2, 255) / 255f;
-			// Shader types 23 and 26 carry float params, but they are not a UV scroll: every
-			// material using them in the Hub is foliage (grass, leaves, ivy, palm fronds), and
-			// scrolling them makes the leaves visibly slide. Only rig-measured rates scroll.
-			if (texture != null && s_measuredScroll.TryGetValue(texture, out var measured))
+			// UV scroll is disc data: the shader record's UnkVal2/UnkVal3 are the U/V animation
+			// modes and UnkVector3.Z/W the speeds in UV units per second. Mode 2 is a linear
+			// scroll - the Hub's sea (0, 0.2), skull waterfall (0, 1), cave ground fog
+			// (0.1, 0.13), god rays (0.2, 0), sky clouds (0, 0.04) and sun halo (0.2, 0).
+			// The engine runs the other way to the PS2: the rig measured the sea at -0.19 V/s and
+			// the waterfall at -1 V/s (logs/wateredge), so both axes are negated. Mode 3 (X/Z
+			// set, character hair and cloth) is some other motion and mode 0 is static.
+			// Object models are left static: their scrolls (Aku's blink, the spin swish) are
+			// unverified against the original. Types 23/26's float params stay unused - every
+			// such Hub material is foliage, and scrolling them made the leaves slide.
+			if (!m_isObject)
 			{
-				scrollU = measured.U;
-				scrollV = measured.V;
+				scrollU = shader.UnkVal2 == 2 ? -shader.UnkVector3.Z : 0f;
+				scrollV = shader.UnkVal3 == 2 ? -shader.UnkVector3.W : 0f;
 			}
 		}
 		// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
@@ -392,31 +399,6 @@ namespace TwExtract
 		}
 		return m_materialIndex[(materialId, vertexLit, layer)] = m_byName[name] = Gltf.AddMaterial(gltfMat);
 	}
-
-	// MEASURED FROM ORIGINAL, not disc data: these overlay textures animate in the game but
-	// their shader records carry no speed (types 12/22 read FloatParam=[0,0,0,0] - the motion
-	// is code-driven on the PS2), so the value comes from PCSX2 captures.
-	// The sea scroll is V-only. The sea strips' U zigzags (0 -> 1 -> 0 mirrored across each
-	// strip, the foam columns of the texture on the u~0 shoreline edge), so any U scroll sweeps
-	// the foam band off the sand and back once per repeat - the "foam sits away from the
-	// shore" bug of the old (0.055, 0). V runs along each strip, so a V scroll keeps the foam
-	// on the waterline and slides its uneven width along the shore, which is what the rig
-	// shows: at the pier-side shore (game 12,-70) the foam's land edge never moves while its
-	// water edge breathes with a 5.1-5.3 s period, travelling toward the inland camera. The
-	// texture's foam width has one dominant bulge per V repeat, so speed = 1 / period.
-	// Evidence: logs/wateredge (rigd/ dense captures, sheet.png).
-	// The skull waterfall behind the beach (beach prim 36, game x 107-125, y 38-66) scrolls 1 V
-	// per second (one repeat per 50 PAL frames). Rig at 20 ms spacing (logs/wateredge/fallsd):
-	// its blobs fall ~208 px/s, and the fall's profile repeats every 0.50 s at every multiple
-	// (0.5/1.0/1.5/2.0 s). That is half a repeat, since the texture's V profile is self-similar at
-	// 32 of its 64 texels. Both captures fall ~1.35 fall-heights per second: the rig at 208 px/s on
-	// a 155 px fall, the engine at ~500 px/s on a 370 px fall. Sign: +1 made the sheet climb
-	// (logs/wateredge/engfall_slow_plus1, 0.1x speed), so it is -1; engfall_slow_minus1 shows it fall.
-	private static readonly Dictionary<string, (float U, float V)> s_measuredScroll = new Dictionary<string, (float, float)>
-	{
-		["2b1f0286252911e6.png"] = (0f, -0.19f), // Earth-Hub beach sea blend layers
-		["f5ccfd069d94f219.png"] = (0f, -1.0f), // Earth-Hub waterfall sheets (skull fall; alwayson/hubb falls share it)
-	};
 
 	// How many DISTINCT texture-mapped layers a material exports (>= 1; texture-less
 	// materials export exactly the layer-0 fallback).

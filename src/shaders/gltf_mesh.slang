@@ -325,18 +325,25 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     const float ambientAo = ao;
     float3 diffuse = kD * baseColor.rgb / kPI;
 
-    const float shadow = ComputeDirectionalShadow(fc, input.worldPos, Ngeom, L, input.svPosition.xy);
+    // Foliage cards face every way, and the cascade lookup answers "unshadowed" for any face
+    // turned from the sun, so a card is looked up through its sun-facing side.
+    const float3 shadowN = (foliage && dot(Ngeom, L) < 0.0f) ? -Ngeom : Ngeom;
+    const float shadow = ComputeDirectionalShadow(fc, input.worldPos, shadowN, L, input.svPosition.xy);
     // Materials can opt out of shadow receiving (flag set == opt out); such
     // surfaces stay fully lit by the sun regardless of the shadow map.
-    // Foliage opts out too: shadow-mapping a clump of one-sided cards mostly finds the
-    // cards shadowing THEMSELVES, which the original (baked vertex lighting, no realtime
-    // shadows) never had.
-    const bool receivesShadows = ((mat.flags & kFlagNoReceiveShadows) == 0u) && !foliage;
+    // Foliage receives: prelit grass kept its full bake under the forest canopy while the
+    // ground it grows from fell to the shade, and read lime against dark green (hubb). Its own
+    // card cannot shade it - shadow_depth pushes foliage casters kFoliageCasterOffset away from
+    // the sun - and a shadow only pulls a prelit card to the bake's shade floor, as the ground.
+    // Leaves under a higher canopy tier shade the same way (a lookup lifted 2 m towards the sun
+    // changed nothing there: logs/scenemotion/canopy_nolift_top_lift2_bottom.png).
+    const bool receivesShadows = (mat.flags & kFlagNoReceiveShadows) == 0u;
     // Contact shadows sharpen only where the cascade cannot resolve: the last few
     // centimetres at the base of an object, which a cascade texel is simply too
     // coarse to contain. Combined by min, because either occluder blocking the sun
-    // is enough - a surface is not lit twice over.
-    const float contact = (fc->shadowParams.w > 0.0f && receivesShadows)
+    // is enough - a surface is not lit twice over. Not on foliage: marching a clump of
+    // cards finds the clump itself.
+    const float contact = (fc->shadowParams.w > 0.0f && receivesShadows && !foliage)
         ? ContactShadow(input.worldPos, Ngeom, L, fc, input.svPosition.xy)
         : 1.0f;
     // Cloud shadow, from the same layer the sky draws. Combined by min for the same reason
@@ -396,12 +403,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         // ponytail: the PS2 had no real-time shadow here; it swapped per-zone light records
         // (radius-limited) instead. Shadowing light 0 is the closest per-pixel stand-in until
         // those zones are extracted.
-        // The foliage opt-out above is for self-shadowing card clumps; on an object it only
-        // marks an alpha-tested part (a crate's banding), which must shade with its crate.
-        const float objectVisibility = ((mat.flags & kFlagNoReceiveShadows) == 0u)
-            ? (foliage ? min(shadow, CloudSunVisibility(input.worldPos, L, fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime)) : sunVisibility)
-            : 1.0f;
-        const float keyVisibility = lerp(1.0f, objectVisibility, fc->shadowParams.z);
+        const float keyVisibility = lerp(1.0f, sunVisibility, fc->shadowParams.z);
         const float3 lit = fc->objectAmbient.rgb * ambientAo
             + fc->objectLight0Color.rgb * (saturate(dot(Ngeom, fc->objectLight0Direction.xyz)) * keyVisibility)
             + fc->objectLight1Color.rgb * saturate(dot(Ngeom, fc->objectLight1Direction.xyz));

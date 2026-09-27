@@ -152,7 +152,7 @@ struct MaterialHeaderDisk
 	// files written before it read 0 - exactly how they rendered.
 	uint8_t modulateVertexColor = 0;
 	// PS2 foliage/cutout card (tw-extract marks alpha-masked scenery "foliage"): shaded by its
-	// baked vertex colour with a wrapped diffuse and excluded from shadow casting/receiving.
+	// baked vertex colour with a wrapped diffuse; casts offset from the sun, no contact shadows.
 	// Carved from the same padding - files written before it read 0, i.e. ordinary geometry.
 	uint8_t foliage = 0;
 	// PS2 prelit scenery (tw-extract marks every vertex-coloured material): the vertex colour IS
