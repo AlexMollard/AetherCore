@@ -42,7 +42,9 @@ public sealed class TwinsanityHud
 	// 102 x 93 about (319, 98.5), i.e. centred on the frame. Crash keeps control (the script sets no input).
 	private const float GemPopW = 102.0f, GemPopH = 93.0f, GemPopCy = 98.5f;
 	private const float GemPopIn0 = 0.07f, GemPopIn1 = 0.30f, GemPopOut0 = 1.90f, GemPopOut1 = 2.13f;
-	private const int GemSparkCount = 24;
+	// Rig ring (rig_red10_sheet.png 0.34-0.66 s): a dense, bright ring of soft blobs hugging the gem's rim, which
+	// then loosens and drifts. Sized and counted to read at that density.
+	private const int GemSparkCount = 40;
 	// Sparkle tints per TwinsanityPause.GemSlot: yellow, red, purple, green, clear, blue.
 	private static readonly Vector4[] GemSparkTint =
 	{
@@ -103,9 +105,9 @@ public sealed class TwinsanityHud
 		float R(float lo, float hi) => lo + (hi - lo) * (float)rng.NextDouble();
 		for (int i = 0; i < GemSparkCount; i++)
 		{
-			float born = R(0.18f, 0.5f);
-			_sparkSeeds[i] = (MathF.Tau * i / GemSparkCount + R(-0.15f, 0.15f), born, MathF.Min(R(0.9f, 1.6f), 1.9f - born),
-				R(50.0f, 110.0f), R(10.0f, 18.0f), R(-15.0f, 25.0f));
+			float born = R(0.18f, 0.45f);
+			_sparkSeeds[i] = (MathF.Tau * i / GemSparkCount + R(-0.12f, 0.12f), born, MathF.Min(R(0.9f, 1.6f), 1.9f - born),
+				R(18.0f, 70.0f), R(18.0f, 32.0f), R(-15.0f, 25.0f));
 		}
 		if (_gemPop.IsValid)
 		{
@@ -341,10 +343,11 @@ public sealed class TwinsanityHud
 				continue;
 			}
 			// Out of the gem's rim in a ring that slows, then drifts; twinkles as it fades.
-			float r = 40.0f + p.Reach * (1.0f - MathF.Exp(-3.0f * age));
+			float r = 50.0f + p.Reach * (1.0f - MathF.Exp(-3.0f * age));
 			float x = cx + MathF.Cos(p.Angle) * r;
-			float y = GemPopCy + MathF.Sin(p.Angle) * r * 0.75f + p.Drift * age;
-			float a = MathF.Min(age / 0.05f, 1.0f) * (1.0f - age / p.Life) * (0.7f + 0.3f * MathF.Sin(age * 25.0f + i));
+			float y = GemPopCy + MathF.Sin(p.Angle) * r * 0.8f + p.Drift * age;
+			float fade = age / p.Life;
+			float a = MathF.Min(age / 0.05f, 1.0f) * (1.0f - fade * fade) * (0.85f + 0.15f * MathF.Sin(age * 25.0f + i));
 			Place(e, (x - p.Size * 0.5f) * s, (y - p.Size * 0.5f) * s, p.Size * s, p.Size * s);
 			Ui.SetMaterialColors(e, tint, tint);
 			Ui.SetImageColor(e, new Vector4(1.0f, 1.0f, 1.0f, a));

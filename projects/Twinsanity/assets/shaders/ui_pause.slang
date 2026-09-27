@@ -1,35 +1,22 @@
-// The Twinsanity pause menu's code-drawn backdrop ("ui_pause", UIMaterial).
+// The Twinsanity pause menu's and HUD's code-drawn shapes ("ui_pause", UIMaterial).
 //
-// The swirl backdrop, the three counter discs, the menu ball and the gem track are drawn by
-// the PS2 game as coloured geometry: no texture for any of them exists in any archive on the
-// disc (tw-extract walked them all). They are rebuilt here as analytic shapes measured on
-// 35 fps rig captures of the original menu (logs/pause/rig/, scan lines and absolute-labelled
-// crops of the idle frame t00334, 640x480 PAL). All distances below are in those frame pixels,
-// relative to each element's own box centre (TwinsanityPause.cs places the boxes):
-//   swirl  - ellipse bands about (318,210): outer radii (238,185) with a thin white rim (edges
-//            measured where no disc, track or ball covers them: left x~80 at y~155, top y~26,
-//            bottom 347 at x=200 and 370 at x=400), the outer blue band down to normalised
-//            radius 0.77 (y 30..74 on top, x 495..541 at y=170), white inside it;
-//            the inner blue is a crescent right of the badge (x > 325, clear of the badge circle
-//            about (290,176) r=100) that runs down into the "hook" under the 0%, a disc about
-//            (465,290) r=62;
-//   disc   - a counter disc: graded blue fill lit from the top left, white rim from r=0.90;
-//   ball   - the menu ball, same construction, rim from 0.93;
-//   track  - the gem track: a cyan band r=127..167 with white edging (122..172) on the
-//            least-squares circle through the six gem centres, (428.9,204.2) r=146, cut at
-//            -88 and +74 degrees.
-// Colours are the rig's on-screen values (the whole menu reads at ~0.75 brightness on the PS2:
-// its white is 187).
+// The PS2 game draws the menu's discs, ball and gem track as coloured geometry (no texture for
+// any of them exists on the disc), so they are analytic shapes here. The menu is a redesign
+// rather than the original's swirl: the same discs, ball, gem track and option drum laid out
+// in a grid straight over a vignette dim (TwinsanityPause.cs lays it out).
 //
-// params = (time, shape, 0, 0) with shape: 0 swirl, 1 disc, 2 ball, 3 track, 4 sparkle (the HUD's
-// gem-pickup sparkles, TwinsanityHud.LayoutGemPop: a soft four-point star in color0 with a white core).
-// color0/color1 are a disc's or the ball's lit and shaded fill. The element's image alpha
-// (input.color.a) fades the whole shape, so C# fades the menu in and out.
-//
-// ponytail: the swirl's spiral is approximated by concentric ellipse bands plus one hook disc;
-// the real S-curl where the white band tucks into the badge and where the outer band feeds the
-// counter discs differs by a few pixels of silhouette. The upgrade path is an arc-length spiral
-// SDF fitted to the scan lines in logs/pause/.
+// params = (time, shape, a, b) with shape:
+//   1 disc     - a counter disc: graded fill lit from the top left (color0 lit, color1 shaded),
+//                white rim from r=0.90;
+//   2 ball     - the badge's ball, same construction, rim from 0.93;
+//   4 sparkle  - the HUD's gem-pickup sparkle (TwinsanityHud.LayoutGemPop): a bright soft blob in
+//                color0 with a four-point glint and a white-hot core;
+//   5 dim      - the full-screen backdrop: a navy dim, darker toward the edges (vignette);
+//   6 box      - a rounded box with a soft drop shadow: a = corner radius px, b = shadow px (the
+//                element's rect includes b px of shadow on every side). Vertical gradient
+//                color0 (top) to color1 (bottom); color1.a = the white rim's strength;
+//   7 glow box - shape 6 with a pulsing cyan outer glow instead of the shadow (the selection).
+// The element's image alpha (input.color.a) fades the whole shape, so C# fades the menu in and out.
 
 [[vk::binding(0, 0)]] Texture2D g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
@@ -49,10 +36,16 @@ struct PausePush
 
 [[vk::push_constant]] PausePush pc;
 
-static const float3 SWIRL_BLUE = float3(0.110, 0.471, 0.733); // rig 28,120,187 (outer band)
-static const float3 INNER_BLUE = float3(0.063, 0.420, 0.733); // rig 16,107,187
-static const float3 PALE       = float3(0.733, 0.733, 0.733); // rig 187,187,187 (white bands)
-static const float3 CYAN       = float3(0.220, 0.733, 0.655); // rig 56,187,167 (gem track)
+static const float3 PALE      = float3(0.94, 0.97, 1.0);
+static const float3 NAVY      = float3(0.008, 0.02, 0.055);
+static const float3 GLOW_CYAN = float3(0.45, 0.95, 1.0);
+
+// Signed distance to a rounded box of half-extent b and corner radius r, in pixels.
+float RoundBox(float2 p, float2 b, float r)
+{
+    const float2 q = abs(p) - (b - r);
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
@@ -61,53 +54,79 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     const int shape = int(pc.params.y + 0.5);
     float alpha = 0.0;
-    float3 col = SWIRL_BLUE;
+    float3 col = PALE;
 
-    if (shape == 0)
+    if (shape == 1 || shape == 2)
     {
-        // The swirl, in frame pixels about its centre (318,210); the box is 484x378.
-        const float2 p = input.local * float2(242.0, 189.0);
-        const float e = length(p / float2(238.0, 185.0));
-        if (e > 1.02) { discard; }
-        if (e > 1.0)        { col = PALE; }        // outer white rim
-        else if (e > 0.77)  { col = SWIRL_BLUE; }  // outer blue band
-        else                { col = PALE; }        // white band
-        // The inner blue crescent right of the badge (badge circle about (290,176) r=100), and
-        // its hook carrying the 0%.
-        const bool crescent = e < 0.62 && p.x > 7.0 && length(p - float2(-28.0, -34.0)) > 100.0;
-        const bool hook = e <= 0.77 && length(p - float2(147.0, 80.0)) < 62.0;
-        if (crescent || hook) { col = INNER_BLUE; }
-        alpha = smoothstep(1.02, 1.005, e);
-    }
-    else if (shape == 1 || shape == 2)
-    {
-        // A counter disc / the menu ball: white rim, graded fill lit from the top left.
         const float d = length(input.local);
         if (d > 1.0) { discard; }
         const float rim = shape == 2 ? 0.93 : 0.90;
         const float lit = saturate(0.5 - 0.5 * (input.local.x + input.local.y));
-        col = d > rim ? PALE : lerp(pc.color1.rgb, pc.color0.rgb, lit);
-        alpha = smoothstep(1.0, 0.97, d);
+        // Anti-aliased rim edge: one pixel wide at any size.
+        const float px = 2.0 / max(min(input.localScale.x, input.localScale.y), 1.0);
+        col = lerp(lerp(pc.color1.rgb, pc.color0.rgb, lit), PALE, smoothstep(rim - px, rim, d));
+        alpha = smoothstep(1.0, 1.0 - px, d);
     }
     else if (shape == 4)
     {
         const float2 q = abs(input.local);
         const float r = length(input.local);
-        const float rays = saturate(1.0 - r) * saturate(1.0 - min(q.x, q.y) * 7.0);
-        const float core = saturate(1.0 - r * 2.5);
-        alpha = saturate(rays + core);
-        if (alpha <= 0.0) { discard; }
-        col = lerp(pc.color0.rgb, float3(1.0, 1.0, 1.0), core);
+        // A full soft blob in the gem's colour (the rig's ring reads as saturated glowing dots),
+        // a faint glint, and a small white-hot centre.
+        const float blob = saturate(1.0 - r);
+        const float halo = blob * sqrt(blob);
+        const float glint = blob * saturate(1.0 - min(q.x, q.y) * 10.0) * 0.5;
+        const float core = exp(-r * r * 70.0);
+        alpha = saturate(halo + glint + core);
+        if (alpha <= 0.002) { discard; }
+        col = lerp(saturate(pc.color0.rgb * 1.25), float3(1.0, 1.0, 1.0), saturate(core));
+    }
+    else if (shape == 5)
+    {
+        const float v = smoothstep(0.15, 1.45, length(input.local));
+        col = NAVY;
+        alpha = lerp(0.55, 0.86, v);
     }
     else
     {
-        // The gem track: its 188x342 box is centred at (509,201); p is relative to the gem circle.
-        const float2 p = input.local * float2(94.0, 171.0) + float2(509.0 - 428.9, 201.0 - 204.2);
-        const float r = length(p);
-        const float a = degrees(atan2(p.y, p.x));
-        if (a < -88.0 || a > 74.0 || r < 122.0 || r > 172.0) { discard; }
-        col = (r < 127.0 || r > 167.0) ? PALE : CYAN;
-        alpha = smoothstep(172.0, 170.5, r) * smoothstep(122.0, 123.5, r);
+        // Rounded box (6) / glowing selection box (7), in pixels about the rect centre.
+        const float2 size = input.localScale;
+        const float2 p = input.local * size * 0.5;
+        const float margin = max(pc.params.w, 0.0);
+        const float2 hb = max(size * 0.5 - margin, float2(1.0, 1.0));
+        const float radius = min(pc.params.z, min(hb.x, hb.y));
+        const float d = RoundBox(p, hb, radius);
+        const float body = saturate(0.5 - d);
+
+        // Fill: vertical gradient with a soft top sheen, and a white rim just inside the edge.
+        const float t = saturate(p.y / hb.y * 0.5 + 0.5);
+        float3 fill = lerp(pc.color0.rgb, pc.color1.rgb, t);
+        fill += 0.08 * smoothstep(0.45, 0.0, t);
+        const float rimW = clamp(radius * 0.1, 1.5, 3.5);
+        const float rim = smoothstep(-rimW - 1.0, -rimW, d) * pc.color1.a;
+        fill = lerp(fill, PALE, rim);
+
+        float3 outer = NAVY;
+        float outerA = 0.0;
+        if (margin > 0.0)
+        {
+            if (shape == 7)
+            {
+                const float pulse = 0.8 + 0.2 * sin(pc.params.x * 6.0);
+                const float g = saturate(1.0 - max(d, 0.0) / margin);
+                outer = GLOW_CYAN;
+                outerA = 0.75 * pulse * g * g;
+            }
+            else
+            {
+                const float ds = RoundBox(p - float2(0.0, margin * 0.3), hb, radius);
+                const float g = saturate(1.0 - max(ds + margin * 0.15, 0.0) / (margin * 0.85));
+                outerA = 0.55 * g * g;
+            }
+        }
+        alpha = body + outerA * (1.0 - body);
+        if (alpha <= 0.002) { discard; }
+        col = (fill * body + outer * outerA * (1.0 - body)) / alpha;
     }
 
     return float4(col, alpha * input.color.a);

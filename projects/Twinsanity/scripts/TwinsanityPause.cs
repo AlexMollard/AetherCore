@@ -6,28 +6,31 @@ using AetherCore;
 namespace AetherGame;
 
 /// <summary>
-/// The original's in-game pause menu (N. Sanity Beach). Escape or gamepad Start freezes the
-/// game (Time.Scale 0) and plays the menu's opening; Up/Down moves the selection through the
-/// option drum, Start/Back/RESUME closes it and the HUD pops back in (TwinsanityLevel calls
-/// TwinsanityHud.PopBoth on JustClosed). All menu animation runs on the unscaled clock, as in
-/// the original: the game is frozen underneath.
+/// The in-game pause menu (N. Sanity Beach). Escape or gamepad Start freezes the game
+/// (Time.Scale 0) and fades the menu in; Up/Down (d-pad, left stick) moves the selection through
+/// the option drum, Start/Back/confirm closes it and the HUD pops back in (TwinsanityLevel calls
+/// TwinsanityHud.PopBoth on JustClosed). All menu animation runs on the unscaled clock: the game
+/// is frozen underneath.
+///
+/// A redesign of the original's layout, not a copy: the same parts - the N. Sanity Island
+/// badge on the menu ball, the wumpa / lives / crystal counters on their discs, the six-gem
+/// track with its completion "0%", the option drum and the SELECT/BACK and L1/L2/R1/R2 prompts -
+/// float straight on a vignette dim of the frozen world - no big backdrop - in a two-column grid
+/// with even margins. The selection is a glowing capsule that glides between rows. Everything is
+/// laid out in a 640x480 design frame fitted inside the screen (scale = min of the two axis
+/// fits, centred), so 16:9, 4:3 and ultrawide show the same composition with nothing clipped.
 ///
 /// Art is the disc's own: the option text, counter digits, "0%", SELECT/BACK and the
 /// L1/L2/R1/R2 + arrow prompts are Crash_Euro glyphs (ui/fonts, item strings from
 /// ui/text/English.txt; the prompt glyph characters are English.txt lines 30-33, kept as
 /// literals because the file's high-byte characters do not survive the engine's UTF-8 asset
-/// reads). The badge is ui/titles/English/Hub01_00.png, the counter icons are ui/icons. The
-/// swirl backdrop, the counter discs, the menu ball and the gem track are drawn by the PS2 game
-/// as coloured geometry - no texture for them exists on the disc (tw-extract walked every
-/// archive) - so they are analytic SDF shapes in the project's ui_pause.slang UI material,
-/// measured on 35 fps rig captures (logs/pause/rig/).
+/// reads). The badge is ui/titles/English/Hub01_00.png, the counter and gem icons are ui/icons.
+/// The boxes, discs and ball are analytic shapes in the project's ui_pause.slang.
 ///
 /// Not faithful, stated plainly: OPTIONS, SAVE GAME, LOAD GAME and QUIT GAME have no target in
 /// this single-level build, so selecting them closes the menu exactly like RESUME (the
 /// original opens sub-screens); DISABLE AUTOSAVE is drawn greyed and Up/Down skips it, as in
-/// the original. Menu sounds are not reproduced (none extracted yet). Glyph rows are placed on
-/// the bowed arc the rig shows, but the original also tilts each glyph along the arc; our
-/// upright glyphs from the disc's font already match the rig rows closely.
+/// the original.
 /// </summary>
 public sealed class TwinsanityPause
 {
@@ -36,14 +39,14 @@ public sealed class TwinsanityPause
 	private const string IconDir = "project://assets/ui/icons/";
 	private const string TitlePath = "project://assets/ui/titles/English/Hub01_00.png";
 	private const string StringsPath = "project://assets/ui/text/English.txt";
-	private const float FrameHeight = 480.0f;
+	private const float GlyphH = 39.0f; // Crash_Euro cell height, texels
 
 	// Option drum: English.txt line indexes - 12 'options', 27 'save game', 11 'load game',
 	// 23 'disable autosave', 28 'quit game', 29 'resume'. Line 3 (DISABLE AUTOSAVE) is greyed
 	// out and skipped by Up/Down, exactly as in the original.
 	private static readonly int[] ItemLines = { 12, 27, 11, 23, 28, 29 };
 	private const int GreyedItem = 3;
-	private const int DefaultItem = 5; // the menu opens on RESUME (rig: the idle pulse is on RESUME)
+	private const int DefaultItem = 5; // the menu opens on RESUME, as in the original
 
 	// The bottom prompts: Crash_Euro button glyphs - '\' cross, '^' triangle, '<' '>' arrows,
 	// '{' '¦' L1 L2, '}' '¬' R1 R2 (English.txt lines 30-33).
@@ -52,54 +55,51 @@ public sealed class TwinsanityPause
 	private const string ShoulderLeft = "< { \u00A6";   // '< { ¦'
 	private const string ShoulderRight = "} \u00AC >";  // '} ¬ >'
 
-	// Measured on the rig's idle menu frame (logs/pause/rig/idle/t00334.png, 640x480 PAL) with
-	// absolute-labelled 3x crops (logs/pause/q_*.png) and colour scan lines (see ui_pause.slang):
-	// element centres/boxes and glyph run scales from ink widths against the font's texel widths
-	// ('options' 124 px of 128 texels).
-	// Transitions (logs/pause/rig/open and close, 35 fps): the swirl, badge, ball and text grow out
-	// of the centre from ~0.2 scale while the counter discs slide in from the left edge and the gem
-	// track from the right, ~0.2 s; closing plays it backwards in ~0.15 s (rig close: art from 412 ms
-	// to gone at 560 ms), while the prompts and the world dim fade more slowly and are clear at
-	// ~0.26 s (the world is back to full brightness at 671 ms).
-	private const float OpenTime = 0.2f, CloseArtTime = 0.15f, CloseTime = 0.26f;
-	private const float MinScale = 0.2f, SlideOut = 220.0f;
-	// While the menu is up the whole PS2 frame reads darker: the world drops to ~24% (dim) and the
-	// menu's own textured art peaks at 191 of 255 (the pre-open frame peaks at 248). The disc textures
-	// are exported at full brightness, so they are drawn tinted to match; the code-drawn shapes
-	// already use the rig's on-screen colours.
-	private static readonly Vector4 DiscLit = new(0.35f, 0.64f, 0.73f, 1.0f);   // rig 89,163,187
-	private static readonly Vector4 DiscShade = new(0.06f, 0.28f, 0.73f, 1.0f); // rig 16,72,187
-	private static readonly Vector4 BallLit = new(0.25f, 0.58f, 0.72f, 1.0f);   // rig 64,149,184
-	private static readonly Vector4 BallShade = new(0.06f, 0.36f, 0.56f, 1.0f); // rig 16,91,144
-	private const float DimAlpha = 0.76f;
-	private const float MenuBright = 0.75f;
-	private const float GroupCenterX = 320.0f, GroupCenterY = 240.0f;
-	// Swirl box: the outer ellipse (238,185) about (318,210) plus its white rim; track box: the
-	// arc band about the gem circle between -88 and +74 degrees (ui_pause.slang holds the shapes).
-	private const float SwirlX = 318.0f, SwirlY = 210.0f, SwirlW = 484.0f, SwirlH = 378.0f;
-	private const float TrackX = 509.0f, TrackY = 201.0f, TrackW = 188.0f, TrackH = 342.0f;
-	// Gem slots: least-squares circle through the six rig gem centres (residuals <= 5 px).
-	private const float GemCx = 428.9f, GemCy = 204.2f, GemR = 146.0f, GemAngle = -72.0f, GemStep = 26.0f, GemSize = 44.0f;
-	private const float BadgeX = 290.0f, BadgeY = 174.0f, BadgeW = 180.0f, BadgeH = 184.0f;
-	private const float BallX = 320.0f, BallY = 368.0f, BallSize = 166.0f;
-	private const float ZeroPctX = 454.0f, ZeroPctY = 271.0f, ZeroPctScaleX = 1.35f, ZeroPctScaleY = 0.9f;
-	private const float RowsX = 320.0f, RowsY = 302.0f, RowStep = 24.5f;
-	private const float RowScaleX = 0.97f, RowScaleY = 0.65f, RowSelectedX = 1.09f, RowSelectedY = 0.78f;
-	private const float RowPulse = 0.03f, PulsePeriod = 0.65f;
-	private const float RowBow = 3.5f, RowBowResume = 6.0f;
-	private const float GreyedTintR = 0.28f, GreyedTintG = 0.16f, GreyedTintB = 0.07f; // dark brown, rig row 4
-	private const float PromptScaleX = 0.9f, PromptScaleY = 0.55f, ShoulderScaleX = 1.08f, ShoulderScaleY = 0.9f;
-	private const float SelectX = 105.0f, BackX = 550.0f, PromptY = 451.0f;
-	private const float ShoulderLX = 104.0f, ShoulderRX = 536.0f, ShoulderY = 424.0f;
-	private const float DigitScaleX = 1.35f, DigitScaleY = 1.0f;
+	// Transitions: the menu fades in while growing from OpenScale with an ease-out; closing
+	// fades and shrinks back with an ease-in. The dim follows the same curve.
+	private const float OpenTime = 0.22f, CloseTime = 0.16f, OpenScale = 0.92f;
+	private const float DimAlpha = 1.0f;          // the vignette shader carries the dim's depth
+	private const float HighlightRate = 18.0f;    // 1/s: capsule glide and row grow (exponential)
+	private const float PulsePeriod = 1.1f, RowPulse = 0.02f;
 	private const float IconWobble = 0.03f, WobblePeriod = 1.4f; // badge/icons breathe while idle
 
-	// Counter discs, icons and read-outs, top to bottom: wumpa, Crash head (lives), crystals. The
-	// count is right-aligned at CountRight, left of its icon; the icons are drawn stretched as the
-	// PS2 draws them (the crystal cluster is 50x129 px on screen from a 64x53 texel tile).
-	private static readonly (float X, float Y, float Size)[] Discs = { (113.0f, 103.0f, 98.0f), (91.0f, 216.0f, 98.0f), (148.0f, 318.0f, 100.0f) };
-	private static readonly (float X, float Y, float W, float H)[] Icons = { (131.0f, 97.0f, 56.0f, 70.0f), (96.0f, 212.0f, 58.0f, 75.0f), (157.0f, 314.0f, 50.0f, 156.0f) };
-	private static readonly (float Right, float Y)[] Counts = { (97.5f, 103.0f), (62.0f, 215.0f), (125.0f, 317.0f) };
+	// Layout, in the 640x480 design frame (element centres unless named X0/Y0), with a 40-unit
+	// outer margin: left column 40..280 (badge + counters), right column 300..600 (option drum),
+	// the gem track across the width, a footer row of prompts. Boxes cast a small soft shadow.
+	private const float FrameW = 640.0f, FrameH = 480.0f, CentreX = 320.0f, CentreY = 240.0f;
+	private const float BoxShadow = 6.0f;
+	private const float BadgeX = 160.0f, BadgeY = 106.0f, BadgeW = 108.0f, BadgeH = 110.0f, BallSize = 132.0f;
+	private const float PillX = 164.0f, PillY = 204.0f, PillStep = 44.0f, PillW = 200.0f, PillH = 34.0f;
+	private const float DiscX = 72.0f, DiscSize = 42.0f, CountRight = 246.0f, DigitScaleX = 0.9f, DigitScaleY = 0.66f;
+	private const float RowsX = 450.0f, RowsY = 62.0f, RowStep = 47.0f, CapsuleW = 284.0f, CapsuleH = 42.0f, CapsuleGlow = 12.0f;
+	private const float RowScaleX = 0.78f, RowScaleY = 0.56f, RowSelectedX = 0.9f, RowSelectedY = 0.66f;
+	private const float StripX = 320.0f, StripY = 356.0f, StripW = 560.0f, StripH = 52.0f;
+	private const float GemX0 = 80.0f, GemStep = 70.0f, GemSize = 38.0f, SocketSize = 44.0f;
+	private const float ZeroPctX = 540.0f, ZeroPctScaleX = 1.0f, ZeroPctScaleY = 0.72f;
+	private const float FooterY = 428.0f, FooterLeft = 44.0f, FooterRight = 596.0f, FooterGap = 18.0f;
+	private const float PromptScaleX = 0.7f, PromptScaleY = 0.46f, ShoulderScaleX = 0.72f, ShoulderScaleY = 0.6f;
+
+	// Counters, top to bottom: wumpa, Crash head (lives), crystals. Icon boxes in design units
+	// (the crystal cluster is a tall 64x53 texel tile the PS2 draws stretched).
+	private static readonly string[] CounterIcons = { "Icons_13.png", "Icons_00.png", "Icons_15.png" };
+	private static readonly (float W, float H)[] IconSizes = { (29.0f, 36.0f), (31.0f, 40.0f), (18.0f, 50.0f) };
+
+	// Colours: the menu's blues and the gem track's cyan, at full brightness.
+	private static readonly Vector4 PillTop = new(0.02f, 0.11f, 0.28f, 1.0f);
+	private static readonly Vector4 PillBottom = new(0.05f, 0.24f, 0.5f, 0.35f);
+	private static readonly Vector4 StripTop = new(0.3f, 0.82f, 0.74f, 1.0f);
+	private static readonly Vector4 StripBottom = new(0.13f, 0.55f, 0.56f, 0.95f);
+	private static readonly Vector4 SocketTop = new(0.04f, 0.27f, 0.33f, 1.0f);
+	private static readonly Vector4 SocketBottom = new(0.09f, 0.42f, 0.45f, 0.4f);
+	private static readonly Vector4 CapsuleTop = new(1.0f, 0.99f, 0.93f, 1.0f);
+	private static readonly Vector4 CapsuleBottom = new(0.8f, 0.88f, 0.94f, 1.0f);
+	private static readonly Vector4 DiscLit = new(0.47f, 0.85f, 0.97f, 1.0f);
+	private static readonly Vector4 DiscShade = new(0.08f, 0.37f, 0.86f, 1.0f);
+	private static readonly Vector4 BallLit = new(0.33f, 0.77f, 0.96f, 1.0f);
+	private static readonly Vector4 BallShade = new(0.08f, 0.48f, 0.75f, 1.0f);
+	private const float RowIdle = 0.82f;                       // unselected row brightness
+	private static readonly Vector3 GreyedTint = new(0.5f, 0.58f, 0.7f);
+	private const float GreyedAlpha = 0.55f;
 
 	private readonly Dictionary<char, (float W, float H)> _glyphs = new();
 	private readonly Dictionary<Entity, TextRun> _runs = new();
@@ -117,46 +117,42 @@ public sealed class TwinsanityPause
 	private Entity _canvas;
 	private Entity _frame;
 	private Entity _dim;
-	private Entity _swirl;
-	private Entity _track;
-	private readonly Entity[] _gems = new Entity[6];
-	private Entity _badge;
 	private Entity _ball;
-	private Entity _zeroPct;
+	private Entity _badge;
+	private readonly Entity[] _pills = new Entity[3];
 	private readonly Entity[] _discs = new Entity[3];
 	private readonly Entity[] _icons = new Entity[3];
-	private readonly Entity[] _rows = new Entity[6];
 	// Each counter owns three digit images, re-textured when its value changes (as the HUD does).
 	private readonly Entity[,] _digits = new Entity[3, 3];
 	private readonly int[] _shownCounts = { -1, -1, -1 };
+	private Entity _strip;
+	private readonly Entity[] _sockets = new Entity[6];
+	private readonly Entity[] _gems = new Entity[6];
+	private Entity _zeroPct;
+	private Entity _capsule;
+	private readonly Entity[] _rows = new Entity[6];
 	private Entity _select, _back, _shoulderL, _shoulderR;
+	private readonly List<Entity> _shapes = new(); // every non-glyph element, for SetVisible
 
 	// Per-frame placement state.
-	private float _s = 1.0f;  // screen scale: frame px -> screen px
-	private float _ox;        // screen x of the 640x480 frame's left edge
-	private float _k = 1.0f;  // menu-open group scale about the group centre
-	private float _a = 1.0f;  // master alpha
-	private float _slide;         // how far the side groups sit off screen (frame px)
-	private float _dimAlpha;      // world dim, fades on its own (slower) curve when closing
-	private float _promptAlpha;   // the bottom prompts, likewise
-	private Group _group;         // which transition group Place() is laying out
-
-	// Transition groups: the centre art scales about the frame centre, the counter discs slide
-	// off the left edge, the gem track off the right; the prompts only fade.
-	private enum Group { Centre, Left, Right, Fixed }
+	private float _s = 1.0f;     // screen scale: design units -> screen px
+	private float _ox, _oy;      // screen px of the design frame's top-left corner
+	private float _k = 1.0f;     // open/close scale about the frame centre
+	private float _a = 1.0f;     // master alpha
+	private float _hiY;          // the selection capsule's current y (design units)
+	private readonly float[] _rowK = new float[6]; // per row: 0 idle .. 1 selected, eased
 
 	private sealed class TextRun
 	{
 		public Entity First = default;
 		public readonly List<(Entity Glyph, float Advance, float Width)> Glyphs = new();
 		public float Total;
-		public Vector4 Tint = new(MenuBright, MenuBright, MenuBright, 1.0f);
 	}
 
 	/// <summary>True on the frame the menu finished closing: TwinsanityLevel pops the HUD back in.</summary>
 	public bool JustClosed => _justClosed;
 
-	// Gem track slots, top to bottom (rig logs/gameplay/rig_gemtrack_all.png: the level's gem word
+	// Gem track slots, left to right (rig logs/gameplay/rig_gemtrack_all.png: the level's gem word
 	// at 0x98EFA4 set bit by bit, bit 5 - slot): yellow, red, purple, green, clear, blue. The disc
 	// icons for them are Icons_12 (yellow) down to Icons_07 (blue); Icons_06 is the empty slot.
 	private static readonly string[] GemColours = { "yellow", "red", "purple", "green", "clear", "blue" };
@@ -197,9 +193,11 @@ public sealed class TwinsanityPause
 				{
 					for (int i = 0; i < _gems.Length; i++)
 					{
-						Ui.SetImageTexture(_gems[i], IconDir + ((gems >> i & 1) != 0 ? $"Icons_{12 - i:00}.png" : "Icons_06.png"));
+						bool have = (gems >> i & 1) != 0;
+						Ui.SetImageTexture(_gems[i], IconDir + (have ? $"Icons_{12 - i:00}.png" : "Icons_06.png"));
 					}
 					_selected = DefaultItem;
+					SnapHighlight();
 					_phase = Phase.Opening;
 					_phaseTime = 0.0f;
 					Time.Pause(); // gameplay freezes; this menu keeps animating unscaled
@@ -239,7 +237,7 @@ public sealed class TwinsanityPause
 				_justClosed = true;
 				return;
 		}
-		Layout(wumpa, lives);
+		Layout(wumpa, lives, dt, now);
 	}
 
 	private void PollMenuInput(bool startEdge)
@@ -296,6 +294,15 @@ public sealed class TwinsanityPause
 		}
 	}
 
+	private void SnapHighlight()
+	{
+		_hiY = RowsY + RowStep * _selected;
+		for (int i = 0; i < _rowK.Length; i++)
+		{
+			_rowK[i] = i == _selected ? 1.0f : 0.0f;
+		}
+	}
+
 	private bool Build()
 	{
 		if (!LoadMetrics())
@@ -305,35 +312,22 @@ public sealed class TwinsanityPause
 		_canvas = Ui.CreateCanvas();
 		_canvas.MarkTransient();
 		// The frame image carries the canvas's resolved rect for the layout scale (the HUD
-		// does the same); the dim draws first, so everything else lands above it.
+		// does the same). Creation order is draw order: the dim first, the prompts last.
 		_frame = Ui.CreateImage(_canvas);
 		Ui.SetAnchors(_frame, Vector2.Zero, Vector2.One);
 		Ui.SetOffsets(_frame, Vector2.Zero, Vector2.Zero);
 		Ui.SetImageColor(_frame, Vector4.Zero);
-		_dim = Ui.CreateImage(_canvas);
+		_dim = Shape(5);
 		Ui.SetAnchors(_dim, Vector2.Zero, Vector2.One);
 		Ui.SetOffsets(_dim, Vector2.Zero, Vector2.Zero);
-		Ui.SetImageColor(_dim, new Vector4(0.0f, 0.0f, 0.0f, DimAlpha));
 
-		_swirl = ArtShape(0, SwirlW, SwirlH);
-		_track = ArtShape(3, TrackW, TrackH);
-		for (int i = 0; i < _gems.Length; i++)
+		_ball = Shape(2, BallLit, BallShade);
+		_badge = Icon(TitlePath);
+		for (int i = 0; i < 3; i++)
 		{
-			_gems[i] = Icon(IconDir + "Icons_06.png", GemSize, GemSize);
-		}
-		_badge = Icon(TitlePath, BadgeW, BadgeH);
-		_ball = ArtShape(2, BallSize, BallSize);
-		Ui.SetMaterialColors(_ball, BallLit, BallShade);
-
-		// Counter discs: wumpa, Crash head (lives), crystals - disc, icon and count each.
-		string[] iconFiles = { "Icons_13.png", "Icons_00.png", "Icons_15.png" };
-		for (int i = 0; i < _discs.Length; i++)
-		{
-			_discs[i] = ArtShape(1, Discs[i].Size, Discs[i].Size);
-			_icons[i] = Icon(IconDir + iconFiles[i], Icons[i].W, Icons[i].H);
-		}
-		for (int i = 0; i < _discs.Length; i++)
-		{
+			_pills[i] = Shape(6, PillTop, PillBottom);
+			_discs[i] = Shape(1, DiscLit, DiscShade);
+			_icons[i] = Icon(IconDir + CounterIcons[i]);
 			for (int d = 0; d < 3; d++)
 			{
 				Entity e = Ui.CreateImage(_canvas);
@@ -342,29 +336,31 @@ public sealed class TwinsanityPause
 				_digits[i, d] = e;
 			}
 		}
-
+		_strip = Shape(6, StripTop, StripBottom);
+		for (int i = 0; i < _gems.Length; i++)
+		{
+			_sockets[i] = Shape(6, SocketTop, SocketBottom);
+			_gems[i] = Icon(IconDir + "Icons_06.png");
+		}
 		_zeroPct = TextImage("0%");
+		_capsule = Shape(7, CapsuleTop, CapsuleBottom);
+
 		string[] items = LoadItems();
 		for (int i = 0; i < _rows.Length; i++)
 		{
 			_rows[i] = TextImage(items[i]);
-			if (i == GreyedItem)
-			{
-				_runs[_rows[i]].Tint = new Vector4(GreyedTintR, GreyedTintG, GreyedTintB, 1.0f);
-			}
 		}
+		_shoulderL = TextImage(ShoulderLeft);
 		_select = TextImage(SelectRun);
 		_back = TextImage(BackRun);
-		_shoulderL = TextImage(ShoulderLeft);
 		_shoulderR = TextImage(ShoulderRight);
 
 		SetVisible(false);
 		return true;
 	}
 
-	// A pause-geometry element: a plain image with the ui_pause UI material, one shape per
-	// params.y (see ui_pause.slang for the measurements).
-	private Entity ArtShape(int shape, float w, float h)
+	// A ui_pause element: a plain image with the project's UI material (shape per params.y).
+	private Entity Shape(int shape, Vector4 top = default, Vector4 bottom = default)
 	{
 		Entity e = Ui.CreateImage(_canvas);
 		Ui.SetAnchors(e, Vector2.Zero, Vector2.Zero);
@@ -372,33 +368,27 @@ public sealed class TwinsanityPause
 		Ui.SetImageColor(e, Vector4.One);
 		Ui.SetMaterial(e, "ui_pause");
 		Ui.SetMaterialParams(e, new Vector4(0.0f, shape, 0.0f, 0.0f));
-		// Disc fill: lit edge (top left) to shaded edge, sampled on the rig frames (the ball's
-		// own pair is set after).
-		Ui.SetMaterialColors(e, DiscLit, DiscShade);
-		Ui.SetRect(e, 0.0f, 0.0f, w, h);
+		Ui.SetMaterialColors(e, top, bottom);
+		_shapes.Add(e);
 		return e;
 	}
 
-	private Entity Icon(string texture, float w, float h)
+	private Entity Icon(string texture)
 	{
 		Entity e = Ui.CreateImage(_canvas);
 		Ui.SetAnchors(e, Vector2.Zero, Vector2.Zero);
 		Ui.SetPivot(e, new Vector2(0.5f, 0.5f));
 		Ui.SetImageColor(e, Vector4.One);
 		Ui.SetImageTexture(e, texture);
-		Ui.SetRect(e, 0.0f, 0.0f, w, h);
+		_shapes.Add(e);
 		return e;
 	}
 
 	// One image per glyph, pivoted at its centre. The run is keyed on its first glyph entity;
 	// a run is always a real glyph followed by whatever else the string carries.
-	private Entity TextImage(string text, Vector4? tint = null)
+	private Entity TextImage(string text)
 	{
 		var run = new TextRun();
-		if (tint is Vector4 given)
-		{
-			run.Tint = given;
-		}
 		foreach (char c in text)
 		{
 			if (c != ' ' && _glyphs.TryGetValue(c, out var g) && g.W > 0.0f)
@@ -406,7 +396,6 @@ public sealed class TwinsanityPause
 				Entity e = Ui.CreateImage(_canvas);
 				Ui.SetAnchors(e, Vector2.Zero, Vector2.Zero);
 				Ui.SetPivot(e, new Vector2(0.5f, 0.5f));
-				Ui.SetImageColor(e, run.Tint);
 				Ui.SetImageTexture(e, $"{FontDir}{(int)c}.png");
 				run.Glyphs.Add((e, run.Total + g.W * 0.5f, g.W));
 				if (!run.First.IsValid)
@@ -427,7 +416,7 @@ public sealed class TwinsanityPause
 	}
 
 	// The counter read-outs: up to three right-aligned Crash_Euro digits.
-	private void SetCount(int index, int value)
+	private void SetCount(int index, int value, float y)
 	{
 		string text = Math.Clamp(value, 0, 999).ToString();
 		if (_shownCounts[index] != value)
@@ -438,7 +427,7 @@ public sealed class TwinsanityPause
 				Ui.SetImageTexture(_digits[index, d], $"{FontDir}{(int)text[d]}.png");
 			}
 		}
-		float xEnd = Counts[index].Right;
+		float xEnd = CountRight;
 		for (int d = 2; d >= 0; d--) // right to left: image d shows text[d]
 		{
 			Entity e = _digits[index, d];
@@ -448,159 +437,153 @@ public sealed class TwinsanityPause
 			{
 				continue;
 			}
-			float w = _glyphs[text[d]].W;
-			Place(e, xEnd - w * DigitScaleX * 0.5f, Counts[index].Y, w * DigitScaleX, 39.0f * DigitScaleY);
-			Ui.SetImageColor(e, Tint());
-			xEnd -= w * DigitScaleX;
+			float w = _glyphs[text[d]].W * DigitScaleX;
+			Place(e, xEnd - w * 0.5f, y, w, GlyphH * DigitScaleY);
+			Ui.SetImageColor(e, new Vector4(1.0f, 1.0f, 1.0f, _a));
+			xEnd -= w;
 		}
 	}
 
-	// Centre-place an element in 640x480 frame units through its transition group, then to screen px.
+	// Centre-place an element in design units, through the open/close scale, to screen px.
 	private void Place(Entity e, float x, float y, float w, float h)
 	{
-		float k = _group == Group.Centre ? _k : 1.0f;
-		float dx = _group == Group.Left ? -_slide : _group == Group.Right ? _slide : 0.0f;
-		x = GroupCenterX + (x - GroupCenterX) * k + dx;
-		y = GroupCenterY + (y - GroupCenterY) * k;
-		Ui.SetRect(e, _ox + x * _s, y * _s, w * k * _s, h * k * _s);
+		x = CentreX + (x - CentreX) * _k;
+		y = CentreY + (y - CentreY) * _k;
+		Ui.SetRect(e, _ox + x * _s, _oy + y * _s, w * _k * _s, h * _k * _s);
 	}
 
-	// The disc textures' tint: the rig's menu brightness, faded with the menu.
-	private Vector4 Tint() => new(MenuBright, MenuBright, MenuBright, _a);
+	// A rounded ui_pause box (shape 6/7): the rect grows by the shadow/glow margin on every side,
+	// and the shader takes the radius and margin in screen px.
+	private void PlaceBox(Entity e, int shape, float x, float y, float w, float h, float radius, float margin, float alpha)
+	{
+		Place(e, x, y, w + margin * 2.0f, h + margin * 2.0f);
+		float px = _s * _k;
+		Ui.SetMaterialParams(e, new Vector4(Time.UnscaledTime, shape, radius * px, margin * px));
+		Ui.SetImageColor(e, new Vector4(1.0f, 1.0f, 1.0f, alpha * _a));
+	}
 
-	// Place a glyph run centred at (cx, cy), scaled (sx, sy), bowed: each glyph sits on the
-	// downward arc the rig rows show (dy = 4*bow*u*(1-u), y down).
-	private void PlaceRun(Entity key, float cx, float cy, float sx, float sy, float bow, float alphaScale)
+	// Place a glyph run at (x, cy), scaled (sx, sy), tinted; align -1 puts x at the run's left
+	// edge, 0 at its centre, 1 at its right edge.
+	private void PlaceRun(Entity key, float x, float cy, float sx, float sy, Vector4 tint, int align = 0)
 	{
 		TextRun run = _runs[key];
-		Vector4 tint = run.Tint;
-		tint.W *= _group == Group.Fixed ? alphaScale : _a * alphaScale;
-		float startX = cx - run.Total * sx * 0.5f;
+		float startX = x - run.Total * sx * (align + 1) * 0.5f;
 		foreach ((Entity glyph, float advance, float width) in run.Glyphs)
 		{
-			float u = advance / Math.Max(run.Total, 1.0f);
-			float dy = 4.0f * bow * u * (1.0f - u);
-			Place(glyph, startX + advance * sx, cy + dy, width * sx, 39.0f * sy);
+			Place(glyph, startX + advance * sx, cy, width * sx, GlyphH * sy);
 			Ui.SetImageColor(glyph, tint);
 		}
 	}
 
-	private void Layout(int wumpa, int lives)
+	private float RunWidth(Entity key, float sx) => _runs[key].Total * sx;
+
+	private void Layout(int wumpa, int lives, float dt, float now)
 	{
 		Vector4 screen = Ui.GetRect(_frame);
-		_s = screen.W / FrameHeight;
-		// The original composes in a 4:3 640x480 frame; a wider viewport centres it.
-		_ox = (screen.Z - 640.0f * _s) * 0.5f;
-		if (_s <= 0.0f)
+		if (screen.Z <= 0.0f || screen.W <= 0.0f)
 		{
 			return;
 		}
+		// Fit the design frame inside the screen and centre it: 4:3 fills it, wider screens
+		// pillarbox it, taller ones letterbox it - nothing is ever cut off.
+		_s = MathF.Min(screen.W / FrameH, screen.Z / FrameW);
+		_ox = (screen.Z - FrameW * _s) * 0.5f;
+		_oy = (screen.W - FrameH * _s) * 0.5f;
 
+		float p = 1.0f; // 0 = gone, 1 = in place
 		float idle = 0.0f;
-		float p; // 0 = off (tiny / slid away / transparent), 1 = in place
 		switch (_phase)
 		{
 			case Phase.Opening:
 			{
-				float t = Math.Min(_phaseTime / OpenTime, 1.0f);
-				p = 1.0f - (1.0f - t) * (1.0f - t); // ease out
-				_dimAlpha = DimAlpha * p;
-				_promptAlpha = Math.Clamp((_phaseTime - OpenTime * 0.5f) / (OpenTime * 0.5f), 0.0f, 1.0f);
+				float t = 1.0f - Math.Min(_phaseTime / OpenTime, 1.0f);
+				p = 1.0f - t * t * t; // ease out
 				break;
 			}
 			case Phase.Closing:
 			{
-				float t = Math.Min(_phaseTime / CloseArtTime, 1.0f);
-				p = 1.0f - t * t; // ease in: holds, then goes
-				float slow = 1.0f - Math.Min(_phaseTime / CloseTime, 1.0f);
-				_dimAlpha = DimAlpha * slow;
-				_promptAlpha = slow;
+				float t = Math.Min(_phaseTime / CloseTime, 1.0f);
+				p = 1.0f - t * t; // ease in
 				break;
 			}
 			default:
-				p = 1.0f;
-				_dimAlpha = DimAlpha;
-				_promptAlpha = 1.0f;
 				idle = _phaseTime;
 				break;
 		}
-		_k = MinScale + (1.0f - MinScale) * p;
+		_k = OpenScale + (1.0f - OpenScale) * p;
 		_a = p;
-		_slide = SlideOut * (1.0f - p);
 
-		Ui.SetImageColor(_dim, new Vector4(0.0f, 0.0f, 0.0f, _dimAlpha));
-		_group = Group.Centre;
-		Vector4 shapeAlpha = new(1.0f, 1.0f, 1.0f, _a); // the shader keeps its own colours
-		Place(_swirl, SwirlX, SwirlY, SwirlW, SwirlH);
-		Ui.SetImageColor(_swirl, shapeAlpha);
-		_group = Group.Right;
-		Place(_track, TrackX, TrackY, TrackW, TrackH);
-		Ui.SetImageColor(_track, shapeAlpha);
+		// The selection glides to its row; each row eases toward its idle / selected size.
+		float ease = 1.0f - MathF.Exp(-HighlightRate * dt);
+		_hiY += (RowsY + RowStep * _selected - _hiY) * ease;
+		for (int i = 0; i < _rowK.Length; i++)
+		{
+			_rowK[i] += ((i == _selected ? 1.0f : 0.0f) - _rowK[i]) * ease;
+		}
+
+		Ui.SetImageColor(_dim, new Vector4(1.0f, 1.0f, 1.0f, DimAlpha * p));
+		Ui.SetMaterialParams(_dim, new Vector4(now, 5.0f, 0.0f, 0.0f));
+
+		// Left column: the badge on its ball, then the three counters.
+		float wobble = 1.0f + IconWobble * MathF.Sin(idle * MathF.Tau / WobblePeriod);
+		Vector4 art = new(1.0f, 1.0f, 1.0f, _a);
+		Place(_ball, BadgeX, BadgeY, BallSize, BallSize);
+		Ui.SetImageColor(_ball, art);
+		Place(_badge, BadgeX, BadgeY, BadgeW * wobble, BadgeH * wobble);
+		Ui.SetImageColor(_badge, art);
+
+		int[] values = { wumpa, lives, 0 }; // crystals: this build has no crystal pickup yet
+		for (int i = 0; i < 3; i++)
+		{
+			float y = PillY + PillStep * i;
+			float breathe = 1.0f + IconWobble * MathF.Sin(idle * MathF.Tau / WobblePeriod + 0.6f * (i + 1));
+			PlaceBox(_pills[i], 6, PillX, y, PillW, PillH, PillH * 0.5f, BoxShadow, 1.0f);
+			Place(_discs[i], DiscX, y, DiscSize, DiscSize);
+			Ui.SetImageColor(_discs[i], art);
+			Place(_icons[i], DiscX, y, IconSizes[i].W * breathe, IconSizes[i].H * breathe);
+			Ui.SetImageColor(_icons[i], art);
+			SetCount(i, values[i], y);
+		}
+
+		// The gem track: a cyan bar of six sockets, the completion to its right.
+		PlaceBox(_strip, 6, StripX, StripY, StripW, StripH, StripH * 0.5f, BoxShadow, 1.0f);
 		for (int i = 0; i < _gems.Length; i++)
 		{
-			double ang = (GemAngle + GemStep * i) * Math.PI / 180.0;
-			Place(_gems[i], GemCx + GemR * (float)Math.Cos(ang), GemCy + GemR * (float)Math.Sin(ang), GemSize, GemSize);
-			Ui.SetImageColor(_gems[i], Tint());
+			float x = GemX0 + GemStep * i;
+			PlaceBox(_sockets[i], 6, x, StripY, SocketSize, SocketSize, SocketSize * 0.5f, 0.0f, 1.0f);
+			Place(_gems[i], x, StripY, GemSize, GemSize);
+			Ui.SetImageColor(_gems[i], art);
 		}
-		_group = Group.Centre;
-		// The badge and the counter icons breathe gently while the menu idles (the rig's idle
-		// diff moves exactly these), each on its own phase.
-		float[] phases = { 0.5f, 1.1f, 1.7f };
-		float wobble = 1.0f + IconWobble * (float)Math.Sin(idle * 2.0 * Math.PI / WobblePeriod);
-		Place(_badge, BadgeX, BadgeY, BadgeW * wobble, BadgeH * wobble);
-		Ui.SetImageColor(_badge, Tint());
-		Place(_ball, BallX, BallY, BallSize, BallSize);
-		Ui.SetImageColor(_ball, shapeAlpha);
+		PlaceRun(_zeroPct, ZeroPctX, StripY, ZeroPctScaleX, ZeroPctScaleY, art);
 
-		_group = Group.Left;
-		int[] values = { wumpa, lives, 0 }; // crystals: this build has no crystal pickup yet
-		for (int i = 0; i < _discs.Length; i++)
-		{
-			float breathe = 1.0f + IconWobble * (float)Math.Sin(idle * 2.0 * Math.PI / WobblePeriod + phases[i]);
-			Place(_discs[i], Discs[i].X, Discs[i].Y, Discs[i].Size, Discs[i].Size);
-			Ui.SetImageColor(_discs[i], shapeAlpha);
-			Place(_icons[i], Icons[i].X, Icons[i].Y, Icons[i].W * breathe, Icons[i].H * breathe);
-			Ui.SetImageColor(_icons[i], Tint());
-			SetCount(i, values[i]);
-		}
-
-		_group = Group.Centre;
-		PlaceRun(_zeroPct, ZeroPctX, ZeroPctY, ZeroPctScaleX, ZeroPctScaleY, 0.0f, 1.0f);
-
-		// The option drum: the selected row grows (rig: 'options' ink 124 -> 139 px wide) and
-		// pulses gently; the greyed row keeps its fixed dark brown.
-		float pulse = 1.0f + RowPulse * (float)Math.Sin(idle * 2.0 * Math.PI / PulsePeriod);
+		// The option drum and its selection capsule.
+		float pulse = MathF.Sin(idle * MathF.Tau / PulsePeriod);
+		PlaceBox(_capsule, 7, RowsX, _hiY, CapsuleW, CapsuleH, CapsuleH * 0.5f, CapsuleGlow, 1.0f);
 		for (int i = 0; i < _rows.Length; i++)
 		{
-			float sx = i == _selected ? RowSelectedX * pulse : RowScaleX;
-			float sy = i == _selected ? RowSelectedY * pulse : RowScaleY;
-			float bow = i == DefaultItem ? RowBowResume : RowBow;
-			PlaceRun(_rows[i], RowsX, RowsY + RowStep * i, sx, sy, bow, 1.0f);
+			float k = _rowK[i];
+			float grow = 1.0f + RowPulse * pulse * k;
+			float sx = (RowScaleX + (RowSelectedX - RowScaleX) * k) * grow;
+			float sy = (RowScaleY + (RowSelectedY - RowScaleY) * k) * grow;
+			float bright = RowIdle + (1.0f - RowIdle) * k;
+			Vector4 tint = i == GreyedItem
+				? new Vector4(GreyedTint, GreyedAlpha * _a)
+				: new Vector4(bright, bright, bright, _a);
+			PlaceRun(_rows[i], RowsX, RowsY + RowStep * i, sx, sy, tint);
 		}
 
-		_group = Group.Fixed;
-		PlaceRun(_shoulderL, ShoulderLX, ShoulderY, ShoulderScaleX, ShoulderScaleY, 0.0f, _promptAlpha);
-		PlaceRun(_shoulderR, ShoulderRX, ShoulderY, ShoulderScaleX, ShoulderScaleY, 0.0f, _promptAlpha);
-		PlaceRun(_select, SelectX, PromptY, PromptScaleX, PromptScaleY, 0.0f, _promptAlpha);
-		PlaceRun(_back, BackX, PromptY, PromptScaleX, PromptScaleY, 0.0f, _promptAlpha);
+		// Footer: the prompts pinned to the column margins.
+		float shoulderW = RunWidth(_shoulderL, ShoulderScaleX);
+		PlaceRun(_shoulderL, FooterLeft, FooterY, ShoulderScaleX, ShoulderScaleY, art, -1);
+		PlaceRun(_select, FooterLeft + shoulderW + FooterGap, FooterY, PromptScaleX, PromptScaleY, art, -1);
+		float shoulderRW = RunWidth(_shoulderR, ShoulderScaleX);
+		PlaceRun(_shoulderR, FooterRight, FooterY, ShoulderScaleX, ShoulderScaleY, art, 1);
+		PlaceRun(_back, FooterRight - shoulderRW - FooterGap, FooterY, PromptScaleX, PromptScaleY, art, 1);
 	}
 
 	private void SetVisible(bool show)
 	{
-		_dim.SetActive(show);
-		_swirl.SetActive(show);
-		_track.SetActive(show);
-		foreach (Entity g in _gems)
-		{
-			g.SetActive(show);
-		}
-		_badge.SetActive(show);
-		_ball.SetActive(show);
-		foreach (Entity e in _discs)
-		{
-			e.SetActive(show);
-		}
-		foreach (Entity e in _icons)
+		foreach (Entity e in _shapes)
 		{
 			e.SetActive(show);
 		}
