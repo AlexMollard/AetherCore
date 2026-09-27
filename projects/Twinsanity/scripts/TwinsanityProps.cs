@@ -452,6 +452,7 @@ public sealed partial class TwinsanityActors
 		CrateFx.BombExploded(center);
 		Log.Info($"[Twinsanity] bomb exploded at ({center.X:F2}, {center.Y:F2}, {center.Z:F2})");
 		Explosion(center, BombDamageRadius);
+		_host?.CrateBlast(center, BombDamageRadius); // CreateDamage radius 3 reaches crates too
 		if (Vector3.Distance(center, crashPos + new Vector3(0.0f, 0.9f, 0.0f)) < BombDamageRadius)
 		{
 			_host?.DamagePlayer(center, DeathKind.Explode);

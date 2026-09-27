@@ -26,6 +26,7 @@ public sealed partial class TwinsanityActors
 		void CreatureTouch(Vector3 position);
 		void CollectGem(int slot);
 		bool IsDeadly(Entity collision); // a deadly collision piece (drowning plane or pit)
+		void CrateBlast(Vector3 center, float radius); // an explosion's damage to every crate in range (TNT/nitro/bomb)
 	}
 
 	private enum Behaviour

@@ -21,6 +21,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	public string LevelPath = "project://assets/levels/Earth/Hub/beach.level.json";
 	public string ObjectsPath = "project://assets/levels/objects.json";
 	public string PlayerName = "Crash";
+	// Scene to reload on R during Play (the Playground's own name); empty = R does nothing (beach, hub).
+	public string ResetScene = "";
+	private bool _resetWasDown = true; // a reload starts with R still held: wait for its release
 	public float KillY = -35.0f;
 	public int StartLives = 4;
 	// Play the New Game movie (FMV/H01_A, tw-extract --movies H01_A) before the beach starts.
@@ -341,9 +344,24 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			{
 				_player!.Configure(_crashFloats);
 			}
-			_player!.Respawn(_spawn, _spawnFacing);
+			if (!_player!.Resumed) // an R reset keeps Crash exactly where he was
+			{
+				_player.Respawn(_spawn, _spawnFacing);
+			}
 			return;
 		}
+		// Playground R: reload the scene (every placed object back to its saved start state) and keep Crash's
+		// pose, motion, look and camera (CrashPlayer.StashForReload). Off unless the scene's Level sets
+		// ResetScene, so the beach and hub never reset. Wumpa and lives restart at their start values.
+		bool resetDown = Input.IsKeyDown(Key.R);
+		if (resetDown && !_resetWasDown && ResetScene.Length > 0 && deltaTime > 0.0f && !_player!.IsDead)
+		{
+			Log.Info($"[Twinsanity] R reset: reloading '{ResetScene}', Crash kept at {_crash.Position}");
+			_player.StashForReload();
+			Scene.Load(ResetScene);
+			return;
+		}
+		_resetWasDown = resetDown;
 
 		_fruit.Update(deltaTime, _crash.Position);
 		_hurtGrace -= deltaTime;
@@ -983,9 +1001,17 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			Hurt(center, DeathKind.Explode);
 		}
+		CrateBlast(center, kExplosionRadius);
+	}
+
+	// An explosion's damage to the crates in range: nitro/TNT chain, checkpoints open, detonators fire, iron
+	// holds, the rest break. TNT/nitro blasts and (TwinsanityActors.ITwinsanityHost) the bomb's CreateDamage
+	// radius 3 (COM_GLOBAL_BOMB_DAMAGED) both land here.
+	public void CrateBlast(Vector3 center, float radius)
+	{
 		foreach (Crate other in _crates)
 		{
-			if (!other.Alive || Vector3.Distance(center, other.Base + new Vector3(0.0f, 0.5f, 0.0f)) > kExplosionRadius)
+			if (!other.Alive || Vector3.Distance(center, other.Base + new Vector3(0.0f, 0.5f, 0.0f)) > radius)
 			{
 				continue;
 			}

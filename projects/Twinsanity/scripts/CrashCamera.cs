@@ -82,7 +82,7 @@ public sealed class CrashCamera
 	private static readonly float[] s_drownHeight = { 4.90f, 4.82f, 4.72f, 5.19f, 6.17f, 7.32f, 8.52f, 9.84f, 10.90f, 11.41f, 11.66f, 11.84f, 11.93f, 11.91f, 11.78f, 11.41f, 10.66f, 9.74f, 8.69f, 7.61f, 6.51f, 5.43f, 4.48f, 3.94f, 3.66f, 3.51f, 3.42f, 3.38f, 3.36f, 3.35f, 3.34f };
 	private static readonly float[] s_drownPitch = { 26.6f, 27.2f, 27.7f, 31.7f, 39.0f, 47.7f, 57.0f, 68.9f, 80.6f, 86.9f, 86.8f, 83.5f, 79.3f, 74.8f, 70.1f, 65.4f, 60.8f, 56.1f, 51.3f, 46.6f, 41.8f, 36.9f, 32.5f, 29.7f, 28.1f, 27.3f, 26.8f, 26.6f, 26.4f, 26.4f, 26.3f };
 
-	public Entity Entity { get; }
+	public Entity Entity { get; private set; }
 
 	private Vector3 _eye;
 	private float _groundY;
@@ -107,6 +107,16 @@ public sealed class CrashCamera
 		Camera.SetMain(camera);
 		Entity = camera;
 		Snap(feet, facingDegrees);
+	}
+
+	/// <summary>After a scene reload destroyed the camera entity (Playground R reset): a fresh orbit camera
+	/// at this rig's own eye and aim, every easing state kept, so the view does not move.</summary>
+	public void Rebind()
+	{
+		Entity camera = Camera.CreateOrbit(_eye, _aim, FovDegrees);
+		camera.Name = "Crash Camera";
+		Camera.SetMain(camera);
+		Entity = camera;
 	}
 
 	/// <summary>Straight behind <paramref name="feet"/> for a facing (spawn, respawn), no easing.</summary>

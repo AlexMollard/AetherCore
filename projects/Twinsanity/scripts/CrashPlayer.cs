@@ -276,11 +276,47 @@ public sealed class CrashPlayer : EntityScript
 		Ui.SetOffsets(_fade, Vector2.Zero, Vector2.Zero);
 		Ui.SetImageColor(_fade, Vector4.Zero);
 
-		_facing = Self.EulerDegrees.Y;
-		_modelYaw = _facing;
-		_camera = new CrashCamera(Self.Position, _facing);
+		if (s_carry is ReloadCarry k)
+		{
+			// A Playground R reset: this is the reloaded scene's Crash; he carries on exactly as he was.
+			s_carry = null;
+			Resumed = true;
+			Self.Position = k.Feet;
+			_facing = k.Facing;
+			_modelYaw = k.ModelYaw;
+			_horizontal = k.Horizontal;
+			_vy = k.Vy;
+			_airY = k.AirY;
+			_moveDir = k.MoveDir;
+			_state = k.State;
+			_arc = k.Arc;
+			_stateTime = k.StateTime;
+			_lookTurn = k.LookTurn;
+			_lookPitch = k.LookPitch;
+			_camera = k.Camera;
+			_camera.Rebind();
+			CharacterController.SetVelocity(Self, Velocity);
+		}
+		else
+		{
+			_facing = Self.EulerDegrees.Y;
+			_modelYaw = _facing;
+			_camera = new CrashCamera(Self.Position, _facing);
+		}
 		PlaceModel(0.0f);
 	}
+
+	// Playground R reset (TwinsanityLevel.ResetScene): Crash's pose, motion, look and camera rig carried over the
+	// scene reload in a static, taken by the reloaded Crash's OnAttach. Everything else restarts from the scene.
+	private sealed record ReloadCarry(Vector3 Feet, float Facing, float ModelYaw, Vector3 Horizontal, float Vy, float AirY,
+		Vector3 MoveDir, State State, Arc Arc, float StateTime, float LookTurn, float LookPitch, CrashCamera Camera);
+	private static ReloadCarry? s_carry;
+
+	/// <summary>True when this Crash took over a previous one's state across an R reset (no spawn placement).</summary>
+	public bool Resumed { get; private set; }
+
+	public void StashForReload() => s_carry = new(Self.Position, _facing, _modelYaw, _horizontal, _vy, _airY,
+		_moveDir, _state, _arc, _stateTime, _lookTurn, _lookPitch, _camera);
 
 	public override void OnDetach()
 	{
