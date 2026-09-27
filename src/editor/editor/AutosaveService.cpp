@@ -1,12 +1,14 @@
 #include "editor/AutosaveService.hpp"
 
-#include <system_error>
+#include <cstdlib>
+#include <filesystem>
 #include <system_error>
 #include <utility>
 
 #include "editor/UndoStack.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "io/IOThread.hpp"
 #include "layers/AppLayer.hpp"
 #include "PlayState.hpp"
@@ -28,12 +30,30 @@ namespace aether::editor
 
 	} // namespace
 
+	bool AutosaveService::IsAgentSession()
+	{
+		static const bool agent = []
+		{
+			if (const char* env = std::getenv("AETHER_AGENT_SESSION"); env != nullptr && *env != '\0' && std::string_view(env) != "0")
+			{
+				return true;
+			}
+			std::error_code ec;
+			return std::filesystem::exists(io::PlatformPaths::GetExecutableDir() / "agent-session", ec);
+		}();
+		return agent;
+	}
+
 	void AutosaveService::Tick(app::LayerContext& context)
 	{
 		const auto* project = context.TryGet<app::EditorProjectContext>();
 		if (project == nullptr || !project->IsLoaded())
 		{
 			return;
+		}
+		if (IsAgentSession())
+		{
+			return; // agent editors never write recovery copies (see IsAgentSession)
 		}
 
 		// Play mutates the world every frame and Stop restores it, so autosaving during

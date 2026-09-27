@@ -1812,9 +1812,9 @@ namespace aether::editor
 		{
 			return;
 		}
-		if (project->root == m_recoveryCheckedRoot)
+		if (project->root == m_recoveryCheckedRoot || editor::AutosaveService::IsAgentSession())
 		{
-			return; // already asked for this project
+			return; // already asked for this project, or an agent editor that never offers
 		}
 		m_recoveryCheckedRoot = project->root;
 		m_recoveryError.clear();
