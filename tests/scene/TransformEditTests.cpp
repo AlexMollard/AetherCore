@@ -11,6 +11,7 @@
 #include "scene/World.hpp"
 #include "scene/reflection/Reflection.hpp"
 
+#include <cmath>
 #include <array>
 #include <cstdlib>
 
@@ -107,6 +108,61 @@ TEST_CASE("SetWorldTransform cascades through a transformless middle link") {
     ecs::SetWorldTransform(world, parent, target);
 
     CheckMatApprox(world.Get<TransformComponent>(leaf).localToWorld, ComposeTransform({2.0f, 0.0f, -4.0f}, {}, glm::vec3(1.0f)));
+}
+
+TEST_CASE("A parent set every tick does not drag its children off it") {
+    // CrashPlayer's model: a script sets the model root's position and then its yaw every
+    // tick, far from the origin, and the skinned meshes are its children. Multiplying each
+    // move's delta into them walked them over a metre off the root in two hours of Play.
+    World world = MakeWorld();
+    const glm::vec3 at{64.0f, 0.25f, 230.4f};
+    const Entity parent = MakeEntityAt(world, at);
+    const Entity child = MakeEntityAt(world, at + glm::vec3(0.0f, 0.0f, 0.1f));
+    REQUIRE(ecs::SetParent(world, child, parent));
+
+    float yaw = 0.0f;
+    for (int tick = 0; tick < 100000; ++tick)
+    {
+        glm::mat4 m = world.Get<TransformComponent>(parent).localToWorld;
+        m[3] = glm::vec4(at + glm::vec3(0.0f, 0.0f, 0.001f * static_cast<float>(tick % 7)), 1.0f);
+        ecs::SetWorldTransform(world, parent, m);
+        yaw = std::fmod(yaw + 7.3f, 360.0f);
+        glm::vec3 pos{}, euler{}, scale{};
+        DecomposeTRS(world.Get<TransformComponent>(parent).localToWorld, pos, euler, scale);
+        ecs::SetWorldTransform(world, parent, ComposeTransform(pos, {0.0f, yaw, 0.0f}, scale));
+    }
+
+    const glm::mat4 rel = RelativeTo(world.Get<TransformComponent>(parent).localToWorld, world.Get<TransformComponent>(child).localToWorld);
+    CHECK(rel[3].x == doctest::Approx(0.0f).epsilon(1e-4));
+    CHECK(rel[3].z == doctest::Approx(0.1f).epsilon(1e-3));
+    CHECK(glm::length(glm::vec3(rel[0])) == doctest::Approx(1.0f).epsilon(1e-4));
+}
+
+TEST_CASE("A child moved on its own keeps its new offset when the parent next moves") {
+    World world = MakeWorld();
+    const Entity parent = MakeEntityAt(world, {0.0f, 0.0f, 0.0f});
+    const Entity child = MakeEntityAt(world, {1.0f, 0.0f, 0.0f});
+    REQUIRE(ecs::SetParent(world, child, parent));
+    ecs::SetWorldTransform(world, parent, ComposeTransform({0.0f, 1.0f, 0.0f}, {}, glm::vec3(1.0f)));
+
+    ecs::SetWorldTransform(world, child, ComposeTransform({3.0f, 1.0f, 0.0f}, {}, glm::vec3(1.0f)));
+    ecs::SetWorldTransform(world, parent, ComposeTransform({0.0f, 1.0f, 0.0f}, {0.0f, 90.0f, 0.0f}, glm::vec3(1.0f)));
+
+    CheckMatApprox(world.Get<TransformComponent>(child).localToWorld, ComposeTransform({0.0f, 1.0f, -3.0f}, {0.0f, 90.0f, 0.0f}, glm::vec3(1.0f)));
+}
+
+TEST_CASE("A reparented child is carried by its new parent from where it is") {
+    World world = MakeWorld();
+    const Entity a = MakeEntityAt(world, {0.0f, 0.0f, 0.0f});
+    const Entity b = MakeEntityAt(world, {10.0f, 0.0f, 0.0f});
+    const Entity child = MakeEntityAt(world, {1.0f, 0.0f, 0.0f});
+    REQUIRE(ecs::SetParent(world, child, a));
+    ecs::SetWorldTransform(world, a, ComposeTransform({0.0f, 2.0f, 0.0f}, {}, glm::vec3(1.0f)));
+
+    REQUIRE(ecs::SetParent(world, child, b));
+    ecs::SetWorldTransform(world, b, ComposeTransform({10.0f, 0.0f, 5.0f}, {}, glm::vec3(1.0f)));
+
+    CheckMatApprox(world.Get<TransformComponent>(child).localToWorld, ComposeTransform({1.0f, 2.0f, 5.0f}, {}, glm::vec3(1.0f)));
 }
 
 // ── Reflected setters must be surgical, not full round-trips ─────────────────

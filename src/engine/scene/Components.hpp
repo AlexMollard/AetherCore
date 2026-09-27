@@ -38,6 +38,14 @@ namespace aether
 	{
 		Entity parent{};
 		std::vector<Entity> children;
+		// ecs::SetWorldTransform's drift guard (scene/TransformEdit.hpp): this entity's transform
+		// relative to its parent, derived from exactly this parent world and own world. While both
+		// are still bit-identical, a moved parent recomposes the child from cachedLocal instead of
+		// multiplying one more delta into it, so a parent a script moves every tick for hours does
+		// not drag its children off it. The zero matrices mark it unset.
+		glm::mat4 cachedLocal{1.0f};
+		glm::mat4 cachedParentWorld{0.0f};
+		glm::mat4 cachedWorld{0.0f};
 	};
 
 	struct MeshComponent
