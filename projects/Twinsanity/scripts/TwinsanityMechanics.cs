@@ -90,20 +90,44 @@ public sealed partial class TwinsanityActors
 		public float LaunchFloor;    // ground height it was launched from
 		public bool Pivots;          // turns about its origin instead of sliding (the cannon)
 		public List<Entity> Hulls = new(); // collision that turns with a pivoting object
+		public float YawRate;        // deg/s, a pivoting object's current turn (coasts briefly when let go)
 		public Entity Button;        // the cannon's red button (disc object 779), turns with it
 		public Entity ButtonHull;    // its disc hull: Crash stands on the button's top
 		public bool Settled;         // RestHeight known against real ground (collision may load late)
 		public bool NoLaunch;        // the bomb: a spin primes it (TwinsanityProps) instead of launching it
 		public bool Pushed;          // Crash has pushed it (the bomb's s5, IsPushingObject)
+		public bool Held;            // Crash has hold of it (IsPushingObject): pulled to his hold point
+		public Vector3 HoldDir;      // his last push direction while held (kept while he stands still)
 	}
 
 	private readonly List<Pushable> _pushables = new();
 
 	private const float CrashRadius = 0.4f;   // Beach.scene.toml capsule
 	private const float CrashHeight = 1.95f;
-	// ponytail: how fast a pushed object closes its sideways offset from Crash's line (1/s). The rig
-	// shows it tracking his line to ~1 cm; the rate itself is not observable, so it is set fast.
-	private const float CenteringRate = 10.0f;
+	// Push magnetism (rig, logs/beachfeel/: per-frame EE RAM traces of the nut and the hay bale, fitted
+	// by sim.py). Walking into an object within GrabAngle of his heading takes hold of it; from then on
+	// it is servoed to the point just ahead of him along his last push direction: velocity target = his
+	// measured velocity + (hold point - centre) * CenteringRate, reached at the kind's PushAccel. Held, it
+	// re-centres onto his line over ~0.5 s (grabbed 0.5-0.7 m off-line), trails ~20-30 deg outside
+	// his curve at 45-90 deg/s, and when he stops dead it overshoots ~0.7 m and is pulled back to
+	// touch him. It lets go when his heading swings faster than TurnReleaseRate (a sharp turn), when
+	// he runs off more than ReleaseAngle from it (a reversal), or when it ends up more than
+	// HoldRelease beyond touching distance.
+	private const float CenteringRate = 2.2f;              // 1/s
+	private static readonly float GrabCos = MathF.Cos(50.0f * MathF.PI / 180.0f);    // rig: 42 deg grabbed, 57 missed
+	// ...and only with the object's centre within GrabOffset of his line: a glancing walk slides him
+	// round a bale or barrel (rig_push_hay_off*.csv: 0.9 m off it is bumped 0.55 m, 1.2 m off it
+	// never moves), where the padded contact alone took hold 1.2 m off at ~47 deg.
+	private const float GrabOffset = 1.0f;                 // m
+	private static readonly float ReleaseCos = MathF.Cos(57.0f * MathF.PI / 180.0f); // rig: held at 30, lost at 66
+	private const float ReleaseSpeed = 1.5f;               // m/s: turning while stopping keeps hold
+	private const float HoldRelease = 1.9f;                // m beyond touching (rig: pulled back from 2.45)
+	// Pushed, the rig holds it about touching (nut 0.9-1.1, bale 1.3-1.4 from his feet). The hold
+	// point sits HoldGap past touching his capsule: any closer and the object blocks him, slowing him
+	// under his commanded speed, which the feed-forward then outruns. At a run his transform trails
+	// his physics capsule by ~0.15 m, so the object rides ~1.2 m from his drawn feet on a 0.55
+	// collider; the nut's collider is its measured 0.45 contact instead (see PushableKind).
+	private const float HoldGap = 0.1f;
 	// ponytail: the game's prop gravity is not in the extracted data; Crash's own AirGravity (50)
 	// stands in, scaled by 5/7 for a rolling sphere. It only matters on slopes.
 	private const float SlopeGravity = 50.0f * 5.0f / 7.0f;
@@ -120,12 +144,26 @@ public sealed partial class TwinsanityActors
 	private const float SlideLaunchPop = 0.28f;
 	private float _spinClock = -1.0f;            // time since the current spin started; -1 = none
 	private bool _spinLaunched, _slideLaunched;
-	// The cannon (rig, logs/traversal/cannon_push2.csv: its world matrix in EE RAM at 0xC4B180 while
-	// Crash pushes it): its origin never moves - a push turns it about its origin, at up to ~15-30
-	// deg/s with Crash working 1.5-2 m out, the way his push would turn a pivoted body (yaw rate =
-	// PivotRate * (his push direction x his offset from the pivot)). ponytail: the rate is fitted
-	// to one capture and the contact is taken as his push line, not the hull's face normal.
-	private const float PivotRate = 11.0f; // deg/s per metre of lever
+	// His velocity, smoothed: commanded over PushSmoothing for the hold servo's push line, measured
+	// (feet displacement) over ReleaseSmoothing for the release test. On the rig a held object keeps
+	// its line for ~2 frames after he turns (logs/beachfeel/rig_push_nut_turn90.csv: still straight
+	// at 30 deg off, ~1.8 m/s sideways once let go), where the stick - and his velocity - turn at
+	// once and a servo on them dragged it sideways at 4.4 m/s.
+	private Vector3 _lastFeet, _smoothVel, _smoothCmd, _lastCmdDir;
+	private bool _hasLastFeet;
+	private const float PushSmoothing = 0.05f;             // s
+	private const float ReleaseSmoothing = 0.02f;          // s
+	// A sharp turn lets go at once: the rig holds through curves at 45-90 deg/s, but in a 90 deg
+	// turn (his heading swinging at ~750 deg/s) the object leaves on its old line within ~2 frames.
+	private const float TurnReleaseRate = 300.0f;          // deg/s of his commanded heading
+	// The cannon (rig, logs/cannon/rigturn.json leg 1, and logs/traversal/cannon_push2.csv): its
+	// origin never moves. Crash walking into a hull - a handle, the trail - drags the contact point
+	// along with his tangential motion (the rig's yaw rate tracks his ω about the pivot within ~10%),
+	// never faster than ~60 deg/s (the rig's fastest 0.1 s window, 62): running out through a handle
+	// 5.5 m out it turns ~35 deg in 0.8 s and holds him to ~5 m/s. Let go, it coasts to a stop in
+	// ~0.1 s (engine twin: logs/cannon/eng_turn.py, sheet_turn.png).
+	private const float PivotMaxRate = 60.0f;  // deg/s
+	private const float PivotCoastDecay = 14.0f; // 1/s
 
 	// The button sits in the mount on the rear box of the trail plate, just short of the handles (rig
 	// logs/cannon/rig_asm*.png, triangulated from four views: local (0.36, 0.47, -3.85) for its top's
@@ -145,29 +183,31 @@ public sealed partial class TwinsanityActors
 
 	// Per family: collision radius (model extent - with our 0.4 capsule it reproduces the rig's
 	// 1.0-1.1 m contact distance), centre height above ground (the script's SetLogicalRadius),
-	// rolls, push acceleration (m/s^2; 80 reproduces the rig 12-frame ramp once the servo spends some of it holding the line), free-roll decay (1/s).
+	// rolls, push acceleration (m/s^2, the hold servo's limit; rig fit 50), free-roll decay (1/s).
+	// The nut's collider is under its drawn 0.56-0.65: pushed at a run the rig holds its centre
+	// 0.9-1.1 m from his feet (logs/beachfeel/push_overlay.txt), which a 0.55 collider held at 1.2.
 	private static (float Radius, float RestHeight, bool Rolls, float PushAccel, float Damping)? PushableKind(string key) => key switch
 	{
-		"act_wumpa_nut" => (0.65f, 0.5615f, true, 80.0f, 0.87f),
+		"act_wumpa_nut" => (0.45f, 0.5615f, true, 50.0f, 0.9f),
 		// ponytail: the ball and rock reuse the nut's push/decay until measured; rest heights are the
 		// rig's live centres (ball 0.594, rock 0.28).
-		"act_beach_ball" => (0.67f, 0.594f, true, 80.0f, 0.87f),
-		"act_monkey_rock" => (0.45f, 0.28f, true, 80.0f, 0.87f),
+		"act_beach_ball" => (0.67f, 0.594f, true, 50.0f, 0.9f),
+		"act_monkey_rock" => (0.45f, 0.28f, true, 50.0f, 0.9f),
 		// The cannon's radius is only its push-contact reach (it collides with its hulls): the body box
 		// is 1.5 m half-wide, so Crash's centre touches it ~1.9 m out.
 		"act_rigid_cannon" => (1.8f, 1.3f, false, 80.0f, 0.0f),
 		// Hay bale and barrel (COM_GLOBAL_HAYBALE_DEFAULT / COM_GLOBAL_BARREL_DEFAULT: SetContactRigid),
-		// rig logs/audit/push_rig_hay3.csv: a head-on push drives the bale at his run speed (~9.4 m/s)
-		// after the same ~0.15 s ramp as the nut, centres 1.5-2.2 m apart; let go it slides to a stop,
-		// decaying at ~5.6/s. It does not roll, a spin only rocks it (push_rig_hayspin.csv), and a
-		// glancing walk slides Crash round it. Both sit their centre RestHeight above the ground: the
-		// bale's model half-height 0.72 (rig: placed 0.687 on flat grass, kept), the barrel 0.91 (rig:
-		// it drops from its placed 1.62). A learned height (centre minus the rim ground at spawn) read
-		// ~0 wherever a rim ray found a surface level with the centre, and the bale then sank 0.9 m.
+		// rig logs/beachfeel/rig_push_hay_*.csv (beach L3 bale, state orig_huba): held like the nut,
+		// centres 1.3-1.5 m apart at his run speed; let go it slides to a stop decaying at ~2.5/s. It
+		// does not roll, a spin only rocks it (logs/audit/push_rig_hayspin.csv), and a glancing walk
+		// slides Crash round it. Both sit their centre RestHeight above the ground: the bale's model
+		// half-height 0.72 (rig: placed 0.687 on flat grass, kept), the barrel 0.91 (rig: it drops from
+		// its placed 1.62). A learned height (centre minus the rim ground at spawn) read ~0 wherever a
+		// rim ray found a surface level with the centre, and the bale then sank 0.9 m.
 		// ponytail: the barrel reuses the bale's push/decay - on the rig only glancing bumps (it moved
-		// 0.5 m) were captured. Upgrade path: a head-on barrel push with goto_log.py.
-		"act_global_haybale" => (1.05f, 0.72f, false, 80.0f, 5.6f),
-		"act_global_barrel" => (1.0f, 0.91f, false, 80.0f, 5.6f),
+		// 0.5 m) were captured. Upgrade path: a head-on barrel push with logs/beachfeel/rigpush.py.
+		"act_global_haybale" => (1.05f, 0.72f, false, 50.0f, 2.5f),
+		"act_global_barrel" => (1.0f, 0.91f, false, 50.0f, 2.5f),
 		// act_GLOBAL_BOMB (COM_GLOBAL_BOMB_DEFAULT: SetContactRigid, SetLogicalRadius 0.6): Crash rolls it
 		// by walking into it, at his own speed (rig logs/beachcomplete/rig_bomb_roll_sheet.png: pushed
 		// 5.6 m in ~1 s into the totem), and it stops soon after he lets go. Rest 0.596 is its live
@@ -301,6 +341,21 @@ public sealed partial class TwinsanityActors
 		Vector3 feet = player.Self.Position;
 		Vector3 flatVel = player.Velocity with { Y = 0.0f };
 		float speed = flatVel.Length();
+		Vector3 moved = _hasLastFeet ? ((feet - _lastFeet) / dt) with { Y = 0.0f } : flatVel;
+		// A warp or respawn is not motion: restart the average from his commanded velocity, and let
+		// go of whatever he held (else the standing hold drags it after him).
+		bool warped = moved.Length() > 30.0f;
+		_smoothVel = warped ? flatVel : _smoothVel + (moved - _smoothVel) * (1.0f - MathF.Exp(-dt / ReleaseSmoothing));
+		_smoothCmd += (flatVel - _smoothCmd) * (1.0f - MathF.Exp(-dt / PushSmoothing));
+		_lastFeet = feet;
+		_hasLastFeet = true;
+		float smoothSpeed = _smoothVel.Length();
+		float cmdSpeed = _smoothCmd.Length();
+		Vector3 pushDir = cmdSpeed > 1e-3f ? _smoothCmd / cmdSpeed : Vector3.Zero;
+		Vector3 cmdDir = speed > 0.5f ? flatVel / speed : Vector3.Zero;
+		bool sharpTurn = cmdDir != Vector3.Zero && _lastCmdDir != Vector3.Zero
+			&& MathF.Acos(Math.Clamp(Vector3.Dot(cmdDir, _lastCmdDir), -1.0f, 1.0f)) * 180.0f / MathF.PI > TurnReleaseRate * dt;
+		_lastCmdDir = cmdDir;
 		// How long the current spin has run: its launch waits SpinLaunchDelay into it. One launch
 		// per spin, one per slide.
 		_spinClock = player.IsSpinning ? (_spinClock < 0.0f ? 0.0f : _spinClock + dt) : -1.0f;
@@ -309,6 +364,11 @@ public sealed partial class TwinsanityActors
 
 		foreach (Pushable p in _pushables)
 		{
+			if (p.Pivots)
+			{
+				pushing |= TurnCannon(p, feet, player.IsGrounded && speed > 0.5f ? flatVel : Vector3.Zero, dt);
+				continue;
+			}
 			Vector3 toObj = (p.Center - feet) with { Y = 0.0f };
 			float dist = toObj.Length();
 			bool overlapY = feet.Y < p.Center.Y + p.Radius * 0.8f && feet.Y + CrashHeight > p.Center.Y - p.Radius;
@@ -323,51 +383,51 @@ public sealed partial class TwinsanityActors
 				Step(p, dt, player.Self);
 				continue;
 			}
-			if (contact && player.IsGrounded && speed > 0.5f)
+			// A jump lets go and the object stays where it is: it does not coast off at his run speed
+			// (a take-off beside the bale shoved it back down the totem's tongue).
+			bool moving = player.IsGrounded && speed > 0.5f;
+			if (p.Held && !player.IsGrounded)
 			{
-				Vector3 n = toObj / dist;
-				if (p.Pivots && Vector3.Dot(flatVel, n) > 0.0f)
+				p.Held = false;
+				p.Velocity = Vector3.Zero;
+			}
+			if (p.Held && (warped || p.Airborne || !overlapY || dist > p.Radius + CrashRadius + HoldRelease))
+			{
+				p.Held = false;
+			}
+			if (moving && dist > 1e-3f)
+			{
+				float cos = Vector3.Dot(flatVel, toObj) / (speed * dist);
+				float smoothCos = smoothSpeed > 1e-3f ? Vector3.Dot(_smoothVel, toObj) / (smoothSpeed * dist) : 1.0f;
+				float offLine = MathF.Abs(flatVel.X * toObj.Z - flatVel.Z * toObj.X) / speed;
+				if (!p.Held && contact && !sharpTurn && cos > GrabCos && offLine < GrabOffset)
 				{
-					// The rig turns it from between the trail handles (feet on the plate, ~1.2 up);
-					// overhead there is no contact anyway (overlapY), so no guard is needed.
-					// Moving the contact point along his push direction turns it (yaw = atan2(x, z)).
-					Vector3 dir = flatVel / speed;
-					Vector3 r = -toObj;
-					float yawRate = PivotRate * (dir.X * r.Z - dir.Z * r.X);
-					p.Model.EulerDegrees = p.Model.EulerDegrees with { Y = p.Model.EulerDegrees.Y + yawRate * dt };
-					foreach (Entity h in p.Hulls)
-					{
-						h.EulerDegrees = p.Model.EulerDegrees;
-					}
-					SyncButton(p);
-					pushing = true;
+					p.Held = true;
 				}
-				else if (!p.Pivots && Vector3.Dot(flatVel, n) > speed * 0.5f)
+				else if (p.Held && (sharpTurn || (smoothSpeed > ReleaseSpeed && smoothCos < ReleaseCos)))
 				{
-					// The rig keeps the pushed object dead ahead of him, at his speed: drive it at the
-					// point his line meets contact distance (servo, closed at CenteringRate). The
-					// speed only ever rises here, up to what he pushes at - when he brakes, turns or
-					// lets go, the object keeps its speed and coasts (rig: releasing at 9.5 leaves it
-					// coasting at 0.87/s; it never follows his braking back down).
-					Vector3 dir = flatVel / speed;
-					Vector3 hold = feet + dir * (p.Radius + CrashRadius + 0.05f);
-					Vector3 delta = flatVel + (hold - p.Center) * CenteringRate - p.Velocity;
-					delta.Y = 0.0f;
-					float max = p.PushAccel * dt;
-					p.Velocity += delta.Length() > max ? Vector3.Normalize(delta) * max : delta;
-					// It never outruns him, and an excess (a slope kick, a teleport) bleeds off.
-					float v = p.Velocity.Length();
-					if (v < speed)
-					{
-						p.Velocity = Vector3.Normalize(p.Velocity + dir * 0.01f) * speed;
-					}
-					else if (v > speed + 0.5f)
-					{
-						p.Velocity *= MathF.Max(speed, v - p.PushAccel * dt) / v;
-					}
-					pushed = pushing = p.Pushed = true;
-					p.FreeDamping = p.Damping;
+					p.Held = false;
 				}
+				if (p.Held)
+				{
+					p.HoldDir = pushDir;
+				}
+			}
+			if (p.Held)
+			{
+				// Servo to the point just ahead of him along his push line: his velocity (swung
+				// round over PushSmoothing) plus the offset closed at CenteringRate, reached at
+				// PushAccel. Standing still, the offset alone pulls it back against him (the rig's
+				// overshoot-and-return).
+				Vector3 hold = feet + p.HoldDir * (p.Radius + CrashRadius + HoldGap);
+				Vector3 delta = (moving ? pushDir * speed : Vector3.Zero) + (hold - p.Center) * CenteringRate - p.Velocity;
+				delta.Y = 0.0f;
+				float max = p.PushAccel * dt;
+				p.Velocity += delta.Length() > max ? Vector3.Normalize(delta) * max : delta;
+				pushed = true;
+				pushing |= moving;
+				p.Pushed |= moving;
+				p.FreeDamping = p.Damping;
 			}
 			if (!pushed)
 			{
@@ -376,6 +436,47 @@ public sealed partial class TwinsanityActors
 			Step(p, dt, player.Self);
 		}
 		player.Pushing = pushing;
+	}
+
+	// The cannon turns where Crash walks into its hulls, not at a radius about its pivot: on the rig
+	// he stands between the handles and runs out through one (the old radius contact never reached
+	// the handles 5-6.4 m out, eng_turn.json). The contact follows his tangential motion, capped.
+	private static bool TurnCannon(Pushable p, Vector3 feet, Vector3 vel, float dt)
+	{
+		bool contact = false;
+		float speed = vel.Length();
+		if (speed > 0.0f)
+		{
+			// Waist height (the handles sit 0.8-1.4 m above the sand he stands on), from past his
+			// capsule and its padding (at +0.01 the ray hit him every frame); a hull he is already
+			// pressed against contains the origin and reports there.
+			Vector3 dir = vel / speed;
+			RaycastHit hit = Physics.Raycast(feet + new Vector3(0.0f, 1.0f, 0.0f) + dir * (CrashRadius + 0.12f), dir, 0.2f);
+			if (hit.DidHit && p.Hulls.Contains(hit.Entity))
+			{
+				// Engine yaw is atan2(x, z): d(yaw)/dt = (r x v) / |r|^2 at the contact.
+				Vector3 r = (hit.Position - p.Model.Position) with { Y = 0.0f };
+				float w = (vel.X * r.Z - vel.Z * r.X) / MathF.Max(r.LengthSquared(), 1.0f) * 180.0f / MathF.PI;
+				p.YawRate = Math.Clamp(w, -PivotMaxRate, PivotMaxRate);
+				contact = true;
+			}
+		}
+		if (!contact)
+		{
+			p.YawRate *= MathF.Exp(-PivotCoastDecay * dt);
+			if (MathF.Abs(p.YawRate) < 0.05f)
+			{
+				p.YawRate = 0.0f;
+				return false;
+			}
+		}
+		p.Model.EulerDegrees = p.Model.EulerDegrees with { Y = p.Model.EulerDegrees.Y + p.YawRate * dt };
+		foreach (Entity h in p.Hulls)
+		{
+			h.EulerDegrees = p.Model.EulerDegrees;
+		}
+		SyncButton(p);
+		return contact;
 	}
 
 	// The button (and its hull) ride the cannon's yaw about its pivot.
@@ -498,7 +599,8 @@ public sealed partial class TwinsanityActors
 		if (p.Rolls && len > 1e-5f)
 		{
 			Vector3 axis = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, dir));
-			p.Roll = Quaternion.Normalize(Quaternion.Concatenate(p.Roll, Quaternion.CreateFromAxisAngle(axis, len / p.Radius)));
+			// A rolling sphere turns by its rest radius (its centre height), not its collider.
+			p.Roll = Quaternion.Normalize(Quaternion.Concatenate(p.Roll, Quaternion.CreateFromAxisAngle(axis, len / p.RestHeight)));
 			p.Model.EulerDegrees = EngineEuler(Matrix4x4.CreateFromQuaternion(Quaternion.Concatenate(p.Base, p.Roll)));
 		}
 	}
