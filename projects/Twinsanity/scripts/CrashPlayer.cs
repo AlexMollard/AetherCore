@@ -134,6 +134,7 @@ public sealed class CrashPlayer : EntityScript
 	private float _lookTurn;
 	private float _lookPitch;
 	private Vector2 _lookStick;
+	private Vector2 _mouseLook; // the mouse's orbit as an equivalent right-stick deflection (head look)
 	private readonly CrashLook _look = new();
 	private bool _control = true;
 
@@ -1110,12 +1111,24 @@ public sealed class CrashPlayer : EntityScript
 	// it with the rig's 0.30.
 	private void Look(float deltaTime)
 	{
-		_lookTurn -= Input.MouseDelta.X * MouseSensitivity;
-		_lookPitch += Input.MouseDelta.Y * MouseSensitivity;
+		float mouseTurn = -Input.MouseDelta.X * MouseSensitivity;
+		float mousePitch = Input.MouseDelta.Y * MouseSensitivity;
+		_lookTurn += mouseTurn;
+		_lookPitch += mousePitch;
 		Vector2 stick = Gamepad.RightStick;
 		float magnitude = 0.76f * stick.Length() + 0.24f;
 		float weight = Math.Max(0.0f, (magnitude - StickDeadzone) / (1.0f - StickDeadzone));
 		_lookStick = weight > 0.0f ? stick / stick.Length() * weight : Vector2.Zero;
+		// The head follows the mouse as it follows the stick: the mouse's orbit this frame as the stick
+		// deflection that turns the camera as fast, eased so frames without mouse input don't snap it back.
+		Vector2 mouseStick = deltaTime > 0.0f
+			? new Vector2(mouseTurn / (CrashCamera.StickTurnRate * deltaTime), mousePitch / (CrashCamera.StickPitchRate * deltaTime))
+			: Vector2.Zero;
+		if (mouseStick.LengthSquared() > 1.0f)
+		{
+			mouseStick = Vector2.Normalize(mouseStick);
+		}
+		_mouseLook += (mouseStick - _mouseLook) * (1.0f - MathF.Exp(-deltaTime / CrashCamera.StickEase));
 	}
 
 	private void PlaceModel(float deltaTime)
@@ -1181,7 +1194,7 @@ public sealed class CrashPlayer : EntityScript
 		}
 		_lookTurn = 0.0f;
 		_lookPitch = 0.0f;
-		_look.Update(_model, _dead ? Vector2.Zero : _lookStick, deltaTime);
+		_look.Update(_model, _dead ? Vector2.Zero : (_lookStick != Vector2.Zero ? _lookStick : _mouseLook), deltaTime);
 	}
 
 	private static Vector3 FacingDir(float yawDegrees)

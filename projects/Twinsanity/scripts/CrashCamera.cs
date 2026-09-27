@@ -46,7 +46,7 @@ public sealed class CrashCamera
 	private const float PullOutLag = 0.45f;
 	private const float WallMargin = 0.05f;
 	private const float CameraSkin = 0.3f;
-	private const float StickTurnRate = 115.0f;
+	public const float StickTurnRate = 115.0f;
 	// Airborne, the height reference holds between his feet less the look height (a launch past the look
 	// point lifts it) and his feet plus DropFollow (a fall drags it down). The look point's height eases
 	// to it faster than the eye (rig djump/worm1: ~1 frame at 50 Hz up, ~0.05 s down and on landing).
@@ -60,8 +60,8 @@ public sealed class CrashCamera
 	private const float DefaultPitch = 15.0f;
 	private const float MinPitch = -35.0f;
 	private const float MaxPitch = 75.0f;
-	private const float StickPitchRate = 59.0f;
-	private const float StickEase = 0.16f;
+	public const float StickPitchRate = 59.0f;
+	public const float StickEase = 0.16f;
 	private const float LimitEase = 12.5f;
 	private const float RecentreRate = 46.0f;
 	private const float RecentreSpeed = 1.0f;
