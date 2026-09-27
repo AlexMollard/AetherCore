@@ -203,16 +203,29 @@ public sealed class CrashPlayer : EntityScript
 	/// <summary>A moving lid carries him (the Hub B red-gem columns' irons, bouncing forever on their
 	/// iron springs; rig: his feet stay on the lid through every bounce). His feet are put on it and he
 	/// counts as grounded there, so the lid's motion is never a fall or a landing, and he keeps full
-	/// control. His own jump, rising faster than the lid, leaves it.</summary>
-	public void Carry(float feetY, float lidVelocityY)
+	/// control: he runs about on it and off its edge, and his own jump, rising faster than the lid,
+	/// leaves it.
+	/// Placing him is a transform write, which the controller takes as a teleport: it throws away the
+	/// step already under way from last frame's pose, his run included (standing on a bouncing iron he
+	/// could not run). So his own horizontal step for this frame goes on top of the placement here.
+	/// The lid moves after his update, so the model is placed here too, or it would show last frame's
+	/// height: sunk into the lid going up, floating above it coming down.</summary>
+	public void Carry(float feetY, float lidVelocityY, float deltaTime)
 	{
 		if (_dead || RideFeet != null || (Airborne && _vy > lidVelocityY + 0.5f))
 		{
 			return;
 		}
-		Self.Position = Self.Position with { Y = feetY };
+		Vector3 p = Self.Position + _horizontal * deltaTime;
+		p.Y = feetY;
+		Self.Position = p;
 		_airY = feetY;
 		_carried = true;
+		_model.Position = p;
+		if (IsSpinning)
+		{
+			_spinModel.Position = p;
+		}
 	}
 
 	private readonly Dictionary<string, int> _clips = new();

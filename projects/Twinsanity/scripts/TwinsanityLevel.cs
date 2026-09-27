@@ -149,6 +149,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		foreach (Crate c in _crates)
 		{
 			c.ColumnFloor = _crates.Where(s => OverFootprint(c, s)).Min(s => s.Base.Y);
+			CrateFx.HoldRest(c.Model);
 		}
 		OpenStartCheckpoint();
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
@@ -1142,6 +1143,12 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			// crate body trails (or overshoots) its model by a physics step, so a hit on any
 			// crate's body - its own included - is a stale lid that froze the fall mid-air.
 			RaycastHit ground = Physics.Raycast(c.Base - new Vector3(0.0f, 0.005f, 0.0f), -Vector3.UnitY, 60.0f);
+			if (ground.DidHit && ground.Entity.Id == _crash.Id)
+			{
+				// Nor is Crash's capsule a floor: an iron that came down on him stopped on his head for good
+				// (iron 49 parked at base 2.43 over him on its spring, iron_edge_steps). Look past his feet.
+				ground = Physics.Raycast(new Vector3(c.Base.X, _crash.Position.Y - 0.005f, c.Base.Z), -Vector3.UnitY, 60.0f);
+			}
 			bool terrain = ground.DidHit && !_crates.Exists(s => s.Body.Id == ground.Entity.Id);
 			float floor = MathF.Max(support, terrain ? ground.Position.Y : c.ColumnFloor);
 			// Exact under constant gravity, so a bounce's apex does not sag with the frame time.
@@ -1183,7 +1190,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			c.Model.Position += move;
 			if (onLid)
 			{
-				_player!.Carry(c.Base.Y + 1.0f, -c.FallSpeed);
+				_player!.Carry(c.Base.Y + 1.0f, -c.FallSpeed, dt);
 			}
 			CrateFx.Moved(c.Model, c.Base); // nitro hops snap back to their cached rest position
 		}

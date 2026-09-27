@@ -398,6 +398,22 @@ namespace aether::assetpipeline
 						nodeNeeded[ni] = true;
 					}
 				}
+				// A bone's parent must be a bone too: the .skel stores a parent as a bone index and the loader
+				// rebuilds each rest local from the parent bone's IBM, so a mesh under an un-animated,
+				// mesh-less node (tw-extract's exit-point "attach" node between a joint and the shieldbearer's
+				// shield) would otherwise become a root bone and stay in the bind pose instead of following
+				// the animated joint above it.
+				for (cgltf_size ni = 0; ni < data.nodes_count; ++ni)
+				{
+					if (!nodeNeeded[ni])
+					{
+						continue;
+					}
+					for (const cgltf_node* p = data.nodes[ni].parent; p != nullptr && !nodeNeeded[static_cast<std::size_t>(ToIndex(p, data))]; p = p->parent)
+					{
+						nodeNeeded[static_cast<std::size_t>(ToIndex(p, data))] = true;
+					}
+				}
 
 				std::vector<bool> worldComputed(data.nodes_count, false);
 				std::vector<glm::mat4> bindWorld(data.nodes_count, glm::mat4(1.0f));

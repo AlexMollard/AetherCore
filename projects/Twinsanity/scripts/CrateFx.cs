@@ -197,6 +197,23 @@ public static class CrateFx
 	/// <summary>COM_DETONATOR_CRATE_DETONATE: the plunger goes down (a009, anim 1173) and stays.</summary>
 	public static void Detonated(Entity crateModel) => PlayOnce(crateModel, "a009");
 
+	/// <summary>A crate's clips are one-shots its scripts start (the checkpoint's a005, the detonator's
+	/// a008 spin and a009 press); GENERIC_CRATE_DEFAULT plays none, so it rests in the bind pose. A
+	/// loaded skinned model loops its first clip, which spun the detonator's plunger at rest. The
+	/// detonator's a008 and a009 both start at that bind pose (every joint at identity), so clip 0 held
+	/// at its start is the rest pose.</summary>
+	public static void HoldRest(Entity crateModel)
+	{
+		if (Animation.ClipCount(crateModel) <= 0)
+		{
+			return;
+		}
+		SetLooping(crateModel, false);
+		Animation.SetClip(crateModel, 0);
+		Animation.SetTime(crateModel, 0.0f);
+		Animation.SetPlaybackSpeed(crateModel, 0.0f);
+	}
+
 	/// <summary>Play a crate state's clip once from the start; returns its length (0 = no clip).</summary>
 	private static float PlayOnce(Entity crate, string clip)
 	{
