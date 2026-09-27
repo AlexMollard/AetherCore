@@ -1794,10 +1794,37 @@ public sealed partial class TwinsanityActors
 				}
 				break;
 		}
+		if (c.Mode is Mode.Idle or Mode.Walk or Mode.GoTree or Mode.GoFruit or Mode.Pickup or Mode.Throw)
+		{
+			Vector3 q = a.Model.Position;
+			a.Model.Position = new Vector3(q.X, MonkeyGroundY(q, a.Home.Y), q.Z);
+		}
+	}
+
+	// The ground under a walking monkey, looking through the wumpa tree's own hull: fruit lies at the
+	// trunk base, and WalkTo's shared ground-follow stepped monkeys up onto the hull (p2d: perched
+	// 2.4-3 m up). A probe that starts inside the hull hits at its start, hence the stepping.
+	private static float MonkeyGroundY(Vector3 p, float fallback)
+	{
+		Vector3 from = p + new Vector3(0.0f, 0.6f, 0.0f);
+		for (int n = 0; n < 12; n++)
+		{
+			RaycastHit hit = Physics.Raycast(from, -Vector3.UnitY, 40.0f);
+			if (!hit.DidHit)
+			{
+				return fallback;
+			}
+			if (!hit.Entity.IsValid || !hit.Entity.Name.Contains("WUMPA_TREE", StringComparison.OrdinalIgnoreCase))
+			{
+				return hit.Position.Y;
+			}
+			from = new Vector3(from.X, MathF.Min(from.Y, hit.Position.Y) - 0.3f, from.Z);
+		}
+		return fallback;
 	}
 
 	// A thrown fruit in flight. Touching Crash it is collected (the user's account and the rig):
-	// +1 wumpa, the hurt flinch and a rumble, but no mask. A miss lands and rolls on as ground fruit.
+	// +1 wumpa and a rumble, but no mask and no recoil. A miss lands and rolls on as ground fruit.
 	private void UpdateFruit(Actor a, Critter c, float dt, Vector3 crashPos)
 	{
 		if (!c.FruitFlying || !c.Fruit.IsValid)
@@ -1810,10 +1837,10 @@ public sealed partial class TwinsanityActors
 		if (Vector3.Distance(p, crashPos + new Vector3(0.0f, 0.8f, 0.0f)) < 1.0f)
 		{
 			_host?.AddWumpa(1);
-			_player?.Flinch();
-			// The disc's rumble strength/duration are not observable on the rig: a short light pulse.
+			// Rig (rig_recoil_zoom.png): no body recoil - he keeps his stance and squints. The rumble is
+			// the "as if hurt" part; the disc's strength/duration are not observable, so a short light pulse.
 			Gamepad.Rumble(0.3f, 0.3f, 0.2f);
-			Log.Info($"[Twinsanity] monkey fruit caught in flight at ({p.X:F2}, {p.Y:F2}, {p.Z:F2}): +1 wumpa, flinch, rumble");
+			Log.Info($"[Twinsanity] monkey fruit caught in flight at ({p.X:F2}, {p.Y:F2}, {p.Z:F2}): +1 wumpa, rumble");
 			c.Fruit.Destroy();
 			c.Fruit = default;
 			c.FruitFlying = false;
