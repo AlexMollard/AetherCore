@@ -1491,7 +1491,7 @@ public sealed partial class TwinsanityActors
 						PlayClip(a, c.SinkClip);
 						TwinsanityAudio.Creature(TwinsanityAudio.Call.WormPop, a.Model.Position);
 					}
-					else if (h < 0.8f && crashPos.Y > a.Home.Y + 0.3f && crashPos.Y < a.Home.Y + 1.6f && MechanicsWorm.TryLaunch(player, a.Home, crashPos.Y))
+					else if (h < 0.8f && crashPos.Y > a.Home.Y + 0.3f && crashPos.Y <= a.Home.Y + MechanicsWorm.WormTop && MechanicsWorm.TryLaunch(player, a.Home, crashPos.Y))
 					{
 						PlayClip(a, c.SquashClip);
 						c.Landed = false;

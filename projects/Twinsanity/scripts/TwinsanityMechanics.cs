@@ -24,9 +24,11 @@ public static class MechanicsWorm
 	// On the rig he lands on the popped worm's top, 1.94 m over its hole (h 2.078 on hubb worm 35 at
 	// 0.141), rides the squash and leaves from there: the apex is the same over every worm (hubb 35
 	// and 20: 11.2 and 11.1 over the hole, logs/hubroute/rig_launch35.csv, rig_bounce2). The engine
-	// worm has no top to stand on, so he is caught anywhere 0.3-1.6 m over the hole; launch him as if
-	// from the top so a late catch (a low frame rate) does not cost height (hubb worm 20 lost 1 m).
-	private const float WormTop = 1.94f;
+	// worm has no top to stand on, so he is caught falling anywhere from 0.3 m up to that top (the
+	// catch used to stop 1.6 up: he fell 0.34 m further through the worm's strike height, and its
+	// lunge killed him on the head - logs/hubrun/worm_catch.txt); launch him as if from the top so a
+	// late catch (a low frame rate) does not cost height (hubb worm 20 lost 1 m).
+	public const float WormTop = 1.94f;
 
 	/// <summary>Launch Crash, feet at <paramref name="crashY"/>, off the worm whose hole is at
 	/// <paramref name="wormPos"/>. Returns false when he is not falling onto it (rising through it, or
