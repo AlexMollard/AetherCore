@@ -256,8 +256,8 @@ namespace TwExtract
 		// material gets {"sheen":true} (gltf_mesh.slang's kFlagSheen), a highlight size and an idle
 		// glow - logs/look/WumpaLook/README.md.
 		public bool Sheen;
-		public const float SheenRoughness = 0.35f;
-		public static readonly float[] SheenGlow = { 0.06f, 0.025f, 0.0f };
+		public const float SheenRoughness = 0.12f;
+		public static readonly float[] SheenGlow = { 0.08f, 0.08f, 0.08f };
 		// The water look (gltf_mesh.slang's kFlagWater, logs/look/WaterLook/README.md): scenery
 		// materials drawing these disc textures (content-hashed names) get {"water":true}. 2b1f..: the
 		// shore/sea sheet with its foam band (beach "lambert168", Hub A/B/C/D, pier); f5cc..: the

@@ -901,43 +901,48 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         {
             // Sheen (bit 12): the wumpa's juicy skin on top of the PS2 object lighting above,
             // which stays the base so the fruit keeps its original colours. Everything here
-            // is additive and only brightens, and everything is tinted by the skin itself so a
-            // red fruit stays red and its leaves stay green - an untinted warm rim/highlight
-            // clipped the whole fruit to yellow. Knobs: material roughness = highlight size,
-            // material emissive = idle glow (scaled up with distance below), k* strengths here.
-            // See logs/look/WumpaLook/README.md.
+            // is additive and only brightens. The level's key light is warm and bright (well
+            // above 1 once linearised), so any term carrying its colour clipped the red skin and
+            // green leaves to yellow: warmth and rim take only its brightness and the skin's own
+            // hue, and only the small highlight keeps the light's colour. Knobs: material
+            // roughness = highlight size, material emissive = idle glow (scaled up with distance
+            // below), k* strengths here. See logs/look/WumpaLook/README.md.
             const float3 L0 = fc->objectLight0Direction.xyz;
             const float3 key = pow(max(fc->objectLight0Color.rgb, float3(0.0, 0.0, 0.0)), 2.2) * keyVisibility;
             const float3 amb = pow(max(fc->objectAmbient.rgb, float3(0.0, 0.0, 0.0)), 2.2);
+            const float3 kLuma = float3(0.2126, 0.7152, 0.0722);
+            const float keyLum = dot(key, kLuma);
+            const float ambLum = dot(amb, kLuma);
             const float fresnel = 1.0f - saturate(dot(N, V));
 
             // Subsurface-like warmth: the key light wraps a little past the terminator and
             // comes back tinted by the flesh (albedo squared = deeper, more saturated), so
-            // the shadow side glows warm instead of going grey.
+            // the shadow side glows red instead of going grey.
             const float kSheenWrap = 0.5f;
-            const float kSheenWarmth = 0.3f;
+            const float kSheenWarmth = 0.35f;
             const float n0 = dot(Ngeom, L0);
             const float wrapBand = saturate((n0 + kSheenWrap) / (1.0f + kSheenWrap)) - saturate(n0);
-            finalColor += baseColor.rgb * baseColor.rgb * key * (wrapBand * kSheenWarmth);
+            finalColor += baseColor.rgb * baseColor.rgb * (keyLum * wrapBand * kSheenWarmth);
 
             // Soft specular: the shared collectible lobe (PickupHighlight, as the gems use), so
-            // gems and fruit read as one family; mostly the light's colour with a touch of skin.
-            const float kSheenSpec = 0.3f;
-            const float3 specTint = lerp(baseColor.rgb, float3(1.0, 1.0, 1.0), 0.7f);
+            // gems and fruit read as one family; the light's colour with a touch of skin.
+            const float kSheenSpec = 0.2f;
+            const float3 specTint = lerp(baseColor.rgb, float3(1.0, 1.0, 1.0), 0.6f);
             finalColor += key * specTint * (PickupHighlight(N, V, L0, roughness) * kSheenSpec);
 
-            // Rim: a skin-tinted fresnel of the key light, plus the ambient so a shaded fruit
-            // still keeps a lit silhouette.
-            const float kSheenRim = 0.3f;
-            const float kSheenAmbientRim = 0.25f;
-            const float3 rimTint = lerp(baseColor.rgb, float3(1.0, 1.0, 1.0), 0.25f);
-            finalColor += rimTint * (key * (kSheenRim * pow(fresnel, 4.0f)) + amb * (kSheenAmbientRim * pow(fresnel, 3.0f)));
+            // Rim: a fresnel in the skin's own hue, off the key's brightness plus the ambient
+            // so a shaded fruit still keeps a lit silhouette.
+            const float kSheenRim = 0.25f;
+            const float kSheenAmbientRim = 0.4f;
+            finalColor += baseColor.rgb * (keyLum * kSheenRim * pow(fresnel, 4.0f) + ambLum * kSheenAmbientRim * pow(fresnel, 2.5f));
 
-            // Idle glow that reads at a distance (project bloom is 0): the authored emissive
-            // is already in; add up to kSheenFarGlow more of it as the fruit shrinks on screen.
+            // Idle glow that reads at a distance (project bloom is 0). The material emissive is
+            // its strength: the raw emissive the line above added is swapped for its luma in the
+            // skin's own hue (a flat orange glow turned the leaves orange in shade), and grows by
+            // up to kSheenFarGlow more as the fruit shrinks on screen.
             const float kSheenFarGlow = 2.0f;
             const float viewDist = length(fc->cameraWorldPos.xyz - input.worldPos);
-            finalColor += emissive * (kSheenFarGlow * smoothstep(6.0f, 40.0f, viewDist));
+            finalColor += baseColor.rgb * (dot(emissive, kLuma) * (1.0f + kSheenFarGlow * smoothstep(6.0f, 40.0f, viewDist))) - emissive;
         }
     }
     else
