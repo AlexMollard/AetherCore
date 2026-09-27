@@ -112,7 +112,10 @@ Conversion notes:
   images flipped upright, GS alpha widened) and accepts a pair only when it is close
   (<= 8.5 per channel) and clearly ahead of the next candidate.
 
-## Level bake
+## Level bake (being retired)
+
+Replaced by **Level convert** below; the bake and its `Twinsanity Marker` binding are deleted when
+the converted scenes land.
 
 The beach is pre-built in the editor rather than at Play. The flavor's **Level Bake**
 panel (or the `twinsanity.bake_level` control method) runs the same builder
@@ -128,6 +131,51 @@ prefab (a fresh checkout), `TwinsanityLevel` builds the level from the extracted
 JSON as before. Re-bake after any re-extraction that changes level content.
 After editing the bake scripts, press Play then Stop once before baking: the bake
 runs the last-loaded script assembly, not the scripts on disk.
+
+## Level convert
+
+The hub becomes ordinary AetherCore content: one prefab per object family, one scene per area,
+and a world scene that stitches the areas together. It is a **one-time migration**. After it,
+the editor scenes and prefabs are the source of truth, and a re-extract refreshes only models,
+textures and audio (prefabs and scenes reference them by path).
+
+Run it from the flavor's **Level Convert** panel or the `twinsanity.convert` control method
+(`{mode: "write"|"report", areas?: [scene...], overwrite?: [name...|"*"]}`). Save your scene first:
+the command replaces the live world, and it refuses to run with unsaved edits or during Play. It
+reloads the scene that was open when it finishes. After editing `TwinsanityConvert.cs`, press Play
+then Stop once so the command runs the new assembly.
+
+What it writes:
+
+|Output|Contents|
+|---|---|
+|`assets/prefabs/tw_*.prefab.toml`|One per family and model variant: `tw_crate_*`, `tw_wumpa*`, `tw_gem_*`, `tw_push_*`, `tw_prop_*`, `tw_critter_*`, `tw_sled*`, `tw_spawner_*`, `tw_agent_*`, `tw_trigger`, `tw_spawn`. The root holds the model and a descriptor script (`TwCrate`, `TwActor`, `TwSpawner`, `TwAgent`, `TwTrigger` or `TwSpawn`, see `scripts/TwinsanityObjects.cs`), whose defaults are the family's own data, so a placed copy behaves as that family. Committed.|
+|`scenes/HubBeach` `HubA` `HubB` `HubC` `HubD` `Pier` `HighPath` `BossArea` `AlwaysOn`|One per hub chunk: its scenery and `Collision` pieces (tags `tw_collision`, `tw_deadly`, `tw_drown`) under `Area <chunk>`, plus one linked prefab instance per disc instance. The instance's disc data (area, layer, id, flags, floats, params...) is a root override of its descriptor. Its links and trigger targets are entity references to other instance roots, and its `points`/`path` are `Point N`/`Path N` children, so moving the instance moves them. Committed.|
+|`scenes/Beach`|The world scene: environment, `Level`, `Crash`, the `Sky` (tag `tw_sky`), the primary `tw_spawn`, and `[[includes]]` of every area scene, which keeps the hub one seamless Play.|
+|`.aether/convert/manifest.json`|The C# half's output, read by the C++ half. Machine-local.|
+
+- **Where the families come from.** `TwinsanityConvert.cs` classifies every instance exactly as
+  the old bake did, and maps each family to a prefab through its checked-in `Catalogue` table. A
+  family that is missing from the table fails the conversion with its name. Add a row; there is
+  no generic fallback.
+- **Write mode.** An existing prefab or scene is kept unless it is named in `overwrite` ("Overwrite
+  all" in the panel). Re-running is byte-stable: instance node ids are hashes of
+  `<chunk>#<layer>#<id>`, prefab guids are carried over by entity name path, and chunk and instance
+  order are fixed.
+- **Report mode.** Nothing is written but `.aether/convert/drift-<scene>.md`. These files list what
+  the current extract would change: missing or extra instances, moves over 1 cm or 0.5°,
+  descriptor property and link differences, points, static pieces, and prefabs that differ from a
+  fresh template. Apply the changes you want by hand in the editor.
+- **Editing.** Edit an area in its own scene. Entities included into `Beach` are transient there and
+  are never saved into it.
+- **Texture paths are stable.** Committed prefabs and scenes name
+  `assets/textures/<hash>.png`. tw-extract derives the hash from the disc texture's own
+  size and decoded pixels (`tools/tw-extract/Convert.cs`, `TextureStore.Name`). `--hd-pack` only
+  writes the HD art under that same name, so a re-extract with or without the pack keeps every
+  reference valid.
+- **Lighting notes.** The world scene is saved by the editor now, and the editor does not keep
+  comments. The notes that explained its `[environment]` values are in `scenes/Beach.scene.toml` as of
+  commit `cc05231e`.
 
 ## Status
 

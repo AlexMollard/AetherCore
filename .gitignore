@@ -117,6 +117,9 @@ __pycache__/
 # Generated per-project launcher preview thumbnails (editor writes these on save)
 **/.aether/preview.png
 
+# twinsanity.convert's manifest and drift reports: regenerated on every run, machine-local.
+**/.aether/convert/
+
 # Autosave recovery copies. Machine-local and transient by definition - they exist only
 # between a crash and the next time the editor offers them back. Committing one would put
 # a half-finished scene from someone else's session into the history, and it would shadow
@@ -129,11 +132,16 @@ AetherGame.slnx
 # Twinsanity workbench (docs/twinsanity-editor.md): ISO-derived study content never
 # enters this public repo. Extracted models/textures/audio land in the project's
 # assets/, and PS2 captures/scans land in reference/ - both machine-local.
-# Hand-written shader sources are ours, not ISO-derived, and stay tracked.
+# Hand-written shader sources are ours, not ISO-derived, and stay tracked. So are the tw_*
+# prefabs twinsanity.convert writes (docs/twinsanity-editor.md "Level convert"): they
+# reference the local models/textures by path and hold no models, textures or audio.
 projects/Twinsanity/assets/*
 !projects/Twinsanity/assets/shaders/
 projects/Twinsanity/assets/shaders/*
 !projects/Twinsanity/assets/shaders/*.slang
+!projects/Twinsanity/assets/prefabs/
+projects/Twinsanity/assets/prefabs/*
+!projects/Twinsanity/assets/prefabs/tw_*.prefab.toml
 projects/Twinsanity/reference/
 
 # Cooked scene/prefab binaries (derived from the .toml source)

@@ -64,6 +64,7 @@ using namespace std::string_view_literals;
 #include "debug/ViewportPanel.hpp"
 #include "twinsanity/ReferenceImagesPanel.hpp"
 #include "twinsanity/LevelBakePanel.hpp"
+#include "twinsanity/LevelConvertPanel.hpp"
 #include "AetherCore.hpp"
 #include "PlaySession.hpp"
 #include "assets/AssetManager.hpp"
@@ -807,6 +808,12 @@ namespace aether::editor
 			bakePanel->SetVisible(m_debugConfig.GetBool(PanelVisibilityKey(bakePanel->GetName()), bakePanel->DefaultVisible()));
 			m_flavorPanels.push_back(bakePanel.get());
 			m_panels.push_back(std::move(bakePanel));
+			auto convertPanel = std::make_unique<twinsanity::LevelConvertPanel>();
+			convertPanel->OnAttach(context);
+			convertPanel->LoadSettings(m_debugConfig, context);
+			convertPanel->SetVisible(m_debugConfig.GetBool(PanelVisibilityKey(convertPanel->GetName()), convertPanel->DefaultVisible()));
+			m_flavorPanels.push_back(convertPanel.get());
+			m_panels.push_back(std::move(convertPanel));
 			chrome::ApplyTheme(chrome::TwinsanityTheme());
 			chrome::ApplyImGuiRounding(6.0f);
 			AE_INFO(LogCategory::App, "Editor flavor 'twinsanity' active for '{}'", project.name);
