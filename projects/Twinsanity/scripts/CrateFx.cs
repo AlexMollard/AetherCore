@@ -613,10 +613,16 @@ public static class CrateFx
 	{
 		// Entity.LoadModel only DETACHES the previous model's meshes, leaving them standing in
 		// the world as orphans: every swap left the old state behind (the "crate inside an
-		// opened crate" duplicate). Destroy them first; the crate root carries nothing else.
+		// opened crate" duplicate). Destroy them first - but not a baked crate's collider, which
+		// is a child of the same root ("<Kind> Crate Body"): the TNT countdown swap took it and
+		// Crash dropped through the lit TNT to the ground under it (logs/hubrun/tnt_wedge.txt).
 		for (int i = crate.ChildCount - 1; i >= 0; i--)
 		{
-			crate.GetChild(i).Destroy();
+			Entity child = crate.GetChild(i);
+			if (!child.Name.EndsWith(" Crate Body", StringComparison.Ordinal))
+			{
+				child.Destroy();
+			}
 		}
 		crate.LoadModel(path);
 	}

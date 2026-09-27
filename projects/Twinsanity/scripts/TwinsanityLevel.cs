@@ -825,7 +825,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			// should.
 			bool onTop = dx < 0.5f + kCrashRadius * 0.75f && dz < 0.5f + kCrashRadius * 0.75f
 			             && feet.Y > top - 0.75f && feet.Y < top + 0.45f && velocity.Y < 0.5f;
-			bool touching = dx < 0.5f + kCrashRadius + 0.08f && dz < 0.5f + kCrashRadius + 0.08f && overlapsVertically;
+			// Touch = his capsule (plus 8 cm) reaching the box: the distance from his axis to the
+			// footprint, rounded at the corners. The square band fired 0.2 m short of the Hub B red-gem
+			// nitro column's corner and killed him beside the TNT (logs/hubrun/tnt_wedge.txt).
+			float outX = MathF.Max(dx - 0.5f, 0.0f), outZ = MathF.Max(dz - 0.5f, 0.0f);
+			bool touching = outX * outX + outZ * outZ < (kCrashRadius + 0.08f) * (kCrashRadius + 0.08f) && overlapsVertically;
 			// The disc's crate behaviour slots (DefaultEnums.GameObjectScriptOrder; per-kind tables in
 			// logs/craterules/crate_objects.txt): 3 touch, 4 headbutt, 5 landed on, 6 spin, 7 body slam,
 			// 8 slide.
