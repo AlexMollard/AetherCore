@@ -250,19 +250,21 @@ public sealed class TwinsanityCutscenes
 	private const float SpeechVolume = 1.0f;
 	private readonly TwinsanitySkipPrompt _prompt = new();
 	// BottomTextDisplay: an AgentLab line drawn in the bottom letterbox bar while a scene holds it (outside
-	// one, in BottomTextShow's hint strip below). Rig
-	// (logs/tutorial/rig_s1_prompt.png, 640x485): glyph cells 28 of 485 lines tall, centred at line 434.5,
-	// i.e. 0.386 of the 15% bar's height, centred 0.306 of the way down it.
+	// one, in BottomTextShow's hint strip below). Rig (logs/tutorial/rig_s2_prompt_full.png, 640x485): the
+	// bar is lines 411-481, the letters' ink lines 431-440, centred 0.345 of the way down it; 39 font units
+	// span 0.386 of the bar's height across (TwinsanitySkipPrompt squashes them 0.7 vertically, as the rig).
 	private string _hint = ""; // '~' is the disc's line break
 	// BottomTextShow/Hide (619/620): the gameplay hint strip the text masters use outside scenes. Rig
-	// (logs/tutorialroute/rig_ch_crates.png, 640x485): the bottom bar's rect (lines 411-481) at half black,
-	// two lines of the same-size glyphs (width 293 px for 427 font units = 0.38 of the bar) centred 0.2
-	// and 0.48 of the way down it. ponytail: the strip fades over the command's time; the glyphs pop.
+	// (logs/tutorialroute/rig_ch_crates.png, rig_hint_beach64_0.png, 640x485): the bottom bar's rect (lines
+	// 411-481) at half black whatever the line count, glyphs the same size as the scene prompts (width 293 px
+	// for 427 font units = 0.38 of the bar). The lines' ink is centred as a block 0.345 of the way down it,
+	// as the scene prompts' (rig_hint_beach64_0.png: one line's ink 431-440): one line there, two 0.28 of
+	// the bar apart (ink at 0.2 and 0.48). ponytail: the strip fades over the command's time; the glyphs pop.
 	private readonly TwinsanitySkipPrompt _prompt2 = new();
 	private Entity _strip;
 	private float _stripLevel, _stripTarget, _stripRate = 5.0f;
 	private const float StripAlpha = 0.5f;
-	private const float StripCentre1 = 0.2f, StripCentre2 = 0.48f;
+	private const float StripPitch = 0.28f; // the block centres at HintCentre, as the scene prompts
 	// DisplayBottomTextInstance (657) shows the agent's own line. ELF Command_DisplayBottomTextInstance_Run
 	// (0x112990): n = the instance's int prop 0; AgentLab line n + 30 below 11, n + 41 from 11 on. Rig: the huba subtype-9 master
 	// shows line 39 ("COLLECT AKU-AKU MASKS..."), the beach subtype-2 one line 32 ("BELLY-FLOP ON THE RED
@@ -284,7 +286,7 @@ public sealed class TwinsanityCutscenes
 	private string[]? _hintLines;
 	private const string HintText = "project://assets/ui/text/AgentLab/English.txt";
 	private const float HintScale = 0.386f;
-	private const float HintCentre = 0.306f;
+	private const float HintCentre = 0.345f;
 
 	// ---- loading -------------------------------------------------------------------------------
 
@@ -2026,17 +2028,18 @@ public sealed class TwinsanityCutscenes
 		if (_hint.Length > 0 && _bars >= 1.0f)
 		{
 			_prompt.Show(_canvas, _bottom, _hintOneLine, HintScale, HintCentre);
-			_prompt2.Show(_canvas, _strip, "", HintScale, StripCentre2);
+			_prompt2.Show(_canvas, _strip, "", HintScale, HintCentre);
 		}
 		else if (_hint.Length > 0 && _bars <= 0.0f && _stripLevel > 0.0f)
 		{
-			_prompt.Show(_canvas, _strip, _hintFirst, HintScale, StripCentre1);
-			_prompt2.Show(_canvas, _strip, _hintSecond, HintScale, StripCentre2);
+			float half = _hintSecond.Length > 0 ? StripPitch * 0.5f : 0.0f;
+			_prompt.Show(_canvas, _strip, _hintFirst, HintScale, HintCentre - half);
+			_prompt2.Show(_canvas, _strip, _hintSecond, HintScale, HintCentre + half);
 		}
 		else
 		{
 			_prompt.Update(_canvas, _bottom, _bars >= 1.0f && CanSkip());
-			_prompt2.Show(_canvas, _strip, "", HintScale, StripCentre2);
+			_prompt2.Show(_canvas, _strip, "", HintScale, HintCentre);
 		}
 	}
 
