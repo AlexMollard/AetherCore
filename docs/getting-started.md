@@ -242,8 +242,8 @@ Sticks are not actions — a direction is not a yes/no, so read `Gamepad.LeftSti
 lists every connected pad with its live stick, trigger and button state. An empty list means the
 engine never saw it, which is a different problem from your code not reading it.
 
-Not supported: **rumble** (needs a vendor API the windowing layer does not expose) and gyro or
-touchpad input.
+Rumble: `Gamepad.Rumble(low, high, seconds)` buzzes every connected XInput pad (Windows only) for
+`seconds`, then stops itself; Stop and Pause stop it too. Not supported: gyro or touchpad input.
 
 ## Touching components from script
 
@@ -310,6 +310,5 @@ was merely out of date.
 Worth knowing before you plan a game around them:
 
 - **There is no audio.** No mixer, no `AudioSource`, no API. A game cannot make a sound today.
-- **No rumble.** Controllers are read-only — buttons, sticks and triggers work, force feedback does not.
 
 Audio is tracked as the top of the roadmap rather than an oversight.

@@ -448,6 +448,12 @@ internal static unsafe partial class Native
     internal static partial void aether_input_gamepad_set_deadzones(float stick, float trigger);
 
     [LibraryImport(Lib)]
+    internal static partial void aether_input_gamepad_rumble(float low, float high, float seconds);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_input_gamepad_stop_rumble();
+
+    [LibraryImport(Lib)]
     internal static partial void aether_input_set_os_cursor_visible(int visible);
 
     [LibraryImport(Lib)]

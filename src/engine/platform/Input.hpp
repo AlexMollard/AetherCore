@@ -191,6 +191,31 @@ namespace aether
 		Right = 3,
 	};
 
+	// Motor strengths, 0..1: `low` is the heavy left motor, `high` the light right one.
+	struct RumbleMotors
+	{
+		float low = 0.0f;
+		float high = 0.0f;
+
+		bool operator==(const RumbleMotors&) const = default;
+	};
+
+	// One timed rumble pulse, kept apart from the XInput call so its timing is testable
+	// without a controller. A new Start replaces the running pulse; it reads zero from the
+	// moment its duration runs out, so nothing has to remember to switch it off.
+	class RumblePulse
+	{
+	public:
+		// Strengths clamp to 0..1; a duration that is not positive (or NaN) stops the pulse.
+		void Start(float low, float high, float seconds, double now);
+		void Stop();
+		[[nodiscard]] RumbleMotors At(double now) const;
+
+	private:
+		RumbleMotors m_motors{};
+		double m_until = 0.0;
+	};
+
 	class Input
 	{
 	public:
@@ -575,6 +600,16 @@ namespace aether
 		void ConsumeGamepadButton(GamepadButton button, int pad = kAnyGamepad);
 		[[nodiscard]] bool IsGamepadButtonConsumed(GamepadButton button, int pad = kAnyGamepad) const;
 
+		// Force feedback: a timed pulse on every connected XInput pad (GLFW has no rumble,
+		// so this talks to XInput directly; a pad that is not XInput, and every non-Windows
+		// build, keeps the timer but feels nothing). A new pulse replaces the running one and
+		// it switches itself off after `seconds`. Play Stop, Pause and Step stop it, so a
+		// paused game never buzzes on. Windowless instances (tests) never touch the hardware.
+		void Rumble(float low, float high, float seconds);
+		void StopRumble();
+		// What the motors are being driven at right now.
+		[[nodiscard]] RumbleMotors GetRumble() const;
+
 		// Synthetic gamepad injection, same contract as synthetic keys and mouse: an
 		// injected pad presents as connected, injected buttons OR into the real state, and
 		// an injected axis overrides the real one until cleared. This is what lets a
@@ -662,6 +697,11 @@ namespace aether
 		};
 
 		void UpdateGamepads();
+		// Pushes the pulse's current level to the pads when it changed since the last push.
+		void ApplyRumble();
+		RumblePulse m_rumble;
+		RumbleMotors m_rumbleSent{};
+		std::chrono::steady_clock::time_point m_rumbleEpoch = std::chrono::steady_clock::now();
 
 		// Shared by the real poll and by synthetic injection: a windowless test never calls
 		// Update(), so without this the flick latch would only ever exist on a real frame and

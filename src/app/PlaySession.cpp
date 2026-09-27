@@ -177,6 +177,7 @@ namespace aether::app
 			input->RequestCursorLock(false);
 			input->SetCursorLocked(false);
 			input->SetGameOwnsInput(false);
+			input->StopRumble();
 		}
 
 		World& world = context.Get<World>();
@@ -330,6 +331,10 @@ namespace aether::app
 		{
 			return false;
 		}
+		if (auto* input = context.TryGet<Input>())
+		{
+			input->StopRumble();
+		}
 		playState->SetPaused(true);
 		if (auto* audio = context.TryGet<aether::audio::AudioSubsystem>())
 		{
@@ -361,6 +366,10 @@ namespace aether::app
 			return false;
 		}
 		playState->SetPaused(!playState->IsPaused());
+		if (auto* input = context.TryGet<Input>(); input != nullptr && playState->IsPaused())
+		{
+			input->StopRumble();
+		}
 		if (auto* audio = context.TryGet<aether::audio::AudioSubsystem>())
 		{
 			audio->SetSuspended(playState->IsPaused());
@@ -379,6 +388,10 @@ namespace aether::app
 		if (!playState->IsPaused())
 		{
 			playState->SetPaused(true);
+			if (auto* input = context.TryGet<Input>())
+			{
+				input->StopRumble();
+			}
 		}
 		playState->RequestStep(frames);
 		return true;

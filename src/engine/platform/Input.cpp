@@ -7,6 +7,17 @@
 #include <cctype>
 #include <sstream>
 
+#ifdef _WIN32
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	include <Windows.h>
+#	include <Xinput.h>
+#endif
+
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -55,15 +66,125 @@ namespace aether
 			}
 			return std::min((unit - deadzone) / (1.0f - deadzone), 1.0f);
 		}
+
+		// XInput, loaded on first use rather than linked: xinput1_4 ships with Windows 8+,
+		// 9_1_0 covers older installs, and a machine with neither simply gets no rumble.
+		// XInput user indices are not GLFW slots, so every connected XInput pad gets the
+		// pulse - the single-player case the rumble exists for.
+		void SendRumble(RumbleMotors motors)
+		{
+#ifdef _WIN32
+			using GetStateFn = DWORD(WINAPI*)(DWORD, XINPUT_STATE*);
+			using SetStateFn = DWORD(WINAPI*)(DWORD, XINPUT_VIBRATION*);
+			static const auto api = []
+			{
+				struct Api
+				{
+					GetStateFn getState = nullptr;
+					SetStateFn setState = nullptr;
+				} a;
+				HMODULE lib = LoadLibraryW(L"xinput1_4.dll");
+				if (lib == nullptr)
+				{
+					lib = LoadLibraryW(L"xinput9_1_0.dll");
+				}
+				if (lib != nullptr)
+				{
+					a.getState = reinterpret_cast<GetStateFn>(GetProcAddress(lib, "XInputGetState"));
+					a.setState = reinterpret_cast<SetStateFn>(GetProcAddress(lib, "XInputSetState"));
+				}
+				if (a.getState == nullptr || a.setState == nullptr)
+				{
+					AE_WARN(LogCategory::Input, "XInput unavailable: gamepad rumble disabled");
+					a = {};
+				}
+				return a;
+			}();
+			if (api.setState == nullptr)
+			{
+				return;
+			}
+			XINPUT_VIBRATION vibration{static_cast<WORD>(motors.low * 65535.0f + 0.5f), static_cast<WORD>(motors.high * 65535.0f + 0.5f)};
+			for (DWORD user = 0; user < XUSER_MAX_COUNT; ++user)
+			{
+				XINPUT_STATE state{};
+				if (api.getState(user, &state) == ERROR_SUCCESS)
+				{
+					api.setState(user, &vibration);
+				}
+			}
+#else
+			(void)motors;
+#endif
+		}
 	} // namespace
+
+	void RumblePulse::Start(float low, float high, float seconds, double now)
+	{
+		if (!(seconds > 0.0f)) // also catches NaN
+		{
+			Stop();
+			return;
+		}
+		const auto unit = [](float v) { return v > 0.0f ? std::min(v, 1.0f) : 0.0f; }; // NaN -> 0
+		m_motors = {unit(low), unit(high)};
+		m_until = now + static_cast<double>(seconds);
+	}
+
+	void RumblePulse::Stop()
+	{
+		m_motors = {};
+		m_until = 0.0;
+	}
+
+	RumbleMotors RumblePulse::At(double now) const
+	{
+		return now < m_until ? m_motors : RumbleMotors{};
+	}
 
 	Input::~Input()
 	{
 		if (m_window)
 		{
+			// A pad left buzzing outlives the process otherwise: XInput holds the last state.
+			if (m_rumbleSent != RumbleMotors{})
+			{
+				SendRumble({});
+			}
 			glfwSetScrollCallback(m_window, nullptr);
 			glfwSetCharCallback(m_window, nullptr);
 			glfwSetWindowUserPointer(m_window, nullptr);
+		}
+	}
+
+	void Input::Rumble(float low, float high, float seconds)
+	{
+		m_rumble.Start(low, high, seconds, std::chrono::duration<double>(std::chrono::steady_clock::now() - m_rumbleEpoch).count());
+		ApplyRumble();
+	}
+
+	void Input::StopRumble()
+	{
+		m_rumble.Stop();
+		ApplyRumble();
+	}
+
+	RumbleMotors Input::GetRumble() const
+	{
+		return m_rumble.At(std::chrono::duration<double>(std::chrono::steady_clock::now() - m_rumbleEpoch).count());
+	}
+
+	void Input::ApplyRumble()
+	{
+		const RumbleMotors now = GetRumble();
+		if (now == m_rumbleSent)
+		{
+			return;
+		}
+		m_rumbleSent = now;
+		if (m_window != nullptr)
+		{
+			SendRumble(now);
 		}
 	}
 
@@ -395,6 +516,7 @@ namespace aether
 		m_pendingChars.clear();
 
 		UpdateGamepads();
+		ApplyRumble(); // a pulse whose time ran out switches the motors off here
 	}
 
 	void Input::ConsumeKey(Key key)

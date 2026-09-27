@@ -307,3 +307,28 @@ TEST_CASE("Consumption lasts one frame and not longer")
 	CHECK(input.IsGamepadButtonDown(GamepadButton::A));
 	CHECK_FALSE(input.IsGamepadButtonConsumed(GamepadButton::A));
 }
+
+// The pulse must switch itself off: XInput holds the last motor level forever, so a pulse
+// that never expired would leave the controller buzzing after the hit that caused it.
+TEST_CASE("A rumble pulse runs for its duration, clamps, and a new pulse replaces it")
+{
+	RumblePulse pulse;
+	pulse.Start(2.0f, -1.0f, 0.25f, 10.0);
+	CHECK(pulse.At(10.0) == RumbleMotors{1.0f, 0.0f});
+	CHECK(pulse.At(10.2) == RumbleMotors{1.0f, 0.0f});
+	CHECK(pulse.At(10.25) == RumbleMotors{});
+
+	// Restarting mid-pulse takes the new strength and a fresh deadline.
+	pulse.Start(0.3f, 0.5f, 0.25f, 10.1);
+	CHECK(pulse.At(10.3) == RumbleMotors{0.3f, 0.5f});
+	CHECK(pulse.At(10.35) == RumbleMotors{});
+
+	pulse.Start(0.3f, 0.5f, 1.0f, 20.0);
+	pulse.Stop();
+	CHECK(pulse.At(20.0) == RumbleMotors{});
+
+	// A zero duration is a stop, not an endless pulse.
+	pulse.Start(0.3f, 0.5f, 1.0f, 30.0);
+	pulse.Start(0.3f, 0.5f, 0.0f, 30.0);
+	CHECK(pulse.At(30.0) == RumbleMotors{});
+}

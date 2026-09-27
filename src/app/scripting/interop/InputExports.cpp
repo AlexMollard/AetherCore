@@ -170,3 +170,10 @@ AE_SCRIPT_API std::int32_t aether_input_gamepad_stick_flicked(std::int32_t stick
 // script reaching into that would be taking input away from itself.
 AE_SCRIPT_API void aether_input_gamepad_set_deadzones(float stick, float trigger)
 { SafeExport([&] -> void { ActiveContext().input->SetGamepadDeadzones(stick, trigger); }); }
+
+// A timed pulse on every connected XInput pad; see Input::Rumble.
+AE_SCRIPT_API void aether_input_gamepad_rumble(float low, float high, float seconds)
+{ SafeExport([&] -> void { ActiveContext().input->Rumble(low, high, seconds); }); }
+
+AE_SCRIPT_API void aether_input_gamepad_stop_rumble()
+{ SafeExport([&] -> void { ActiveContext().input->StopRumble(); }); }

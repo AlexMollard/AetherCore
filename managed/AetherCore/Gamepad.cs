@@ -175,4 +175,17 @@ public static class Gamepad
     /// </summary>
     public static void SetDeadzones(float stick, float trigger)
         => Native.aether_input_gamepad_set_deadzones(stick, trigger);
+
+    /// <summary>
+    /// Buzz the controller: <paramref name="low"/> drives the heavy left motor and
+    /// <paramref name="high"/> the light right one (each 0..1) for <paramref name="seconds"/>,
+    /// then the motors switch themselves off. A new call replaces a pulse still running.
+    /// Reaches every connected XInput pad; with none connected (or off Windows) it does
+    /// nothing. Stopping or pausing play stops it too.
+    /// </summary>
+    public static void Rumble(float low, float high, float seconds)
+        => Native.aether_input_gamepad_rumble(low, high, seconds);
+
+    /// <summary>Stop a <see cref="Rumble"/> pulse early (a game's own pause menu, a cutscene).</summary>
+    public static void StopRumble() => Native.aether_input_gamepad_stop_rumble();
 }
