@@ -114,7 +114,7 @@ public abstract class TwObject : EntityScript
 		TwRegistry.Children(Self, "Point"), TwRegistry.Children(Self, "Path"));
 }
 
-public sealed class TwCrate : TwObject { public CrateKind Kind; public bool StartOpen; } // StartOpen replaces OpenStartCheckpoint's nearest-to-spawn pick
+public sealed class TwCrate : TwObject { public CrateKind Kind; public bool StartOpen; } // StartOpen: the checkpoint OpenStartCheckpoint opens at load
 public sealed class TwActor : TwObject { }   // creatures, gems, props, pushables: dispatch stays name-keyed
 public sealed class TwSpawner : TwObject { } // creature/ecology/parrot spawner; template = Link0
 public sealed class TwAgent : TwObject { }   // logic-only instances (directors, text masters, DJ, ambience, sound spots...) and scripted wumpa

@@ -1,8 +1,6 @@
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Text.Json;
 using AetherCore;
 
 namespace AetherGame;
@@ -51,33 +49,8 @@ public static class TwinsanityAudio
 	private static bool s_paused;
 	private static float s_musicBus = 1.0f, s_ambienceBus = 1.0f;
 
-	/// <summary>Level start (TwinsanityLevel.OnAttach): the music and ambience streams the
-	/// placed actors name, and the 3D waterfall loops.</summary>
-	public static void Start(string levelPath)
-	{
-		Reset();
-		string? text = Assets.ReadText(levelPath);
-		if (text == null)
-		{
-			return;
-		}
-		using JsonDocument doc = JsonDocument.Parse(text);
-		foreach (JsonElement ins in doc.RootElement.GetProperty("instances").EnumerateArray())
-		{
-			string name = ins.GetProperty("name").GetString() ?? "";
-			if (!IsAudioSource(name))
-			{
-				continue;
-			}
-			JsonElement pos = ins.GetProperty("position");
-			int[] ps = ins.TryGetProperty("params", out JsonElement p) ? Array.ConvertAll(p.EnumerateArray().ToArray(), e => e.GetInt32()) : Array.Empty<int>();
-			float[] fs = ins.TryGetProperty("floats", out JsonElement f) ? Array.ConvertAll(f.EnumerateArray().ToArray(), e => e.GetSingle()) : Array.Empty<float>();
-			Place(name, new Vector3(pos[0].GetSingle(), pos[1].GetSingle(), pos[2].GetSingle()), ps, fs);
-		}
-	}
-
-	/// <summary>Level start from converted content: the same streams and loops, read from the start
-	/// area's descriptors (the start chunk's level.json instances, as <see cref="Start(string)"/>).</summary>
+	/// <summary>Level start (TwinsanityLevel's bind): the music and ambience streams and the 3D
+	/// waterfall loops the start area's placed descriptors name.</summary>
 	public static void Start(IReadOnlyList<TwObject> objects, string startArea)
 	{
 		Reset();

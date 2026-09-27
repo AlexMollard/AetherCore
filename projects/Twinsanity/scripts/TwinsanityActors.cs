@@ -99,10 +99,10 @@ public sealed partial class TwinsanityActors
 	public bool TryBind(TwObject o)
 	{
 		TwInstance i = o.Data();
-		return o is TwSpawner ? TryRegisterSpawner(i, null) : BindActor(i);
+		return o is TwSpawner ? TryRegisterSpawner(i) : BindActor(i);
 	}
 
-	// The model root exists (prefab instance or bake entity): pushable, else actor.
+	// The model root exists (the prefab instance): pushable, else actor.
 	private bool BindActor(TwInstance i)
 	{
 		if (i.Model.Length == 0)
@@ -129,7 +129,7 @@ public sealed partial class TwinsanityActors
 	}
 
 	// Everything an actor needs after its model entity (i.Root) exists: clips, behaviour, one-shot or
-	// looping animation, critter state. Shared by the prefab bind and the JSON adapter below.
+	// looping animation, critter state.
 	private void RegisterActor(TwInstance i)
 	{
 		Entity e = i.Root;
@@ -185,148 +185,10 @@ public sealed partial class TwinsanityActors
 		=> new(root, "", -1, -1, 0, name, model, position, euler, Array.Empty<float>(), 0u, 0u, Array.Empty<int>(),
 			Array.Empty<Entity>(), Array.Empty<Vector3>(), Array.Empty<Vector3>());
 
-	// ---- JSON adapter: the JSON build (TrySpawn) and the bake marker bind (TryBind(Entity, role, json)).
-	// Everything below until "end JSON adapter" is deleted by the wave-2 cutover. ----
-
-	public bool TrySpawn(int objectId, string objectName, string? modelPath, Vector3 position, Vector3 eulerDegrees, float[] floats, uint subtype, JsonElement instance, Matrix4x4 transform)
-	{
-		TwInstance i = FromJson(instance, transform, default, objectId, objectName, modelPath ?? "", position, eulerDegrees);
-		if (TryRegisterSpawner(i, LegacyLinkKey(instance, transform)))
-		{
-			return true;
-		}
-		if (ShouldSkip(objectName))
-		{
-			return false;
-		}
-		string? model = modelPath ?? ModelFor(objectName);
-		i = i with { Model = model ?? "" };
-		RememberLegacy(instance, transform, i);
-		if (model == null)
-		{
-			return false;
-		}
-		NoteMonkeyTree(i);
-		if (TrySpawnPushable(objectName, model, position, eulerDegrees))
-		{
-			return true;
-		}
-		Entity e = World.Create();
-		e.Name = objectName + "#" + objectId;
-		e.AddTransform();
-		e.Position = position;
-		e.EulerDegrees = eulerDegrees;
-		e.LoadModel(model);
-		NameAttachedParts(e, model);
-		if (NameKey(objectName).StartsWith("act_redwumpa"))
-		{
-			// Wumpa cast no shadow (as TwinsanityWumpa.SpawnModel): at distance they show as specks.
-			for (int c = 0; c < e.ChildCount; c++)
-			{
-				MeshRenderer.SetCastShadows(e.GetChild(c), false);
-			}
-		}
-		i = i with { Root = e };
-		RememberLegacy(instance, transform, i);
-		RegisterActor(i);
-		return true;
-	}
-
-	// The bake bind: one pre-built entity with its marker role and world-space identity JSON.
-	public bool TryBind(Entity e, int role, JsonElement instance)
-	{
-		int objectId = instance.TryGetProperty("object", out JsonElement ob) ? ob.GetInt32() : 0;
-		string objectName = ObjectNameOf(instance);
-		Vector3 position = instance.TryGetProperty("position", out JsonElement pp) ? Vec3(pp) : e.Position;
-		Vector3 euler = instance.TryGetProperty("euler", out JsonElement el) ? Vec3(el) : e.EulerDegrees;
-		string? model = instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : null;
-		TwInstance i = FromJson(instance, Matrix4x4.Identity, e, objectId, objectName, model ?? "", position, euler);
-		if (role is SpawnerCreature or SpawnerParrot)
-		{
-			TryRegisterSpawner(i, LegacyLinkKey(instance, Matrix4x4.Identity));
-			return true;
-		}
-		i = i with { Model = model ?? ModelFor(objectName) ?? "" };
-		RememberLegacy(instance, Matrix4x4.Identity, i);
-		return BindActor(i);
-	}
-
-	// The one JsonElement -> TwInstance adapter. Points and path are chunk-local, placed by the chunk
-	// transform (identity for the bake's world-space marker JSON). Links stay numeric: the spawner's
-	// template resolves through LegacyLinkKey/RememberLegacy instead.
-	private static TwInstance FromJson(JsonElement instance, Matrix4x4 transform, Entity root, int objectId, string name, string model, Vector3 position, Vector3 euler)
-	{
-		if (instance.ValueKind != JsonValueKind.Object)
-		{
-			return Bare(root, name, model, position, euler) with { ObjectId = objectId };
-		}
-		static Vector3[] Points(JsonElement o, string key, Matrix4x4 t)
-		{
-			if (!o.TryGetProperty(key, out JsonElement arr))
-			{
-				return Array.Empty<Vector3>();
-			}
-			var list = new List<Vector3>();
-			foreach (JsonElement p in arr.EnumerateArray())
-			{
-				list.Add(Vector3.Transform(Vec3(p), t));
-			}
-			return list.ToArray();
-		}
-		var floats = new List<float>();
-		if (instance.TryGetProperty("floats", out JsonElement fl) && fl.ValueKind == JsonValueKind.Array)
-		{
-			foreach (JsonElement f in fl.EnumerateArray())
-			{
-				floats.Add(f.GetSingle());
-			}
-		}
-		var pars = new List<int>();
-		if (instance.TryGetProperty("params", out JsonElement ps))
-		{
-			foreach (JsonElement p in ps.EnumerateArray())
-			{
-				pars.Add(p.GetInt32());
-			}
-		}
-		return new TwInstance(root,
-			instance.TryGetProperty("chunk", out JsonElement ch) ? ch.GetString() ?? "" : "",
-			instance.TryGetProperty("layer", out JsonElement l) ? l.GetInt32() : 0,
-			instance.TryGetProperty("id", out JsonElement id) ? id.GetInt32() : -1,
-			objectId, name, model, position, euler, floats.ToArray(),
-			instance.TryGetProperty("subtype", out JsonElement st) ? st.GetUInt32() : 0u,
-			instance.TryGetProperty("flags", out JsonElement fg) ? fg.GetUInt32() : 0u,
-			pars.ToArray(), Array.Empty<Entity>(), Points(instance, "points", transform), Points(instance, "path", transform));
-	}
-
-	// Instance ids are per chunk layer, and links point within the layer.
-	private static string LegacyKey(Matrix4x4 t, JsonElement instance, int id)
-		=> $"{t.M41:F2},{t.M42:F2},{t.M43:F2}#{(instance.TryGetProperty("layer", out JsonElement l) ? l.GetInt32() : 0)}#{id}";
-
-	// A JSON creature spawner's template: its links[0], keyed as RememberLegacy keys instances.
-	private static string? LegacyLinkKey(JsonElement instance, Matrix4x4 transform)
-		=> instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("links", out JsonElement links)
-			? LegacyKey(transform, instance, links[0].GetInt32()) : null;
-
-	private readonly Dictionary<string, TwInstance> _legacyInstances = new();
-
-	private void RememberLegacy(JsonElement instance, Matrix4x4 transform, TwInstance i)
-	{
-		if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("id", out JsonElement id))
-		{
-			_legacyInstances[LegacyKey(transform, instance, id.GetInt32())] = i;
-		}
-	}
-
-	private static string ObjectNameOf(JsonElement instance)
-		=> InstanceName(instance, instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : null);
-
-	// ---- end JSON adapter ----
-
 	/// <summary>The instance's object name. Layer-5 instances (crates, fruit and the hub's colour gems
 	/// GEM_YELLOW/PURPLE/GREEN...) carry none, so they are known by their object's model file
 	/// (GEM_YELLOW/GEM_YELLOW.gltf, BASICCRATE/BASICCRATE_0.gltf); "object_N" was never a pickup, which
-	/// left those gems as dead props. Shared by the JSON build, the bake and the converter.</summary>
+	/// left those gems as dead props. Shared by the converter.</summary>
 	internal static string InstanceName(JsonElement instance, string? model)
 	{
 		if (instance.TryGetProperty("name", out JsonElement n) && n.GetString() is { Length: > 0 } name)
@@ -747,8 +609,8 @@ public sealed partial class TwinsanityActors
 
 	// The shield (WEAPON_NATIVE_SHIELD, attached on exit point 2 by his INIT script) is baked onto his
 	// arm by tw-extract as the model's last mesh entities; <model>.attach.json says how many. They are
-	// last only straight after LoadModel (a baked prefab's instances do not keep the child order), so the
-	// spawn (NameAttachedParts, here and in TwinsanityBake) names them and ReadShield finds them by name.
+	// last only straight after LoadModel (a prefab's instances do not keep the child order), so the
+	// converter (NameAttachedParts) names them in the prefab and ReadShield finds them by name.
 	private const string AttachedPartName = " attached";
 
 	private static JsonDocument? Attachments(string? model)

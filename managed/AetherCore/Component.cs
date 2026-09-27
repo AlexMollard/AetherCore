@@ -95,8 +95,8 @@ public readonly struct ComponentAccess
     public unsafe string GetString(string field, string fallback = "")
     {
         // Stack fast path for the common short field; a full-length read when the value
-        // filled the buffer (which may be a truncation) - a baked TwinsanityMarker's
-        // identity JSON runs well past 512 bytes.
+        // filled the buffer (which may be a truncation) - a long string field runs well past
+        // 512 bytes.
         Span<byte> buffer = stackalloc byte[512];
         fixed (byte* ptr = buffer)
         {

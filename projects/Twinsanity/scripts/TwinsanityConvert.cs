@@ -21,7 +21,7 @@ namespace AetherGame;
 /// and writes the manifest (ManifestPath) the C++ side turns into prefab instances, area scenes and
 /// the world scene. Nothing here runs at play, and nothing reads the manifest but the command.
 ///
-/// Classification is today's bake rule, instance by instance: a scripted object (its id is in the
+/// Classification is the retired level bake's rule, instance by instance: a scripted object (its id is in the
 /// chunk's scripts.json) always gets a descriptor; object 1 is wumpa (tag tw_wumpa + TwAgent,
 /// DESIGN.md amendment A1); a crate kind is a TwCrate; a spawner a TwSpawner; a skipped instance only
 /// survives as an empty TwAgent when scripted; anything else with a model is a TwActor.
@@ -261,7 +261,7 @@ public static class TwinsanityConvert
 		int nCrates = 0, nWumpa = 0, nActors = 0, nSpawners = 0, nAgents = 0, nTriggers = 0, unresolved = 0;
 
 		// The hub walk: every seamless-neighbour chunk inside the start chunk's folder, breadth-first,
-		// exactly as TwinsanityLevel.BuildFromJson and the old bake walked it.
+		// exactly as the retired play-time JSON build walked it.
 		var queue = new Queue<(string Path, Matrix4x4 Transform)>();
 		var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		queue.Enqueue((levelPath, Matrix4x4.Identity));
@@ -428,8 +428,8 @@ public static class TwinsanityConvert
 			}
 		}
 
-		// StartOpen: the checkpoint OpenStartCheckpoint picked at play - the nearest to the spawn
-		// (first in walk order on a tie, as MinBy).
+		// StartOpen: the checkpoint nearest to the spawn (first in walk order on a tie, as MinBy) - the
+		// one the retired play-time pick opened; TwinsanityLevel.OpenStartCheckpoint now opens this one.
 		if (spawn != null)
 		{
 			Placed? first = crates.Where(c => c.Crate == CrateKind.Checkpoint)
@@ -449,7 +449,7 @@ public static class TwinsanityConvert
 
 	// ---- templates ------------------------------------------------------------------------------
 
-	// The family's prefab, built at the origin in today's baked layout (TwinsanityBake): the model
+	// The family's prefab, built at the origin in the retired bake's layout: the model
 	// root, a crate's "<Kind> Crate Body" box child, wumpa without shadows and with its tag, the
 	// actor's attached parts named. Descriptor defaults are the family's own data, so a placed copy
 	// (Playground) behaves as its family with no per-instance edits.

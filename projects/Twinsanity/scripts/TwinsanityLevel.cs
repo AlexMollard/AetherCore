@@ -9,10 +9,9 @@ using Kind = AetherGame.CrateKind;
 namespace AetherGame;
 
 /// <summary>
-/// Builds a Twinsanity chunk from tw-extract's levels/&lt;chunk&gt;.level.json at play time - scenery,
-/// collision, crates, wumpa, Crash's spawn - and runs its rules: breaking crates, collecting
-/// wumpa, lives, checkpoints and dying. Nothing ISO-derived is in the scene file itself, so the
-/// scene is committable and the content stays in the gitignored assets folder.
+/// Runs a converted Twinsanity level at play time: binds the prefab instances the area scenes place
+/// (TwinsanityObjects descriptors and tw_* tags, written by twinsanity.convert) and runs their rules:
+/// breaking crates, collecting wumpa, lives, checkpoints and dying.
 ///
 /// Object IDs are DefaultEnums.ObjectID from the Twinsanity editor. Crates are 1 unit cubes with
 /// their origin at the bottom centre; wumpa sit about 1 unit above their origin.
@@ -38,7 +37,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	// Crate kinds are CrateKind (TwinsanityObjects.cs), aliased Kind here: TwCrate serializes the same enum.
 
 	/// <summary>The crate kind for a level instance, or null when it is not a crate the level
-	/// rules handle (it then belongs to the actor system). Shared with the bake.</summary>
+	/// rules handle (it then belongs to the actor system). Shared with the converter.</summary>
 	internal static Kind? KindFor(int objectId, string? model)
 	{
 		Kind? kind = objectId switch
@@ -61,6 +60,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private sealed class Crate
 	{
 		public Kind Kind;
+		// The body is a CHILD of the model (one selectable unit in the editor), so it follows the
+		// model's transform and is never moved on its own by the fall code.
 		public Entity Body;
 		public Entity Model;
 		public Vector3 Base;
@@ -72,18 +73,13 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		public bool CheckSupport;              // the crate under it broke or moved: see if it must fall
 		public bool Falling;
 		public float FallSpeed;
-		// Baked crates: the body is a CHILD of the model (one selectable unit in the editor), so
-		// it follows the model's transform and must not be moved again by the fall code.
-		public bool BodyIsChild;
 		// Where the bottom of its column stood at load: the fall's floor when the ground ray sees no
 		// terrain (it hit a crate body still being destroyed, or started under the ground).
 		public float ColumnFloor;
-		// The disc instance's (layer, id), which other instances' links name, and its own links
-		// (a detonator's MessageLinkedObject targets).
+		// The disc instance's (layer, id), for the logs.
 		public int Id = -1, Layer = -1;
-		public int[] Links = Array.Empty<int>();
-		// Registry-bound crates: the disc links as the target instance roots (TwCrate.Link0..9), which
-		// replace the (layer, id) lookup of Links; and StartOpen, the checkpoint that opens at load.
+		// The disc links as the target instance roots (TwCrate.Link0..9): a detonator's
+		// MessageLinkedObject targets. StartOpen: the checkpoint that opens at load.
 		public Entity[] LinkRoots = Array.Empty<Entity>();
 		public bool StartOpen;
 		public bool Detonated;                 // a detonator fires once (its DETONATE script ends in a control state)
@@ -121,41 +117,15 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	private float _hurtGrace;
 	private int _gems; // collected gems, one bit per TwinsanityPause.GemSlot
 	private Entity _sky;
-	// Converted content (area scenes of prefab instances whose roots carry TwinsanityObjects descriptors) is
-	// bound on the second OnUpdate, once every scene-loaded script has attached (attach order is unspecified).
-	// ponytail: the bake and JSON paths stay beside it until the wave-2 cutover deletes them.
-	private int _bindFrames = -1;
-	private bool _fromRegistry;
+	// The level is bound on the second OnUpdate, once every scene-loaded script has attached (attach
+	// order is unspecified): area scenes of prefab instances whose roots carry TwinsanityObjects descriptors.
+	private int _bindFrames = 0;
 
 	public override void OnAttach()
 	{
 		_lives = StartLives;
 		_fruit = new TwinsanityWumpa(AddWumpa);
 		LoadObjectModels();
-
-		// A baked level (the editor's Twinsanity bake, saved with the scene as a prefab
-		// instance) is bound to, not rebuilt: every entity already exists and carries its
-		// disc identity in a Twinsanity Marker. A bake root whose marker cannot be read (an
-		// editor binary older than the marker component) must not fall back: the baked
-		// entities are already in the scene and a JSON build would stack a second copy of
-		// the whole level on top of them. Converted content, or no bake at all, waits for
-		// the registry bind (OnUpdate), which falls back to the extracted JSON only when
-		// the scene holds no descriptors either - a fresh checkout.
-		Entity bakeRoot = Scene.Find(TwinsanityBake.BakeRootName);
-		if (!bakeRoot.IsValid || HasConvertedContent())
-		{
-			_bindFrames = 0;
-			return;
-		}
-		if (bakeRoot.Component("Twinsanity Marker").Exists)
-		{
-			BindBaked(bakeRoot);
-		}
-		else
-		{
-			Log.Error("[Twinsanity] the baked level has no readable Twinsanity Marker (editor build predates the bake?) - rebuild the editor; not building the level a second time.");
-		}
-		FinishBuild();
 	}
 
 	// Frame 2 of play: every descriptor has registered. Returns false while still waiting.
@@ -170,15 +140,11 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			return false;
 		}
 		_bindFrames = -1;
-		if (TwRegistry.All.Count > 0 || TwRegistry.Triggers.Count > 0 || TwRegistry.Spawns.Count > 0 || HasConvertedContent())
+		if (TwRegistry.All.Count == 0 && TwRegistry.Triggers.Count == 0 && TwRegistry.Spawns.Count == 0 && !HasConvertedContent())
 		{
-			_fromRegistry = true;
-			BindRegistry();
+			Log.Error("[Twinsanity] the scene holds no converted content (no Tw* descriptors or tw_* tags) - open a converted world scene or run twinsanity.convert (docs/twinsanity-editor.md). Nothing is built.");
 		}
-		else
-		{
-			BuildFromJson();
-		}
+		BindRegistry();
 		FinishBuild();
 		return true;
 	}
@@ -193,7 +159,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		OpenStartCheckpoint();
 		Log.Info($"[Twinsanity] {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly collision pieces");
-		Action startAudio = _fromRegistry ? () => TwinsanityAudio.Start(TwRegistry.All, StartArea) : () => TwinsanityAudio.Start(LevelPath);
+		Action startAudio = () => TwinsanityAudio.Start(TwRegistry.All, StartArea);
 		if (!IntroMovie || !_movie.Play("H01_A", startAudio))
 		{
 			startAudio();
@@ -221,9 +187,8 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		return buffer[..Tags.GetEntitiesWith(tag, buffer)];
 	}
 
-	// The registry path: the same runtime state BindBaked fills, from the descriptors (crates, actors,
-	// spawners, cutscene agents, triggers, spawn) and tags (wumpa, deadly collision, sky). Each item
-	// costs only itself if it fails.
+	// Binds the runtime state from the descriptors (crates, actors, spawners, cutscene agents,
+	// triggers, spawn) and tags (wumpa, deadly collision, sky). Each item costs only itself if it fails.
 	private void BindRegistry()
 	{
 		int wumpa = 0, crates = 0, actors = 0, spawners = 0;
@@ -321,13 +286,12 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			Model = e,
 			Base = e.Position,
 			ObjectId = c.ObjectId,
-			BodyIsChild = true,
 			Id = c.Id,
 			Layer = c.Layer,
 			LinkRoots = Array.FindAll(c.Links(), l => l.IsValid),
 			StartOpen = c.StartOpen,
 		});
-		// As the JSON build's spawn: the OGI state swaps key on the crate's own model, and nitros hop.
+		// The OGI state swaps key on the crate's own model, and nitros hop.
 		if (c.Model.Length > 0)
 		{
 			CrateFx.Spawned(e, c.ObjectId, c.Model);
@@ -352,230 +316,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		{
 			Log.Warn($"[Twinsanity] {ObjectsPath} missing - run tw-extract over the whole disc; crates and wumpa from other files will be invisible.");
 		}
-	}
-
-	// The play-time build: the start chunk plus every chunk reachable over its chunk links
-	// (BFS, each chunk once). A link's transform is relative to its own chunk, so a child's
-	// world transform is local * parent (row vectors). Link targets outside the extracted set
-	// are skipped. Only seamless-neighbour links (flags low byte 1) in the start chunk's own
-	// level folder stream in; kind 2 is a door into another space (Doc's lab, the totem, level
-	// entrances) and kind 0 the boat trip - their transforms do not agree with the hub's loops.
-	private void BuildFromJson()
-	{
-		string levelFolder = LevelPath[..(LevelPath.LastIndexOf('/') + 1)];
-		var queue = new Queue<(string Path, Matrix4x4 Transform)>();
-		var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		queue.Enqueue((LevelPath, Matrix4x4.Identity));
-		while (queue.Count > 0)
-		{
-			(string path, Matrix4x4 transform) = queue.Dequeue();
-			if (!visited.Add(path))
-			{
-				continue;
-			}
-			string? text = Assets.ReadText(path);
-			if (text == null)
-			{
-				if (path == LevelPath)
-				{
-					Log.Error($"[Twinsanity] {path} not found - run tools/tw-extract (see docs/twinsanity-editor.md).");
-				}
-				else
-				{
-					Log.Warn($"[Twinsanity] linked chunk {path} not extracted - skipping.");
-				}
-				continue;
-			}
-			using JsonDocument doc = JsonDocument.Parse(text);
-			LoadChunk(doc.RootElement, transform, path == LevelPath);
-			_cutscenes.AddChunk(path, doc.RootElement, transform);
-			if (doc.RootElement.TryGetProperty("links", out JsonElement links))
-			{
-				foreach (JsonElement link in links.EnumerateArray())
-				{
-					string chunk = link.GetProperty("chunk").GetString()!;
-					bool neighbour = link.TryGetProperty("flags", out JsonElement flags) && (flags.GetUInt32() & 0xFF) == 1;
-					if (neighbour && chunk.StartsWith(levelFolder, StringComparison.OrdinalIgnoreCase))
-					{
-						queue.Enqueue((chunk, ChunkTransform(link) * transform));
-					}
-				}
-			}
-		}
-	}
-
-	// The baked path: adopt every marker entity into the same runtime state BuildFromJson fills
-	// - crates, wumpa, actors, deadly collision, spawn, sky - and hand the cutscene agents and
-	// triggers to the cutscene system grouped by their chunk (each chunk's scripts.json loads
-	// once). The scan is scene-wide, not just the bake root's subtree: a hand-placed COPY of a
-	// baked entity (editor duplicate) re-roots outside it, and must behave identically. The
-	// JSON paths are never read here; the markers carry the world-space instance data.
-	private void BindBaked(Entity bakeRoot)
-	{
-		// A generous fixed buffer: the beach runs ~3.5k entities with transforms; the native
-		// side clamps to the capacity and returns the written count.
-		var buffer = new Entity[16384];
-		int written = World.GetEntitiesWithTransform(buffer);
-		var entities = new List<Entity>(Math.Max(0, written));
-		for (int i = 0; i < written; i++)
-		{
-			entities.Add(buffer[i]);
-		}
-		var agentsByChunk = new SortedDictionary<string, List<JsonElement>>();
-		var triggersByChunk = new SortedDictionary<string, List<(JsonElement Json, Vector3 Center, Vector3 Extents)>>();
-		int actors = 0, spawners = 0, cutsceneAgents = 0;
-		var openDocs = new List<JsonDocument>();
-		foreach (Entity e in entities)
-		{
-			ComponentAccess marker = e.Component("Twinsanity Marker");
-			if (!marker.Exists)
-			{
-				continue;
-			}
-			int role = marker.GetInt("role");
-			string identity = marker.GetString("identity");
-			if (role == TwinsanityBake.RoleRoot || identity.Length == 0)
-			{
-				continue;
-			}
-			JsonDocument doc;
-			try
-			{
-				doc = JsonDocument.Parse(identity);
-			}
-			catch (Exception ex)
-			{
-				// A hand-edited or stale marker must cost itself, not the whole bind.
-				Log.Warn($"[Twinsanity] bad marker JSON on '{e.Name}' - skipped ({ex.Message})");
-				continue;
-			}
-			openDocs.Add(doc);
-			JsonElement json = doc.RootElement;
-			try
-			{
-				switch (role)
-				{
-				case TwinsanityBake.RoleCrate:
-				{
-					string kindName = json.TryGetProperty("crate", out JsonElement ck) ? ck.GetString()! : Kind.Basic.ToString();
-					Kind kind = Enum.TryParse(kindName, out Kind parsed) ? parsed : Kind.Basic;
-					Entity body = default;
-					for (int i = 0; i < e.ChildCount; i++)
-					{
-						Entity child = e.GetChild(i);
-						if (child.Component("Rigid Body").Exists)
-						{
-							body = child;
-							break;
-						}
-					}
-					_crates.Add(WithIdentity(new Crate
-					{
-						Kind = kind,
-						Body = body,
-						Model = e,
-						Base = e.Position,
-						ObjectId = json.TryGetProperty("objectId", out JsonElement oi) ? oi.GetInt32() : 0,
-						BodyIsChild = true,
-					}, json));
-					break;
-				}
-				case TwinsanityBake.RoleWumpa:
-					_fruit.Bind(e, e.Position);
-					break;
-				case TwinsanityBake.RoleDeadlyCollision:
-					_deadly[e.Id] = json.TryGetProperty("drown", out JsonElement dr) && dr.GetBoolean();
-					break;
-				case TwinsanityBake.RoleSpawn:
-					_spawn = e.Position;
-					_spawnFacing = json.TryGetProperty("facing", out JsonElement f) ? f.GetSingle() : e.EulerDegrees.Y;
-					if (json.TryGetProperty("floats", out JsonElement floats) && floats.ValueKind == JsonValueKind.Array)
-					{
-						var list = new List<float>();
-						foreach (JsonElement v in floats.EnumerateArray())
-						{
-							list.Add(v.GetSingle());
-						}
-						_crashFloats = list.ToArray();
-					}
-					_checkpoint = _spawn;
-					_checkpointFacing = _spawnFacing;
-					break;
-				case TwinsanityBake.RoleSky:
-					_sky = e;
-					break;
-				case TwinsanityBake.RoleCutsceneAgent:
-				{
-					string chunk = json.TryGetProperty("chunk", out JsonElement c) ? c.GetString()! : "";
-					if (chunk.Length > 0)
-					{
-						(agentsByChunk.TryGetValue(chunk, out List<JsonElement>? list) ? list : agentsByChunk[chunk] = new List<JsonElement>()).Add(json);
-						cutsceneAgents++;
-					}
-					break;
-				}
-				case TwinsanityBake.RoleTrigger:
-				{
-					string chunk = json.TryGetProperty("chunk", out JsonElement c) ? c.GetString()! : "";
-					if (chunk.Length > 0)
-					{
-						if (!triggersByChunk.TryGetValue(chunk, out var list))
-						{
-							list = triggersByChunk[chunk] = new List<(JsonElement, Vector3, Vector3)>();
-						}
-						list.Add((json, e.Position, e.Scale));
-					}
-					break;
-				}
-				default:
-					// Actors, creature spawners and parrot spawners: the actor system adopts them.
-					if (_actors.TryBind(e, role, json))
-					{
-						if (role is TwinsanityBake.RoleSpawner or TwinsanityBake.RoleParrotSpawner)
-						{
-							spawners++;
-						}
-						else
-						{
-							actors++;
-						}
-					}
-					break;
-				}
-			}
-			catch (Exception ex)
-			{
-				Log.Warn($"[Twinsanity] marker bind failed on '{e.Name}' (role {role}) - skipped ({ex.Message})");
-			}
-		}
-		// Every chunk that has agents OR triggers: a chunk whose agent markers were all
-		// skipped still owns its trigger volumes, and dropping them strands the scenes
-		// those volumes start (the start chunk's cutscenes, before the bake named it).
-		var chunks = new SortedSet<string>(agentsByChunk.Keys, StringComparer.Ordinal);
-		chunks.UnionWith(triggersByChunk.Keys);
-		foreach (string chunkPath in chunks)
-		{
-			_cutscenes.BindChunkScripts(chunkPath);
-			if (agentsByChunk.TryGetValue(chunkPath, out List<JsonElement>? agents))
-			{
-				foreach (JsonElement agent in agents)
-				{
-					_cutscenes.BindAgent(agent);
-				}
-			}
-			if (triggersByChunk.TryGetValue(chunkPath, out var triggers))
-			{
-				foreach ((JsonElement json, Vector3 center, Vector3 extents) in triggers)
-				{
-					_cutscenes.BindTrigger(json, center, extents);
-				}
-			}
-		}
-		foreach (JsonDocument doc in openDocs)
-		{
-			doc.Dispose();
-		}
-		Log.Info($"[Twinsanity] bound baked level: {actors} actors, {spawners} spawners, {cutsceneAgents} cutscene agents");
 	}
 
 	public override void OnUpdate(float deltaTime)
@@ -632,10 +372,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		foreach ((Vector3 at, Vector3 from) in _cutscenes.TakeHits())
 		{
 			_actors.KnockEnemy(at, from);
-		}
-		foreach (Vector3 home in _cutscenes.TakeWakes())
-		{
-			_actors.Wake(home);
 		}
 		foreach (Entity root in _cutscenes.TakeWakeRoots())
 		{
@@ -713,73 +449,14 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		return _player != null;
 	}
 
-	private void LoadChunk(JsonElement root, Matrix4x4 transform, bool start)
-	{
-		string name = root.GetProperty("level").GetString()!;
-		foreach (JsonElement path in root.GetProperty("scenery").EnumerateArray())
-		{
-			// Listed by naming convention; not every chunk has dynamic scenery.
-			if (Assets.List(path.GetString()!).Length > 0)
-			{
-				Spawn("Scenery", path.GetString()!, transform);
-			}
-		}
-		if (start)
-		{
-			// Twinsanity draws its skydome around the camera, behind everything. The extracted dome is
-			// a 120-unit sphere at the chunk origin, so left in place it swallows any scenery further out.
-			// Kept on the camera and grown to just inside the far plane (1000), it stays behind the world.
-			_sky = Spawn("Sky", root.GetProperty("sky").GetString()!, Matrix4x4.Identity);
-			_sky.Scale = new Vector3(SkyScale);
-			for (int i = 0; i < _sky.ChildCount; i++)
-			{
-				MeshRenderer.SetCastShadows(_sky.GetChild(i), false);
-			}
-		}
-		foreach (JsonElement piece in root.GetProperty("collision").EnumerateArray())
-		{
-			Entity e = World.Create();
-			e.Name = "Collision";
-			e.AddTransform();
-			e.Position = transform.Translation;
-			e.EulerDegrees = EulerOf(transform);
-			Physics.AddMeshBody(e, piece.GetProperty("path").GetString()!);
-			if (piece.GetProperty("deadly").GetBoolean())
-			{
-				_deadly[e.Id] = piece.TryGetProperty("drown", out JsonElement drown) && drown.GetBoolean();
-			}
-		}
-		if (start && root.TryGetProperty("spawn", out JsonElement spawn))
-		{
-			_spawn = Vector3.Transform(Vec(spawn.GetProperty("position")), transform);
-			// The instance yaw turns a +Z-facing model; CrashPlayer's facing is the camera yaw.
-			_spawnFacing = EulerOf(SysRotation(Vec(spawn.GetProperty("euler"))) * transform).Y + 180.0f;
-			if (spawn.TryGetProperty("floats", out JsonElement floats))
-			{
-				_crashFloats = floats.EnumerateArray().Select(f => f.GetSingle()).ToArray();
-			}
-			_checkpoint = _spawn;
-			_checkpointFacing = _spawnFacing;
-		}
-		foreach (JsonElement instance in root.GetProperty("instances").EnumerateArray())
-		{
-			AddInstance(instance, transform);
-		}
-		Log.Info($"[Twinsanity] chunk {name}: {_crates.Count} crates, {_fruit.Count} wumpa, {_deadly.Count} deadly pieces so far");
-	}
-
 	// On the rig a fresh beach load already shows the level-start checkpoint open (flat pieces, no crate
 	// to hit; logs/camera/_rig_cp.png), and a death before any other checkpoint respawns him standing on
 	// those pieces (game (-1.07, 0.07, -39.41); the crate is at engine (1.07, -39.41)). So it opens at load,
 	// silently, and is the first checkpoint rather than the spawn. He respawns facing the crate's own
 	// yaw: the rig runs off at heading 140.9 after a respawn, the crate's instance yaw is 140.87.
-	// ponytail: "nearest checkpoint to the spawn" stands in for the level's own start-checkpoint link on the
-	// bake and JSON paths; converted content names it (TwCrate.StartOpen, set by the converter on that crate).
 	private void OpenStartCheckpoint()
 	{
-		Crate? first = _fromRegistry
-			? _crates.Find(c => c.StartOpen && c.Alive)
-			: _crates.Where(c => c.Kind == Kind.Checkpoint && c.Alive).MinBy(c => Vector3.DistanceSquared(c.Base, _spawn));
+		Crate? first = _crates.Find(c => c.StartOpen && c.Alive);
 		if (first == null)
 		{
 			return;
@@ -795,23 +472,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	// CrashPlayer's facing is the camera yaw: the instance yaw turns a +Z-facing model (as the spawn).
 	private static float CheckpointFacing(Crate c) => c.Model.EulerDegrees.Y + 180.0f;
 
-	// A level.json link entry -> the chunk's local transform (rotation, then offset), in
-	// System.Numerics row-vector form. Internal: TwinsanityBake walks the same links.
-	internal static Matrix4x4 ChunkTransform(JsonElement link)
-	{
-		Matrix4x4 m = Matrix4x4.CreateTranslation(Vec(link.GetProperty("offset")));
-		if (link.TryGetProperty("rotation", out JsonElement r))
-		{
-			var q = new Quaternion(r[0].GetSingle(), r[1].GetSingle(), r[2].GetSingle(), r[3].GetSingle());
-			m = Matrix4x4.CreateFromQuaternion(q) * m;
-		}
-		return m;
-	}
-
 	// The engine composes EulerDegrees as R = Ry * Rx * Rz (column vectors); System.Numerics works
 	// with row vectors, so a rotation crosses between the two as the transpose. EulerOf takes a
 	// row-vector transform and returns the engine's Euler degrees of its rotation.
-	// (Internal: the bake transforms instance transforms with the same pair.)
+	// (Internal: the converter transforms instance transforms with the same pair.)
 	internal static Vector3 EulerOf(Matrix4x4 sys)
 	{
 		const float deg = 180.0f / MathF.PI;
@@ -826,60 +490,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	{
 		float x = euler.X * MathF.PI / 180.0f, y = euler.Y * MathF.PI / 180.0f, z = euler.Z * MathF.PI / 180.0f;
 		return Matrix4x4.CreateRotationZ(z) * Matrix4x4.CreateRotationX(x) * Matrix4x4.CreateRotationY(y);
-	}
-
-	private void AddInstance(JsonElement instance, Matrix4x4 transform)
-	{
-		int objectId = instance.GetProperty("object").GetInt32();
-		Vector3 position = Vector3.Transform(Vec(instance.GetProperty("position")), transform);
-		Vector3 euler = EulerOf(SysRotation(Vec(instance.GetProperty("euler"))) * transform);
-		string? model = instance.TryGetProperty("model", out JsonElement m) ? m.GetString() : _objectModels.GetValueOrDefault(objectId);
-
-		if (objectId == 1)
-		{
-			if (model != null)
-			{
-				_fruit.Spawn(model, position, euler.Y);
-			}
-			return;
-		}
-		Kind? kind = KindFor(objectId, model);
-		if (kind == null)
-		{
-			// Not a crate: hand it to the actor system (enemies, birds, butterflies, chickens...).
-			string objectName = TwinsanityActors.InstanceName(instance, model);
-			float[] floats = instance.TryGetProperty("floats", out JsonElement fl)
-				? fl.EnumerateArray().Select(f => f.GetSingle()).ToArray()
-				: Array.Empty<float>();
-			uint subtype = instance.TryGetProperty("subtype", out JsonElement st) ? st.GetUInt32() : 0u;
-			_actors.TrySpawn(objectId, objectName, model, position, euler, floats, subtype, instance, transform);
-			return;
-		}
-		if (model == null)
-		{
-			return;
-		}
-		// shortcut: the box collider and the touch tests below are axis-aligned; crates placed at
-		// a yaw other than a multiple of 90 degrees get a slightly wrong footprint.
-		Entity body = World.Create();
-		body.Name = kind.ToString() + " Crate";
-		body.AddTransform();
-		body.Position = position + new Vector3(0.0f, 0.5f, 0.0f);
-		Physics.AddBoxBody(body, new Vector3(0.5f, 0.5f, 0.5f), dynamic: false);
-		Entity crateModel = Spawn(body.Name, model, position, euler);
-		CrateFx.Spawned(crateModel, objectId, model);
-		_crates.Add(WithIdentity(new Crate { Kind = kind.Value, Body = body, Model = crateModel, Base = position, ObjectId = objectId }, instance));
-	}
-
-	private static Crate WithIdentity(Crate c, JsonElement instance)
-	{
-		c.Id = instance.TryGetProperty("id", out JsonElement id) ? id.GetInt32() : -1;
-		c.Layer = instance.TryGetProperty("layer", out JsonElement layer) ? layer.GetInt32() : -1;
-		if (instance.TryGetProperty("links", out JsonElement links) && links.ValueKind == JsonValueKind.Array)
-		{
-			c.Links = links.EnumerateArray().Select(l => l.GetInt32()).ToArray();
-		}
-		return c;
 	}
 
 	// Some crate kinds are only distinguishable by model name (their object ids differ per chunk
@@ -901,25 +511,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			if (name.Contains("LEVELCRATE")) return Kind.Level;              // the level-entrance crate
 		}
 		return null;
-	}
-
-	private static Entity Spawn(string name, string path, Matrix4x4 transform)
-	{
-		Entity e = Spawn(name, path, Vector3.Zero, Vector3.Zero);
-		e.Position = transform.Translation;
-		e.EulerDegrees = EulerOf(transform);
-		return e;
-	}
-
-	private static Entity Spawn(string name, string path, Vector3 position, Vector3 euler)
-	{
-		Entity e = World.Create();
-		e.Name = name;
-		e.AddTransform();
-		e.Position = position;
-		e.EulerDegrees = euler;
-		e.LoadModel(path);
-		return e;
 	}
 
 	private float _warpPoll;
@@ -1367,10 +958,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				&& MathF.Abs(feet.X - c.Base.X) < 0.5f + kCrashRadius * 0.75f && MathF.Abs(feet.Z - c.Base.Z) < 0.5f + kCrashRadius * 0.75f
 				&& feet.Y > c.Base.Y + 1.0f - 0.75f && feet.Y < c.Base.Y + 1.0f + 0.45f;
 			c.Base += move;
-			if (!c.BodyIsChild)
-			{
-				c.Body.Position += move; // baked crates: the body is a child, it follows the model
-			}
 			c.Model.Position += move;
 			if (onLid)
 			{
@@ -1428,37 +1015,13 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 	// message 169 to every link, which nitro and TNT crates receive as *_CRATE_EXPLODE (logs/craterules:
 	// NITROCRATE / TNTCRATE recv 169). Rig (logs/hubroute/rig2_det_sheet.png): landing on the Hub B
 	// detonator blows its linked nitro at once, the stack beside it goes in the chain, and the blast
-	// fells log 4.
+	// fells log 4. Each link is the target instance root itself (TwCrate.Link*), so the crate is the one
+	// whose model is that root.
 	private void Detonate(Crate c)
 	{
 		c.Detonated = true;
 		c.Fuse = -1.0f;
 		CrateFx.Detonated(c.Model);
-		if (c.LinkRoots.Length > 0)
-		{
-			DetonateLinkRoots(c);
-			return;
-		}
-		foreach (int link in c.Links)
-		{
-			Crate? target = LinkedCrate(c, link);
-			if (target == null)
-			{
-				Log.Warn($"[Twinsanity] detonator (layer {c.Layer}, id {c.Id}) link {link} is not a crate here");
-				continue;
-			}
-			Log.Info($"[Twinsanity] detonator (layer {c.Layer}, id {c.Id}) fires {target.Kind} {link} at {Vector3.Distance(c.Base, target.Base):F1} m");
-			if (target.Kind is Kind.Nitro or Kind.Tnt)
-			{
-				Explode(target);
-			}
-		}
-	}
-
-	// Registry-bound detonators: each link is the target instance root itself (TwCrate.Link*), so the
-	// crate is the one whose model is that root - no (layer, id) match, no nearest pick.
-	private void DetonateLinkRoots(Crate c)
-	{
 		foreach (Entity root in c.LinkRoots)
 		{
 			Crate? target = _crates.Find(t => t != c && t.Model.Id == root.Id);
@@ -1473,24 +1036,6 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 				Explode(target);
 			}
 		}
-	}
-
-	// A link names an instance of the same chunk by (layer, id). ponytail: the baked crate markers do not
-	// carry their chunk, so the nearest crate with that (layer, id) stands in for the same-chunk one (every
-	// hub detonator's link is a nitro 7-28 m off); record the chunk in the crate marker if two chunks' ids
-	// ever collide that close.
-	private Crate? LinkedCrate(Crate from, int id)
-	{
-		Crate? best = null;
-		foreach (Crate c in _crates)
-		{
-			if (c != from && c.Id == id && c.Layer == from.Layer
-				&& (best == null || Vector3.DistanceSquared(c.Base, from.Base) < Vector3.DistanceSquared(best.Base, from.Base)))
-			{
-				best = c;
-			}
-		}
-		return best;
 	}
 
 	private void UpdateFuses(float deltaTime)
@@ -1612,6 +1157,4 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		Entity ground = CharacterController.GetGroundEntity(_crash);
 		return ground.IsValid && _deadly.TryGetValue(ground.Id, out drown);
 	}
-
-	internal static Vector3 Vec(JsonElement a) => new(a[0].GetSingle(), a[1].GetSingle(), a[2].GetSingle());
 }

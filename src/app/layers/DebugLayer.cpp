@@ -63,7 +63,6 @@ using namespace std::string_view_literals;
 #include "debug/UiCanvasPanel.hpp"
 #include "debug/ViewportPanel.hpp"
 #include "twinsanity/ReferenceImagesPanel.hpp"
-#include "twinsanity/LevelBakePanel.hpp"
 #include "twinsanity/LevelConvertPanel.hpp"
 #include "AetherCore.hpp"
 #include "PlaySession.hpp"
@@ -802,12 +801,6 @@ namespace aether::editor
 			panel->SetVisible(m_debugConfig.GetBool(PanelVisibilityKey(panel->GetName()), panel->DefaultVisible()));
 			m_flavorPanels.push_back(panel.get());
 			m_panels.push_back(std::move(panel));
-			auto bakePanel = std::make_unique<twinsanity::LevelBakePanel>();
-			bakePanel->OnAttach(context);
-			bakePanel->LoadSettings(m_debugConfig, context);
-			bakePanel->SetVisible(m_debugConfig.GetBool(PanelVisibilityKey(bakePanel->GetName()), bakePanel->DefaultVisible()));
-			m_flavorPanels.push_back(bakePanel.get());
-			m_panels.push_back(std::move(bakePanel));
 			auto convertPanel = std::make_unique<twinsanity::LevelConvertPanel>();
 			convertPanel->OnAttach(context);
 			convertPanel->LoadSettings(m_debugConfig, context);

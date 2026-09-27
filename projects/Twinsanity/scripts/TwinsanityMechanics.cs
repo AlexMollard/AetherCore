@@ -235,9 +235,9 @@ public sealed partial class TwinsanityActors
 		return true;
 	}
 
-	// The bake bind: the model entity came from the bake; its collision body, hulls and (for the
-	// cannon) button are runtime state, created here exactly as a spawn would. `model` is the
-	// marker's resolved model path (the cannon's hulls.json hangs off it).
+	// The prefab bind: the model entity is the placed instance root; its collision body, hulls and (for
+	// the cannon) button are runtime state, created here exactly as a spawn would. `model` is the
+	// descriptor's model path (the cannon's hulls.json hangs off it).
 	private bool TryBindPushable(Entity e, string objectName, Vector3 position, Vector3 eulerDegrees, string? model)
 	{
 		string key = NameKey(objectName);

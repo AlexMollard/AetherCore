@@ -45,7 +45,7 @@ list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]PlaySession\\.cpp$")
 # every editor-side source, imgui/ and materialgraph/ included.
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]src[/\\\\]editor[/\\\\]debug[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]src[/\\\\]editor[/\\\\]editor[/\\\\]")
-# The Twinsanity editor flavour (level bake, panels) drives the scene serializer and the C# host,
+# The Twinsanity editor flavour (level convert, panels) drives the scene serializer and the C# host,
 # neither of which the hub links.
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]src[/\\\\]editor[/\\\\]twinsanity[/\\\\]")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]scripting[/\\\\]")

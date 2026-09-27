@@ -121,7 +121,6 @@ public sealed partial class TwinsanityActors
 	{
 		public bool Ecology;
 		public Entity TemplateRoot;        // Link0: the instance the spawner copies (the coop's chicken)
-		public string? LegacyKey;          // JSON adapter only: the template's legacy instance key
 		public Vector3 Position;
 		public List<Vector3> Points = new();
 		public int Count;
@@ -158,9 +157,9 @@ public sealed partial class TwinsanityActors
 		public int FlyClip = -1, ClimbClip = -1, WalkClip = -1, RestClip = -1, PopClip = -1, SinkClip = -1, SquashClip = -1, SpunClip = -1, ThrowClip = -1, PickClip = -1, ShakeClip = -1, BiteClip = -1;
 	}
 
-	// ---- classification (shared with TwinsanityBake, which dispatches on these) ----
+	// ---- classification (shared with the converter, which dispatches on these) ----
 
-	// Marker roles TwinsanityBake assigns actor-side things; must match TwinsanityBake's constants.
+	// Spawner kinds SpawnerRoleFor returns; the converter makes TwSpawner prefabs of both.
 	internal const int SpawnerCreature = 4;
 	internal const int SpawnerParrot = 5;
 
@@ -180,17 +179,16 @@ public sealed partial class TwinsanityActors
 		return 0;
 	}
 
-	// The bake skips exactly what play-time spawning skips; internal so both share the rule.
+	// The converter skips exactly what the actor bind skips; internal so both share the rule.
 	internal static bool Skipped(string objectName) => ShouldSkip(objectName);
 
-	// Lower-case, family name with trailing instance numbers stripped. (The bake reads it to
+	// Lower-case, family name with trailing instance numbers stripped. (The converter reads it to
 	// mirror the wumpa-tree shadow rule.)
 	internal static string NameKeyOf(string objectName) => NameKey(objectName);
 
 	// Creature spawners and the ecology manager have no model: they spawn copies of the instance
-	// they link (Link0; the JSON adapter passes the link's legacy key instead). True when this
-	// instance is one (it is then consumed).
-	private bool TryRegisterSpawner(TwInstance i, string? legacyTemplateKey)
+	// they link (Link0). True when this instance is one (it is then consumed).
+	private bool TryRegisterSpawner(TwInstance i)
 	{
 		int role = SpawnerRoleFor(i.Name);
 		if (role == SpawnerParrot)
@@ -204,7 +202,7 @@ public sealed partial class TwinsanityActors
 			return true;
 		}
 		Entity template = i.Links.Length > 0 ? i.Links[0] : default;
-		if (role != SpawnerCreature || (legacyTemplateKey == null && !template.IsValid))
+		if (role != SpawnerCreature || !template.IsValid)
 		{
 			return false;
 		}
@@ -212,7 +210,6 @@ public sealed partial class TwinsanityActors
 		{
 			Ecology = NameKey(i.Name).StartsWith("act_util_ecology_manager"),
 			TemplateRoot = template,
-			LegacyKey = legacyTemplateKey,
 			Position = i.Position,
 			Points = new List<Vector3>(i.Points),
 		};
@@ -386,8 +383,7 @@ public sealed partial class TwinsanityActors
 
 	private void UpdateCritters()
 	{
-		// Resolve spawners once their template instance is known: Link0's descriptor (the JSON adapter:
-		// the legacy key, chunks loading in any order).
+		// Resolve spawners once their template instance is known: Link0's descriptor.
 		foreach (Spawner s in _spawners)
 		{
 			if (s.Resolved || ResolveTemplate(s) is not TwInstance info)
@@ -432,14 +428,7 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	private TwInstance? ResolveTemplate(Spawner s)
-	{
-		if (s.LegacyKey != null)
-		{
-			return _legacyInstances.TryGetValue(s.LegacyKey, out TwInstance legacy) ? legacy : null;
-		}
-		return TwRegistry.Of(s.TemplateRoot)?.Data();
-	}
+	private static TwInstance? ResolveTemplate(Spawner s) => TwRegistry.Of(s.TemplateRoot)?.Data();
 
 	private Actor? SpawnCopy(TwInstance info, Vector3 at)
 	{
@@ -1160,19 +1149,6 @@ public sealed partial class TwinsanityActors
 		{
 			c.Mode = Mode.Idle;
 			c.Timer = RandomRange(4.0f, 15.0f);
-		}
-	}
-
-	/// <summary>Trigger message 87 (huba trigger 1 -> crabs 9 and 10) wakes the path crab standing at
-	/// <paramref name="home"/> (COM_GLOBAL_CRAB_INIT S11 leaves its wait on it).</summary>
-	private void WakePathCrab(Vector3 home)
-	{
-		foreach (Actor a in _actors)
-		{
-			if (a.Kind == Behaviour.Crab && a.Critter is { Points.Count: > 1, Mode: Mode.Down } c && Horizontal(a.Home, home) < 0.5f)
-			{
-				c.Mode = Mode.Walk;
-			}
 		}
 	}
 

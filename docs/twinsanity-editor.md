@@ -112,32 +112,15 @@ Conversion notes:
   images flipped upright, GS alpha widened) and accepts a pair only when it is close
   (<= 8.5 per channel) and clearly ahead of the next candidate.
 
-## Level bake (being retired)
-
-Replaced by **Level convert** below; the bake and its `Twinsanity Marker` binding are deleted when
-the converted scenes land.
-
-The beach is pre-built in the editor rather than at Play. The flavor's **Level Bake**
-panel (or the `twinsanity.bake_level` control method) runs the same builder
-`TwinsanityLevel` runs at Play and saves the result as the gitignored
-`assets/prefabs/beach.prefab.toml`. Every baked entity carries a `Twinsanity Marker`
-component (its role and disc identity), and at Play the scripts bind to those
-entities instead of spawning them, so a hand-placed copy behaves like a baked one.
-
-`scenes/Beach.scene.toml` holds a linked instance of that prefab, so edits to baked
-entities save as per-entity overrides in the committed scene. A re-bake keeps them;
-an override whose entity no longer exists is dropped with a warning. Without the
-prefab (a fresh checkout), `TwinsanityLevel` builds the level from the extracted
-JSON as before. Re-bake after any re-extraction that changes level content.
-After editing the bake scripts, press Play then Stop once before baking: the bake
-runs the last-loaded script assembly, not the scripts on disk.
-
 ## Level convert
 
 The hub becomes ordinary AetherCore content: one prefab per object family, one scene per area,
 and a world scene that stitches the areas together. It is a **one-time migration**. After it,
 the editor scenes and prefabs are the source of truth, and a re-extract refreshes only models,
-textures and audio (prefabs and scenes reference them by path).
+textures and audio (prefabs and scenes reference them by path). The old Level Bake (the gitignored
+`beach` prefab and its `Twinsanity Marker` binding) and the play-time build from `level.json` are
+gone: at Play, `TwinsanityLevel` binds only converted content (the descriptors and `tw_*` tags). A
+scene with none logs an error and builds nothing.
 
 Run it from the flavor's **Level Convert** panel or the `twinsanity.convert` control method
 (`{mode: "write"|"report", areas?: [scene...], overwrite?: [name...|"*"]}`). Save your scene first:
@@ -155,7 +138,7 @@ What it writes:
 |`.aether/convert/manifest.json`|The C# half's output, read by the C++ half. Machine-local.|
 
 - **Where the families come from.** `TwinsanityConvert.cs` classifies every instance exactly as
-  the old bake did, and maps each family to a prefab through its checked-in `Catalogue` table. A
+  the retired level bake did, and maps each family to a prefab through its checked-in `Catalogue` table. A
   family that is missing from the table fails the conversion with its name. Add a row; there is
   no generic fallback.
 - **Write mode.** An existing prefab or scene is kept unless it is named in `overwrite` ("Overwrite
@@ -185,4 +168,4 @@ What it writes:
   failures; beach scenery, Crash, Aku Aku and a crab were checked in the editor.
 - Beach playable end to end: crates and creatures, cutscenes (director scenes and
   FMVs, with speech and a hold-to-skip prompt), audio, Aku Aku, cannon and sled,
-  pre-baked level, HD textures.
+  converted prefab level, HD textures.

@@ -69,21 +69,9 @@ public sealed class TwinsanityWumpa
 
 	public int Count => _fruits.Count;
 
-	/// <summary>Places one idle fruit. `position` is the level instance's origin, where the
-	/// model's origin sits (the mesh itself is modelled 0.6-1.4 above it), bobbing around it.</summary>
-	public void Spawn(string modelPath, Vector3 position, float yawDegrees)
-	{
-		var f = new Fruit
-		{
-			Model = SpawnModel(modelPath, position, yawDegrees),
-			Base = position,
-		};
-		f.Phase = PhaseFor(position);
-		_fruits.Add(f);
-	}
-
-	/// <summary>Adopts a fruit the bake already placed: the entity carries the model at the
-	/// instance origin, so the bind state is derived from it exactly as a spawn would.</summary>
+	/// <summary>Adopts a placed fruit (a tw_wumpa prefab instance): the entity carries the model at the
+	/// instance origin, where the model's origin sits (the mesh itself is modelled 0.6-1.4 above it),
+	/// bobbing around it.</summary>
 	public void Bind(Entity existing, Vector3 position)
 	{
 		var f = new Fruit

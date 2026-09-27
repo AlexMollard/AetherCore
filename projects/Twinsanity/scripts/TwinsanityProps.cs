@@ -767,21 +767,6 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	// JSON adapter (TwinsanityCutscenes' position-based wakes); deleted by the wave-2 cutover.
-	/// <summary>Trigger message 87 aimed at the actor placed at <paramref name="home"/>: a path crab leaves its
-	/// wait (COM_GLOBAL_CRAB_INIT S11, huba trigger 1), the cave blocker drops (hubb trigger 2).</summary>
-	public void Wake(Vector3 home)
-	{
-		WakePathCrab(home);
-		foreach (Blocker b in _blockers)
-		{
-			if (!b.Moving && !b.Down && Horizontal(b.Shot.Actor.Home, home) < 0.5f)
-			{
-				b.Moving = true;
-			}
-		}
-	}
-
 	private void UpdateBlockers(float dt)
 	{
 		foreach (Blocker b in _blockers)
