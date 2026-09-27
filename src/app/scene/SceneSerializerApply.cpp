@@ -394,6 +394,7 @@ namespace aether::app::scene
 			if (deps.renderer != nullptr && scene.environment)
 			{
 				const EnvironmentRecord& env = *scene.environment;
+				world.GetRegistry().ctx().insert_or_assign(AppliedEnvironment{env});
 				deps.renderer->SetAmbientLight(env.ambient);
 				deps.renderer->SetDirectionalLight(env.sunDirection, env.sunIntensity);
 				deps.renderer->SetSunColor(env.sunColor);

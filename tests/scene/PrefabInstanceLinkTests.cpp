@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "material/MaterialRegistry.hpp"
 #include "material/TextureRegistry.hpp"
@@ -262,6 +263,12 @@ TEST_CASE("E3: entity refs to instance roots survive save/load, reordering and p
 	CHECK(loaded.Get<HierarchyComponent>(point2).parent == a2);
 	CHECK(Prop(loaded, point2, "Owner") == b2.id);
 
+	// Instances save in node-id order, not in whatever order the load expanded them (reversed here).
+	const SceneDescription recaptured = CaptureScene(loaded, fx.mreg, fx.treg);
+	REQUIRE(recaptured.prefabInstances.size() == 2);
+	CHECK(recaptured.prefabInstances[0].node == 111);
+	CHECK(recaptured.prefabInstances[1].node == 222);
+
 	// The cooked binary carries the same node ids.
 	const auto binary = ReadSceneBinary(WriteSceneBinary(captured));
 	REQUIRE(binary.has_value());
@@ -357,4 +364,51 @@ TEST_CASE("E4: an include applies, is not re-saved into the host, and survives P
 	// Loading a scene without includes drops the include list.
 	ReplaceScene(SceneDescription{}, world, ApplySceneDeps{});
 	CHECK(CaptureScene(world, fx.mreg, fx.treg).includes.empty());
+}
+
+TEST_CASE("A load then save of a yawed instance adds no child transform override") {
+	// Converted crates sit at arbitrary yaws far from the origin, and their static crate body
+	// child's pose comes back from the physics side with float noise in the last digits
+	// (euler 14.787592 under a 14.787594 root, scale 0.99999976). Noise is not an edit and
+	// must not freeze as a per-child override.
+	LinkFixture fx("aether_prefab_link_noise");
+	const SceneDescription prefab = fx.SaveLinker("tw_test_noise");
+	World live;
+	for (int i = 0; i < 16; ++i)
+	{
+		const float yaw = 14.787594f + 23.1f * static_cast<float>(i);
+		const Entity e = InstantiatePrefabInstance("tw_test_noise", prefab, live, ApplySceneDeps{}, ComposeTransform({312.4f + static_cast<float>(i), 5.25f, -87.3f}, {0, yaw, 0}, {1, 1, 1}), 500 + static_cast<std::uint64_t>(i));
+		REQUIRE(e.IsValid());
+	}
+	REQUIRE(SaveSceneFile("NoiseScene", CaptureScene(live, fx.mreg, fx.treg)));
+	World loaded;
+	REQUIRE(LoadSceneFile("NoiseScene", loaded, ApplySceneDeps{}));
+	loaded.View<PrefabInstanceComponent>().each(
+	        [&](entt::entity handle, const PrefabInstanceComponent&)
+	        {
+		        for (const Entity child: ChildrenOf(loaded, World::FromEntt(handle)))
+		        {
+			        auto& tc = loaded.Get<TransformComponent>(child);
+			        glm::vec3 p{}, r{}, s{};
+			        DecomposeTRS(tc.localToWorld, p, r, s);
+			        tc.localToWorld = ComposeTransform(p + glm::vec3(3e-6f, 0, -2e-6f), r + glm::vec3(0, -2e-6f, 0), s * glm::vec3(0.99999976f, 1, 0.99999976f));
+		        }
+	        });
+	const SceneDescription resaved = CaptureScene(loaded, fx.mreg, fx.treg);
+	REQUIRE(resaved.prefabInstances.size() == 16);
+	for (const PrefabInstanceRecord& rec: resaved.prefabInstances)
+	{
+		CHECK(rec.overrides.empty());
+	}
+
+	// A real edit is still an override.
+	const Entity first = FindInstance(loaded, "Linker");
+	auto& moved = loaded.Get<TransformComponent>(ChildrenOf(loaded, first)[0]);
+	moved.localToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0.01f, 0)) * moved.localToWorld;
+	std::size_t overridden = 0;
+	for (const PrefabInstanceRecord& rec: CaptureScene(loaded, fx.mreg, fx.treg).prefabInstances)
+	{
+		overridden += rec.overrides.size();
+	}
+	CHECK(overridden == 1);
 }

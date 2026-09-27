@@ -15,6 +15,7 @@
 
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scene/Components.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "scene/Entity.hpp"
 
 namespace aether::app::scene::detail
@@ -114,5 +115,12 @@ namespace aether::app::scene::detail
 	struct ActiveSceneIncludes
 	{
 		std::vector<std::string> scenes;
+	};
+
+	// The environment block the scene file last applied to a World, kept so CaptureScene can
+	// write the authored values back instead of the renderer's normalized copies.
+	struct AppliedEnvironment
+	{
+		EnvironmentRecord environment;
 	};
 } // namespace aether::app::scene::detail

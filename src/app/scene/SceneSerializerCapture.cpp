@@ -216,6 +216,23 @@ namespace aether::app::scene
 			snap(rec.scale);
 		}
 
+		// Two world transforms equal up to float noise: basis columns within 1e-4, translation
+		// within 1 mm (float32 resolves ~0.03 mm at the few hundred metres a level spans, so a
+		// millimetre is far above noise and far below any deliberate edit).
+		bool TransformsMatch(const glm::mat4& a, const glm::mat4& b)
+		{
+			for (int c = 0; c < 3; ++c)
+			{
+				if (glm::any(glm::greaterThan(glm::abs(glm::vec3(a[c]) - glm::vec3(b[c])), glm::vec3(1e-4f))))
+				{
+					return false;
+				}
+			}
+			const glm::vec3 ta(a[3]);
+			const glm::vec3 tb(b[3]);
+			return glm::length(ta - tb) <= 1e-3f;
+		}
+
 		// Diff a live prefab-instance subtree against its prefab, one entity at a time
 		// (mapped by PrefabLink.prefabGuid = the prefab entity index). Any entity whose
 		// captured content differs becomes a whole-entity override.
@@ -313,6 +330,17 @@ namespace aether::app::scene
 							// only a local edit reads as a difference.
 							const glm::mat4 expected = *prefabToInstance * ComposeTransform(prefC.position, prefC.eulerDeg, prefC.scale);
 							DecomposeTRS(expected, prefC.position, prefC.eulerDeg, prefC.scale);
+							// Composing the instance pose with the prefab's child pose (and a
+							// load's own compose/decompose) leaves float noise in the last digits
+							// - e.g. scale 0.99999976 under a yawed root. Noise is not an edit, so
+							// a child still within tolerance of where the prefab puts it is not
+							// an override: compare the matrices, not the decomposed floats.
+							if (liveC.hasTransform && TransformsMatch(ComposeTransform(liveC.position, liveC.eulerDeg, liveC.scale), expected))
+							{
+								liveC.position = prefC.position;
+								liveC.eulerDeg = prefC.eulerDeg;
+								liveC.scale = prefC.scale;
+							}
 						}
 						CanonicalizeRecordTransform(liveC);
 						CanonicalizeRecordTransform(prefC);
@@ -394,6 +422,37 @@ namespace aether::app::scene
 			env.skyVoid = renderer->GetSkyVoidColor();
 			env.cloudCoverage = renderer->GetCloudCoverage();
 			env.cloudSpeed = renderer->GetCloudSpeed();
+			env.objectAmbient = glm::vec3(renderer->GetObjectAmbientVector());
+			env.objectLight0Direction = glm::vec3(renderer->GetObjectLight0DirectionVector());
+			env.objectLight0Color = glm::vec3(renderer->GetObjectLight0ColorVector());
+			env.objectLight1Direction = glm::vec3(renderer->GetObjectLight1DirectionVector());
+			env.objectLight1Color = glm::vec3(renderer->GetObjectLight1ColorVector());
+			// The renderer normalizes directions (and clamps colours), so a loaded-then-saved
+			// scene would rewrite its authored values every save. Where the live value is still
+			// what the scene file set, keep the file's own spelling.
+			if (const auto* applied = reg.ctx().find<AppliedEnvironment>())
+			{
+				const auto keep = [](glm::vec3& live, glm::vec3 authored, bool direction)
+				{
+					const glm::vec3 expected = direction && glm::dot(authored, authored) > 0.0f ? glm::normalize(authored) : authored;
+					if (glm::all(glm::lessThan(glm::abs(live - expected), glm::vec3(1e-5f))))
+					{
+						live = authored;
+					}
+				};
+				const EnvironmentRecord& a = applied->environment;
+				keep(env.ambient, a.ambient, false);
+				keep(env.sunDirection, a.sunDirection, true);
+				keep(env.sunColor, a.sunColor, false);
+				keep(env.skyHorizon, a.skyHorizon, false);
+				keep(env.skyZenith, a.skyZenith, false);
+				keep(env.skyVoid, a.skyVoid, false);
+				keep(env.objectAmbient, a.objectAmbient, false);
+				keep(env.objectLight0Direction, a.objectLight0Direction, true);
+				keep(env.objectLight0Color, a.objectLight0Color, false);
+				keep(env.objectLight1Direction, a.objectLight1Direction, true);
+				keep(env.objectLight1Color, a.objectLight1Color, false);
+			}
 			scene.environment = env;
 		}
 
@@ -454,6 +513,9 @@ namespace aether::app::scene
 		// Linked prefab instances: emit a reference (path + world transform +
 		// overrides) for each instance root. Their expanded subtrees were tagged
 		// SceneTransient, so they are already excluded from the flat records above.
+		// Emitted in ascending (unsigned) root node-id order, not registry storage order,
+		// so re-saving a scene never reshuffles its instances.
+		std::vector<std::pair<std::uint64_t, Entity>> instanceRoots;
 		for (const auto handle: reg.storage<entt::entity>())
 		{
 			if (!reg.valid(handle))
@@ -466,6 +528,13 @@ namespace aether::app::scene
 			{
 				continue; // included instances belong to their own scene (re-emitted as the include)
 			}
+			const auto* node = world.TryGet<SceneNodeComponent>(e);
+			instanceRoots.emplace_back(node != nullptr ? node->id : 0, e);
+		}
+		std::stable_sort(instanceRoots.begin(), instanceRoots.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+		scene.prefabInstances.reserve(instanceRoots.size());
+		for (const auto& [node, e]: instanceRoots)
+		{
 			scene.prefabInstances.push_back(CapturePrefabInstance(world, e, materials, textures));
 		}
 		if (const auto* includes = reg.ctx().find<ActiveSceneIncludes>())
