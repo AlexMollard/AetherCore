@@ -452,7 +452,9 @@ public sealed partial class TwinsanityActors
 	// body radius alone let a slide at a guard stop short or pass him by.
 	// ponytail: the rig (rig_g2_leashF_sheet.png) knocks it off from ~1.5 m and a slide ending ~2 m
 	// short does not (rig_g2_leashE_sheet.png); the disc's collision radius is not decoded.
-	private const float GuardSlideReach = 1.6f;
+	// It must reach past the shield's own reach: his collider stops a head-on slide 1.56-1.64 m out, and a
+	// slide reach inside that let the slide end un-counted and the shield bash him first (HubRun5 hr5_gs2/gs4).
+	private const float GuardSlideReach = GuardShieldReach + 0.1f;
 
 	private void UpdateShieldbearer(Actor a, float dt, Vector3 crashPos)
 	{
