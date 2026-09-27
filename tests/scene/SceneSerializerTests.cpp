@@ -2442,8 +2442,15 @@ TEST_CASE("A dangling v_node clears the reference instead of keeping a stale, po
     REQUIRE(parsed.has_value());
     const EntityRecord& holder = RecordOf(*parsed, "Holder");
     REQUIRE(holder.scripts.size() == 1);
-    // Cleared (0), not the stale positional value (1, which would silently point at 'Other').
-    CHECK(holder.scripts[0].properties.at("Ref").i64 == 0);
+    // Not the stale positional value (1, which would silently point at 'Other'): the index is
+    // dropped (-1, unset) and the node id is kept for apply-time resolution - it may name a
+    // prefab-instance root, which is not an entity of the file. Apply clears it if nothing has it.
+    CHECK(holder.scripts[0].properties.at("Ref").i64 == -1);
+    CHECK(holder.scripts[0].nodeRefs.at("Ref") == 999);
+
+    World world = MakeWorld();
+    const std::vector<Entity> created = ApplyScene(*parsed, world, ApplySceneDeps{});
+    CHECK(world.Get<ScriptComponent>(AppliedOf(*parsed, created, "Holder")).scripts[0].properties.at("Ref").i64 == 0);
 }
 
 TEST_CASE("A real Whisper scene's script Entity refs survive a resave-then-insert edit") {

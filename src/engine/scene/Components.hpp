@@ -213,6 +213,14 @@ namespace aether
 	{
 	};
 
+	// Marks the root of an entity (or prefab instance) brought in by a scene's [[includes]]:
+	// `scene` is the included scene's name. Included roots are also SceneTransient, so the host
+	// scene never saves them - it re-emits only its include list. Edit an area in its own scene.
+	struct IncludedFromComponent
+	{
+		std::string scene;
+	};
+
 	// Marks an entity (and, via ancestry, its subtree) to SURVIVE a gameplay scene
 	// switch (Scene.Load) - the DontDestroyOnLoad semantic. Deliberately distinct from
 	// SceneTransientComponent, which only means "runtime-only, don't serialize":

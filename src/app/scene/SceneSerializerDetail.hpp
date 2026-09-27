@@ -92,4 +92,27 @@ namespace aether::app::scene::detail
 		}
 		return out;
 	}
+
+	// A script Entity/Component property that names its target by stable scene-node id
+	// (ScriptRecord::nodeRefs). ApplyScripts records one per such property; the outermost
+	// apply resolves them against every live SceneNodeComponent once the scene, its prefab
+	// instances (overrides + added entities) and its includes all exist.
+	struct DeferredScriptNodeRef
+	{
+		std::size_t scriptIndex = 0;
+		std::string property;
+		std::uint64_t nodeId = 0;
+	};
+
+	// Keyed by entity id. Re-applying scripts onto an entity (a prefab override replacing the
+	// prefab's own scripts) replaces its entry, so a stale ref never clobbers the newer value.
+	// Defined in SceneSerializerApply.cpp; thread-local like the rest of the apply state.
+	std::unordered_map<std::uint32_t, std::vector<DeferredScriptNodeRef>>& DeferredScriptNodeRefs();
+
+	// The include list of the scene currently applied to a World, kept in its registry
+	// context so CaptureScene can re-emit it (included entities themselves are transient).
+	struct ActiveSceneIncludes
+	{
+		std::vector<std::string> scenes;
+	};
 } // namespace aether::app::scene::detail

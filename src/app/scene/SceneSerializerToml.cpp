@@ -671,7 +671,7 @@ namespace aether::app::scene
 			}
 		}
 
-		toml::table ScriptPropsToToml(const std::map<std::string, ScriptPropertyValue>& props)
+		toml::table ScriptPropsToToml(const std::map<std::string, ScriptPropertyValue>& props, const std::map<std::string, std::uint64_t>& nodeRefs)
 		{
 			toml::table out;
 			for (const auto& [name, value]: props)
@@ -705,6 +705,12 @@ namespace aether::app::scene
 					case ScriptPropertyValue::Type::None:
 					default:
 						break;
+				}
+				if (const auto ref = nodeRefs.find(name); ref != nodeRefs.end() && (value.type == ScriptPropertyValue::Type::Entity || value.type == ScriptPropertyValue::Type::Component))
+				{
+					// Target outside this record set (see ScriptRecord::nodeRefs): v stays -1.
+					entry.insert_or_assign("v", std::int64_t{-1});
+					entry.insert("v_node", static_cast<std::int64_t>(ref->second));
 				}
 				out.insert(name, std::move(entry));
 			}
@@ -1180,7 +1186,7 @@ namespace aether::app::scene
 					s.insert("type", script.type);
 					if (!script.properties.empty())
 					{
-						s.insert("properties", ScriptPropsToToml(script.properties));
+						s.insert("properties", ScriptPropsToToml(script.properties, script.nodeRefs));
 					}
 					scripts.push_back(std::move(s));
 				}
@@ -1265,6 +1271,10 @@ namespace aether::app::scene
 				{
 					it.insert("name", pi.name);
 				}
+				if (pi.node != 0)
+				{
+					it.insert("node", static_cast<std::int64_t>(pi.node));
+				}
 				it.insert("position", Vec3ToToml(pi.position));
 				it.insert("euler", Vec3ToToml(pi.eulerDeg));
 				it.insert("scale", Vec3ToToml(pi.scale));
@@ -1311,6 +1321,18 @@ namespace aether::app::scene
 				instances.push_back(std::move(it));
 			}
 			root.insert("prefab_instances", std::move(instances));
+		}
+
+		if (!scene.includes.empty())
+		{
+			toml::array includes;
+			for (const std::string& name: scene.includes)
+			{
+				toml::table inc;
+				inc.insert("scene", name);
+				includes.push_back(std::move(inc));
+			}
+			root.insert("includes", std::move(includes));
 		}
 
 		// Normalize every float to its shortest float32 representation so both the TOML
@@ -1447,6 +1469,24 @@ namespace aether::app::scene
 		{
 			const toml::node_view<const toml::node> tv{tbl};
 
+			// A `v_node` on a top-level scene entity is resolved to a positional index once the
+			// whole entity list is parsed (below). Anywhere else - an instance's added entities -
+			// there is no local list to resolve against, so it stays a node ref for apply.
+			const auto routeNodeRefs = [&](ScriptRecord& script, const std::vector<std::pair<std::string, std::uint64_t>>& nodeRefs, std::size_t scriptIndex)
+			{
+				for (const auto& [propertyName, nodeId]: nodeRefs)
+				{
+					if (pendingScriptNodeRefs != nullptr)
+					{
+						pendingScriptNodeRefs->push_back(PendingScriptNodeRef{entityIndex, scriptIndex, propertyName, nodeId});
+					}
+					else if (auto it = script.properties.find(propertyName); it != script.properties.end())
+					{
+						it->second.i64 = -1;
+						script.nodeRefs[propertyName] = nodeId;
+					}
+				}
+			};
 			EntityRecord rec;
 			rec.name = tv["name"].value_or(std::string{});
 			rec.guid = static_cast<std::uint64_t>(tv["guid"].value_or(std::int64_t{0}));
@@ -1739,14 +1779,8 @@ namespace aether::app::scene
 					if (const auto* props = sv["properties"].as_table())
 					{
 						std::vector<std::pair<std::string, std::uint64_t>> nodeRefs;
-						script.properties = ScriptPropsFromToml(*props, pendingScriptNodeRefs != nullptr ? &nodeRefs : nullptr);
-						if (pendingScriptNodeRefs != nullptr)
-						{
-							for (auto& [propertyName, nodeId]: nodeRefs)
-							{
-								pendingScriptNodeRefs->push_back(PendingScriptNodeRef{entityIndex, rec.scripts.size(), propertyName, nodeId});
-							}
-						}
+						script.properties = ScriptPropsFromToml(*props, &nodeRefs);
+						routeNodeRefs(script, nodeRefs, rec.scripts.size());
 					}
 					rec.scripts.push_back(std::move(script));
 				}
@@ -1758,14 +1792,8 @@ namespace aether::app::scene
 				if (const auto* props = tv["script_properties"].as_table())
 				{
 					std::vector<std::pair<std::string, std::uint64_t>> nodeRefs;
-					legacy.properties = ScriptPropsFromToml(*props, pendingScriptNodeRefs != nullptr ? &nodeRefs : nullptr);
-					if (pendingScriptNodeRefs != nullptr)
-					{
-						for (auto& [propertyName, nodeId]: nodeRefs)
-						{
-							pendingScriptNodeRefs->push_back(PendingScriptNodeRef{entityIndex, rec.scripts.size(), propertyName, nodeId});
-						}
-					}
+					legacy.properties = ScriptPropsFromToml(*props, &nodeRefs);
+					routeNodeRefs(legacy, nodeRefs, rec.scripts.size());
 				}
 				rec.scripts.push_back(std::move(legacy));
 			}
@@ -1842,14 +1870,12 @@ namespace aether::app::scene
 				}
 				else
 				{
-					AE_WARN(LogCategory::App,
-					        "Scene load: entity '{}' script '{}' property '{}' referenced node {} which no longer exists in the scene; clearing the reference (was positional index {})",
-					        entity.name,
-					        script.type,
-					        ref.propertyName,
-					        ref.nodeId,
-					        propIt->second.i64);
-					propIt->second.i64 = 0;
+					// Not an entity of this file: it may be a prefab-instance root (or, for a
+					// prefab/override fragment, a scene entity), which only exists once the scene
+					// is applied. Drop the stale positional index and resolve by node id at apply
+					// time; the apply warns and clears it if nothing carries that node id.
+					propIt->second.i64 = -1;
+					script.nodeRefs[ref.propertyName] = ref.nodeId;
 				}
 			}
 		}
@@ -1870,6 +1896,7 @@ namespace aether::app::scene
 					continue;
 				}
 				pi.name = (*it)["name"].value_or(std::string{});
+				pi.node = static_cast<std::uint64_t>((*it)["node"].value_or(std::int64_t{0}));
 				pi.position = Vec3FromToml((*it)["position"], glm::vec3(0.0f));
 				pi.eulerDeg = Vec3FromToml((*it)["euler"], glm::vec3(0.0f));
 				pi.scale = Vec3FromToml((*it)["scale"], glm::vec3(1.0f));
@@ -1908,6 +1935,19 @@ namespace aether::app::scene
 					}
 				}
 				scene.prefabInstances.push_back(std::move(pi));
+			}
+		}
+
+		if (const auto* includes = root["includes"].as_array())
+		{
+			for (const auto& node: *includes)
+			{
+				const auto* inc = node.as_table();
+				std::string name = inc != nullptr ? (*inc)["scene"].value_or(std::string{}) : std::string{};
+				if (!name.empty())
+				{
+					scene.includes.push_back(std::move(name));
+				}
 			}
 		}
 

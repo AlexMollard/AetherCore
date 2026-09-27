@@ -15,6 +15,33 @@ namespace aether::app::scene
 
 	namespace
 	{
+		// Entity/Component properties whose live target is outside this capture (so the
+		// positional index came back -1) but has a stable scene-node id: a prefab-instance
+		// root or a top-level scene entity. Prefab children are skipped - their node ids are
+		// re-minted on every expansion, so persisting one would only produce a dangling ref.
+		std::map<std::string, std::uint64_t> CaptureNodeRefs(const SceneCaptureContext& c, const std::map<std::string, ScriptPropertyValue>& live)
+		{
+			std::map<std::string, std::uint64_t> out;
+			for (const auto& [name, value]: live)
+			{
+				const bool isRef = value.type == ScriptPropertyValue::Type::Entity || value.type == ScriptPropertyValue::Type::Component;
+				if (!isRef || value.i64 <= 0 || c.indexOf.contains(static_cast<std::uint32_t>(value.i64)))
+				{
+					continue;
+				}
+				const Entity target{static_cast<std::uint32_t>(value.i64)};
+				if (!c.world.GetRegistry().valid(World::ToEntt(target)) || (c.world.Has<PrefabLinkComponent>(target) && !c.world.Has<PrefabInstanceComponent>(target)))
+				{
+					continue;
+				}
+				if (const auto* node = c.world.TryGet<SceneNodeComponent>(target); node != nullptr && node->id != 0)
+				{
+					out.emplace(name, node->id);
+				}
+			}
+			return out;
+		}
+
 		void CaptureScripts(SceneCaptureContext& c)
 		{
 			auto* script = c.world.TryGet<ScriptComponent>(c.entity);
@@ -51,7 +78,7 @@ namespace aether::app::scene
 				// that fix landed) directly - not just from the copy below - so a resave
 				// permanently drops it instead of re-writing a stale/wrong index forever.
 				entry.properties.erase("Self");
-				c.rec.scripts.push_back(ScriptRecord{.type = entry.path, .properties = ScriptPropsToSceneRefs(entry.properties, c.indexOf)});
+				c.rec.scripts.push_back(ScriptRecord{.type = entry.path, .properties = ScriptPropsToSceneRefs(entry.properties, c.indexOf), .nodeRefs = CaptureNodeRefs(c, entry.properties)});
 			}
 		}
 
@@ -63,6 +90,7 @@ namespace aether::app::scene
 			}
 			ScriptComponent component;
 			component.scripts.reserve(c.rec.scripts.size());
+			std::vector<DeferredScriptNodeRef> deferred;
 			for (const ScriptRecord& script: c.rec.scripts)
 			{
 				auto properties = ScriptPropsFromSceneRefs(script.properties, c.created);
@@ -72,9 +100,26 @@ namespace aether::app::scene
 				// with a persisted value for it - ApplyProperties would ignore it anyway now
 				// that Self isn't reflected, but this keeps the cache itself clean too.
 				properties.erase("Self");
+				for (const auto& [name, nodeId]: script.nodeRefs)
+				{
+					if (name != "Self" && properties.contains(name))
+					{
+						deferred.push_back(DeferredScriptNodeRef{.scriptIndex = component.scripts.size(), .property = name, .nodeId = nodeId});
+					}
+				}
 				component.scripts.push_back(ScriptEntry{.path = script.type, .attached = false, .properties = std::move(properties)});
 			}
 			c.world.Emplace<ScriptComponent>(c.entity, std::move(component));
+			// Replace (not append): a later re-apply onto this entity supersedes earlier refs.
+			auto& pending = DeferredScriptNodeRefs();
+			if (deferred.empty())
+			{
+				pending.erase(c.entity.id);
+			}
+			else
+			{
+				pending[c.entity.id] = std::move(deferred);
+			}
 		}
 
 		AE_SCENE_SERDE(Scripts, "Scripts", 80, CaptureScripts, ApplyScripts)

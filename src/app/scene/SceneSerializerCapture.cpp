@@ -234,9 +234,11 @@ namespace aether::app::scene
 			// Map each prefab entity by its stable guid so live entities route to their
 			// source by guid (PrefabLink.prefabGuid), never by index.
 			std::unordered_map<std::uint64_t, const EntityRecord*> prefabByGuid;
+			std::unordered_map<std::uint64_t, int> prefabIndexByGuid;
 			for (std::size_t i = 0; i < prefab->entities.size(); ++i)
 			{
 				prefabByGuid[EffectiveGuid(prefab->entities[i], i)] = &prefab->entities[i];
+				prefabIndexByGuid[EffectiveGuid(prefab->entities[i], i)] = static_cast<int>(i);
 			}
 			// Records are world-space (see the scene format invariant), so a child's
 			// captured transform moves whenever the INSTANCE ROOT moves - it no longer
@@ -258,8 +260,24 @@ namespace aether::app::scene
 				const glm::mat4 prefabRoot = ComposeTransform(rootIt->second->position, rootIt->second->eulerDeg, rootIt->second->scale);
 				prefabToInstance = rootTransform->localToWorld * glm::inverse(prefabRoot);
 			}
+			const std::vector<Entity> subtree = CollectSubtree(world, root);
+			// Script Entity refs between entities of this instance are captured as the TARGET's
+			// index in the prefab (by guid), which is exactly how the prefab file stores them - so
+			// an untouched intra-prefab ref never reads as an override, and apply resolves an
+			// overridden one against the instance's own prefab-ordered entities.
+			std::unordered_map<std::uint32_t, int> prefabIndexOf;
+			for (const Entity e: subtree)
+			{
+				if (const auto* link = world.TryGet<PrefabLinkComponent>(e))
+				{
+					if (const auto it = prefabIndexByGuid.find(link->prefabGuid); it != prefabIndexByGuid.end())
+					{
+						prefabIndexOf[e.id] = it->second;
+					}
+				}
+			}
 			std::unordered_set<std::uint64_t> presentGuids;
-			for (const Entity e: CollectSubtree(world, root))
+			for (const Entity e: subtree)
 			{
 				const auto* link = world.TryGet<PrefabLinkComponent>(e);
 				const auto pit = link != nullptr ? prefabByGuid.find(link->prefabGuid) : prefabByGuid.end();
@@ -269,22 +287,27 @@ namespace aether::app::scene
 					// This includes the instance root, which links to the prefab's own
 					// root entity.
 					presentGuids.insert(link->prefabGuid);
-					// The instance root's transform IS the instance transform, and
-					// re-applying onto a root would strip its children list, so the root
-					// is never a per-entity override - mark it present and move on.
-					if (e == root)
-					{
-						continue;
-					}
 					// Record only the changed top-level keys (field-level override), so
 					// keys we do not touch - including ones the prefab changes later -
 					// keep tracking the prefab.
-					SceneDescription oneCap = CaptureSubtrees(world, {e}, materials, textures);
+					SceneDescription oneCap;
+					AppendEntityRecords(oneCap, world, {e}, prefabIndexOf, materials, textures);
 					if (!oneCap.entities.empty())
 					{
 						EntityRecord liveC = std::move(oneCap.entities[0]);
 						EntityRecord prefC = *pit->second;
-						if (prefabToInstance && prefC.hasTransform)
+						if (e == root)
+						{
+							// The root's transform and name ARE the instance record's own
+							// fields, so only its other keys (scripts, tags, components) can
+							// be a per-entity override.
+							liveC.hasTransform = prefC.hasTransform;
+							liveC.position = prefC.position;
+							liveC.eulerDeg = prefC.eulerDeg;
+							liveC.scale = prefC.scale;
+							liveC.name = prefC.name;
+						}
+						else if (prefabToInstance && prefC.hasTransform)
 						{
 							// Lift the prefab's child pose into this instance's frame, so
 							// only a local edit reads as a difference.
@@ -439,11 +462,15 @@ namespace aether::app::scene
 			}
 			const Entity e = World::FromEntt(handle);
 			const auto* inst = world.TryGet<PrefabInstanceComponent>(e);
-			if (inst == nullptr)
+			if (inst == nullptr || ecs::HasAncestorWith<IncludedFromComponent>(world, e))
 			{
-				continue;
+				continue; // included instances belong to their own scene (re-emitted as the include)
 			}
 			scene.prefabInstances.push_back(CapturePrefabInstance(world, e, materials, textures));
+		}
+		if (const auto* includes = reg.ctx().find<ActiveSceneIncludes>())
+		{
+			scene.includes = includes->scenes;
 		}
 		return scene;
 	}
@@ -487,6 +514,10 @@ namespace aether::app::scene
 		{
 			rec.name = nc->name;
 		}
+		if (const auto* node = world.TryGet<SceneNodeComponent>(root))
+		{
+			rec.node = node->id;
+		}
 		if (const auto* tc = world.TryGet<TransformComponent>(root))
 		{
 			DecomposeTRS(tc->localToWorld, rec.position, rec.eulerDeg, rec.scale);
@@ -500,6 +531,15 @@ namespace aether::app::scene
 		if (const auto* nc = world.TryGet<NameComponent>(root))
 		{
 			prefab.name = nc->name;
+		}
+		// A prefab is placed into many scenes, so a reference to one scene's node (another
+		// instance, a scene entity) cannot be part of it: those properties save as unset.
+		for (EntityRecord& rec: prefab.entities)
+		{
+			for (ScriptRecord& script: rec.scripts)
+			{
+				script.nodeRefs.clear();
+			}
 		}
 		return prefab;
 	}

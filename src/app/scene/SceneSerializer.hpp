@@ -152,6 +152,12 @@ namespace aether::app::scene
 	{
 		std::string type;
 		std::map<std::string, ScriptPropertyValue> properties;
+		// Entity/Component properties whose target lies OUTSIDE the captured record set (a
+		// prefab-instance root, or a top-level scene entity seen from an instance override /
+		// added entity): property name -> the target's stable scene-node id (`v_node`). The
+		// property's positional index is -1; apply resolves it by node id once the whole
+		// scene, its prefab instances and its includes exist.
+		std::map<std::string, std::uint64_t> nodeRefs;
 	};
 
 	// A component captured generically from the reflection registry: the reflected
@@ -284,10 +290,15 @@ namespace aether::app::scene
 	{
 		std::string prefabPath;
 		std::string name; // hierarchy display name (defaults to the prefab's root name)
+		// The instance root's stable scene-node id (SceneNodeComponent), so script Entity
+		// references to the instance survive save/load. 0 = mint a random one on expand.
+		std::uint64_t node = 0;
 		glm::vec3 position{0.0f};
 		glm::vec3 eulerDeg{0.0f};
 		glm::vec3 scale{1.0f};
-		std::vector<PrefabEntityOverride> overrides; // applied after expansion
+		// Applied after expansion. May include the instance ROOT's guid: its non-transform,
+		// non-name keys (scripts, tags, components) are re-applied without touching children.
+		std::vector<PrefabEntityOverride> overrides;
 		// Prefab entities (by stable guid) deleted in this instance; removed on load.
 		std::vector<std::uint64_t> removedGuids;
 		// Entities added to this instance beyond the prefab (self-contained subtrees,
@@ -321,6 +332,10 @@ namespace aether::app::scene
 		std::vector<LightRecord> lights;
 		std::optional<EnvironmentRecord> environment;
 		std::vector<AssetManifestEntry> assetManifest;
+		// Scene names applied additively after this scene (`[[includes]] scene = '...'`), in
+		// order. Their entities load SceneTransient + IncludedFromComponent and are never
+		// captured back into this scene; CaptureScene re-emits only this list.
+		std::vector<std::string> includes;
 	};
 
 	// Assign a fresh, stable guid to every entity that lacks one (max existing + 1).
@@ -453,7 +468,9 @@ std::vector<std::string> ListSceneFiles();
 	// root is tagged (PrefabInstance + SceneTransient + PrefabLink subtree) so the
 	// scene re-serializes it as a reference and edits to the prefab propagate to
 	// every instance. `prefabName` is the prefab's save name (what a scene stores).
-	Entity InstantiatePrefabInstance(const std::string& prefabName, const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld);
+	// `nodeId` stamps the root's SceneNodeComponent (0 = keep a random one), which is
+	// what script Entity references to this instance persist as.
+	Entity InstantiatePrefabInstance(const std::string& prefabName, const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld, std::uint64_t nodeId = 0);
 
 	// Capture one live prefab-instance root as the reference record a scene stores: its
 	// transform, name, and per-entity delta against the prefab currently on disk.
