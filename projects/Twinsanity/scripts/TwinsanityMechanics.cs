@@ -59,12 +59,16 @@ public static class MechanicsWorm
 ///     (about 40 m/s^2), then runs at his full speed (9 run, 2.5 walk) - pushing never slows him.
 ///   - Pushing at an angle moves it along the contact normal only.
 ///   - Let go, it rolls on, its speed decaying exponentially at 0.87/s on flat sand.
-/// Spin and slide (rig, logs/chickenpush/push_spin.csv / push_slide.csv, the nut at 60 frames/s):
-///   - A spin in contact launches it along the contact normal 3 frames after the spin starts: 33.7
-///     m/s, decaying at 0.67/s (35 m in 1.8 s), with a 0.1 m hop.
-///   - A slide into it throws it up in an arc on contact: 0.28 m pop, then 11.5 m/s up under 27.7
-///     m/s^2 (peak 2.7 m above rest, 0.87 s in the air) and 8.2 m/s along the contact normal,
-///     decaying at 0.85/s - the free-roll rate - so it lands 5 m away.
+/// Spin and slide (rig, PAL 50 Hz frames: logs/chickenpush/push_*_rig.csv and logs/pushlaunch/rig_*.csv,
+/// fitted by logs/pushlaunch/fit.py / fit2.py; per-kind numbers at Throws):
+///   - A spin in contact - or while he holds it - launches it along the contact normal 3 frames
+///     after the spin starts, whatever it was doing (pushed at a run or at rest): the nut at 29.6
+///     m/s decaying at 0.64/s (33 m in 2 s), the ball and rock at 25 m/s, with a 0.1 m hop.
+///   - A slide into it throws it up in an arc on contact: 0.28 m pop, then 9.6 m/s up under 19.2
+///     m/s^2 (peak 2.7 m above rest, ~1.0 s in the air), and 6.8 m/s along the contact normal,
+///     decaying at 0.8/s. Held (pushed at a run), the kick adds to its push velocity and it flies
+///     its kind's arc: the nut ~15 m/s and 2.2-2.7 m up, the ball ~17.7 m/s and 2.1 m, the rock
+///     ~21 m/s and 6.4 m. Landing costs its kind's share of its vertical speed from its horizontal.
 /// Each is a kinematic collision body the script drives, so Crash's controller is blocked by it
 /// exactly as by scenery.
 /// </summary>
@@ -84,10 +88,13 @@ public sealed partial class TwinsanityActors
 		public Vector3 Velocity;     // horizontal
 		public Quaternion Roll = Quaternion.Identity;
 		public Quaternion Base = Quaternion.Identity;
-		public float FreeDamping;    // 1/s, current free decay (Damping, or the spin launch's)
+		public float FreeDamping;    // 1/s, current free decay (Damping, or the launch's)
 		public float VelocityY;      // while airborne
 		public bool Airborne;
 		public float LaunchFloor;    // ground height it was launched from
+		public Throws Throw;         // its kind's spin / held-slide launch (rollers)
+		public float FlyGravity;     // the current flight's gravity
+		public float FlyLoss;        // ... and its landing friction
 		public bool Pivots;          // turns about its origin instead of sliding (the cannon)
 		public List<Entity> Hulls = new(); // collision that turns with a pivoting object
 		public float YawRate;        // deg/s, a pivoting object's current turn (coasts briefly when let go)
@@ -132,16 +139,35 @@ public sealed partial class TwinsanityActors
 	// stands in, scaled by 5/7 for a rolling sphere. It only matters on slopes.
 	private const float SlopeGravity = 50.0f * 5.0f / 7.0f;
 	private const float RestSpeed = 0.05f;
-	// Spin / slide launches (rig, see the summary). One gravity fits the nut's slide arc and its
-	// spin hop; the ball and rock reuse the nut's numbers (ponytail: not measured).
-	private const float LaunchGravity = 27.7f;
-	private const float SpinLaunchSpeed = 33.7f;
-	private const float SpinLaunchHop = 2.35f;   // sqrt(2 g 0.1)
-	private const float SpinLaunchDamping = 0.67f;
-	private const float SpinLaunchDelay = 0.05f; // 3 frames after the spin starts
-	private const float SlideLaunchSpeed = 8.2f;
-	private const float SlideLaunchUp = 11.5f;
+	// Spin / slide launches (rig, see the summary; 50 Hz fits - the first fit read the frames as
+	// 60 Hz and ran every launch 20% fast). A slide into a free roller throws each kind alike (the
+	// nut's arc; ponytail: the ball's free slide was not captured, and the rock's one capture only
+	// nudged it); a spin, and a slide while he holds it, throw per kind (Throws).
+	private const float LaunchGravity = 19.2f;   // the free slide's arc and the spin hop
+	private const float SpinLaunchHop = 1.96f;   // sqrt(2 g 0.1)
+	private const float SpinLaunchDelay = 0.06f; // 3 frames after the spin starts
+	private const float SlideLaunchSpeed = 6.8f;
+	private const float SlideLaunchUp = 9.6f;
 	private const float SlideLaunchPop = 0.28f;
+	private const float SlideLaunchDamping = 0.8f;
+	private const float LandingFriction = 0.2f;  // horizontal speed lost per m/s of landing speed
+
+	/// <summary>A roller's own launches (rig, logs/pushlaunch/fit2.py): spin speed and its decay,
+	/// and the held slide's kick along the contact normal (on top of its push velocity), rise,
+	/// decay, gravity and landing friction.</summary>
+	private readonly record struct Throws(float SpinSpeed, float SpinDamping, float SlideKick, float SlideUp, float SlideDamping, float Gravity, float LandingLoss);
+
+	// Nut: 29.6 m/s decaying 0.64/s; pushed at a run and slid, it flies at ~15 m/s, 2.2-2.7 m up.
+	// Ball: 25 m/s that barely decays (25.0 m/s over 1 s clean); slid, 17.7 m/s, 2.1 m up, 0.76 s
+	// in the air, then rolls on at ~12.5 m/s. Rock: 25 m/s (0.6-0.8 s clean; ponytail: its decay
+	// past that is unmeasured, 0.2/s stands in); slid, ~21 m/s, 6.4 m up, 1.4 s in the air.
+	private static readonly Throws NutThrows = new(29.6f, 0.64f, SlideLaunchSpeed, SlideLaunchUp, SlideLaunchDamping, LaunchGravity, LandingFriction);
+	private static Throws ThrowsFor(string key) => key switch
+	{
+		"act_beach_ball" => new(25.0f, 0.04f, 8.6f, 9.5f, 0.04f, 25.0f, 0.46f),
+		"act_monkey_rock" => new(25.0f, 0.2f, 12.0f, 18.8f, 0.09f, 27.7f, 0.61f),
+		_ => NutThrows,
+	};
 	private float _spinClock = -1.0f;            // time since the current spin started; -1 = none
 	private bool _spinLaunched, _slideLaunched;
 	// His velocity, smoothed: commanded over PushSmoothing for the hold servo's push line, measured
@@ -317,6 +343,7 @@ public sealed partial class TwinsanityActors
 			Hulls = hulls,
 			Button = button,
 			NoLaunch = key == "act_global_bomb",
+			Throw = ThrowsFor(key),
 		};
 		if (button.IsValid)
 		{
@@ -375,7 +402,11 @@ public sealed partial class TwinsanityActors
 			bool pushed = false;
 			bool contact = dist < p.Radius + CrashRadius + 0.2f && dist > 1e-3f && overlapY && !p.Airborne;
 			bool slideHit = player.IsSliding && !_slideLaunched;
-			if (contact && p.Rolls && !p.NoLaunch && (slideHit || (_spinClock >= SpinLaunchDelay && !_spinLaunched)))
+			// Held counts as contact: pushed at a run the servo rides it just past the contact reach
+			// (his drawn feet trail his capsule), and a spin slows him while it runs on, so a launch
+			// gated on contact alone was swallowed by the hold. The launch lets go of it.
+			bool touching = contact || (p.Held && dist > 1e-3f && !p.Airborne);
+			if (touching && p.Rolls && !p.NoLaunch && (slideHit || (_spinClock >= SpinLaunchDelay && !_spinLaunched)))
 			{
 				Launch(p, toObj / dist, slideHit);
 				_slideLaunched |= slideHit;
@@ -491,12 +522,18 @@ public sealed partial class TwinsanityActors
 		}
 	}
 
-	// Spin: straight out along the contact normal with a small hop. Slide: thrown up in an arc.
+	// Spin: straight out along the contact normal with a small hop, whatever it was doing, at its
+	// kind's speed. Slide: thrown up in an arc, the kick added to its own velocity - a held one
+	// keeps its run speed and flies its kind's arc; a free one the common arc.
 	private static void Launch(Pushable p, Vector3 normal, bool slide)
 	{
-		p.Velocity = normal * (slide ? SlideLaunchSpeed : SpinLaunchSpeed);
-		p.VelocityY = slide ? SlideLaunchUp : SpinLaunchHop;
-		p.FreeDamping = slide ? p.Damping : SpinLaunchDamping;
+		Throws t = slide && !p.Held ? NutThrows : p.Throw;
+		p.Held = false;
+		p.Velocity = (slide ? p.Velocity with { Y = 0.0f } : Vector3.Zero) + normal * (slide ? t.SlideKick : t.SpinSpeed);
+		p.VelocityY = slide ? t.SlideUp : SpinLaunchHop;
+		p.FreeDamping = slide ? t.SlideDamping : t.SpinDamping;
+		p.FlyGravity = slide ? t.Gravity : LaunchGravity;
+		p.FlyLoss = t.LandingLoss;
 		p.LaunchFloor = p.Center.Y - p.RestHeight;
 		if (slide)
 		{
@@ -564,7 +601,7 @@ public sealed partial class TwinsanityActors
 	// height; its horizontal speed keeps decaying (UpdatePushables), as the rig's arc does.
 	private void Fly(Pushable p, float dt, Entity crash)
 	{
-		p.VelocityY -= LaunchGravity * dt;
+		p.VelocityY -= p.FlyGravity * dt;
 		Vector3 step = p.Velocity * dt;
 		float len = step.Length();
 		Vector3 dir = len > 1e-5f ? step / len : Vector3.Zero;
@@ -585,6 +622,9 @@ public sealed partial class TwinsanityActors
 		if (p.VelocityY < 0.0f && next.Y <= floor + p.RestHeight)
 		{
 			next.Y = floor + p.RestHeight;
+			// The landing's friction takes speed in proportion to how hard it came down.
+			float h = p.Velocity.Length();
+			p.Velocity *= h > 1e-3f ? MathF.Max(0.0f, h + p.FlyLoss * p.VelocityY) / h : 0.0f;
 			p.VelocityY = 0.0f;
 			p.Airborne = false;
 		}
