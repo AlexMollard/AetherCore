@@ -253,11 +253,10 @@ namespace TwExtract
 		// Object models (Program.Objects): lit by the level's light records, not prelit.
 		readonly bool m_isObject;
 		// Wumpa fruit (Program.Objects sets it for REDWUMPA*): the look upgrade's glossy skin. The
-		// material gets {"sheen":true} (gltf_mesh.slang's kFlagSheen), a highlight size and an idle
-		// glow - logs/look/WumpaLook/README.md.
+		// material gets {"sheen":true} (gltf_mesh.slang's kFlagSheen) and a highlight size; the skin
+		// keeps the PS2 object lighting - logs/look/WumpaLook/README.md.
 		public bool Sheen;
 		public const float SheenRoughness = 0.12f;
-		public static readonly float[] SheenGlow = { 0.08f, 0.08f, 0.08f };
 		// The water look (gltf_mesh.slang's kFlagWater, logs/look/WaterLook/README.md): scenery
 		// materials drawing these disc textures (content-hashed names) get {"water":true}. 2b1f..: the
 		// shore/sea sheet with its foam band (beach "lambert168", Hub A/B/C/D, pier); f5cc..: the
@@ -403,11 +402,7 @@ namespace TwExtract
 			},
 			["doubleSided"] = true,
 		};
-		if (Sheen)
-		{
-			gltfMat["emissiveFactor"] = SheenGlow;
-		}
-		else if (character && CharacterGlow)
+		if (character && CharacterGlow)
 		{
 			gltfMat["emissiveFactor"] = mask ? AkuFeatherGlow : AkuWoodGlow;
 		}

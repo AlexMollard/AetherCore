@@ -1,8 +1,10 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "PipelineUtils.hpp"
 
@@ -33,5 +35,23 @@ namespace aether::assetpipeline
 		// Best-effort: a parse failure returns an empty list rather than erroring: Process()
 		// surfaces a proper error if the model is actually (re)baked.
 		[[nodiscard]] std::vector<std::filesystem::path> CollectExternalSourceFiles(const std::filesystem::path& modelPath);
+
+		// One submesh for ComputeFoliageSway: its index range, and whether its material is
+		// scenery foliage (foliage + baked_lighting, not sky - Foliage.slangh's IsSceneryFoliage).
+		struct SwaySubMesh
+		{
+			std::uint32_t firstIndex = 0;
+			std::uint32_t indexCount = 0;
+			bool foliage = false;
+		};
+
+		// Wind sway weight per vertex (0 = still, 1 = full sway), baked into uv2.x of the scenery
+		// foliage vertices and read by Foliage.slangh. `positions` is xyz per vertex. A vertex
+		// touching geometry other than its own card (the terrain a grass fringe is welded to, the
+		// ground under a tuft, the next card) is an anchor and never moves, and the weight grows
+		// with distance from the card's anchors, so only free tips sway and no seam opens. A card
+		// lying on other geometry for most of its vertices (fringe skirts, decals) stays still.
+		// Vertices outside the foliage submeshes get 0.
+		[[nodiscard]] std::vector<float> ComputeFoliageSway(std::span<const float> positions, std::span<const std::uint32_t> indices, std::span<const SwaySubMesh> subMeshes);
 	} // namespace MeshProcessor
 } // namespace aether::assetpipeline

@@ -81,7 +81,7 @@ float4 DepthVertexTransform(uint vertexId, uint instanceIndex, out float3 worldP
 
     // Scenery foliage sways (Foliage.slangh): the same offset the forward pass adds, so a
     // swaying card's prepass depth and shadow follow it.
-    wPos.xyz += FoliageWindOffset(fc, instance.materialIndex, wPos.xyz, mul((float3x3)instance.model, input.normal));
+    wPos.xyz += FoliageWindOffset(fc, instance.materialIndex, wPos.xyz, input.uv2.x);
     worldPos = wPos.xyz;
     return mul(fc->viewProj, wPos);
 }

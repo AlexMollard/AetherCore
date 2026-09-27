@@ -119,3 +119,46 @@ TEST_CASE("Baked glTF materials carry the foliage, baked-lighting and additive-b
 	CHECK(Header(result.materialFiles, "solid").alphaBlend == 0);
 	std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("Foliage sway weights plant everything touching other geometry and sway only free tips")
+{
+	// Submesh 0: a ground quad (not foliage), y = 0 over x,z in [0, 4].
+	// Submesh 1 (foliage): a 1 m upright tuft card standing on the ground at x = 1.
+	// Submesh 2 (foliage): a fringe skirt whose top edge is welded to the ground's edge at z = 4
+	// and hangs 0.8 m down, lying against a wall (submesh 3, not foliage) at z = 4.
+	// Submesh 4 (foliage): a free flat decal floating clear of everything.
+	const std::vector<float> pos = {
+	        0, 0, 0, 4, 0, 0, 4, 0, 4, 0, 0, 4,             // 0-3 ground
+	        1, 0, 1, 2, 0, 1, 2, 1, 1, 1, 1, 1,             // 4-7 tuft
+	        0, 0, 4, 4, 0, 4, 4, -0.8f, 4, 0, -0.8f, 4,     // 8-11 skirt
+	        0, 0, 4.01f, 4, 0, 4.01f, 4, -2, 4.01f, 0, -2, 4.01f, // 12-15 wall
+	        10, 5, 10, 11, 5, 10, 11, 5, 11, 10, 5, 11,     // 16-19 decal
+	};
+	std::vector<std::uint32_t> idx;
+	for (std::uint32_t q = 0; q < 5; ++q)
+	{
+		const std::uint32_t b = q * 4;
+		idx.insert(idx.end(), {b, b + 1, b + 2, b, b + 2, b + 3});
+	}
+	const std::vector<assetpipeline::MeshProcessor::SwaySubMesh> subs = {
+	        {0, 6, false}, {6, 6, true}, {12, 6, true}, {18, 6, false}, {24, 6, true}};
+	const std::vector<float> w = assetpipeline::MeshProcessor::ComputeFoliageSway(pos, idx, subs);
+	REQUIRE(w.size() == 20);
+	// The tuft's base touches the ground: still. Its tip, 1 m up, sways fully.
+	CHECK(w[4] == 0.0f);
+	CHECK(w[5] == 0.0f);
+	CHECK(w[6] == doctest::Approx(1.0f));
+	CHECK(w[7] == doctest::Approx(1.0f));
+	// The skirt lies on the ground edge and the wall: every vertex still, so no seam opens.
+	for (std::uint32_t v = 8; v < 12; ++v)
+	{
+		CHECK(w[v] == 0.0f);
+	}
+	// A free flat decal has no height to sway from.
+	for (std::uint32_t v = 16; v < 20; ++v)
+	{
+		CHECK(w[v] == 0.0f);
+	}
+	// Not foliage: 0.
+	CHECK(w[0] == 0.0f);
+}

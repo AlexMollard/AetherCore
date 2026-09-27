@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
@@ -1315,7 +1316,235 @@ namespace aether::assetpipeline
 				}
 			}
 
+			// Scenery foliage, as Foliage.slangh's IsSceneryFoliage reads the baked flags.
+			bool IsSceneryFoliageMaterial(const cgltf_material& mat)
+			{
+				const char* const extras = mat.extras.data;
+				return extras != nullptr && std::strstr(extras, "\"foliage\"") != nullptr && std::strstr(extras, "\"baked_lighting\"") != nullptr && std::strstr(extras, "\"sky\"") == nullptr;
+			}
+
+			// Squared distance from p to triangle abc (Ericson, Real-Time Collision Detection 5.1.5).
+			float PointTriangleDistSq(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b, const glm::vec3& c)
+			{
+				const glm::vec3 ab = b - a;
+				const glm::vec3 ac = c - a;
+				const glm::vec3 ap = p - a;
+				const float d1 = glm::dot(ab, ap);
+				const float d2 = glm::dot(ac, ap);
+				if (d1 <= 0.0f && d2 <= 0.0f)
+				{
+					return glm::dot(ap, ap);
+				}
+				const glm::vec3 bp = p - b;
+				const float d3 = glm::dot(ab, bp);
+				const float d4 = glm::dot(ac, bp);
+				if (d3 >= 0.0f && d4 <= d3)
+				{
+					return glm::dot(bp, bp);
+				}
+				const float vc = d1 * d4 - d3 * d2;
+				if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
+				{
+					const glm::vec3 q = a + ab * (d1 / (d1 - d3));
+					return glm::dot(p - q, p - q);
+				}
+				const glm::vec3 cp = p - c;
+				const float d5 = glm::dot(ab, cp);
+				const float d6 = glm::dot(ac, cp);
+				if (d6 >= 0.0f && d5 <= d6)
+				{
+					return glm::dot(cp, cp);
+				}
+				const float vb = d5 * d2 - d1 * d6;
+				if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
+				{
+					const glm::vec3 q = a + ac * (d2 / (d2 - d6));
+					return glm::dot(p - q, p - q);
+				}
+				const float va = d3 * d6 - d5 * d4;
+				if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
+				{
+					const glm::vec3 q = b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+					return glm::dot(p - q, p - q);
+				}
+				const float denom = 1.0f / (va + vb + vc);
+				const glm::vec3 q = a + ab * (vb * denom) + ac * (vc * denom);
+				return glm::dot(p - q, p - q);
+			}
+
+			// A grid cell key: 21 bits per axis (±1 M cells), plenty for a level.
+			std::uint64_t CellKey(const glm::ivec3& c)
+			{
+				constexpr std::int64_t kBias = 1 << 20;
+				return (static_cast<std::uint64_t>(c.x + kBias) & 0x1FFFFF) | ((static_cast<std::uint64_t>(c.y + kBias) & 0x1FFFFF) << 21) | ((static_cast<std::uint64_t>(c.z + kBias) & 0x1FFFFF) << 42);
+			}
+
 		} // namespace
+
+		std::vector<float> ComputeFoliageSway(std::span<const float> positions, std::span<const std::uint32_t> indices, std::span<const SwaySubMesh> subMeshes)
+		{
+			// ponytail: every k* is judged on the beach, not measured - the PS2 had no wind.
+			constexpr float kContact = 0.05f;    // m: a vertex this close to other geometry is attached to it
+			constexpr float kFalloff = 1.0f;     // m from the card's anchors to full sway
+			constexpr float kAnchorBand = 0.1f;  // fraction of a free card's height that plants it
+			constexpr float kTuftMaxSpan = 3.0f; // m: a free card wider than this is a canopy, planted at its top
+			constexpr float kFlat = 0.05f;       // m: a free card shallower than this lies flat (a decal)
+			constexpr float kCell = 2.0f;        // m: contact-grid cell
+			constexpr float kWeld = 0.001f;      // m: split vertices closer than this are one point
+
+			const std::size_t vertexCount = positions.size() / 3;
+			std::vector<float> weight(vertexCount, 0.0f);
+			const auto P = [&](std::uint32_t v) { return glm::vec3(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]); };
+			const auto Cell = [&](const glm::vec3& p) { return glm::ivec3(glm::floor(p / kCell)); };
+
+			// Islands: the connected cards of each foliage submesh, joining vertices split at a seam.
+			std::vector<std::uint32_t> parent(vertexCount);
+			for (std::uint32_t v = 0; v < vertexCount; ++v)
+			{
+				parent[v] = v;
+			}
+			const auto Find = [&](std::uint32_t v)
+			{
+				while (parent[v] != v)
+				{
+					parent[v] = parent[parent[v]];
+					v = parent[v];
+				}
+				return v;
+			};
+			const auto Union = [&](std::uint32_t a, std::uint32_t b) { parent[Find(b)] = Find(a); };
+			std::vector<bool> isFoliage(vertexCount, false);
+			for (const SwaySubMesh& sm: subMeshes)
+			{
+				if (!sm.foliage)
+				{
+					continue;
+				}
+				std::unordered_map<std::uint64_t, std::uint32_t> weld;
+				for (std::uint32_t k = sm.firstIndex; k + 2 < sm.firstIndex + sm.indexCount; k += 3)
+				{
+					Union(indices[k], indices[k + 1]);
+					Union(indices[k], indices[k + 2]);
+				}
+				for (std::uint32_t k = sm.firstIndex; k < sm.firstIndex + sm.indexCount; ++k)
+				{
+					const std::uint32_t v = indices[k];
+					isFoliage[v] = true;
+					const auto [it, inserted] = weld.try_emplace(CellKey(glm::ivec3(glm::round(P(v) / kWeld))), v);
+					if (!inserted)
+					{
+						Union(it->second, v);
+					}
+				}
+			}
+
+			// Contact grid: every triangle, filed only under the cells a foliage vertex sits in.
+			// A triangle's owner is its card (foliage) or its whole submesh (everything else).
+			std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> grid;
+			for (std::uint32_t v = 0; v < vertexCount; ++v)
+			{
+				if (isFoliage[v])
+				{
+					grid.try_emplace(CellKey(Cell(P(v))));
+				}
+			}
+			std::vector<std::uint64_t> triOwner(indices.size() / 3, 0);
+			for (std::size_t s = 0; s < subMeshes.size(); ++s)
+			{
+				const SwaySubMesh& sm = subMeshes[s];
+				for (std::uint32_t k = sm.firstIndex; k + 2 < sm.firstIndex + sm.indexCount; k += 3)
+				{
+					const std::uint32_t t = k / 3;
+					triOwner[t] = sm.foliage ? Find(indices[k]) : vertexCount + s;
+					const glm::vec3 a = P(indices[k]);
+					const glm::vec3 b = P(indices[k + 1]);
+					const glm::vec3 c = P(indices[k + 2]);
+					const glm::ivec3 lo = Cell(glm::min(a, glm::min(b, c)) - kContact);
+					const glm::ivec3 hi = Cell(glm::max(a, glm::max(b, c)) + kContact);
+					for (int x = lo.x; x <= hi.x; ++x)
+					{
+						for (int y = lo.y; y <= hi.y; ++y)
+						{
+							for (int z = lo.z; z <= hi.z; ++z)
+							{
+								const auto it = grid.find(CellKey({x, y, z}));
+								if (it != grid.end())
+								{
+									it->second.push_back(t);
+								}
+							}
+						}
+					}
+				}
+			}
+
+			std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> islands;
+			for (std::uint32_t v = 0; v < vertexCount; ++v)
+			{
+				if (isFoliage[v])
+				{
+					islands[Find(v)].push_back(v);
+				}
+			}
+			for (const auto& [root, verts]: islands)
+			{
+				std::vector<glm::vec3> anchors;
+				for (const std::uint32_t v: verts)
+				{
+					const glm::vec3 p = P(v);
+					for (const std::uint32_t t: grid[CellKey(Cell(p))])
+					{
+						if (triOwner[t] != root && PointTriangleDistSq(p, P(indices[t * 3]), P(indices[t * 3 + 1]), P(indices[t * 3 + 2])) < kContact * kContact)
+						{
+							anchors.push_back(p);
+							break;
+						}
+					}
+				}
+				// Lying on other geometry (a fringe skirt down a ledge, a decal): the card stays still.
+				if (anchors.size() * 2 > verts.size())
+				{
+					continue;
+				}
+				if (anchors.empty())
+				{
+					// A free card: planted at its base (a tuft) or, when wide, at its top (a canopy
+					// hanging from its tree). One too shallow to have either lies flat and stays still.
+					glm::vec3 lo = P(verts[0]);
+					glm::vec3 hi = lo;
+					for (const std::uint32_t v: verts)
+					{
+						lo = glm::min(lo, P(v));
+						hi = glm::max(hi, P(v));
+					}
+					const float height = hi.y - lo.y;
+					if (height < kFlat)
+					{
+						continue;
+					}
+					const bool canopy = std::hypot(hi.x - lo.x, hi.z - lo.z) > kTuftMaxSpan;
+					for (const std::uint32_t v: verts)
+					{
+						const float y = P(v).y;
+						if (canopy ? y >= hi.y - kAnchorBand * height : y <= lo.y + kAnchorBand * height)
+						{
+							anchors.push_back(P(v));
+						}
+					}
+				}
+				for (const std::uint32_t v: verts)
+				{
+					const glm::vec3 p = P(v);
+					float nearest = kFalloff * kFalloff;
+					for (const glm::vec3& a: anchors)
+					{
+						nearest = std::min(nearest, glm::dot(p - a, p - a));
+					}
+					weight[v] = std::sqrt(nearest) / kFalloff;
+				}
+			}
+			return weight;
+		}
 
 		ProcessedResult Process(std::span<const std::byte> gltfData, const std::filesystem::path& sourcePath, const std::string& virtualPath, const std::filesystem::path& sourceDir)
 		{
@@ -1385,6 +1614,37 @@ namespace aether::assetpipeline
 			}
 
 			auto mesh = ExtractMeshes(data, skel.remapTable, virtualPath, sourcePath.string());
+
+			// Scenery foliage carries its wind sway weight in uv2.x (Foliage.slangh); its cards
+			// have no second UV set (only BLEND light-shaft cards do, and those are not foliage).
+			{
+				std::vector<SwaySubMesh> swaySubs;
+				bool anyFoliage = false;
+				for (const auto& sm: mesh.subMeshes)
+				{
+					const bool foliage = sm.materialIndex >= 0 && IsSceneryFoliageMaterial(data->materials[sm.materialIndex]);
+					anyFoliage = anyFoliage || foliage;
+					swaySubs.push_back({.firstIndex = sm.firstIndex, .indexCount = sm.indexCount, .foliage = foliage});
+				}
+				if (anyFoliage)
+				{
+					std::vector<float> positions;
+					positions.reserve(mesh.verts.size() * 3);
+					for (const auto& v: mesh.verts)
+					{
+						positions.insert(positions.end(), {v.position[0], v.position[1], v.position[2]});
+					}
+					const std::vector<float> sway = ComputeFoliageSway(positions, mesh.indices, swaySubs);
+					for (const SwaySubMesh& sm: swaySubs)
+					{
+						for (std::uint32_t k = sm.firstIndex; sm.foliage && k < sm.firstIndex + sm.indexCount; ++k)
+						{
+							mesh.verts[mesh.indices[k]].uv2[0] = sway[mesh.indices[k]];
+							mesh.verts[mesh.indices[k]].uv2[1] = 0.0f;
+						}
+					}
+				}
+			}
 
 			if (!mesh.verts.empty())
 			{

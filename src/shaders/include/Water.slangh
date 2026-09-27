@@ -36,11 +36,12 @@ static const float kWaterDeepAlpha = 0.92;    // coverage once deep
 static const float kWaterEdgeSoft = 0.06;     // m: coverage fades in over this depth at the waterline
 static const float kWaterPattern = 0.3;       // how strongly the PS2 texel pattern modulates the body (higher tiles into a checker seen from above)
 static const float kWaterRippleAmp = 1.0;     // ripple slope scale
-static const float kWaterGlint = 1.0;         // sun glint strength
-static const float kWaterGlintCap = 24.0;     // brightest glint, so one texel cannot blow out
+static const float kWaterGlint = 0.6;         // sun glint strength
+static const float kWaterGlintCap = 6.0;      // brightest glint: a soft sheen, never a white dash
 static const float kWaterFoamContact = 0.25;  // m: contact foam band where water meets ground
 static const float kWaterFoam = 1.0;          // foam brightness
-static const float kWaterGlintRoughness = 0.06; // sun glint lobe (independent of the material's SSR knob)
+static const float kWaterGlintRoughness = 0.16; // sun glint lobe: broad, so it lies across many crests as one soft path, not a ladder of bands
+static const float kWaterSsrRipple = 0.3;    // how much of the ripple slope bends the reflection (1 shreds it into stacked bands)
 static const float kWaterSsrMaxRoughness = 0.5;
 static const uint kWaterSsrSteps = 20u;
 static const float kWaterFresnelCap = 0.6;   // most of the view the reflection may take (grazing)
@@ -52,8 +53,10 @@ static const float kWaterSsrLength = 60.0;    // m
 // along a direction (waterfalls). Returned already faded by the pixel footprint.
 float2 WaterRippleGradient(float2 p, float t, float footprint)
 {
-	// Warp: moves the sample point a little, slowly, so wave crests bend and drift.
-	p += 0.35 * float2(sin(p.y * 0.37 + t * 0.31), sin(p.x * 0.29 - t * 0.27));
+	// Warp: moves the sample point a few metres, slowly and at two scales, so wave crests bend,
+	// drift and never line up into parallel bands (a lattice of glints reads as a ladder).
+	p += 1.6 * float2(sin(p.y * 0.19 + t * 0.21), sin(p.x * 0.23 - t * 0.17))
+		+ 0.6 * float2(sin(dot(p, float2(0.41, 0.33)) - t * 0.37), sin(dot(p, float2(-0.29, 0.47)) + t * 0.31));
 	// (direction.xy, spatial frequency, angular speed), amplitude falls with frequency.
 	const float4 waves[5] = {
 		float4(0.866, 0.500, 0.9, 0.9),
@@ -287,10 +290,12 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 	float foam = 0.0;
 	if (mat.albedoSlot != kNoTexture)
 	{
-		const float4 soft = g_textures[mat.albedoSlot].SampleBias(g_linearSampler, uv, 1.5);
+		// A blurrier mip and a wide ramp soften the painted edge, so the foam never shows the
+		// texel's hard wedge; the ripple height moves the ramp so the edge breathes.
+		const float4 soft = g_textures[mat.albedoSlot].SampleBias(g_linearSampler, uv, 2.5);
 		const float grey = saturate((soft.r / max(soft.b, 1e-3) - 0.35) * 2.5) * soft.a;
 		const float h = WaterRippleHeight(worldPos.xz * 1.3, t);
-		foam = smoothstep(0.35 + 0.2 * h, 0.75 + 0.2 * h, grey);
+		foam = smoothstep(0.25 + 0.15 * h, 0.85 + 0.15 * h, grey);
 	}
 	// Contact foam where the water meets the ground, broken up and lapping with the ripple.
 	if (haveBehind && steep < 0.5)
@@ -305,6 +310,9 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 
 	// ── Reflection ────────────────────────────────────────────────────────
 	const float3 R = reflect(-V, N);
+	// The screen reflection follows a mostly flat surface: at full ripple slope neighbouring
+	// crests alternately hit and miss the reflected object, which cut it into stacked bands.
+	const float3 Rssr = reflect(-V, normalize(lerp(Nup, N, kWaterSsrRipple)));
 	const float3 Rup = float3(R.x, abs(R.y), R.z); // a ripple can tip R under the horizon
 	float3 skyRefl;
 	if (dot(mat.emissiveFactor.rgb, mat.emissiveFactor.rgb) > 1e-6)
@@ -327,7 +335,7 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 	if (mat.roughnessFactor <= kWaterSsrMaxRoughness && ssrView > 0.0)
 	{
 		const float3 origin = worldPos + Nup * (0.02 + eyeDist * 0.002);
-		const float4 ssr = WaterScreenReflection(fc, origin, R, svPos);
+		const float4 ssr = WaterScreenReflection(fc, origin, Rssr, svPos);
 		refl = lerp(skyRefl, ssr.rgb * shade, ssr.a * ssrView);
 	}
 	// Schlick fresnel for water (F0 0.02), capped below 1 so the far sea keeps some body colour.
@@ -336,7 +344,7 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 	// ── Sun glints ────────────────────────────────────────────────────────
 	const float3 L = normalize(fc->sunDirectionIntensity.xyz);
 	const float3 H = normalize(V + L);
-	const float glintRough = max(kWaterGlintRoughness, sqrt(footprint * 0.02));
+	const float glintRough = max(kWaterGlintRoughness, sqrt(footprint * 0.05));
 	const float NdotL = saturate(dot(N, L));
 	const float spec = min(D_GGX(saturate(dot(N, H)), glintRough) * 0.25 * NdotL, kWaterGlintCap);
 	const float3 glint = fc->sunColor.rgb * fc->sunDirectionIntensity.w * spec * (0.02 + 0.98 * pow(1.0 - saturate(dot(V, H)), 5.0))

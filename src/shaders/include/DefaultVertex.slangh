@@ -76,7 +76,7 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartIn
 #ifdef AETHER_VS_FOLIAGE_WIND
     // Scenery foliage sways (Foliage.slangh); the depth passes add the same offset, so the
     // prepass depth and the cascades agree with what this draws. Needs Foliage.slangh.
-    worldPos.xyz += FoliageWindOffset(fc, instance.materialIndex, worldPos.xyz, mul((float3x3)instance.model, input.normal));
+    worldPos.xyz += FoliageWindOffset(fc, instance.materialIndex, worldPos.xyz, input.uv2.x);
 #endif
 
     VSOutput o;
