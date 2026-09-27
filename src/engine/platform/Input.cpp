@@ -79,6 +79,7 @@ namespace aether
 	void Input::PlayInputSequence(std::vector<InputSequenceEvent> events)
 	{
 		ClearSyntheticKeys();
+		CentreSequenceStick();
 		m_inputSequence = std::move(events);
 		std::sort(m_inputSequence.begin(), m_inputSequence.end(), [](const InputSequenceEvent& a, const InputSequenceEvent& b) { return a.time < b.time; });
 		m_inputSequenceNext = 0;
@@ -92,6 +93,17 @@ namespace aether
 		m_inputSequence.clear();
 		m_inputSequenceNext = 0;
 		ClearSyntheticKeys();
+		CentreSequenceStick();
+	}
+
+	void Input::CentreSequenceStick()
+	{
+		if (m_sequenceStickSet)
+		{
+			SetSyntheticGamepadAxis(0, GamepadAxis::LeftX, 0.0f);
+			SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, 0.0f);
+			m_sequenceStickSet = false;
+		}
 	}
 
 	int Input::KeyCodeFromName(std::string name)
@@ -201,7 +213,35 @@ namespace aether
 
 			if (op == "clear" || (op == "release" && keys.size() == 1 && keys[0] == "all"))
 			{
-				events.push_back({t, -1, false});
+				events.push_back({t, kSequenceClear, false});
+				continue;
+			}
+			// "stick <x> <y>": gamepad 0's raw left stick, the same axes as send_input's pad_axis
+			// left_x/left_y. An analog direction the 8 key directions cannot give, on the same
+			// frame-accurate clock as the keys.
+			if (op == "stick")
+			{
+				float xy[2] = {};
+				bool ok = keys.size() == 2;
+				for (std::size_t i = 0; ok && i < 2; ++i)
+				{
+					try
+					{
+						std::size_t used = 0;
+						xy[i] = std::stof(keys[i], &used);
+						ok = used == keys[i].size();
+					}
+					catch (...)
+					{
+						ok = false;
+					}
+				}
+				if (!ok)
+				{
+					error = "line " + std::to_string(lineNo) + ": stick needs two numbers, '<x> <y>'";
+					return {};
+				}
+				events.push_back({t, kSequenceStick, false, std::clamp(xy[0], -1.0f, 1.0f), std::clamp(xy[1], -1.0f, 1.0f)});
 				continue;
 			}
 			// "press" and "tap" both produce a REAL key edge every time: down now,
@@ -215,7 +255,7 @@ namespace aether
 			const bool autoRelease = (op == "press" || op == "tap");
 			if (!down && !release)
 			{
-				error = "line " + std::to_string(lineNo) + ": unknown op '" + op + "' (use hold/press/tap/release/up/clear)";
+				error = "line " + std::to_string(lineNo) + ": unknown op '" + op + "' (use hold/press/tap/release/up/clear/stick)";
 				return {};
 			}
 			for (const std::string& key: keys)
@@ -247,9 +287,17 @@ namespace aether
 		{
 			const InputSequenceEvent& ev = m_inputSequence[m_inputSequenceNext];
 			++m_inputSequenceNext;
-			if (ev.keyCode < 0)
+			if (ev.keyCode == kSequenceClear)
 			{
 				ClearSyntheticKeys();
+				CentreSequenceStick();
+			}
+			else if (ev.keyCode == kSequenceStick)
+			{
+				SetSyntheticGamepadConnected(0, true);
+				SetSyntheticGamepadAxis(0, GamepadAxis::LeftX, ev.stickX);
+				SetSyntheticGamepadAxis(0, GamepadAxis::LeftY, ev.stickY);
+				m_sequenceStickSet = true;
 			}
 			else
 			{

@@ -586,14 +586,19 @@ namespace aether
 		void ClearSyntheticGamepads();
 
 		// Timed synthetic-input playback for auto-testing. A sequence is a list of
-		// events (seconds-from-start, key, down/up); keyCode < 0 means "release all".
+		// events (seconds-from-start, key, down/up); keyCode kSequenceClear means
+		// "release all", kSequenceStick sets gamepad 0's left stick to (stickX, stickY).
 		// Driven off a wall clock in Update(), so it survives variable framerate and
 		// needs no per-frame dt. See engine.play_input_sequence.
+		static constexpr int kSequenceClear = -1;
+		static constexpr int kSequenceStick = -2;
 		struct InputSequenceEvent
 		{
 			float time = 0.0f;
-			int keyCode = 0; // < 0 == clear all synthetic keys
+			int keyCode = 0; // kSequenceClear / kSequenceStick, else a GLFW key code
 			bool down = false;
+			float stickX = 0.0f;
+			float stickY = 0.0f;
 		};
 
 		void PlayInputSequence(std::vector<InputSequenceEvent> events);
@@ -602,7 +607,9 @@ namespace aether
 		// Parses the engine.play_input_sequence text format: lines of
 		// "<seconds> <op> [keys...]"; op is hold (keys stay down), press/tap
 		// (down now, auto-released ~0.1s later - a real key edge every time),
-		// release/up, or clear. Sets 'error' and returns {} on a bad line.
+		// release/up, clear, or "stick <x> <y>" (gamepad 0's left stick, raw -1..1,
+		// held until the next stick line; clear centres it). Sets 'error' and returns
+		// {} on a bad line.
 		// Static so the control endpoint and the test suite share one definition
 		// of the format - the press-vs-hold distinction is semantics, not syntax.
 		static std::vector<InputSequenceEvent> ParseInputSequence(const std::string& text, std::string& error);
@@ -619,6 +626,7 @@ namespace aether
 
 	private:
 		void TickInputSequence();
+		void CentreSequenceStick();
 
 		static void OnScroll(GLFWwindow* window, double xOffset, double yOffset);
 		static void OnChar(GLFWwindow* window, unsigned int codepoint);
@@ -716,6 +724,7 @@ namespace aether
 		std::vector<InputSequenceEvent> m_inputSequence;
 		std::size_t m_inputSequenceNext = 0;
 		bool m_inputSequenceActive = false;
+		bool m_sequenceStickSet = false; // a sequence moved pad 0's left stick: clear/stop centre it
 		std::chrono::steady_clock::time_point m_inputSequenceStart{};
 
 		bool m_mouseViewportTransformActive = false;

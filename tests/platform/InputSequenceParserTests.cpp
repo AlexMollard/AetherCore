@@ -6,6 +6,8 @@
 // These assert the event SHAPE the parser must produce, not incidental defaults.
 #include <doctest/doctest.h>
 
+#include <glm/geometric.hpp>
+
 #include "platform/Input.hpp"
 
 using namespace aether;
@@ -67,4 +69,38 @@ TEST_CASE("ParseInputSequence: unknown op is rejected rather than silently ignor
 	const auto events = Input::ParseInputSequence("0.0 poke g", error);
 	CHECK(events.empty());
 	CHECK_FALSE(error.empty());
+}
+
+TEST_CASE("ParseInputSequence: a malformed stick line is rejected, not read as a centred stick")
+{
+	for (const char* bad: {"0.0 stick 0.5", "0.0 stick 0.5 up", "0.0 stick 0.5x 1", "0.0 stick 1 2 3"})
+	{
+		std::string error;
+		const auto events = Input::ParseInputSequence(bad, error);
+		CHECK(events.empty());
+		CHECK_FALSE(error.empty());
+	}
+}
+
+// A sequence's stick line drives pad 0's left stick on the sequence clock, and 'clear' centres it again
+// (a route leg that ends with 'clear' must not leave Crash running).
+TEST_CASE("play_input_sequence: stick moves pad 0's left stick and clear centres it")
+{
+	std::string error;
+	const auto events = Input::ParseInputSequence("0.0 stick 1 -2\n0.0 hold w", error);
+	REQUIRE(error.empty());
+	REQUIRE(events.size() == 2);
+	Input input;
+	input.PlayInputSequence(events);
+	input.Update();
+	REQUIRE(input.IsGamepadConnected());
+	const glm::vec2 stick = input.GetGamepadStick(GamepadStick::Left);
+	CHECK(stick.x > 0.6f);
+	CHECK(stick.y > 0.6f); // raw -2 clamps to -1: pushed fully up, positive y
+	CHECK(input.IsKeyDown(Key::W));
+
+	input.PlayInputSequence(Input::ParseInputSequence("0.0 clear", error));
+	input.Update();
+	CHECK(glm::length(input.GetGamepadStick(GamepadStick::Left)) == doctest::Approx(0.0f));
+	CHECK_FALSE(input.IsKeyDown(Key::W));
 }
