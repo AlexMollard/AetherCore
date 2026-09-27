@@ -57,6 +57,7 @@ namespace aether
 	// BillboardParticleInstance::blendMode bits.
 	inline constexpr std::uint32_t kBillboardAdditive = 1u << 0u;
 	inline constexpr std::uint32_t kBillboardDisplaySpace = 1u << 8u;
+	inline constexpr std::uint32_t kBillboardLit = 1u << 9u; // shade as a sun-lit ball (ParticleEmitterComponent::lit)
 
 	// Occluder2D::flags bits.
 	inline constexpr std::uint32_t kOccluder2DFlipX = 1u << 0u;
@@ -181,7 +182,7 @@ namespace aether
 		glm::vec4 skyVoidColor{0.0f};
 		glm::vec4 fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		glm::vec4 skyParams{0.0f, 2.5f, 0.0f, 0.0f};
-		glm::vec4 shadingParams{1.0f, 0.0f, 0.0f, 0.0f};
+		glm::vec4 shadingParams{1.0f, 0.0f, 0.0f, 1.0f};
 		// PS2 object lighting (kFlagObjectLit materials), from the scene environment.
 		glm::vec4 objectAmbient{1.0f, 1.0f, 1.0f, 1.0f};
 		glm::vec4 objectLight0Direction{0.0f, 1.0f, 0.0f, 0.0f};
@@ -191,6 +192,8 @@ namespace aether
 		// Contact blob shadows under object-lit actors, nearest the camera first (xyz = bounds
 		// centre, w = bounds radius). Only the first kMaxBlobShadows reach the GPU.
 		std::vector<glm::vec4> blobShadows;
+		// How many of blobShadows (at the front) are character actors': they get a contact core.
+		std::uint32_t blobCharacterCount = 0;
 		bool contactShadows = false;
 		// 0 splits the cascades evenly across the view distance, 1 logarithmically.
 		float shadowSplitLambda = 0.65f;

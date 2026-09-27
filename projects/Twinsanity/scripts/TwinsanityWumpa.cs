@@ -35,6 +35,7 @@ public sealed class TwinsanityWumpa
 		public float Speed;       // homing speed
 		public float FlyT;        // seconds in the HUD fly
 		public Vector3 FlyFrom;
+		public Vector3 Scale0;    // the model's scale when it left for the HUD (the squash is look only)
 	}
 
 	private enum State
@@ -56,6 +57,14 @@ public sealed class TwinsanityWumpa
 	private const float SpillSpread = 0.8f;
 	private const float SpillHeight = 0.35f;
 	private const float FlyDuration = 0.25f;
+
+	// Pickup look (logs/look/WumpaLook/README.md): squash-and-stretch during the HUD flight, then
+	// a shrink into the counter. Scale only - the flight path, its timing and the collect are untouched.
+	private const float SquashEnd = 0.4f;     // fraction of the flight the squash pulse takes
+	private const float SquashWide = 0.3f;    // peak x/z bulge
+	private const float SquashFlat = 0.3f;    // peak y flattening
+	private const float VanishScale = 0.25f;  // scale when it reaches the counter
+	private const float SparkleLift = 1.0f;   // the mesh sits 0.6-1.4 above the origin: its centre
 
 	private static readonly System.Random s_spill = new(0x5911);
 
@@ -136,6 +145,8 @@ public sealed class TwinsanityWumpa
 						f.St = State.ToHud;
 						f.FlyFrom = f.Base;
 						f.FlyT = 0.0f;
+						f.Scale0 = f.Model.Scale;
+						CrateFx.WumpaPickup(f.Base + new Vector3(0.0f, SparkleLift, 0.0f));
 						break;
 					}
 					f.Base += to * (stepLen / d);
@@ -166,8 +177,23 @@ public sealed class TwinsanityWumpa
 			else
 			{
 				f.Model.Position = f.Base;
+				if (f.St == State.ToHud)
+				{
+					f.Model.Scale = f.Scale0 * PickupSquash(f.FlyT / FlyDuration);
+				}
 			}
 		}
+	}
+
+	// Per-axis scale over the HUD flight (u = 0..1): a squash pulse (wide and flat, like a squeezed
+	// fruit), then an ease-in shrink so it is swallowed by the counter rather than popping out.
+	private static Vector3 PickupSquash(float u)
+	{
+		u = Math.Clamp(u, 0.0f, 1.0f);
+		float pulse = u < SquashEnd ? MathF.Sin(MathF.PI * u / SquashEnd) : 0.0f;
+		float shrinkT = u < SquashEnd ? 0.0f : (u - SquashEnd) / (1.0f - SquashEnd);
+		float shrink = 1.0f + (VanishScale - 1.0f) * shrinkT * shrinkT;
+		return new Vector3(1.0f + SquashWide * pulse, 1.0f - SquashFlat * pulse, 1.0f + SquashWide * pulse) * shrink;
 	}
 
 	// The counter sits in the HUD's top-left; a fixed point ahead of the camera towards it

@@ -42,6 +42,10 @@ namespace aether::assets
 		bool bakedLighting = false;
 		bool sky = false;
 		bool lightShaft = false;
+		bool gem = false;
+		bool sheen = false;
+		bool water = false;
+		bool character = false;
 		bool objectLit = false;
 		glm::vec2 uvScroll{0.0f, 0.0f};
 		std::int32_t baseColorTexture = -1;

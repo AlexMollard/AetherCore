@@ -46,6 +46,11 @@ public static class TwinsanityAku
 	private static Entity s_mask;
 	private static Entity s_trail;
 	private static Entity[] s_invulnerable = Array.Empty<Entity>();
+	// Look only (logs/look/CrashLook/README.md): Aku Aku's warm glow on the ground around him and a
+	// soft breathing halo behind the upgraded (two-mask) mask. Neither exists on the PS2.
+	private static Entity s_glow;
+	private static Entity s_halo;
+	private const float GlowLift = 0.35f;  // mask origin -> the middle of the face
 	private static int s_shown;          // mask count the visuals are showing
 	private static float s_invincible;   // seconds of invincibility left
 	private static float s_kick = -1.0f; // time since a two->one loss
@@ -91,7 +96,7 @@ public static class TwinsanityAku
 		{
 			// Level start: the mask Crash starts with is already at his side (rig beach_orig).
 			Create(feet + right * SideOffset + new Vector3(0.0f, UpOffset, 0.0f));
-			s_mask.SetActive(masks > 0);
+			ShowMask(masks > 0);
 			s_shown = masks;
 			s_yaw = crash.Facing;
 		}
@@ -100,7 +105,7 @@ public static class TwinsanityAku
 		if (TwinsanityCutscenes.Active != s_sceneHidden)
 		{
 			s_sceneHidden = TwinsanityCutscenes.Active;
-			s_mask.SetActive(!s_sceneHidden && masks > 0);
+			ShowMask(!s_sceneHidden && masks > 0);
 		}
 		if (s_sceneHidden)
 		{
@@ -121,7 +126,7 @@ public static class TwinsanityAku
 			{
 				// The first mask drops in from high above him.
 				s_fly = -1.0f;
-				s_mask.SetActive(true);
+				ShowMask(true);
 				s_mask.Position = feet + right * SideOffset + new Vector3(0.0f, DropHeight, 0.0f);
 				s_yaw = crash.Facing;
 			}
@@ -140,6 +145,7 @@ public static class TwinsanityAku
 		bool face = Invincible;
 		SetBob(!face);
 		SetEmitting(s_trail, masks >= 2 && !face);
+		SetEmitting(s_halo, masks >= 2 || face);
 		foreach (Entity e in s_invulnerable)
 		{
 			SetEmitting(e, face);
@@ -156,9 +162,9 @@ public static class TwinsanityAku
 			if (s_fly > FlyAwaySeconds)
 			{
 				s_fly = -1.0f;
-				s_mask.SetActive(false);
+				ShowMask(false);
 			}
-			s_trail.Position = s_mask.Position;
+			Follow();
 			return;
 		}
 		if (masks == 0)
@@ -200,7 +206,7 @@ public static class TwinsanityAku
 		float dy = ((crash.Facing - s_yaw + 540.0f) % 360.0f) - 180.0f;
 		s_yaw += dy * (1.0f - MathF.Exp(-10.0f * dt));
 		s_mask.EulerDegrees = new Vector3(0.0f, s_yaw + YawOffset, 0.0f);
-		s_trail.Position = s_mask.Position;
+		Follow();
 	}
 
 	private static void Create(Vector3 at)
@@ -215,6 +221,81 @@ public static class TwinsanityAku
 		s_bobOn = null;
 		s_trail = AkuTrail();
 		s_invulnerable = Invulnerable();
+		s_glow = AkuGlow();
+		s_halo = AkuHalo();
+		s_glow.SetActive(false);
+	}
+
+	private static void ShowMask(bool on)
+	{
+		s_mask.SetActive(on);
+		s_glow.SetActive(on);
+	}
+
+	private static void Follow()
+	{
+		s_trail.Position = s_mask.Position;
+		s_glow.Position = s_mask.Position + new Vector3(0.0f, GlowLift, 0.0f);
+		s_halo.Position = s_glow.Position;
+	}
+
+	// A warm point light in the mask: the glow he casts on the sand and on scenery beside Crash
+	// (object-lit actors take their light from the level's records, so Crash himself is not lit
+	// by it). Tiled, no shadow - the same cost as a gem's ground glow.
+	private static Entity AkuGlow()
+	{
+		Entity e = World.Create();
+		e.Name = "AkuGlow";
+		e.MarkTransient();
+		e.AddTransform();
+		ComponentAccess c = e.Component("Point Light");
+		if (c.Add())
+		{
+			c.SetVector3("color", new Vector3(1.0f, 0.62f, 0.28f));
+			c.SetFloat("intensity", 3.0f);
+			c.SetFloat("radius", 2.4f);
+			c.SetBool("shadow", false);
+		}
+		return e;
+	}
+
+	// The upgraded mask's halo: the disc's soft blob (page 1, the gems' halo sprite) in a warm
+	// gold, one every 0.67 s living 2 s and swelling 1.1 -> 1.45 m, so it breathes behind the
+	// FX_AKUTRAIL sparkles (and the INVULNERABLE aura on his face).
+	private static Entity AkuHalo()
+	{
+		Entity e = World.Create();
+		e.Name = "AkuHalo";
+		e.MarkTransient();
+		e.AddTransform();
+		ComponentAccess c = e.Component("Particle Emitter");
+		if (!c.Add())
+		{
+			return e;
+		}
+		c.SetString("texture", "project://assets/particles/particle_page_1.png");
+		c.SetVector4("uv_rect", new Vector4(0.28125f, 0.78125f, 0.4609375f, 0.9609375f));
+		c.SetInt("space", 1);
+		c.SetInt("blend_mode", 1);
+		c.SetInt("emit_shape", 0);
+		c.SetBool("display_space", true);
+		c.SetBool("emit_on_start", false);
+		c.SetBool("auto_destroy", false);
+		c.SetBool("emitting", false);
+		c.SetInt("burst_count", 0);
+		c.SetInt("max_particles", 4);
+		c.SetFloat("rate", 1.5f);
+		c.SetFloat("emit_duration", 0.0f);
+		c.SetFloat("lifetime_min", 2.0f);
+		c.SetFloat("lifetime_max", 2.0f);
+		c.SetVector3("velocity", Vector3.Zero);
+		c.SetVector3("velocity_jitter", Vector3.Zero);
+		c.SetVector3("spawn_jitter", Vector3.Zero);
+		c.SetVector3("gravity_3d", Vector3.Zero);
+		Particles.SetKeys(e, ParticleKeyChannel.Color, new[] { CrateFx.CK(0f, 128f, 84f, 36f), CrateFx.CK(1f, 128f, 64f, 20f) });
+		Keys(e, ParticleKeyChannel.Alpha, new[] { 0f, 0f, 0.45f, 0.35f, 1f, 0f }, 1.0f);
+		Keys(e, ParticleKeyChannel.Size, new[] { 0f, 1.1f, 1f, 1.45f }, 1.0f);
+		return e;
 	}
 
 	private static bool? s_bobOn;

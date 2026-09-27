@@ -22,6 +22,66 @@ tags = [ 'tw_wumpa' ]
     [[entities.scripts]]
     type = 'TwAgent'
 
+        [entities.scripts.properties.Area]
+        t = 'string'
+        v = ''
+
+        [entities.scripts.properties.Flags]
+        t = 'int'
+        v = 0
+
+        [entities.scripts.properties.Floats]
+        t = 'string'
+        v = ''
+
+        [entities.scripts.properties.Id]
+        t = 'int'
+        v = -1
+
+        [entities.scripts.properties.Layer]
+        t = 'int'
+        v = -1
+
+        [entities.scripts.properties.Link0]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link1]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link2]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link3]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link4]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link5]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link6]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link7]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link8]
+        t = 'entity'
+        v = -1
+
+        [entities.scripts.properties.Link9]
+        t = 'entity'
+        v = -1
+
         [entities.scripts.properties.Model]
         t = 'string'
         v = 'project://assets/models/objects/REDWUMPA/REDWUMPA.gltf'
@@ -33,6 +93,14 @@ tags = [ 'tw_wumpa' ]
         [entities.scripts.properties.ObjectName]
         t = 'string'
         v = 'REDWUMPA'
+
+        [entities.scripts.properties.Params]
+        t = 'string'
+        v = ''
+
+        [entities.scripts.properties.Subtype]
+        t = 'int'
+        v = 0
 
 [[entities]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -51,12 +119,13 @@ scale = [ 1.0, 1.0, 1.0 ]
     alpha_mask = false
     base_color = [ 1.0, 1.0, 1.0, 1.0 ]
     double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
+    emissive = [ 0.06, 0.025, 0.0 ]
     metallic = 0.0
     object_lit = true
     occlusion = 1.0
     receive_shadows = true
-    roughness = 1.0
+    roughness = 0.3
+    sheen = true
     vertex_color = true
 
     [entities.mesh]

@@ -186,6 +186,10 @@ namespace aether
 		out.objectLit = (g.flags & GpuMaterial::kObjectLit) != 0;
 		out.sky = (g.flags & GpuMaterial::kSky) != 0;
 		out.lightShaft = (g.flags & GpuMaterial::kLightShaft) != 0;
+		out.gem = (g.flags & GpuMaterial::kGem) != 0;
+		out.sheen = (g.flags & GpuMaterial::kSheen) != 0;
+		out.water = (g.flags & GpuMaterial::kWater) != 0;
+		out.character = (g.flags & GpuMaterial::kCharacter) != 0;
 		// Without this a captured material (scene save, prefab bake) lost its scroll
 		// velocity and the sea/waterfalls/sky dome froze - the shader animates purely
 		// from this value and the frame clock.

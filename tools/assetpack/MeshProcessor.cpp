@@ -662,6 +662,25 @@ namespace aether::assetpipeline
 					{
 						hdr.bakedLighting |= kMaterialDiskLightShaft;
 					}
+					// {"gem":true} - Twinsanity gem crystal shading; {"sheen":true} - collectible sheen.
+					if (std::strstr(extras, "\"gem\"") != nullptr)
+					{
+						hdr.bakedLighting |= kMaterialDiskGem;
+					}
+					if (std::strstr(extras, "\"sheen\"") != nullptr)
+					{
+						hdr.bakedLighting |= kMaterialDiskSheen;
+					}
+					// {"water":true} - the water look (sea, shore, pools, waterfalls).
+					if (std::strstr(extras, "\"water\"") != nullptr)
+					{
+						hdr.bakedLighting |= kMaterialDiskWater;
+					}
+					// {"character":true} - the character look (Crash, Aku Aku).
+					if (std::strstr(extras, "\"character\"") != nullptr)
+					{
+						hdr.bakedLighting |= kMaterialDiskCharacter;
+					}
 					// {"object_lit":true} - PS2 object lighting: the level's light records
 					// light it (ambient + two directional), like the GS lit objects.
 					if (std::strstr(extras, "\"object_lit\"") != nullptr)

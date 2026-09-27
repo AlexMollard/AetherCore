@@ -69,13 +69,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     alpha_cutoff = 0.5
     alpha_mask = false
     base_color = [ 1.0, 1.0, 1.0, 1.0 ]
-    double_sided = true
+    double_sided = false
     emissive = [ 0.0, 0.0, 0.0 ]
+    gem = true
     metallic = 0.0
     object_lit = true
     occlusion = 1.0
     receive_shadows = true
-    roughness = 1.0
+    roughness = 0.08
     vertex_color = true
 
     [entities.mesh]
@@ -97,7 +98,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     alpha_blend = true
     alpha_cutoff = 0.5
     alpha_mask = false
-    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    base_color = [ 1.0, 1.0, 1.0, 0.15 ]
     double_sided = true
     emissive = [ 0.0, 0.0, 0.0 ]
     metallic = 0.0
@@ -126,7 +127,7 @@ scale = [ 1.0, 1.0, 1.0 ]
     alpha_blend = true
     alpha_cutoff = 0.5
     alpha_mask = false
-    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    base_color = [ 1.0, 1.0, 1.0, 0.0 ]
     double_sided = true
     emissive = [ 0.0, 0.0, 0.0 ]
     metallic = 0.0
@@ -140,3 +141,183 @@ scale = [ 1.0, 1.0, 1.0 ]
     index = 2
     kind = 'model'
     path = 'project://assets/models/objects/GEM_PURPLE/GEM_PURPLE.gltf'
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+guid = 5
+name = 'GemHalo'
+parent = 0
+position = [ 0.0, 0.3, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    auto_destroy = false
+    blend_mode = 'additive'
+    bounce = 0.4
+    burst_count = 0
+    collide_particles = false
+    collide_world = false
+    collision_damping = 0.2
+    collision_radius = 0.0
+    direction_deg = 90.0
+    display_space = true
+    emit_duration = 0.0
+    emit_on_start = false
+    emit_shape = 'box'
+    emitting = true
+    end_color = [ 1.0, 1.0, 1.0, 0.0 ]
+    end_size = 0.0
+    gravity = [ 0.0, -6.0 ]
+    gravity_3d = [ 0.0, 0.0, 0.0 ]
+    lifetime_max = 2.0
+    lifetime_min = 2.0
+    max_particles = 4
+    order_in_layer = 0
+    radial_speed = 0.0
+    rate = 1.5
+    rotation_jitter = 0.0
+    rotation_keys = []
+    sorting_layer = 10
+    space = 'billboard_3d'
+    spawn_jitter = [ 0.0, 0.0, 0.0 ]
+    speed_max = 0.0
+    speed_min = 0.0
+    spread_deg = 30.0
+    start_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    start_size = 0.3
+    texture = 'project://assets/particles/particle_page_1.png'
+    uv_rect = [ 0.28125, 0.78125, 0.4609375, 0.9609375 ]
+    velocity = [ 0.0, 0.0, 0.0 ]
+    velocity_jitter = [ 0.0, 0.0, 0.0 ]
+
+        [[entities.particles.alpha_keys]]
+        t = 0.0
+        value = 0.0
+
+        [[entities.particles.alpha_keys]]
+        t = 0.45
+        value = 0.6
+
+        [[entities.particles.alpha_keys]]
+        t = 1.0
+        value = 0.0
+
+        [[entities.particles.color_keys]]
+        color = [ 0.8, 0.4, 1.0 ]
+        t = 0.0
+
+        [[entities.particles.color_keys]]
+        color = [ 0.8, 0.4, 1.0 ]
+        t = 1.0
+
+        [[entities.particles.size_keys]]
+        t = 0.0
+        value = 1.6
+
+        [[entities.particles.size_keys]]
+        t = 1.0
+        value = 2.0
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+guid = 6
+name = 'GemTwinkle'
+parent = 0
+position = [ 0.0, 0.3, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    auto_destroy = false
+    blend_mode = 'additive'
+    bounce = 0.4
+    burst_count = 0
+    collide_particles = false
+    collide_world = false
+    collision_damping = 0.2
+    collision_radius = 0.0
+    direction_deg = 90.0
+    display_space = true
+    emit_duration = 0.0
+    emit_on_start = false
+    emit_shape = 'box'
+    emitting = true
+    end_color = [ 1.0, 1.0, 1.0, 0.0 ]
+    end_size = 0.0
+    gravity = [ 0.0, -6.0 ]
+    gravity_3d = [ 0.0, 0.0, 0.0 ]
+    lifetime_max = 0.55
+    lifetime_min = 0.35
+    max_particles = 6
+    order_in_layer = 0
+    radial_speed = 0.0
+    rate = 3.5
+    rotation_jitter = 45.0
+    sorting_layer = 10
+    space = 'billboard_3d'
+    spawn_jitter = [ 0.55, 0.5, 0.55 ]
+    speed_max = 0.0
+    speed_min = 0.0
+    spread_deg = 30.0
+    start_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    start_size = 0.3
+    texture = 'project://assets/particles/particle_page_0.png'
+    uv_rect = [ 0.2578125, 0.7578125, 0.4765625, 0.9765625 ]
+    velocity = [ 0.0, 0.15, 0.0 ]
+    velocity_jitter = [ 0.0, 0.05, 0.0 ]
+
+        [[entities.particles.alpha_keys]]
+        t = 0.0
+        value = 0.0
+
+        [[entities.particles.alpha_keys]]
+        t = 0.25
+        value = 1.0
+
+        [[entities.particles.alpha_keys]]
+        t = 1.0
+        value = 0.0
+
+        [[entities.particles.color_keys]]
+        color = [ 1.0, 1.0, 1.0 ]
+        t = 0.0
+
+        [[entities.particles.color_keys]]
+        color = [ 0.91, 0.73, 1.0 ]
+        t = 1.0
+
+        [[entities.particles.rotation_keys]]
+        t = 0.0
+        value = 0.0
+
+        [[entities.particles.rotation_keys]]
+        t = 1.0
+        value = 90.0
+
+        [[entities.particles.size_keys]]
+        t = 0.0
+        value = 0.05
+
+        [[entities.particles.size_keys]]
+        t = 0.3
+        value = 0.42
+
+        [[entities.particles.size_keys]]
+        t = 1.0
+        value = 0.0
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+guid = 7
+name = 'GemLight'
+parent = 0
+position = [ 0.0, 0.2, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.8, 0.4, 1.0 ]
+    flicker = 0.0
+    flickerSpeed = 8.0
+    intensity = 6.0
+    radius = 2.5
+    shadow = false
+    sourceRadius = 0.1

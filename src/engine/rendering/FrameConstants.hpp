@@ -79,8 +79,8 @@ namespace aether
 		// x = specular filter strength: how much of the roughness widening that hides
 		// specular aliasing is applied. 1 is the full filter, 0 disables it and restores the
 		// unfiltered highlight. y = cloud coverage (0 = clear sky), z = cloud drift speed.
-		// w spare.
-		glm::vec4 shadingParams{1.0f, 0.0f, 0.0f, 0.0f};
+		// w = graphics.foliageSkyLook strength (Foliage.slangh; 1 = full, 0 = the PS2 look).
+		glm::vec4 shadingParams{1.0f, 0.0f, 0.0f, 1.0f};
 
 		// PS2 object lighting (kFlagObjectLit materials): the level's own light records
 		// (SM2 SceneryData) as the GS applied them to everything that was not prelit

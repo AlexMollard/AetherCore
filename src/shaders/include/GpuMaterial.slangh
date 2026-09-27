@@ -12,8 +12,13 @@ static const uint kFlagNoReceiveShadows = 16u; // set == material opts out of sh
 static const uint kFlagFoliage = 32u; // PS2 foliage/cutout card: offset casters, no contact shadows
 static const uint kFlagBakedLighting = 64u; // PS2 prelit: vertex colour is the lighting
 static const uint kFlagObjectLit = 128u;    // PS2 object lighting from the level's light records
+static const uint kFlagAdditiveBlend = 256u; // additive blend (pipeline state; GpuMaterial::kAdditiveBlend)
 static const uint kFlagSky = 512u;          // skydome: drawn at infinite depth (clip z = w)
 static const uint kFlagLightShaft = 1024u; // volumetric god-ray card: soft-faded, shimmers in place
+static const uint kFlagGem = 2048u;       // Twinsanity gem: faceted crystal shading (GpuMaterial::kGem)
+static const uint kFlagSheen = 4096u;     // collectible sheen: object-lit + skin-tinted rim/highlight/warmth (gltf_mesh sheen block)
+static const uint kFlagWater = 8192u;     // water look: depth tint, SSR, ripple, glints (Water.slangh)
+static const uint kFlagCharacter = 16384u; // character look: wrapped key, rim, eye catchlight (gltf_mesh character block)
 
 struct GpuMaterial
 {

@@ -158,7 +158,7 @@ namespace aether
 		}
 	}
 
-	void WorldRenderer::GatherBlobShadows(const World& world, const MaterialRegistry& materials, const glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out)
+	std::size_t WorldRenderer::GatherBlobShadows(const World& world, const MaterialRegistry& materials, const glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out)
 	{
 		AE_PROFILE_ZONE();
 		out.clear();
@@ -169,6 +169,7 @@ namespace aether
 		{
 			glm::vec3 min{std::numeric_limits<float>::max()};
 			glm::vec3 max{std::numeric_limits<float>::lowest()};
+			bool character = false;
 		};
 		std::unordered_map<std::uint32_t, Bounds> actors;
 		auto view = world.GetRegistry().view<const MeshComponent, const MaterialComponent, const TransformComponent>();
@@ -199,6 +200,7 @@ namespace aether
 			Bounds& b = actors[key];
 			b.min = glm::min(b.min, glm::vec3(sphere) - glm::vec3(sphere.w));
 			b.max = glm::max(b.max, glm::vec3(sphere) + glm::vec3(sphere.w));
+			b.character = b.character || (flags & GpuMaterial::kCharacter) != 0u;
 		}
 
 		// The blob covers the inner half of the actor's footprint and fades out past it, which
@@ -214,21 +216,34 @@ namespace aether
 		// A wumpa's bounds sphere (0.74 m, its model being 0.85 m across) gives 0.37 here, a 1 m
 		// crate 0.43.
 		constexpr float kPickupBlobRadius = 0.4f;
-		for (const auto& [key, b]: actors)
+		// Character actors (a kCharacter material: Crash, Aku Aku) go first, so the shader can add
+		// their contact core (CrashLook) to the first `characters` blobs, and they survive the cap.
+		std::size_t characters = 0;
+		for (const bool characterPass: {true, false})
 		{
-			const float radius = kFootprintFraction * 0.5f * std::max(b.max.x - b.min.x, b.max.z - b.min.z);
-			if (radius < kMinBlobRadius)
+			for (const auto& [key, b]: actors)
 			{
-				continue;
+				if (b.character != characterPass)
+				{
+					continue;
+				}
+				const float radius = kFootprintFraction * 0.5f * std::max(b.max.x - b.min.x, b.max.z - b.min.z);
+				if (radius < kMinBlobRadius)
+				{
+					continue;
+				}
+				out.emplace_back(0.5f * (b.min.x + b.max.x), b.min.y, 0.5f * (b.min.z + b.max.z), radius < kPickupBlobRadius ? -radius : radius);
+				characters += characterPass ? 1u : 0u;
 			}
-			out.emplace_back(0.5f * (b.min.x + b.max.x), b.min.y, 0.5f * (b.min.z + b.max.z), radius < kPickupBlobRadius ? -radius : radius);
 		}
+		characters = std::min<std::size_t>(characters, kMaxBlobShadows);
 		const auto distSq = [&](const glm::vec4& blob) { return glm::dot(glm::vec3(blob) - eyeWorldPos, glm::vec3(blob) - eyeWorldPos); };
 		if (out.size() > kMaxBlobShadows)
 		{
-			std::nth_element(out.begin(), out.begin() + kMaxBlobShadows, out.end(), [&](const glm::vec4& a, const glm::vec4& b) { return distSq(a) < distSq(b); });
+			std::nth_element(out.begin() + characters, out.begin() + kMaxBlobShadows, out.end(), [&](const glm::vec4& a, const glm::vec4& b) { return distSq(a) < distSq(b); });
 			out.resize(kMaxBlobShadows);
 		}
+		return characters;
 	}
 
 } // namespace aether

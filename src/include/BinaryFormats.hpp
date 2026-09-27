@@ -124,6 +124,11 @@ inline constexpr uint32_t MATL_VERSION = 2;
 inline constexpr uint8_t kMaterialDiskBaked = 1;
 inline constexpr uint8_t kMaterialDiskSky = 2;
 inline constexpr uint8_t kMaterialDiskLightShaft = 4;
+// The byte has eight bits, so the lead's "disk flag bit 8/9" land as the byte's next free bits 3/4.
+inline constexpr uint8_t kMaterialDiskGem = 8;    // Twinsanity gem crystal shading (GpuMaterial::kGem)
+inline constexpr uint8_t kMaterialDiskSheen = 16; // collectible sheen (GpuMaterial::kSheen)
+inline constexpr uint8_t kMaterialDiskWater = 32; // water look: depth tint, reflections, ripple (GpuMaterial::kWater)
+inline constexpr uint8_t kMaterialDiskCharacter = 64; // character look: wrap, rim, eye catchlight (GpuMaterial::kCharacter)
 
 enum class TextureTypeDisk : uint8_t
 {
@@ -161,9 +166,12 @@ struct MaterialHeaderDisk
 	// the scene's shade colour. Carved from the same padding - old files read 0, i.e. lit as PBR.
 	// Bit 0 is that flag (kMaterialDiskBaked). Bit 1 (kMaterialDiskSky, tw-extract's "sky") is a
 	// skydome surface: drawn first, behind everything, at infinite depth. Bit 2
-	// (kMaterialDiskLightShaft, tw-extract's "light_shaft") is a soft volumetric god-ray card.
-	// They share this byte because the header has no padding left; files written before them
-	// only ever held 0/1.
+	// (kMaterialDiskLightShaft, tw-extract's "light_shaft") is a soft volumetric god-ray card. Bit 3
+	// (kMaterialDiskGem, "gem") is a Twinsanity gem's crystal shading and bit 4 (kMaterialDiskSheen,
+	// "sheen") a collectible's rim-and-highlight sheen. Bit 5 (kMaterialDiskWater, "water") is the
+	// water look and bit 6 (kMaterialDiskCharacter, "character") the character look. They share this
+	// byte because the header has no padding left; files written
+	// before them only ever held 0/1.
 	uint8_t bakedLighting = 0;
 	// PS2 object lighting (tw-extract marks object models "object_lit"): lit by the level's
 	// light records instead of the sun. Carved from the same padding - old files read 0.

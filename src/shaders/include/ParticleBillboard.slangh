@@ -10,12 +10,13 @@ struct GpuBillboardParticle
     [[vk::offset(32)]] float4 uvRect;            // (u0, v0, u1, v1), v down
     [[vk::offset(48)]] float rotationDegrees;    // clockwise on screen
     [[vk::offset(52)]] uint textureIndex;
-    [[vk::offset(56)]] uint blendMode;           // bit 0 additive (pipeline picks the state), bit 8 display space
+    [[vk::offset(56)]] uint blendMode;           // bit 0 additive (pipeline picks the state), bit 8 display space, bit 9 sun-lit
     [[vk::offset(60)]] uint entityId;
 };
 
-// GpuBillboardParticle::blendMode bits (mirror kBillboardAdditive / kBillboardDisplaySpace).
+// GpuBillboardParticle::blendMode bits (mirror kBillboardAdditive / kBillboardDisplaySpace / kBillboardLit).
 static const uint kBillboardAdditive = 1u;
 static const uint kBillboardDisplaySpace = 1u << 8u;
+static const uint kBillboardLit = 1u << 9u;
 
 #endif

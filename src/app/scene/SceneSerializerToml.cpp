@@ -1040,6 +1040,10 @@ namespace aether::app::scene
 				if (wants("foliage") && a.foliage) { m.insert("foliage", true); }
 				if (wants("sky") && a.sky) { m.insert("sky", true); }
 				if (wants("light_shaft") && a.lightShaft) { m.insert("light_shaft", true); }
+				if (wants("gem") && a.gem) { m.insert("gem", true); }
+				if (wants("sheen") && a.sheen) { m.insert("sheen", true); }
+				if (wants("water") && a.water) { m.insert("water", true); }
+				if (wants("character") && a.character) { m.insert("character", true); }
 				if (wants("additive_blend") && a.additiveBlend) { m.insert("additive_blend", true); }
 				// Written only when it scrolls, so every static material's captured table stays
 				// byte-identical (the same rule as the .material asset format's uvscroll key).
@@ -1591,6 +1595,14 @@ namespace aether::app::scene
 				mat.asset.sky = mv["sky"].value_or(false);
 				took("light_shaft");
 				mat.asset.lightShaft = mv["light_shaft"].value_or(false);
+				took("gem");
+				mat.asset.gem = mv["gem"].value_or(false);
+				took("sheen");
+				mat.asset.sheen = mv["sheen"].value_or(false);
+				took("water");
+				mat.asset.water = mv["water"].value_or(false);
+				took("character");
+				mat.asset.character = mv["character"].value_or(false);
 				took("additive_blend");
 				mat.asset.additiveBlend = mv["additive_blend"].value_or(false);
 				took("uv_scroll");

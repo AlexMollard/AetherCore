@@ -634,6 +634,10 @@ namespace aether::assets
 			outMat.bakedLighting = (hdr.bakedLighting & kMaterialDiskBaked) != 0;
 			outMat.sky = (hdr.bakedLighting & kMaterialDiskSky) != 0;
 			outMat.lightShaft = (hdr.bakedLighting & kMaterialDiskLightShaft) != 0;
+			outMat.gem = (hdr.bakedLighting & kMaterialDiskGem) != 0;
+			outMat.sheen = (hdr.bakedLighting & kMaterialDiskSheen) != 0;
+			outMat.water = (hdr.bakedLighting & kMaterialDiskWater) != 0;
+			outMat.character = (hdr.bakedLighting & kMaterialDiskCharacter) != 0;
 			outMat.objectLit = hdr.objectLit != 0;
 			outMat.uvScroll = glm::vec2(hdr.uvScroll[0], hdr.uvScroll[1]);
 

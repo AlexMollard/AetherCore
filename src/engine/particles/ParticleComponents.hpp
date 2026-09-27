@@ -122,6 +122,9 @@ namespace aether
 		// additive halos stay visible over bright ground. Opt-in; bloom, exposure and DoF no
 		// longer apply to these particles. Off = linear HDR composite before post.
 		bool displaySpace = false;
+		// Shade the quad as a ball lit by the scene's sun (wrap-lit, sky-tinted shadow side), so
+		// smoke reads as a volume. Opt-in; the texel/colour keys stay the albedo.
+		bool lit = false;
 		// Over-lifetime keys. Empty = fall back to start/end colour and size (and no spin).
 		// size is the quad edge in world units; rotation is in degrees.
 		std::vector<ParticleColorKey> colorKeys;

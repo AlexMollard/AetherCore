@@ -84,6 +84,8 @@ namespace TwExtract
 			Directory.CreateDirectory(m_dir);
 		}
 
+		public string Dir => m_dir;
+
 		// File name (no directory) of the PNG for this texture, or null when its pixel format has no decoder.
 		public string Name(Texture t)
 		{
@@ -250,6 +252,38 @@ namespace TwExtract
 		readonly string m_texturesRel;
 		// Object models (Program.Objects): lit by the level's light records, not prelit.
 		readonly bool m_isObject;
+		// Wumpa fruit (Program.Objects sets it for REDWUMPA*): the look upgrade's glossy skin. The
+		// material gets {"sheen":true} (gltf_mesh.slang's kFlagSheen), a highlight size and an idle
+		// glow - logs/look/WumpaLook/README.md.
+		public bool Sheen;
+		public const float SheenRoughness = 0.35f;
+		public static readonly float[] SheenGlow = { 0.06f, 0.025f, 0.0f };
+		// The water look (gltf_mesh.slang's kFlagWater, logs/look/WaterLook/README.md): scenery
+		// materials drawing these disc textures (content-hashed names) get {"water":true}. 2b1f..: the
+		// shore/sea sheet with its foam band (beach "lambert168", Hub A/B/C/D, pier); f5cc..: the
+		// waterfalls; c294.., 6373.., fa05.., f9cb..: the open-ocean layers. The cave ground fog
+		// (b86c..) scrolls like water but is not.
+		static readonly HashSet<string> WaterTextures = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+		{
+			"2b1f0286252911e6.png", "f5ccfd069d94f219.png", "c294a798ae25b8e6.png",
+			"6373ca7932176772.png", "fa0587f1e693bd73.png", "f9cb49f2a4f9b7af.png",
+		};
+		// Crate objects (Program.Objects, CrateLook.IsCrate): surface maps derived from the albedo -
+		// relief, cavity, roughness, metal, edge wear; CrateGlow (nitro, TNT) adds the emissive mask.
+		public bool Crate, CrateGlow;
+		// Characters (Program.Objects: Crash's act_CRASH* models and Aku Aku's AKUMASK): the look
+		// upgrade's wrap, rim, texture relief and eye catchlight - {"character":true}, gltf_mesh.slang's
+		// kFlagCharacter, logs/look/CrashLook/README.md. The material roughness picks the response:
+		// the eye texture (content-hashed disc name) is glossy, which is what turns its catchlight on.
+		// CharacterGlow (Aku Aku) adds a warm emissive, wood and feathers apart. Blended parts (the
+		// spin swirl) stay as they were.
+		public bool Character, CharacterGlow;
+		public const float CharacterRoughness = 0.7f;
+		public const float CharacterEyeRoughness = 0.12f;
+		public const float CharacterWoodRoughness = 0.5f;
+		static readonly HashSet<string> CharacterEyeTextures = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "97d77ce418b77dea.png" };
+		public static readonly float[] AkuWoodGlow = { 0.02f, 0.009f, 0.0015f };
+		public static readonly float[] AkuFeatherGlow = { 0.012f, 0.0055f, 0.0f };
 
 		public Export(Gfx gfx, TextureStore textures, string texturesRelativeToGltf, bool isObject = false)
 		{
@@ -335,7 +369,13 @@ namespace TwExtract
 		// Named by content, one glTF material per name. The bake writes materials/<name>.material beside
 		// the model, so equal names must mean equal content.
 		// Additive only joins the key when set, so every other material keeps its name.
-		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{m_isObject}|{scrollU:R}|{scrollV:R}" + (additive ? "|add" : "") + (lightShaft ? "|shaft" : "")));
+		bool crate = Crate && texture != null && !blend;
+		// Water shades its own coverage (depth tint darkens the seabed), which an additive blend
+		// cannot do, so a water sheet blends as a mix instead.
+		bool water = !m_isObject && texture != null && WaterTextures.Contains(texture);
+		additive &= !water;
+		bool character = Character && !blend;
+		string name = "m_" + Hash.Of(Encoding.UTF8.GetBytes($"{texture}|{blend}|{mask}|{cutoff:R}|{vertexLit}|{m_isObject}|{scrollU:R}|{scrollV:R}" + (additive ? "|add" : "") + (lightShaft ? "|shaft" : "") + (Sheen ? "|sheen" : "") + (crate ? "|crate" : "") + (crate && CrateGlow ? "|glow" : "") + (water ? "|water" : "") + (character ? "|char" : "") + (character && CharacterGlow ? "|akuglow" : "")));
 		if (m_byName.TryGetValue(name, out index))
 		{
 			return m_materialIndex[(materialId, vertexLit, layer)] = index;
@@ -355,11 +395,27 @@ namespace TwExtract
 			{
 				["baseColorFactor"] = new[] { gain, gain, gain, 1f },
 				["metallicFactor"] = 0f,
-				["roughnessFactor"] = 1f,
+				["roughnessFactor"] = Sheen ? SheenRoughness
+					: !character ? 1f
+					: texture != null && CharacterEyeTextures.Contains(texture) ? CharacterEyeRoughness
+					: CharacterGlow && !mask ? CharacterWoodRoughness
+					: CharacterRoughness,
 			},
 			["doubleSided"] = true,
 		};
-		if (texture != null)
+		if (Sheen)
+		{
+			gltfMat["emissiveFactor"] = SheenGlow;
+		}
+		else if (character && CharacterGlow)
+		{
+			gltfMat["emissiveFactor"] = mask ? AkuFeatherGlow : AkuWoodGlow;
+		}
+		if (crate)
+		{
+			CrateLook.Apply(gltfMat, CrateLook.Make(m_textures.Dir, texture, CrateGlow), m_texturesRel, Gltf.TextureFor, CrateGlow);
+		}
+		else if (texture != null)
 		{
 			((Dictionary<string, object>)gltfMat["pbrMetallicRoughness"])["baseColorTexture"] =
 			        new Dictionary<string, object> { ["index"] = Gltf.TextureFor(m_texturesRel + "/" + texture) };
@@ -408,6 +464,18 @@ namespace TwExtract
 			if (vertexLit || m_isObject)
 			{
 				extras[m_isObject ? "object_lit" : "baked_lighting"] = true;
+			}
+			if (Sheen)
+			{
+				extras["sheen"] = true;
+			}
+			if (water)
+			{
+				extras["water"] = true;
+			}
+			if (character)
+			{
+				extras["character"] = true;
 			}
 			if (extras.Count > 0)
 			{

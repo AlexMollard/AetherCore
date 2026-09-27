@@ -85,6 +85,11 @@ namespace aether::editor
 			out["alphaMask"] = a.alphaMask;
 			out["alphaCutoff"] = a.alphaCutoff;
 			out["receiveShadows"] = a.receiveShadows;
+			out["gem"] = a.gem;
+			out["sheen"] = a.sheen;
+			out["water"] = a.water;
+			out["additiveBlend"] = a.additiveBlend;
+			out["character"] = a.character;
 			return true;
 		}
 
@@ -159,6 +164,31 @@ namespace aether::editor
 				a.receiveShadows = v["receiveShadows"].get<bool>();
 				applied.emplace_back("receiveShadows");
 			}
+			if (v.contains("gem"))
+			{
+				a.gem = v["gem"].get<bool>();
+				applied.emplace_back("gem");
+			}
+			if (v.contains("sheen"))
+			{
+				a.sheen = v["sheen"].get<bool>();
+				applied.emplace_back("sheen");
+			}
+			if (v.contains("water"))
+			{
+				a.water = v["water"].get<bool>();
+				applied.emplace_back("water");
+			}
+			if (v.contains("additiveBlend"))
+			{
+				a.additiveBlend = v["additiveBlend"].get<bool>();
+				applied.emplace_back("additiveBlend");
+			}
+			if (v.contains("character"))
+			{
+				a.character = v["character"].get<bool>();
+				applied.emplace_back("character");
+			}
 
 			if (!applied.empty())
 			{
@@ -170,7 +200,7 @@ namespace aether::editor
 		const std::vector<ComponentFieldSet>& BuildSets()
 		{
 			static const std::vector<ComponentFieldSet> sets = {
-			        {"Material", "baseColor:vec4, metallic:float, roughness:float, occlusion:float, emissive:vec3, doubleSided:bool, alphaBlend:bool, alphaMask:bool, alphaCutoff:float, receiveShadows:bool", ReadMaterial, WriteMaterial},
+			        {"Material", "baseColor:vec4, metallic:float, roughness:float, occlusion:float, emissive:vec3, doubleSided:bool, alphaBlend:bool, alphaMask:bool, alphaCutoff:float, receiveShadows:bool, gem:bool, sheen:bool, water:bool, additiveBlend:bool, character:bool", ReadMaterial, WriteMaterial},
 			};
 			return sets;
 		}

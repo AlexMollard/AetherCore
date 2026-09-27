@@ -267,7 +267,7 @@ namespace aether
 		fc.objectLight1Direction = packet.objectLight1Direction;
 		fc.objectLight1Color = packet.objectLight1Color;
 		const auto blobCount = static_cast<std::uint32_t>(std::min<std::size_t>(packet.blobShadows.size(), kMaxBlobShadows));
-		fc.blobShadowInfo = glm::uvec4(blobCount, 0u, 0u, 0u);
+		fc.blobShadowInfo = glm::uvec4(blobCount, std::min(packet.blobCharacterCount, blobCount), 0u, 0u);
 		std::copy_n(packet.blobShadows.begin(), blobCount, fc.blobShadows);
 
 		// A first frame has nothing behind it, and a camera that jumped has nothing

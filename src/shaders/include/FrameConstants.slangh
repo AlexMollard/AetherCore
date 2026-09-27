@@ -38,7 +38,7 @@ struct FrameConstantsData
     [[vk::offset(832)]] float4  skyParams;                 // x=physical sky on, y=turbidity, z=volumetric strength (0=off), w=Mie g
     [[vk::offset(816)]] float4  fogParams;                  // x=density at y=0, y=height falloff, z=sun forward scatter, w=max opacity
     [[vk::offset(848)]] float4x4 prevViewProj;              // last frame's viewProj, for reprojecting a pixel to find its screen motion
-    [[vk::offset(912)]] float4  shadingParams;             // x=specular filter strength (1=full, 0=off), y=cloud coverage, z=cloud drift speed
+    [[vk::offset(912)]] float4  shadingParams;             // x=specular filter strength (1=full, 0=off), y=cloud coverage, z=cloud drift speed, w=foliageSkyLook strength
     // PS2 object lighting (kFlagObjectLit materials): the level's own light records.
     // Directions point TOWARDS their light; colours already carry the game's k scale.
     [[vk::offset(928)]] float4  objectAmbient;
@@ -46,7 +46,8 @@ struct FrameConstantsData
     [[vk::offset(960)]] float4  objectLight0Color;
     [[vk::offset(976)]] float4  objectLight1Direction;
     [[vk::offset(992)]] float4  objectLight1Color;
-    // Contact blob shadows under object-lit actors: x = count; xyz = bounds centre, w = radius.
+    // Contact blob shadows under object-lit actors: x = count, y = how many of them (first) are
+    // character actors'; xyz = bounds centre, w = radius.
     [[vk::offset(1008)]] uint4  blobShadowInfo;
     [[vk::offset(1024)]] float4 blobShadows[64];
 };

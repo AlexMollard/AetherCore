@@ -1464,7 +1464,6 @@ position = [ -6.399933, 0.0003541562, 256.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
-    additive_blend = true
     albedo = 'project://assets/textures/f9cb49f2a4f9b7af.png'
     alpha_blend = true
     alpha_cutoff = 0.5
@@ -1472,13 +1471,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     baked_lighting = true
     base_color = [ 4.5553994, 4.5553994, 4.5553994, 1.0 ]
     double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
+    emissive = [ 0.3, 0.34, 0.72 ]
     metallic = 0.0
     occlusion = 1.0
     receive_shadows = true
-    roughness = 1.0
+    roughness = 0.2
     uv_scroll = [ -0.05, -0.08 ]
     vertex_color = true
+    water = true
 
     [entities.mesh]
     index = 24
@@ -1495,7 +1495,6 @@ position = [ -6.399933, 0.0003541562, 256.0 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
-    additive_blend = true
     albedo = 'project://assets/textures/2b1f0286252911e6.png'
     alpha_blend = true
     alpha_cutoff = 0.5
@@ -1503,13 +1502,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     baked_lighting = true
     base_color = [ 4.5553994, 4.5553994, 4.5553994, 1.0 ]
     double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
+    emissive = [ 0.3, 0.34, 0.72 ]
     metallic = 0.0
     occlusion = 1.0
     receive_shadows = true
-    roughness = 1.0
+    roughness = 0.2
     uv_scroll = [ 0.0, -0.2 ]
     vertex_color = true
+    water = true
 
     [entities.mesh]
     index = 25
@@ -1591,13 +1591,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     baked_lighting = true
     base_color = [ 4.5553994, 4.5553994, 4.5553994, 1.0 ]
     double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
+    emissive = [ 0.3, 0.34, 0.72 ]
     metallic = 0.0
     occlusion = 1.0
     receive_shadows = true
-    roughness = 1.0
+    roughness = 0.3
     uv_scroll = [ 0.0, -1.0 ]
     vertex_color = true
+    water = true
 
     [entities.mesh]
     index = 28
@@ -2903,6 +2904,69 @@ scale = [ 1.0, 1.0, 1.0 ]
     path = 'project://assets/models/collision/Earth/Hub/hubb/hubb_col_drown_005.gltf'
 
     [entities.not_pickable]
+
+[[entities]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'WaterfallMist'
+node = -7168266313920836253
+parent = 0
+parent_node = -5202747872660832510
+position = [ -9.0, -2.4, 285.5 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.particles]
+    auto_destroy = false
+    blend_mode = 'alpha'
+    bounce = 0.4
+    burst_count = 0
+    collide_particles = false
+    collide_world = false
+    collision_damping = 0.2
+    collision_radius = 0.0
+    color_keys = []
+    direction_deg = 90.0
+    display_space = false
+    emit_duration = 0.0
+    emit_on_start = false
+    emit_shape = 'box'
+    emitting = true
+    end_color = [ 0.92, 0.97, 1.0, 0.0 ]
+    end_size = 3.2
+    gravity = [ 0.0, 0.0 ]
+    gravity_3d = [ 0.0, 0.12, 0.0 ]
+    lifetime_max = 4.0
+    lifetime_min = 2.5
+    max_particles = 96
+    order_in_layer = 0
+    radial_speed = 0.0
+    rate = 12.0
+    rotation_jitter = 3.14
+    rotation_keys = []
+    size_keys = []
+    sorting_layer = 10
+    space = 'billboard_3d'
+    spawn_jitter = [ 2.5, 0.3, 7.0 ]
+    speed_max = 0.0
+    speed_min = 0.0
+    spread_deg = 30.0
+    start_color = [ 0.92, 0.97, 1.0, 0.0 ]
+    start_size = 1.6
+    texture = 'project://assets/particles/particle_page_1.png'
+    uv_rect = [ 0.28125, 0.78125, 0.4609375, 0.9609375 ]
+    velocity = [ 0.0, 0.7, 0.0 ]
+    velocity_jitter = [ 0.8, 0.3, 0.8 ]
+
+        [[entities.particles.alpha_keys]]
+        t = 0.0
+        value = 0.0
+
+        [[entities.particles.alpha_keys]]
+        t = 0.3
+        value = 0.35
+
+        [[entities.particles.alpha_keys]]
+        t = 1.0
+        value = 0.0
 
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]

@@ -41,6 +41,10 @@ namespace aether::app::scene
 				else if (key == "foliage") { onto.foliage = from.foliage; }
 				else if (key == "sky") { onto.sky = from.sky; }
 				else if (key == "light_shaft") { onto.lightShaft = from.lightShaft; }
+				else if (key == "gem") { onto.gem = from.gem; }
+				else if (key == "sheen") { onto.sheen = from.sheen; }
+				else if (key == "water") { onto.water = from.water; }
+				else if (key == "character") { onto.character = from.character; }
 				else if (key == "additive_blend") { onto.additiveBlend = from.additiveBlend; }
 				else if (key == "uv_scroll") { onto.uvScroll = from.uvScroll; }
 			}

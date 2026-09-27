@@ -39,6 +39,19 @@ namespace aether
 		bool lightShaft = false;
 		// PS2 object lighting: lit by the scene's object light records.
 		bool objectLit = false;
+		// Twinsanity gem (disk bit kMaterialDiskGem): faceted crystal shading instead of the
+		// object lighting - flat facets, fresnel rim, fake-refraction interior, facet sparkle.
+		// roughness = sparkle sharpness, emissive = self-glow.
+		bool gem = false;
+		// Collectible sheen (disk bit kMaterialDiskSheen, the wumpa fruit): object lighting
+		// plus the shared PickupSheen rim and highlight.
+		bool sheen = false;
+		// Water look (disk bit kMaterialDiskWater: the sea, rivers, pools, waterfalls): depth tint,
+		// screen-space reflections, ripple and sun glints on top of the PS2 texture (Water.slangh).
+		bool water = false;
+		// Character look (disk bit kMaterialDiskCharacter: Crash, Aku Aku): wrapped key light, rim,
+		// eye catchlight and texture relief on top of the PS2 object lighting.
+		bool character = false;
 
 		// UV scroll velocity in UV units per second (Twinsanity sea, waterfalls, sky).
 		glm::vec2 uvScroll{0.0f, 0.0f};

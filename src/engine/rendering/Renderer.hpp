@@ -220,6 +220,12 @@ namespace aether
 			m_shadingParams.x = strength;
 		}
 
+		// graphics.foliageSkyLook (logs/look/FoliageSkyLook/README.md); 0 is the PS2 look.
+		void SetFoliageSkyLook(float strength)
+		{
+			m_shadingParams.w = strength;
+		}
+
 		// Cloud cover over the visible sky. Coverage 0 is a clear sky and costs nothing:
 		// the shader returns before sampling any noise.
 		void SetClouds(float coverage, float speed)
@@ -314,7 +320,7 @@ namespace aether
 		glm::vec4 m_objectLight1Color{0.0f, 0.0f, 0.0f, 0.0f};
 		glm::vec4 m_fogParams{0.0f, 0.08f, 0.6f, 0.9f};
 		glm::vec4 m_skyParams{0.0f, 2.5f, 0.0f, 0.0f};
-		glm::vec4 m_shadingParams{1.0f, 0.0f, 0.0f, 0.0f};
+		glm::vec4 m_shadingParams{1.0f, 0.0f, 0.0f, 1.0f};
 		bool m_volumetrics = true;
 		float m_shadowSplitLambda = 0.65f;
 		bool m_contactShadows = false;

@@ -103,6 +103,7 @@ namespace aether
 			float gtaoRadius = 1.4f;
 			float gtaoStrength = 1.35f;
 			float specularFilter = 1.0f;
+			float foliageSkyLook = 1.0f;
 			float bloomStrength = 0.05f;
 			float bloomRadius = 1.0f;
 			bool autoExposure = true;
@@ -272,6 +273,7 @@ namespace aether
 		f("graphics.gtaoRadius", settings.graphics.gtaoRadius);
 		f("graphics.gtaoStrength", settings.graphics.gtaoStrength);
 		f("graphics.specularFilter", settings.graphics.specularFilter);
+		f("graphics.foliageSkyLook", settings.graphics.foliageSkyLook);
 		f("graphics.bloomStrength", settings.graphics.bloomStrength);
 		f("graphics.bloomRadius", settings.graphics.bloomRadius);
 		f("graphics.autoExposure", settings.graphics.autoExposure);

@@ -2438,7 +2438,6 @@ position = [ 70.400024, 9.013267e-12, 41.600098 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
-    additive_blend = true
     albedo = 'project://assets/textures/2b1f0286252911e6.png'
     alpha_blend = true
     alpha_cutoff = 0.5
@@ -2446,13 +2445,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     baked_lighting = true
     base_color = [ 4.5553994, 4.5553994, 4.5553994, 1.0 ]
     double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
+    emissive = [ 0.3, 0.34, 0.72 ]
     metallic = 0.0
     occlusion = 1.0
     receive_shadows = true
-    roughness = 1.0
+    roughness = 0.2
     uv_scroll = [ 0.0, -0.2 ]
     vertex_color = true
+    water = true
 
     [entities.mesh]
     index = 51
@@ -2498,7 +2498,6 @@ position = [ 70.400024, 9.013267e-12, 41.600098 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
     [entities.material]
-    additive_blend = true
     albedo = 'project://assets/textures/f9cb49f2a4f9b7af.png'
     alpha_blend = true
     alpha_cutoff = 0.5
@@ -2506,13 +2505,14 @@ scale = [ 1.0, 1.0, 1.0 ]
     baked_lighting = true
     base_color = [ 4.5553994, 4.5553994, 4.5553994, 1.0 ]
     double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
+    emissive = [ 0.3, 0.34, 0.72 ]
     metallic = 0.0
     occlusion = 1.0
     receive_shadows = true
-    roughness = 1.0
+    roughness = 0.2
     uv_scroll = [ -0.05, -0.08 ]
     vertex_color = true
+    water = true
 
     [entities.mesh]
     index = 53

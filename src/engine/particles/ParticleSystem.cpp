@@ -465,7 +465,8 @@ namespace aether
 			instance.uvRect = emitter.uvRect;
 			instance.rotationDegrees = EvaluateParticleKeys(emitter.rotationKeys, t, 0.0f) + p.rotationOffsetDeg;
 			instance.textureIndex = slot;
-			instance.blendMode = (emitter.blendMode == SpriteBlendMode::Additive ? kBillboardAdditive : 0u) | (emitter.displaySpace ? kBillboardDisplaySpace : 0u);
+			instance.blendMode = (emitter.blendMode == SpriteBlendMode::Additive ? kBillboardAdditive : 0u) | (emitter.displaySpace ? kBillboardDisplaySpace : 0u)
+			        | (emitter.lit ? kBillboardLit : 0u);
 			instance.entityId = entity.id;
 			m_billboardOut->push_back(instance);
 		}

@@ -59,6 +59,7 @@ namespace TwExtract
 					case "--cache": cache = Next(); break;
 					case "--hd-pack": HdPack.Load(Next()); break; // PCSX2 replacement zip; matched textures write HD art
 					case "--only": only = Next(); break;
+					case "--crate-look": return CrateLook.Cli(Next(), Next(), Next() == "1"); // <assets dir> <albedo.png> <glow 0|1>
 					case "--movies": movies.UnionWith(Next().Split(',')); break; // FMV names: H01_A,B01_A,...
 					case "--ffmpeg": ffmpeg = Next(); break;
 					case "--voice": voice.AddRange(Next().Split(',').Select(int.Parse)); break; // ENGLISH.MB speech tracks
@@ -458,6 +459,12 @@ namespace TwExtract
 					string name = Safe(obj.Name) + (used.Count > 1 ? $"_{k}" : "");
 					string dir = Path.Combine(s_out, "models", "objects", Safe(obj.Name));
 					var ex = NewObjectExport(gfx, dir);
+					ex.Sheen = obj.Name.IndexOf("REDWUMPA", StringComparison.Ordinal) >= 0;
+					ex.Crate = CrateLook.IsCrate(obj.Name);
+					ex.CrateGlow = ex.Crate && CrateLook.IsGlow(obj.Name);
+					// CrashLook: the player's own models (act_CRASH_0..6) and the Aku Aku mask.
+					ex.Character = Safe(obj.Name) is "act_CRASH" or "AKUMASK";
+					ex.CharacterGlow = Safe(obj.Name) == "AKUMASK";
 					var hulls = new List<(string Suffix, Prim Hull)>();
 					foreach (var at in attach)
 					{

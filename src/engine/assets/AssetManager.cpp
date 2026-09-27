@@ -260,6 +260,10 @@ namespace aether
 					material.bakedLighting = (hdr.bakedLighting & kMaterialDiskBaked) != 0;
 					material.sky = (hdr.bakedLighting & kMaterialDiskSky) != 0;
 					material.lightShaft = (hdr.bakedLighting & kMaterialDiskLightShaft) != 0;
+					material.gem = (hdr.bakedLighting & kMaterialDiskGem) != 0;
+					material.sheen = (hdr.bakedLighting & kMaterialDiskSheen) != 0;
+					material.water = (hdr.bakedLighting & kMaterialDiskWater) != 0;
+					material.character = (hdr.bakedLighting & kMaterialDiskCharacter) != 0;
 					material.objectLit = hdr.objectLit != 0;
 					material.uvScroll = glm::vec2(hdr.uvScroll[0], hdr.uvScroll[1]);
 
@@ -494,6 +498,10 @@ namespace aether
 				mat.bakedLighting = srcMat.bakedLighting;
 				mat.sky = srcMat.sky;
 				mat.lightShaft = srcMat.lightShaft;
+				mat.gem = srcMat.gem;
+				mat.sheen = srcMat.sheen;
+				mat.water = srcMat.water;
+				mat.character = srcMat.character;
 				mat.objectLit = srcMat.objectLit;
 				mat.uvScroll = srcMat.uvScroll;
 

@@ -183,6 +183,13 @@ namespace aether
 				renderer->SetSpecularFilter(m_values.graphics.specularFilter);
 			}
 		}
+		else if (key == "graphics.foliageSkyLook")
+		{
+			if (auto* renderer = m_services.TryGet<Renderer>())
+			{
+				renderer->SetFoliageSkyLook(m_values.graphics.foliageSkyLook);
+			}
+		}
 		else if (key == "graphics.gtaoStrength")
 		{
 			if (auto* renderer = m_services.TryGet<Renderer>())

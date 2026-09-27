@@ -640,6 +640,7 @@ public sealed class CrashPlayer : EntityScript
 			// (a046 is the same track for the co-op-linked branch, CrashSpinWithCortex.)
 			_spinClock = 0.0f;
 			ShowSpinModel(true);
+			CrateFx.SpinSwirl(this, _spinLength, !Airborne); // look only: motes and dust around the swirl
 		}
 
 		switch (_state)

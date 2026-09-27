@@ -1279,7 +1279,7 @@ namespace aether
 		if (!collisionOnly)
 		{
 			const Camera* const blobEye = cameras.TryGetMainCamera();
-			WorldRenderer::GatherBlobShadows(world, assetsSub.GetMaterialRegistry(), blobEye ? blobEye->GetPosition() : glm::vec3(0.0f), packet.blobShadows);
+			packet.blobCharacterCount = static_cast<std::uint32_t>(WorldRenderer::GatherBlobShadows(world, assetsSub.GetMaterialRegistry(), blobEye ? blobEye->GetPosition() : glm::vec3(0.0f), packet.blobShadows));
 		}
 		packet.skyHorizonColor = renderer.GetSkyHorizonColorVector();
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();

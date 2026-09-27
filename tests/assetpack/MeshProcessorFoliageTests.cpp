@@ -21,12 +21,13 @@ namespace
 	// {"baked_lighting":true}, "plain" is opaque with no extras. "foam" is BLEND with the PS2
 	// "blend add" preset tw-extract marks {"additive":true}, "glass" a plain BLEND that is also a
 	// skydome layer ({"sky":true}), "solid" an opaque material wrongly carrying the additive mark,
-	// and "beam" an additive prelit god-ray card ({"light_shaft":true}).
+	// "beam" an additive prelit god-ray card ({"light_shaft":true}), and "skin" an object-lit
+	// character material ({"character":true}).
 	constexpr const char* kGltf = R"({
   "asset": {"version": "2.0"},
   "scene": 0,
-  "scenes": [{"nodes": [0, 1, 2, 3, 4, 5, 6]}],
-  "nodes": [{"mesh": 0}, {"mesh": 1}, {"mesh": 2}, {"mesh": 3}, {"mesh": 4}, {"mesh": 5}, {"mesh": 6}],
+  "scenes": [{"nodes": [0, 1, 2, 3, 4, 5, 6, 7]}],
+  "nodes": [{"mesh": 0}, {"mesh": 1}, {"mesh": 2}, {"mesh": 3}, {"mesh": 4}, {"mesh": 5}, {"mesh": 6}, {"mesh": 7}],
   "meshes": [
     {"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 0}]},
     {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 1}]},
@@ -34,16 +35,18 @@ namespace
     {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 3}]},
     {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 4}]},
     {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 5}]},
-    {"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 6}]}
+    {"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 6}]},
+    {"primitives": [{"attributes": {"POSITION": 0}, "indices": 2, "material": 7}]}
   ],
   "materials": [
     {"name": "leaf", "alphaMode": "MASK", "alphaCutoff": 0.5, "extras": {"foliage": true}},
     {"name": "plain"},
     {"name": "lit", "extras": {"baked_lighting": true}},
-    {"name": "foam", "alphaMode": "BLEND", "extras": {"additive": true}},
+    {"name": "foam", "alphaMode": "BLEND", "extras": {"additive": true, "water": true}},
     {"name": "glass", "alphaMode": "BLEND", "extras": {"sky": true}},
     {"name": "solid", "extras": {"additive": true}},
-    {"name": "beam", "alphaMode": "BLEND", "extras": {"additive": true, "light_shaft": true, "baked_lighting": true}}
+    {"name": "beam", "alphaMode": "BLEND", "extras": {"additive": true, "light_shaft": true, "baked_lighting": true}},
+    {"name": "skin", "extras": {"object_lit": true, "character": true}}
   ],
   "accessors": [
     {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
@@ -107,6 +110,11 @@ TEST_CASE("Baked glTF materials carry the foliage, baked-lighting and additive-b
 	CHECK(Header(result.materialFiles, "plain").bakedLighting == 0);
 	// alphaBlend: 0 opaque, 1 mix, 2 additive - and the additive mark alone never makes a draw blend.
 	CHECK(Header(result.materialFiles, "foam").alphaBlend == 2);
+	// The water bit rides the same byte, alone: it sets neither baked nor sky.
+	CHECK(Header(result.materialFiles, "foam").bakedLighting == kMaterialDiskWater);
+	// The character bit rides the same byte beside object_lit (its own header field).
+	CHECK(Header(result.materialFiles, "skin").bakedLighting == kMaterialDiskCharacter);
+	CHECK(Header(result.materialFiles, "skin").objectLit == 1);
 	CHECK(Header(result.materialFiles, "glass").alphaBlend == 1);
 	CHECK(Header(result.materialFiles, "solid").alphaBlend == 0);
 	std::filesystem::remove_all(dir);

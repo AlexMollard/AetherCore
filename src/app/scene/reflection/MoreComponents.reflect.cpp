@@ -201,6 +201,7 @@ AE_FIELD_NT("rotation_jitter", rotationJitterDeg, Float, "Random start angle in 
 AE_FIELD_ENUM("emit_shape", emitShape, ParticleEmitShapeEnum())
 AE_FIELD_NT("radial_speed", radialSpeed, Float, "Radial shapes: outward launch speed. spawn_jitter is then the base (radius, yaw, polar) and velocity_jitter their +/- ranges.")
 AE_FIELD_NT("display_space", displaySpace, Bool, "Billboard3D: composite after the tonemap, blending in display (gamma) space like a PS2 GS. Bloom, exposure and depth of field no longer apply.")
+AE_FIELD_NT("lit", lit, Bool, "Billboard3D: shade each quad as a sun-lit ball (wrap lighting, sky-tinted shadow side) so smoke reads as a volume.")
 b.CustomListField(
         "color_keys",
         {{"t", reflect::FieldType::Float}, {"color", reflect::FieldType::Color3}},

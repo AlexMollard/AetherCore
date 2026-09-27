@@ -60,6 +60,22 @@ namespace aether
 		{
 			flags |= GpuMaterial::kObjectLit;
 		}
+		if (a.gem)
+		{
+			flags |= GpuMaterial::kGem;
+		}
+		if (a.sheen)
+		{
+			flags |= GpuMaterial::kSheen;
+		}
+		if (a.water)
+		{
+			flags |= GpuMaterial::kWater;
+		}
+		if (a.character)
+		{
+			flags |= GpuMaterial::kCharacter;
+		}
 		g.flags = flags;
 		g.uvScroll = a.uvScroll;
 

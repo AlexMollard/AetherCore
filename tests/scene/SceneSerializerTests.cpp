@@ -200,6 +200,99 @@ TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     CHECK(!o.skinned->looping);
 }
 
+// The gem, sheen and water material flags (Twinsanity gems / wumpa / sea) are set only in prefab
+// TOML, so a capture or load that dropped them would turn every gem back into a flat PS2 card (and
+// the sea back into a flat sheet) on the next save. Covers the per-entity override (instance) path
+// and the registry path (TryDescribe of a packed GpuMaterial), plus a plain material that must not
+// gain any of the keys.
+TEST_CASE("Gem, sheen, water and character material flags round-trip through capture and TOML") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    const auto add = [&world](const char* name, const MaterialAsset& asset) {
+        Entity e = world.Create();
+        world.Emplace<NameComponent>(e, NameComponent{.name = name});
+        world.Emplace<TransformComponent>(e, TransformComponent{});
+        world.Emplace<MaterialInstanceComponent>(e, MaterialInstanceComponent{asset});
+        world.Emplace<MaterialComponent>(e, MaterialComponent{});
+        return e;
+    };
+    MaterialAsset gem;
+    gem.alphaBlend = true;
+    gem.objectLit = true;
+    gem.gem = true;
+    add("Gem", gem);
+    MaterialAsset fruit;
+    fruit.objectLit = true;
+    fruit.sheen = true;
+    add("Fruit", fruit);
+    MaterialAsset sea;
+    sea.alphaBlend = true;
+    sea.bakedLighting = true;
+    sea.water = true;
+    sea.uvScroll = glm::vec2(-0.05f, -0.08f);
+    add("Sea", sea);
+    MaterialAsset skin;
+    skin.objectLit = true;
+    skin.character = true;
+    add("Skin", skin);
+    add("Plain", MaterialAsset{});
+
+    // Registry path: what a captured prefab mesh without an instance reads back.
+    MaterialAsset described;
+    REQUIRE(mreg.TryDescribe(mreg.Acquire(gem), described));
+    CHECK(described.gem);
+    CHECK_FALSE(described.sheen);
+    REQUIRE(mreg.TryDescribe(mreg.Acquire(fruit), described));
+    CHECK(described.sheen);
+    CHECK_FALSE(described.gem);
+    CHECK_FALSE(described.water);
+    REQUIRE(mreg.TryDescribe(mreg.Acquire(sea), described));
+    CHECK(described.water);
+    CHECK_FALSE(described.sheen);
+    CHECK_FALSE(described.gem);
+    CHECK(described.uvScroll == glm::vec2(-0.05f, -0.08f));
+    REQUIRE(mreg.TryDescribe(mreg.Acquire(skin), described));
+    CHECK(described.character);
+    CHECK_FALSE(described.sheen);
+    REQUIRE(mreg.TryDescribe(mreg.Acquire(fruit), described));
+    CHECK_FALSE(described.character);
+
+    const std::string toml = WriteToml(CaptureScene(world, mreg, treg));
+    const auto parsed = ParseToml(toml);
+    REQUIRE(parsed.has_value());
+
+    const EntityRecord& g = RecordOf(*parsed, "Gem");
+    REQUIRE(g.material.has_value());
+    CHECK(g.material->asset.gem);
+    CHECK_FALSE(g.material->asset.sheen);
+    CHECK(g.material->asset.objectLit);
+    const EntityRecord& f = RecordOf(*parsed, "Fruit");
+    REQUIRE(f.material.has_value());
+    CHECK(f.material->asset.sheen);
+    CHECK_FALSE(f.material->asset.gem);
+    CHECK_FALSE(f.material->asset.water);
+    const EntityRecord& s = RecordOf(*parsed, "Sea");
+    REQUIRE(s.material.has_value());
+    CHECK(s.material->asset.water);
+    CHECK(s.material->asset.bakedLighting);
+    CHECK_FALSE(s.material->asset.gem);
+    const EntityRecord& k = RecordOf(*parsed, "Skin");
+    REQUIRE(k.material.has_value());
+    CHECK(k.material->asset.character);
+    CHECK(k.material->asset.objectLit);
+    CHECK_FALSE(k.material->asset.sheen);
+    const EntityRecord& p = RecordOf(*parsed, "Plain");
+    REQUIRE(p.material.has_value());
+    CHECK_FALSE(p.material->asset.gem);
+    CHECK_FALSE(p.material->asset.sheen);
+    CHECK_FALSE(p.material->asset.water);
+    CHECK_FALSE(p.material->asset.character);
+}
+
 TEST_CASE("Behavior components round-trip through capture, TOML and apply") {
     FakeSlotSink sink(8);
     FakeTextureSink tsink;

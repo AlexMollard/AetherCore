@@ -22,7 +22,8 @@ namespace aether
 
 		// Contact blob shadows: one per object-lit actor (its visible object-lit primitives
 		// merged under their shared parent), nearest the eye first, capped at kMaxBlobShadows.
-		// Each is xyz = (centre x, bounds bottom y, centre z), w = blob radius.
-		void GatherBlobShadows(const World& world, const MaterialRegistry& materials, glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out);
+		// Each is xyz = (centre x, bounds bottom y, centre z), w = blob radius. Returns how many
+		// of them (placed first) belong to character actors (a kCharacter material).
+		std::size_t GatherBlobShadows(const World& world, const MaterialRegistry& materials, glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out);
 	}
 } // namespace aether

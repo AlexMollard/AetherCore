@@ -56,19 +56,25 @@ namespace aether
 
 		MaterialTemplate tmpl = asset.templateDesc;
 		tmpl.cullMode = asset.doubleSided ? gpu::CullMode::None : gpu::CullMode::Back;
-		tmpl.blendEnable = asset.alphaBlend;
+		// Scenery foliage (FoliageSkyLook, logs/look/FoliageSkyLook/README.md): PS2 prelit cutout
+		// cards draw with the blended group, after everything opaque and the sky, so the one-pixel
+		// soft fringe gltf_mesh lays just outside the alpha cutoff mixes over what is really behind
+		// it. Their inside is still in the depth prepass (cut at the same cutoff), so they keep
+		// occluding and being occluded as a cutout does; only the forward pass stops writing depth.
+		const bool softCutout = asset.foliage && asset.bakedLighting && asset.alphaMask && !asset.alphaBlend && !asset.sky;
+		tmpl.blendEnable = asset.alphaBlend || softCutout;
 		tmpl.blendMode = asset.additiveBlend ? gpu::BlendMode::Additive : gpu::BlendMode::Alpha;
 		// Transparent geometry must not write depth: the surfaces behind it still have to be
 		// visible through it, and a depth write would reject them. Only ever cleared, never
 		// set - an opaque material keeps whatever its own template asked for.
 		// A sky surface is drawn at the far plane (the vertex shaders set clip z = w) and must never
 		// write it either: every sky layer shares that one depth, and a write would reject the next.
-		if (asset.alphaBlend || asset.sky)
+		if (asset.alphaBlend || asset.sky || softCutout)
 		{
 			tmpl.depthWriteEnable = false;
 		}
 		const GraphicsPipeline* pipeline = pipelineCache.Acquire(tmpl);
-		r.emplace_or_replace<PipelineComponent>(e, PipelineComponent{.pipeline = pipeline, .blended = asset.alphaBlend, .sky = asset.sky});
+		r.emplace_or_replace<PipelineComponent>(e, PipelineComponent{.pipeline = pipeline, .blended = asset.alphaBlend || softCutout, .sky = asset.sky});
 	}
 
 	namespace

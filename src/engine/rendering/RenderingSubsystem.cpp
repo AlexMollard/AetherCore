@@ -1064,6 +1064,13 @@ namespace aether
 					pass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductGtao, FrameResourceId::Gtao);
 				}
 			}
+			// Water (Water.slangh) marches its own reflection and reads the prepass base colour at
+			// the hit: blended water is not in the gbuffer the $SSR pass reflects from. Read-only
+			// here; $ScenePreDepth wrote it.
+			if (m_sceneBaseColor.IsValid())
+			{
+				pass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneBaseColor, FrameResourceId::SceneBaseColor);
+			}
 
 			if (auto* lighting = frame.lighting)
 			{

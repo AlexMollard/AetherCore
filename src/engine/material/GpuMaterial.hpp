@@ -23,8 +23,8 @@ namespace aether
 		// PS2 object lighting: lit by the scene's object light records (ambient + two
 		// directional) like the GS lit everything that was not prelit scenery.
 		static constexpr std::uint32_t kObjectLit = 1u << 7;
-		// Additive blend (Cs*As + Cd). Pipeline state, not read by any shader: carried here only
-		// so MaterialRegistry::TryDescribe round-trips it.
+		// Additive blend (Cs*As + Cd). Pipeline state; gltf_mesh reads it (kFlagAdditiveBlend) only to
+		// keep the aerial haze off additive surfaces. Also carried so MaterialRegistry::TryDescribe round-trips it.
 		static constexpr std::uint32_t kAdditiveBlend = 1u << 8;
 		// Skydome surface: the vertex shaders put it at infinite depth (clip z = w). Mirrors
 		// kFlagSky in GpuMaterial.slangh.
@@ -33,6 +33,18 @@ namespace aether
 		// edges (TEXCOORD_1), edge-on, near the camera and where it meets geometry, and makes the
 		// rays breathe in place. Mirrors kFlagLightShaft in GpuMaterial.slangh.
 		static constexpr std::uint32_t kLightShaft = 1u << 10;
+		// Twinsanity gem: faceted crystal shading (flat facets, fresnel rim, fake refraction,
+		// facet sparkle) replacing the object lighting. Mirrors kFlagGem in GpuMaterial.slangh.
+		static constexpr std::uint32_t kGem = 1u << 11;
+		// Collectible sheen (wumpa fruit): object lighting plus the shared PickupSheen rim and
+		// highlight. Mirrors kFlagSheen in GpuMaterial.slangh.
+		static constexpr std::uint32_t kSheen = 1u << 12;
+		// Water look (sea, shore, pools, waterfalls): depth tint, screen-space reflection, ripple
+		// normals and sun glints. Mirrors kFlagWater in GpuMaterial.slangh.
+		static constexpr std::uint32_t kWater = 1u << 13;
+		// Character look (Crash, Aku Aku): wrapped key, rim, eye catchlight and texture relief on
+		// top of the object lighting. Mirrors kFlagCharacter in GpuMaterial.slangh.
+		static constexpr std::uint32_t kCharacter = 1u << 14;
 
 		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor{1.0f};
