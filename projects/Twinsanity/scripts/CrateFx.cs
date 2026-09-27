@@ -547,6 +547,63 @@ public static class CrateFx
 		}
 	}
 
+	/// <summary>The cannon's shot (COM_RIGID_CANNON_ACTIVATED): DoParticle EXPLODE_1A, 1C and 1D
+	/// (bank 13, 15, 16) at the muzzle - the rig's white-yellow flash and sparks
+	/// (logs/cannon/rigfire_sheet.png, 0.1 s after the landing on the button).</summary>
+	public static void MuzzleFlash(Vector3 center)
+	{
+		Explode1A(center);
+		Explode1C(center);
+		Explode1D(center);
+	}
+
+	/// <summary>act_GLOBAL_BOMB going off (COM_GLOBAL_BOMB_DAMAGED): DoParticle EXPLODE_1A-1D
+	/// (bank 13-16) and its Sounds[3] = 63 (the same clip as the crates' 22). Defs from
+	/// logs/aku/all_particles.json, mapped as the EXPLODE_TNT_* ones above (logs/cannon/emit_cs.py).</summary>
+	public static void BombExploded(Vector3 center)
+	{
+		TwinsanityAudio.Explosion(center);
+		Explode1A(center);
+		SpawnEmitter("EXPLODE_1B", center, "1", new Vector4(1.9f, 34.3f, 30.6f, 62.4f) / 128.0f,
+			21, 180f, 7.0f / 60.0f, 0.598306f,
+			Vector3.Zero /* Velocity 19.73946 */, new Vector3(2.00618f, 2.81786f, 2.07087f), new Vector3(0.140788f, 1.56087f, 0.134684f), 0.0f /* Gravity -30.02218 */,
+			new[] { CK(0f, 102.691f, 78.1687f, 45.5888f), CK(1f, 91.1085f, 96.2787f, 70.5784f) },
+			new[] { 0f, 120.687f, 0.752277f, 120.687f, 1f, 0f },
+			new[] { 0f, 5673.81f * 1e-4f, 1f, 5673.81f * 1e-4f },
+			new[] { 0f, -7470f / 65536f * 360f, 1f, 36978f / 65536f * 360f });
+		Explode1C(center);
+		Explode1D(center);
+	}
+
+	private static void Explode1A(Vector3 center) =>
+		SpawnEmitter("EXPLODE_1A", center, "0", new Vector4(1.8f, 1.6f, 30.4f, 30.3f) / 128.0f,
+			21, 180f, 7.0f / 60.0f, 0.829455f,
+			Vector3.Zero /* Velocity 20.41963 */, new Vector3(1.00561f, 4.94437f, 1.01042f), new Vector3(0.404053f, 1.45467f, 0.570475f), 0.0f /* Gravity -22.48482 */,
+			new[] { CK(0f, 208.401f, 168.424f, 48.024f), CK(0.241145f, 156.013f, 0f, 0f), CK(0.622721f, 94.2554f, 54.7301f, 5.98089f), CK(1f, 130.208f, 113.441f, 109.646f) },
+			new[] { 0f, 0f, 0.0661778f, 198.124f, 0.210261f, 53.0439f, 0.326627f, 42.8852f, 1f, 0f },
+			new[] { 0f, 47386.5f * 1e-4f, 0.123176f, 9687.66f * 1e-4f, 1f, 7123.2f * 1e-4f },
+			new[] { 0f, 0f, 1f, 23445f / 65536f * 360f });
+
+	private static void Explode1C(Vector3 center) =>
+		SpawnEmitter("EXPLODE_1C", center, "0", new Vector4(9.4f, 74.2f, 50.3f, 120.4f) / 128.0f,
+			16, 240f, 4.0f / 60.0f, 1.04305f,
+			Vector3.Zero /* Velocity 9.340652 */, new Vector3(0.909934f, 4.73281f, 0.882648f), new Vector3(0f, 3.00072f, 0f), 0.0f /* Gravity -6.271156 */,
+			new[] { CK(0f, 154.581f, 131.617f, 111.769f), CK(1f, 154.581f, 131.617f, 111.769f) },
+			new[] { 0f, 0f, 0.260937f, 32.0575f, 1f, 0f },
+			new[] { 0f, 7905.12f * 1e-4f, 0.87285f, 22005.6f * 1e-4f, 1f, 7905.12f * 1e-4f },
+			new[] { 0f, 0f, 1f, 24157f / 65536f * 360f },
+			unkByte7: 3);
+
+	private static void Explode1D(Vector3 center) =>
+		SpawnEmitter("EXPLODE_1D", center, "2", new Vector4(66.8f, 66.4f, 126f, 126.1f) / 128.0f,
+			2, 0.0f, 0.0f, 0.101817f,
+			Vector3.Zero, Vector3.Zero, Vector3.Zero, 0.0f,
+			new[] { CK(0f, 255f, 249.895f, 0f), CK(0.245475f, 255f, 0f, 0f), CK(1f, 116.232f, 89.6426f, 0f) },
+			new[] { 0f, 255f, 1f, 24.1496f },
+			new[] { 0f, 33711.6f * 1e-4f, 1f, 50000f * 1e-4f },
+			new[] { 0f, 18f / 65536f * 360f, 1f, 18f / 65536f * 360f },
+			unkByte7: 3);
+
 	// ── Crash landing FX ─────────────────────────────────────────────────────────
 	// Both straight from the disc's ParticleData (Startup/Default.rm2, dump in
 	// logs/cratefx2/particles_land.json). Body slam = CRASH_DROP2 (49): GenSort Radial, 85

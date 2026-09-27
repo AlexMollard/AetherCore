@@ -91,8 +91,10 @@ public sealed partial class TwinsanityActors
 		public bool Pivots;          // turns about its origin instead of sliding (the cannon)
 		public List<Entity> Hulls = new(); // collision that turns with a pivoting object
 		public Entity Button;        // the cannon's red button (disc object 779), turns with it
+		public Entity ButtonHull;    // its disc hull: Crash stands on the button's top
 		public bool Settled;         // RestHeight known against real ground (collision may load late)
 		public bool NoLaunch;        // the bomb: a spin primes it (TwinsanityProps) instead of launching it
+		public bool Pushed;          // Crash has pushed it (the bomb's s5, IsPushingObject)
 	}
 
 	private readonly List<Pushable> _pushables = new();
@@ -125,8 +127,13 @@ public sealed partial class TwinsanityActors
 	// to one capture and the contact is taken as his push line, not the hull's face normal.
 	private const float PivotRate = 11.0f; // deg/s per metre of lever
 
-	// The button sits on the body top between the trail handles; its model is a 1.556 disc, 0.46 tall.
-	private static readonly Vector3 CannonButtonLocal = new(0.0f, 2.79f, -1.05f);
+	// The button sits in the mount on the rear box of the trail plate, just short of the handles (rig
+	// logs/cannon/rig_asm*.png, triangulated from four views: local (0.36, 0.47, -3.85) for its top's
+	// centre; Crash standing on it reads 1.692 = pivot + 0.48, rigfire.json). The box is centred on
+	// x = 0, z = -3.85 (hull 2), so the model's origin (base of a 0.46-tall disc) is 0.02 up.
+	private static readonly Vector3 CannonButtonLocal = new(0.0f, 0.02f, -3.85f);
+	private const string CannonButtonModel = "project://assets/models/objects/RIGID_CANNON_BUTTON/RIGID_CANNON_BUTTON.gltf";
+	private const string CannonButtonHull = "project://assets/models/objects/RIGID_CANNON_BUTTON/RIGID_CANNON_BUTTON_hull0.gltf";
 
 	// Engine yaw is atan2(x, z): local +z maps to (sin y, cos y).
 	private static Vector3 Yawed(Vector3 local, float yawDeg)
@@ -225,8 +232,8 @@ public sealed partial class TwinsanityActors
 		Entity button = default;
 		if (key == "act_rigid_cannon")
 		{
-			// The cannon turns in place, so it collides with its own disc hulls (the body box with
-			// the button on top at +2.79, the barrel and the trail), turned with it, not a sphere.
+			// The cannon turns in place, so it collides with its own disc hulls (the trunnion
+			// bracket, the barrel, the trail plate, its rear box and the handles), turned with it.
 			string? text = model != null ? Assets.ReadText(model.Substring(0, model.Length - ".gltf".Length) + ".hulls.json") : null;
 			if (text != null)
 			{
@@ -239,14 +246,12 @@ public sealed partial class TwinsanityActors
 				}
 			}
 
-			// The red button between the trail handles ("BELLY-FLOP ON THE RED BUTTON"): the disc
-			// links it to the cannon as object 779. It turns with the cannon.
+			// The red button on the trail's rear box ("BELLY-FLOP ON THE RED BUTTON"): the disc
+			// links it to the cannon as object 779. It turns with the cannon and is solid.
 			button = World.Create();
 			button.Name = objectName + " Button";
 			button.AddTransform();
-			button.LoadModel("project://assets/models/objects/RIGID_CANNON_BUTTON/RIGID_CANNON_BUTTON.gltf");
-			button.Position = e.Position + Yawed(CannonButtonLocal, e.EulerDegrees.Y);
-			button.EulerDegrees = e.EulerDegrees;
+			button.LoadModel(CannonButtonModel);
 		}
 		if (hulls.Count == 0)
 		{
@@ -273,10 +278,16 @@ public sealed partial class TwinsanityActors
 			Button = button,
 			NoLaunch = key == "act_global_bomb",
 		};
+		if (button.IsValid)
+		{
+			SyncButton(pushable);
+			pushable.ButtonHull = HullBody(button, CannonButtonHull);
+			Physics.SetMotionType(pushable.ButtonHull, PhysicsMotionType.Kinematic);
+		}
 		_pushables.Add(pushable);
 		if (pushable.NoLaunch)
 		{
-			_bombs.Add(new Bomb { Push = pushable });
+			_bombs.Add(new Bomb { Push = pushable, Home = center });
 		}
 	}
 
@@ -328,11 +339,7 @@ public sealed partial class TwinsanityActors
 					{
 						h.EulerDegrees = p.Model.EulerDegrees;
 					}
-					if (p.Button.IsValid)
-					{
-						p.Button.Position = p.Model.Position + Yawed(CannonButtonLocal, p.Model.EulerDegrees.Y);
-						p.Button.EulerDegrees = p.Model.EulerDegrees;
-					}
+					SyncButton(p);
 					pushing = true;
 				}
 				else if (!p.Pivots && Vector3.Dot(flatVel, n) > speed * 0.5f)
@@ -358,7 +365,7 @@ public sealed partial class TwinsanityActors
 					{
 						p.Velocity *= MathF.Max(speed, v - p.PushAccel * dt) / v;
 					}
-					pushed = pushing = true;
+					pushed = pushing = p.Pushed = true;
 					p.FreeDamping = p.Damping;
 				}
 			}
@@ -369,6 +376,18 @@ public sealed partial class TwinsanityActors
 			Step(p, dt, player.Self);
 		}
 		player.Pushing = pushing;
+	}
+
+	// The button (and its hull) ride the cannon's yaw about its pivot.
+	private static void SyncButton(Pushable p)
+	{
+		p.Button.Position = p.Model.Position + Yawed(CannonButtonLocal, p.Model.EulerDegrees.Y);
+		p.Button.EulerDegrees = p.Model.EulerDegrees;
+		if (p.ButtonHull.IsValid)
+		{
+			p.ButtonHull.Position = p.Button.Position;
+			p.ButtonHull.EulerDegrees = p.Button.EulerDegrees;
+		}
 	}
 
 	// Spin: straight out along the contact normal with a small hop. Slide: thrown up in an arc.

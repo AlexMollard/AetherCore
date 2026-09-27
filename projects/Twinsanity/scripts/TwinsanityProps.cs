@@ -35,6 +35,8 @@ public sealed partial class TwinsanityActors
 		public float Remaining = -1.0f; // seconds left of the clip playing now; -1 = resting
 		public string Playing = "";
 		public readonly List<PropHull> Hulls = new();
+		public Entity Crown, CrownHull; // an idol head's spiked crown (TRAINING_EXPLODING_IDOL_HEAD_CROWN)
+		public float CrownLeft = -1.0f; // seconds of the crown's a001 burst left; -1 = resting
 	}
 
 	// One of the object's disc collision hulls (GI_CollisionData, exported by tw-extract to
@@ -51,20 +53,27 @@ public sealed partial class TwinsanityActors
 
 	// act_GLOBAL_BOMB (COM_GLOBAL_BOMB_DEFAULT) is a pushable (TwinsanityMechanics) with this fuse on
 	// top. A spin primes it (s4/s6 AgentWasSpun -> s2 COM_GLOBAL_BOMB_PRIMED); so does rolling it and
-	// walking off: s5 (rolling) -> s6 (stopped) -> s2 once MeToPlayerSqrDist > 20. 1 s after priming
-	// (s2 TimeInUnit 1) COM_GLOBAL_BOMB_DAMAGED explodes it with CreateDamage radius 3 - the blast
-	// that knocks the idol heads over (rig logs/beachcomplete/rig_totem_sheet.png: rolled to the
+	// walking off: s5 (rolling) -> s6 (stopped) -> s2 once MeToPlayerSqrDist > 20; so does touching a
+	// deadly surface (s1/s4/s6 Cond125: rig logs/cannon/rigjump_boom.png, a lobbed bomb that rolled
+	// down the seabed onto the drowning plane primed and blew up, one resting above it at -2.7 did
+	// not, rigjump2.json). Rolled more than sqrt(2000) m from where it started (s5
+	// MeToInitPosSqrDist > 2000) it primes on a 4 s fuse instead (s10). 1 s after priming (s2
+	// TimeInUnit 1) COM_GLOBAL_BOMB_DAMAGED explodes it with CreateDamage radius 3 - the blast that
+	// knocks the idol heads over (rig logs/beachcomplete/rig_totem_sheet.png: rolled to the
 	// yellow-gem totem, Crash leaves, it goes off at the totem's mouth).
 	private sealed class Bomb
 	{
 		public Pushable Push = null!;
 		public float Fuse = -1.0f; // seconds to the explosion once primed
 		public bool Rolled;        // s5 reached: it has been pushed
+		public Vector3 Home;       // where it started (s5 MeToInitPosSqrDist)
 		public bool Gone;
 	}
 
 	private readonly List<Bomb> _bombs = new();
 	private const float BombFuse = 1.0f;
+	private const float BombFarFuse = 4.0f;    // s10 TimeInUnit 4
+	private const float BombFarSqr = 2000.0f;  // s5 MeToInitPosSqrDist
 	private const float BombDamageRadius = 3.0f;
 	private const float BombSpinReach = 1.5f;
 	private const float BombLeaveSqr = 20.0f;
@@ -74,26 +83,53 @@ public sealed partial class TwinsanityActors
 	private const float BombKickSpeed = 4.5f;
 	private const float BombDrag = 1.4f;
 
-	// act_RIGID_CANNON: belly-flopping its red button fires a GLOBAL_BOMB (the cannon's object list
-	// holds it) that COM_GLOBAL_BOMB_DEFAULT subtype 7 launches with cmd193(.., 8.0, .., 20.0) and that
-	// explodes where it lands (s12 TouchingTerrain) - on the CannonPuzzle idol heads.
+	// act_RIGID_CANNON (COM_RIGID_CANNON_ACTIVATED): any jump landing on its red button fires a
+	// GLOBAL_BOMB from the muzzle (OGI 756 exit point 1: local (0, 2.577, 4.058)) 0.1 s after the
+	// landing, with the muzzle flash (EXPLODE_1A/1C/1D) and its Sounds[0] = 63. The button sends
+	// message 87 on a plain landing and 256 on a belly-flop, and the two shots differ (rig EE RAM,
+	// logs/cannon/rigball*.json, fitted by fit_ball.py with drag dv/dt = -k v - g):
+	//   - plain jump: subtype 7, 8.0 m/s along the barrel and 11.2 up; it lands ~7 m out and just
+	//     lies there as an ordinary bomb (s12 TouchingTerrain -> s1).
+	//   - belly-flop: subtype 8, primed, 24.3 m/s along and 16.6 up; it goes off on the first thing
+	//     it touches (s8 TouchingTerrain -> s7): the statue 30 m out, 1.49 s after leaving.
+	// Both fly under g 19.5 with a drag of 0.585/s (the fits: 19.62/0.597 and 19.36/0.573). Every
+	// landing fires, with no cooldown and no ball count (rigtrig2/3.json: five in a row, and four
+	// 0.95 s apart).
 	private sealed class Cannonball
 	{
 		public Entity Model;
 		public Vector3 Velocity;
-		public float Floor; // explode when it falls below this height
+		public bool Primed;       // the belly-flop shot: explodes on contact
+		public Pushable Cannon = null!;
+		public float Floor;       // lost below this (over a void)
+	}
+
+	private sealed class CannonShot
+	{
+		public Pushable Cannon = null!;
+		public bool Primed;
+		public float Delay;
 	}
 
 	private readonly List<Cannonball> _cannonballs = new();
-	private bool _slamHandled;
-	// ponytail: cmd193's 8.0 / 20.0 read as launch up-speed / forward speed (m/s); gravity, the
-	// muzzle offset and the button reach are not in the scripts. Upgrade path: measure a shot on
-	// the rig (the camera faces inland from the cannon, so it needs a free-camera capture).
-	private const float CannonUpSpeed = 8.0f;
-	private const float CannonForwardSpeed = 20.0f;
-	private const float CannonballGravity = 9.8f;
-	private const float CannonButtonReach = 2.0f;
+	private readonly List<CannonShot> _cannonShots = new();
+	private bool _wasGrounded = true;
+	private bool _rose; // this airborne spell went up: a jump (AgentWasJumpedOn), not a fall or a warp
+	private static readonly Vector3 CannonMuzzleLocal = new(0.0f, 2.577f, 4.058f);
+	private const float CannonFireDelay = 0.1f;   // rigfire.json: landing flash 1.324 s, muzzle 1.418 s
+	private const float CannonJumpSpeed = 8.0f, CannonJumpUp = 11.2f;
+	private const float CannonSlamSpeed = 24.3f, CannonSlamUp = 16.6f;
+	private const float CannonballGravity = 19.5f;
+	private const float CannonballDrag = 0.585f;
+	private const float CannonballRadius = 0.6f;  // SetLogicalRadius(0, 0.6)
 	private const string CannonballModel = "project://assets/models/objects/act_GLOBAL_BOMB/act_GLOBAL_BOMB_0.gltf";
+	// The idol head's crown: SpawnResidentAgent(0, 0, 8.5, ...) of object 780 on top of the head. It
+	// hurts Crash standing on it (rig logs/cannon/rigcrown.json: dropped onto statue 2's crown he
+	// stands at 12.649 = 1.792 + 8.5 + its 2.337 hull top and loses a mask at 0.6 s and another at
+	// 2.45 s), and bursts (a001, then DestroyMe) when a blast lowers the head (rig_headhit.png).
+	private const float CrownRise = 8.5f;
+	private const string CrownModel = "project://assets/models/objects/TRAINING_EXPLODING_IDOL_HEAD_CROWN/TRAINING_EXPLODING_IDOL_HEAD_CROWN.gltf";
+	private const string CrownHullPath = "project://assets/models/objects/TRAINING_EXPLODING_IDOL_HEAD_CROWN/TRAINING_EXPLODING_IDOL_HEAD_CROWN_hull0.gltf";
 
 	// ponytail: the original's global progression counter (condition GlobalProgression) lives in
 	// the save; the port always starts a new game, where it is 0. Upgrade path: a save system.
@@ -113,6 +149,26 @@ public sealed partial class TwinsanityActors
 		{
 			s.Cue = PropCue.Explosion;
 			s.ClipNames = new[] { "a001", "a002" };
+			// COM_TRAINING_EXPLODING_IDOL_HEAD_DEFAULT s4: SoftFlagSet(18) spawns the crown 8.5 up.
+			if (instance.ValueKind == JsonValueKind.Object && instance.TryGetProperty("flags", out JsonElement fl) && (fl.GetUInt32() >> 18 & 1u) != 0)
+			{
+				s.Crown = World.Create();
+				s.Crown.Name = objectName + " Crown";
+				s.Crown.MarkTransient();
+				s.Crown.AddTransform();
+				s.Crown.Position = e.Position + new Vector3(0.0f, CrownRise, 0.0f);
+				s.Crown.EulerDegrees = e.EulerDegrees;
+				s.Crown.LoadModel(CrownModel);
+				SetLooping(s.Crown, false);
+				int burst = Animation.Find(s.Crown, "a001");
+				if (burst >= 0)
+				{
+					Animation.SetClip(s.Crown, burst);
+					Animation.SetTime(s.Crown, 0.0f);
+					Animation.SetPlaybackSpeed(s.Crown, 0.0f);
+				}
+				s.CrownHull = HullBody(s.Crown, CrownHullPath);
+			}
 		}
 		else if (n.StartsWith("act_training_falling_log"))
 		{
@@ -233,7 +289,48 @@ public sealed partial class TwinsanityActors
 			if (s.Cue == PropCue.Explosion && s.Actor.Alive && InBlast(center, radius, s.Actor.Model.Position))
 			{
 				PlayOnce(s);
+				BurstCrown(s);
 			}
+		}
+	}
+
+	// The head's message to its crown when it drops: the crown plays a001 (its spikes fly off) and
+	// DestroyMe once it ends (COM_TRAINING_EXPLODING_IDOL_HEAD_CROWN_ACTIVATED); from then on the
+	// lowered head's top is safe.
+	private static void BurstCrown(OneShot s)
+	{
+		if (!s.Crown.IsValid || s.CrownLeft >= 0.0f)
+		{
+			return;
+		}
+		if (s.CrownHull.IsValid)
+		{
+			s.CrownHull.Destroy();
+			s.CrownHull = default;
+		}
+		Animation.SetTime(s.Crown, 0.0f);
+		Animation.SetPlaybackSpeed(s.Crown, 1.0f);
+		s.CrownLeft = Animation.ClipDuration(s.Crown);
+	}
+
+	// Crash on a crown: its spikes hurt him, one mask per hit, again once his hurt grace is over
+	// (the rig's two hits 1.85 s apart, rigcrown.json).
+	private void UpdateCrown(OneShot s, float dt)
+	{
+		if (s.CrownLeft >= 0.0f)
+		{
+			s.CrownLeft -= dt;
+			if (s.CrownLeft < 0.0f)
+			{
+				s.Crown.Destroy();
+				s.Crown = default;
+			}
+			return;
+		}
+		if (s.CrownHull.IsValid && _player != null && _player.Self.IsValid && CharacterController.GetGroundEntity(_player.Self) == s.CrownHull)
+		{
+			// From straight below: the rig leaves him standing on the spikes (no shove off the top).
+			_host?.DamagePlayer(_player.Self.Position - Vector3.UnitY, DeathKind.Generic);
 		}
 	}
 
@@ -263,9 +360,19 @@ public sealed partial class TwinsanityActors
 					p.Velocity = (dist > 0.001f ? away / dist : Vector3.UnitZ) * BombKickSpeed;
 					p.FreeDamping = BombDrag;
 				}
+				else if (OnDeadly(p))
+				{
+					b.Fuse = BombFuse;
+				}
+				else if (b.Rolled && Vector3.DistanceSquared(p.Center, b.Home) > BombFarSqr)
+				{
+					b.Fuse = BombFarFuse;
+				}
 				else
 				{
-					b.Rolled |= p.Velocity != Vector3.Zero;
+					// s6's leave rule follows s5 only, i.e. only once Crash has pushed it: a lobbed bomb
+					// resting on the seabed stays put (rigjump2.json).
+					b.Rolled |= p.Pushed;
 					if (b.Rolled && p.Velocity == Vector3.Zero && Vector3.DistanceSquared(p.Center, crashPos) > BombLeaveSqr)
 					{
 						b.Fuse = BombFuse;
@@ -278,13 +385,7 @@ public sealed partial class TwinsanityActors
 			{
 				continue;
 			}
-			Vector3 center = p.Center;
-			CrateFx.Exploded(center, 5);
-			Explosion(center, BombDamageRadius);
-			if (Vector3.Distance(center, crashPos + new Vector3(0.0f, 0.9f, 0.0f)) < BombDamageRadius)
-			{
-				_host?.DamagePlayer(center, DeathKind.Explode);
-			}
+			BombBlast(p.Center, crashPos);
 			b.Gone = true;
 			_pushables.Remove(p);
 			p.Body.Destroy();
@@ -293,68 +394,141 @@ public sealed partial class TwinsanityActors
 		_bombs.RemoveAll(b => b.Gone);
 	}
 
+	// What the bomb rests on is a deadly collision piece (the drowning plane under the sea, a pit).
+	private bool OnDeadly(Pushable p)
+	{
+		RaycastHit hit = Physics.Raycast(p.Center, -Vector3.UnitY, p.RestHeight + 0.3f);
+		if (hit.DidHit && hit.Entity == p.Body)
+		{
+			hit = Physics.Raycast(p.Center - new Vector3(0.0f, p.Radius + 0.02f, 0.0f), -Vector3.UnitY, 0.3f);
+		}
+		return hit.DidHit && _host != null && _host.IsDeadly(hit.Entity);
+	}
+
+	// COM_GLOBAL_BOMB_DAMAGED: EXPLODE_1A-1D, Sounds[3], CreateDamage radius 3 (100 damage: through
+	// the masks).
+	private void BombBlast(Vector3 center, Vector3 crashPos)
+	{
+		CrateFx.BombExploded(center);
+		Log.Info($"[Twinsanity] bomb exploded at ({center.X:F2}, {center.Y:F2}, {center.Z:F2})");
+		Explosion(center, BombDamageRadius);
+		if (Vector3.Distance(center, crashPos + new Vector3(0.0f, 0.9f, 0.0f)) < BombDamageRadius)
+		{
+			_host?.DamagePlayer(center, DeathKind.Explode);
+		}
+	}
+
 	private void UpdateCannons(float dt, Vector3 crashPos)
 	{
-		// One shot per belly-flop landing on the cannon (COM_RIGID_CANNON_BUTTON_ACTIVATED on
-		// OnGettingBodyslamAttacked / OnLand).
-		bool slamLanded = _player != null && _player.IsSlamming && _player.IsGrounded;
-		if (!slamLanded)
+		// A jump landing on the button (COM_RIGID_CANNON_BUTTON_ACTIVATED on OnLand /
+		// OnGettingBodyslamAttacked): Crash comes down onto its hull. A belly-flop is the primed shot.
+		bool grounded = _player != null && _player.IsGrounded;
+		_rose |= !grounded && _player != null && _player.Velocity.Y > 1.0f;
+		// The rig's idle case (rigtrig.json): dropped onto the button by a warp, nothing fires.
+		if (grounded && !_wasGrounded && _rose && _player!.Self.IsValid)
 		{
-			_slamHandled = false;
-		}
-		else if (!_slamHandled)
-		{
-			_slamHandled = true;
+			Entity under = CharacterController.GetGroundEntity(_player.Self);
 			foreach (Pushable p in _pushables)
 			{
-				Vector3 origin = p.Model.Position;
-				Vector3 flat = crashPos - origin;
-				flat.Y = 0.0f;
-				if (NameKey(p.Model.Name) != "act_rigid_cannon" || flat.Length() > CannonButtonReach || crashPos.Y < origin.Y + 1.0f)
+				if (p.ButtonHull.IsValid && under == p.ButtonHull)
 				{
-					continue;
+					_cannonShots.Add(new CannonShot { Cannon = p, Primed = _player.IsSlamming, Delay = CannonFireDelay });
 				}
-				float yaw = p.Model.EulerDegrees.Y * MathF.PI / 180.0f;
-				Vector3 forward = new(MathF.Sin(yaw), 0.0f, MathF.Cos(yaw));
-				Entity ball = World.Create();
-				ball.Name = "Cannonball";
-				ball.MarkTransient();
-				ball.AddTransform();
-				ball.Position = origin + forward * 3.1f + new Vector3(0.0f, 2.3f, 0.0f); // barrel mouth
-				ball.LoadModel(CannonballModel);
-				_cannonballs.Add(new Cannonball
-				{
-					Model = ball,
-					Velocity = forward * CannonForwardSpeed + new Vector3(0.0f, CannonUpSpeed, 0.0f),
-					Floor = origin.Y - 3.0f,
-				});
 			}
 		}
+		_wasGrounded = grounded;
+		if (grounded)
+		{
+			_rose = false;
+		}
+
+		foreach (CannonShot shot in _cannonShots)
+		{
+			shot.Delay -= dt;
+			if (shot.Delay < 0.0f)
+			{
+				FireCannon(shot.Cannon, shot.Primed);
+			}
+		}
+		_cannonShots.RemoveAll(s => s.Delay < 0.0f);
 
 		foreach (Cannonball c in _cannonballs)
 		{
-			c.Velocity.Y -= CannonballGravity * dt;
-			Vector3 p = c.Model.Position + c.Velocity * dt;
-			c.Model.Position = p;
-			bool hit = p.Y < c.Floor;
-			foreach (OneShot s in _oneShots)
+			// dv/dt = -k v - g (the rig fit), one semi-implicit step.
+			c.Velocity += (-CannonballDrag * c.Velocity - new Vector3(0.0f, CannonballGravity, 0.0f)) * dt;
+			Vector3 from = c.Model.Position;
+			Vector3 step = c.Velocity * dt;
+			float len = step.Length();
+			Vector3 to = from + step;
+			bool contact = false;
+			if (len > 1e-5f)
 			{
-				if (s.Cue == PropCue.Explosion && InBlast(p, 0.0f, s.Actor.Model.Position))
+				RaycastHit hit = Physics.Raycast(from, step / len, len + CannonballRadius);
+				if (hit.DidHit && !IsCannonPart(c.Cannon, hit.Entity) && !(_player != null && hit.Entity == _player.Self))
 				{
-					hit = true;
+					contact = true;
+					to = hit.Position - step / len * CannonballRadius;
 				}
 			}
-			if (!hit)
+			if (c.Primed && !contact)
+			{
+				foreach (OneShot s in _oneShots)
+				{
+					contact |= s.Cue == PropCue.Explosion && s.Actor.Alive && InBlast(to, 0.0f, s.Actor.Model.Position);
+				}
+			}
+			c.Model.Position = to;
+			if (to.Y < c.Floor)
+			{
+				c.Model.Destroy();
+				c.Velocity = new Vector3(float.NaN);
+				continue;
+			}
+			if (!contact)
 			{
 				continue;
 			}
-			CrateFx.Exploded(p - new Vector3(0.0f, 0.5f, 0.0f), 5);
-			Explosion(p, BombDamageRadius);
 			c.Model.Destroy();
 			c.Velocity = new Vector3(float.NaN);
+			if (c.Primed)
+			{
+				BombBlast(to, crashPos);
+			}
+			else
+			{
+				// The lob lands and lies there as an ordinary bomb (s12 TouchingTerrain -> s1).
+				TrySpawnPushable("act_GLOBAL_BOMB", CannonballModel, to, Vector3.Zero);
+				Log.Info($"[Twinsanity] cannon lob landed at ({to.X:F2}, {to.Y:F2}, {to.Z:F2})");
+			}
 		}
 		_cannonballs.RemoveAll(c => float.IsNaN(c.Velocity.X));
 	}
+
+	private void FireCannon(Pushable p, bool primed)
+	{
+		float yaw = p.Model.EulerDegrees.Y;
+		Vector3 muzzle = p.Model.Position + Yawed(CannonMuzzleLocal, yaw);
+		Vector3 forward = Yawed(Vector3.UnitZ, yaw);
+		CrateFx.MuzzleFlash(muzzle);
+		Log.Info($"[Twinsanity] cannon fired ({(primed ? "belly-flop" : "jump")} shot, yaw {yaw:F1})");
+		TwinsanityAudio.Explosion(muzzle); // Sounds[0] = 63, the same clip as 22
+		Entity ball = World.Create();
+		ball.Name = "Cannonball";
+		ball.MarkTransient();
+		ball.AddTransform();
+		ball.Position = muzzle;
+		ball.LoadModel(CannonballModel);
+		_cannonballs.Add(new Cannonball
+		{
+			Model = ball,
+			Cannon = p,
+			Primed = primed,
+			Velocity = forward * (primed ? CannonSlamSpeed : CannonJumpSpeed) + new Vector3(0.0f, primed ? CannonSlamUp : CannonJumpUp, 0.0f),
+			Floor = p.Model.Position.Y - 40.0f,
+		});
+	}
+
+	private static bool IsCannonPart(Pushable p, Entity e) => e == p.Body || e == p.ButtonHull || p.Hulls.Contains(e);
 
 	// act_EARTH_NATIVE_SLEDGE (COM_EARTH_NATIVE_SLEDGE_DEFAULT): a rigid body on a rigid-only chute
 	// that starts sliding once Crash stands on it, carries him down the chute, off the ramp and over
@@ -631,6 +805,10 @@ public sealed partial class TwinsanityActors
 		UpdateSwingLogs(dt, crashPos);
 		foreach (OneShot s in _oneShots)
 		{
+			if (s.Crown.IsValid)
+			{
+				UpdateCrown(s, dt);
+			}
 			if (s.Remaining >= 0.0f)
 			{
 				s.Remaining -= dt;

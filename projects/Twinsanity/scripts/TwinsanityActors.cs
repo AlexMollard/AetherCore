@@ -25,6 +25,7 @@ public sealed partial class TwinsanityActors
 		void AddWumpa(int n);
 		void CreatureTouch(Vector3 position);
 		void CollectGem(int slot);
+		bool IsDeadly(Entity collision); // a deadly collision piece (drowning plane or pit)
 	}
 
 	private enum Behaviour

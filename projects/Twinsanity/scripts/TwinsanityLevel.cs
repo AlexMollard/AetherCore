@@ -744,7 +744,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 
 	// ponytail: dev-only test hook - polls project://warp.txt (shared by every playing editor), or
 	// instead project://warp-<AETHER_CONTROL_PORT>.txt when that file exists (this editor only), and
-	// teleports Crash there ("x y z", any other content = idle). Inert in normal play; remove when
+	// teleports Crash there ("x y z [facing]", any other content = idle). Inert in normal play; remove when
 	// automated testing gets a proper driver API.
 	private static readonly string? kOwnWarp = Environment.GetEnvironmentVariable("AETHER_CONTROL_PORT") is { Length: > 0 } port
 		? $"project://warp-{port}.txt" : null;
@@ -763,10 +763,12 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 			return;
 		}
 		string[] parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-		if (parts.Length == 3 && float.TryParse(parts[0], out float x) && float.TryParse(parts[1], out float y) && float.TryParse(parts[2], out float z))
+		if (parts.Length is 3 or 4 && float.TryParse(parts[0], out float x) && float.TryParse(parts[1], out float y) && float.TryParse(parts[2], out float z))
 		{
-			_player!.Respawn(new Vector3(x, y, z), _player.Facing);
-			Log.Info($"[Twinsanity] debug warp to ({x}, {y}, {z})");
+			// An optional fourth value is the facing in degrees, which also swings the camera behind it.
+			float facing = parts.Length == 4 && float.TryParse(parts[3], out float f) ? f : _player!.Facing;
+			_player!.Respawn(new Vector3(x, y, z), facing);
+			Log.Info($"[Twinsanity] debug warp to ({x}, {y}, {z}) facing {facing}");
 		}
 	}
 
@@ -1362,6 +1364,9 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		Hurt(from, kind);
 	}
+
+	// TwinsanityActors.ITwinsanityHost: a bomb that rolls onto a deadly surface primes (Cond125).
+	public bool IsDeadly(Entity collision) => _deadly.ContainsKey(collision.Id);
 
 	private void Die(DeathKind kind)
 	{
