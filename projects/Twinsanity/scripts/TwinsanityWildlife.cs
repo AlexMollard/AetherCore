@@ -1577,6 +1577,10 @@ public sealed partial class TwinsanityActors
 	private const float WormAttackRadius = 3.0f;
 	private const float WormTurnRate = 180.0f;
 	private const float WormHitAt = 0.3f;
+	// The lunge reaches forward at mouth height: on the rig a bite already under way never hurt Crash dropping
+	// onto the worm from over its head (feet ~2.2-2.9 m over the hole at the hit frame, 0-1 m off it); he
+	// landed on the head and was launched (logs/hubrun/rig_worm_air*.csv). ponytail: the only rig samples are
+	// over the head; a jump past its side at head height is untested and taken as a hit.
 	private const float WormBiteClip = 1.12f; // a003
 
 	// c.Landed: biting; c.FruitLife: time into a003; c.Speed: the idle loop's phase last frame.
@@ -1587,7 +1591,7 @@ public sealed partial class TwinsanityActors
 		{
 			float before = c.FruitLife;
 			c.FruitLife += dt;
-			if (before < WormHitAt && c.FruitLife >= WormHitAt && d < WormAttackRadius)
+			if (before < WormHitAt && c.FruitLife >= WormHitAt && d < WormAttackRadius && crashPos.Y <= a.Home.Y + MechanicsWorm.WormTop)
 			{
 				_host?.DamagePlayer(a.Home, DeathKind.Generic);
 			}
