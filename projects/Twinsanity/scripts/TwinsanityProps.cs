@@ -65,6 +65,8 @@ public sealed partial class TwinsanityActors
 	{
 		public Pushable Push = null!;
 		public float Fuse = -1.0f; // seconds to the explosion once primed
+		public float Flash;        // COM_GLOBAL_BOMB_PRIMED's red/black cycles run so far (BombFlash)
+		public bool Red;           // showing OGI 871 (red) rather than 870
 		public bool Rolled;        // s5 reached: it has been pushed
 		public Vector3 Home;       // where it started (s5 MeToInitPosSqrDist)
 		public bool Gone;
@@ -82,6 +84,17 @@ public sealed partial class TwinsanityActors
 	// 2.4 m over the 1 s fuse.
 	private const float BombKickSpeed = 4.5f;
 	private const float BombDrag = 1.4f;
+	// COM_GLOBAL_BOMB_PRIMED loops DoAnim OGI slot 2 (871: the red half of the bomb texture, UVs
+	// shifted 0.485) then slot 1 (870, black), DELAY 0.25 per state. Rig, every frame at 50 Hz
+	// (logs/bombfuse/README.md): red from the moment it primes, ~13 frames red / ~15 black, a steady
+	// 0.55 s cycle from the first flash to the boom on both the 1 s spin fuse and the 4 s far fuse.
+	// The speed-up over the last second is ours, visual only (the user's ask): the cycle shrinks
+	// linearly to BombFlashEnd at the boom. The fuse lengths are untouched.
+	private const float BombFlashCycle = 0.55f;
+	private const float BombFlashRed = 0.47f;       // red share of a cycle (0.26 s of 0.55)
+	private const float BombFlashEnd = 0.1f;
+	private const float BombFlashRamp = 1.0f;       // seconds before the boom the speed-up starts
+	private const string BombRedModel = "project://assets/models/objects/act_GLOBAL_BOMB/act_GLOBAL_BOMB_1.gltf";
 
 	// act_RIGID_CANNON (COM_RIGID_CANNON_ACTIVATED): any jump landing on its red button fires a
 	// GLOBAL_BOMB from the muzzle (OGI 756 exit point 1: local (0, 2.577, 4.058)) 0.1 s after the
@@ -99,7 +112,9 @@ public sealed partial class TwinsanityActors
 	{
 		public Entity Model;
 		public Vector3 Velocity;
-		public bool Primed;       // the belly-flop shot: explodes on contact
+		public bool Primed;       // the belly-flop shot: explodes on contact, flashing (s8 runs PRIMED)
+		public float Flash;
+		public bool Red;
 		public Pushable Cannon = null!;
 		public float Floor;       // lost below this (over a void)
 	}
@@ -378,11 +393,18 @@ public sealed partial class TwinsanityActors
 						b.Fuse = BombFuse;
 					}
 				}
-				continue;
+				if (b.Fuse < 0.0f)
+				{
+					continue;
+				}
 			}
-			b.Fuse -= dt;
+			else
+			{
+				b.Fuse -= dt;
+			}
 			if (b.Fuse >= 0.0f)
 			{
+				BombFlash(p.Model, dt, b.Fuse, ref b.Flash, ref b.Red);
 				continue;
 			}
 			BombBlast(p.Center, crashPos);
@@ -392,6 +414,22 @@ public sealed partial class TwinsanityActors
 			p.Model.Destroy();
 		}
 		_bombs.RemoveAll(b => b.Gone);
+	}
+
+	// One step of the primed flash (BombFlashCycle): red for the first BombFlashRed of each cycle,
+	// from the frame it primes. `remaining` is the fuse left; infinity keeps the rig's steady cycle.
+	private static void BombFlash(Entity model, float dt, float remaining, ref float phase, ref bool red)
+	{
+		float cycle = remaining < BombFlashRamp
+			? BombFlashEnd + (BombFlashCycle - BombFlashEnd) * remaining / BombFlashRamp
+			: BombFlashCycle;
+		bool want = phase % 1.0f < BombFlashRed;
+		phase += dt / cycle;
+		if (want != red)
+		{
+			red = want;
+			CrateFx.LoadState(model, red ? BombRedModel : CannonballModel);
+		}
 	}
 
 	// What the bomb rests on is a deadly collision piece (the drowning plane under the sea, a pit).
@@ -478,6 +516,10 @@ public sealed partial class TwinsanityActors
 				}
 			}
 			c.Model.Position = to;
+			if (c.Primed)
+			{
+				BombFlash(c.Model, dt, float.PositiveInfinity, ref c.Flash, ref c.Red);
+			}
 			if (to.Y < c.Floor)
 			{
 				c.Model.Destroy();

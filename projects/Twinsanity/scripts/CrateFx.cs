@@ -580,11 +580,11 @@ public static class CrateFx
 	}
 
 	/// <summary>act_GLOBAL_BOMB going off (COM_GLOBAL_BOMB_DAMAGED): DoParticle EXPLODE_1A-1D
-	/// (bank 13-16) and its Sounds[3] = 63 (the same clip as the crates' 22). Defs from
+	/// (bank 13-16) and its Sounds[3] = 63 (bit-identical to the crates' 22). Defs from
 	/// logs/aku/all_particles.json, mapped as the EXPLODE_TNT_* ones above (logs/cannon/emit_cs.py).</summary>
 	public static void BombExploded(Vector3 center)
 	{
-		TwinsanityAudio.Explosion(center);
+		TwinsanityAudio.BombExplosion(center);
 		Explode1A(center);
 		SpawnEmitter("EXPLODE_1B", center, "1", new Vector4(1.9f, 34.3f, 30.6f, 62.4f) / 128.0f,
 			21, 180f, 7.0f / 60.0f, 0.598306f,
@@ -705,7 +705,7 @@ public static class CrateFx
 		return model[..(under + 1)] + k + ".gltf";
 	}
 
-	private static void LoadState(Entity crate, string path)
+	internal static void LoadState(Entity crate, string path)
 	{
 		// Entity.LoadModel only DETACHES the previous model's meshes, leaving them standing in
 		// the world as orphans: every swap left the old state behind (the "crate inside an

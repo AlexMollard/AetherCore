@@ -182,6 +182,11 @@ public static class TwinsanityAudio
 
 	public static void Explosion(Vector3 at) => At(GlobalBank + "22.wav", at, 8.0f, 90.0f);
 
+	/// <summary>act_GLOBAL_BOMB going off (COM_GLOBAL_BOMB_DAMAGED, Sounds[3] = 63). The fuse itself is
+	/// silent on the disc: COM_GLOBAL_BOMB_PRIMED has no DoSound, and rig captures of a 1 s and a 4 s fuse
+	/// show 63 at the boom only (logs/bombfuse/README.md).</summary>
+	public static void BombExplosion(Vector3 at) => At(LevelBank + "63.wav", at, 8.0f, 90.0f);
+
 	/// <summary>Nitro idle hop (COM_NITRO_CRATE_DEFAULT, Sounds[0] = 51).</summary>
 	public static void NitroHop(Vector3 at) => At(GlobalBank + "51.wav", at, 2.0f, 25.0f);
 
