@@ -927,12 +927,30 @@ public sealed partial class TwinsanityActors
 			// Subtype 2 drops from its hold to hanging at DropRate and stays there.
 			float roll = l.Subtype == 2 ? l.HoldRoll * MathF.Max(0.0f, 1.0f - DropRate * l.T / MathF.Abs(l.HoldRoll)) : 0.0f;
 			(Vector3 a, Vector3 b) = PoseSwingLog(l, angle, roll);
+			if (l.Subtype == 2)
+			{
+				CrushPiranhas(a, b);
+			}
 			// Crash's body: feet + 0.4 to feet + 1.3, radius 0.4; crouched or crawling, feet + 0.4 to + 0.7
 			// (rig_pitB_sheet.png: a crawl passes under log 42, whose underside is 1.2 m over the bridge).
 			float top = _player != null && _player.IsCrouching ? 0.7f : 1.3f;
 			if (SegmentDistance(a, b, crashPos + new Vector3(0.0f, 0.4f, 0.0f), crashPos + new Vector3(0.0f, top, 0.0f)) < SwingLogRadius + 0.4f)
 			{
 				_host?.DamagePlayer((a + b) * 0.5f, DeathKind.Crush);
+			}
+		}
+	}
+
+	// Trig 1's log 38 drops onto piranha 39 in the gap (its message 59, COM_PIRANHAPLANT_CRUSHED): the rig shows
+	// the plant flattened for good under the hanging log (rig_s1 frames 9-10). Plant body: feet + 0.5 to + 3.0.
+	private void CrushPiranhas(Vector3 a, Vector3 b)
+	{
+		foreach (Actor p in _actors)
+		{
+			if (p.Kind == Behaviour.Piranha && p.Critter is { } c && c.Mode != Mode.Rest
+				&& SegmentDistance(a, b, p.Model.Position + new Vector3(0.0f, 0.5f, 0.0f), p.Model.Position + new Vector3(0.0f, 3.0f, 0.0f)) < SwingLogRadius + 0.5f)
+			{
+				KnockFlat(p, c);
 			}
 		}
 	}
