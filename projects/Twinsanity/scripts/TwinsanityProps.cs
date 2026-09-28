@@ -238,10 +238,11 @@ public sealed partial class TwinsanityActors
 			});
 			return true;
 		}
-		else if (n.StartsWith("act_training_swinging_log") && subtype == 0)
+		else if (n.EndsWith("act_training_swinging_log", StringComparison.Ordinal) && subtype == 0)
 		{
 			// COM_TRAINING_SWINGING_LOG_START s0: PosWarp lifts the pivot 6.4 m (the model hangs 8.3 m below its
-			// origin); subtype 0 then swings from level start (s9 -> s13 SetWobble).
+			// origin); subtype 0 then swings from level start (s9 -> s13 SetWobble). Hub B's act_..._LOG11 and the
+			// high path's old_act_..._LOG (L0 23, over pit A) run the same script.
 			e.Position += new Vector3(0.0f, SwingLift, 0.0f);
 			_swingLogs.Add(new SwingLog { Model = e, Pivot = e.Position, Yaw = e.EulerDegrees.Y });
 			return true;
