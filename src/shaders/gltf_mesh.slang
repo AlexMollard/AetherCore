@@ -391,8 +391,8 @@ float3 GemShade(FrameConstantsData* fc, float3 albedo, float3 albedoAvg, float3 
 
 // FoliageSkyLook (logs/look/FoliageSkyLook/README.md). ponytail: every k* below is a look choice
 // judged on the sheets, not measured - the PS2 had none of it.
-// Soft cutout edge: scenery foliage keeps texels down to this far (in alpha, capped) below the
-// cutoff as a one-pixel coverage ramp; its pipeline blends (MaterialSystem softCutout).
+// Soft cutout edge: scenery foliage's edge pass keeps texels down to this far (in alpha, capped)
+// below the cutoff as a one-pixel coverage ramp (MaterialSystem softCutout).
 static const float kFoliageEdgeMaxBand = 0.35;
 // Light through the leaves: how much a card lit from behind adds, as a fraction of its own lit
 // colour. Cards lying flat on the ground face the high sun, so they never light from behind and
@@ -520,25 +520,30 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         baseColor.a *= LightShaftFade(fc, input.uv, input.uv2, input.worldPos, input.worldNormal);
     }
 
-    // Alpha test. Scenery foliage (Foliage.slangh) keeps a one-pixel ramp of texels just below the
-    // cutoff as partial coverage - its pipeline blends (MaterialSystem softCutout) - so a card's
-    // silhouette is antialiased instead of stair-stepped, without blurring the texture. Inside
-    // the cutoff it stays fully opaque: those pixels are in the depth prepass, which cut the card
-    // at the plain cutoff.
+    // Alpha test. Scenery foliage (Foliage.slangh) draws twice (MaterialSystem softCutout): this
+    // shader as a plain cutout with the opaque geometry, writing depth, then the edge pass
+    // (gltf_mesh_foliage_edge.slang, AETHER_FOLIAGE_EDGE_PASS) in the blended group without a depth
+    // write, keeping only the one-pixel ramp of texels just below the cutoff as partial coverage.
+    // The silhouette is antialiased instead of stair-stepped, without blurring the texture, and
+    // the fringe hides nothing drawn after it.
     const bool sceneryFoliage = IsSceneryFoliage(mat.flags) && (mat.flags & kFlagAlphaMask) != 0u;
     const float alphaWidth = fwidth(baseColor.a);
     float edgeCoverage = 1.0;
     if ((mat.flags & kFlagAlphaMask) != 0u)
     {
+#ifdef AETHER_FOLIAGE_EDGE_PASS
         const float band = sceneryFoliage ? min(alphaWidth, kFoliageEdgeMaxBand) * lookStrength : 0.0;
-        if (baseColor.a < mat.alphaCutoff - band)
+        if (band <= 1e-4 || baseColor.a >= mat.alphaCutoff || baseColor.a < mat.alphaCutoff - band)
         {
             discard;
         }
-        if (band > 1e-4)
+        edgeCoverage = saturate((baseColor.a - (mat.alphaCutoff - band)) / band);
+#else
+        if (baseColor.a < mat.alphaCutoff)
         {
-            edgeCoverage = saturate((baseColor.a - (mat.alphaCutoff - band)) / band);
+            discard;
         }
+#endif
     }
 
     // ── TBN - world-space tangent frame ──────────────────────────────────

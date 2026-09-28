@@ -132,6 +132,8 @@ namespace aether
 				}
 			}
 
+			const float viewDepthSq = glm::dot(glm::vec3(worldSphere) - eyeWorldPos, glm::vec3(worldSphere) - eyeWorldPos);
+			const std::uint32_t meshGeneration = meshComp.mesh ? meshComp.mesh->GetGeneration() : 0;
 			queue.Submit({
 			        .pipeline = pipelineComp.pipeline,
 			        .mesh = meshComp.mesh,
@@ -149,12 +151,29 @@ namespace aether
 			        .ragdollOverrides = std::move(ragdollOverrides),
 			        .animDb = animDb,
 			        .animDbGeneration = animDb ? animDb->GetGeneration() : 0,
-			        .meshGeneration = meshComp.mesh ? meshComp.mesh->GetGeneration() : 0,
+			        .meshGeneration = meshGeneration,
 			        .blended = pipelineComp.blended,
-			        .viewDepthSq = glm::dot(glm::vec3(worldSphere) - eyeWorldPos, glm::vec3(worldSphere) - eyeWorldPos),
+			        .viewDepthSq = viewDepthSq,
 			        .sky = pipelineComp.sky,
 			        .skyOrder = skyOrder,
 			});
+			// Scenery foliage's soft fringe (MaterialSystem softCutout): colour only, so shadows skip it.
+			// ponytail: the depth prepass draws this copy too (it flushes every draw); the depth is the
+			// same, so the cost is only the extra foliage geometry there.
+			if (pipelineComp.edgePipeline != nullptr && !shadowPass && skinIndex < 0)
+			{
+				queue.Submit({
+				        .pipeline = pipelineComp.edgePipeline,
+				        .mesh = meshComp.mesh,
+				        .modelMatrix = transformComp.localToWorld,
+				        .materialIndex = materialIndex,
+				        .effectParamIndex = effectParamIndex,
+				        .worldBoundingSphere = worldSphere,
+				        .meshGeneration = meshGeneration,
+				        .blended = true,
+				        .viewDepthSq = viewDepthSq,
+				});
+			}
 		}
 	}
 

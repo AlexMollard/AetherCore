@@ -111,6 +111,9 @@ namespace aether
 		bool blended = false;
 		// Skydome surface (MaterialAsset::sky): drawn before everything else, in primitive order.
 		bool sky = false;
+		// Scenery foliage soft edge (MaterialSystem softCutout): drawn a second time with this
+		// pipeline in the blended group, after `pipeline` has drawn the hard cutout with depth.
+		const GraphicsPipeline* edgePipeline = nullptr;
 	};
 
 	struct MeshSourceComponent

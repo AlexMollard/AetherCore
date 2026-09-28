@@ -76,3 +76,45 @@ TEST_CASE("Destroying an entity releases its material handle via the hook") {
 
     MaterialSystem::DisconnectLifecycle(world);
 }
+
+TEST_CASE("Soft-cutout scenery foliage writes depth as a cutout and blends only its edge") {
+    // The forward pass clears the prepass depth, so a leaf that did not write depth let water,
+    // gems and later foliage in the blended group paint over it; a blended edge that did write
+    // depth left halos wherever something behind it was drawn later.
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry reg(sink, treg);
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    World world;
+
+    Entity leaf = world.Create();
+    MaterialAsset a; a.foliage = true; a.bakedLighting = true; a.alphaMask = true; a.doubleSided = true;
+    MaterialSystem::AssignMaterial(world, leaf, reg, cache, a);
+
+    MaterialTemplate cutout = a.templateDesc;
+    cutout.cullMode = gpu::CullMode::None;
+    cutout.blendEnable = false;
+    cutout.depthWriteEnable = true;
+    MaterialTemplate edge = cutout;
+    edge.shaderVfsPath = "shaders://gltf_mesh_foliage_edge.spv";
+    edge.blendEnable = true;
+    edge.depthWriteEnable = false;
+    const PipelineComponent& p = world.Get<PipelineComponent>(leaf);
+    CHECK_FALSE(p.blended);
+    CHECK(p.pipeline == cache.Acquire(cutout));
+    CHECK(p.edgePipeline == cache.Acquire(edge));
+
+    // Transparent surfaces still blend in one draw and never write depth.
+    Entity water = world.Create();
+    MaterialAsset w; w.alphaBlend = true;
+    MaterialSystem::AssignMaterial(world, water, reg, cache, w);
+    MaterialTemplate noWrite = w.templateDesc;
+    noWrite.cullMode = gpu::CullMode::Back;
+    noWrite.blendEnable = true;
+    noWrite.depthWriteEnable = false;
+    const PipelineComponent& pw = world.Get<PipelineComponent>(water);
+    CHECK(pw.blended);
+    CHECK(pw.pipeline == cache.Acquire(noWrite));
+    CHECK(pw.edgePipeline == nullptr);
+}
