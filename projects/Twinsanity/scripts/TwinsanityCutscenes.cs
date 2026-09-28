@@ -255,6 +255,11 @@ public sealed class TwinsanityCutscenes
 	private float _camMove, _camMoveT;             // its length (s) and progress
 	private float _sceneClock;
 	private int _speech;          // Audio voice id of the playing speech line
+	private Agent? _speaker;      // who started it, and the scene time its line ends (audio/voice/lengths.json)
+	private float _speechEnd;
+	private Dictionary<int, float>? _speechLengths;
+	private Agent? _endedDirector; // the director whose scene ended last, and when (game clock)
+	private float _endedAt;
 	private const float SpeechVolume = 1.0f;
 	private readonly TwinsanitySkipPrompt _prompt = new();
 	// BottomTextDisplay: an AgentLab line drawn in the bottom letterbox bar while a scene holds it (outside
@@ -1145,8 +1150,11 @@ public sealed class TwinsanityCutscenes
 		}
 		// NO_MOTION: done once the delay has passed and a one-shot clip has played out, unless its DoAnim set
 		// 0x2000. Rig: scene B's Coco (DoAnim 0x2FF1) leaves her 0.1 s states 0.1 s in (rig_sB_actors.csv);
-		// the beach Aku (0x0FF1) holds his 0.7 s state for his whole 13 s clip.
-		m.MotionDone = a.ClipLoops || !a.ClipBlocks || a.Clip.Length == 0 || a.ClipTime >= a.ClipLength;
+		// the beach Aku (0x0FF1) holds his 0.7 s state for his whole 13 s clip. A state whose way out stops
+		// the speech (Cmd186) also holds while its agent's own line plays: the high path skunk tells its
+		// 11.8 s tale in a 0.5 s NO_MOTION state (rig scene 12.7 s, rig_sk1.csv).
+		m.MotionDone = (a.ClipLoops || !a.ClipBlocks || a.Clip.Length == 0 || a.ClipTime >= a.ClipLength)
+		               && !(_speaker == a && _sceneClock < _speechEnd && StopsSpeech(m.Def.States[m.State]));
 	}
 
 	// GROUND_CHASE: run along the ground at MOVE_SPEED until within SQR_TOLERANCE of the target (which may
@@ -1444,7 +1452,13 @@ public sealed class TwinsanityCutscenes
 				a.Message = -1;
 				break;
 			case 521: // SetPlayerInput(mask, mode): 0 hands control back
-				SetControl(Arg(1) == 0);
+				// A director's own post-END state can still switch input off (the high path skunk's s6,
+				// SetPlayerInput(0x400040, 3064) after COM_GENERIC_CUTSCENE_END): the scene is over and the rig
+				// hands control back, so only a running scene (or a hand-back) touches it.
+				if (Active || Arg(1) == 0 || a != _endedDirector || _clock - _endedAt > 1.0f)
+				{
+					SetControl(Arg(1) == 0);
+				}
 				break;
 			case 589: // CutsceneStart
 				Log.Info($"[Cutscenes] start {m.Def.Name} ({a.Name})");
@@ -1472,6 +1486,8 @@ public sealed class TwinsanityCutscenes
 				StopSpeech();
 				int track = (int)(Arg(0) >> 3);
 				_speech = Audio.Play($"project://assets/audio/voice/track_{track}.wav", SpeechVolume);
+				_speaker = a;
+				_speechEnd = _sceneClock + SpeechLength(track);
 				Log.Info($"[Cutscenes] speech {track} ({a.Name}) at {_sceneClock:F2} s");
 				break;
 			case 186: // stop the speech line
@@ -1819,6 +1835,8 @@ public sealed class TwinsanityCutscenes
 	private void EndScene()
 	{
 		Active = false;
+		_endedDirector = _scene;
+		_endedAt = _clock;
 		s_ownsCamera = false;
 		StopSpeech();
 		if (_stripTarget <= 0.0f)
@@ -2114,6 +2132,38 @@ public sealed class TwinsanityCutscenes
 			Audio.Stop(_speech);
 			_speech = 0;
 		}
+		_speaker = null;
+	}
+
+	// Seconds of speech track n (tw-extract --voice writes audio/voice/lengths.json); 0 when unknown.
+	private float SpeechLength(int track)
+	{
+		if (_speechLengths == null)
+		{
+			_speechLengths = new Dictionary<int, float>();
+			string text = Assets.ReadText("project://assets/audio/voice/lengths.json") ?? "";
+			foreach (System.Text.RegularExpressions.Match mt in System.Text.RegularExpressions.Regex.Matches(text, "\"(\\d+)\"\\s*:\\s*([0-9.]+)"))
+			{
+				_speechLengths[int.Parse(mt.Groups[1].Value)] = float.Parse(mt.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+			}
+		}
+		return _speechLengths.TryGetValue(track, out float s) ? s : 0.0f;
+	}
+
+	// A state whose rules stop the speech line (Cmd186) on the way out.
+	private static bool StopsSpeech(State st)
+	{
+		foreach (Rule r in st.Rules)
+		{
+			foreach (uint[] c in r.Cmds)
+			{
+				if (c.Length > 0 && c[0] == 186)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	// The prompt shows only while the running scene's director has a live skip rule (condition 572).

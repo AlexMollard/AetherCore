@@ -309,9 +309,10 @@ public sealed partial class TwinsanityActors
 				// COM_CREATURE_BASIC_IDLE_PATROL: a002 walk to the next route key, a001 while turning.
 				// Rig (logs/audit/skunk_patrol_rig.csv, huba skunk 12): 2.15 m/s legs (the instance's
 				// floats[2] = 2.2), stops ~0.36 m short of each key and stands 1.3 s before heading
-				// back - a ping-pong along the keys, never off them.
+				// back - a ping-pong along the keys, never off them. params[0] == 0 (highpath's scene
+				// skunk 52) stands still: the rig's stays at (-14.01, -51.59) for good (HubC4).
 				c.WalkClip = Animation.Find(e, "a002");
-				c.Points = new List<Vector3>(i.Points);
+				c.Points = i.Params.Length > 0 && i.Params[0] == 0 ? new List<Vector3>() : new List<Vector3>(i.Points);
 				c.Speed = i.Floats.Length > 2 ? i.Floats[2] : SkunkWalk;
 				c.Mode = Mode.Walk;
 				break;
