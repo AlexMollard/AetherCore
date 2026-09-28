@@ -30,11 +30,14 @@
 
 static const float3 kWaterShallow = float3(0.06, 0.62, 0.55); // linear turquoise over sand
 static const float3 kWaterDeep = float3(0.0, 0.085, 0.38);    // linear vivid deep blue (the PS2 sea's hue)
-static const float kWaterDepthScale = 0.2;    // m: deepness = 1 - exp(-depth / scale)
+static const float kWaterDepthScale = 0.2;    // m: deepness = 1 - exp(-depth / scale), rescaled to reach 1 at kWaterDeepAt
+static const float kWaterDeepAt = 0.6;        // m: fully deep from here (the beach sea sheet floats 0.7 m over the open-ocean base: an
+                                              // asymptotic 0.97 left it 3% turquoise against the open sea, a hard seam at its edge)
 static const float kWaterShallowAlpha = 0.30; // coverage over the shallowest sand
 static const float kWaterDeepAlpha = 0.92;    // coverage once deep
 static const float kWaterEdgeSoft = 0.06;     // m: coverage fades in over this depth at the waterline
-static const float kWaterPattern = 0.3;       // how strongly the PS2 texel pattern modulates the body (higher tiles into a checker seen from above)
+static const float kWaterPattern = 0.15;      // how strongly the PS2 texel pattern modulates the body (higher tiles into a checker seen from above)
+static const float kWaterBodyGain = 0.82;     // body brightness (about the shore sheets' level before the pattern stopped carrying the vertex colour)
 static const float kWaterRippleAmp = 1.0;     // ripple slope scale
 static const float kWaterGlint = 0.6;         // sun glint strength
 static const float kWaterGlintCap = 6.0;      // brightest glint: a soft sheen, never a white dash
@@ -250,7 +253,7 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 		depth = max(lerp(worldPos.y - behind.y, distance(worldPos, behind), steep), 0.0);
 	}
 	const float waterDepth = depth + max(mat.metallicFactor, 0.0);
-	const float deepness = lerp(1.0 - exp(-waterDepth / kWaterDepthScale), 0.35, steep);
+	const float deepness = lerp(saturate((1.0 - exp(-waterDepth / kWaterDepthScale)) / (1.0 - exp(-kWaterDeepAt / kWaterDepthScale))), 0.35, steep);
 
 	// ── Light ─────────────────────────────────────────────────────────────
 	// The bake's brightness (its hue is the PS2's blue, which the tint replaces), pulled down by
@@ -260,15 +263,24 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 	const float3 light = bakeLum * shade;
 
 	// ── Body ──────────────────────────────────────────────────────────────
-	// The PS2 texel's brightness against its own average keeps the original caustic pattern.
-	float3 avgTex = albedo;
+	// The PS2 texel's brightness against the texture's local average (its 4x4 mip) keeps the
+	// original caustic pattern. Both sides carry the vertex colour and material factor
+	// (bakedLight), so the ratio is the texture's alone and averages 1 on every sheet: with the
+	// average from the texture alone and over the whole texture (foam band included), each sheet's
+	// body was scaled by its baked vertex colour and texture layout, and neighbouring sheets (the
+	// beach sea sheet over the open-ocean sheet) met at a hard straight seam of different brightness.
+	float3 texAvg = albedo / max(bakedLight, 1e-4);
+	float coarseLevel = 0.0;
 	if (mat.albedoSlot != kNoTexture)
 	{
-		avgTex = mat.baseColorFactor.rgb * g_textures[mat.albedoSlot].SampleLevel(g_linearSampler, uv, 12.0).rgb;
+		uint texW, texH, texLevels;
+		g_textures[mat.albedoSlot].GetDimensions(0u, texW, texH, texLevels);
+		coarseLevel = max(log2(float(max(texW, texH))) - 2.0, 0.0);
+		texAvg = g_textures[mat.albedoSlot].SampleLevel(g_linearSampler, uv, coarseLevel).rgb;
 	}
-	const float pattern = clamp(dot(albedo, kLuma) / max(dot(avgTex, kLuma), 1e-4), 0.0, 2.5);
+	const float pattern = clamp(dot(albedo, kLuma) / max(dot(bakedLight * texAvg, kLuma), 1e-4), 0.0, 2.5);
 	const float3 tint = lerp(kWaterShallow, kWaterDeep, deepness);
-	float3 body = tint * light * lerp(1.0, pattern, kWaterPattern);
+	float3 body = tint * light * (kWaterBodyGain * lerp(1.0, pattern, kWaterPattern));
 	// Shallow caustic sparkle: the pattern's bright cells light the sand through the water.
 	body += kWaterShallow * light * (saturate(pattern - 1.0) * (1.0 - deepness) * 0.6 * sunVisibility);
 
@@ -276,9 +288,12 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 	// same world speed (half the tiling, half the UV rate) and white streaks where both are bright.
 	if (steep > 0.001 && mat.albedoSlot != kNoTexture)
 	{
+		// The streak thresholds were tuned against the texel over the material-only whole-texture
+		// average (the fall's vertex colour left in), so they keep reading it that way.
+		const float fallAvg = max(dot(mat.baseColorFactor.rgb * g_textures[mat.albedoSlot].SampleLevel(g_linearSampler, uv, 12.0).rgb, kLuma), 1e-4);
 		const float2 uv2 = meshUv * float2(0.5, 0.5) + fract(mat.uvScroll * 0.5 * t) + float2(0.37, 0.0);
 		const float3 layer2 = mat.baseColorFactor.rgb * g_textures[mat.albedoSlot].Sample(g_linearSampler, uv2).rgb;
-		const float streak = smoothstep(0.9, 1.6, pattern) * smoothstep(0.9, 1.5, dot(layer2, kLuma) / max(dot(avgTex, kLuma), 1e-4));
+		const float streak = smoothstep(0.9, 1.6, clamp(dot(albedo, kLuma) / fallAvg, 0.0, 2.5)) * smoothstep(0.9, 1.5, dot(layer2, kLuma) / fallAvg);
 		const float3 fall = lerp(albedo, layer2, 0.4) * lerp(1.0, 1.15, sunVisibility) + streak * 0.45 * light;
 		body = lerp(body, fall, steep);
 	}
@@ -287,22 +302,31 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 	// The PS2's own foam is its grey texels (the sea is blue): the sheet's UV layout puts it along
 	// the shore, so reading it from the same UV keeps its orientation. A blurrier mip softens its
 	// hard painted edges; a slowly moving ripple height dissolves its edge so it breathes.
+	// The open-ocean and river textures are tiled caustic nets whose thin veins are just as grey:
+	// read as foam they tile into rows of white cells (bands of zigzag across the open sea). Shore
+	// foam is a broad painted band, so it is still grey in the texture's 4x4 mip (0.45-0.8 on the
+	// shore texture), where a vein net has averaged back to blue (<= 0.06). That mip is read clamped
+	// inside the tile: wrapped, the foam band at one edge would blend with the open water at the
+	// other and lose its landward edge. The low ramp keeps the band's seaward wisps.
 	float foam = 0.0;
 	if (mat.albedoSlot != kNoTexture)
 	{
-		// A blurrier mip and a wide ramp soften the painted edge, so the foam never shows the
-		// texel's hard wedge; the ripple height moves the ramp so the edge breathes.
 		const float4 soft = g_textures[mat.albedoSlot].SampleBias(g_linearSampler, uv, 2.5);
 		const float grey = saturate((soft.r / max(soft.b, 1e-3) - 0.35) * 2.5) * soft.a;
+		const float4 coarse = g_textures[mat.albedoSlot].SampleLevel(g_linearSampler, clamp(frac(uv), 0.125, 0.875), coarseLevel);
+		const float broad = smoothstep(0.08, 0.25, saturate((coarse.r / max(coarse.b, 1e-3) - 0.35) * 2.5) * coarse.a);
 		const float h = WaterRippleHeight(worldPos.xz * 1.3, t);
-		foam = smoothstep(0.25 + 0.15 * h, 0.85 + 0.15 * h, grey);
+		foam = smoothstep(0.25 + 0.15 * h, 0.85 + 0.15 * h, grey) * broad;
 	}
-	// Contact foam where the water meets the ground, broken up and lapping with the ripple.
+	// Contact foam where the water meets the ground, broken up and lapping with the ripple. It
+	// reads the biased depth: an open-ocean sheet floats ~0.2 m over the opaque ocean base sheet,
+	// which the raw depth takes for a seabed, so the lapping band (diagonal in x+z, cut up by the
+	// ripple height) swept the whole open sea as rows of white zigzag cells.
 	if (haveBehind && steep < 0.5)
 	{
 		const float h = WaterRippleHeight(worldPos.xz * 2.1 + 7.0, t * 1.3);
 		const float band = kWaterFoamContact * (0.75 + 0.25 * sin(t * 1.4 + (worldPos.x + worldPos.z) * 0.45));
-		const float contact = 1.0 - smoothstep(0.0, band, depth);
+		const float contact = 1.0 - smoothstep(0.0, band, waterDepth);
 		foam = max(foam, contact * smoothstep(-0.3, 0.5, h + contact * 0.6));
 	}
 	foam *= 1.0 - steep; // a fall's texture is grey-blue all over: its streaks come from the flow layer
