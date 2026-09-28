@@ -145,6 +145,35 @@ public sealed class CrashPlayer : EntityScript
 	private float _vy;
 	// The height the game's own 50 Hz integration would have him at (see TrackHeight).
 	private float _airY;
+	// The original collides at its object's +0x284 height, not at the physics body: in a jump that point
+	// rides above the body by what the clip does to his legs (rig, frame-exact 50 Hz, logs/jumpreach:
+	// 0x284 minus the vy-integrated body). So his FEET for walls, ledges and floors are the body plus
+	// this lift, and a running jump clears a vertical ledge up to ~2.7 while the body peaks at 2.15.
+	// Per 50 Hz tick from the launch; the controller follows _airY + _lift, the model stays on the body
+	// (the clip tucks the legs up to the feet) and eases up onto the feet after a landing.
+	private static readonly float[] LiftRun = // a020 (jump_rig.csv "single", run)
+	{
+		0.098f, 0.055f, -0.040f, -0.075f, -0.029f, 0.019f, 0.041f, 0.073f, 0.140f, 0.218f, 0.257f, 0.286f,
+		0.324f, 0.378f, 0.438f, 0.498f, 0.537f, 0.578f, 0.608f, 0.629f, 0.651f, 0.662f, 0.669f, 0.625f,
+		0.594f, 0.564f, 0.533f, 0.494f, 0.458f, 0.407f, 0.348f, 0.297f,
+	};
+	private static readonly float[] LiftStand = // a019 (rig_offsets.json "stand_jump", no stick)
+	{
+		-0.025f, -0.039f, -0.042f, -0.057f, -0.079f, -0.105f, -0.123f, -0.118f, -0.093f, -0.058f, -0.016f,
+		-0.006f, 0.012f, 0.039f, 0.051f, 0.066f, 0.086f, 0.102f, 0.119f, 0.137f, 0.160f, 0.184f, 0.208f,
+		0.228f, 0.249f, 0.271f, 0.296f, 0.322f, 0.350f, 0.318f, 0.291f, 0.273f,
+	};
+	private static readonly float[] LiftDouble = // a021 from its launch (jump_rig.csv "double16")
+	{
+		0.496f, 0.533f, 0.432f, 0.385f, 0.398f, 0.304f, 0.203f, 0.103f, 0.202f, 0.302f, 0.402f, 0.501f,
+		0.601f, 0.702f, 0.802f, 0.902f, 0.931f, 0.932f, 0.934f, 0.935f, 0.888f, 0.790f, 0.692f, 0.592f,
+		0.494f, 0.396f, 0.298f, 0.199f, 0.100f, 0.003f,
+	};
+	private const float LiftRate = 0.1f;        // m per tick: the rig's 0x284 never moves off the body faster
+	private const float LandCatchUp = 0.15f;    // m per tick the body closes on the feet after a landing (rig ~4 ticks)
+	private float[]? _liftTable;
+	private int _liftTick;
+	private float _lift, _liftPrev, _modelDrop;
 	private float _stateTime;
 	private float _spinTime;
 	private float _spinCooldown;
@@ -200,6 +229,9 @@ public sealed class CrashPlayer : EntityScript
 	/// at this point every frame and his own movement is suspended; null hands control back.</summary>
 	public Vector3? RideFeet;
 	private bool _carried, _carriedNow; // held on a moving lid since our last update (Carry)
+	private int _offEdgeTicks;
+	private bool _offEdge; // the capsule rests on an edge his feet never reached (FeetSupported)
+	private float _apexY; // the highest his feet were meant to reach in this jump (_airY + _lift)
 
 	/// <summary>A moving lid carries him (the Hub B red-gem columns' irons, bouncing forever on their
 	/// iron springs; rig: his feet stay on the lid through every bounce). His feet are put on it and he
@@ -400,6 +432,24 @@ public sealed class CrashPlayer : EntityScript
 				}
 				velocity -= normal * GroundPress;
 			}
+			if (_offEdge)
+			{
+				// Pushed on into the edge, the rounded bottom rode up over it. The original's feet ring
+				// stops at the face (jr4_lip.py), so step back off the edge: along the contact's
+				// horizontal normal, or against his own run when the normal is level.
+				Vector3 n = CharacterController.GetGroundNormal(Self);
+				Vector3 away = new(n.X, 0.0f, n.Z);
+				if (away.Length() < 0.1f)
+				{
+					away = new Vector3(-_horizontal.X, 0.0f, -_horizontal.Z);
+				}
+				if (away.Length() > 1e-3f)
+				{
+					away = Vector3.Normalize(away) * OffEdgeSpeed;
+					velocity.X = away.X;
+					velocity.Z = away.Z;
+				}
+			}
 			CharacterController.SetVelocity(Self, velocity);
 		}
 		else
@@ -596,7 +646,34 @@ public sealed class CrashPlayer : EntityScript
 
 		var (stickDir, stick) = StickInput();
 		bool moving = stick >= StickDeadZone;
+		float rideUp = Self.Position.Y - _apexY;
+		// 1 cm slack: a transform write is a teleport and drops the step under way, so never for noise.
+		// Only a jump has an apex: a fall (off a step's edge, running up stairs) keeps its ground step-up.
+		bool capped = _state == State.Air && _arc != Arc.Fall && !_carriedNow && rideUp > 0.01f && rideUp < 0.3f; // not a warp
+		if (capped)
+		{
+			// The rounded bottom rode up an edge in the contact solve (0.04-0.07 a tick): the original's
+			// feet never rise above the jump's own apex, so put them back on it. The body trails the arc
+			// on the way up, so only a ride-up reaches this while rising.
+			Self.Position = new Vector3(Self.Position.X, _apexY, Self.Position.Z);
+		}
 		bool grounded = CharacterController.IsGrounded(Self) || _carriedNow;
+		if (grounded && !_carriedNow && _state == State.Air && !FeetSupported()
+			&& _offEdgeTicks < OffEdgeTicks) // held there anyway: take the landing
+		{
+			// Not a landing: the capsule's rounded bottom rests on an edge his feet never reached.
+			// Left airborne and moved off it (see _offEdge), he slides down the face as in the original.
+			grounded = false;
+			_offEdge = true;
+			_offEdgeTicks++;
+		}
+		else
+		{
+			// Capped and still pressed into the edge, each tick rode him back up to the apex and he hung
+			// there (0.4 s, jr5 stand 2.25): step back off it as from an unsupported edge.
+			_offEdge = capped && !grounded;
+			_offEdgeTicks = 0;
+		}
 		_stateTime += dt;
 
 		if (grounded)
@@ -766,6 +843,8 @@ public sealed class CrashPlayer : EntityScript
 					_doubleJumped = true;
 					_vy = _doubleJumpHeight;
 					_arc = Arc.DoubleJump;
+					_liftTable = LiftDouble;
+					_liftTick = 0;
 					Play("a021", false);
 					TwinsanityAudio.DoubleJump();
 				}
@@ -825,10 +904,10 @@ public sealed class CrashPlayer : EntityScript
 		{
 			// Against the same one-tick-behind point TrackHeight steers onto (see there).
 			float slack = 0.25f + _vy * (2.0f * Time.DeltaTime + 1.0f / 60.0f);
-			if (_airY - _vy * Tick - Self.Position.Y > slack)
+			if (_airY - _vy * Tick + _liftPrev - Self.Position.Y > slack)
 			{
 				_vy = 0.0f;
-				_airY = Self.Position.Y;
+				_airY = Self.Position.Y - _lift;
 				_ceilingHit = true;
 			}
 		}
@@ -836,16 +915,88 @@ public sealed class CrashPlayer : EntityScript
 		if (Airborne)
 		{
 			_airY += _vy * dt;
+			_liftPrev = _lift;
+			_lift = FollowLift(_lift, _liftTick++);
+			_apexY = Math.Max(_apexY, _airY + _lift);
 		}
 		else
 		{
-			_airY = Self.Position.Y;
+			_airY = _apexY = Self.Position.Y;
+			_lift = _liftPrev = 0.0f;
+			_modelDrop = Math.Max(0.0f, _modelDrop - LandCatchUp);
 		}
 		_runTicks = _horizontal.Length() >= _runSpeed - 0.5f ? _runTicks + 1 : 0;
 		Animate(dt, moving, stick);
 	}
 
 	private bool Airborne => _state is State.Air or State.SlamHang or State.SlamDrop;
+
+	// The original stands on the floor under the point of his feet; walls keep a ring of ~0.37 m off
+	// him at foot level (logs/jumpreach/jr4_lip.py: the rig pinned at L6 and L3). The capsule's
+	// 0.4 m bottom sphere is centred 0.4 m above the feet, so falling past a ledge it caught the top
+	// edge with the feet 0.2 m under it and stood him there (L6 2.96: the rig misses 5/5). A landing
+	// needs floor under the point of his feet, or within FeetSupport under a point FeetRing off them;
+	// the ring also passes the capsule's gap to a 50-degree slope under its centre (0.4 (1 / cos - 1) = 0.22).
+	private const float FeetSupport = 0.3f;
+	private const float FeetRing = 0.2f; // outside the 0.4 m bottom sphere at 3 cm up (0.42 from its centre)
+	private const int OffEdgeTicks = 10; // 0.2 s held on an unsupported edge = a real (odd) floor: land
+	private static readonly Vector3[] FeetProbes =
+	{
+		new(FeetRing, 0.0f, 0.0f), new(-FeetRing, 0.0f, 0.0f), new(0.0f, 0.0f, FeetRing), new(0.0f, 0.0f, -FeetRing),
+	};
+	private const float OffEdgeSpeed = 1.5f; // m/s off an edge he did not land on
+
+	private bool FeetSupported()
+	{
+		// The point of his feet: a ray from 2 cm under them (outside his capsule; the rays have no self
+		// filter, and one begun inside it hits it at once). Begun inside a solid (fraction 0), his feet
+		// are sunk in it - a rock shoulder or a box top he came down on - which is floor too, if its top
+		// there is under the jump's apex: his feet were over it. Pressed into a box's top edge instead,
+		// the capsule is over the box with the feet still under its top, never having cleared it.
+		Vector3 point = Self.Position - new Vector3(0.0f, 0.02f, 0.0f);
+		RaycastHit hit = Physics.Raycast(point, -Vector3.UnitY, FeetSupport);
+		if (hit.DidHit && hit.Entity.Id != Self.Id && (hit.Fraction > 0.0f || !SolidAt(new Vector3(point.X, _apexY + 0.02f, point.Z))))
+		{
+			return true;
+		}
+		// A ring of FeetRing round the feet, 3 cm up: a mesh floor he rests on (the point under his feet
+		// starts beneath its surface and sees no back face) and slopes under the capsule's gap.
+		Vector3 feet = Self.Position + new Vector3(0.0f, 0.03f, 0.0f);
+		foreach (Vector3 o in FeetProbes)
+		{
+			hit = Physics.Raycast(feet + o, -Vector3.UnitY, FeetSupport + 0.03f);
+			// Fraction 0: begun inside a solid beside him (a box face he is pressed to), no floor.
+			if (hit.DidHit && hit.Fraction > 0.0f && hit.Entity.Id != Self.Id)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Anything but him at this point (a 1 cm sphere: overlaps, unlike rays, list every body).
+	private bool SolidAt(Vector3 p)
+	{
+		foreach (Entity e in Physics.OverlapSphere(p, 0.01f))
+		{
+			if (e.Id != Self.Id)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// The lift follows its clip's table at no more than LiftRate a tick, and falls back to the body
+	// (0) for every other arc and once the table is over.
+	// ponytail: tables for the three measured arcs only (run/stand jump, double at the rig's +16 ticks);
+	// bounces, slide jumps and slams get none, and a fall past a table's end drops the lift at LiftRate.
+	private float FollowLift(float lift, int tick)
+	{
+		float[]? table = _state == State.Air && _arc is Arc.Jump or Arc.DoubleJump ? _liftTable : null;
+		float target = table != null && tick < table.Length ? table[tick] : 0.0f;
+		return lift + Math.Clamp(target - lift, -LiftRate, LiftRate);
+	}
 
 	// The logic steps at the game's 50 Hz but physics integrates at 60 Hz, so each 50 Hz velocity is
 	// held for one or two physics steps depending on phase, and a jump's apex wandered by +-0.1 m
@@ -863,7 +1014,7 @@ public sealed class CrashPlayer : EntityScript
 		{
 			return _vy;
 		}
-		float gap = _airY + _vy * _accumulator - Self.Position.Y;
+		float gap = _airY + _lift + _vy * _accumulator - Self.Position.Y;
 		if (_state != State.Air)
 		{
 			return _vy + Math.Clamp(gap, -0.5f, 0.5f) * HeightGain;
@@ -872,9 +1023,11 @@ public sealed class CrashPlayer : EntityScript
 		// tick behind _airY (which already includes this tick's move). Steer onto that same point:
 		// against _airY itself the gap held +vy*Tick all the way up, and the pull turned it into
 		// ~0.12 m of extra apex (single 2.25 against the rig's 2.13, logs/tutorialroute/jump_flat_*).
-		gap -= _vy * Tick;
+		gap -= _vy * Tick + (_lift - _liftPrev);
 		float dt = Math.Max(deltaTime, 1.0f / 240.0f);
 		float t = _accumulator, end = _accumulator + dt, vy = _vy, rise = 0.0f;
+		float lift = _lift, liftStep = _lift - _liftPrev; // the feet's lift moves with the arc, tick by tick
+		int liftTick = _liftTick;
 		for (float tickEnd = Tick; t < end; tickEnd += Tick)
 		{
 			if (tickEnd <= t)
@@ -882,9 +1035,12 @@ public sealed class CrashPlayer : EntityScript
 				continue;
 			}
 			float seg = Math.Min(tickEnd, end) - t;
-			rise += vy * seg;
+			rise += (vy + liftStep / Tick) * seg;
 			t += seg;
 			vy -= AirGravityAt(vy) * Tick; // the next tick's velocity, gravity applied before it moves
+			float next = FollowLift(lift, liftTick++);
+			liftStep = next - lift;
+			lift = next;
 		}
 		return rise / dt + Math.Clamp(gap, -0.5f, 0.5f) * HeightDrift;
 	}
@@ -894,6 +1050,8 @@ public sealed class CrashPlayer : EntityScript
 	{
 		_vy = _jumpHeight - _jumpRiseGravity * Tick;
 		_arc = Arc.Jump;
+		_liftTable = clip == "a020" ? LiftRun : LiftStand;
+		_liftTick = 0;
 		_doubleJumped = false;
 		Enter(State.Air);
 		Play(clip, false);
@@ -912,6 +1070,7 @@ public sealed class CrashPlayer : EntityScript
 	{
 		float impact = -_vy;
 		_vy = 0.0f;
+		_modelDrop = Math.Max(_modelDrop, _lift); // the body was that far under his feet: it catches up
 		Enter(State.Ground);
 		_landClip = clip;
 		_oneShotLeft = lock_;
@@ -1181,7 +1340,8 @@ public sealed class CrashPlayer : EntityScript
 		float rate = MathF.Abs(delta) > 25.0f ? ModelTurnRate : Math.Min(ModelTurnRate, MathF.Abs(delta) / 0.17f + 10.0f);
 		float step = deltaTime > 0.0f ? rate * deltaTime : 360.0f;
 		_modelYaw += Math.Clamp(delta, -step, step);
-		_model.Position = Self.Position;
+		// On the body, not the feet: the clip tucks his legs up to them (see LiftRun).
+		_model.Position = Self.Position - new Vector3(0.0f, Airborne ? _lift : _modelDrop, 0.0f);
 		if (_dead && _deathPlan.FloatToSurface)
 		{
 			// a004 Crash_DeathDrown is authored about the water surface: its hips start 2.1 below

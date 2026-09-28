@@ -105,6 +105,10 @@ public sealed partial class TwinsanityActors
 		public bool Pushed;          // Crash has pushed it (the bomb's s5, IsPushingObject)
 		public bool Held;            // Crash has hold of it (IsPushingObject): pulled to his hold point
 		public Vector3 HoldDir;      // his last push direction while held (kept while he stands still)
+		public bool Slides;          // non-rolling but slides downhill (the hay bale)
+		public float Slope;          // ... the tilt across it at its last step (SlideGrad)
+		public bool Ridden;          // ... Crash stands on it (it carries him on down: SlideRidden)
+		public bool Slipping;        // ... got too steep to hold: slides back, not held, until it comes to rest
 	}
 
 	private readonly List<Pushable> _pushables = new();
@@ -138,6 +142,21 @@ public sealed partial class TwinsanityActors
 	// ponytail: the game's prop gravity is not in the extracted data; Crash's own AirGravity (50)
 	// stands in, scaled by 5/7 for a rolling sphere. It only matters on slopes.
 	private const float SlopeGravity = 50.0f * 5.0f / 7.0f;
+	// The hay bale's slide on a slope (rig fit, logs/yellowrig): pull (slope - SlideStatic) * SlideGravity
+	// downhill against its free damping 2.5/s, so ~0.9-1 m/s back down the idol's tongue; it rests where
+	// the slope falls under SlideStatic (the rig's bale stops on the lower tongue at 1.04-1.08).
+	private const float SlideGravity = 12.0f;
+	private const float SlideStatic = 0.15f;
+	// ... with Crash standing on it, it does not stop there: it carries him on off the tongue (rig:
+	// 1.39 -> 0.75 in 2.2 s, ~0.75 m/s).
+	private const float SlideRidden = 0.05f;
+	// Tilt (drop across it) past which he cannot hold it: the rig's bale tops out at centre 1.53-1.70 up
+	// the tongue and slides back down while he still pushes into it.
+	private const float SlideHold = 0.4f;
+	// Its descent over a lip, as a slope (see Step): the rig's comes off the tongue 1.09 -> 0.75 over ~1.5-2 s.
+	private const float DropSlope = 0.35f;
+	// Its collider's flat top above its centre (RegisterPushable), as the rig's.
+	private const float BaleTop = 1.1f;
 	private const float RestSpeed = 0.05f;
 	private const float WallNormalY = 0.7f;               // steeper than this is a wall, not ground
 	// Spin / slide launches (rig, see the summary; 50 Hz fits - the first fit read the frames as
@@ -322,7 +341,18 @@ public sealed partial class TwinsanityActors
 		}
 		if (hulls.Count == 0)
 		{
-			Physics.AddSphereBody(body, radius, dynamic: false);
+			// The hay bale's stand-on surface is flat at its centre + 1.1 (rig logs/yellowrig/rig_stand_on_bale.csv:
+			// the ground under Crash reads centre + 1.08-1.12 0.84 m off the centre, above the drawn 0.72-0.76
+			// top), where a 1.05 sphere gave + 0.79 there and a single jump from the sand fell short of it.
+			// Radius 1.0 keeps inside the push hold's 1.05 contact; the push/ground logic still uses Radius.
+			if (key == "act_global_haybale")
+			{
+				Physics.AddCylinderBody(body, BaleTop, 1.0f, dynamic: false);
+			}
+			else
+			{
+				Physics.AddSphereBody(body, radius, dynamic: false);
+			}
 			Physics.SetMotionType(body, PhysicsMotionType.Kinematic);
 		}
 
@@ -344,6 +374,7 @@ public sealed partial class TwinsanityActors
 			Hulls = hulls,
 			Button = button,
 			NoLaunch = key == "act_global_bomb",
+			Slides = key == "act_global_haybale",
 			Throw = ThrowsFor(key),
 		};
 		if (button.IsValid)
@@ -423,6 +454,15 @@ public sealed partial class TwinsanityActors
 				p.Held = false;
 				p.Velocity = Vector3.Zero;
 			}
+			// Too steep to hold, it stops where his push gives out and slides back from there; and on any
+			// slope it slides once he stops pushing (the rig's released bale slides back down the tongue).
+			bool steep = p.Slides && (p.Slope > SlideHold || (!moving && p.Slope > SlideStatic));
+			if (p.Held && steep)
+			{
+				p.Held = false;
+				p.Velocity = Vector3.Zero;
+				p.Slipping = true;
+			}
 			if (p.Held && (warped || p.Airborne || !overlapY || dist > p.Radius + CrashRadius + HoldRelease))
 			{
 				p.Held = false;
@@ -432,7 +472,7 @@ public sealed partial class TwinsanityActors
 				float cos = Vector3.Dot(flatVel, toObj) / (speed * dist);
 				float smoothCos = smoothSpeed > 1e-3f ? Vector3.Dot(_smoothVel, toObj) / (smoothSpeed * dist) : 1.0f;
 				float offLine = MathF.Abs(flatVel.X * toObj.Z - flatVel.Z * toObj.X) / speed;
-				if (!p.Held && contact && !sharpTurn && cos > GrabCos && offLine < GrabOffset)
+				if (!p.Held && !steep && !p.Slipping && contact && !sharpTurn && cos > GrabCos && offLine < GrabOffset)
 				{
 					p.Held = true;
 				}
@@ -465,7 +505,20 @@ public sealed partial class TwinsanityActors
 			{
 				p.Velocity *= p.Damping > 0.0f ? MathF.Exp(-p.FreeDamping * dt) : 0.0f;
 			}
+			// Standing on the sliding bale he rides it down (rig: 1.39 -> 0.75 in 2.2 s with him on top), on its
+			// collider's flat top as the rig's +1.0-1.1 (a band up to + Radius + 0.4 caught him still coming down
+			// at +1.44 and the carry held him there).
+			Vector3 before = p.Center;
+			bool onTop = p.Slides && !p.Airborne && dist < p.Radius * 0.8f
+				&& feet.Y > p.Center.Y + 0.5f && feet.Y < p.Center.Y + BaleTop + 0.15f;
+			p.Ridden = onTop;
 			Step(p, dt, player.Self);
+			Vector3 carried = p.Center - before;
+			if (onTop && carried.LengthSquared() > 1e-10f)
+			{
+				player.Self.Position += carried with { Y = 0.0f };
+				player.Carry(p.Center.Y + BaleTop, carried.Y / dt, dt);
+			}
 		}
 		player.Pushing = pushing;
 	}
@@ -557,6 +610,7 @@ public sealed partial class TwinsanityActors
 			p.Settled = true;
 			Place(p, p.Center with { Y = groundHere.Value + p.RestHeight }, Vector3.Zero, 0.0f);
 		}
+		bool sliding = false;
 		if (p.Rolls && groundHere != null)
 		{
 			// Downhill pull on a rolling sphere. Gradient is clamped: a rim ray that clipped
@@ -564,13 +618,40 @@ public sealed partial class TwinsanityActors
 			grad = Vector2.Clamp(grad, new Vector2(-0.5f), new Vector2(0.5f));
 			p.Velocity -= new Vector3(grad.X, 0.0f, grad.Y) * SlopeGravity * dt;
 		}
-		if (p.Velocity.LengthSquared() < RestSpeed * RestSpeed)
+		else if (p.Slides && groundHere != null && (p.Pushed || p.Ridden))
+		{
+			// The hay bale does not roll, but it does not hold a slope either: on the rig it slides
+			// back down the idol's tongue at ~0.8-1 m/s once let go, with Crash on it too, and settles
+			// within 1.3-2.2 s (logs/yellowrig). Pull past a static threshold, against its free damping.
+			// Only once he has pushed it or stands on it: a bale authored on a slope stays where it was
+			// placed (one at (-311.8, 1.73, -4.1) slid 2 m off its spot at load).
+			grad = Vector2.Clamp(SlideGrad(p, crash, out p.Slope), new Vector2(-0.5f), new Vector2(0.5f));
+			float slope = grad.Length();
+			Vector2 down = slope > 1e-3f ? -grad / slope : Vector2.Zero;
+			float hold = p.Ridden ? SlideRidden : SlideStatic;
+			if (p.Center.Y - p.RestHeight > groundHere.Value + 0.02f && p.Velocity.LengthSquared() > 1e-6f)
+			{
+				// Coming down over a lip (below): that descent's slope keeps it going, ridden or not.
+				down = Vector2.Normalize(new Vector2(p.Velocity.X, p.Velocity.Z));
+				slope = DropSlope;
+				hold = SlideStatic;
+			}
+			if (slope > hold && down != Vector2.Zero)
+			{
+				p.Velocity += new Vector3(down.X, 0.0f, down.Y) * ((slope - hold) * SlideGravity * dt);
+				sliding = true;
+			}
+		}
+		if (!sliding && p.Velocity.LengthSquared() < RestSpeed * RestSpeed)
 		{
 			p.Velocity = Vector3.Zero;
 			p.FreeDamping = p.Damping;
+			p.Slipping = false;
 			// A roller spawned before its chunk's collision loaded rests at its instance height
 			// (the nut hung 0.45 m up): settle it once the ground is there.
-			if (p.Rolls && groundHere != null && MathF.Abs(groundHere.Value + p.RestHeight - p.Center.Y) > 0.02f)
+			// A bale stopped part way down a lip (below) settles onto the ground under it.
+			if (groundHere != null && (p.Rolls || (p.Slides && p.Center.Y - p.RestHeight > groundHere.Value + 0.02f))
+				&& MathF.Abs(groundHere.Value + p.RestHeight - p.Center.Y) > 0.02f)
 			{
 				Place(p, p.Center with { Y = groundHere.Value + p.RestHeight }, Vector3.Zero, 0.0f);
 			}
@@ -579,9 +660,10 @@ public sealed partial class TwinsanityActors
 		Vector3 step = p.Velocity * dt;
 		float len = step.Length();
 		Vector3 dir = step / len;
-		// Stop at scenery: probe ahead from just outside the body so the ray cannot hit it.
+		// Stop at scenery: probe ahead from just outside the body so the ray cannot hit it. Sliding
+		// back down it does not stop at Crash pushing into it (the rig's shoves him aside).
 		RaycastHit wall = Physics.Raycast(p.Center + dir * (p.Radius + 0.02f), dir, len + 0.05f);
-		if (wall.DidHit && wall.Entity != p.Body && wall.Normal.Y < WallNormalY)
+		if (wall.DidHit && wall.Entity != p.Body && !(sliding && wall.Entity == crash) && wall.Normal.Y < WallNormalY)
 		{
 			p.Velocity = Vector3.Zero;
 			return;
@@ -603,7 +685,48 @@ public sealed partial class TwinsanityActors
 			return;
 		}
 		next.Y = ground.Value + p.RestHeight;
+		if (sliding)
+		{
+			// It rides its highest rim hit, so the last rim off a step dropped it in one frame; the rig's
+			// comes down over the lip as a sphere rolls off one (1.09 -> 0.75 over ~1.5 s off the tongue).
+			next.Y = MathF.Max(next.Y, p.Center.Y - len * DropSlope);
+		}
 		Place(p, next, dir, len);
+	}
+
+	// The slope under a sliding body: its four rim rays (as Ground), each against the rim opposite, or
+	// - where that one is missing (a face above its centre, Crash, nothing) - against the ground it
+	// stands on. Ground's gradient drops such an axis to 0, which held the bale up against the idol's
+	// face where the rig's slides back down the tongue.
+	private static Vector2 SlideGrad(Pushable p, Entity crash, out float tilt)
+	{
+		float r = p.Radius + 0.05f;
+		float support = p.Center.Y - p.RestHeight;
+		Span<float> h = stackalloc float[4];
+		Span<Vector2> offsets = stackalloc Vector2[] { new(r, 0), new(-r, 0), new(0, r), new(0, -r) };
+		for (int i = 0; i < 4; i++)
+		{
+			Vector3 from = new(p.Center.X + offsets[i].X, p.Center.Y + 1.0f, p.Center.Z + offsets[i].Y);
+			RaycastHit hit = Physics.Raycast(from, -Vector3.UnitY, 1.0f + p.Radius + 1.5f);
+			bool ground = hit.DidHit && hit.Entity != p.Body && hit.Entity != crash && hit.Position.Y < p.Center.Y + 0.05f;
+			h[i] = ground ? hit.Position.Y : float.NaN;
+		}
+		// tilt: the drop across the body, highest rim to lowest (the bale rides its highest rim hit).
+		float hi = float.NegativeInfinity, lo = float.PositiveInfinity;
+		foreach (float v in h)
+		{
+			if (!float.IsNaN(v))
+			{
+				hi = MathF.Max(hi, v);
+				lo = MathF.Min(lo, v);
+			}
+		}
+		tilt = hi > lo ? (hi - lo) / (2.0f * r) : 0.0f;
+		float gx = !float.IsNaN(h[0]) && !float.IsNaN(h[1]) ? (h[0] - h[1]) / (2.0f * r)
+			: !float.IsNaN(h[0]) ? (h[0] - support) / r : !float.IsNaN(h[1]) ? (support - h[1]) / r : 0.0f;
+		float gz = !float.IsNaN(h[2]) && !float.IsNaN(h[3]) ? (h[2] - h[3]) / (2.0f * r)
+			: !float.IsNaN(h[2]) ? (h[2] - support) / r : !float.IsNaN(h[3]) ? (support - h[3]) / r : 0.0f;
+		return new Vector2(gx, gz);
 	}
 
 	// A launched object flies under LaunchGravity until it comes down onto the ground at its rest

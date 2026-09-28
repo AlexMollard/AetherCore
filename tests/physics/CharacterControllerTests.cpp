@@ -89,6 +89,19 @@ TEST_CASE("Character controller treats a slope under the max angle as walkable g
 	CHECK(fx.ControllerOf(player).isGrounded);
 }
 
+// The supporting volume admits bottom-sphere contacts up to the max-slope height only; a
+// slope just under the limit touches the sphere right below that line and must still hold.
+TEST_CASE("Character controller stands on a slope just under the max angle")
+{
+	CharacterFixture fx;
+	fx.MakeStaticBox({0.0f, 0.0f, 0.0f}, {2.5f, 0.1f, 2.5f}, {42.0f, 0.0f, 0.0f});
+	const aether::Entity player = fx.MakeCharacter({0.0f, 1.5f, 0.0f});
+
+	fx.StepSeconds(2.0f);
+
+	CHECK(fx.ControllerOf(player).isGrounded);
+}
+
 // Grounded, the step used to add the whole gravity vector; its along-slope part survived the
 // contact solve, so an idle character crept downhill forever on any walkable slope.
 TEST_CASE("A character standing idle on a walkable slope stays where it is")
@@ -157,6 +170,56 @@ TEST_CASE("Character controller is blocked by a ledge above its step height")
 	// Blocked at the step's vertical face: still on the lower floor, short of the ledge.
 	CHECK(fx.FeetPositionOf(player).y < 0.3f);
 	CHECK(fx.FeetPositionOf(player).x < 2.5f);
+}
+
+// Jolt's stair walk checks support after the move, and a jumping capsule whose rounded bottom
+// grazes a ledge corner reads as supported: it was stepped a whole step height onto a top its
+// arc never reached, so every jump climbed ~stepHeight higher than it should.
+TEST_CASE("A jump whose arc peaks just under a ledge top is not stepped up onto it")
+{
+	CharacterFixture fx;
+	fx.MakeStaticBox({0.0f, -0.5f, 0.0f}, {5.0f, 0.5f, 5.0f}); // floor, top at y = 0
+	// Wall face at x = 1.2, top at y = 1.0.
+	constexpr float kLedgeHeight = 1.0f;
+	fx.MakeStaticBox({3.2f, kLedgeHeight * 0.5f, 0.0f}, {2.0f, kLedgeHeight * 0.5f, 5.0f});
+
+	const aether::Entity player = fx.MakeCharacter({0.0f, 0.0f, 0.0f});
+	fx.StepSeconds(0.5f);
+	REQUIRE(fx.ControllerOf(player).isGrounded);
+	// 4.1 m/s peaks the feet at v^2 / 2g = 0.86 m: 0.14 under the top, inside the default
+	// 0.3 m step height, reached as the character presses into the face at 2 m/s.
+	fx.ControllerOf(player).desiredVelocity = {2.0f, 0.0f, 0.0f};
+	fx.ControllerOf(player).pendingJumpSpeed = 4.1f;
+	fx.StepSeconds(2.0f);
+
+	// Fell back to the floor in front of the face instead of standing on the top.
+	CHECK(fx.FeetPositionOf(player).y < 0.3f);
+	CHECK(fx.FeetPositionOf(player).x < 1.2f);
+}
+
+// A ledge edge pressed into the capsule's side can still report a walkable surface normal (the
+// top face a box edge rounds into, or a mesh's top triangle), and Jolt judges support by that
+// normal: a character rising against a wall read grounded with its feet well below the top.
+TEST_CASE("A ledge edge touching the capsule's side is not ground")
+{
+	CharacterFixture fx;
+	// A 1 m box rolled 50 degrees: its rightmost corner (x ~0.70, y ~1.0 +-0.06) juts out
+	// between a face 50 degrees from up (walkable under the 60 degree limit below) and one
+	// facing down, so a horizontal push into that corner rounds onto the walkable face.
+	fx.MakeStaticBox({0.0f, 1.0f, 0.0f}, {0.5f, 0.5f, 2.0f}, {0.0f, 0.0f, -50.0f});
+	// Feet at y 0.3: the bottom sphere's centre is at 0.6, the corner hits the cylinder.
+	const aether::Entity player = fx.MakeCharacter({1.1f, 0.3f, 0.0f});
+	auto& cc = fx.ControllerOf(player);
+	cc.gravityScale = 0.0f;
+	cc.maxSlopeAngle = glm::radians(60.0f);
+	cc.desiredVelocity = {-1.0f, 0.0f, 0.0f};
+
+	fx.StepSeconds(0.5f);
+
+	// Pressed against the corner (blocked short of it), yet not standing on it.
+	CHECK(fx.FeetPositionOf(player).x > 0.95f);
+	CHECK(fx.FeetPositionOf(player).y == doctest::Approx(0.3f).epsilon(0.05));
+	CHECK_FALSE(fx.ControllerOf(player).isGrounded);
 }
 
 TEST_CASE("Character controller ground state transitions from airborne to grounded on landing")

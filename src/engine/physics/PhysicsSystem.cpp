@@ -987,6 +987,60 @@ namespace aether
 		return offsetResult.Get();
 	}
 
+	// Jolt judges a contact's slope by the OTHER shape's surface normal (CharacterVirtual.cpp,
+	// the contact's mSurfaceNormal): for a mesh that is the whole triangle's normal, so the flat
+	// top of a ledge whose EDGE touches the flank of the capsule's round bottom reads as level
+	// ground even where the capsule's own surface there is far too steep to stand on. These two
+	// judge the contact by its true normal (from the bottom sphere's centre) instead.
+	//
+	// Ground: OnGround only while some contact Jolt counted as support also sits where the
+	// bottom sphere's own surface is a walkable slope. Every contact is checked, not just
+	// Jolt's "best" one, so standing on a floor with a step edge against the flank stays
+	// grounded. The small allowance keeps a slope right at the limit from flickering.
+	static bool StandsOnWalkableContact(const JPH::CharacterVirtual& character)
+	{
+		if (character.GetGroundState() != JPH::CharacterBase::EGroundState::OnGround)
+		{
+			return false;
+		}
+		constexpr float kCosAllowance = 0.03f; // ~2 degrees at a 45-50 degree limit
+		const float cosWalkable = character.GetCosMaxSlopeAngle() - kCosAllowance;
+		const JPH::Vec3 up = character.GetUp();
+		for (const JPH::CharacterVirtual::Contact& c: character.GetActiveContacts())
+		{
+			// mContactNormal is the true separation direction; mSurfaceNormal is the shape's.
+			if (c.mHadCollision && !c.mWasDiscarded && !character.IsSlopeTooSteep(c.mSurfaceNormal) && c.mContactNormal.Dot(up) >= cosWalkable)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Solve: a contact whose true normal is too steep to stand on may block the character but
+	// never lift it - the same rule Jolt applies to steep surfaces, which it skipped for these
+	// edges. Without it a jump pressed into a ledge rode up the rounded bottom onto a top the
+	// arc never reached. Stateless, so one instance serves every character.
+	class SteepContactListener final : public JPH::CharacterContactListener
+	{
+	public:
+		void OnContactSolve(const JPH::CharacterVirtual* inCharacter, const JPH::BodyID&, const JPH::SubShapeID&, JPH::RVec3Arg, JPH::Vec3Arg inContactNormal, JPH::Vec3Arg, const JPH::PhysicsMaterial*, JPH::Vec3Arg inCharacterVelocity, JPH::Vec3& ioNewCharacterVelocity) override
+		{
+			const JPH::Vec3 up = inCharacter->GetUp();
+			if (inContactNormal.Dot(up) <= 0.0f || !inCharacter->IsSlopeTooSteep(inContactNormal))
+			{
+				return;
+			}
+			const float allowed = std::max(inCharacterVelocity.Dot(up), 0.0f);
+			const float lifted = ioNewCharacterVelocity.Dot(up);
+			if (lifted > allowed)
+			{
+				ioNewCharacterVelocity -= up * (lifted - allowed);
+			}
+		}
+	};
+	static SteepContactListener s_steepContactListener;
+
 	static void ApplyRigidBodyTunables(JPH::BodyCreationSettings& bcs, const RigidBodyComponent& rb)
 	{
 		bcs.mLinearDamping = rb.linearDamping;
@@ -1355,6 +1409,11 @@ namespace aether
 			settings.mMaxSlopeAngle = cc.maxSlopeAngle;
 			settings.mMass = cc.mass;
 			settings.mMaxStrength = cc.maxPushForce;
+			// Only the bottom sphere may support (Jolt's sample plane, CharacterVirtualTest):
+			// Jolt's default plane accepts any contact, so a ledge top touching the capsule's
+			// side or shoulder counted as ground. CharacterBase has no setter: a live radius
+			// edit keeps this plane.
+			settings.mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -cc.radius);
 			// Inner rigid body: gives the character presence in the world outside its own
 			// collision queries - see the class comment on CharacterControllerComponent for
 			// what this costs and CharacterVirtual's own class comment for why a virtual
@@ -1370,6 +1429,7 @@ namespace aether
 
 			Impl::LiveCharacter live;
 			live.character = new JPH::CharacterVirtual(&settings, JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), static_cast<JPH::uint64>(entity.id), m_impl->physics.get());
+			live.character->SetListener(&s_steepContactListener);
 			live.builtRadius = cc.radius;
 			live.builtHalfHeight = cc.halfHeight;
 			live.io = cc;
@@ -1437,7 +1497,7 @@ namespace aether
 			const JPH::Vec3 currentVelocity = character->GetLinearVelocity();
 			const JPH::Vec3 verticalVelocity = up * currentVelocity.Dot(up);
 			const JPH::Vec3 groundVelocity = character->GetGroundVelocity();
-			const bool onGround = character->GetGroundState() == JPH::CharacterBase::EGroundState::OnGround;
+			const bool onGround = StandsOnWalkableContact(*character);
 			// Matches Jolt's own CharacterVirtual sample: 0.1 m/s of tolerance so ordinary
 			// floating-point noise in the ground velocity estimate doesn't flicker the
 			// character between "assume ground velocity" and "keep falling" every frame.
@@ -1500,7 +1560,13 @@ namespace aether
 
 			JPH::CharacterVirtual::ExtendedUpdateSettings updateSettings;
 			updateSettings.mStickToFloorStepDown = -up * io.groundSnapDistance;
-			updateSettings.mWalkStairsStepUp = up * io.stepHeight;
+			// Stairs are walked, not jumped: step up only from ground the character already
+			// stood on before this update. Jolt's own CanWalkStairs checks support AFTER the
+			// move, so an airborne capsule whose rounded bottom grazed a ledge corner read as
+			// supported and was lifted a whole step height onto the top - every jump reached
+			// stepHeight higher than its arc. Same before-the-move test ExtendedUpdate itself
+			// uses to gate StickToFloor.
+			updateSettings.mWalkStairsStepUp = onGround ? up * io.stepHeight : JPH::Vec3::sZero();
 
 			character->ExtendedUpdate(dt, gravity, updateSettings,
 			        m_impl->physics->GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
@@ -1509,7 +1575,7 @@ namespace aether
 			        {},
 			        *m_impl->tempAllocator);
 
-			io.isGrounded = character->GetGroundState() == JPH::CharacterBase::EGroundState::OnGround;
+			io.isGrounded = StandsOnWalkableContact(*character);
 			io.groundNormal = FromJolt(character->GetGroundNormal());
 			// Body user data is the owning entity id (see CastRay); steep ground counts too.
 			io.groundEntity = character->GetGroundState() != JPH::CharacterBase::EGroundState::InAir
