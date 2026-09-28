@@ -203,17 +203,6 @@ namespace TwExtract
 			string dir = Path.Combine(outDir, "audio", bank == "MUSIC" ? "music" : "voice");
 			Directory.CreateDirectory(dir);
 			var done = new List<int>();
-			// Voice: lengths.json {track: seconds} beside the wavs, merged with earlier runs' entries. The cutscene
-			// interpreter holds a speaker's NO_MOTION state for its line (the high path skunk's 11.8 s tale).
-			string lengthsPath = Path.Combine(dir, "lengths.json");
-			var lengths = new SortedDictionary<int, double>();
-			if (bank != "MUSIC" && File.Exists(lengthsPath))
-			{
-				foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(lengthsPath), "\"(\\d+)\"\\s*:\\s*([0-9.]+)"))
-				{
-					lengths[int.Parse(m.Groups[1].Value)] = double.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
-				}
-			}
 			foreach (int t in tracks.Distinct().OrderBy(t => t))
 			{
 				if (t < 0 || t >= count)
@@ -237,38 +226,8 @@ namespace TwExtract
 					: RIFF.SaveRiff(ADPCM.ToPCMMono(raw.Skip(0x30).ToArray(), raw.Length - 0x30), 1, rate);
 				File.WriteAllBytes(Path.Combine(dir, $"track_{t}.wav"), wav);
 				done.Add(t);
-				if (bank != "MUSIC")
-				{
-					lengths[t] = WavSeconds(wav);
-				}
-			}
-			if (bank != "MUSIC" && done.Count > 0)
-			{
-				File.WriteAllText(lengthsPath, "{\n" + string.Join(",\n", lengths.Select(kv =>
-					$"\t\"{kv.Key}\": {kv.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}")) + "\n}\n");
 			}
 			return $"{bank} tracks {string.Join(",", done)}";
-		}
-
-		// A RIFF/WAVE's play time: the data chunk's bytes over the fmt chunk's byte rate.
-		static double WavSeconds(byte[] wav)
-		{
-			int byteRate = 0, data = 0;
-			for (int p = 12; p + 8 <= wav.Length;)
-			{
-				string id = Encoding.ASCII.GetString(wav, p, 4);
-				int size = BitConverter.ToInt32(wav, p + 4);
-				if (id == "fmt ")
-				{
-					byteRate = BitConverter.ToInt32(wav, p + 16);
-				}
-				else if (id == "data")
-				{
-					data = size;
-				}
-				p += 8 + size + (size & 1);
-			}
-			return byteRate > 0 ? (double)data / byteRate : 0.0;
 		}
 	}
 }

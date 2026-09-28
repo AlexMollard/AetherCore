@@ -234,8 +234,31 @@ public sealed class TwinsanityCutscenes
 		public bool Finished => Def.States.Length == 0 || (Def.States[State].Rules.Length == 0 && Def.States[State].Sub < 0 && Def.States[State].Motion == null);
 		public bool Started;
 		// A machine handed out this frame has not run yet: it counts as busy (the scene's FocusIsBusy wait
-		// must not pass before the actor has entered its first state).
-		public bool Busy => !Started || (Def.States.Length > 0 && Def.States[State].Motion != null && !MotionDone) || (Sub?.Busy ?? false);
+		// must not pass before the actor has entered its first state). A state waiting on AnimationFinished
+		// is busy until its one-shot clip has played out, unless that wait leads into a motion controller: the
+		// rig's skunk scene ends only after the skunk's 11.96 s talk clip a001 (it stands up 9-10 s into the
+		// clip ~9.5 s into the scene, which ends at 12.72 s: rig_ske1/rig_ske2, frame counter), while the beach
+		// training Cortex's s1 clip wait before his move is not busy (the camera cut lands on the move).
+		// ponytail: a rule fitted to those two rig scenes; the ELF's condition 66 would settle it.
+		public bool Busy => !Started || (Def.States.Length > 0 && Def.States[State].Motion != null && !MotionDone) || WaitsClip || (Sub?.Busy ?? false);
+		private bool WaitsClip
+		{
+			get
+			{
+				if (Def.States.Length == 0 || Self.Clip.Length == 0 || Self.ClipLoops || Self.ClipTime >= Self.ClipLength)
+				{
+					return false;
+				}
+				foreach (Rule r in Def.States[State].Rules)
+				{
+					if (r.Cond == 7 && !r.Not && r.To >= 0 && r.To < Def.States.Length && Def.States[r.To].Motion == null)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+		}
 	}
 
 	private readonly List<Chunk> _chunks = new();
@@ -255,9 +278,6 @@ public sealed class TwinsanityCutscenes
 	private float _camMove, _camMoveT;             // its length (s) and progress
 	private float _sceneClock;
 	private int _speech;          // Audio voice id of the playing speech line
-	private Agent? _speaker;      // who started it, and the scene time its line ends (audio/voice/lengths.json)
-	private float _speechEnd;
-	private Dictionary<int, float>? _speechLengths;
 	private Agent? _endedDirector; // the director whose scene ended last, and when (game clock)
 	private float _endedAt;
 	private const float SpeechVolume = 1.0f;
@@ -1150,11 +1170,8 @@ public sealed class TwinsanityCutscenes
 		}
 		// NO_MOTION: done once the delay has passed and a one-shot clip has played out, unless its DoAnim set
 		// 0x2000. Rig: scene B's Coco (DoAnim 0x2FF1) leaves her 0.1 s states 0.1 s in (rig_sB_actors.csv);
-		// the beach Aku (0x0FF1) holds his 0.7 s state for his whole 13 s clip. A state whose way out stops
-		// the speech (Cmd186) also holds while its agent's own line plays: the high path skunk tells its
-		// 11.8 s tale in a 0.5 s NO_MOTION state (rig scene 12.7 s, rig_sk1.csv).
-		m.MotionDone = (a.ClipLoops || !a.ClipBlocks || a.Clip.Length == 0 || a.ClipTime >= a.ClipLength)
-		               && !(_speaker == a && _sceneClock < _speechEnd && StopsSpeech(m.Def.States[m.State]));
+		// the beach Aku (0x0FF1) holds his 0.7 s state for his whole 13 s clip.
+		m.MotionDone = a.ClipLoops || !a.ClipBlocks || a.Clip.Length == 0 || a.ClipTime >= a.ClipLength;
 	}
 
 	// GROUND_CHASE: run along the ground at MOVE_SPEED until within SQR_TOLERANCE of the target (which may
@@ -1484,15 +1501,11 @@ public sealed class TwinsanityCutscenes
 				break;
 			case 185: // start a speech line: ENGLISH.MB stream <int arg> (tw-extract --voice -> audio/voice/track_<n>.wav)
 				StopSpeech();
-				int track = (int)(Arg(0) >> 3);
-				_speech = Audio.Play($"project://assets/audio/voice/track_{track}.wav", SpeechVolume);
-				_speaker = a;
-				_speechEnd = _sceneClock + SpeechLength(track);
-				Log.Info($"[Cutscenes] speech {track} ({a.Name}) at {_sceneClock:F2} s");
+				_speech = Audio.Play($"project://assets/audio/voice/track_{Arg(0) >> 3}.wav", SpeechVolume);
+				Log.Info($"[Cutscenes] speech {Arg(0) >> 3} ({a.Name}) at {_sceneClock:F2} s");
 				break;
-			case 186: // stop the speech line
-				StopSpeech();
-				break;
+			case 186: // not a stop: the high path skunk runs it 0.5 s into its 11.8 s line, as its 11.96 s talk
+				break; // clip a001 starts (rig_ske1/rig_ske2); the line plays on to its end or the scene's
 			case 595: // the camera subject, framed by an unmeasured Cmd591 (the shot table replaces it)
 				a.CameraSubject = Target(a, Arg(0));
 				break;
@@ -2132,38 +2145,6 @@ public sealed class TwinsanityCutscenes
 			Audio.Stop(_speech);
 			_speech = 0;
 		}
-		_speaker = null;
-	}
-
-	// Seconds of speech track n (tw-extract --voice writes audio/voice/lengths.json); 0 when unknown.
-	private float SpeechLength(int track)
-	{
-		if (_speechLengths == null)
-		{
-			_speechLengths = new Dictionary<int, float>();
-			string text = Assets.ReadText("project://assets/audio/voice/lengths.json") ?? "";
-			foreach (System.Text.RegularExpressions.Match mt in System.Text.RegularExpressions.Regex.Matches(text, "\"(\\d+)\"\\s*:\\s*([0-9.]+)"))
-			{
-				_speechLengths[int.Parse(mt.Groups[1].Value)] = float.Parse(mt.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
-			}
-		}
-		return _speechLengths.TryGetValue(track, out float s) ? s : 0.0f;
-	}
-
-	// A state whose rules stop the speech line (Cmd186) on the way out.
-	private static bool StopsSpeech(State st)
-	{
-		foreach (Rule r in st.Rules)
-		{
-			foreach (uint[] c in r.Cmds)
-			{
-				if (c.Length > 0 && c[0] == 186)
-				{
-					return true;
-				}
-			}
-		}
-		return false;
 	}
 
 	// The prompt shows only while the running scene's director has a live skip rule (condition 572).
