@@ -2014,6 +2014,41 @@ namespace aether::editor
 			        return json{{"ok", true}, {"events", count}, {"duration", duration}};
 		        }});
 
+		methods.push_back({"scene.environment",
+		        "scene_environment",
+		        "Read or edit the scene's sun and ambient lighting (what scene.save writes to the [environment] block). Every field is optional; "
+		        "pass any of sunColor, sunIntensity, ambient, objectAmbient, objectLight0Color, objectLight1Color as [r,g,b] (sunIntensity a number) "
+		        "to change them live. Returns the current values. Save the scene to keep them.",
+		        true,
+		        Obj(),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* renderer = ctx.services.TryGet<Renderer>();
+			        if (renderer == nullptr)
+			        {
+				        return json{{"ok", false}, {"error", "renderer unavailable"}};
+			        }
+			        const glm::vec3 sunDir = renderer->GetDirectionalLightDirection();
+			        const float sunIntensity = p.contains("sunIntensity") && p["sunIntensity"].is_number() ? p["sunIntensity"].get<float>()
+			                                                                                              : renderer->GetDirectionalLightIntensity();
+			        renderer->SetDirectionalLight(sunDir, sunIntensity);
+			        renderer->SetSunColor(ReadVec3(p, "sunColor", renderer->GetSunColor()));
+			        renderer->SetAmbientLight(ReadVec3(p, "ambient", renderer->GetAmbientLight()));
+			        renderer->SetObjectLights(ReadVec3(p, "objectAmbient", glm::vec3(renderer->GetObjectAmbientVector())),
+			                glm::vec3(renderer->GetObjectLight0DirectionVector()),
+			                ReadVec3(p, "objectLight0Color", glm::vec3(renderer->GetObjectLight0ColorVector())),
+			                glm::vec3(renderer->GetObjectLight1DirectionVector()),
+			                ReadVec3(p, "objectLight1Color", glm::vec3(renderer->GetObjectLight1ColorVector())));
+			        const auto v = [](glm::vec3 c) { return json::array({c.x, c.y, c.z}); };
+			        return json{{"ok", true},
+			                {"sunColor", v(renderer->GetSunColor())},
+			                {"sunIntensity", renderer->GetDirectionalLightIntensity()},
+			                {"ambient", v(renderer->GetAmbientLight())},
+			                {"objectAmbient", v(glm::vec3(renderer->GetObjectAmbientVector()))},
+			                {"objectLight0Color", v(glm::vec3(renderer->GetObjectLight0ColorVector()))},
+			                {"objectLight1Color", v(glm::vec3(renderer->GetObjectLight1ColorVector()))}};
+		        }});
+
 		methods.push_back({"rendergraph",
 		        "query_rendergraph",
 		        "Dump the live render graph: every compiled pass with its type, dependencies, produced/consumed frame products, and last CPU time.",
