@@ -169,6 +169,7 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		}
 		TwinsanityAku.Start();
 		_cutscenes.Start();
+		_actors.TouchAgents = _cutscenes.Impact;
 		// The HUD (wumpa and lives counters, pause menu) is TwinsanityHud, fed from OnUpdate; its
 		// summary has the rig evidence for when the original shows it.
 	}
@@ -394,6 +395,10 @@ public sealed class TwinsanityLevel : EntityScript, TwinsanityActors.ITwinsanity
 		foreach (Entity root in _cutscenes.TakeWakeRoots())
 		{
 			_actors.Wake(root);
+		}
+		foreach (Entity root in _cutscenes.TakeHoldRoots())
+		{
+			_actors.Hold(root);
 		}
 		foreach ((Vector3 at, bool slam) in _cutscenes.TakeWormHits())
 		{

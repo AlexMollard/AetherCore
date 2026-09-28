@@ -86,6 +86,10 @@ public sealed class TwinsanityCutscenes
 			(new Vector3(-1.405f, 11.031f, -34.153f), new Vector3(0.783f, -0.573f, -0.242f)),
 			(new Vector3(3.748f, 15.102f, -37.302f), new Vector3(0.676f, -0.706f, -0.211f)),
 		},
+		// High path (logs/hubc/rig_sE2.csv, rig_sk1.csv; the rig in the highpath state is in highpath game space).
+		// Scene E and the skunk scene are one fixed shot each (8.9 s and 12.7 s).
+		["COM_TRAINING_CUTSCENE_E"] = new[] { (new Vector3(0.409f, -0.543f, 10.005f), new Vector3(0.0f, -0.259f, -0.966f)) },
+		["COM_ANGRY_SKUNK_CUSCENE_MAIN"] = new[] { (new Vector3(-13.431f, -3.525f, -47.828f), new Vector3(-0.152f, 0.0f, -0.988f)) },
 	};
 
 	// ---- data ----------------------------------------------------------------------------------
@@ -206,6 +210,7 @@ public sealed class TwinsanityCutscenes
 		public bool Claimed;
 		public Agent? MessageFrom;                 // who sent the last message (SetFocusToAgent's attacker)
 		public Vector3 Velocity;                   // ColliderLaunchNow flight
+		public float Gravity = LaunchGravity;      // its gravity
 		public bool Airborne;
 		public float MessageTime;                  // when Message arrived (Clock), for GotUserMessageEquals' age
 		public int ImpactMessage;                  // cmd 158: the message a launched agent sends its focus on landing
@@ -278,6 +283,7 @@ public sealed class TwinsanityCutscenes
 	private readonly List<(Vector3 At, Vector3 From)> _hits = new(); // hits on live actors, for TakeHits
 	private readonly List<(Vector3 At, bool Slam)> _wormHits = new(); // scene blows on live worms, for TakeWormHits
 	private readonly List<Entity> _wakeRoots = new(); // registry-bound path crabs / blocker a volume woke, for TakeWakeRoots
+	private readonly List<Entity> _holdRoots = new(); // live swinging logs a zone respawn re-armed, for TakeHoldRoots
 	// Script time: rules fire at most once per 50 Hz tick per machine, as on the rig (scene B's director
 	// reaches its first shot 5 transitions = 0.10 s after the volume; the engine's same-frame chain gave 0.02).
 	private const float ScriptTick = 0.02f;
@@ -516,9 +522,11 @@ public sealed class TwinsanityCutscenes
 			_triggers.Add(tr);
 			return tr;
 		}
-		// Message 87 also wakes actors with no receiver: path crabs (huba trigger 1) and hubb's cave blocker (trigger 2).
+		// Message 87 also wakes actors with no receiver: path crabs (huba trigger 1), hubb's cave blocker (trigger 2)
+		// and the high path's held swinging logs 37/38 (highpath trigger 1).
 		if (tr.Message == WakeMessage && tr.Targets.Length > 0 && Array.TrueForAll(tr.Targets, id => chunk.Instances.TryGetValue((tr.Layer, id), out Agent? c)
-			&& (c.Name.Contains("GLOBAL_CRAB", StringComparison.Ordinal) || c.Name.Contains("CAVE_BLOCKER", StringComparison.Ordinal))))
+			&& (c.Name.Contains("GLOBAL_CRAB", StringComparison.Ordinal) || c.Name.Contains("CAVE_BLOCKER", StringComparison.Ordinal)
+				|| c.Name.Contains("SWINGING_LOG", StringComparison.Ordinal))))
 		{
 			tr.Wake = true;
 			_triggers.Add(tr);
@@ -727,6 +735,37 @@ public sealed class TwinsanityCutscenes
 		return wakes;
 	}
 
+	/// <summary>The instance roots of the swinging logs a zone respawn re-armed with their scene (log 42 goes
+	/// back to its hold for scene E to release again).</summary>
+	public List<Entity> TakeHoldRoots()
+	{
+		var holds = new List<Entity>(_holdRoots);
+		_holdRoots.Clear();
+		return holds;
+	}
+
+	/// <summary>A live world hazard (a swinging log's body, segment a-b of radius r) touching the scene's drawn
+	/// actors: each one it touches gets <paramref name="message"/>, the hazard's cmd 158 impact message (scene E:
+	/// log 42's 81 knocks Coco off pit B's bridge, COM_COCO_CUTSCENE_L01E s5). True when it touched one.</summary>
+	public bool Impact(Vector3 a, Vector3 b, float r, int message)
+	{
+		bool touched = false;
+		foreach (Agent d in _directors)
+		{
+			foreach (Agent x in d.Cast)
+			{
+				// ponytail: an actor's body is taken as Crash's standing one (feet + 0.3 to + 1.5, radius 0.4).
+				if (x.Proxy.IsValid && !x.Done && x.Machine != null
+					&& TwinsanityActors.SegmentDistance(a, b, x.Position + new Vector3(0.0f, 0.3f, 0.0f), x.Position + new Vector3(0.0f, 1.5f, 0.0f)) < r + 0.4f)
+				{
+					Deliver(x, message);
+					touched = true;
+				}
+			}
+		}
+		return touched;
+	}
+
 	/// <summary>Scene blows on live worms since the last call: where the worm stands and whether it was the
 	/// slam (message 230, SLAMMED: it moves to its next hole) or the squash (226, SQUASHLAUNCH_NOIMPULSE).</summary>
 	public List<(Vector3 At, bool Slam)> TakeWormHits()
@@ -801,6 +840,10 @@ public sealed class TwinsanityCutscenes
 		foreach (Agent a in reset)
 		{
 			Reset(a);
+			if (!a.Proxy.IsValid && a.Name.Contains("SWINGING_LOG", StringComparison.Ordinal))
+			{
+				_holdRoots.Add(a.Root); // the live world's log a director of this zone releases (scene E: log 42)
+			}
 		}
 		foreach (Trigger t in _triggers)
 		{
@@ -945,7 +988,7 @@ public sealed class TwinsanityCutscenes
 
 	private void Fly(Agent a, float dt)
 	{
-		a.Velocity.Y -= LaunchGravity * dt;
+		a.Velocity.Y -= a.Gravity * dt;
 		Vector3 next = a.Position + a.Velocity * dt;
 		// The probe can miss (it only counts the level's own collision, and a worm or a crate can stand
 		// between): the flight then comes down at its landing height, the take-off's or the aimed focus'.
@@ -1333,10 +1376,12 @@ public sealed class TwinsanityCutscenes
 			         // that is the message's sender here, the argument is not decoded.
 				a.Focus = a.MessageFrom ?? a.Focus;
 				break;
-			case 72: // ColliderLaunchNow(.., .., .., back speed, .., ..., rise height (arg 14), ...): knocked away
-			         // from the focus. Gravity 35: Coco's 12 m launch in scene B peaks 0.84 s up on the rig
-			         // (rig_sB_actors.csv). ponytail: args past the height are not decoded.
-				Launch(a, BitConverter.UInt32BitsToSingle(Arg(3)), BitConverter.UInt32BitsToSingle(Arg(14)));
+			case 72: // ColliderLaunchNow(.., side speed (arg 1), .., back speed (arg 3), .., ..., rise height (arg 14), ...):
+			         // knocked away from the focus. Gravity 35: Coco's 12 m launch in scene B peaks 0.84 s up on the rig
+			         // (rig_sB_actors.csv). Arg 1 is only set by scene E's knock-off (COM_COCO_CUTSCENE_L01E s5, 2 m/s):
+			         // log 42 sweeps her off pit B's bridge, out of the fixed shot within 0.9 s of its arrival
+			         // (rig_sE2_003/004.png), under its arg-15 gravity (20). ponytail: the other args are not decoded.
+				Launch(a, BitConverter.UInt32BitsToSingle(Arg(3)), BitConverter.UInt32BitsToSingle(Arg(14)), BitConverter.UInt32BitsToSingle(Arg(1)), BitConverter.UInt32BitsToSingle(Arg(15)));
 				a.ImpactMessage = 0;
 				break;
 			case 158: // (ELF Run 0x253CF0) the collider's impact message: arg 0 goes to what the launched agent lands
@@ -1525,6 +1570,13 @@ public sealed class TwinsanityCutscenes
 			target.Message = message;
 			return;
 		}
+		if (message == WakeMessage && !target.Proxy.IsValid && target.Name.Contains("SWINGING_LOG", StringComparison.Ordinal))
+		{
+			// Scene E's director (state 6 MessageLinkedObject 87) releases log 42 over pit B: the live world's log
+			// (TwinsanityProps), so the log's own recv script (87 -> COM_TRAINING_SWINGING_LOG_START) is not run here.
+			_wakeRoots.Add(target.Root);
+			return;
+		}
 		ObjectDef def = target.Chunk.Objects[target.Object];
 		foreach ((int msg, int script) in def.Recv)
 		{
@@ -1629,15 +1681,20 @@ public sealed class TwinsanityCutscenes
 	}
 
 	// ColliderLaunchNow: away from the focus (the attacker) at `back` m/s (the script's negative forward
-	// speed), rising `height` metres.
-	private static void Launch(Agent a, float back, float height)
+	// speed) plus `side` m/s along its own local x, rising `height` metres. A sideways launch falls
+	// under its own gravity (arg 15) and through where the probe finds no ground (off a bridge, into the
+	// pit) instead of stopping at its take-off height.
+	private static void Launch(Agent a, float back, float height, float side = 0.0f, float gravity = 0.0f)
 	{
 		Vector3 away = a.Focus != null ? a.Position - a.Focus.Position : -new Vector3(MathF.Sin(a.Yaw * MathF.PI / 180.0f), 0.0f, MathF.Cos(a.Yaw * MathF.PI / 180.0f));
 		away.Y = 0.0f;
 		away = away.LengthSquared() > 1e-6f ? Vector3.Normalize(away) : Vector3.UnitZ;
-		a.Velocity = away * MathF.Abs(back) + Vector3.UnitY * MathF.Sqrt(2.0f * LaunchGravity * MathF.Max(height, 0.05f));
+		// The disc's local +x is the engine's local -x (x negated).
+		Vector3 right = new(MathF.Cos(a.Yaw * MathF.PI / 180.0f), 0.0f, -MathF.Sin(a.Yaw * MathF.PI / 180.0f));
+		a.Gravity = side != 0.0f && gravity is > 1.0f and < 100.0f ? gravity : LaunchGravity;
+		a.Velocity = away * MathF.Abs(back) - right * side + Vector3.UnitY * MathF.Sqrt(2.0f * a.Gravity * MathF.Max(height, 0.05f));
 		a.Airborne = true;
-		a.LandFloor = a.Position.Y;
+		a.LandFloor = side != 0.0f ? float.NegativeInfinity : a.Position.Y;
 	}
 
 	// Re-aim a launch's level speed so it comes down on `target` (its rise kept, gravity LaunchGravity).

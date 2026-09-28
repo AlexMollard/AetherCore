@@ -238,13 +238,44 @@ public sealed partial class TwinsanityActors
 			});
 			return true;
 		}
-		else if (n.EndsWith("act_training_swinging_log", StringComparison.Ordinal) && subtype == 0)
+		else if (n.EndsWith("act_training_swinging_log", StringComparison.Ordinal) && subtype is 0 or 2 or 5)
 		{
-			// COM_TRAINING_SWINGING_LOG_START s0: PosWarp lifts the pivot 6.4 m (the model hangs 8.3 m below its
-			// origin); subtype 0 then swings from level start (s9 -> s13 SetWobble). Hub B's act_..._LOG11 and the
-			// high path's old_act_..._LOG (L0 23, over pit A) run the same script.
-			e.Position += new Vector3(0.0f, SwingLift, 0.0f);
-			_swingLogs.Add(new SwingLog { Model = e, Pivot = e.Position, Yaw = e.EulerDegrees.Y });
+			// COM_TRAINING_SWINGING_LOG_START (logs/cutscenes/highpath_scripts.txt script 2089). Subtype 0: s0 PosWarp
+			// lifts the pivot 6.4 m (the model hangs 8.3 m below its origin), then it swings from level start (s9 ->
+			// s13 SetWobble). Hub B's act_..._LOG11 and the high path's old_act_..._LOG L0 23 (pit A) run it.
+			// Subtype 5 (L0 42, pit B): s2 PosWarp 9 (pivot 5.42: the log clears the bridge by 1.2 m, a crawl's
+			// height) and RotWarp 90 deg about x, held until message 87 (scene E's director), then s12 SetWobble
+			// 2.094 rad/s, 1.1 rad, phase pi. Subtype 2 (L0 37/38, trig 1): s0 PosWarp 6.4 and s2 RotWarp 90 deg about
+			// z (the log held out level with its pivot), held until trigger 1's message 87; then it swings down to
+			// hang still at a steady pi rad/s (rig EE RAM, rig_t1ram1.csv: 3 deg a frame, 90 deg in 0.5 s, no
+			// overswing). The disc's z roll is mirrored with x, so the engine holds -90 deg.
+			SwingLog l = new() { Model = e, Yaw = e.EulerDegrees.Y };
+			if (subtype == 5)
+			{
+				e.Position += new Vector3(0.0f, SwingLift5, 0.0f);
+				l.Held = true;
+				l.HoldPitch = MathF.PI * 0.5f;
+			}
+			else
+			{
+				e.Position += new Vector3(0.0f, SwingLift, 0.0f);
+				l.Held = subtype == 2;
+				l.HoldRoll = subtype == 2 ? -MathF.PI * 0.5f : 0.0f;
+			}
+			l.Subtype = (int)subtype;
+			l.Pivot = e.Position;
+			_swingLogs.Add(l);
+			PoseSwingLog(l, l.Held ? l.HoldPitch : 0.0f, l.Held ? l.HoldRoll : 0.0f);
+			return true;
+		}
+		else if (n.StartsWith("act_training_path_platform"))
+		{
+			LoadHulls(s, model);
+			foreach (PropHull h in s.Hulls)
+			{
+				Physics.SetMotionType(h.Body, PhysicsMotionType.Kinematic);
+			}
+			_platforms.Add(new PathPlatform { Shot = s, Top = e.Position });
 			return true;
 		}
 		else if (objectName.Equals("act_EARTH_NATIVE_SLEDGE", StringComparison.OrdinalIgnoreCase))
@@ -767,6 +798,32 @@ public sealed partial class TwinsanityActors
 				b.Moving = true;
 			}
 		}
+		foreach (SwingLog l in _swingLogs)
+		{
+			if (l.Held && l.Model == root)
+			{
+				l.Held = false;
+				l.Dropping = l.Subtype == 5;
+				l.T = 0.0f;
+			}
+		}
+	}
+
+	/// <summary>A respawn at a zone checkpoint re-arms the zone's scenes (TwinsanityCutscenes.TakeHoldRoots): log 42
+	/// (subtype 5) goes back to its RotWarp hold, for scene E's replay to release it again (rig: the scene
+	/// replays after a death, rig_sE2_sheet.png).</summary>
+	public void Hold(Entity root)
+	{
+		foreach (SwingLog l in _swingLogs)
+		{
+			if (l.Subtype == 5 && l.Model == root)
+			{
+				l.Held = true;
+				l.Dropping = false;
+				l.T = 0.0f;
+				PoseSwingLog(l, l.HoldPitch, 0.0f);
+			}
+		}
 	}
 
 	private void UpdateBlockers(float dt)
@@ -801,43 +858,155 @@ public sealed partial class TwinsanityActors
 	// SetWobble(2.0944, 0, 0, 0.8, ...) - 2.0944 rad/s about its local x axis, amplitude 0.8 rad: a 3.0 s
 	// pendulum. COM_TRAINING_SWINGING_LOG_IMPACT sends Crash message 59 on touch. Rig (logs/hubb/rig_notes.md):
 	// period 2.9-3.0 s from 0.72 s samples (rig_log2_sheet.png); one hit killed Crash with an Aku mask up
-	// (rig_log_hit_sheet.png), so the hit goes through the masks.
+	// (rig_log_hit_sheet.png), so the hit goes through the masks. Subtypes 2 and 5: SetupOneShot.
 	// ponytail: the swing phase starts at level start, not at the chunk's load on the disc.
 	private sealed class SwingLog
 	{
 		public Entity Model;
 		public Vector3 Pivot;
 		public float Yaw, T;
+		public int Subtype;
+		public bool Held;                // waiting for message 87 in its RotWarp pose
+		public bool Dropping;            // subtype 5 woken: falling back to rest (s10) before the wobble
+		public float HoldPitch, HoldRoll; // that pose, radians about local x / z
 	}
 
 	private readonly List<SwingLog> _swingLogs = new();
 	private const float SwingLift = 6.4f;          // s0 PosWarp(0, 6.4, 0)
+	private const float SwingLift5 = 9.0f;         // subtype 5: s2 PosWarp(0, 9, 0)
 	private const float SwingRate = 2.0944f;        // SetWobble rad/s
 	private const float SwingAmplitude = 0.8f;      // SetWobble rad
+	private const float SwingAmplitude5 = 1.1f;     // subtype 5: s12 SetWobble(2.094, 0, 0, 1.1, 0, 0, 3.142)
+	private const float DropRate = MathF.PI;        // subtype 2's fall to hanging, rad/s (rig_t1ram1.csv)
+	private const float LogDropRate5 = MathF.PI * 0.5f; // subtype 5: s10 LINEAR_INTERP TURN_SPEED 1.5708 back to rest
+	private const int LogImpactMessage = 81;        // subtype 5: s2 Cmd158(81), its impact message
+
+	/// <summary>The scene actors a hazard touches: (segment a, b, radius, message) -> touched any. Set by the level
+	/// to TwinsanityCutscenes.Impact.</summary>
+	public Func<Vector3, Vector3, float, int, bool>? TouchAgents;
 	// The log in the model: its axis 7.3 m under the pivot, 5.5 m long along x (mesh -2.83..2.66), radius 1.0.
 	private static readonly Vector3 SwingLogA = new(-2.6f, -7.3f, 0.0f), SwingLogB = new(2.4f, -7.3f, 0.0f);
 	private const float SwingLogRadius = 1.0f;
+
+	private static (Vector3 A, Vector3 B) PoseSwingLog(SwingLog l, float pitch, float roll)
+	{
+		l.Model.EulerDegrees = new Vector3(pitch * 180.0f / MathF.PI, l.Yaw, roll * 180.0f / MathF.PI);
+		Quaternion q = Quaternion.CreateFromYawPitchRoll(l.Yaw * MathF.PI / 180.0f, pitch, roll);
+		return (l.Pivot + Vector3.Transform(SwingLogA, q), l.Pivot + Vector3.Transform(SwingLogB, q));
+	}
 
 	private void UpdateSwingLogs(float dt, Vector3 crashPos)
 	{
 		foreach (SwingLog l in _swingLogs)
 		{
+			if (l.Held)
+			{
+				continue;
+			}
 			l.T += dt;
-			float angle = SwingAmplitude * MathF.Sin(SwingRate * l.T);
-			l.Model.EulerDegrees = new Vector3(angle * 180.0f / MathF.PI, l.Yaw, 0.0f);
-			Quaternion q = Quaternion.CreateFromYawPitchRoll(l.Yaw * MathF.PI / 180.0f, angle, 0.0f);
-			Vector3 a = l.Pivot + Vector3.Transform(SwingLogA, q);
-			Vector3 b = l.Pivot + Vector3.Transform(SwingLogB, q);
-			// Crash's body: feet + 0.4 to feet + 1.3, radius 0.4.
-			if (SegmentDistance(a, b, crashPos + new Vector3(0.0f, 0.4f, 0.0f), crashPos + new Vector3(0.0f, 1.3f, 0.0f)) < SwingLogRadius + 0.4f)
+			float angle;
+			if (l.Subtype == 5 && l.Dropping)
+			{
+				// s10: back to its rest pose at TURN_SPEED pi/2 until it touches an agent (Coco, whom its s2
+				// impact message 81 knocks off the bridge) or hangs; then s12's wobble. ponytail: the wobble is
+				// entered at the drop's angle on its falling side (no snap), not at the disc's phase-pi origin.
+				angle = MathF.Max(0.0f, l.HoldPitch - LogDropRate5 * l.T);
+				(Vector3 da, Vector3 db) = PoseSwingLog(l, angle, 0.0f);
+				if (angle <= 0.0f || (TouchAgents?.Invoke(da, db, SwingLogRadius, LogImpactMessage) ?? false))
+				{
+					l.Dropping = false;
+					l.T = -MathF.Asin(MathF.Min(1.0f, angle / SwingAmplitude5)) / SwingRate;
+				}
+			}
+			else
+			{
+				angle = l.Subtype == 5
+					? SwingAmplitude5 * MathF.Sin(SwingRate * l.T + MathF.PI)
+					: l.Subtype == 2 ? 0.0f : SwingAmplitude * MathF.Sin(SwingRate * l.T);
+			}
+			// Subtype 2 drops from its hold to hanging at DropRate and stays there.
+			float roll = l.Subtype == 2 ? l.HoldRoll * MathF.Max(0.0f, 1.0f - DropRate * l.T / MathF.Abs(l.HoldRoll)) : 0.0f;
+			(Vector3 a, Vector3 b) = PoseSwingLog(l, angle, roll);
+			// Crash's body: feet + 0.4 to feet + 1.3, radius 0.4; crouched or crawling, feet + 0.4 to + 0.7
+			// (rig_pitB_sheet.png: a crawl passes under log 42, whose underside is 1.2 m over the bridge).
+			float top = _player != null && _player.IsCrouching ? 0.7f : 1.3f;
+			if (SegmentDistance(a, b, crashPos + new Vector3(0.0f, 0.4f, 0.0f), crashPos + new Vector3(0.0f, top, 0.0f)) < SwingLogRadius + 0.4f)
 			{
 				_host?.DamagePlayer((a + b) * 0.5f, DeathKind.Crush);
 			}
 		}
 	}
 
+	// act_TRAINING_PATH_PLATFORM2 (L0 24, pit C): COM_GENERIC_PLATFORM_RISE runs from OnLand. Rig EE RAM
+	// (logs/hubc/rig_plat1.csv, its y at 30 Hz): 0.57 s after Crash lands it drops 16 m (the instance's float
+	// [5] -16) and at once rises back, each leg a trapezoid of 100 m/s^2 up to 29 m/s (0.84 s; fit residual
+	// 0.3 m^2 over 20 samples). Ridden down he falls to the kill plane (rig_pitC1_sheet.png).
+	private sealed class PathPlatform
+	{
+		public OneShot Shot = null!;
+		public Vector3 Top;
+		public float T = -1.0f; // seconds since the landing that set it off; -1 = resting
+	}
+
+	private readonly List<PathPlatform> _platforms = new();
+	private const float PlatformDelay = 0.57f, PlatformDrop = 16.0f, PlatformAccel = 100.0f, PlatformSpeed = 29.0f;
+
+	// Distance along one leg t seconds in.
+	private static float PlatformLeg(float t)
+	{
+		float ta = PlatformSpeed / PlatformAccel, ramp = 0.5f * PlatformAccel * ta * ta;
+		float cruise = (PlatformDrop - 2.0f * ramp) / PlatformSpeed, total = 2.0f * ta + cruise;
+		if (t <= 0.0f)
+		{
+			return 0.0f;
+		}
+		if (t < ta)
+		{
+			return 0.5f * PlatformAccel * t * t;
+		}
+		if (t < ta + cruise)
+		{
+			return ramp + PlatformSpeed * (t - ta);
+		}
+		float w = MathF.Min(t, total) - ta - cruise;
+		return ramp + PlatformSpeed * cruise + PlatformSpeed * w - 0.5f * PlatformAccel * w * w;
+	}
+
+	private void UpdatePlatforms(float dt)
+	{
+		foreach (PathPlatform p in _platforms)
+		{
+			Entity e = p.Shot.Actor.Model;
+			if (p.T < 0.0f)
+			{
+				bool on = _player != null && _player.Self.IsValid && _player.IsGrounded
+					&& p.Shot.Hulls.Exists(h => CharacterController.GetGroundEntity(_player.Self) == h.Body);
+				if (!on)
+				{
+					continue;
+				}
+				p.T = 0.0f;
+			}
+			p.T += dt;
+			// One leg: two ramps of v/a plus the cruise between them.
+			float legTime = PlatformSpeed / PlatformAccel + PlatformDrop / PlatformSpeed;
+			float u = p.T - PlatformDelay;
+			float down = u < legTime ? PlatformLeg(u) : PlatformDrop - PlatformLeg(u - legTime);
+			if (u >= 2.0f * legTime)
+			{
+				down = 0.0f;
+				p.T = -1.0f;
+			}
+			e.Position = p.Top - new Vector3(0.0f, down, 0.0f);
+			foreach (PropHull h in p.Shot.Hulls)
+			{
+				h.Body.Position = e.Position;
+			}
+		}
+	}
+
 	// Closest distance between segments p0-p1 and q0-q1.
-	private static float SegmentDistance(Vector3 p0, Vector3 p1, Vector3 q0, Vector3 q1)
+	internal static float SegmentDistance(Vector3 p0, Vector3 p1, Vector3 q0, Vector3 q1)
 	{
 		Vector3 d1 = p1 - p0, d2 = q1 - q0, r = p0 - q0;
 		float a = Vector3.Dot(d1, d1), e = Vector3.Dot(d2, d2), f = Vector3.Dot(d2, r);
@@ -855,6 +1024,7 @@ public sealed partial class TwinsanityActors
 		UpdateSleds(dt, crashPos);
 		UpdateBlockers(dt);
 		UpdateSwingLogs(dt, crashPos);
+		UpdatePlatforms(dt);
 		foreach (OneShot s in _oneShots)
 		{
 			if (s.Crown.IsValid)

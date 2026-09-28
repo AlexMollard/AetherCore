@@ -114,6 +114,7 @@ public sealed class CrashPlayer : EntityScript
 	public bool IsSliding => _state == State.Slide;
 	public Vector3 Velocity => new(_horizontal.X, _vy, _horizontal.Z);
 	public bool IsGrounded => _state is State.Ground or State.Crouch or State.Slide or State.SlamLand;
+	public bool IsCrouching => _state == State.Crouch;
 	public bool IsDead => _dead;
 	public float Facing => _facing;
 
