@@ -269,6 +269,9 @@ namespace aether
 		const auto blobCount = static_cast<std::uint32_t>(std::min<std::size_t>(packet.blobShadows.size(), kMaxBlobShadows));
 		fc.blobShadowInfo = glm::uvec4(blobCount, std::min(packet.blobCharacterCount, blobCount), 0u, 0u);
 		std::copy_n(packet.blobShadows.begin(), blobCount, fc.blobShadows);
+		const auto darknessCount = static_cast<std::uint32_t>(std::min<std::size_t>(packet.darknessVolumes.size() / 2u, kMaxDarknessVolumes));
+		fc.darknessVolumeInfo = glm::uvec4(darknessCount, 0u, 0u, 0u);
+		std::copy_n(packet.darknessVolumes.begin(), darknessCount * 2u, fc.darknessVolumes);
 
 		// A first frame has nothing behind it, and a camera that jumped has nothing
 		// meaningful behind it either - reprojecting through either produces a screen-wide

@@ -84,7 +84,7 @@ aether-ctl describe        # every method, with parameters and descriptions
 | `list_script_types` | yes | The C# script type names `add_script` accepts, from the project's built assembly. |
 | `undo` / `redo` / `undo_status` | yes | Step the editor's history and read its depth and unsaved state. |
 | `list_layouts` / `apply_layout` | yes | The named dock-layout presets, and switching to one. |
-| Prefab tools | yes | `add_prefab_instance`, `apply_prefab_instance`, `revert_prefab_instance`, `unpack_prefab_instance` — place a linked instance and manage its overrides. |
+| Prefab tools | yes | `add_prefab_instance`, `apply_prefab_instance`, `revert_prefab_instance`, `unpack_prefab_instance`, `save_prefab` — save an entity as a new prefab, place a linked instance and manage its overrides. |
 | Script tools | yes | `add_script`, `remove_script`, `list_scripts` — attach C# scripts and read back their property values. |
 | Tile authoring | yes | `create_tile_assets`, `paint_tiles`, `fill_tiles`, `read_tiles`, `add_tile_layer`, `get_tile_map` — chunked tilemap editing that joins the editor's undo stack. |
 | Sprite / atlas tools | yes | `slice_atlas`, `get_atlas`, `create_sprite_animation`, `list_assets` — build atlases and animations from textures. |

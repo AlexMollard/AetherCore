@@ -873,9 +873,9 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"editor.camera",
 		        "set_editor_camera",
-		        "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, and 'frame' centres on an entity. Call it with no arguments to read the camera without moving it - it returns the current position and orthographic height either way. 'height' only lands in a 2D scene; a 3D edit camera is perspective and keeps the value it had. Edit mode only - the play camera belongs to the game.",
+		        "Move the edit-mode viewport camera: 'position' ([x, y] keeps z, [x, y, z] sets it), 'height' sets the orthographic view height, 'frame' centres on an entity, and 'lookAt' ([x, y, z], 3D only) turns the camera to face a world point. Call it with no arguments to read the camera without moving it - it returns the current position and orthographic height either way. 'height' only lands in a 2D scene; a 3D edit camera is perspective and keeps the value it had. Edit mode only - the play camera belongs to the game.",
 		        true,
-		        Obj({{"position", json{{"type", "array"}, {"items", NumProp()}, {"minItems", 2}, {"maxItems", 3}}}, {"height", NumProp()}, {"frame", json{{"type", "integer"}, {"description", "entity id to centre on"}}}}),
+		        Obj({{"position", json{{"type", "array"}, {"items", NumProp()}, {"minItems", 2}, {"maxItems", 3}}}, {"height", NumProp()}, {"frame", json{{"type", "integer"}, {"description", "entity id to centre on"}}}, {"lookAt", json{{"type", "array"}, {"items", NumProp()}, {"minItems", 3}, {"maxItems", 3}, {"description", "world point to face (perspective camera only)"}}}}),
 		        [](const json& p, MethodContext& ctx) -> json
 		        {
 			        const auto* playState = ctx.services.TryGet<app::PlayState>();
@@ -922,6 +922,21 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 				        }
 			        }
 			        cam->SetPosition(position);
+			        if (p.contains("lookAt") && cam->GetProjection() == CameraProjection::Perspective)
+			        {
+				        const json& array = p["lookAt"];
+				        if (!array.is_array() || array.size() != 3)
+				        {
+					        return json{{"error", "'lookAt' must be [x, y, z]"}};
+				        }
+				        const glm::vec3 to = glm::vec3(array[0].get<float>(), array[1].get<float>(), array[2].get<float>()) - position;
+				        if (glm::length(to) > 1e-4f)
+				        {
+					        // The same yaw/pitch convention the viewport seeds the free camera with.
+					        const glm::vec3 fwd = glm::normalize(to);
+					        cam->SetYawPitch(glm::degrees(std::atan2(-fwd.x, -fwd.z)), glm::degrees(std::asin(glm::clamp(fwd.y, -1.0f, 1.0f))));
+				        }
+			        }
 			        if (p.contains("height") && cam->GetProjection() == CameraProjection::Orthographic)
 			        {
 				        cam->SetOrthographic(std::max(p.value("height", 10.0f), 0.01f), cam->GetNearPlane(), cam->GetFarPlane());

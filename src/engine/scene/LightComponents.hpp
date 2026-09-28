@@ -128,6 +128,17 @@ namespace aether
 		float timeSpeedSecondsPerSecond = 60.0f; // simulated seconds per real second
 	};
 
+	// A box that swallows light with depth below its top face: everything seen inside it
+	// (geometry, characters, and the sky or sea through its open bottom) fades to black
+	// over fadeDepth world units, starting at the top. For bottomless pits and shafts whose
+	// floor the player must not see. The box is the entity's transform: centred on its
+	// position, sized by its scale (a unit cube scaled, like a Trigger Volume), turned by
+	// its yaw only - pitch and roll are ignored, the fade always runs straight down.
+	struct DarknessVolumeComponent
+	{
+		float fadeDepth = 6.0f;
+	};
+
 	namespace ecs
 	{
 		inline glm::mat4 LightAimMatrix(const glm::vec3& position, const glm::vec3& direction)

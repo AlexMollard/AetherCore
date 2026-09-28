@@ -50,6 +50,9 @@ struct FrameConstantsData
     // character actors'; xyz = bounds centre, w = radius.
     [[vk::offset(1008)]] uint4  blobShadowInfo;
     [[vk::offset(1024)]] float4 blobShadows[64];
+    // Darkness volumes: x = count; volume i = [2i] (centre xyz, fade depth), [2i+1] (half extents xyz, yaw).
+    [[vk::offset(2048)]] uint4  darknessVolumeInfo;
+    [[vk::offset(2064)]] float4 darknessVolumes[32];
 };
 
 #endif

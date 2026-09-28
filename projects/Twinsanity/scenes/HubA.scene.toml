@@ -4344,6 +4344,20 @@ scale = [ 1.0, 1.0, 1.0 ]
             v = 'act_REDWUMPA102'
 
 [[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PitDarkness channel 4'
+node = 5359207944108657784
+position = [ 128.15, -7.95, 134.05 ]
+prefab = 'tw_pit_darkness'
+scale = [ 20.2, 12.7, 5.4 ]
+
+    [[prefab_instances.overrides]]
+    guid = 1
+
+        [prefab_instances.overrides.darkness_volume]
+        fade_depth = 7.0
+
+[[prefab_instances]]
 euler = [ 0.0, -45.24853, 0.0 ]
 name = 'Trigger'
 node = 5889958589836369654
@@ -8354,7 +8368,7 @@ name = 'act_TRAINING_CUTSCENE_DIRECTOR_HUBA_Spin_Cutscene1'
 node = 6806394249872375155
 position = [ 85.48364, 3.0547996, 78.34436 ]
 prefab = 'tw_agent_training_cutscene_director_huba_spin_cutscene'
-scale = [ 0.99999994, 1.0, 0.99999994 ]
+scale = [ 0.9999999, 1.0, 0.9999999 ]
 
     [[prefab_instances.added]]
     euler = [ 0.0, 0.0, 0.0 ]
@@ -9128,6 +9142,20 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'PitDarkness channel 2'
+node = 8356803139218041678
+position = [ 127.65, -8.8, 102.4 ]
+prefab = 'tw_pit_darkness'
+scale = [ 13.8, 14.4, 13.3 ]
+
+    [[prefab_instances.overrides]]
+    guid = 1
+
+        [prefab_instances.overrides.darkness_volume]
+        fade_depth = 7.0
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'REINFORCEDWOODENCRATE'
 node = -8358881425436650272
 position = [ 129.67252, -0.5800042, 147.19005 ]
@@ -9678,7 +9706,7 @@ name = 'act_GLOBAL_HAYBALE4'
 node = -6419385794733069501
 position = [ 94.52368, 0.686566, -18.696411 ]
 prefab = 'tw_push_haybale_4'
-scale = [ 1.0, 0.99999994, 1.0 ]
+scale = [ 1.0, 0.9999999, 1.0 ]
 
     [[prefab_instances.overrides]]
     guid = 1
@@ -10361,6 +10389,20 @@ scale = [ 1.0, 1.0, 1.0 ]
 
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]
+name = 'PitDarkness channel 3'
+node = -6089420797733907661
+position = [ 128.05, -7.95, 125.3 ]
+prefab = 'tw_pit_darkness'
+scale = [ 20.2, 12.7, 6.1 ]
+
+    [[prefab_instances.overrides]]
+    guid = 1
+
+        [prefab_instances.overrides.darkness_volume]
+        fade_depth = 7.0
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
 name = 'act_BASICCRATE45'
 node = -5236097977838544767
 position = [ -448.0, 9.013267e-12, -1395.2 ]
@@ -10500,3 +10542,17 @@ scale = [ 1.0, 1.0, 1.0 ]
             [prefab_instances.overrides.scripts.properties.Params]
             t = 'string'
             v = '0,255,10,0'
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PitDarkness channel 1'
+node = -334740036676934244
+position = [ 102.4, -7.7, 76.65 ]
+prefab = 'tw_pit_darkness'
+scale = [ 4.1, 12.2, 14.2 ]
+
+    [[prefab_instances.overrides]]
+    guid = 1
+
+        [prefab_instances.overrides.darkness_volume]
+        fade_depth = 7.0

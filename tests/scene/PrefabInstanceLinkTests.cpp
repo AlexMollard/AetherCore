@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <string_view>
 
@@ -16,6 +17,7 @@
 #include "material/MaterialRegistry.hpp"
 #include "material/TextureRegistry.hpp"
 #include "scene/Components.hpp"
+#include "scene/LightComponents.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/TagSlots.hpp"
@@ -411,4 +413,58 @@ TEST_CASE("A load then save of a yawed instance adds no child transform override
 		overridden += rec.overrides.size();
 	}
 	CHECK(overridden == 1);
+}
+
+TEST_CASE("An unedited instance of a prefab saved before a component field existed has no override") {
+	LinkFixture fx("aether_prefab_link_old_field");
+	// Written before Darkness Volume had fade_depth: the table exists, the key does not, so the
+	// component loads with the reflected default and the live capture writes that default.
+	{
+		std::ofstream out(fx.dir / "prefabs" / "tw_test_old.prefab.toml");
+		out << "[[entities]]\nguid = 1\nname = 'Old'\nparent = -1\nposition = [ 0.0, 0.0, 0.0 ]\neuler = [ 0.0, 0.0, 0.0 ]\nscale = [ 1.0, 1.0, 1.0 ]\n\n"
+		       "    [entities.darkness_volume]\n";
+	}
+	const auto prefab = ReadPrefabFile("tw_test_old");
+	REQUIRE(prefab.has_value());
+	World live;
+	const Entity inst = InstantiatePrefabInstance("tw_test_old", *prefab, live, ApplySceneDeps{}, ComposeTransform({4, 1, -3}, {0, 30, 0}, {2, 3, 4}));
+	REQUIRE(inst.IsValid());
+	REQUIRE(live.Has<DarknessVolumeComponent>(inst));
+	const SceneDescription captured = CaptureScene(live, fx.mreg, fx.treg);
+	REQUIRE(captured.prefabInstances.size() == 1);
+	CHECK(captured.prefabInstances[0].overrides.empty());
+
+	// A value that differs from the default is still an edit.
+	live.Get<DarknessVolumeComponent>(inst).fadeDepth = 9.0f;
+	const SceneDescription edited = CaptureScene(live, fx.mreg, fx.treg);
+	REQUIRE(edited.prefabInstances[0].overrides.size() == 1);
+	CHECK(edited.prefabInstances[0].overrides[0].partialToml.find("fade_depth") != std::string::npos);
+}
+
+TEST_CASE("Applying a placed instance keeps the prefab at the origin and its root's own script values") {
+	LinkFixture fx("aether_prefab_link_apply_placement");
+	const SceneDescription prefab = fx.SaveLinker("tw_test_apply");
+	World live;
+	const Entity inst = InstantiatePrefabInstance("tw_test_apply", prefab, live, ApplySceneDeps{}, ComposeTransform({50, 7, -20}, {0, 45, 0}, {1, 1, 1}));
+	REQUIRE(inst.IsValid());
+	live.Get<NameComponent>(inst).name = "act_Placed";
+	SetProp(live, inst, "Layer", IntProp(7)); // per-instance data
+	const Entity body = ChildrenOf(live, inst)[0];
+	live.Get<NameComponent>(body).name = "Hull"; // a real content edit
+
+	REQUIRE(ApplyPrefabInstanceToPrefab(live, inst, ApplySceneDeps{}, fx.mreg, fx.treg));
+	const auto saved = ReadPrefabFile("tw_test_apply");
+	REQUIRE(saved.has_value());
+	REQUIRE(saved->entities.size() == 2);
+	const EntityRecord& root = saved->entities[0];
+	CHECK(root.name == "Linker");
+	CHECK(glm::length(root.position) == doctest::Approx(0.0f));
+	CHECK(glm::length(root.eulerDeg) == doctest::Approx(0.0f));
+	REQUIRE(!root.scripts.empty());
+	CHECK(root.scripts[0].properties.at("Layer").i64 == 0);
+	const EntityRecord& child = saved->entities[1];
+	CHECK(child.name == "Hull");
+	CHECK(child.position.x == doctest::Approx(0.0f).epsilon(1e-4));
+	CHECK(child.position.y == doctest::Approx(0.5f));
+	CHECK(child.position.z == doctest::Approx(0.0f).epsilon(1e-4));
 }

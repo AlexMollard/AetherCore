@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <filesystem>
 #include <type_traits>
@@ -2045,12 +2046,47 @@ namespace aether::app::scene
 			n.visit([&](auto&& concrete) { tmp.insert_or_assign("k", concrete); });
 			return StringifyTree(tmp);
 		}
+
+		// A prefab written before a field existed has no key for it, while the live
+		// capture of an untouched instance writes every field. Compare against what that
+		// prefab loads as instead: a missing field is the component's reflected default.
+		void FillMissingReflectedDefaults(EntityRecord& rec)
+		{
+			std::optional<World> scratch; // only built when a field is actually missing
+			for (GenericComponent& generic: rec.reflected)
+			{
+				const reflect::ComponentType* ct = reflect::FindComponentType(generic.type);
+				if (ct == nullptr || !ct->emplaceDefault)
+				{
+					continue;
+				}
+				const void* defaults = nullptr;
+				for (const reflect::FieldDesc& f: ct->fields)
+				{
+					if (!f.meta.serialize || !f.get || std::ranges::any_of(generic.fields, [&](const auto& kv) { return kv.first == f.name; }))
+					{
+						continue;
+					}
+					if (defaults == nullptr)
+					{
+						if (!scratch)
+						{
+							scratch.emplace();
+						}
+						defaults = ct->emplaceDefault(*scratch, scratch->Create());
+					}
+					generic.fields.emplace_back(f.name, f.get(defaults));
+				}
+			}
+		}
 	} // namespace
 
 	std::string ComputePrefabOverrideToml(const EntityRecord& live, const EntityRecord& prefab)
 	{
 		const toml::table lt = EntityToTable(live);
-		const toml::table pt = EntityToTable(prefab);
+		EntityRecord prefabFilled = prefab;
+		FillMissingReflectedDefaults(prefabFilled);
+		const toml::table pt = EntityToTable(prefabFilled);
 		toml::table pruned;
 		for (auto&& [k, v]: lt)
 		{

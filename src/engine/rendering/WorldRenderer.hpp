@@ -25,5 +25,10 @@ namespace aether
 		// Each is xyz = (centre x, bounds bottom y, centre z), w = blob radius. Returns how many
 		// of them (placed first) belong to character actors (a kCharacter material).
 		std::size_t GatherBlobShadows(const World& world, const MaterialRegistry& materials, glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out);
+
+		// DarknessVolumeComponents as FrameConstants::darknessVolumes packs them: two vec4 per
+		// volume, (centre, fade depth) then (half extents, yaw radians), nearest the eye first
+		// and capped at kMaxDarknessVolumes.
+		void GatherDarknessVolumes(const World& world, glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out);
 	}
 } // namespace aether

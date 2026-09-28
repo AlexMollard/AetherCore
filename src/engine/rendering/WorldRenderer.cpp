@@ -1,6 +1,7 @@
 #include "rendering/WorldRenderer.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <unordered_map>
 
@@ -15,6 +16,7 @@
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/LightComponents.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 
@@ -263,6 +265,45 @@ namespace aether
 			out.resize(kMaxBlobShadows);
 		}
 		return characters;
+	}
+
+	void WorldRenderer::GatherDarknessVolumes(const World& world, const glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out)
+	{
+		AE_PROFILE_ZONE();
+		out.clear();
+		struct Volume
+		{
+			glm::vec4 centreFade;
+			glm::vec4 halfExtentsYaw;
+		};
+		std::vector<Volume> volumes;
+		auto view = world.GetRegistry().view<const DarknessVolumeComponent, const TransformComponent>();
+		for (auto enttEntity: view)
+		{
+			const Entity entity = World::FromEntt(enttEntity);
+			if (ecs::HasDisabledAncestor(world, entity))
+			{
+				continue;
+			}
+			const glm::mat4& m = view.get<const TransformComponent>(enttEntity).localToWorld;
+			const glm::vec3 halfExtents = 0.5f * glm::vec3(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
+			const float fadeDepth = view.get<const DarknessVolumeComponent>(enttEntity).fadeDepth;
+			if (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f || fadeDepth <= 0.0f)
+			{
+				continue;
+			}
+			// Yaw of the box's local x axis: a y rotation by t takes x to (cos t, 0, -sin t).
+			const float yaw = std::atan2(-m[0].z, m[0].x);
+			volumes.push_back({glm::vec4(glm::vec3(m[3]), fadeDepth), glm::vec4(halfExtents, yaw)});
+		}
+		const auto distSq = [&](const Volume& v) { return glm::dot(glm::vec3(v.centreFade) - eyeWorldPos, glm::vec3(v.centreFade) - eyeWorldPos); };
+		std::sort(volumes.begin(), volumes.end(), [&](const Volume& a, const Volume& b) { return distSq(a) < distSq(b); });
+		volumes.resize(std::min<std::size_t>(volumes.size(), kMaxDarknessVolumes));
+		for (const Volume& v: volumes)
+		{
+			out.push_back(v.centreFade);
+			out.push_back(v.halfExtentsYaw);
+		}
 	}
 
 } // namespace aether

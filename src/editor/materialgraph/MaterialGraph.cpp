@@ -788,6 +788,7 @@ namespace aether::editor
 #include "include/EnvBrdf.slangh"
 #include "include/AmbientOcclusion.slangh"
 #include "include/HeightFog.slangh"
+#include "include/DarknessVolume.slangh"
 #include "include/MeshVertex.slangh"
 #include "include/DefaultVertex.slangh"
 
@@ -962,6 +963,9 @@ float4 fragmentMain(VSOutput input) : SV_Target0
                                                fc->fogParams.z, fc->skyParams, fc->shadingParams.y);
         finalColor = lerp(finalColor, fogColor, fogAmount);
     }}
+
+    // Darkness volumes (pits), exactly as gltf_mesh applies them.
+    finalColor *= 1.0f - DarknessVolumeAmount(fc, fc->cameraWorldPos.xyz, input.worldPos);
 
     return float4(finalColor, 1.0f);
 }}

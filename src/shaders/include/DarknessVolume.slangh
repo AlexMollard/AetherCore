@@ -1,0 +1,68 @@
+#ifndef AETHER_DARKNESS_VOLUME_SLANGH
+#define AETHER_DARKNESS_VOLUME_SLANGH
+
+// Darkness volumes (DarknessVolumeComponent): boxes that fade what is seen inside them to
+// black with depth below their top face - the black a PS2 pit had at its bottom.
+//
+// The fade follows the view ray, not just the shaded point. The part of the segment from the
+// eye to the surface that lies inside the box is found by slab clipping, and its deepest point
+// sets the darkness. For a surface inside the pit that is the surface itself (a wall or floor
+// darkens with its depth, Crash falling in darkens as he drops), and for anything seen THROUGH
+// the pit's open bottom (sky, sea far below) it is where the ray leaves the box, so the hole
+// reads black instead of showing what is under the level. A ray that misses every box, or only
+// grazes one along its top, is untouched: nothing outside a pit changes.
+
+#include "FrameConstants.slangh"
+
+// Fraction of the radiance the volumes swallow along the ray eye -> surface, 0 = none.
+float DarknessVolumeAmount(FrameConstantsData* fc, float3 eye, float3 surface)
+{
+	float darkness = 0.0f;
+	const uint count = min(fc->darknessVolumeInfo.x, 16u);
+	for (uint i = 0u; i < count; ++i)
+	{
+		const float4 centreFade = fc->darknessVolumes[2u * i];
+		const float4 halfYaw = fc->darknessVolumes[2u * i + 1u];
+		const float3 h = halfYaw.xyz;
+		const float c = cos(halfYaw.w);
+		const float s = sin(halfYaw.w);
+		// Into the box's frame: undo its yaw (a y rotation by t maps x to (cos t, 0, -sin t)).
+		const float3 a = eye - centreFade.xyz;
+		const float3 b = surface - centreFade.xyz;
+		const float3 o = float3(c * a.x - s * a.z, a.y, s * a.x + c * a.z);
+		const float3 e = float3(c * b.x - s * b.z, b.y, s * b.x + c * b.z);
+		const float3 d = e - o;
+
+		// Slab clip of o + t d, t in [0, 1].
+		float t0 = 0.0f;
+		float t1 = 1.0f;
+		[unroll]
+		for (int k = 0; k < 3; ++k)
+		{
+			if (abs(d[k]) < 1e-6f)
+			{
+				if (abs(o[k]) > h[k])
+				{
+					t0 = 2.0f; // parallel and outside this slab: no overlap
+				}
+			}
+			else
+			{
+				const float inv = 1.0f / d[k];
+				const float ta = (-h[k] - o[k]) * inv;
+				const float tb = (h[k] - o[k]) * inv;
+				t0 = max(t0, min(ta, tb));
+				t1 = min(t1, max(ta, tb));
+			}
+		}
+		if (t0 > t1)
+		{
+			continue;
+		}
+		const float deepest = min(o.y + d.y * t0, o.y + d.y * t1);
+		darkness = max(darkness, smoothstep(0.0f, 1.0f, (h.y - deepest) / max(centreFade.w, 1e-3f)));
+	}
+	return darkness;
+}
+
+#endif

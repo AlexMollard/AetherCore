@@ -1496,12 +1496,12 @@ scale = [ 1.0, 1.0, 1.0 ]
             v = 'act_NITROCRATE49'
 
 [[prefab_instances]]
-euler = [ 5.7458496, 14.342649, 0.0 ]
+euler = [ 5.74585, 14.342649, 0.0 ]
 name = 'act_NITROCRATE49'
 node = 2062370893784673297
 position = [ -45.349625, 37.3828, 160.92505 ]
 prefab = 'tw_crate_nitro_act49'
-scale = [ 1.0, 0.99999994, 0.99999994 ]
+scale = [ 1.0, 0.9999999, 0.9999999 ]
 
     [[prefab_instances.overrides]]
     guid = 1
@@ -1789,6 +1789,20 @@ scale = [ 7.6474595, 2.5109372, 5.1720905 ]
             t = 'entity'
             v = -1
             v_node = 5608089364371191059
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PitDarkness pit B'
+node = 5206452344016968600
+position = [ -64.35, 29.6, 217.6 ]
+prefab = 'tw_pit_darkness'
+scale = [ 13.8, 14.4, 13.3 ]
+
+    [[prefab_instances.overrides]]
+    guid = 1
+
+        [prefab_instances.overrides.darkness_volume]
+        fade_depth = 9.0
 
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -4147,7 +4161,7 @@ name = 'act_NITROCRATE49'
 node = -4235616458572412773
 position = [ -43.25116, 37.303356, 161.51845 ]
 prefab = 'tw_crate_nitro_act49'
-scale = [ 0.99999994, 1.0, 0.99999994 ]
+scale = [ 0.9999999, 1.0, 0.9999999 ]
 
     [[prefab_instances.overrides]]
     guid = 1
@@ -4292,12 +4306,12 @@ scale = [ 1.0, 1.0, 1.0 ]
             v = 'act_NITROCRATE49'
 
 [[prefab_instances]]
-euler = [ -0.15380584, 5.5480986, 0.0 ]
+euler = [ -0.15380584, 5.548099, 0.0 ]
 name = 'act_NITROCRATE49'
 node = -4235613160037528140
 position = [ -44.74508, 36.810005, 167.13309 ]
 prefab = 'tw_crate_nitro_act49'
-scale = [ 0.99999994, 1.0, 1.0 ]
+scale = [ 0.9999999, 1.0, 1.0 ]
 
     [[prefab_instances.overrides]]
     guid = 1
@@ -4442,7 +4456,7 @@ scale = [ 1.0, 1.0, 1.0 ]
             v = 'act_NITROCRATE49'
 
 [[prefab_instances]]
-euler = [ 0.6591796, 20.33568, 0.0 ]
+euler = [ 0.6591796, 20.335682, 0.0 ]
 name = 'act_NITROCRATE49'
 node = -4235609861502643507
 position = [ -42.72412, 36.810005, 167.6544 ]
@@ -4490,6 +4504,20 @@ scale = [ 1.0, 1.0, 1.0 ]
             [prefab_instances.overrides.scripts.properties.ObjectName]
             t = 'string'
             v = 'act_NITROCRATE49'
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PitDarkness pit C'
+node = -2959305957800951244
+position = [ -64.35, 29.6, 192.0 ]
+prefab = 'tw_pit_darkness'
+scale = [ 13.8, 14.4, 13.3 ]
+
+    [[prefab_instances.overrides]]
+    guid = 1
+
+        [prefab_instances.overrides.darkness_volume]
+        fade_depth = 9.0
 
 [[prefab_instances]]
 euler = [ 0.0, 0.0, 0.0 ]
@@ -4990,3 +5018,11 @@ scale = [ 1.0, 1.0, 1.0 ]
             [prefab_instances.overrides.scripts.properties.ObjectName]
             t = 'string'
             v = 'act_NITROCRATE49'
+
+[[prefab_instances]]
+euler = [ 0.0, 0.0, 0.0 ]
+name = 'PitDarkness pit A'
+node = -617213715357345615
+position = [ -64.85, 30.7, 243.2 ]
+prefab = 'tw_pit_darkness'
+scale = [ 19.0, 12.2, 5.5 ]

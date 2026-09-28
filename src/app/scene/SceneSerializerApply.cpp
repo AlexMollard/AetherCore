@@ -798,7 +798,43 @@ namespace aether::app::scene
 			siblingRoots.push_back(e);
 		}
 
-		if (!SavePrefabFile(prefabName, CapturePrefab(world, root, materials, textures)))
+		// The instance root's transform, name and script property values are the instance's
+		// own placement and identity (the scene stores them on the instance record), not the
+		// prefab's content. Capture the subtree in prefab space - the root back at the origin -
+		// and keep the prefab's own root name and root script values, so applying one placed
+		// instance never moves every other instance or stamps its per-instance data on them.
+		SceneDescription captured = CapturePrefab(world, root, materials, textures);
+		if (const auto* rootTransform = world.TryGet<TransformComponent>(root); rootTransform != nullptr && !captured.entities.empty())
+		{
+			const glm::mat4 toPrefab = glm::inverse(rootTransform->localToWorld);
+			for (EntityRecord& rec: captured.entities)
+			{
+				if (rec.hasTransform)
+				{
+					DecomposeTRS(toPrefab * ComposeTransform(rec.position, rec.eulerDeg, rec.scale), rec.position, rec.eulerDeg, rec.scale);
+				}
+			}
+			EntityRecord& rootRec = captured.entities[0];
+			rootRec.position = glm::vec3(0.0f);
+			rootRec.eulerDeg = glm::vec3(0.0f);
+			rootRec.scale = glm::vec3(1.0f);
+		}
+		if (const auto old = ReadPrefabFile(prefabName); old.has_value() && !old->entities.empty() && !captured.entities.empty())
+		{
+			captured.name = old->name;
+			EntityRecord& rootRec = captured.entities[0];
+			const EntityRecord& oldRoot = old->entities[0];
+			rootRec.name = oldRoot.name;
+			for (ScriptRecord& script: rootRec.scripts)
+			{
+				const auto oldScript = std::ranges::find_if(oldRoot.scripts, [&](const ScriptRecord& s) { return s.type == script.type; });
+				if (oldScript != oldRoot.scripts.end())
+				{
+					script.properties = oldScript->properties;
+				}
+			}
+		}
+		if (!SavePrefabFile(prefabName, captured))
 		{
 			return false;
 		}

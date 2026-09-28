@@ -143,6 +143,20 @@ b.RequiresFeature(SceneFeatureFlags::Lighting3D);
 AE_GENERIC_SERIALIZE()
 AE_COMPONENT_END()
 
+AE_COMPONENT(DarknessVolumeComponent, "Darkness Volume", "Rendering", ICON_FA_MOON)
+AE_FIELD_NT("fade_depth", fadeDepth, Float, "World units below the box's top face over which what is seen inside it fades to black. The box is the entity's transform (a unit cube: position, scale, yaw).")
+b.RequiresFeature(SceneFeatureFlags::Lighting3D);
+b.PostSet(
+        [](World& w, Entity e)
+        {
+	        if (!w.Has<TransformComponent>(e))
+	        {
+		        w.Emplace<TransformComponent>(e);
+	        }
+        });
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
 AE_COMPONENT(NameComponent, "Name", "Core", ICON_FA_TAG)
 AE_FIELD_N("name", name, String)
 AE_HAND_AUTHORED_CATALOG()

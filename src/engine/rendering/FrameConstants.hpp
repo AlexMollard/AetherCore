@@ -12,8 +12,10 @@ namespace aether
 
 	// Contact blob shadows under object-lit actors, see blobShadows below.
 	inline constexpr std::uint32_t kMaxBlobShadows = 64u;
+	// Darkness volumes (DarknessVolumeComponent), two vec4 each, see darknessVolumes below.
+	inline constexpr std::uint32_t kMaxDarknessVolumes = 16u;
 
-	// Layout (2048 bytes):
+	// Layout (2576 bytes):
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};
@@ -100,6 +102,11 @@ namespace aether
 		glm::uvec4 blobShadowInfo{0u};
 		glm::vec4 blobShadows[kMaxBlobShadows]{};
 
+		// Darkness volumes (pits whose floor must not show): x = count. Volume i is
+		// darknessVolumes[2i] = (centre xyz, fade depth), [2i+1] = (half extents xyz, yaw radians).
+		glm::uvec4 darknessVolumeInfo{0u};
+		glm::vec4 darknessVolumes[kMaxDarknessVolumes * 2u]{};
+
 		void RefreshDerived()
 		{
 			invViewProj = glm::inverse(viewProj);
@@ -124,7 +131,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 2048, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 2576, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -164,4 +171,6 @@ namespace aether
 	static_assert(offsetof(FrameConstants, objectLight1Color) == 992);
 	static_assert(offsetof(FrameConstants, blobShadowInfo) == 1008);
 	static_assert(offsetof(FrameConstants, blobShadows) == 1024);
+	static_assert(offsetof(FrameConstants, darknessVolumeInfo) == 2048);
+	static_assert(offsetof(FrameConstants, darknessVolumes) == 2064);
 } // namespace aether

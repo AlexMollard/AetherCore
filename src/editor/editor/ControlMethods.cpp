@@ -810,6 +810,37 @@ namespace aether::editor
 			        return json{{"id", root.id}, {"prefab", prefabName}, {"applied", true}, {"refreshed", refreshed}};
 		        }});
 
+		methods.push_back({"scene.save_prefab",
+		        "save_prefab",
+		        "Save an entity (with its children) as a prefab file under the project's prefabs folder - the Hierarchy's 'Save as Prefab'. 'name' is the prefab's save name (what add_prefab_instance takes); an existing prefab of that name is overwritten. The entity itself stays as it is: place linked copies with add_prefab_instance.",
+		        true,
+		        Obj({{"id", IntProp()}, {"name", StrProp()}}, {"id", "name"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scenes = ctx.services.TryGet<SceneSubsystem>();
+			        auto* assets = ctx.services.TryGet<AssetManager>();
+			        if (scenes == nullptr || assets == nullptr)
+			        {
+				        return ErrNoScene();
+			        }
+			        World& world = scenes->GetWorld();
+			        const Entity e{IdOf(p)};
+			        if (!world.GetRegistry().valid(World::ToEntt(e)))
+			        {
+				        return json{{"error", "entity not found"}};
+			        }
+			        const std::string name = p.value("name", std::string{});
+			        if (name.empty() || !app::scene::IsValidAssetName(name.c_str()))
+			        {
+				        return json{{"error", "invalid prefab name"}};
+			        }
+			        if (!app::scene::SavePrefabFile(name, app::scene::CapturePrefab(world, e, assets->GetMaterialRegistry(), assets->GetTextureRegistry())))
+			        {
+				        return json{{"error", "failed to save prefab"}};
+			        }
+			        return json{{"id", e.id}, {"prefab", name}, {"saved", true}};
+		        }});
+
 		methods.push_back({"scene.revert_prefab_instance",
 		        "revert_prefab_instance",
 		        "Discard a prefab instance's component overrides and re-expand it from the prefab. The instance keeps where it is: its root transform is placement, stored on the instance reference rather than as an override, so reverting does not move it back to the origin. 'id' is the instance root. Returns the new root id - the old subtree is destroyed, so an id held from before the call no longer resolves.",

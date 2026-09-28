@@ -12,6 +12,7 @@
 #include "include/DevicePointer.slangh"
 #include "include/FrameConstants.slangh"
 #include "include/Sky.slangh"
+#include "include/DarknessVolume.slangh"
 
 struct SkyboxPush
 {
@@ -119,6 +120,9 @@ float4 fragmentMain(VSOut input) : SV_Target0
     const float dayAmount = saturate(sunDir.y * 0.5f + 0.5f);
     const float dither = Hash12(floor(input.svPos.xy)) - 0.5f;
     sky += dither * (1.0f / 1024.0f) * dayAmount;
+
+    // Sky seen down through a pit's open bottom: the ray leaves the box through its floor.
+    sky *= 1.0f - DarknessVolumeAmount(fc, fc->cameraWorldPos.xyz, fc->cameraWorldPos.xyz + worldDir * 1.0e4f);
 
     return float4(max(sky, float3(0.0f, 0.0f, 0.0f)), 1.0f);
 }

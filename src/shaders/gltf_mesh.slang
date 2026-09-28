@@ -22,6 +22,7 @@
 #include "include/EnvBrdf.slangh"
 #include "include/AmbientOcclusion.slangh"
 #include "include/HeightFog.slangh"
+#include "include/DarknessVolume.slangh"
 #include "include/ShadowSampling.slangh"
 #include "include/DirectionalShadowCSM.slangh"
 #include "include/ContactShadow.slangh"
@@ -1046,6 +1047,10 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
             fc->shadingParams.y);
         finalColor = lerp(finalColor, fogColor, fogAmount);
     }
+
+    // Pits: after the fog, so the bottom of a pit reads black rather than hazed. An additive
+    // surface loses what it adds, a blended one blends toward black - both correct as a plain scale.
+    finalColor *= 1.0f - DarknessVolumeAmount(fc, fc->cameraWorldPos.xyz, input.worldPos);
 
     // Alpha is this surface's coverage. For opaque geometry that is 1 - it fully hides
     // whatever is behind it, which is what the background compositor needs to know. A

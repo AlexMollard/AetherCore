@@ -194,6 +194,9 @@ namespace aether
 		std::vector<glm::vec4> blobShadows;
 		// How many of blobShadows (at the front) are character actors': they get a contact core.
 		std::uint32_t blobCharacterCount = 0;
+		// Darkness volumes, two vec4 per volume (see FrameConstants::darknessVolumes), nearest
+		// the camera first. Only the first kMaxDarknessVolumes reach the GPU.
+		std::vector<glm::vec4> darknessVolumes;
 		bool contactShadows = false;
 		// 0 splits the cascades evenly across the view distance, 1 logarithmically.
 		float shadowSplitLambda = 0.65f;
