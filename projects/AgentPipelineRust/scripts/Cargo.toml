@@ -1,0 +1,16 @@
+[package]
+name = "aether_gameplay"
+version = "0.1.0"
+edition = "2024"
+publish = false
+[workspace]
+[lib]
+crate-type = ["cdylib", "rlib"]
+[dependencies]
+aethercore = { path = "../../../rust/aethercore" }
+[features]
+wrong-abi = []
+
+[profile.abort]
+inherits = "dev"
+panic = "abort"
