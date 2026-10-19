@@ -37,7 +37,6 @@ namespace
 				        aetherRuntime.diagnostics.push({code : 'BROWSER_GAMEPLAY', message : UTF8ToString($0)});
 			        },
 			        message);
-			Stop();
 		}
 
 		bool Check(AetherGameplayStatus status, const char* operation)
@@ -60,6 +59,7 @@ namespace
 			emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, nullptr);
 			emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, nullptr);
 			emscripten_set_blur_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, nullptr);
+			emscripten_set_visibilitychange_callback(nullptr, false, nullptr);
 			{
 				aether::scripting::GameplayAccess::Scope scope(access, aether::scripting::GameplayAccess::ScopeKind::Callback);
 				if (attached)
@@ -75,12 +75,18 @@ namespace
 				}
 				if (instance)
 				{
-					(void) module.destroy(module.context, instance);
+					if (module.destroy(module.context, instance) != AE_GAMEPLAY_OK)
+					{
+						Failure("Rust instance destroy failed");
+					}
 					instance = 0;
 				}
 				if (initialized)
 				{
-					(void) module.shutdown(module.context);
+					if (module.shutdown(module.context) != AE_GAMEPLAY_OK)
+					{
+						Failure("Rust module shutdown failed");
+					}
 					initialized = false;
 				}
 			}
@@ -98,6 +104,34 @@ namespace
 			sprite.pixelsPerUnit = 1;
 			sprite.pixelArt = true;
 			sprite.texturePath = "quadrants";
+			const int scenario = EM_ASM_INT({
+				const scene = new URLSearchParams(location.search).get('scene');
+				return scene == 'layers' ? 1 : scene == 'capacity' ? 2 : 0;
+			});
+			auto addSprite = [&](float x, glm::vec2 size, glm::vec4 tint, int order)
+			{
+				const auto entity = world.Create();
+				world.Emplace<aether::TransformComponent>(entity).localToWorld[3].x = x;
+				auto& sprite = world.Emplace<aether::SpriteRendererComponent>(entity);
+				sprite.pixelSize = size;
+				sprite.pixelsPerUnit = 1;
+				sprite.tint = tint;
+				sprite.orderInLayer = order;
+				sprite.texturePath = "white";
+			};
+			if (scenario == 1)
+			{
+				addSprite(0, {2, 2}, {0, 1, 0, 0.5f}, 2);
+				addSprite(0, {1, 1}, {0, 0, 1, 1}, 1);
+			}
+			if (scenario == 2)
+			{
+				for (int index = 0; index < 1025; ++index)
+				{
+					addSprite(index == 1024 ? 0.0f : 10.0f, {2, 2}, {0, 0, 1, 1}, 1 + index);
+				}
+			}
+
 			if (!Check(aether::scripting::QueryGameplayModule(aether_gameplay_query, 1, sizeof(module), &module), "Rust module ABI query failed"))
 			{
 				return false;
@@ -115,7 +149,7 @@ namespace
 			        [](std::uint64_t context, const AetherGameplayServiceRequest* request, AetherGameplayPropertyValue* result, AetherGameplayUtf8Buffer) -> AetherGameplayStatus
 			        {
 				        auto& app = Get();
-				        if (context != app.access.EngineApi().context || app.stopped)
+				        if (context != app.access.EngineApi().context || !app.initialized)
 				        {
 					        return AE_GAMEPLAY_INVALID_HANDLE;
 				        }
@@ -154,6 +188,10 @@ namespace
 			auto key = [](int type, const EmscriptenKeyboardEvent* event, void* data) -> bool
 			{
 				auto& app = *static_cast<BrowserApplication*>(data);
+				if (type == EMSCRIPTEN_EVENT_KEYDOWN && !EM_ASM_INT({ return document.activeElement == Module.canvas; }))
+				{
+					return false;
+				}
 				if (std::strcmp(event->code, "ArrowRight") == 0)
 				{
 					app.keys[262] = type == EMSCRIPTEN_EVENT_KEYDOWN;
@@ -174,6 +212,16 @@ namespace
 			        [](int, const EmscriptenFocusEvent*, void* data) -> bool
 			        {
 				        static_cast<BrowserApplication*>(data)->keys.fill(false);
+				        return false;
+			        });
+			emscripten_set_visibilitychange_callback(this,
+			        false,
+			        [](int, const EmscriptenVisibilityChangeEvent*, void* data) -> bool
+			        {
+				        auto& app = *static_cast<BrowserApplication*>(data);
+				        app.previous = 0;
+				        app.accumulator = 0;
+				        app.keys.fill(false);
 				        return false;
 			        });
 			EM_ASM({ aetherRuntime.status = 'running'; });
@@ -203,6 +251,12 @@ namespace
 				previous = now;
 				return true;
 			}
+			if (!EM_ASM_INT({ return new URLSearchParams(location.search).has('test'); }))
+			{
+				double width = 0, height = 0;
+				emscripten_get_element_css_size("#canvas", &width, &height);
+				graphics.Resize(static_cast<unsigned>(std::max(0.0, std::round(width))), static_cast<unsigned>(std::max(0.0, std::round(height))));
+			}
 			if (!texturesReady)
 			{
 				constexpr std::array<std::uint8_t, 16> quadrants{255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255};
@@ -213,6 +267,11 @@ namespace
 					return false;
 				}
 				texturesReady = true;
+				if (EM_ASM_INT({ return new URLSearchParams(location.search).has("stopAfterUpload"); }))
+				{
+					Stop();
+					return false;
+				}
 			}
 			const bool hidden = EM_ASM_INT({ return document.hidden; });
 			if (hidden)
@@ -320,6 +379,12 @@ extern "C"
 
 int RunBrowserApplication()
 {
+	if (EM_ASM_INT({ return new URLSearchParams(location.search).has('dropOwner'); }))
+	{
+		aether::webgpu::WebGpuDevice pending;
+		pending.Initialize();
+		return 0;
+	}
 	auto& application = BrowserApplication::Get();
 	if (application.Start())
 	{
@@ -328,7 +393,22 @@ int RunBrowserApplication()
 			application.Stop();
 			return 0;
 		}
-		emscripten_request_animation_frame_loop([](double now, void* data) -> bool { return static_cast<BrowserApplication*>(data)->Frame(now); }, &application);
+		emscripten_request_animation_frame_loop(
+		        [](double now, void* data) -> bool
+		        {
+			        auto& app = *static_cast<BrowserApplication*>(data);
+			        const bool keepRunning = app.Frame(now);
+			        if (!keepRunning && !app.stopped)
+			        {
+				        app.Stop();
+			        }
+			        return keepRunning;
+		        },
+		        &application);
+	}
+	else
+	{
+		application.Stop();
 	}
 	return 0;
 }

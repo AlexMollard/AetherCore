@@ -25,7 +25,8 @@ namespace aether::webgpu
    const item={code:UTF8ToString(code),message:UTF8ToString(text,length)};
    globalThis.aetherRuntime.diagnostics.push(item);
    globalThis.aetherRuntime.status='failed';
-   if(globalThis.aetherRuntime.state!=='stopped') { globalThis.aetherRuntime.state=item.code==='WEBGPU_DEVICE_LOST'?'device-lost':'failed'; }
+   if(!globalThis.aetherRuntime.terminalState || item.code==='WEBGPU_DEVICE_LOST') { globalThis.aetherRuntime.terminalState=item.code==='WEBGPU_DEVICE_LOST'?'device-lost':'failed'; }
+   if(globalThis.aetherRuntime.state!=='stopped') { globalThis.aetherRuntime.state=globalThis.aetherRuntime.terminalState; }
   });
   EM_JS(void, AdapterReport, (const char* vendor, size_t vendorSize, const char* architecture, size_t architectureSize, const char* text, size_t size, int type), {
    globalThis.aetherRuntime.adapter={vendor:UTF8ToString(vendor,vendorSize),architecture:UTF8ToString(architecture,architectureSize),description:UTF8ToString(text,size),adapterType:type,isFallbackAdapter:type===3};
@@ -41,6 +42,8 @@ namespace aether::webgpu
 	struct WebGpuDevice::Impl
 	{
 		gpu::AsyncRenderLifecycle lifecycle;
+		std::shared_ptr<Impl> callbackLifetime;
+		bool started = false, deviceLostPending = false;
 		WGPUInstance instance = nullptr;
 		WGPUAdapter adapter = nullptr;
 		WGPUDevice device = nullptr;
@@ -62,54 +65,63 @@ namespace aether::webgpu
 
 		void Release()
 		{
-			if (released || callbacks || pendingFrames || lifecycle.State() != gpu::RenderState::Stopped)
+			auto hold = callbackLifetime;
+			if (callbacks || pendingFrames || lifecycle.State() != gpu::RenderState::Stopped)
 			{
 				return;
 			}
-			released = true;
-			for (auto texture: textures)
+			if (!released)
 			{
-				if (texture)
+				released = true;
+				for (auto texture: textures)
 				{
-					wgpuTextureDestroy(texture);
-					wgpuTextureRelease(texture);
+					if (texture)
+					{
+						wgpuTextureDestroy(texture);
+						wgpuTextureRelease(texture);
+					}
+				}
+				textures.clear();
+				for (auto pipeline: pipelines)
+				{
+					if (pipeline)
+					{
+						wgpuRenderPipelineRelease(pipeline);
+					}
+				}
+				if (sampler)
+				{
+					wgpuSamplerRelease(sampler);
+				}
+				if (surface)
+				{
+					wgpuSurfaceUnconfigure(surface);
+					wgpuSurfaceRelease(surface);
+				}
+				if (queue)
+				{
+					wgpuQueueRelease(queue);
+				}
+				if (device)
+				{
+					wgpuDeviceDestroy(device);
+					wgpuDeviceRelease(device);
+				}
+				if (adapter)
+				{
+					wgpuAdapterRelease(adapter);
+				}
+				if (instance)
+				{
+					wgpuInstanceRelease(instance);
 				}
 			}
-			textures.clear();
-			for (auto pipeline: pipelines)
+			if (deviceLostPending)
 			{
-				if (pipeline)
-				{
-					wgpuRenderPipelineRelease(pipeline);
-				}
-			}
-			if (sampler)
-			{
-				wgpuSamplerRelease(sampler);
-			}
-			if (surface)
-			{
-				wgpuSurfaceUnconfigure(surface);
-				wgpuSurfaceRelease(surface);
-			}
-			if (queue)
-			{
-				wgpuQueueRelease(queue);
-			}
-			if (device)
-			{
-				wgpuDeviceDestroy(device);
-				wgpuDeviceRelease(device);
-			}
-			if (adapter)
-			{
-				wgpuAdapterRelease(adapter);
-			}
-			if (instance)
-			{
-				wgpuInstanceRelease(instance);
+				return;
 			}
 			EM_ASM({ globalThis.aetherRuntime.state = 'stopped'; });
+			callbackLifetime.reset();
 		}
 
 		void Configure()
@@ -258,11 +270,14 @@ namespace aether::webgpu
 	};
 
 	WebGpuDevice::WebGpuDevice()
-	      : m_impl(std::make_unique<Impl>())
+	      : m_impl(std::make_shared<Impl>())
 	{
 	}
 
-	WebGpuDevice::~WebGpuDevice() = default;
+	WebGpuDevice::~WebGpuDevice()
+	{
+		Stop();
+	}
 
 	gpu::RenderState WebGpuDevice::State() const
 	{
@@ -272,6 +287,12 @@ namespace aether::webgpu
 	void WebGpuDevice::Initialize()
 	{
 		auto& self = *m_impl;
+		if (self.started || self.lifecycle.State() != gpu::RenderState::Initializing)
+		{
+			return;
+		}
+		self.started = true;
+		self.callbackLifetime = m_impl;
 		if (!EM_ASM_INT({ return !!navigator.gpu && !new URLSearchParams(location.search).has('forceNoAdapter'); }))
 		{
 			self.Fail("WEBGPU_UNAVAILABLE", Text("WebGPU requires a supported adapter and secure context"));
@@ -313,16 +334,20 @@ namespace aether::webgpu
 			{
 				static_cast<Impl*>(data)->Fail("WEBGPU_VALIDATION", message);
 			};
+			self.deviceLostPending = true;
 			descriptor.deviceLostCallbackInfo.userdata1 = &self;
 			descriptor.deviceLostCallbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
 			descriptor.deviceLostCallbackInfo.callback = [](const WGPUDevice*, WGPUDeviceLostReason, WGPUStringView message, void* data, void*)
 			{
 				auto& self = *static_cast<Impl*>(data);
+				auto hold = self.callbackLifetime;
+				self.deviceLostPending = false;
 				if (self.lifecycle.State() != gpu::RenderState::Stopped && self.lifecycle.State() != gpu::RenderState::Stopping)
 				{
 					self.Fail("WEBGPU_DEVICE_LOST", message, true);
 					EM_ASM({ globalThis.aetherRuntime.state = 'device-lost'; });
 				}
+				self.Release();
 			};
 			++self.callbacks;
 			WGPURequestDeviceCallbackInfo deviceCallback = WGPU_REQUEST_DEVICE_CALLBACK_INFO_INIT;
@@ -383,6 +408,26 @@ namespace aether::webgpu
 		layout.rowsPerImage = height;
 		wgpuQueueWriteTexture(self.queue, &destination, rgba.data(), rgba.size(), &layout, &descriptor.size);
 		self.textures[slot] = texture;
+		++self.callbacks;
+		WGPUQueueWorkDoneCallbackInfo uploaded = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
+		uploaded.mode = WGPUCallbackMode_AllowSpontaneous;
+		uploaded.userdata1 = &self;
+		uploaded.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
+		{
+			auto& self = *static_cast<Impl*>(data);
+			--self.callbacks;
+			if (status != WGPUQueueWorkDoneStatus_Success)
+			{
+				self.Fail("WEBGPU_UPLOAD", message);
+			}
+			else
+			{
+				EM_ASM({ aetherRuntime.uploadsCompleted = (aetherRuntime.uploadsCompleted || 0) + 1; });
+			}
+			self.Release();
+		};
+		wgpuQueueOnSubmittedWorkDone(self.queue, uploaded);
+
 		return true;
 	}
 
@@ -562,7 +607,7 @@ namespace aether::webgpu
 
 	void WebGpuDevice::LoseDeviceForTest()
 	{
-		if (m_impl->device)
+		if (m_impl->device && !m_impl->released)
 		{
 			wgpuDeviceDestroy(m_impl->device);
 		}

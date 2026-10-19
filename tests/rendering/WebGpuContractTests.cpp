@@ -53,4 +53,3 @@ TEST_CASE("WebGPU sprite bounds ordering and asynchronous retirement")
 	lost.Complete();
 	CHECK(lost.State() == gpu::RenderState::DeviceLost);
 }
-

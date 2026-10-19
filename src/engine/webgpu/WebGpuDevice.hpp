@@ -18,6 +18,8 @@ namespace aether::webgpu
 	public:
 		WebGpuDevice();
 		~WebGpuDevice();
+		WebGpuDevice(const WebGpuDevice&) = delete;
+		WebGpuDevice& operator=(const WebGpuDevice&) = delete;
 		void Initialize();
 		[[nodiscard]] gpu::RenderState State() const;
 		[[nodiscard]] bool Draw(const RenderFramePacket& packet, bool capture = false);
@@ -28,6 +30,6 @@ namespace aether::webgpu
 
 	private:
 		struct Impl;
-		std::unique_ptr<Impl> m_impl;
+		std::shared_ptr<Impl> m_impl;
 	};
 } // namespace aether::webgpu

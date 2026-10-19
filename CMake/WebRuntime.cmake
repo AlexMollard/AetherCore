@@ -66,6 +66,8 @@ add_custom_command(OUTPUT "${_assets}/sprite.wgsl"
     VERBATIM)
 add_custom_target(WebAssets DEPENDS "${_assets}/reference.pak" "${_assets}/sprite.wgsl")
 add_dependencies(GameRuntime WebAssets)
+set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS
+    "${_assets}/reference.pak" "${_assets}/sprite.wgsl")
 target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}@/assets")
 add_custom_target(WebRuntimeAudit ALL
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/audit.py" wasm

@@ -4,6 +4,9 @@ param(
     [string]$AssetPackerPath = '',
     [string]$SlangCompiler = '',
     [switch]$SkipHostBuild,
+    [switch]$BrowserChecks,
+    [string]$PlaywrightModule = $env:AETHER_PLAYWRIGHT_MODULE,
+    [string]$BrowserExecutable = '',
     [string]$ReportPath = 'logs/web-runtime/report.json'
 )
 
@@ -57,6 +60,19 @@ try
     $report.runtime = $runtime
     $report.importAudit = Get-Content 'build/webgpu-browser/web-imports.json' -Raw | ConvertFrom-Json
     $report.sourceAudit = Get-Content 'build/webgpu-browser/web-sources.json' -Raw | ConvertFrom-Json
+    if ($BrowserChecks)
+    {
+        $browserReport = Join-Path $logRoot 'browser.json'
+        $browserArguments = @('tools/web-runtime/browser-tests.mjs', "--report=$browserReport")
+        if ($PlaywrightModule) { $browserArguments += "--playwright=$PlaywrightModule" }
+        if ($BrowserExecutable) { $browserArguments += "--executable=$BrowserExecutable" }
+        Invoke-Checked 'browser-checks' $env:EMSDK_NODE $browserArguments
+        $report.browser = Get-Content -LiteralPath $browserReport -Raw | ConvertFrom-Json
+        if ($report.browser.status -ne 'passed') { throw 'Browser runtime verification failed' }
+        $report.profile = 'browser-webgpu-m3'
+        $report.rendererReady = $true
+        $report.keyboardReady = $true
+    }
     $report.status = 'passed'
 }
 catch { $report.error = $_.Exception.Message; throw }
