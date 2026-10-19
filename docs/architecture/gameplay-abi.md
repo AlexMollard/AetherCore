@@ -117,7 +117,7 @@ Schema: docs/schemas/agent-report-v1.schema.json. Examples in docs/schemas/examp
 
 Every report carries schemaVersion=1, jobId, phase, target, language, profile, durationMs, diagnostics, toolchains, artifacts, requiredChecks and exitCode. Source locations have a file and optional one-based line/column; a column requires a line. Toolchains identify name/version/target. Artifacts have a path and optional bytes/hash. Empty identifiers, invalid UTF-8, negative duration and contradictory pass results are rejected. Required-check names must be unique in the producer; JSON Schema alone cannot enforce uniqueness by a selected object field.
 
-BuildPublishAgentReport is a pure adapter around the existing PublishReport. Existing ok/summary/text fields are preserved. A pending publish stays queued/running; a completed legacy result determines passed/failed and a failure diagnostic. This task does not change the current publish control payload or switch existing C# publishing onto a new transport.
+BuildPublishAgentReport is a pure adapter around the existing PublishReport. Existing ok/summary/text fields are preserved. A pending publish stays queued/running; a completed legacy result determines passed/failed and a failure diagnostic. The live editor retains its existing publish control payload; the independent gameplay pipeline below reuses the shared publish steps.
 
 For JSON Schema verification install the pinned test-only dependency outside the source tree:
 
@@ -138,3 +138,45 @@ tools/gameplay-api/fixture/Run-Fixture.ps1 compiles a Rust test provider against
 The fixture reuses the qualified Task 1 Emscripten 6.0.12 and Rust nightly-2026-10-18 combination, rebuilding Rust std. It installs no toolchains; stages have a configurable timeout and terminate their process tree on expiry. Native reproduction currently selects Windows/MSVC; Linux is not claimed qualified. Reports are under logs/gameplay-api/fixture/; generated binaries stay in artifacts/gameplay-api/fixture/.
 
 Native EngineTests additionally cover actual World generation reuse, wrong-world/thread access, stale contexts, reentrant scopes and diagnostic sink-to-owning-report forwarding. Existing native gauntlet and separate managed tests remain the C# compatibility baseline. The pre-existing standalone managed suite had 29 failures out of 160 before this task; do not report that suite green unless those independent issues are fixed.
+
+
+## Agent gameplay pipeline
+
+Build `Editor` (which also builds `aether-project`) through CMake, then run a saved scene without opening a window:
+
+```powershell
+./scripts/Run-GameplayPipeline.ps1 -Project projects/AgentPipelineRust -Operation test -Scene default -Ticks 60 -LaunchConfig projects/AgentPipelineRust/gameplay-test.json -ReportPath logs/gameplay-test.json
+```
+
+The same pipeline supports `create`, `inspect`, `build`, `run`, `relaunch`, `test`, and `publish` for desktop Rust and C#. `create` accepts `-Name`, `-Template` and `-Language`; C# remains the default. `-Async` returns a job ID immediately. Use `-Operation status -JobId <id>` or `-Operation cancel -JobId <id>` from another process. Jobs and logs persist under `logs/gameplay-jobs/<id>/`. MCP exposes `gameplay_job_start`, `gameplay_job_status` and `gameplay_job_cancel` with the same request fields. Restart an already-running MCP client once to discover these new static tools.
+
+CMake drives Cargo or dotnet into isolated job directories. A failed rebuild preserves prior job artifacts and never runs stale code. Each run/relaunch/test starts a fresh bounded child runtime at frame zero from the saved scene, applying authored fields and remapped entity references. It does not restore live physics, coroutines, or heap state. Default limits are 60 ticks, step 1/60 second, and 180 seconds overall; requests cap ticks at one million and timeout at ten minutes. Cancellation and timeout terminate only the owned process tree.
+
+The `native-headless-2d-v1` profile has no window, renderer, audio output or interactive UI layout. It supports script properties, transforms, synthetic keyboard input and Box2D gameplay. Unsupported 3D, linked scenes/prefabs, tilemap and interactive UI content fails explicitly. This verifies gameplay state, not rendered pixels. Existing editor Play, C# hot reload and visual publishing remain available.
+
+Launch configuration is JSON with optional `input` entries (`tick`, `key`, `down`), `assertions` (`entity`, script `type`, `property`, `equals`, optional numeric `tolerance`), and `readSaves`. Tests require at least one assertion. Save reads are disabled unless `readSaves: true`; writes remain real project save writes. Snapshots include initial frame, tick count, policy and script properties. Compiler diagnostics include source locations where available; terminal reports follow `agent-report-v1.schema.json` and include logs/artifacts.
+
+## Owned background editor and game windows
+
+```powershell
+$owned = ./scripts/Start-AgentEditor.ps1 -Project projects/AgentPipelineRust -Name 'Rust gameplay inspection' -Port 8891 | ConvertFrom-Json
+'{}' | Set-Content logs/info-params.json
+./scripts/Invoke-AgentEditor.ps1 -Receipt $owned.receiptPath -Method engine_info -ParamsPath logs/info-params.json
+./scripts/Stop-AgentEditor.ps1 -Receipt $owned.receiptPath
+```
+
+Editor launch defaults to background mode: the native window stays hidden and does not request focus. Add `-Visible` for inspection. Agent windows always have a name, autosave is disabled for that session, and the title and receipt remind the agent to close them when finished. Cleanup saves deliberate dirty scene edits by default; `-DiscardChanges` explicitly discards them. Receipts validate PID, start time, executable, project and endpoint ownership before calls or closure. Keep the receipt even if a later operation fails.
+
+MCP equivalents are `agent_editor_launch` (`project`, `name`, `port`, optional `background`, default true), `agent_editor_call` (`receiptPath`, `method`, optional `arguments`) and `agent_editor_close` (`receiptPath`, optional `discardChanges`). Receipt calls accept either wire method names or MCP tool aliases and target the owned window. General engine tools still use their configured default port.
+
+A packaged game accepts `AetherGame --agent --agent-name "Gameplay inspection" --background` from its package directory. It uses baked project settings; a development runtime may also supply `--project <path>`. Native background mode keeps the window hidden through later show/mode changes. The launching agent owns game cleanup and must close its matching process/window when finished. For unattended gameplay verification, prefer the windowless jobs above.
+
+## Editor modal input ownership
+
+The editor prepares pending recovery/unsaved prompts and active modal ownership through `EngineClient::OnBeforeInput`, before input polling, camera updates and gameplay scripts. Other engine clients keep the default no-op hook; initialization and shutdown ordering are unchanged.
+
+An editor modal releases FPS capture, forces a visible pointer and blocks gameplay keyboard, mouse and controller input. Global editor shortcuts are also blocked behind it. Keys and buttons handled while the modal is open remain quarantined through their release, so closing it cannot replay the same press into gameplay. Pointer capture requires an explicit viewport click afterward. Normal game Escape behavior remains available when no editor modal is open.
+
+Escape on recovery chooses **Decide later**: it leaves the current scene, running Play session and recovery copies intact. Escape on the unsaved prompt cancels navigation. Neither path restores, discards or stops Play. `info` exposes `cursorLocked`, `cursorLockRequested`, `osCursorVisible`, `gameOwnsInput` and `editorModalInputBlocked` for agent inspection.
+
+Task 6 qualification on Windows: build/abstraction guard and 1,451 native cases passed; both hidden Editor/GameRuntime validation smokes had zero findings. Actual Rust/C# jobs covered tests, fresh relaunch, publishing and failure handling. A recovery dialog on an isolated desktop preserved a running C# session, authored setup and both scene/recovery files after Escape; a fresh game Escape still reached the script. Owned editors and packaged games remained hidden, named and cleanly closed; Chinese/emoji project launch, preview and scene save passed. Python jobs passed eight tests on Windows and Linux WSL, MCP passed twenty tests, SDK/raw ABI passed nine/three tests plus three compile-fail checks, generator/schema passed five/four tests, and both ownership PowerShell suites passed. Standalone managed tests remain 131 passed and the exact same 29 baseline failures. Linux native qualification remains pending because its native toolchain is unavailable. Evidence: `logs/task6/`, plus `logs/modal-input-*` for focused RED/GREEN regressions.

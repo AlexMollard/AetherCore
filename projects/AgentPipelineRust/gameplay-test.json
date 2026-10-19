@@ -1,0 +1,40 @@
+{
+  "input": [
+    {
+      "tick": 0,
+      "key": "space",
+      "down": true
+    },
+    {
+      "tick": 20,
+      "key": "space",
+      "down": false
+    }
+  ],
+  "assertions": [
+    {
+      "entity": "Player",
+      "type": "Player",
+      "property": "ticks",
+      "equals": 60
+    },
+    {
+      "entity": "Player",
+      "type": "Player",
+      "property": "score",
+      "equals": 20
+    },
+    {
+      "entity": "Player",
+      "type": "Player",
+      "property": "label",
+      "equals": "caf\u00e9\u0000agent"
+    },
+    {
+      "entity": "Player",
+      "type": "Player",
+      "property": "counter",
+      "equals": "RustCounter"
+    }
+  ]
+}

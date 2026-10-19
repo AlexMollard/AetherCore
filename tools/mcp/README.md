@@ -181,3 +181,7 @@ printf '%s\n%s\n' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
   | python tools/mcp/aethercore_mcp.py
 ```
+
+## Gameplay jobs and owned editors
+
+`gameplay_job_start/status/cancel` run persistent desktop Rust/C# project jobs without an editor. `agent_editor_launch/call/close` manage named editors with ownership receipts; launch defaults to a hidden window and disables autosave. Always use the receipt for calls to that editor and close it when finished. See [the gameplay pipeline guide](../../docs/architecture/gameplay-abi.md#agent-gameplay-pipeline) for request fields, PowerShell examples, limits and cleanup policy. Restart the MCP client after updating the server to discover these static tools.

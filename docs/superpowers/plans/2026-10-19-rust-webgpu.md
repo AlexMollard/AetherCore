@@ -135,14 +135,18 @@ At the Task 4 checkpoint Rust gameplay was intentionally unavailable; Task 5 bel
 
 **Files:** Shared gameplay build service under src/app/scripting/, tools/project/ native command target, scripts/Run-GameplayPipeline.ps1, tools/mcp/aethercore_mcp.py and existing control dispatch; tests/app/ integration checks.
 
-- [ ] Add command-level tests for argument validation, structured Cargo diagnostics, compiler failure, missing SDK, timeout, cancellation and paths with spaces/non-ASCII characters. Invoke tools with argument arrays and controlled working directories.
-- [ ] Implement asynchronous create/build/run/test/publish jobs with a job ID and status polling. CMake orchestrates Cargo and existing dotnet/native tools; CMake remains the canonical engine build, with lockfiles/toolchain pins recorded.
-- [ ] Define initial Rust iteration as rebuild then child-runtime relaunch from a named scene and explicit launch configuration, starting at tick zero. Preserve the editor-authored scene snapshot/property references through existing serialization; headless runs use saved content. Persistent saves load only when requested. Test authored-field/reference restoration, tick-zero restart, explicit save loading and absence of automatic coroutine/physics/live-heap restoration. A failed build preserves source/content and a usable previous artifact without calling it the new result.
-- [ ] Add CLI/MCP access with the same services and report schema. No live editor is required for build/publish/test. Preserve existing editor control methods as adapters.
+- [x] Add command-level tests for argument validation, structured Cargo diagnostics, compiler failure, missing SDK, timeout, cancellation and paths with spaces/non-ASCII characters. Invoke tools with argument arrays and controlled working directories.
+- [x] Implement asynchronous create/build/run/test/publish jobs with a job ID and status polling. CMake orchestrates Cargo and existing dotnet/native tools; CMake remains the canonical engine build, with lockfiles/toolchain pins recorded.
+- [x] Define initial Rust iteration as rebuild then child-runtime relaunch from a named scene and explicit launch configuration, starting at tick zero. Preserve the editor-authored scene snapshot/property references through existing serialization; headless runs use saved content. Persistent saves load only when requested. Test authored-field/reference restoration, tick-zero restart, explicit save loading and absence of automatic coroutine/physics/live-heap restoration. A failed build preserves source/content and a usable previous artifact without calling it the new result.
+- [x] Add CLI/MCP access with the same services and report schema. No live editor is required for build/publish/test. Preserve existing editor control methods as adapters.
 
-**Proposed acceptance command:** ./scripts/Run-GameplayPipeline.ps1 -Project projects/AgentPipelineRust -Target desktop -Operation test -ReportPath logs/rust-desktop-report.json
+- [x] Verify editor modals release viewport capture and own keyboard input, including Escape, without stopping Play or restoring/resetting the scene. Preserve the authored setup and normal game Escape behavior when no editor modal is active.
+
+**Acceptance command:** ./scripts/Run-GameplayPipeline.ps1 -Project projects/AgentPipelineRust -Target desktop -Operation test -Scene default -Ticks 60 -LaunchConfig projects/AgentPipelineRust/gameplay-test.json -ReportPath logs/rust-desktop-report.json
 
 **Gate:** Zero exit code plus terminal passed report, script state assertions and captured logs. Failure/cancellation tests must terminate within their declared timeout.
+
+**Task 6 verification (Windows, 2026-10-19):** Guard/build and 1,451 native cases passed. Hidden Editor/runtime GPU smokes passed with zero validation findings. Rust and C# CLI/MCP jobs, C# editor Play/hot reload/publish, failure preservation, crash/cancel/timeout and save opt-in checks passed. Native Unicode launch/preview/save and real recovery Escape/capture checks passed with owned-process cleanup. MCP stdio discovery and persisted status survived process restart; Python jobs passed on Windows and Linux WSL. Standalone managed baseline remains 131 passed / the same 29 failures. Linux native qualification is pending; the initial headless profile explicitly excludes GPU/3D and interactive UI. Evidence: `logs/task6/` and `logs/modal-input-*`.
 
 ## Task 7: Establish an equivalent C#/Rust reference scenario
 
