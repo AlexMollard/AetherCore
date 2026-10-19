@@ -1,0 +1,95 @@
+[scene]
+version = 16
+kind = '2d'
+features = ['sprites', 'physics_2d']
+
+[[entities]]
+name = 'Player'
+position = [0.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+
+[entities.sprite]
+texture = 'project://assets/textures/reference.png'
+pixel_size = [16.0, 16.0]
+pixels_per_unit = 16.0
+tint = [0.2, 0.8, 1.0, 1.0]
+visible = true
+
+[entities.rigid_body_2d]
+body_type = 'dynamic'
+gravity_scale = 0.0
+fixed_rotation = true
+[entities.collider_2d]
+shape = 'box'
+size = [0.5, 0.5]
+is_trigger = false
+density = 1.0
+friction = 0.0
+
+[[entities.scripts]]
+type = 'ReferencePlayer'
+
+[[entities]]
+name = 'Camera'
+position = [0.0, 0.0, 10.0]
+scale = [1.0, 1.0, 1.0]
+
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 6.0
+background = 'solid_colour'
+clear_color = [0.02, 0.03, 0.06]
+near = 0.1
+far = 100.0
+
+[[entities]]
+name = 'Counter'
+position = [0.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+
+[entities.ui_canvas]
+reference = [640.0, 360.0]
+scale_mode = 'constant_pixel'
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [16.0, 16.0]
+offset_max = [320.0, 56.0]
+[entities.ui_text]
+text = 'Score 0'
+font = 'Roboto'
+size = 24.0
+color = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Trigger'
+position = [1.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+
+[entities.rigid_body_2d]
+body_type = 'static'
+gravity_scale = 0.0
+fixed_rotation = true
+[entities.collider_2d]
+shape = 'box'
+size = [0.5, 4.0]
+is_trigger = true
+density = 1.0
+friction = 0.0
+
+[[entities]]
+name = 'Wall'
+position = [2.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+
+[entities.rigid_body_2d]
+body_type = 'static'
+gravity_scale = 0.0
+fixed_rotation = true
+[entities.collider_2d]
+shape = 'box'
+size = [0.5, 4.0]
+is_trigger = false
+density = 1.0
+friction = 0.0

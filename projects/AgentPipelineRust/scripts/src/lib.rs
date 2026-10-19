@@ -1,3 +1,6 @@
+mod reference;
+use reference::{ReferencePlayer, ReferenceResult};
+
 use aethercore::*;
 gameplay_enum! { pub enum Mode { Idle = 0, Moving = 1, Complete = 2 } }
 gameplay_component_ref! { pub struct RigidBody2DRef = "Rigid Body 2D"; }
@@ -97,7 +100,7 @@ impl Script for Player {
     }
 }
 #[cfg(not(feature = "wrong-abi"))]
-aethercore::export_gameplay!(Player, Probe);
+aethercore::export_gameplay!(Player, Probe, ReferencePlayer, ReferenceResult);
 #[cfg(feature = "wrong-abi")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn aether_gameplay_query(

@@ -1,0 +1,148 @@
+{
+  "profile": "native-desktop-2d-v1",
+  "readSaves": true,
+  "input": [
+    {
+      "tick": 0,
+      "key": "space",
+      "down": true
+    },
+    {
+      "tick": 20,
+      "key": "space",
+      "down": false
+    }
+  ],
+  "checkpoints": [
+    {
+      "tick": 10,
+      "assertions": [
+        {
+          "entity": "ReferencePickup",
+          "type": "$engine",
+          "property": "exists",
+          "equals": true
+        },
+        {
+          "entity": "Counter",
+          "type": "$engine",
+          "property": "uiText",
+          "equals": "Score 10"
+        },
+        {
+          "entity": "Player",
+          "type": "$engine",
+          "property": "position",
+          "equals": [
+            0.3,
+            0,
+            0
+          ],
+          "tolerance": 0.08
+        },
+        {
+          "entity": "$runtime",
+          "type": "$engine",
+          "property": "audioStarted",
+          "equals": 1
+        }
+      ]
+    },
+    {
+      "tick": 20,
+      "assertions": [
+        {
+          "entity": "ReferencePickup",
+          "type": "$engine",
+          "property": "exists",
+          "equals": false
+        },
+        {
+          "entity": "Counter",
+          "type": "$engine",
+          "property": "uiText",
+          "equals": "Score 20"
+        }
+      ]
+    },
+    {
+      "tick": 59,
+      "assertions": [
+        {
+          "entity": "Player",
+          "type": "ReferencePlayer",
+          "property": "collision",
+          "equals": true
+        },
+        {
+          "entity": "Player",
+          "type": "ReferencePlayer",
+          "property": "trigger",
+          "equals": true
+        }
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "entity": "Result",
+      "type": "ReferenceResult",
+      "property": "ticks",
+      "equals": 30
+    },
+    {
+      "entity": "Result",
+      "type": "ReferenceResult",
+      "property": "score",
+      "equals": 20
+    },
+    {
+      "entity": "Result",
+      "type": "ReferenceResult",
+      "property": "collision",
+      "equals": true
+    },
+    {
+      "entity": "Result",
+      "type": "ReferenceResult",
+      "property": "trigger",
+      "equals": true
+    },
+    {
+      "entity": "Result",
+      "type": "ReferenceResult",
+      "property": "label",
+      "equals": "café\u0000agent"
+    },
+    {
+      "entity": "Counter",
+      "type": "$engine",
+      "property": "uiText",
+      "equals": "Saved score 20"
+    },
+    {
+      "entity": "Player",
+      "type": "$engine",
+      "property": "exists",
+      "equals": false
+    },
+    {
+      "entity": "ReferencePickup",
+      "type": "$engine",
+      "property": "exists",
+      "equals": false
+    },
+    {
+      "entity": "$runtime",
+      "type": "$engine",
+      "property": "scene",
+      "equals": "ReferenceResult"
+    },
+    {
+      "entity": "$runtime",
+      "type": "$engine",
+      "property": "audioStarted",
+      "equals": 1
+    }
+  ]
+}

@@ -152,11 +152,13 @@ At the Task 4 checkpoint Rust gameplay was intentionally unavailable; Task 5 bel
 
 **Files:** projects/AgentPipelineRust/, projects/AgentPipelineCSharp/, fixture input/state expectations, local comparison/report tooling.
 
-- [ ] Implement equivalent small scenarios: moving sprite/player, collision/trigger, spawned/despawned prefab, UI counter, sound, transition to a second scene and a saved score. Reuse assets and test inputs rather than fork two unrelated games.
-- [ ] Use seeded inputs and fixed simulation steps for state assertions, with tolerances for physics. Compare observable gameplay outcomes, not internal memory layouts or byte-identical physics.
-- [ ] Record cold/warm build, edit-to-ready, compiler feedback/correction cycles under a documented comparable agent task, startup, memory and frame timing. Do not rank languages from a single run or claim agent productivity from compiler timing alone.
+- [x] Implement equivalent small scenarios: moving sprite/player, collision/trigger, spawned/despawned prefab, UI counter, sound, transition to a second scene and a saved score. Reuse assets and test inputs rather than fork two unrelated games.
+- [x] Use seeded inputs and fixed simulation steps for state assertions, with tolerances for physics. Compare observable gameplay outcomes, not internal memory layouts or byte-identical physics.
+- [x] Record cold/warm build, edit-to-ready, compiler feedback/correction cycles under a documented comparable agent task, startup, memory and frame timing. Do not rank languages from a single run or claim agent productivity from compiler timing alone.
 
 **Gate:** Both desktop scenarios pass without editor interaction. This fixture becomes the browser acceptance game; M2 is complete.
+
+**Task 7 verification (Windows, 2026-10-19):** Both hidden desktop scenarios passed three paired samples, including native checkpoints, rendered captures, saved score/Unicode readback and source-located compiler feedback/correction. First-tick readiness is separate from completion timing. Final guard/build and 1,454 native cases passed with the real Rust SDK module enabled; both hidden Editor/runtime GPU smokes had zero validation findings. Managed SDK: 137 passed / exact same 29 baseline failures, including six new passing save cases. Python project suite: 12 passed / one explicit GPU test skipped by default; the opt-in two-language detach-failure regression passed. MCP 20, safe Rust SDK 9 and compile-fail 3 passed. See [reference comparison](../../gameplay-reference-comparison.md). Browser and native Linux qualification remain later work.
 
 ## Task 8: Separate browser runtime sources, dependencies and host tools
 

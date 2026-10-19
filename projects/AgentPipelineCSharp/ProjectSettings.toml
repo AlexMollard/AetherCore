@@ -1,0 +1,23 @@
+# AetherCore project file.
+
+[app]
+startupscene = "ReferenceStart"
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+kind = "2d"
+name = "AgentPipelineCSharp"
+template = "blank_2d"
+version = 2
+
+[publish]
+platformname = "Windows"
+productname = "AgentPipelineCSharp"
+
+[scripting]
+language = "csharp"
