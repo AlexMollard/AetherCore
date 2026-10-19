@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>AetherCore browser C++/Box2D probe</title></head>
+<body>
+<pre id="output">Starting C++/Box2D probe...</pre>
+<script>
+var Module = {
+  print(text) {
+    console.log(text);
+    document.getElementById('output').textContent = text;
+    try {
+      const result = JSON.parse(text);
+      if (result.probe === 'cpp_library_box2d') globalThis.feasibilityResult = result;
+    } catch (_) {}
+  },
+  printErr(text) { console.error(text); },
+  onAbort(reason) { globalThis.feasibilityResult = {status: 'failed', code: 'WASM_ABORT', error: String(reason)}; }
+};
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AetherCore WebGPU feasibility</title>
+<style>
+  body { background: #171b22; color: #eee; font: 16px monospace; }
+  canvas { width: 256px; height: 256px; image-rendering: pixelated; }
+  pre { white-space: pre-wrap; }
+</style>
+<h1>WebGPU C++ / Slang sprite probe</h1>
+<canvas id="canvas" width="64" height="64"></canvas>
+<pre id="result">Starting WebGPU probe…</pre>
+<script>
+  globalThis.feasibilityResult = { status: 'running', phase: 'loader', diagnostics: [] };
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    onAbort(message) {
+      const result = globalThis.feasibilityResult;
+      result.status = 'failed';
+      result.phase = 'runtime';
+	  result.code = 'WASM_ABORT';
+      result.diagnostics.push({ code: 'WASM_ABORT', message: String(message) });
+    },
+    printErr(message) { console.error(message); }
+  };
+  setTimeout(() => {
+    const result = globalThis.feasibilityResult;
+    if (result.status === 'running') {
+      result.status = 'failed';
+      result.phase = 'timeout';
+	  result.code = 'WEBGPU_TIMEOUT';
+      result.diagnostics.push({ code: 'WEBGPU_TIMEOUT', message: 'Probe did not finish within 30 seconds' });
+    }
+  }, 30000);
+  setInterval(() => document.getElementById('result').textContent = JSON.stringify(globalThis.feasibilityResult, null, 2), 100);
+</script>
+<script src="probe.js"></script>
+</html>

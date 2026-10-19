@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>AetherCore C++/Rust ABI probe</title></head>
+<body>
+<h1>C++/Rust WebAssembly ABI probe</h1>
+<pre id="output">Starting…</pre>
+<script>
+const output = document.getElementById('output');
+var Module = {
+  print(text) {
+    console.log(text);
+    output.textContent = text;
+    try {
+      const result = JSON.parse(text);
+      if (result.probe === 'rust_cpp_interop') globalThis.feasibilityResult = result;
+    } catch (_) {}
+  },
+  printErr(text) { console.error(text); },
+  onAbort(reason) {
+    globalThis.feasibilityResult = {schema_version: 1, probe: 'rust_cpp_interop', status: 'failed', error: String(reason)};
+    output.textContent = JSON.stringify(globalThis.feasibilityResult);
+  }
+};
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>
