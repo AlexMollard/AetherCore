@@ -69,7 +69,20 @@ try
         Invoke-Checked 'browser-checks' $env:EMSDK_NODE $browserArguments
         $report.browser = Get-Content -LiteralPath $browserReport -Raw | ConvertFrom-Json
         if ($report.browser.status -ne 'passed') { throw 'Browser runtime verification failed' }
-        $report.profile = 'browser-webgpu-m3'
+        $required = @('sprite-input-resize-shutdown', 'unavailable', 'limits', 'device-loss', 'stop-during-init', 'stop-in-flight', 'layers', 'batch-capacity', 'responsive', 'drop-owner-init', 'stop-after-upload', 'assets-ready', 'assets-missing', 'assets-corrupt', 'assets-version', 'assets-target', 'assets-cancel', 'platform-save-reload', 'platform-storage-denied', 'platform-storage-quota', 'platform-audio-resume', 'reference-gameplay', 'browser-features', 'browser-gamepad', 'browser-focus-resume', 'invalid-font', 'invalid-scene-version', 'invalid-atlas-version', 'invalid-audio-component', 'browser-key-latch', 'browser-ui-order')
+        foreach ($case in $required)
+        {
+            $matches = @($report.browser.cases | Where-Object { $_.name -eq $case -and $_.status -eq 'passed' })
+            if ($matches.Count -ne 1) { throw "Required browser case missing, duplicated or failed: $case" }
+        }
+        $report.profile = 'browser-webgpu-2d-v1'
+        $report.audioReady = $true
+        $report.storageReady = $true
+        $report.inputReady = $true
+        $report.pointerReady = $true
+        $report.gamepadApiReady = $true
+        $report.physicalGamepadQualified = $false
+        $report.fontReady = $true
         $report.rendererReady = $true
         $report.keyboardReady = $true
     }

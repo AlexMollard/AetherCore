@@ -44,3 +44,7 @@ Regression checks include the normal native build and gauntlet, C# and Rust desk
 Task 9 qualification used Emscripten 6.0.12, Emdawnwebgpu v20260423.175430, Rust nightly-2026-10-18, Slang 2026.8 and Playwright 1.62.1. The final hardware browser suite passed 11 cases on NVIDIA Blackwell with Chrome 155.0.8059.85; source/import audits recorded 44 translation units, 66 Wasm imports and no shared memory. C# and Rust desktop reference games passed, the native GPU abstraction guard remained clean, and both hidden validation smokes had zero findings. The new sprite/lifecycle contract also runs in EngineTests with 23 assertions.
 
 The final normal native suite passed all 1,455 cases after the new contract was registered, with its 23 assertions also checked independently. The integrated report is `logs/task9/integrated/report.json`; the final unit report is `logs/task9/final-unit-gauntlet.json` and native GPU validation is recorded in `logs/task9/final-native-gauntlet.json`.
+
+## Task 10 continuation
+
+The historical M3 qualification above is superseded for platform readiness by [browser assets and platform services](browser-assets-and-platform.md). Task 10 adds real packaged reference gameplay, audio, saves and shared input/UI integration. Generic publishing and the release-excluded automation bridge remain later milestones.

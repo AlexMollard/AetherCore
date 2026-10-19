@@ -193,14 +193,16 @@ At the Task 4 checkpoint Rust gameplay was intentionally unavailable; Task 5 bel
 
 **Files:** io/ VFS/storage adapters, tools/assetpack/ texture and package cooking, audio/ backend selection, platform/web/ input, resources/web/ loader, 2D/UI/animation rendering paths.
 
-- [ ] Add tests for asynchronous asset preload, missing/corrupt package, unknown asset version, UTF-8 paths and target format mismatch. Reuse VFS/PAK contracts after validating endian/alignment/compression behavior.
-- [ ] Add target-qualified cooked artifacts. Use RGBA8 as the initial portable texture baseline; compression is capability-gated. Rebuild desktop BC-format artifacts separately; never reuse a desktop-only DDS cache by accident.
-- [ ] Support the reference game's sprites/animation, tilemap batches, Box2D and basic UI text/images/widgets. Validate font/assets and large texture/batch limits; unsupported features remain explicit.
-- [ ] Implement browser audio initialization after a gesture and test sound scheduling/resume. Route supported miniaudio browser backend or Web Audio integration based on the pinned toolchain evidence; do not claim audio success from a silent/headless placeholder.
-- [ ] Map canvas keyboard/pointer/gamepad input, resize/focus and visibility transitions. Reset timing on resume to avoid a giant catch-up delta. Preserve fixed-step simulation semantics.
-- [ ] Implement browser save storage with explicit asynchronous flush/error completion. Test a fresh page reading the saved value at the same origin and meaningful failure on denied/quota-exhausted storage; do not report a save before flush succeeds.
+- [x] Add tests for asynchronous asset preload, missing/corrupt package, unknown asset version, UTF-8 paths and target format mismatch. Reuse VFS/PAK contracts after validating endian/alignment/compression behavior.
+- [x] Add target-qualified cooked artifacts. Use RGBA8 as the initial portable texture baseline; compression is capability-gated. Rebuild desktop BC-format artifacts separately; never reuse a desktop-only DDS cache by accident.
+- [x] Support the reference game's sprites/animation, tilemap batches, Box2D and basic UI text/images/widgets. Validate font/assets and large texture/batch limits; unsupported features remain explicit.
+- [x] Implement browser audio initialization after a gesture and test sound scheduling/resume. Route supported miniaudio browser backend or Web Audio integration based on the pinned toolchain evidence; do not claim audio success from a silent/headless placeholder.
+- [x] Map canvas keyboard/pointer/gamepad input, resize/focus and visibility transitions. Reset timing on resume to avoid a giant catch-up delta. Preserve fixed-step simulation semantics.
+- [x] Implement browser save storage with explicit asynchronous flush/error completion. Test a fresh page reading the saved value at the same origin and meaningful failure on denied/quota-exhausted storage; do not report a save before flush succeeds.
 
 **Gate:** Reference gameplay, sound, transition and save/reload all work in-browser. No threads/SharedArrayBuffer are required by the first profile.
+
+**Qualified:** 31/31 hardware Chromium cases, including real Rust reference gameplay/audio/transition/durable save/reload and short-key/UI-order/audio-component regressions; 13 host/audit Python checks; native 1,460/1,460 plus hidden GPU smokes and C#/Rust desktop fixtures. See [assets and platform contracts](../../architecture/browser-assets-and-platform.md). Physical controllers and other browser/OS combinations remain unqualified.
 
 ## Task 11: Add browser automation and honest verification reports
 
