@@ -179,6 +179,22 @@ int main(int argc, char** argv)
 	{
 		return Fail("error: " + envelope["error"].get<std::string>());
 	}
-	std::cout << (envelope.contains("result") ? envelope["result"].dump() : envelope.dump()) << "\n";
+	const json& payload = envelope.contains("result") ? envelope["result"] : envelope;
+	std::cout << payload.dump() << "\n";
+	// Only an explicitly rejected operation propagates a shared gameplay report's
+	// terminal failure. Capability queries can contain failed prerequisite reports.
+	if (payload.is_object() && payload.contains("ok") && payload["ok"].is_boolean() && !payload["ok"].get<bool>() && payload.contains("report") && payload["report"].is_object())
+	{
+		const json& report = payload["report"];
+		if (report.contains("schemaVersion") && report["schemaVersion"].is_number_integer() && report["schemaVersion"] == 1 && report.contains("status") && report["status"].is_string() &&
+		    report.contains("exitCode") && report["exitCode"].is_number_integer())
+		{
+			const std::string status = report["status"].get<std::string>();
+			if ((status == "failed" && report["exitCode"] == 1) || (status == "cancelled" && report["exitCode"] == 130) || (status == "skipped" && report["exitCode"] == 3))
+			{
+				return report["exitCode"].get<int>();
+			}
+		}
+	}
 	return 0;
 }

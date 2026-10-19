@@ -120,7 +120,8 @@ KENNEY_CACHE_DIR = REPO / ".temp" / "kenney-cache"
 
 def _ctl(method: str, params: dict | None = None) -> dict:
     """Invoke aether-ctl for one control-endpoint method; return a result dict
-    ({"result": ...} on success, {"error": ...} on failure)."""
+    ({"result": ...} on success, {"error": ...} on failure). Shared gameplay
+    report failures retain both keys so MCP error content keeps the full report."""
     ctl = _ctl_path()
     if not Path(ctl).exists():
         return {"error": f"aether-ctl not found (searched build dirs under {REPO}); build it: cmake --build {BUILD_DIR} --target aether-ctl"}
@@ -133,10 +134,22 @@ def _ctl(method: str, params: dict | None = None) -> dict:
         input_json = json.dumps(params)
     try:
         # Generous: engine.play rebuilds C# scripts before replying.
-        proc = subprocess.run(args, input=input_json, capture_output=True, text=True, timeout=45)
+        proc = subprocess.run(args, input=input_json, capture_output=True, text=True, encoding="utf-8", timeout=45)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"error": f"aether-ctl failed to run: {exc}"}
     if proc.returncode != 0:
+        try:
+            payload = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict) and payload.get("ok") is False:
+            report = payload.get("report")
+            if isinstance(report, dict) and type(report.get("schemaVersion")) is int and report["schemaVersion"] == 1:
+                exit_code = report.get("exitCode")
+                status = report.get("status")
+                if isinstance(status, str) and type(exit_code) is int and exit_code == {"failed": 1, "cancelled": 130, "skipped": 3}.get(status):
+                    message = payload.get("message")
+                    return {"result": payload, "error": message if isinstance(message, str) and message else "Gameplay operation failed"}
         return {"error": (proc.stderr or proc.stdout or "aether-ctl error").strip()}
     out = proc.stdout.strip()
     try:
