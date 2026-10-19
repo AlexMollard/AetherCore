@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <stop_token>
 #include "scripting/AgentDiagnostics.hpp"
 
 namespace aether::app::scripting
@@ -12,6 +13,7 @@ namespace aether::app::scripting
 		std::filesystem::path outputDir;
 		bool release = false;
 		int timeoutMs = 180000;
+		std::stop_token stopToken;
 	};
 	struct RustBuildResult
 	{

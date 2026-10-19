@@ -40,6 +40,12 @@ namespace aether::editor
 	{
 		constexpr std::string_view kEngineBugRemediation = "This is an engine bug - report it.";
 
+		std::string Utf8(const std::filesystem::path& path)
+		{
+			const auto value = path.generic_u8string();
+			return {value.begin(), value.end()};
+		}
+
 		std::string LowerAscii(std::string value)
 		{
 			std::ranges::transform(value, value.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -157,11 +163,11 @@ namespace aether::editor
 			std::filesystem::remove_all(plan.outputDir, ec);
 			if (ec)
 			{
-				return Failed("Could not clear the output folder: " + ec.message(), "Close anything using " + plan.outputDir.generic_string() + " and publish again.");
+				return Failed("Could not clear the output folder: " + ec.message(), "Close anything using " + Utf8(plan.outputDir) + " and publish again.");
 			}
 			if (auto dirResult = io::file_util::CreateDirectories(plan.outputDir); !dirResult)
 			{
-				return Failed("Could not create the output folder: " + dirResult.error().message, "Check write permissions on " + plan.outputDir.generic_string() + ".");
+				return Failed("Could not create the output folder: " + dirResult.error().message, "Check write permissions on " + Utf8(plan.outputDir) + ".");
 			}
 			return {};
 		}
@@ -354,9 +360,9 @@ namespace aether::editor
 
 			const std::filesystem::path outputDll = artifactsDir / "bin" / "AetherGame" / "release" / "AetherGame.dll";
 			std::string diagnostics(64 * 1024, char{0});
-			const int rc = api->CompileScripts(plan.scriptsDir.string().c_str(),
-			        outputDll.string().c_str(),
-			        (plan.outputDir / "data" / "scripts" / "managed").string().c_str(),
+			const int rc = api->CompileScripts(Utf8(plan.scriptsDir).c_str(),
+			        Utf8(outputDll).c_str(),
+			        Utf8(plan.outputDir / "data" / "scripts" / "managed").c_str(),
 			        1, // optimized, and without symbols: this is what ships
 			        diagnostics.data(),
 			        static_cast<std::int32_t>(diagnostics.size()));
@@ -366,7 +372,7 @@ namespace aether::editor
 			{
 				const std::filesystem::path publishLog = plan.projectRoot / "Builds" / "publish-scripts.log";
 				(void) io::file_util::WriteText(publishLog, diagnostics);
-				return Failed("The project's C# scripts failed to compile.", "See " + publishLog.generic_string() + " for the compiler output.");
+				return Failed("The project's C# scripts failed to compile.", "See " + Utf8(publishLog) + " for the compiler output.");
 			}
 
 			std::string error;

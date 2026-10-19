@@ -67,11 +67,12 @@ namespace aether::app::scripting
 		const auto remaining = [&] { return std::max(0, request.timeoutMs - static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count())); };
 		const auto fail = [&](std::string code, std::string message)
 		{
-			result.report.status = AgentJobStatus::Failed;
-			result.report.diagnostics.push_back({.code = std::move(code), .severity = AgentDiagnosticSeverity::Error, .message = std::move(message)});
+			result.report.status = request.stopToken.stop_requested() ? AgentJobStatus::Cancelled : AgentJobStatus::Failed;
+			result.report.diagnostics.push_back({.code = request.stopToken.stop_requested() ? "RUST_BUILD_CANCELLED" : std::move(code), .severity = request.stopToken.stop_requested() ? AgentDiagnosticSeverity::Info : AgentDiagnosticSeverity::Error, .message = std::move(message)});
 			result.report.durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
 			return result;
 		};
+		if (request.stopToken.stop_requested()) { return fail("RUST_BUILD_CANCELLED", "Cancelled before Rust build"); }
 		std::error_code ec;
 		if (!std::filesystem::is_regular_file(request.manifest, ec)) { return fail("RUST_MANIFEST_MISSING", "Gameplay Cargo.toml is missing: " + Utf8(request.manifest)); }
 		if (request.artifactsDir.empty() || request.outputDir.empty() || request.timeoutMs <= 0) { return fail("RUST_BUILD_ARGUMENT", "Rust builds require explicit output/intermediate directories and a positive timeout."); }
@@ -94,7 +95,7 @@ namespace aether::app::scripting
 		const std::vector<std::string> rustcArguments{"-vV"};
 		const int rustcBudget = remaining();
 		if (rustcBudget <= 0) { return fail("RUST_BUILD_TIMEOUT", "Rust toolchain discovery exceeded the build timeout."); }
-		const int rustcQueried = io::RunProcessArguments(prerequisites.rustc, rustcArguments, manifest.parent_path(), rustcLog, rustcBudget);
+		const int rustcQueried = io::RunProcessArguments(prerequisites.rustc, rustcArguments, manifest.parent_path(), rustcLog, rustcBudget, request.stopToken);
 		if (rustcQueried != 0) { return fail(rustcQueried == io::kProcessTimedOut ? "RUST_BUILD_TIMEOUT" : "RUST_TOOLCHAIN_QUERY_FAILED", "rustc identity query failed; inspect " + Utf8(rustcLog)); }
 		const auto rustcIdentity = io::file_util::ReadText(rustcLog);
 		const auto rustcVersion = rustcIdentity ? IdentityLine(*rustcIdentity, "rustc ") : std::string{};
@@ -104,7 +105,7 @@ namespace aether::app::scripting
 		const std::vector<std::string> cargoArguments{"--version"};
 		const int cargoBudget = remaining();
 		if (cargoBudget <= 0) { return fail("RUST_BUILD_TIMEOUT", "Rust toolchain discovery exceeded the build timeout."); }
-		const int cargoQueried = io::RunProcessArguments(prerequisites.cargo, cargoArguments, manifest.parent_path(), cargoLog, cargoBudget);
+		const int cargoQueried = io::RunProcessArguments(prerequisites.cargo, cargoArguments, manifest.parent_path(), cargoLog, cargoBudget, request.stopToken);
 		if (cargoQueried != 0) { return fail(cargoQueried == io::kProcessTimedOut ? "RUST_BUILD_TIMEOUT" : "RUST_TOOLCHAIN_QUERY_FAILED", "Cargo identity query failed; inspect " + Utf8(cargoLog)); }
 		const auto cargoIdentity = io::file_util::ReadText(cargoLog);
 		const auto cargoVersion = cargoIdentity ? IdentityLine(*cargoIdentity, "cargo ") : std::string{};
@@ -112,11 +113,11 @@ namespace aether::app::scripting
 		result.report.toolchains.push_back({.name = "cargo", .version = cargoVersion, .target = rustHost});
 		result.report.phase = "configure";
 		const std::vector<std::string> configure{"-S", Utf8(driver), "-B", Utf8(build), "-DAETHER_GAMEPLAY_MANIFEST=" + Utf8(manifest), "-DAETHER_CARGO_EXECUTABLE=" + Utf8(prerequisites.cargo), "-DAETHER_RUSTC_EXECUTABLE=" + Utf8(prerequisites.rustc), "-DAETHER_RUST_TARGET_DIR=" + Utf8(artifacts / "cargo"), "-DAETHER_RUST_OUTPUT_DIR=" + Utf8(output), std::string("-DAETHER_RUST_PROFILE=") + (request.release ? "release" : "debug")};
-		const int configured = io::RunProcessArguments(prerequisites.cmake, configure, manifest.parent_path(), configureLog, remaining());
+		const int configured = io::RunProcessArguments(prerequisites.cmake, configure, manifest.parent_path(), configureLog, remaining(), request.stopToken);
 		if (configured != 0) { return fail(configured == io::kProcessTimedOut ? "RUST_BUILD_TIMEOUT" : "RUST_CONFIGURE_FAILED", "Rust CMake configuration failed; inspect " + Utf8(configureLog)); }
 		result.report.phase = "build";
 		const std::vector<std::string> args{"--build", Utf8(build), "--config", "Release", "--target", "AetherRustGameplay"};
-		const int compiled = io::RunProcessArguments(prerequisites.cmake, args, manifest.parent_path(), buildLog, remaining());
+		const int compiled = io::RunProcessArguments(prerequisites.cmake, args, manifest.parent_path(), buildLog, remaining(), request.stopToken);
 		if (const auto log = io::file_util::ReadText(buildLog)) { CompilerDiagnostics(*log, result.report); }
 		if (compiled != 0) { return fail(compiled == io::kProcessTimedOut ? "RUST_BUILD_TIMEOUT" : "RUST_BUILD_FAILED", "Rust compilation failed; inspect " + Utf8(buildLog)); }
 		const auto module = output / ResolveRuntimeGameplayModule({}, GameplayLanguage::Rust).filename();
