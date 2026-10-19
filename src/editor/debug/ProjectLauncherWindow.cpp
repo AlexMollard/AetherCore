@@ -444,6 +444,18 @@ namespace aether::app
 				}
 				ImGui::TextDisabled("%s", selectedTemplate->description.data());
 				ImGui::Spacing();
+				ImGui::TextUnformatted("Gameplay language");
+				ImGui::SetNextItemWidth(width);
+				int languageIndex = state.newLanguage == GameplayLanguage::Rust ? 1 : 0;
+				if (ImGui::Combo("##newProjectLanguage", &languageIndex, "C#\0Rust\0"))
+				{
+					state.newLanguage = languageIndex == 1 ? GameplayLanguage::Rust : GameplayLanguage::CSharp;
+				}
+				if (state.newLanguage == GameplayLanguage::Rust)
+				{
+					ImGui::TextWrapped("Rust projects can be edited. Rust gameplay execution is not available yet.");
+				}
+				ImGui::Spacing();
 
 				ImGui::TextUnformatted("Name");
 				ImGui::SetNextItemWidth(width);
@@ -522,7 +534,7 @@ namespace aether::app
 				}
 				else if (!opening && actions.createProject)
 				{
-					actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data(), state.newTemplate);
+					actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data(), state.newTemplate, state.newLanguage);
 				}
 				state.dialog = ProjectLauncherDialog::None;
 				ImGui::CloseCurrentPopup();

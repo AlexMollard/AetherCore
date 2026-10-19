@@ -17,6 +17,7 @@
 #include "editor/ControlServer.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/PlatformPaths.hpp"
+#include "GameplayPrerequisites.hpp"
 #include "launcher/LauncherProcess.hpp"
 #include "platform/Window.hpp"
 #include "imgui/UiAutomationMethods.hpp"
@@ -48,6 +49,24 @@ namespace aether::app
 		json StrProp()
 		{
 			return json{{"type", "string"}};
+		}
+
+		json RecentProjectJson(const EditorProjectContext& project)
+		{
+			json summary{{"name", project.name}, {"root", project.root.string()}};
+			const auto descriptor = project::ReadProjectDescriptor(project.root);
+			if (descriptor)
+			{
+				summary["language"] = GameplayLanguageName(descriptor->language);
+				summary["profile"] = GameplayProfileName(descriptor->language);
+			}
+			else
+			{
+				summary["language"] = nullptr;
+				summary["profile"] = nullptr;
+				summary["diagnostic"] = descriptor.error().message;
+			}
+			return summary;
 		}
 
 		json ProjectTemplateProp()
@@ -107,7 +126,7 @@ namespace aether::app
 			        false,
 			        Obj(),
 			        [&launcher](const json&, editor::MethodContext& ctx) -> json
-			        { return json{{"frame", ctx.frameIndex}, {"fps", ctx.fps}, {"recentProjectCount", launcher.RecentProjects().size()}, {"launchingEditor", launcher.IsLaunchingEditor()}}; }});
+			        { return json{{"frame", ctx.frameIndex}, {"fps", ctx.fps}, {"recentProjectCount", launcher.RecentProjects().size()}, {"launchingEditor", launcher.IsLaunchingEditor()}, {"lastError", launcher.ControlError()}}; }});
 
 			methods.push_back({"launcher.projects",
 			        "list_projects",
@@ -119,7 +138,7 @@ namespace aether::app
 				        json projects = json::array();
 				        for (const EditorProjectContext& project: launcher.RecentProjects())
 				        {
-					        projects.push_back(json{{"name", project.name}, {"root", project.root.string()}});
+					        projects.push_back(RecentProjectJson(project));
 				        }
 				        return json{{"projects", std::move(projects)}};
 			        }});
@@ -143,12 +162,17 @@ namespace aether::app
 			        "create_project",
 			        "Create a new project from a template - Blank 3D, Blank 2D, Multiplayer 2D, or Multiplayer 3D - then hand the control port from the Launcher to its Editor process.",
 			        true,
-			        Obj({{"root", StrProp()}, {"name", StrProp()}, {"template", ProjectTemplateProp()}}, {"root", "template"}),
+			        Obj({{"root", StrProp()}, {"name", StrProp()}, {"template", ProjectTemplateProp()}, {"language", json{{"type", "string"}, {"enum", {"csharp", "rust"}}, {"default", "csharp"}}}}, {"root", "template"}),
 			        [&launcher](const json& params, editor::MethodContext&) -> json
 			        {
 				        const std::filesystem::path root = params.value("root", std::string{});
 				        const std::string name = params.value("name", std::string{});
 				        const std::string templateName = params.value("template", std::string{});
+				        const auto language = ParseGameplayLanguage(params.value("language", std::string{"csharp"}));
+				        if (!language)
+				        {
+					        return json{{"error", language.error().message}};
+				        }
 				        const std::optional<project::ProjectTemplate> projectTemplate = project::ProjectTemplateFromName(templateName);
 				        if (!projectTemplate.has_value())
 				        {
@@ -163,11 +187,19 @@ namespace aether::app
 					        }
 					        return json{{"error", "template must be one of: " + allowed}};
 				        }
-				        if (const std::string error = launcher.QueueCreateProjectForControl(root, name, *projectTemplate); !error.empty())
+				        if (const std::string error = launcher.QueueCreateProjectForControl(root, name, *projectTemplate, *language); !error.empty())
 				        {
 					        return json{{"error", error}};
 				        }
-				        return json{{"status", "queued"}, {"root", root.string()}, {"name", name}, {"template", templateName}};
+				        return json{{"status", "queued"}, {"root", root.string()}, {"name", name}, {"template", templateName}, {"language", GameplayLanguageName(*language)}, {"profile", GameplayProfileName(*language)}};
+			        }});
+
+			methods.push_back({"project.gameplay_capabilities", "gameplay_capabilities",
+			        "Inspect a project's gameplay language/profile and prerequisites without opening it. Omit root to inspect a language for new project creation. Rust creation is supported; execution follows separately.",
+			        false, Obj({{"root", StrProp()}, {"language", json{{"type", "string"}, {"enum", {"csharp", "rust"}}}}}),
+			        [](const json& params, editor::MethodContext&) -> json
+			        {
+				        return DescribeProjectGameplayCapabilities(params.value("root", std::string{}), params.value("language", std::string{}));
 			        }});
 
 			methods.push_back({"viewport.screenshot",
@@ -203,7 +235,7 @@ namespace aether::app
 				json projects = json::array();
 				for (const EditorProjectContext& p: launcher.RecentProjects())
 				{
-					projects.push_back(json{{"name", p.name}, {"root", p.root.string()}});
+					projects.push_back(RecentProjectJson(p));
 				}
 				return projects;
 			};
@@ -283,12 +315,20 @@ namespace aether::app
 		{
 			return "no ProjectSettings.toml found under root";
 		}
+		if (const auto descriptor = project::ReadProjectDescriptor(resolved); !descriptor)
+		{
+			return descriptor.error().message;
+		}
 		m_pendingControlAction = PendingControlAction{.kind = PendingControlActionKind::Open, .root = resolved, .executeAfter = std::chrono::steady_clock::now() + std::chrono::milliseconds(250)};
 		return {};
 	}
 
-	std::string LauncherLayer::QueueCreateProjectForControl(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate)
+	std::string LauncherLayer::QueueCreateProjectForControl(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate, GameplayLanguage language)
 	{
+		if (language == GameplayLanguage::Rust && (projectTemplate == project::ProjectTemplate::Multiplayer2D || projectTemplate == project::ProjectTemplate::Multiplayer3D))
+		{
+			return "Rust multiplayer templates are unavailable; choose a blank template.";
+		}
 		if (m_pendingControlAction.has_value() || m_pendingEditor.has_value())
 		{
 			return "the Launcher is already handing off to an Editor";
@@ -299,7 +339,7 @@ namespace aether::app
 			return "root must identify a project folder";
 		}
 		m_pendingControlAction = PendingControlAction{
-		        .kind = PendingControlActionKind::Create, .root = resolved, .name = text::TrimAscii(std::string(name)), .projectTemplate = projectTemplate, .executeAfter = std::chrono::steady_clock::now() + std::chrono::milliseconds(250)};
+		        .kind = PendingControlActionKind::Create, .root = resolved, .name = text::TrimAscii(std::string(name)), .projectTemplate = projectTemplate, .language = language, .executeAfter = std::chrono::steady_clock::now() + std::chrono::milliseconds(250)};
 		return {};
 	}
 
@@ -406,7 +446,7 @@ namespace aether::app
 			m_pendingControlAction.reset();
 			if (action.kind == PendingControlActionKind::Create)
 			{
-				CreateProject(action.root, action.name, action.projectTemplate);
+				CreateProject(action.root, action.name, action.projectTemplate, action.language);
 			}
 			else
 			{
@@ -555,7 +595,7 @@ namespace aether::app
 		{
 			OpenProject(root);
 		};
-		actions.createProject = [this](const std::filesystem::path& parentDir, std::string_view name, project::ProjectTemplate projectTemplate)
+		actions.createProject = [this](const std::filesystem::path& parentDir, std::string_view name, project::ProjectTemplate projectTemplate, GameplayLanguage language)
 		{
 			const std::filesystem::path root = project::ComposeNewProjectRoot(parentDir, name);
 			if (root.empty())
@@ -563,7 +603,7 @@ namespace aether::app
 				m_windowState.error = "Choose a location and a valid project name.";
 				return;
 			}
-			CreateProject(root, name, projectTemplate);
+			CreateProject(root, name, projectTemplate, language);
 		};
 		actions.browseFolder = []()
 		{
@@ -594,16 +634,16 @@ namespace aether::app
 			m_windowState.error = "Choose a project folder.";
 			return;
 		}
-		if (!project::HasProjectDescriptor(resolved))
+		if (const auto descriptor = project::ReadProjectDescriptor(resolved); !descriptor)
 		{
-			m_windowState.error = "No ProjectSettings.toml found there.";
+			m_windowState.error = descriptor.error().message;
 			return;
 		}
 		RememberRecent(resolved);
 		SpawnEditorFor(resolved);
 	}
 
-	void LauncherLayer::CreateProject(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate)
+	void LauncherLayer::CreateProject(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate, GameplayLanguage language)
 	{
 		m_windowState.error.clear();
 		const std::filesystem::path resolved = project::ResolveProjectRoot(root);
@@ -617,7 +657,7 @@ namespace aether::app
 		{
 			projectName = project::FallbackProjectName(resolved);
 		}
-		if (!project::WriteProjectDescriptor(resolved, projectName, m_windowState.error, projectTemplate))
+		if (!project::WriteProjectDescriptor(resolved, projectName, m_windowState.error, projectTemplate, language))
 		{
 			return;
 		}
@@ -713,6 +753,10 @@ namespace aether::app
 		EditorProjectContext entry;
 		entry.root = resolved;
 		entry.name = project::ReadProjectName(resolved);
+		if (const auto descriptor = project::ReadProjectDescriptor(resolved); descriptor)
+		{
+			entry.language = descriptor->language;
+		}
 		LoadPreview(entry);
 		m_recentProjects.insert(m_recentProjects.begin(), std::move(entry));
 		if (m_recentProjects.size() > static_cast<std::size_t>(project::kMaxRecentProjects))

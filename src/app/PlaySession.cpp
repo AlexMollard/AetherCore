@@ -6,6 +6,11 @@
 #include <vector>
 
 #include "PlayState.hpp"
+#include "ProjectScripting.hpp"
+#include "RuntimeProjectSettings.hpp"
+#include "editor/EditorProjectContext.hpp"
+#include "utils/SettingsService.hpp"
+#include "utils/Logger.hpp"
 #include "animation/SpriteAnimationSystem.hpp"
 #include "assets/AssetManager.hpp"
 #include "audio/AudioSubsystem.hpp"
@@ -66,8 +71,32 @@ namespace aether::app
 		}
 	} // namespace
 
+	Expected<void> ValidatePlaySessionGameplay(const ServiceContainer& services)
+	{
+		const auto* selected = services.TryGet<ProjectScriptingSettings>();
+		const auto activeLanguage = selected != nullptr ? selected->language : GameplayLanguage::CSharp;
+		const auto* project = services.TryGet<EditorProjectContext>();
+		const auto* settings = services.TryGet<SettingsService>();
+		auto current = ValidateProjectGameplaySelection(project != nullptr ? project->root : std::filesystem::path{}, activeLanguage,
+		        settings != nullptr ? std::optional<std::string_view>(settings->Get().scripting.language) : std::nullopt);
+		if (!current)
+		{
+			return std::unexpected(current.error());
+		}
+		if (activeLanguage == GameplayLanguage::Rust)
+		{
+			AE_UNEXPECTED(AetherError::Engine("Rust gameplay backend is not implemented yet (Task 5); the project can be edited, but Play and publishing are unavailable."));
+		}
+		return {};
+	}
+
 	bool StartPlaySession(LayerContext& context)
 	{
+		if (auto gameplay = ValidatePlaySessionGameplay(context.services); !gameplay)
+		{
+			AE_ERROR(LogCategory::App, "{}", gameplay.error().message);
+			return false;
+		}
 		auto* playState = context.TryGet<PlayState>();
 		auto* assets = context.TryGet<AssetManager>();
 		if (playState == nullptr || assets == nullptr || playState->IsPlaying() || playState->IsCompiling())

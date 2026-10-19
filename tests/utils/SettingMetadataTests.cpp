@@ -162,6 +162,7 @@ TEST_CASE("The set of restart-only settings is exactly what the engine reads onc
 	// Each of these is read during startup and never again:
 	//   app.startupScene     read by the boot path / bake
 	//   app.autoplay         read by the boot path
+	//   scripting.language   selects the gameplay backend before CoreCLR boots
 	//
 	// Deliberately NOT here, and each for a reason worth keeping straight:
 	//   framesInFlight, latencyPacing  - re-read inside the frame loop
@@ -182,6 +183,7 @@ TEST_CASE("The set of restart-only settings is exactly what the engine reads onc
 	const std::vector<std::string> expected{
 	        "app.autoplay",
 	        "app.startupScene",
+	        "scripting.language",
 	};
 	CHECK(restartOnly == expected);
 }

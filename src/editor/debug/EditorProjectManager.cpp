@@ -190,6 +190,10 @@ namespace aether::editor
 			{
 				return {.succeeded = false, .message = "No project is open."};
 			}
+			if (m_currentProject.language == app::GameplayLanguage::Rust)
+			{
+				return {.succeeded = false, .message = "The C# debugger is unavailable for a Rust project."};
+			}
 
 			const std::filesystem::path scriptsProject = m_currentProject.scriptsDir / "AetherGame.csproj";
 			if (auto* scripting = m_services != nullptr ? m_services->TryGet<app::scripting::CSharpScriptingSubsystem>() : nullptr)
@@ -306,7 +310,7 @@ namespace aether::editor
 
 	void EditorProjectManager::BuildAndReloadProjectScripts()
 	{
-		if (m_services == nullptr)
+		if (m_services == nullptr || m_currentProject.language != app::GameplayLanguage::CSharp)
 		{
 			return;
 		}
@@ -428,12 +432,19 @@ namespace aether::editor
 			m_launcherState.error = projectResult.error().message;
 			return;
 		}
+		if (const auto* selected = m_services != nullptr ? m_services->TryGet<app::ProjectScriptingSettings>() : nullptr;
+		    selected != nullptr && selected->language != projectResult->language)
+		{
+			m_launcherState.error = "This project's gameplay language changed. Reopen the project from the Launcher to select its gameplay backend.";
+			AE_ERROR(LogCategory::App, "{}", m_launcherState.error);
+			return;
+		}
 		m_currentProject = *std::move(projectResult);
 		m_currentProject.loaded = true;
 		io::FileSystem::Mount("project", m_currentProject.root);
 		// Refresh the per-project VS solution so opening AetherGame.slnx resolves
 		// engine types in the IDE (non-fatal).
-		if (std::string solutionError; !EnsureGameSolution(m_currentProject.root, solutionError))
+		if (std::string solutionError; m_currentProject.language == app::GameplayLanguage::CSharp && !EnsureGameSolution(m_currentProject.root, solutionError))
 		{
 			AE_WARN(LogCategory::App, "Could not generate game solution: {}", solutionError);
 		}
@@ -548,7 +559,7 @@ namespace aether::editor
 		}
 	}
 
-	void EditorProjectManager::CreateProject(std::filesystem::path root, std::string_view name, ProjectTemplate projectTemplate)
+	void EditorProjectManager::CreateProject(std::filesystem::path root, std::string_view name, ProjectTemplate projectTemplate, app::GameplayLanguage language)
 	{
 		m_launcherState.error.clear();
 		root = ResolveProjectRoot(std::move(root));
@@ -563,7 +574,7 @@ namespace aether::editor
 			m_launcherState.error = "Choose a project folder.";
 			return;
 		}
-		if (!WriteProjectDescriptor(root, projectName, m_launcherState.error, projectTemplate))
+		if (!WriteProjectDescriptor(root, projectName, m_launcherState.error, projectTemplate, language))
 		{
 			return;
 		}
@@ -584,9 +595,9 @@ namespace aether::editor
 		{
 			OpenProject(std::move(root));
 		};
-		actions.createProject = [this](std::filesystem::path root, std::string_view name, ProjectTemplate projectTemplate)
+		actions.createProject = [this](std::filesystem::path root, std::string_view name, ProjectTemplate projectTemplate, app::GameplayLanguage language)
 		{
-			CreateProject(std::move(root), name, projectTemplate);
+			CreateProject(std::move(root), name, projectTemplate, language);
 		};
 		actions.browseFolder = []() -> std::optional<std::filesystem::path>
 		{

@@ -106,11 +106,15 @@ Read directory-local AGENTS.md files before creating/editing these paths. Adapt 
 
 **Metadata:** [scripting].language accepts csharp or rust; absent means csharp. Keep existing script type strings intact. Publish target is separate from project gameplay language. The first profile permits exactly one host per project.
 
-- [ ] Test missing, valid and unknown language values; Rust selection with missing toolchain; existing C# scene load; relocated runtime project/module resolution; and rejection of mixed-language declarations.
-- [ ] Generate Rust Cargo manifests and template gameplay using shared project creation. Resolve SDK paths from declared engine/toolchain locations, not a hardcoded developer checkout. Preserve current C# generation for old projects.
-- [ ] Expose language and profile through CLI/MCP capabilities and project creation. Reports identify missing prerequisites before spawning builds. Avoid modal picker dependencies in agent paths.
+- [x] Test missing, valid and unknown language values; Rust selection with missing toolchain; existing C# scene load; relocated runtime project/module resolution; and rejection of mixed-language declarations.
+- [x] Generate Rust Cargo manifests and template gameplay using shared project creation. Resolve SDK paths from declared engine/toolchain locations, not a hardcoded developer checkout. Preserve current C# generation for old projects.
+- [x] Expose language and profile through CLI/MCP capabilities and project creation. Reports identify missing prerequisites before spawning builds. Avoid modal picker dependencies in agent paths.
 
 **Gate:** An agent can create and inspect either language project through the same service. Missing Rust tooling does not break C# configure/run.
+
+**Task 4 verification (Windows, 2026-10-19):** The full native gauntlet passed with 1,401 native cases and both GPU smokes reporting zero validation findings, including strict metadata, settings serialization, recent projects, missing prerequisites, custom scripts paths, stale selection and moved runtime/module paths. Live agent controls created Rust and default C# projects with Cargo/rustc overrides deliberately unavailable. Rust opened/saved/reopened without CoreCLR, its Cargo scaffold checked offline, and Play/publish returned schema-v1 failures through CLI and MCP. C# Play/Stop and publishing succeeded; the published C# package booted after relocation. Standalone managed results remain 131 passed / 29 failed, with the exact Task 3 failure set. Generator checks, five generator tests, four report-schema tests, eight transport tests and the raw ABI crate test passed. Evidence: `logs/task4/`.
+
+Rust gameplay remains intentionally unavailable until Task 5; this task adds project authoring and explicit capabilities, not a Rust runtime.
 
 ## Task 5: Implement desktop Rust gameplay and the safe SDK
 

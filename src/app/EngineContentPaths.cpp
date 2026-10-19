@@ -26,6 +26,12 @@ namespace aether::app
 #else
 		constexpr std::string_view kSdkDevHint = {};
 #endif
+
+#ifdef AETHER_RUST_SDK_MANIFEST
+		constexpr std::string_view kRustSdkDevHint = AETHER_RUST_SDK_MANIFEST;
+#else
+		constexpr std::string_view kRustSdkDevHint = {};
+#endif
 	} // namespace
 
 	std::filesystem::path EngineSceneTemplatesDir()
@@ -41,5 +47,10 @@ namespace aether::app
 	std::filesystem::path EngineManagedSdkProject()
 	{
 		return io::PlatformPaths::ResolveBundlePath("AETHERCORE_SDK", kSdkDevHint, "data/sdk/managed/AetherCore/AetherCore.csproj");
+	}
+
+	std::filesystem::path EngineRustSdkManifest()
+	{
+		return io::PlatformPaths::ResolveBundlePath("AETHERCORE_RUST_SDK", kRustSdkDevHint, "data/sdk/rust/aethercore-abi/Cargo.toml");
 	}
 } // namespace aether::app

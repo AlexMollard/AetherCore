@@ -155,6 +155,11 @@ namespace aether
 			float uiScale = 1.0f;
 		} graphics;
 
+		struct Scripting
+		{
+			std::string language = "csharp";
+		} scripting;
+
 		struct App
 		{
 			// Capped by default because MAILBOX is: without a cap the loop renders as fast as
@@ -298,6 +303,7 @@ namespace aether
 		f("app.startupScene", settings.app.startupScene);
 		f("app.autoplay", settings.app.autoplay);
 		f("app.autosaveSeconds", settings.app.autosaveSeconds);
+		f("scripting.language", settings.scripting.language);
 		f("cursor.custom", settings.cursor.custom);
 		f("cursor.texture", settings.cursor.texture);
 		f("cursor.size", settings.cursor.size);
@@ -461,7 +467,7 @@ namespace aether
 	// every published build. So the user layer neither writes these nor reads them back.
 	[[nodiscard]] inline bool IsProjectOnlySettingKey(std::string_view key) noexcept
 	{
-		return key == "app.startupScene";
+		return key == "app.startupScene" || key == "scripting.language";
 	}
 
 	// Where the EDITOR saves a setting the user changed.

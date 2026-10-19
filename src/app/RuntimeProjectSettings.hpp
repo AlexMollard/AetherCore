@@ -1,6 +1,10 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
+#include <string_view>
+
+#include "ProjectScripting.hpp"
 
 namespace aether::app
 {
@@ -23,6 +27,14 @@ namespace aether::app
 	// directory compiled into the binary would let the BUILD machine's startup scene
 	// replace the published one.
 	[[nodiscard]] std::filesystem::path ResolveRuntimeProjectSettings(const RuntimeProjectSettingsInputs& inputs);
+
+	// Select the backend before CoreCLR is booted. Published settings are rooted beside
+	// the executable, never the process working directory or the build machine's source.
+	[[nodiscard]] Expected<ProjectScriptingSettings> ResolveRuntimeGameplaySettings(const RuntimeProjectSettingsInputs& inputs);
+	[[nodiscard]] std::filesystem::path ResolveRuntimeGameplayModule(const std::filesystem::path& exeDir, GameplayLanguage language);
+	// Revalidate authored state at a gameplay operation boundary. A changed language
+	// requires a new process; it must never run through the backend selected at boot.
+	[[nodiscard]] Expected<void> ValidateProjectGameplaySelection(const std::filesystem::path& projectRoot, GameplayLanguage activeLanguage, std::optional<std::string_view> configuredLanguage = std::nullopt);
 
 	// Which assembly the runtime is about to treat as "the game's scripts".
 	struct RuntimeScriptAssemblyInputs

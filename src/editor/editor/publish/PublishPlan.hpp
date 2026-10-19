@@ -4,6 +4,8 @@
 #include <string>
 #include <string_view>
 
+#include "ProjectScripting.hpp"
+
 namespace aether::app
 {
 	struct EditorProjectContext;
@@ -38,6 +40,7 @@ namespace aether::editor
 		std::string runtimeExeName;
 		std::string configName;
 		bool shippableConfig = false;
+		app::GameplayLanguage language = app::GameplayLanguage::CSharp;
 	};
 
 	// Replaces a path segment's illegal characters with '_' and trims the trailing dots

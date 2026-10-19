@@ -1,9 +1,12 @@
 #pragma once
 
 #include "layers/AppLayer.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether::app
 {
+	[[nodiscard]] Expected<void> ValidatePlaySessionGameplay(const ServiceContainer& services);
+
 	// background thread and returns immediately with the session in the Compiling
 	bool StartPlaySession(LayerContext& context);
 

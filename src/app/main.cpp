@@ -1,10 +1,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <memory>
 #include <print>
 #include <string>
 
 #include "ProjectCli.hpp"
+#include "RuntimeProjectSettings.hpp"
+#include "io/PlatformPaths.hpp"
 #include "utils/AetherExceptions.hpp"
 #include "Application.hpp"
 #include "platform/CrashHandler.hpp"
@@ -113,6 +116,25 @@ int main(int argc, char** argv)
 	try
 	{
 		aether::Logger::SetMinimumLevel(aether::LogLevel::Info);
+		aether::app::RuntimeProjectSettingsInputs scriptingInputs;
+		scriptingInputs.envProjectDir = aether::io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR");
+		scriptingInputs.exeDir = aether::io::PlatformPaths::GetExecutableDir();
+#ifdef AETHER_DEFAULT_PROJECT_DIR
+		scriptingInputs.compiledDefaultDir = AETHER_DEFAULT_PROJECT_DIR;
+#endif
+		auto selectedScripting = aether::app::ResolveRuntimeGameplaySettings(scriptingInputs);
+		if (!selectedScripting)
+		{
+			AE_ERROR(aether::LogCategory::App, "Cannot select project gameplay language: {}", selectedScripting.error().message);
+			return 2;
+		}
+#ifndef AETHERCORE_EDITOR_APP
+		if (selectedScripting->language == aether::app::GameplayLanguage::Rust)
+		{
+			AE_ERROR(aether::LogCategory::App, "Rust gameplay backend is not implemented yet (Task 5); this runtime cannot execute Rust games.");
+			return 2;
+		}
+#endif
 
 		// NVIDIA Aftermath (dev-only GPU crash diagnostics) is only ever turned
 		// on for an editor build - see the vendor + editor gate in
@@ -154,9 +176,20 @@ int main(int argc, char** argv)
 		// Services
 		// C# scripting: boots CoreCLR and loads the game-scripts assembly.
 		// Disabled-safe - a missing runtime just means no entity-script behavior.
-		aether::app::scripting::CSharpScriptingSubsystem csharpScripting;
-		application.AddService(csharpScripting);
-		application.AddService(csharpScripting.Gameplay());
+		application.AddService(*selectedScripting);
+		std::unique_ptr<aether::app::scripting::CSharpScriptingSubsystem> csharpScripting;
+		aether::app::scripting::GameplayHost rustGameplay;
+		if (selectedScripting->language == aether::app::GameplayLanguage::CSharp)
+		{
+			csharpScripting = std::make_unique<aether::app::scripting::CSharpScriptingSubsystem>();
+			application.AddService(*csharpScripting);
+			application.AddService(csharpScripting->Gameplay());
+		}
+		else
+		{
+			application.AddService(rustGameplay);
+			AE_INFO(aether::LogCategory::App, "Rust project opened for editing; its gameplay backend is not implemented yet (Task 5).");
+		}
 
 		// Layers
 #ifdef AETHERCORE_EDITOR_APP

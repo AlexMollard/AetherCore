@@ -35,7 +35,7 @@ namespace aether::editor
 		void OpenLauncher();
 		void CloseLauncher();
 		void OpenProject(std::filesystem::path root, bool reloadScene = true);
-		void CreateProject(std::filesystem::path root, std::string_view name, app::project::ProjectTemplate projectTemplate);
+		void CreateProject(std::filesystem::path root, std::string_view name, app::project::ProjectTemplate projectTemplate, app::GameplayLanguage language = app::GameplayLanguage::CSharp);
 
 		// Invoked at the end of every successful OpenProject. The editor layer uses it to
 		// apply the project's flavor (flavor panels + theme) once the context is loaded.

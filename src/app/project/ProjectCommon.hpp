@@ -79,7 +79,7 @@ namespace aether::app::project
 	[[nodiscard]] Expected<EditorProjectContext> ReadProjectDescriptor(const std::filesystem::path& root);
 	[[nodiscard]] std::string ReadProjectName(const std::filesystem::path& root);
 
-	[[nodiscard]] bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error, ProjectTemplate projectTemplate = ProjectTemplate::Blank3D);
+	[[nodiscard]] bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error, ProjectTemplate projectTemplate = ProjectTemplate::Blank3D, GameplayLanguage language = GameplayLanguage::CSharp);
 	[[nodiscard]] std::string MakeProjectScriptCsprojText(const std::filesystem::path& managedSdkProject);
 
 	// A per-project Visual Studio solution (.slnx) that pairs the game scripts

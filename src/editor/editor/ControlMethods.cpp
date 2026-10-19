@@ -28,6 +28,8 @@
 
 #include "PlaySession.hpp"
 #include "PlayState.hpp"
+#include "GameplayPrerequisites.hpp"
+#include "RuntimeProjectSettings.hpp"
 #include "assets/AssetManager.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
@@ -84,6 +86,16 @@ namespace aether::editor
 
 	namespace
 	{
+		json GameplayPreflightFailure(app::GameplayLanguage language, std::string_view message)
+		{
+			auto report = app::BuildGameplayPrerequisiteReport(language, app::InspectGameplayPrerequisites(language));
+			report.status = ::aether::scripting::AgentJobStatus::Failed;
+			report.requiredChecks.push_back({"project-gameplay-selection", ::aether::scripting::AgentJobStatus::Failed});
+			report.diagnostics.push_back({.code = "AE_GAMEPLAY_SELECTION_INVALID", .severity = ::aether::scripting::AgentDiagnosticSeverity::Error, .message = std::string(message)});
+			const auto serialized = ::aether::scripting::SerializeAgentReport(report);
+			return json{{"ok", false}, {"state", "failed"}, {"message", message}, {"report", serialized.value()}};
+		}
+
 		constexpr std::size_t kMaxBatchItems = 10'000;
 		const json kVec3 = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}};
 
@@ -413,6 +425,19 @@ namespace aether::editor
 			                {"playFrame", playFrame},
 			                {"speed", speed},
 			                {"gamepads", gamepads}};
+		        }});
+
+		methods.push_back({"project.gameplay_capabilities", "gameplay_capabilities",
+		        "Inspect a project's gameplay language/profile and prerequisites. Defaults to the open project. Rust creation is supported; execution follows separately.",
+		        false, Obj({{"root", StrProp()}, {"language", json{{"type", "string"}, {"enum", {"csharp", "rust"}}}}}),
+		        [](const json& params, MethodContext& ctx) -> json
+		        {
+			        std::filesystem::path root = params.value("root", std::string{});
+			        if (root.empty() && !params.contains("language"))
+			        {
+				        if (const auto* project = ctx.services.TryGet<app::EditorProjectContext>()) { root = project->root; }
+			        }
+			        return app::DescribeProjectGameplayCapabilities(root, params.value("language", std::string{}));
 		        }});
 
 		methods.push_back({"console.logs",
@@ -1666,6 +1691,17 @@ namespace aether::editor
 				app::LayerContext lc{.services = ctx.services, .frameIndex = ctx.frameIndex};
 				bool ok = false;
 				const std::string w = which;
+				const auto* selected = ctx.services.TryGet<app::ProjectScriptingSettings>();
+				const auto* currentPlay = ctx.services.TryGet<app::PlayState>();
+				if (w == "play" || (w == "step" && (currentPlay == nullptr || !currentPlay->IsPlaying())) || (w == "toggle" && (currentPlay == nullptr || !currentPlay->IsPlaying())))
+				{
+					if (const auto preflight = app::ValidatePlaySessionGameplay(ctx.services); !preflight)
+					{
+						auto failure = GameplayPreflightFailure(selected != nullptr ? selected->language : app::GameplayLanguage::CSharp, preflight.error().message);
+						failure["state"] = "editing";
+						return failure;
+					}
+				}
 				if (w == "play")
 				{
 					ok = StartPlaySession(lc);
@@ -3000,6 +3036,14 @@ namespace aether::editor
 			        if (project == nullptr)
 			        {
 				        return json{{"error", "no project is open"}};
+			        }
+			        if (const auto preflight = app::ValidateProjectGameplaySelection(project->root, project->language); !preflight)
+			        {
+				        return GameplayPreflightFailure(project->language, preflight.error().message);
+			        }
+			        if (project->language == app::GameplayLanguage::Rust)
+			        {
+				        return GameplayPreflightFailure(project->language, "Rust publishing is unavailable until the Rust gameplay backend is implemented (Task 5).");
 			        }
 			        PublishJob& job = Job();
 			        if (job.future.valid())

@@ -3,8 +3,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <string>
 
 #include "io/PlatformPaths.hpp"
+#include "EngineContentPaths.hpp"
 
 using aether::io::PlatformPaths;
 
@@ -138,4 +140,26 @@ TEST_CASE("ResolveBundlePath resolves env override -> dev hint -> staged bundle 
 	fs::remove(envFile, ec);
 	fs::remove(hintFile, ec);
 	fs::remove_all(stagedAbsolute.parent_path(), ec);
+}
+
+TEST_CASE("Rust SDK manifest resolves explicit override and the installed default")
+{
+	namespace fs = std::filesystem;
+	const char* previousValue = std::getenv("AETHERCORE_RUST_SDK");
+	const std::string previous = previousValue != nullptr ? previousValue : "";
+	const fs::path marker = fs::temp_directory_path() / "ae_rust_sdk_override.marker";
+	std::ofstream(marker) << "[package]\nname = 'test-rust-sdk'\n";
+	SetEnv("AETHERCORE_RUST_SDK", marker.string().c_str());
+	CHECK(aether::app::EngineRustSdkManifest() == marker);
+
+	SetEnv("AETHERCORE_RUST_SDK", nullptr);
+	const fs::path defaultManifest = aether::app::EngineRustSdkManifest();
+	CHECK_FALSE(defaultManifest.empty());
+	CHECK(defaultManifest.filename() == "Cargo.toml");
+	CHECK(defaultManifest.parent_path().filename() == "aethercore-abi");
+	CHECK(fs::is_regular_file(defaultManifest));
+
+	SetEnv("AETHERCORE_RUST_SDK", previous.c_str());
+	std::error_code ec;
+	fs::remove(marker, ec);
 }

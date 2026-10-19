@@ -24,6 +24,7 @@ namespace aether
 	namespace
 	{
 		constexpr std::array<std::string_view, 3> kWindowModes{"windowed", "borderless", "fullscreen"};
+		constexpr std::array<std::string_view, 2> kGameplayLanguages{"csharp", "rust"};
 
 		// One line per key. Ranges are what the engine will actually honour, so the UI can
 		// stop a value being typed that the loader would silently clamp or reject.
@@ -88,6 +89,7 @@ namespace aether
 		        {"graphics.uiScale", {.description = "Extra multiplier on editor UI size, on top of the display's own DPI scale.", .minValue = 0.5, .maxValue = 3.0}},
 		        {"app.targetFps", {.description = "Frame cap. 0 leaves it uncapped.", .minValue = 0.0, .maxValue = 1000.0}},
 		        {"app.startupScene", {.description = "Scene a published build boots into.", .restartRequired = true}},
+		        {"scripting.language", {.description = "Gameplay language for this project. Reopen the project after changing it.", .choices = kGameplayLanguages, .restartRequired = true}},
 		        {"app.autoplay", {.description = "Start the game straight away instead of opening the editor.", .restartRequired = true}},
 		        {"app.autosaveSeconds", {.description = "How often the editor writes a recovery copy of unsaved scene edits, beside the project and never over the scene itself. 0 disables it.", .minValue = 0.0, .maxValue = 3600.0}},
 		        {"cursor.custom", {.description = "Draw the mouse pointer from a texture instead of using the OS pointer."}},

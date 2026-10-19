@@ -10,6 +10,7 @@
 #include "AssetPipeline.hpp"
 #include "scripting/DotNetHost.hpp"
 #include "EngineContentPaths.hpp"
+#include "RuntimeProjectSettings.hpp"
 #include "editor/ShaderCompiler.hpp"
 #include "editor/publish/PublishPlan.hpp"
 #include "editor/publish/PublishReport.hpp"
@@ -122,6 +123,15 @@ namespace aether::editor
 
 		StepResult ValidateProject(const PublishPlan& plan, PublishContext&, const PublishToolchain&)
 		{
+			if (auto gameplay = app::ValidateProjectGameplaySelection(plan.projectRoot, plan.language); !gameplay)
+			{
+				return Failed(gameplay.error().message, "Reopen the project after correcting its gameplay language and manifests.");
+			}
+			if (plan.language == app::GameplayLanguage::Rust)
+			{
+				return Failed("Rust gameplay backend is not implemented yet (Task 5); the project can be edited, but Play and publishing are unavailable.",
+				        "Rust project scaffolding is available; implement the desktop Rust gameplay backend before publishing.");
+			}
 			if (plan.projectRoot.empty() || !io::file_util::Exists(plan.projectFile))
 			{
 				return Failed("No project is open, or its ProjectSettings.toml is missing.", "Open a project from the launcher, then publish again.");

@@ -42,7 +42,8 @@ aether-ctl describe        # every method, with parameters and descriptions
 | `kenney_import_pack` | no | Bulk-import every model in a pack matching a filter (empty = whole pack - use deliberately) as spawnable props, one `kenney_import` per match; one bad model never poisons the batch. Idempotent. |
 | `kenney_import_font` | no | Import a Kenney icon/text font (`.ttf` + optional glyph-map reference) into a project's `assets/fonts/`, baked with the engine's glyph-outline font pipeline. Not a model: no collider, never registered in `PropSpawner.cs`. |
 | `launcher_info` / `list_projects` | Launcher | Inspect hub and recent-project state before handoff. |
-| `open_project` / `create_project` | Launcher | Open an existing project or create a `blank_2d` / `blank_3d` project, then hand the same control port to the Editor. |
+| `gameplay_capabilities` | Launcher + Editor | Inspect project language/profile, supported operations and structured prerequisites. Rust Play/publish remain unavailable until its backend is implemented. |
+| `open_project` / `create_project` | Launcher | Open an existing project or create a project, then hand the same control port to the Editor. `create_project.language` is `csharp` (default) or `rust`; Rust supports `blank_2d` / `blank_3d` authoring. |
 | `engine_info` | yes | Scene name and 2D/3D kind, entity count, frame index, fps. |
 | `get_console_log` | yes | Bounded, filterable live console tail with levels, categories, source locations, and monotonic sequence ids for polling. |
 | `list_entities` | yes | Every entity: id, name, world position. |

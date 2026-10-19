@@ -2,6 +2,7 @@
 
 #include <system_error>
 
+#include "project/ProjectCommon.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
@@ -59,6 +60,81 @@ namespace aether::app
 		const std::filesystem::path compiled = SettingsIn(inputs.compiledDefaultDir);
 		AE_INFO(LogCategory::App, "Runtime project settings: {}", compiled.empty() ? std::string{"none found; using the settings beside the executable"} : compiled.string());
 		return compiled;
+	}
+
+	Expected<ProjectScriptingSettings> ResolveRuntimeGameplaySettings(const RuntimeProjectSettingsInputs& inputs)
+	{
+		const auto projectFile = ResolveRuntimeProjectSettings(inputs);
+		if (!projectFile.empty())
+		{
+			const auto sourceRoot = !inputs.envProjectDir.empty() ? inputs.envProjectDir : inputs.compiledDefaultDir;
+			if (!sourceRoot.empty() && projectFile.lexically_normal() == (sourceRoot / "ProjectSettings.toml").lexically_normal())
+			{
+				// Use the same descriptor/path validation as the editor, including paths.scripts.
+				auto descriptor = project::ReadProjectDescriptor(sourceRoot);
+				if (!descriptor)
+				{
+					return std::unexpected(descriptor.error());
+				}
+				return ProjectScriptingSettings{descriptor->language};
+			}
+			return ReadProjectScriptingSettings(projectFile);
+		}
+		// A package without a separate project layer has its authored values baked into
+		// EngineSettings.toml. Read only the copy beside this executable.
+		std::error_code ec;
+		const auto baked = inputs.exeDir / "data" / "config" / "EngineSettings.toml";
+		if (std::filesystem::exists(baked, ec))
+		{
+			return ReadProjectScriptingSettings(baked);
+		}
+		return ProjectScriptingSettings{};
+	}
+
+	Expected<void> ValidateProjectGameplaySelection(const std::filesystem::path& projectRoot, GameplayLanguage activeLanguage, std::optional<std::string_view> configuredLanguage)
+	{
+		constexpr std::string_view kReopen = "This project's gameplay language changed. Reopen the project from the Launcher to select its gameplay backend.";
+		if (configuredLanguage)
+		{
+			auto configured = ParseGameplayLanguage(*configuredLanguage);
+			if (!configured)
+			{
+				return std::unexpected(configured.error());
+			}
+			if (*configured != activeLanguage)
+			{
+				AE_UNEXPECTED(AetherError::Engine(kReopen));
+			}
+		}
+		if (!projectRoot.empty())
+		{
+			auto descriptor = project::ReadProjectDescriptor(projectRoot);
+			if (!descriptor)
+			{
+				return std::unexpected(descriptor.error());
+			}
+			if (descriptor->language != activeLanguage)
+			{
+				AE_UNEXPECTED(AetherError::Engine(kReopen));
+			}
+		}
+		return {};
+	}
+
+	std::filesystem::path ResolveRuntimeGameplayModule(const std::filesystem::path& exeDir, GameplayLanguage language)
+	{
+		if (language == GameplayLanguage::CSharp)
+		{
+			return exeDir / "data" / "scripts" / "managed" / "AetherGame.dll";
+		}
+#ifdef _WIN32
+		constexpr const char* kModuleName = "aether_gameplay.dll";
+#elif defined(__APPLE__)
+		constexpr const char* kModuleName = "libaether_gameplay.dylib";
+#else
+		constexpr const char* kModuleName = "libaether_gameplay.so";
+#endif
+		return exeDir / "data" / "scripts" / "rust" / kModuleName;
 	}
 
 	bool ProjectScriptsCannotBeLoaded(const RuntimeScriptAssemblyInputs& inputs)

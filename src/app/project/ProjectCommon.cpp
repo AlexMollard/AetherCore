@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <format>
 #include <system_error>
+#include <utility>
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -45,6 +46,25 @@ namespace aether::app::project
 			std::string out;
 			for (const char c: value)
 			{
+				switch (c)
+				{
+					case '\n':
+						out += "\\n";
+						continue;
+					case '\r':
+						out += "\\r";
+						continue;
+					case '\t':
+						out += "\\t";
+						continue;
+					default:
+						break;
+				}
+				if (static_cast<unsigned char>(c) < 0x20 || c == 0x7f)
+				{
+					out += std::format("\\u{:04x}", static_cast<unsigned char>(c));
+					continue;
+				}
 				if (c == '\\' || c == '"')
 				{
 					out += '\\';
@@ -742,68 +762,109 @@ namespace aether::app::project
 			return toml;
 		}
 
-		bool SeedProjectTemplateFiles(const std::filesystem::path& root, ProjectTemplate projectTemplate, std::string& error)
+		bool SeedProjectTemplateFiles(const std::filesystem::path& root, ProjectTemplate projectTemplate, GameplayLanguage language, std::string& error)
 		{
 			const bool isMultiplayer = projectTemplate == ProjectTemplate::Multiplayer2D || projectTemplate == ProjectTemplate::Multiplayer3D;
 			const bool is2D = ProjectKindForTemplate(projectTemplate) == ProjectKind::Scene2D;
 
-			const std::filesystem::path starter = root / "scripts" / "Player.cs";
-			if (!io::file_util::Exists(starter))
+			if (language == GameplayLanguage::Rust)
 			{
-				// Non-fatal: a project without the sample is still a valid project.
-				if (auto written = io::file_util::WriteText(starter, MakeStarterScriptText(projectTemplate)); !written)
+				const std::filesystem::path manifest = root / "scripts" / "Cargo.toml";
+				std::error_code ec;
+				const std::filesystem::path sdk = AbsolutePath(EngineRustSdkManifest()).parent_path();
+				std::filesystem::path dependency = std::filesystem::relative(sdk, AbsolutePath(root / "scripts"), ec);
+				if (ec || dependency.empty())
 				{
-					AE_WARN(LogCategory::App, "Could not write the starter script: {}", written.error().message);
+					dependency = sdk;
 				}
-			}
-
-			if (isMultiplayer)
-			{
-				const std::filesystem::path lobbyScript = root / "scripts" / "MultiplayerLobby.cs";
-				if (!io::file_util::Exists(lobbyScript))
+				const auto utf8Path = dependency.generic_u8string();
+				const std::string dependencyPath(utf8Path.begin(), utf8Path.end());
+				const std::string cargo = "[package]\nname = \"aether-game\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\ncrate-type = [\"cdylib\", \"staticlib\"]\n\n[dependencies]\naethercore-abi = { path = \""
+				                          + EscapeTomlString(dependencyPath) + "\" }\n\n[profile.release]\npanic = \"abort\"\n";
+				const std::string source = "// The Rust gameplay backend and safe SDK arrive in the next milestone.\n"
+				                           "// Reject loading explicitly until lifecycle and type registration are implemented.\n"
+				                           "use aethercore_abi::{AetherGameplayModuleApi, AE_GAMEPLAY_UNSUPPORTED};\n\n"
+				                           "#[unsafe(no_mangle)]\n"
+				                           "pub unsafe extern \"C\" fn aether_gameplay_query(\n"
+				                           "    _requested_major: u32,\n    _out_size: u32,\n    _out_api: *mut AetherGameplayModuleApi,\n"
+				                           ") -> i32 {\n    AE_GAMEPLAY_UNSUPPORTED\n}\n";
+				if (auto created = io::file_util::CreateDirectories(root / "scripts" / "src"); !created)
 				{
-					if (auto written = io::file_util::WriteText(lobbyScript, MakeLobbyScriptText()); !written)
-					{
-						AE_WARN(LogCategory::App, "Could not write the multiplayer lobby script: {}", written.error().message);
-					}
-				}
-
-				const std::filesystem::path sessionScript = root / "scripts" / "MultiplayerSession.cs";
-				if (!io::file_util::Exists(sessionScript))
-				{
-					if (auto written = io::file_util::WriteText(sessionScript, MakeSessionScriptText()); !written)
-					{
-						AE_WARN(LogCategory::App, "Could not write the multiplayer session script: {}", written.error().message);
-					}
-				}
-
-				const std::filesystem::path playerPrefab = root / "assets" / "prefabs" / "player.prefab.toml";
-				if (!io::file_util::Exists(playerPrefab))
-				{
-					if (auto written = io::file_util::WriteText(playerPrefab, MakePlayerPrefabTomlText(is2D)); !written)
-					{
-						AE_WARN(LogCategory::App, "Could not write the multiplayer player prefab: {}", written.error().message);
-					}
-				}
-			}
-
-			const std::filesystem::path scriptsProject = root / "scripts" / "AetherGame.csproj";
-			if (!io::file_util::Exists(scriptsProject))
-			{
-				if (auto writeResult = io::file_util::WriteText(scriptsProject, MakeProjectScriptCsprojText(ManagedSdkProjectPath())); !writeResult)
-				{
-					error = "Could not write project scripts file: " + writeResult.error().message;
+					error = "Could not create Rust sources directory: " + created.error().message;
 					return false;
 				}
+				for (const auto& [path, content]: {std::pair{manifest, cargo}, std::pair{root / "scripts" / "src" / "lib.rs", source}})
+				{
+					if (!io::file_util::Exists(path))
+					{
+						if (auto written = io::file_util::WriteText(path, content); !written)
+						{
+							error = "Could not write Rust gameplay project: " + written.error().message;
+							return false;
+						}
+					}
+				}
 			}
-
-			// A VS solution pairing the game scripts with the engine SDK, so the IDE
-			// resolves engine types. Non-fatal if it can't be written.
-			std::string solutionError;
-			if (!EnsureGameSolution(root, solutionError))
+			else
 			{
-				error = solutionError;
-				return false;
+				const std::filesystem::path starter = root / "scripts" / "Player.cs";
+				if (!io::file_util::Exists(starter))
+				{
+					// Non-fatal: a project without the sample is still a valid project.
+					if (auto written = io::file_util::WriteText(starter, MakeStarterScriptText(projectTemplate)); !written)
+					{
+						AE_WARN(LogCategory::App, "Could not write the starter script: {}", written.error().message);
+					}
+				}
+
+				if (isMultiplayer)
+				{
+					const std::filesystem::path lobbyScript = root / "scripts" / "MultiplayerLobby.cs";
+					if (!io::file_util::Exists(lobbyScript))
+					{
+						if (auto written = io::file_util::WriteText(lobbyScript, MakeLobbyScriptText()); !written)
+						{
+							AE_WARN(LogCategory::App, "Could not write the multiplayer lobby script: {}", written.error().message);
+						}
+					}
+
+					const std::filesystem::path sessionScript = root / "scripts" / "MultiplayerSession.cs";
+					if (!io::file_util::Exists(sessionScript))
+					{
+						if (auto written = io::file_util::WriteText(sessionScript, MakeSessionScriptText()); !written)
+						{
+							AE_WARN(LogCategory::App, "Could not write the multiplayer session script: {}", written.error().message);
+						}
+					}
+
+					const std::filesystem::path playerPrefab = root / "assets" / "prefabs" / "player.prefab.toml";
+					if (!io::file_util::Exists(playerPrefab))
+					{
+						if (auto written = io::file_util::WriteText(playerPrefab, MakePlayerPrefabTomlText(is2D)); !written)
+						{
+							AE_WARN(LogCategory::App, "Could not write the multiplayer player prefab: {}", written.error().message);
+						}
+					}
+				}
+
+				const std::filesystem::path scriptsProject = root / "scripts" / "AetherGame.csproj";
+				if (!io::file_util::Exists(scriptsProject))
+				{
+					if (auto writeResult = io::file_util::WriteText(scriptsProject, MakeProjectScriptCsprojText(ManagedSdkProjectPath())); !writeResult)
+					{
+						error = "Could not write project scripts file: " + writeResult.error().message;
+						return false;
+					}
+				}
+
+				// A VS solution pairing the game scripts with the engine SDK, so the IDE
+				// resolves engine types. Non-fatal if it can't be written.
+				std::string solutionError;
+				if (!EnsureGameSolution(root, solutionError))
+				{
+					error = solutionError;
+					return false;
+				}
 			}
 
 			const std::filesystem::path seedScene = root / "scenes" / "default.scene.toml";
@@ -970,6 +1031,8 @@ namespace aether::app::project
 		{
 			AE_UNEXPECTED(AetherError::Engine("No project descriptor found."));
 		}
+		AE_TRY(scriptingSettings, ParseProjectScriptingSettings(*descriptorText));
+		project.language = scriptingSettings->language;
 
 		std::string assetsPath;
 		std::string scenesPath;
@@ -1033,6 +1096,7 @@ namespace aether::app::project
 		const std::string inferredPrefabsPath = !prefabsPath.empty() ? prefabsPath : (!assetsPath.empty() ? assetsPath + "/prefabs" : std::string{});
 		project.prefabsDir = ResolveProjectPath(project.root, inferredPrefabsPath, "assets/prefabs");
 		project.scriptsDir = ResolveProjectPath(project.root, scriptsPath, "scripts");
+		AE_TRY_VOID(ValidateProjectGameplayManifests(project.language, project.scriptsDir));
 		return project;
 	}
 
@@ -1080,7 +1144,8 @@ namespace aether::app::project
 		         "\n"
 		         "  <Target Name=\"AetherCoreSdkPresent\" BeforeTargets=\"PrepareForBuild\">\n"
 		         "    <Error Condition=\"!Exists('$(AetherCoreSdkProject)')\"\n"
-		         "           Text=\"AetherCore SDK not found at '$(AetherCoreSdkProject)'. This project was created against an engine checkout at a different path; set the AETHERCORE_SDK environment variable to this machine's managed/AetherCore/AetherCore.csproj.\" />\n"
+		         "           Text=\"AetherCore SDK not found at '$(AetherCoreSdkProject)'. This project was created against an engine checkout at a different path; set the AETHERCORE_SDK environment variable to this machine's "
+		         "managed/AetherCore/AetherCore.csproj.\" />\n"
 		         "  </Target>\n"
 		         "\n"
 		         "  <ItemGroup>\n"
@@ -1132,6 +1197,19 @@ namespace aether::app::project
 
 	bool EnsureGameSolution(const std::filesystem::path& root, std::string& error)
 	{
+		if (!root.empty())
+		{
+			const auto project = ReadProjectDescriptor(root);
+			if (!project)
+			{
+				error = project.error().message;
+				return false;
+			}
+			if (project->language == GameplayLanguage::Rust)
+			{
+				return true;
+			}
+		}
 		const std::filesystem::path managedSdkProject = ManagedSdkProjectPath();
 		if (root.empty() || managedSdkProject.empty())
 		{
@@ -1181,8 +1259,42 @@ namespace aether::app::project
 		return std::nullopt;
 	}
 
-	bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error, ProjectTemplate projectTemplate)
+	bool WriteProjectDescriptor(const std::filesystem::path& root, std::string_view name, std::string& error, ProjectTemplate projectTemplate, GameplayLanguage language)
 	{
+		if (GameplayLanguageName(language).empty() || std::ranges::none_of(kProjectTemplates, [projectTemplate](const ProjectTemplateInfo& info) { return info.value == projectTemplate; }))
+		{
+			error = "Unsupported project language or template.";
+			return false;
+		}
+		if (language == GameplayLanguage::Rust && (projectTemplate == ProjectTemplate::Multiplayer2D || projectTemplate == ProjectTemplate::Multiplayer3D))
+		{
+			error = "Rust multiplayer templates are unsupported; choose a blank Rust template or C#.";
+			return false;
+		}
+		if (io::file_util::Exists(ProjectFilePath(root)))
+		{
+			const auto existing = ReadProjectDescriptor(root);
+			if (!existing)
+			{
+				error = existing.error().message;
+				return false;
+			}
+			if (existing->language != language)
+			{
+				error = "Cannot replace an existing project's scripting language during project creation; create a separate project.";
+				return false;
+			}
+		}
+		if (auto validated = ValidateProjectGameplayManifests(language, root / "scripts"); !validated)
+		{
+			error = validated.error().message;
+			return false;
+		}
+		if (language == GameplayLanguage::Rust && EngineRustSdkManifest().empty())
+		{
+			error = "The Rust ABI SDK is missing; expected data/sdk/rust/aethercore-abi/Cargo.toml in the engine install.";
+			return false;
+		}
 		if (auto dirResult = io::file_util::CreateDirectories(root); !dirResult)
 		{
 			error = "Could not create project directory: " + dirResult.error().message;
@@ -1201,7 +1313,8 @@ namespace aether::app::project
 		const bool is2D = ProjectKindForTemplate(projectTemplate) == ProjectKind::Scene2D;
 		const std::string descriptor = "# AetherCore project file.\n\n"
 		                               "[project]\nversion = 2\nname = \""
-		                               + EscapeTomlString(name) + "\"\nkind = \"" + (is2D ? "2d" : "3d") + "\"\ntemplate = \"" + std::string(TemplateName(projectTemplate))
+		                               + EscapeTomlString(name) + "\"\nkind = \"" + (is2D ? "2d" : "3d") + "\"\ntemplate = \"" + std::string(TemplateName(projectTemplate)) + "\"\n\n[scripting]\nlanguage = \""
+		                               + std::string(GameplayLanguageName(language))
 		                               + "\"\n\n"
 		                                 "[paths]\nassets = \"assets\"\nscenes = \"scenes\"\nprefabs = \"assets/prefabs\"\nscripts = \"scripts\"\n\n"
 		                                 "[app]\nstartupScene = \"default\"\n\n"
@@ -1212,7 +1325,7 @@ namespace aether::app::project
 			error = "Could not write ProjectSettings.toml.";
 			return false;
 		}
-		return SeedProjectTemplateFiles(root, projectTemplate, error);
+		return SeedProjectTemplateFiles(root, projectTemplate, language, error);
 	}
 
 #ifdef _WIN32
@@ -1363,6 +1476,10 @@ namespace aether::app::project
 			if (project.name.empty())
 			{
 				project.name = ReadProjectName(project.root);
+			}
+			if (const auto descriptor = ReadProjectDescriptor(project.root); descriptor)
+			{
+				project.language = descriptor->language;
 			}
 			if (std::ranges::none_of(recents, [&](const EditorProjectContext& existing) { return NormalizePath(existing.root) == project.root; }))
 			{

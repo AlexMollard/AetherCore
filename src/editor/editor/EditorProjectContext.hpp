@@ -4,6 +4,8 @@
 #include <string>
 #include <string_view>
 
+#include "ProjectScripting.hpp"
+
 namespace aether::app
 {
 	enum class ProjectKind
@@ -26,6 +28,7 @@ namespace aether::app
 		// panels register and which editor theme applies. See docs/twinsanity-editor.md.
 		std::string editorFlavor;
 		ProjectKind kind = ProjectKind::Scene3D;
+		GameplayLanguage language = GameplayLanguage::CSharp;
 		bool loaded = false;
 
 		[[nodiscard]] bool IsLoaded() const noexcept

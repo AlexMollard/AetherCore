@@ -28,4 +28,7 @@ namespace aether::app
 
 	// The managed SDK's C# project, referenced by a generated game .csproj.
 	[[nodiscard]] std::filesystem::path EngineManagedSdkProject();
+
+	// The standalone raw Rust gameplay ABI crate, referenced by generated Cargo projects.
+	[[nodiscard]] std::filesystem::path EngineRustSdkManifest();
 } // namespace aether::app

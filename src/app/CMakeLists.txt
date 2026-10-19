@@ -65,6 +65,8 @@ list(APPEND APP_LAUNCHER_SOURCES "${AETHERCORE_EDITOR_TREE_DIR}/editor/ControlSe
 # listed: editor/ is excluded wholesale above, so a file ControlServer.cpp needs is not
 # picked up just because it sits next to it.
 list(APPEND APP_LAUNCHER_SOURCES "${AETHERCORE_EDITOR_TREE_DIR}/editor/ControlDiagnostics.cpp")
+# Shared report serialization is runtime-safe and also serves Launcher preflight.
+list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/scripting/AgentDiagnostics.cpp")
 
 # ── RuntimeFramework ────────────────────────────────────────────────────────
 # The runtime source set, compiled ONCE and consumed by Editor, GameRuntime and EngineTests.
@@ -116,6 +118,7 @@ target_compile_definitions(RuntimeFramework PUBLIC
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
+    AETHER_RUST_SDK_MANIFEST="${CMAKE_SOURCE_DIR}/rust/aethercore-abi/Cargo.toml"
 )
 aethercore_target_defaults(RuntimeFramework)
 
@@ -415,6 +418,9 @@ set(_aether_payload
     # up from itself - flattening it here would silently drop TargetFramework.
     "dir|${CMAKE_SOURCE_DIR}/managed/AetherCore|data/sdk/managed/AetherCore"
     "file|${CMAKE_SOURCE_DIR}/managed/Directory.Build.props|data/sdk/managed/Directory.Build.props"
+    "file|${CMAKE_SOURCE_DIR}/rust/aethercore-abi/Cargo.toml|data/sdk/rust/aethercore-abi/Cargo.toml"
+    "file|${CMAKE_SOURCE_DIR}/rust/aethercore-abi/src/lib.rs|data/sdk/rust/aethercore-abi/src/lib.rs"
+    "file|${CMAKE_SOURCE_DIR}/rust/aethercore-abi/src/generated.rs|data/sdk/rust/aethercore-abi/src/generated.rs"
 )
 if(AETHER_HAS_DOTNET)
     list(APPEND _aether_payload "dir|${CMAKE_BINARY_DIR}/data/scripts/managed|data/scripts/managed")
@@ -519,6 +525,7 @@ target_compile_definitions(Launcher PRIVATE
     AETHER_EDITOR_EXE_NAME="${AETHER_EDITOR_EXE_NAME}"
     AETHER_EDITOR_EXE_PATH="${_aether_app_bundle_dir}/${AETHER_EDITOR_EXE_NAME}"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
+    AETHER_RUST_SDK_MANIFEST="${CMAKE_SOURCE_DIR}/rust/aethercore-abi/Cargo.toml"
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 
 aethercore_target_defaults(Launcher)

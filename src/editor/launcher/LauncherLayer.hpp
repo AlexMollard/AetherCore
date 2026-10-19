@@ -39,8 +39,9 @@ namespace aether::app
 
 		[[nodiscard]] std::span<const EditorProjectContext> RecentProjects() const;
 		[[nodiscard]] bool IsLaunchingEditor() const noexcept;
+		[[nodiscard]] std::string_view ControlError() const noexcept { return m_windowState.error; }
 		[[nodiscard]] std::string QueueOpenProjectForControl(const std::filesystem::path& root);
-		[[nodiscard]] std::string QueueCreateProjectForControl(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate);
+		[[nodiscard]] std::string QueueCreateProjectForControl(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate, GameplayLanguage language = GameplayLanguage::CSharp);
 
 		// Recents management - also exposed as control methods (remove/reveal/relocate).
 		void RemoveRecent(const std::filesystem::path& root);
@@ -60,11 +61,12 @@ namespace aether::app
 			std::filesystem::path root;
 			std::string name;
 			project::ProjectTemplate projectTemplate = project::ProjectTemplate::Blank3D;
+			GameplayLanguage language = GameplayLanguage::CSharp;
 			std::chrono::steady_clock::time_point executeAfter{};
 		};
 
 		void OpenProject(const std::filesystem::path& root);
-		void CreateProject(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate);
+		void CreateProject(const std::filesystem::path& root, std::string_view name, project::ProjectTemplate projectTemplate, GameplayLanguage language = GameplayLanguage::CSharp);
 		void SpawnEditorFor(const std::filesystem::path& root);
 		void StartControlServer();
 		void StopControlServer();

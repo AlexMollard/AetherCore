@@ -1,6 +1,6 @@
 # Shared gameplay ABI and agent diagnostics v1
 
-Implemented in Tasks 2 and 3 of the Rust/WebGPU plan. C# lifecycle, discovery and properties now route through the shared host and v1 module table. The existing CoreCLR loader, ManagedInterop.hpp, managed ABI, compiler and project format remain compatible. Project language selection is Task 4; Rust execution is Task 5.
+Implemented in Tasks 2 through 4 of the Rust/WebGPU plan. C# lifecycle, discovery and properties now route through the shared host and v1 module table. The existing CoreCLR loader, ManagedInterop.hpp, managed ABI, compiler and project format remain compatible. Project language selection is available; Rust execution is Task 5.
 
 ## Ownership and negotiation
 
@@ -35,6 +35,18 @@ Every load attempt refreshes the shared metadata generation and invalidates the 
 Bootstrapping and shutdown remain backend-owned. The current uint32 entity creation path explicitly represents legacy C# world identity zero. It does not install `GameplayAccess` guards around existing C# exports. Rust must supply scoped entity identities and checked engine access when its backend is implemented. Physics events still execute inside the managed update callback; the adapter advertises only its shared ownership-event capability, rather than claiming a new physics or RPC event implementation.
 
 Nine focused native adapter/runner tests cover lifecycle, missing types, stale handles, reported errors, property kinds, callback-driven storage growth and live scene-reference round-trips. A real C# fixture additionally exercises in-place reload, failed rebuild/Play recovery, sibling scripts, UTF-8/NUL strings, ownership, local RPC, 2D collision callbacks, movement and Stop restoration. Its published package also runs after relocation. Evidence is under `logs/task3/`.
+
+## Project language selection
+
+`ProjectSettings.toml` accepts one `[scripting]` `language`: `"csharp"` or `"rust"`. A missing declaration preserves C# for existing projects. Unknown values, non-string declarations and mixed Cargo/C# manifests in the configured scripts directory are rejected. Script type names in scenes remain unchanged. Changing language requires reopening the project; Play and publishing revalidate the descriptor before building or cleaning output.
+
+The shared project creator, Launcher picker and `create_project` agent tool accept a language. Omit it for C#. Rust supports `blank_2d` and `blank_3d`; multiplayer templates remain C# only. Rust projects contain `scripts/Cargo.toml` and `scripts/src/lib.rs`, with no C# project/solution generation. Their entry point returns `AE_GAMEPLAY_UNSUPPORTED` until Task 5 implements a provider. The editor can open/save Rust scenes without starting CoreCLR. Rust Play, execution and publishing fail explicitly; they never fall back to C#.
+
+`gameplay_capabilities` is available in both Launcher and Editor. It returns language, desktop profile, supported operations and a schema-v1 prerequisite report. In the Launcher, pass `root` to inspect a project, or `language` to inspect prerequisites for creation. The Editor defaults to its open project. Rust prerequisite checks locate Cargo, rustc and the raw ABI SDK without starting builds. `AETHERCORE_CARGO` and `AETHERCORE_RUSTC` override executable discovery; an invalid override reports missing tooling. C# does not require Rust tools. Backend availability is reported separately from installed prerequisites.
+
+The dependency-free `rust/aethercore-abi` crate ships under `data/sdk/rust/aethercore-abi`; its ABI declarations are generated from the canonical C header. `AETHERCORE_RUST_SDK` can select a Cargo.toml explicitly; otherwise resolution checks the executable bundle and development hint. Generated project dependencies use relative paths where possible. This is a raw ABI crate; the safe gameplay SDK is Task 5.
+
+Runtime settings and module resolution use the executable directory for moved packages. Native tests cover relocated packages, source overrides, invalid/mixed manifests, missing language defaults, settings round-trips and stale selection. CLI rejected gameplay operations return the terminal report exit code while retaining JSON; MCP marks them `isError` and preserves that report. A capability query remains successful even when its prerequisite report identifies unavailable operations.
 
 ## Engine access guard
 

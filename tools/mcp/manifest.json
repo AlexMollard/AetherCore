@@ -508,11 +508,19 @@
       "tool": "engine_info"
     },
     {
-      "description": "Create a Blank 2D or Blank 3D project, then hand the control port from the Launcher to its Editor process.",
+      "description": "Create a new project from a template - Blank 3D, Blank 2D, Multiplayer 2D, or Multiplayer 3D - then hand the control port from the Launcher to its Editor process.",
       "mutates": true,
       "name": "launcher.create_project",
       "paramsSchema": {
         "properties": {
+          "language": {
+            "default": "csharp",
+            "enum": [
+              "csharp",
+              "rust"
+            ],
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -522,7 +530,9 @@
           "template": {
             "enum": [
               "blank_3d",
-              "blank_2d"
+              "blank_2d",
+              "multiplayer_2d",
+              "multiplayer_3d"
             ],
             "type": "string"
           }
@@ -2395,6 +2405,27 @@
         "type": "object"
       },
       "tool": "ui_scroll"
+    },
+    {
+      "description": "Inspect a project's gameplay language/profile and prerequisites without opening it. Omit root to inspect a language for new project creation. Rust creation is supported; execution follows separately.",
+      "mutates": false,
+      "name": "project.gameplay_capabilities",
+      "paramsSchema": {
+        "properties": {
+          "language": {
+            "enum": [
+              "csharp",
+              "rust"
+            ],
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "tool": "gameplay_capabilities"
     }
   ]
 }
