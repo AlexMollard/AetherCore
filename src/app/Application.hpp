@@ -54,6 +54,8 @@ namespace aether::app
 
 		int Run();
 
+		void SetSettingsPersistenceEnabled(bool enabled) { m_persist_settings = enabled; }
+
 		void SetTargetFps(float fps)
 		{
 			m_engine.SetTargetFps(fps);
@@ -93,6 +95,7 @@ namespace aether::app
 		aether::coro::queued_executor m_coroExecutor;
 		LayerStack m_layers;
 		PlayState m_playState;
+		bool m_persist_settings = true;
 		bool m_layersAttached = false;
 		// Run() starts the render thread long before AttachAll; anything throwing in
 		// between leaves no layers attached but a live render thread, so the destructor

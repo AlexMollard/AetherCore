@@ -1,4 +1,5 @@
 #include "ProjectPipeline.hpp"
+#include "DesktopGameplayRun.hpp"
 
 #include <chrono>
 #include <regex>
@@ -32,6 +33,16 @@ namespace aether::project_tool
 		{
 			const auto value = path.generic_u8string();
 			return {value.begin(), value.end()};
+		}
+		std::filesystem::path RuntimeWorkingDirectory()
+		{
+			const auto executableDir = io::PlatformPaths::GetExecutableDir();
+			for (auto candidate = executableDir; !candidate.empty(); candidate = candidate.parent_path())
+			{
+				if (std::filesystem::is_regular_file(candidate / "CMakeCache.txt")) { return candidate; }
+				if (candidate == candidate.parent_path()) { break; }
+			}
+			return executableDir;
 		}
 		void SetProjectEnvironment(const std::string& project)
 		{
@@ -102,12 +113,13 @@ namespace aether::project_tool
 		SetProjectEnvironment(Utf8(project));
 		if (!publish)
 		{
-			return Serialize(app::scripting::RunGameplay({.project = project,
+			const app::scripting::GameplayRunRequest runRequest{.project = project,
 			        .module = std::filesystem::u8path(request.value("module", "")),
 			        .managedDir = std::filesystem::u8path(request.value("managedDir", "")),
 			        .output = std::filesystem::u8path(request.at("statePath").get<std::string>()),
 			        .scene = request.at("scene").get<std::string>(), .ticks = request.at("ticks").get<std::uint32_t>(),
-			        .step = request.at("step").get<float>(), .launchConfig = request.at("launchConfig")}));
+			        .step = request.at("step").get<float>(), .launchConfig = request.at("launchConfig")};
+			return Serialize(runRequest.launchConfig.value("profile", "native-headless-2d-v1") == "native-desktop-2d-v1" ? RunDesktopGameplay(runRequest) : app::scripting::RunGameplay(runRequest));
 		}
 		const auto descriptor = app::project::ReadProjectDescriptor(project);
 		if (!descriptor) { throw std::runtime_error(descriptor.error().message); }
@@ -244,7 +256,7 @@ namespace aether::project_tool
 #ifdef _WIN32
 		executable += ".exe";
 #endif
-		const int exited = run(executable, {operation == "publish" ? "--publish-child" : "--run-child", "--request", Utf8(childRequest), "--report", Utf8(childReport)}, root, directory / "runtime.log");
+		const int exited = run(executable, {operation == "publish" ? "--publish-child" : "--run-child", "--request", Utf8(childRequest), "--report", Utf8(childReport)}, RuntimeWorkingDirectory(), directory / "runtime.log");
 		if (exited == io::kProcessCancelled) { return fail("GAMEPLAY_CANCELLED", "Cancelled and closed the owned runtime process"); }
 		if (exited == io::kProcessTimedOut) { return fail("GAMEPLAY_TIMEOUT", "Gameplay child exceeded the shared timeout and was closed"); }
 		const auto text = io::file_util::ReadText(childReport);

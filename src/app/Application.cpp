@@ -186,7 +186,10 @@ namespace aether::app
 
 	Application::~Application()
 	{
-		m_settingsService.Save();
+		if (m_persist_settings)
+		{
+			m_settingsService.Save();
+		}
 
 		// Run() starts the render thread long before AttachAll; if anything in
 		// between threw (layer attach, system registration, network context), there

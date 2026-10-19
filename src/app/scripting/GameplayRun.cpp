@@ -9,12 +9,14 @@
 
 #include "ProjectScripting.hpp"
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "physics2d/Physics2DSystem.hpp"
 #include "platform/Input.hpp"
 #include "project/ProjectCommon.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
+#include "ui/UiComponents.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/RustGameplayHost.hpp"
 #include "scripting/SceneContext.hpp"
@@ -44,13 +46,30 @@ namespace aether::app::scripting
 			Require(config.is_object(), "launchConfig must be an object");
 			for (const auto& [key, value]: config.items())
 			{
-				Require(key == "readSaves" || key == "input" || key == "assertions", "Unknown launchConfig field: " + key);
+				Require(key == "readSaves" || key == "input" || key == "assertions" || key == "profile" || key == "checkpoints", "Unknown launchConfig field: " + key);
 			}
+			Require(!config.contains("profile") || (config["profile"].is_string() && (config["profile"] == "native-headless-2d-v1" || config["profile"] == "native-desktop-2d-v1")), "Unsupported gameplay run profile");
 			Require(!config.contains("readSaves") || config["readSaves"].is_boolean(), "readSaves must be a boolean");
 			for (const char* key: {"input", "assertions"})
 			{
 				Require(!config.contains(key) || config[key].is_array(), std::string(key) + " must be an array");
 			}
+			if (config.contains("checkpoints"))
+			{
+				Require(config.value("profile", "native-headless-2d-v1") == "native-desktop-2d-v1" && config["checkpoints"].is_array(), "Checkpoints require the desktop profile and an array");
+				std::set<std::uint32_t> ticks;
+				for (const auto& checkpoint: config["checkpoints"])
+				{
+					Require(checkpoint.is_object() && checkpoint.contains("tick") && checkpoint["tick"].is_number_integer(), "Checkpoint requires an integer tick");
+					const auto tick = checkpoint["tick"].get<std::int64_t>();
+					Require(tick > 0 && tick <= request.ticks && ticks.insert(static_cast<std::uint32_t>(tick)).second, "Checkpoint tick is repeated or outside the run");
+					Require(checkpoint.contains("assertions") && checkpoint["assertions"].is_array() && !checkpoint["assertions"].empty(), "Checkpoint requires assertions");
+					auto copied = request;
+					copied.launchConfig = {{"assertions", checkpoint["assertions"]}};
+					ValidateConfig(copied);
+				}
+			}
+
 			for (const auto& event: config.value("input", Json::array()))
 			{
 				Require(event.is_object() && event.contains("tick") && event["tick"].is_number_integer() && event["tick"].get<std::int64_t>() >= 0, "input.tick must be a nonnegative integer");
@@ -84,7 +103,8 @@ namespace aether::app::scripting
 			const std::set<std::string> supported{"Name", "Transform", "Rigid Body 2D", "Collider 2D", "Joint 2D", "UI Canvas", "UI Rect", "UI Text", "UI Image", "UI Progress Bar", "UI Mask"};
 			for (const auto& record: description.entities)
 			{
-				Require(!record.meshRenderer && !record.mesh && !record.material && !record.skinned && !record.physics && !record.effect && !record.joint && record.scriptJoints.empty() && !record.spriteAnimator, "Headless run requires unavailable model/3D physics/effect/animation systems: " + record.name);
+				Require(!record.meshRenderer && !record.mesh && !record.material && !record.skinned && !record.physics && !record.effect && !record.joint && record.scriptJoints.empty() && !record.spriteAnimator,
+				        "Headless run requires unavailable model/3D physics/effect/animation systems: " + record.name);
 				for (const auto& component: record.reflected)
 				{
 					Require(supported.contains(component.type), "Headless run does not support component: " + component.type);
@@ -153,6 +173,104 @@ namespace aether::app::scripting
 			}
 			return actual == expected;
 		}
+	} // namespace
+
+	void ValidateGameplayRunConfig(const GameplayRunRequest& request)
+	{
+		ValidateConfig(request);
+	}
+
+	void WriteGameplayState(const GameplayRunRequest& request, World& world, GameplayHost& hostRef, ScriptComponentSystem& scripts, bool allowSaveReads, const Json& observations)
+	{
+		auto* host = &hostRef;
+		Json state = {{"schemaVersion", 1}, {"initialFrame", 0}, {"ticks", request.ticks}, {"step", request.step}, {"readSaves", allowSaveReads}, {"entities", Json::array()}, {"assertions", Json::array()}};
+		for (auto&& [handle, component]: world.View<ScriptComponent>().each())
+		{
+			const Entity entity = World::FromEntt(handle);
+			const auto* name = world.TryGet<NameComponent>(entity);
+			for (std::uint32_t index = 0; index < component.scripts.size(); ++index)
+			{
+				const auto& entry = component.scripts[index];
+				const auto instance = scripts.GetInstanceHandle(entity.id, index);
+				Require(entry.path.empty() || instance != 0 || !entry.attached, "Script instance missing: " + entry.path);
+				// Disabled authored scripts are intentionally not executed.
+				if (!entry.attached)
+				{
+					continue;
+				}
+				Json values = Json::object();
+				const auto properties = host->GetScriptProperties(entry.path);
+				for (std::size_t p = 0; p < properties.size(); ++p)
+				{
+					ScriptPropertyValue value;
+					Require(host->GetPropertyValue(instance, static_cast<int>(p), value), "Cannot copy property: " + properties[p].name);
+					values[properties[p].name] = CopyProperty(value, world);
+				}
+				state["entities"].push_back({{"entity", name ? name->name : std::to_string(entity.id)}, {"type", entry.path}, {"properties", values}});
+			}
+		}
+		for (auto&& [handle, name]: world.View<NameComponent>().each())
+		{
+			const Entity entity = World::FromEntt(handle);
+			Json values = {{"exists", true}};
+			if (const auto* transform = world.TryGet<TransformComponent>(entity))
+			{
+				values["position"] = Json::array({transform->localToWorld[3].x, transform->localToWorld[3].y, transform->localToWorld[3].z});
+			}
+			if (const auto* text = world.TryGet<ui::UIText>(entity))
+			{
+				values["uiText"] = text->text;
+			}
+			state["entities"].push_back({{"entity", name.name}, {"type", "$engine"}, {"properties", values}});
+		}
+		for (const auto& observation: observations)
+		{
+			state["entities"].push_back(observation);
+		}
+		for (const auto& assertion: request.launchConfig.value("assertions", Json::array()))
+		{
+			if (assertion["type"] != "$engine" || assertion["property"] != "exists")
+			{
+				continue;
+			}
+			const bool found = std::any_of(state["entities"].begin(), state["entities"].end(), [&](const Json& entry) { return entry["entity"] == assertion["entity"] && entry["type"] == "$engine"; });
+			if (!found)
+			{
+				state["entities"].push_back({{"entity", assertion["entity"]}, {"type", "$engine"}, {"properties", {{"exists", false}}}});
+			}
+		}
+
+		bool assertionsPassed = true;
+		for (const auto& assertion: request.launchConfig.value("assertions", Json::array()))
+		{
+			const Json* actual = nullptr;
+			std::size_t matches = 0;
+			for (const auto& entity: state["entities"])
+			{
+				if (entity["entity"] == assertion["entity"] && entity["type"] == assertion["type"])
+				{
+					++matches;
+					const auto property = assertion["property"].get<std::string>();
+					if (entity["properties"].contains(property))
+					{
+						actual = &entity["properties"][property];
+					}
+				}
+			}
+			const bool passed = matches == 1 && actual != nullptr && Equal(*actual, assertion["equals"], assertion.value("tolerance", 0.0));
+			assertionsPassed &= passed;
+			state["assertions"].push_back({{"entity", assertion["entity"]},
+			        {"type", assertion["type"]},
+			        {"property", assertion["property"]},
+			        {"expected", assertion["equals"]},
+			        {"actual", actual ? *actual : Json(nullptr)},
+			        {"tolerance", assertion.value("tolerance", 0.0)},
+			        {"passed", passed}});
+		}
+		Require(request.output.parent_path().empty() || io::file_util::CreateDirectories(request.output.parent_path()).has_value(), "Cannot create artifact directory");
+		const auto written = io::file_util::WriteText(request.output, state.dump(2));
+		Require(written.has_value(), "Cannot write copied script state artifact");
+		Require(assertionsPassed, "One or more script-state assertions failed (missing/ambiguous entity, type, property, or value mismatch)");
 	}
 
 	aether::scripting::AgentReport RunGameplay(const GameplayRunRequest& request)
@@ -169,6 +287,7 @@ namespace aether::app::scripting
 		try
 		{
 			ValidateConfig(request);
+			Require(request.launchConfig.value("profile", "native-headless-2d-v1") == "native-headless-2d-v1", "Headless runner requires native-headless-2d-v1");
 			Require(!request.output.empty(), "State artifact output path is required");
 			Require(scene::IsValidAssetName(request.scene), "A valid named scene is required");
 			const auto settings = project::ReadProjectDescriptor(request.project);
@@ -228,12 +347,14 @@ namespace aether::app::scripting
 			std::vector<std::string> callbackErrors;
 			host->SetErrorHandler([&](const std::string& message) { callbackErrors.push_back(message); });
 			ScriptComponentSystem scripts(services);
+
 			struct Cleanup
 			{
 				ScriptComponentSystem& scripts;
 				World& world;
 				GameplayHost& host;
 				bool closed = false;
+
 				void Close()
 				{
 					if (!closed)
@@ -243,13 +364,23 @@ namespace aether::app::scripting
 						host.SetErrorHandler({});
 					}
 				}
-				~Cleanup() { Close(); }
+
+				~Cleanup()
+				{
+					Close();
+				}
 			} cleanup{scripts, world, *host};
+
 			scene::SetProjectSceneDirectories(settings->scenesDir, settings->prefabsDir);
+
 			struct DirectoryCleanup
 			{
-				~DirectoryCleanup() { scene::ClearProjectSceneDirectories(); }
+				~DirectoryCleanup()
+				{
+					scene::ClearProjectSceneDirectories();
+				}
 			} directoryCleanup;
+
 			scene::ApplySceneDeps deps;
 			deps.sceneContext = &context;
 			scene::ApplyScene(*description, world, deps);
@@ -289,58 +420,8 @@ namespace aether::app::scripting
 				}
 			}
 			report.requiredChecks[1].status = Status::Passed;
-			Json state = {{"schemaVersion", 1}, {"initialFrame", 0}, {"ticks", request.ticks}, {"step", request.step}, {"readSaves", context.allowSaveReads}, {"entities", Json::array()}, {"assertions", Json::array()}};
-			for (auto&& [handle, component]: world.View<ScriptComponent>().each())
-			{
-				const Entity entity = World::FromEntt(handle);
-				const auto* name = world.TryGet<NameComponent>(entity);
-				for (std::uint32_t index = 0; index < component.scripts.size(); ++index)
-				{
-					const auto& entry = component.scripts[index];
-					const auto instance = scripts.GetInstanceHandle(entity.id, index);
-					Require(entry.path.empty() || instance != 0 || !entry.attached, "Script instance missing: " + entry.path);
-					// Disabled authored scripts are intentionally not executed.
-					if (!entry.attached)
-					{
-						continue;
-					}
-					Json values = Json::object();
-					const auto properties = host->GetScriptProperties(entry.path);
-					for (std::size_t p = 0; p < properties.size(); ++p)
-					{
-						ScriptPropertyValue value;
-						Require(host->GetPropertyValue(instance, static_cast<int>(p), value), "Cannot copy property: " + properties[p].name);
-						values[properties[p].name] = CopyProperty(value, world);
-					}
-					state["entities"].push_back({{"entity", name ? name->name : std::to_string(entity.id)}, {"type", entry.path}, {"properties", values}});
-				}
-			}
-			bool assertionsPassed = true;
-			for (const auto& assertion: request.launchConfig.value("assertions", Json::array()))
-			{
-				const Json* actual = nullptr;
-				std::size_t matches = 0;
-				for (const auto& entity: state["entities"])
-				{
-					if (entity["entity"] == assertion["entity"] && entity["type"] == assertion["type"])
-					{
-						++matches;
-						const auto property = assertion["property"].get<std::string>();
-						if (entity["properties"].contains(property))
-						{
-							actual = &entity["properties"][property];
-						}
-					}
-				}
-				const bool passed = matches == 1 && actual != nullptr && Equal(*actual, assertion["equals"], assertion.value("tolerance", 0.0));
-				assertionsPassed &= passed;
-				state["assertions"].push_back({{"entity", assertion["entity"]}, {"type", assertion["type"]}, {"property", assertion["property"]}, {"expected", assertion["equals"]}, {"actual", actual ? *actual : Json(nullptr)}, {"passed", passed}});
-			}
-			Require(request.output.parent_path().empty() || io::file_util::CreateDirectories(request.output.parent_path()).has_value(), "Cannot create artifact directory");
-			const auto written = io::file_util::WriteText(request.output, state.dump(2));
-			Require(written.has_value(), "Cannot write copied script state artifact");
-			report.artifacts.push_back({request.output.string(), std::filesystem::file_size(request.output), std::nullopt});
-			Require(assertionsPassed, "One or more script-state assertions failed (missing/ambiguous entity, type, property, or value mismatch)");
+			WriteGameplayState(request, world, *host, scripts, context.allowSaveReads);
+			report.artifacts.push_back({io::PlatformPaths::PathToUtf8(request.output), std::filesystem::file_size(request.output), std::nullopt});
 			cleanup.Close();
 			rust.Unload();
 			Require(callbackErrors.empty(), callbackErrors.empty() ? "" : callbackErrors.front());
@@ -362,4 +443,4 @@ namespace aether::app::scripting
 		report.durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
 		return report;
 	}
-}
+} // namespace aether::app::scripting
