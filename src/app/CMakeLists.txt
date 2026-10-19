@@ -119,6 +119,8 @@ target_compile_definitions(RuntimeFramework PUBLIC
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
     AETHER_RUST_SDK_MANIFEST="${CMAKE_SOURCE_DIR}/rust/aethercore-abi/Cargo.toml"
+    AETHER_RUST_GAMEPLAY_SDK_MANIFEST="${CMAKE_SOURCE_DIR}/rust/aethercore/Cargo.toml"
+    AETHER_RUST_BUILD_PROJECT="${CMAKE_SOURCE_DIR}/CMake/RustGameplayDriver"
 )
 aethercore_target_defaults(RuntimeFramework)
 
@@ -418,6 +420,12 @@ set(_aether_payload
     # up from itself - flattening it here would silently drop TargetFramework.
     "dir|${CMAKE_SOURCE_DIR}/managed/AetherCore|data/sdk/managed/AetherCore"
     "file|${CMAKE_SOURCE_DIR}/managed/Directory.Build.props|data/sdk/managed/Directory.Build.props"
+    "file|${CMAKE_SOURCE_DIR}/rust/aethercore-abi/src/services.rs|data/sdk/rust/aethercore-abi/src/services.rs"
+    "file|${CMAKE_SOURCE_DIR}/rust/aethercore/Cargo.toml|data/sdk/rust/aethercore/Cargo.toml"
+    "file|${CMAKE_SOURCE_DIR}/rust/aethercore/src/lib.rs|data/sdk/rust/aethercore/src/lib.rs"
+    "file|${CMAKE_SOURCE_DIR}/rust/aethercore/src/provider.rs|data/sdk/rust/aethercore/src/provider.rs"
+    "file|${CMAKE_SOURCE_DIR}/CMake/RustGameplay.cmake|data/sdk/rust/RustGameplay.cmake"
+    "file|${CMAKE_SOURCE_DIR}/CMake/RustGameplayDriver/CMakeLists.txt|data/sdk/rust/build/CMakeLists.txt"
     "file|${CMAKE_SOURCE_DIR}/rust/aethercore-abi/Cargo.toml|data/sdk/rust/aethercore-abi/Cargo.toml"
     "file|${CMAKE_SOURCE_DIR}/rust/aethercore-abi/src/lib.rs|data/sdk/rust/aethercore-abi/src/lib.rs"
     "file|${CMAKE_SOURCE_DIR}/rust/aethercore-abi/src/generated.rs|data/sdk/rust/aethercore-abi/src/generated.rs"
@@ -526,6 +534,8 @@ target_compile_definitions(Launcher PRIVATE
     AETHER_EDITOR_EXE_PATH="${_aether_app_bundle_dir}/${AETHER_EDITOR_EXE_NAME}"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
     AETHER_RUST_SDK_MANIFEST="${CMAKE_SOURCE_DIR}/rust/aethercore-abi/Cargo.toml"
+    AETHER_RUST_GAMEPLAY_SDK_MANIFEST="${CMAKE_SOURCE_DIR}/rust/aethercore/Cargo.toml"
+    AETHER_RUST_BUILD_PROJECT="${CMAKE_SOURCE_DIR}/CMake/RustGameplayDriver"
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 
 aethercore_target_defaults(Launcher)
@@ -557,3 +567,5 @@ if(AETHERCORE_BUILD_EDITOR)
     install(TARGETS Editor RUNTIME DESTINATION "." COMPONENT Runtime)
 endif()
 install(TARGETS GameRuntime RUNTIME DESTINATION "." COMPONENT Runtime)
+
+target_link_libraries(RuntimeFramework PUBLIC ${CMAKE_DL_LIBS})

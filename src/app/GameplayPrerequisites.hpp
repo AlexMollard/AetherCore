@@ -12,6 +12,7 @@ namespace aether::app
 		std::filesystem::path cargo;
 		std::filesystem::path rustc;
 		std::filesystem::path rustSdkManifest;
+		std::filesystem::path cmake;
 	};
 
 	// Presence checks only. Backend compilation and loading are separate operations.

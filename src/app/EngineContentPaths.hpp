@@ -31,4 +31,6 @@ namespace aether::app
 
 	// The standalone raw Rust gameplay ABI crate, referenced by generated Cargo projects.
 	[[nodiscard]] std::filesystem::path EngineRustSdkManifest();
+	[[nodiscard]] std::filesystem::path EngineRustGameplaySdkManifest();
+	[[nodiscard]] std::filesystem::path EngineRustBuildProjectDir();
 } // namespace aether::app

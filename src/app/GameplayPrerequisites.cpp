@@ -59,7 +59,7 @@ namespace aether::app
 	GameplayPrerequisites InspectGameplayPrerequisites(GameplayLanguage language)
 	{
 		if (language != GameplayLanguage::Rust) { return {}; }
-		return {FindExecutable("AETHERCORE_CARGO", "cargo"), FindExecutable("AETHERCORE_RUSTC", "rustc"), EngineRustSdkManifest()};
+		return {FindExecutable("AETHERCORE_CARGO", "cargo"), FindExecutable("AETHERCORE_RUSTC", "rustc"), EngineRustGameplaySdkManifest(), FindExecutable("AETHERCORE_CMAKE", "cmake")};
 	}
 
 	::aether::scripting::AgentReport BuildGameplayPrerequisiteReport(GameplayLanguage language, const GameplayPrerequisites& prerequisites)
@@ -79,8 +79,8 @@ namespace aether::app
 		{
 			check("cargo-executable", !prerequisites.cargo.empty(), "AE_RUST_CARGO_MISSING", "Cargo was not found. Install the Rust toolchain or set AETHERCORE_CARGO to its executable.");
 			check("rustc-executable", !prerequisites.rustc.empty(), "AE_RUST_RUSTC_MISSING", "rustc was not found. Install the Rust toolchain or set AETHERCORE_RUSTC to its executable.");
-			check("rust-sdk-manifest", !prerequisites.rustSdkManifest.empty(), "AE_RUST_SDK_MISSING", "The AetherCore Rust ABI SDK was not found. Repair the engine install or set AETHERCORE_RUST_SDK to its Cargo.toml.");
-			check("rust-gameplay-backend", false, "AE_RUST_BACKEND_UNAVAILABLE", "Rust gameplay backend is not implemented yet (Task 5); the project can be edited, but Play and publishing are unavailable.");
+			check("rust-sdk-manifest", !prerequisites.rustSdkManifest.empty(), "AE_RUST_SDK_MISSING", "The AetherCore Rust ABI SDK was not found. Repair the engine install or set AETHERCORE_RUST_GAMEPLAY_SDK to its Cargo.toml.");
+			check("cmake-executable", !prerequisites.cmake.empty(), "AE_RUST_CMAKE_MISSING", "CMake was not found. Install CMake or set AETHERCORE_CMAKE to its executable.");
 		}
 		else
 		{
@@ -92,11 +92,11 @@ namespace aether::app
 	nlohmann::json DescribeGameplayCapabilities(GameplayLanguage language)
 	{
 		const auto prerequisites = InspectGameplayPrerequisites(language);
-		const bool implemented = language == GameplayLanguage::CSharp;
+		const bool implemented = true;
 		const auto report = ::aether::scripting::SerializeAgentReport(BuildGameplayPrerequisiteReport(language, prerequisites));
 		if (!report) { return {{"error", report.error().message}}; }
 		return {{"language", GameplayLanguageName(language)}, {"profile", GameplayProfileName(language)}, {"target", "desktop"}, {"runtimeImplemented", implemented},
-		        {"operations", {{"create", implemented || !prerequisites.rustSdkManifest.empty()}, {"inspect", true}, {"build", implemented}, {"run", implemented}, {"publish", implemented}}},
+		        {"operations", {{"create", language == GameplayLanguage::CSharp || !prerequisites.rustSdkManifest.empty()}, {"inspect", true}, {"build", implemented}, {"run", implemented}, {"publish", implemented}}},
 		        {"prerequisiteReport", *report}};
 	}
 

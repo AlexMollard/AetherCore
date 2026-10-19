@@ -32,6 +32,16 @@ namespace aether::app
 #else
 		constexpr std::string_view kRustSdkDevHint = {};
 #endif
+#ifdef AETHER_RUST_GAMEPLAY_SDK_MANIFEST
+		constexpr std::string_view kRustGameplaySdk = AETHER_RUST_GAMEPLAY_SDK_MANIFEST;
+#else
+		constexpr std::string_view kRustGameplaySdk = {};
+#endif
+#ifdef AETHER_RUST_BUILD_PROJECT
+		constexpr std::string_view kRustBuildProject = AETHER_RUST_BUILD_PROJECT;
+#else
+		constexpr std::string_view kRustBuildProject = {};
+#endif
 	} // namespace
 
 	std::filesystem::path EngineSceneTemplatesDir()
@@ -52,5 +62,13 @@ namespace aether::app
 	std::filesystem::path EngineRustSdkManifest()
 	{
 		return io::PlatformPaths::ResolveBundlePath("AETHERCORE_RUST_SDK", kRustSdkDevHint, "data/sdk/rust/aethercore-abi/Cargo.toml");
+	}
+	std::filesystem::path EngineRustGameplaySdkManifest()
+	{
+		return io::PlatformPaths::ResolveBundlePath("AETHERCORE_RUST_GAMEPLAY_SDK", kRustGameplaySdk, "data/sdk/rust/aethercore/Cargo.toml");
+	}
+	std::filesystem::path EngineRustBuildProjectDir()
+	{
+		return io::PlatformPaths::ResolveBundlePath("AETHERCORE_RUST_BUILD", kRustBuildProject, "data/sdk/rust/build");
 	}
 } // namespace aether::app

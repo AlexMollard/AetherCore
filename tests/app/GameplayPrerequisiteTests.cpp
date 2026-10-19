@@ -25,7 +25,7 @@ TEST_CASE("Gameplay prerequisites report missing Rust tools before any build")
 	CHECK(report.profile == "desktop-rust-v1");
 	CHECK(report.phase == "preflight");
 	CHECK(report.target == "desktop");
-	for (const auto* code: {"AE_RUST_CARGO_MISSING", "AE_RUST_RUSTC_MISSING", "AE_RUST_SDK_MISSING", "AE_RUST_BACKEND_UNAVAILABLE"})
+	for (const auto* code: {"AE_RUST_CARGO_MISSING", "AE_RUST_RUSTC_MISSING", "AE_RUST_SDK_MISSING", "AE_RUST_CMAKE_MISSING"})
 	{
 		CHECK(std::any_of(report.diagnostics.begin(), report.diagnostics.end(), [code](const auto& diagnostic) { return diagnostic.code == code; }));
 	}
@@ -34,11 +34,10 @@ TEST_CASE("Gameplay prerequisites report missing Rust tools before any build")
 	CHECK((*json)["exitCode"] == 1);
 }
 
-TEST_CASE("Gameplay prerequisites do not claim a Rust runtime when tools exist")
+TEST_CASE("Gameplay prerequisites recognize the implemented Rust runtime when tools exist")
 {
-	const auto report = BuildGameplayPrerequisiteReport(GameplayLanguage::Rust, {.cargo = "cargo", .rustc = "rustc", .rustSdkManifest = "sdk/Cargo.toml"});
-	CHECK(report.status == scripting::AgentJobStatus::Failed);
-	REQUIRE(report.diagnostics.size() == 1);
-	CHECK(report.diagnostics.front().code == "AE_RUST_BACKEND_UNAVAILABLE");
+	const auto report = BuildGameplayPrerequisiteReport(GameplayLanguage::Rust, {.cargo = "cargo", .rustc = "rustc", .rustSdkManifest = "sdk/Cargo.toml", .cmake = "cmake"});
+	CHECK(report.status == scripting::AgentJobStatus::Passed);
+	CHECK(report.diagnostics.empty());
 	CHECK(scripting::SerializeAgentReport(report).has_value());
 }
