@@ -5,6 +5,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "utils/Utf8.hpp"
+
 namespace aether::scripting
 {
 	static_assert(sizeof(AetherGameplayEntity) == 16);
@@ -111,62 +113,7 @@ namespace aether::scripting
 
 	bool IsGameplayUtf8(AetherGameplayUtf8 value) noexcept
 	{
-		if (value.data == nullptr)
-		{
-			return value.length == 0;
-		}
-		const auto* bytes = reinterpret_cast<const unsigned char*>(value.data);
-		for (uint32_t index = 0; index < value.length;)
-		{
-			const uint32_t lead = bytes[index++];
-			if (lead < 0x80)
-			{
-				continue;
-			}
-			uint32_t continuationCount;
-			uint32_t codePoint;
-			uint32_t minimum;
-			if (lead >= 0xC2 && lead <= 0xDF)
-			{
-				continuationCount = 1;
-				codePoint = lead & 0x1F;
-				minimum = 0x80;
-			}
-			else if (lead >= 0xE0 && lead <= 0xEF)
-			{
-				continuationCount = 2;
-				codePoint = lead & 0x0F;
-				minimum = 0x800;
-			}
-			else if (lead >= 0xF0 && lead <= 0xF4)
-			{
-				continuationCount = 3;
-				codePoint = lead & 0x07;
-				minimum = 0x10000;
-			}
-			else
-			{
-				return false;
-			}
-			if (continuationCount > value.length - index)
-			{
-				return false;
-			}
-			for (uint32_t offset = 0; offset < continuationCount; ++offset)
-			{
-				const uint32_t byte = bytes[index++];
-				if ((byte & 0xC0) != 0x80)
-				{
-					return false;
-				}
-				codePoint = (codePoint << 6) | (byte & 0x3F);
-			}
-			if (codePoint < minimum || codePoint > 0x10FFFF || (codePoint >= 0xD800 && codePoint <= 0xDFFF))
-			{
-				return false;
-			}
-		}
-		return true;
+		return IsValidUtf8(value.data, value.length);
 	}
 
 	AetherGameplayStatus CopyGameplayUtf8(AetherGameplayUtf8 source, AetherGameplayUtf8Buffer destination) noexcept

@@ -18,9 +18,9 @@ namespace aether::assetpipeline
 	inline constexpr int kManifestVersion = 5;
 
 	// on-disk pak format + pipeline versions, so bumping any of them invalidates a
-	inline std::string ManifestHeaderLine()
+	inline std::string ManifestHeaderLine(std::string_view target = "desktop")
 	{
-		return "# AetherPak manifest v" + std::to_string(kManifestVersion) + " pak" + std::to_string(PAK_VERSION) + " pipeline" + std::to_string(PAK_PIPELINE_VERSION);
+		return "# AetherPak manifest v" + std::to_string(kManifestVersion) + " pak" + std::to_string(PAK_VERSION) + " pipeline" + std::to_string(PAK_PIPELINE_VERSION) + (target == "desktop" ? std::string{} : " target=" + std::string(target));
 	}
 
 	struct ManifestEntry
@@ -31,7 +31,7 @@ namespace aether::assetpipeline
 
 	using ManifestMap = std::unordered_map<std::string, ManifestEntry>;
 
-	inline ManifestMap LoadManifest(const fs::path& manifestPath)
+	inline ManifestMap LoadManifest(const fs::path& manifestPath, std::string_view target = "desktop")
 	{
 		ManifestMap map;
 		std::ifstream in(manifestPath);
@@ -47,7 +47,7 @@ namespace aether::assetpipeline
 			{
 				continue;
 			}
-			if (line != ManifestHeaderLine())
+			if (line != ManifestHeaderLine(target))
 			{
 				return {};
 			}
@@ -80,7 +80,7 @@ namespace aether::assetpipeline
 		return map;
 	}
 
-	inline void SaveManifest(const fs::path& manifestPath, const ManifestMap& map)
+	inline void SaveManifest(const fs::path& manifestPath, const ManifestMap& map, std::string_view target = "desktop")
 	{
 		std::ofstream out(manifestPath);
 		if (!out)
@@ -88,7 +88,7 @@ namespace aether::assetpipeline
 			return;
 		}
 
-		out << ManifestHeaderLine() << "\n";
+		out << ManifestHeaderLine(target) << "\n";
 		for (const auto& [vpath, e]: map)
 		{
 			out << vpath << '\t' << std::dec << e.mtimeSec << '\t' << std::hex << e.contentHash << '\n';

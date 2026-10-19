@@ -13,8 +13,8 @@ namespace aether::assetpipeline
 	class PakWriter
 	{
 	public:
-		explicit PakWriter(int compressionLevel = 3)
-		      : m_compressionLevel(compressionLevel)
+		explicit PakWriter(int compressionLevel = 3, std::string target = "desktop")
+		      : m_compressionLevel(compressionLevel), m_target(std::move(target))
 		{
 		}
 
@@ -41,5 +41,6 @@ namespace aether::assetpipeline
 		std::vector<FileRecord> m_files;
 		fs::path m_sourceDir;
 		int m_compressionLevel;
+		std::string m_target;
 	};
 } // namespace aether::assetpipeline

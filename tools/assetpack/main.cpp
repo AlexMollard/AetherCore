@@ -27,6 +27,7 @@ struct Args
 {
 	bool project = false;
 	bool importMaterials = false;
+	std::string target = "desktop";
 	int compressionLevel = 3;
 	fs::path sourceDir;
 	fs::path outputPath;
@@ -41,7 +42,21 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 	{
 		const std::string arg = argv[argOffset];
 
-		if (arg == "--import-materials")
+		if (arg == "--target")
+		{
+			if (argOffset + 1 >= argc)
+			{
+				return std::nullopt;
+			}
+			args.target = argv[argOffset + 1];
+			if (args.target != "desktop" && args.target != "webgpu-2d-v1")
+			{
+				std::cerr << "Unknown asset target\n";
+				return std::nullopt;
+			}
+			argOffset += 2;
+		}
+		else if (arg == "--import-materials")
 		{
 			args.importMaterials = true;
 			++argOffset;
@@ -101,9 +116,9 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 		}
 	}
 
-	if (argc < argOffset + 2)
+	if (argc != argOffset + 2)
 	{
-		std::cerr << "Usage: AssetPacker [--project] [--import-materials] [--compress-level N] <source-dir> <output.pak>\n";
+		std::cerr << "Usage: AssetPacker [--project] [--import-materials] [--compress-level N] [--target desktop|webgpu-2d-v1] <source-dir> <output.pak>\n";
 		std::cerr << "       AssetPacker import-materials <source-dir>\n";
 		std::cerr << "       AssetPacker bake-font <ttf> <outDir>\n";
 		std::cerr << "       AssetPacker bake <gltf-or-glb-path> <project-root>\n";
@@ -570,6 +585,7 @@ int main(int argc, char* argv[])
 	        .compressionLevel = args->compressionLevel,
 	        .importMaterials = args->importMaterials,
 	        .projectLayout = args->project,
+	        .target = args->target,
 	};
 	const PackResult result = args->project ? PackProject(args->sourceDir, args->outputPath, options) : PackDirectory(args->sourceDir, args->outputPath, options);
 	if (!result.ok)

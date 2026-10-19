@@ -5,6 +5,7 @@
 #include "PipelineUtils.hpp"
 #include "SpirvProcessor.hpp"
 #include "TextureProcessor.hpp"
+#include "WebAssetFormat.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -87,9 +88,10 @@ namespace aether::assetpipeline
 		std::string outExt;
 		std::vector<PakFileData> extraFiles;
 		bool skipSource = false;
+		std::string error;
 	};
 
-	inline ProcessAssetResult ProcessAsset(const std::vector<std::byte>& raw, const fs::path& diskPath, const std::string& virtualPath, const fs::path& sourceDir)
+	inline ProcessAssetResult ProcessAsset(const std::vector<std::byte>& raw, const fs::path& diskPath, const std::string& virtualPath, const fs::path& sourceDir, bool webTarget = false)
 	{
 		const auto ext = [&]
 		{
@@ -103,12 +105,24 @@ namespace aether::assetpipeline
 
 		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".webp")
 		{
-			auto d = TextureProcessor::ToDDS(raw, diskPath, TextureProcessor::BC7Quality::Normal);
+			auto d = webTarget ? TextureProcessor::ToRGBA8(raw) : TextureProcessor::ToDDS(raw, diskPath, TextureProcessor::BC7Quality::Normal);
 			if (!d.empty())
 			{
 				return {std::move(d), ".texture", {}};
 			}
+			if (webTarget)
+			{
+				return {.error = "WEB_ASSET_TEXTURE: invalid image or unsupported texture extent"};
+			}
 			return {};
+		}
+		if (webTarget && (ext == ".dds" || ext == ".texture" || ext == ".ktx" || ext == ".ktx2"))
+		{
+			WebTextureHeader header;
+			if (!ReadWebTextureHeader(raw, header))
+			{
+				return {.error = "WEB_ASSET_FORMAT: desktop/compressed texture offered to webgpu-2d-v1"};
+			}
 		}
 
 		if (ext == ".toml")
@@ -122,8 +136,7 @@ namespace aether::assetpipeline
 			//   of an AUTO-GENERATED material possible at all).
 			const std::string filename = diskPath.filename().string();
 			constexpr std::string_view kOverrideSuffix = ".override.toml";
-			const bool isMaterialOverride = filename.size() > kOverrideSuffix.size()
-			                                && filename.substr(filename.size() - kOverrideSuffix.size()) == kOverrideSuffix;
+			const bool isMaterialOverride = filename.size() > kOverrideSuffix.size() && filename.substr(filename.size() - kOverrideSuffix.size()) == kOverrideSuffix;
 			if (diskPath.filename() == "properties.toml" || isMaterialOverride)
 			{
 				auto d = MaterialProcessor::Process(raw, diskPath, sourceDir);
@@ -146,7 +159,7 @@ namespace aether::assetpipeline
 			auto meshResult = MeshProcessor::Process(raw, diskPath, virtualPath, sourceDir);
 
 			const std::string stem = Stem(diskPath);
-			const std::string dir = fs::path(virtualPath).parent_path().generic_string();
+			const std::string dir = Utf8Path(virtualPath).parent_path().generic_string();
 
 			std::vector<PakFileData> extraFiles;
 
@@ -204,7 +217,7 @@ namespace aether::assetpipeline
 		std::vector<PakFileData> extraFiles;
 	};
 
-	inline PakFileResult ProcessFile(const std::string& virtualPath, const fs::path& diskPath, const fs::path& sourceDir, int compressionLevel)
+	inline PakFileResult ProcessFile(const std::string& virtualPath, const fs::path& diskPath, const fs::path& sourceDir, int compressionLevel, bool webTarget = false)
 	{
 		PakFileResult result;
 		result.virtualPath = virtualPath;
@@ -230,7 +243,12 @@ namespace aether::assetpipeline
 			return result;
 		}
 
-		auto procResult = ProcessAsset(rawData, diskPath, virtualPath, sourceDir);
+		auto procResult = ProcessAsset(rawData, diskPath, virtualPath, sourceDir, webTarget);
+		if (!procResult.error.empty())
+		{
+			result.errorMsg = procResult.error;
+			return result;
+		}
 
 		if (procResult.skipSource)
 		{
@@ -270,26 +288,25 @@ namespace aether::assetpipeline
 			rawData = std::move(procResult.data);
 			if (!procResult.outExt.empty())
 			{
-				const auto stem = fs::path(virtualPath).stem().string();
-				const auto parent = fs::path(virtualPath).parent_path().generic_string();
+				const auto stem = PathUtf8(Utf8Path(virtualPath).stem());
+				const auto parent = PathUtf8(Utf8Path(virtualPath).parent_path());
 				result.virtualPath = parent.empty() ? stem + procResult.outExt : parent + "/" + stem + procResult.outExt;
 			}
 
-		if (procResult.outExt == ".material")
+			if (procResult.outExt == ".material")
 			{
 				const std::string sourceName = diskPath.filename().string();
 				constexpr std::string_view kOverrideSuffix = ".override.toml";
-				if (sourceName.size() > kOverrideSuffix.size()
-				                && sourceName.substr(sourceName.size() - kOverrideSuffix.size()) == kOverrideSuffix)
+				if (sourceName.size() > kOverrideSuffix.size() && sourceName.substr(sourceName.size() - kOverrideSuffix.size()) == kOverrideSuffix)
 				{
 					// <name>.material.override.toml replaces the generated material in place:
 					// publish under the exact materials/<name>.material path loaders look up.
-					auto dir = fs::path(virtualPath).parent_path();
+					auto dir = Utf8Path(virtualPath).parent_path();
 					result.virtualPath = (dir / sourceName.substr(0, sourceName.size() - kOverrideSuffix.size())).generic_string();
 				}
 				else
 				{
-					auto dir = fs::path(virtualPath).parent_path();
+					auto dir = Utf8Path(virtualPath).parent_path();
 					const std::string dirName = dir.filename().string();
 					if (dirName.size() < 9 || dirName.substr(dirName.size() - 9) != ".material")
 					{

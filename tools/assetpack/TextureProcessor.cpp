@@ -1,6 +1,7 @@
 #include "TextureProcessor.hpp"
 
 #include "DDSFormat.hpp"
+#include "WebAssetFormat.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -19,6 +20,38 @@ namespace aether::assetpipeline
 {
 	namespace TextureProcessor
 	{
+		ByteBuffer ToRGBA8(std::span<const std::byte> imageData)
+		{
+			if (imageData.size() > static_cast<std::size_t>(INT_MAX))
+			{
+				return {};
+			}
+			int width = 0, height = 0, channels = 0;
+			if (!stbi_info_from_memory(reinterpret_cast<const stbi_uc*>(imageData.data()), static_cast<int>(imageData.size()), &width, &height, &channels) || width <= 0 || height <= 0 || width > 4096 || height > 4096)
+			{
+				return {};
+			}
+			auto* pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(imageData.data()), static_cast<int>(imageData.size()), &width, &height, &channels, 4);
+			if (pixels == nullptr)
+			{
+				return {};
+			}
+			if (width <= 0 || height <= 0 || width > 4096 || height > 4096)
+			{
+				stbi_image_free(pixels);
+				return {};
+			}
+			WebTextureHeader header;
+			header.width = static_cast<std::uint32_t>(width);
+			header.height = static_cast<std::uint32_t>(height);
+			header.pixelBytes = std::uint64_t(width) * height * 4;
+			ByteBuffer result(sizeof(header) + header.pixelBytes);
+			std::memcpy(result.data(), &header, sizeof(header));
+			std::memcpy(result.data() + sizeof(header), pixels, header.pixelBytes);
+			stbi_image_free(pixels);
+			return result;
+		}
+
 		namespace
 		{
 			std::vector<std::byte> CompressBlocks(const uint8_t* pixels, int width, int height, int channels, BCnFmt fmt, const bc7enc_compress_block_params& bc7Params)

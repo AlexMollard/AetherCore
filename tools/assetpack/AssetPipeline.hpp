@@ -13,6 +13,7 @@ namespace aether::assetpipeline
 		bool projectLayout = false;
 
 		std::filesystem::path shaderSpirvDir;
+		std::string target = "desktop";
 	};
 
 	struct PackResult

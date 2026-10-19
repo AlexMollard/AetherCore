@@ -58,7 +58,7 @@ namespace aether::assetpipeline
 
 		std::string ApplyPrefix(std::string_view prefix, const fs::path& rel)
 		{
-			std::string relStr = rel.generic_string();
+			std::string relStr = PathUtf8(rel);
 			std::string p(prefix);
 			while (!p.empty() && p.back() == '/')
 			{
@@ -94,7 +94,7 @@ namespace aether::assetpipeline
 				continue;
 			}
 
-			const auto vpath = rel.generic_string();
+			const auto vpath = PathUtf8(rel);
 			m_files.push_back({vpath, entry.path(), sourceDir});
 		}
 
@@ -130,7 +130,7 @@ namespace aether::assetpipeline
 		const auto manifestPath = fs::path(outPath.string() + ".manifest");
 		const auto logPath = fs::path(outPath.string() + ".log");
 
-		const ManifestMap manifest = LoadManifest(manifestPath);
+		const ManifestMap manifest = LoadManifest(manifestPath, m_target);
 		if (IsUpToDate(outPath, manifest, m_files))
 		{
 			std::cout << "AssetPacker: " << outPath.filename().string() << " is up to date, skipping.\n";
@@ -151,7 +151,8 @@ namespace aether::assetpipeline
 		ThreadPool pool;
 		for (const auto& file: m_files)
 		{
-			futures.push_back(pool.submit([virtualPath = file.virtualPath, diskPath = file.diskPath, sourceDir = file.sourceDir, compressionLevel = m_compressionLevel]() { return ProcessFile(virtualPath, diskPath, sourceDir, compressionLevel); }));
+			futures.push_back(pool.submit([virtualPath = file.virtualPath, diskPath = file.diskPath, sourceDir = file.sourceDir, compressionLevel = m_compressionLevel, webTarget = m_target == "webgpu-2d-v1"]()
+			        { return ProcessFile(virtualPath, diskPath, sourceDir, compressionLevel, webTarget); }));
 		}
 
 		std::vector<PakFileResult> allResults;
@@ -206,6 +207,7 @@ namespace aether::assetpipeline
 		{
 			std::ostringstream manifest;
 			manifest << "format=AetherPakManifest\n";
+			manifest << "target=" << m_target << "\n";
 			manifest << "pakVersion=" << PAK_VERSION << "\n";
 			manifest << "pipelineVersion=" << PAK_PIPELINE_VERSION << "\n";
 			manifest << "sourceFileCount=" << m_files.size() << "\n";
@@ -369,7 +371,7 @@ namespace aether::assetpipeline
 			fs::remove(tmpPath, ec);
 		}
 
-		SaveManifest(manifestPath, newManifest);
+		SaveManifest(manifestPath, newManifest, m_target);
 		SaveLog(logPath, m_sourceDir, outPath, m_compressionLevel, logEntries, totalRawBytes, pakBytes, elapsedSecs);
 
 		const double savings = totalRawBytes > 0 ? 100.0 * (1.0 - static_cast<double>(pakBytes) / static_cast<double>(totalRawBytes)) : 0.0;

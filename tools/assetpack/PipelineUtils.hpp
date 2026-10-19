@@ -22,6 +22,17 @@ namespace aether::assetpipeline
 
 	using ByteBuffer = std::vector<std::byte>;
 
+	inline std::string PathUtf8(const fs::path& path)
+	{
+		const auto value = path.generic_u8string();
+		return {reinterpret_cast<const char*>(value.data()), value.size()};
+	}
+
+	inline fs::path Utf8Path(std::string_view value)
+	{
+		return fs::path(std::u8string_view(reinterpret_cast<const char8_t*>(value.data()), value.size()));
+	}
+
 	// Reads an entire file into a fresh ByteBuffer. Returns false (leaving `out` in an
 	// unspecified but valid state) on any stat/read failure - shared by every caller that
 	// needs a whole model file in memory (AssetPacker's `bake`/`bake-all` CLI subcommands,

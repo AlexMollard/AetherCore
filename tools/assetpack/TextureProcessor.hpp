@@ -17,5 +17,6 @@ namespace aether::assetpipeline
 		};
 
 		[[nodiscard]] ByteBuffer ToDDS(std::span<const std::byte> imageData, const std::filesystem::path& sourcePath, BC7Quality quality = BC7Quality::Normal);
+		[[nodiscard]] ByteBuffer ToRGBA8(std::span<const std::byte> imageData);
 	} // namespace TextureProcessor
 } // namespace aether::assetpipeline

@@ -17,6 +17,10 @@ namespace aether::assetpipeline
 
 		PackResult RunPack(const std::filesystem::path& sourceDir, const std::filesystem::path& outputPak, const PackOptions& options)
 		{
+			if (options.target != "desktop" && options.target != "webgpu-2d-v1")
+			{
+				return {.ok = false, .message = "Unknown asset target: " + options.target, .outputPath = outputPak};
+			}
 			std::error_code ec;
 			if (!std::filesystem::is_directory(sourceDir, ec))
 			{
@@ -32,7 +36,7 @@ namespace aether::assetpipeline
 				}
 			}
 
-			PakWriter writer(options.compressionLevel);
+			PakWriter writer(options.compressionLevel, options.target);
 			writer.AddDirectory(sourceDir);
 
 			if (!options.shaderSpirvDir.empty() && std::filesystem::is_directory(options.shaderSpirvDir, ec))
