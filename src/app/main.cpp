@@ -14,6 +14,7 @@
 #include "platform/Window.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/RustScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 
 #ifdef AETHERCORE_EDITOR_APP
@@ -128,13 +129,6 @@ int main(int argc, char** argv)
 			AE_ERROR(aether::LogCategory::App, "Cannot select project gameplay language: {}", selectedScripting.error().message);
 			return 2;
 		}
-#ifndef AETHERCORE_EDITOR_APP
-		if (selectedScripting->language == aether::app::GameplayLanguage::Rust)
-		{
-			AE_ERROR(aether::LogCategory::App, "Rust gameplay backend is not implemented yet (Task 5); this runtime cannot execute Rust games.");
-			return 2;
-		}
-#endif
 
 		// NVIDIA Aftermath (dev-only GPU crash diagnostics) is only ever turned
 		// on for an editor build - see the vendor + editor gate in
@@ -171,14 +165,16 @@ int main(int argc, char** argv)
 #ifdef AETHERCORE_EDITOR_APP
 		engineConfig.enableGpuDiagnostics = true;
 #endif
+		// Registered services must remain alive through Application's layer teardown.
+		std::unique_ptr<aether::app::scripting::CSharpScriptingSubsystem> csharpScripting;
+		std::unique_ptr<aether::app::scripting::RustScriptingSubsystem> rustScripting;
 		aether::app::Application application(engineConfig);
 
 		// Services
 		// C# scripting: boots CoreCLR and loads the game-scripts assembly.
 		// Disabled-safe - a missing runtime just means no entity-script behavior.
 		application.AddService(*selectedScripting);
-		std::unique_ptr<aether::app::scripting::CSharpScriptingSubsystem> csharpScripting;
-		aether::app::scripting::GameplayHost rustGameplay;
+
 		if (selectedScripting->language == aether::app::GameplayLanguage::CSharp)
 		{
 			csharpScripting = std::make_unique<aether::app::scripting::CSharpScriptingSubsystem>();
@@ -187,8 +183,15 @@ int main(int argc, char** argv)
 		}
 		else
 		{
-			application.AddService(rustGameplay);
-			AE_INFO(aether::LogCategory::App, "Rust project opened for editing; its gameplay backend is not implemented yet (Task 5).");
+			auto sourceRoot = scriptingInputs.envProjectDir;
+			if (sourceRoot.empty() && !scriptingInputs.compiledDefaultDir.empty()
+			        && aether::app::ResolveRuntimeProjectSettings(scriptingInputs).lexically_normal() == (scriptingInputs.compiledDefaultDir / "ProjectSettings.toml").lexically_normal())
+			{
+				sourceRoot = scriptingInputs.compiledDefaultDir;
+			}
+			rustScripting = std::make_unique<aether::app::scripting::RustScriptingSubsystem>(sourceRoot);
+			application.AddService(*rustScripting);
+			application.AddService(rustScripting->Gameplay());
 		}
 
 		// Layers

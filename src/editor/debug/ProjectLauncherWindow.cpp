@@ -453,7 +453,7 @@ namespace aether::app
 				}
 				if (state.newLanguage == GameplayLanguage::Rust)
 				{
-					ImGui::TextWrapped("Rust projects can be edited. Rust gameplay execution is not available yet.");
+					ImGui::TextWrapped("Desktop Rust gameplay uses Cargo and the safe AetherCore SDK. Multiplayer templates require C#.");
 				}
 				ImGui::Spacing();
 

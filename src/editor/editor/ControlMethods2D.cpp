@@ -33,6 +33,7 @@
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
 #include "scripting/GameplayHost.hpp"
+#include "scripting/GameplayPropertyJson.hpp"
 #include "systems/ScriptComponentSystem.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -946,7 +947,8 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"scene.add_script",
 		        "add_script",
-		        "Attach a C# script to an entity by type name (the class name in the project's scripts folder, e.g. 'PlayerController'). Optional 'properties' seeds public fields: numbers, bools, strings, or [x, y, z] arrays.",
+		        "Attach a gameplay script to an entity by type name (the class name in the project's scripts folder, e.g. 'PlayerController'). Optional 'properties' seeds public fields. Rust declarations determine numeric field types; component "
+		        "references accept {entity, component} or an entity integer for a declared component type.",
 		        true,
 		        Obj({{"id", IntProp()}, {"type", StrProp()}, {"properties", json{{"type", "object"}}}}, {"id", "type"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -984,51 +986,25 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 					        return json{{"error", std::move(message)}};
 				        }
 			        }
+			        const auto* gameplay = ctx.services.TryGet<app::scripting::GameplayHost>();
+			        const bool rust = gameplay != nullptr && gameplay->Language() == "rust";
+			        const auto declarations = rust ? gameplay->GetScriptProperties(type) : std::vector<app::scripting::ScriptPropertyInfo>{};
+			        json input = p.value("properties", json::object());
+			        if (!rust && !input.is_object())
+			        {
+				        input = json::object();
+			        }
+			        auto parsed = app::scripting::ParseGameplayScriptProperties(input, declarations, rust);
+			        if (!parsed)
+			        {
+				        return json{{"error", parsed.error().message}};
+			        }
+			        ScriptEntry authored;
+			        authored.path = type;
+			        authored.properties = std::move(*parsed);
 			        auto* existing = world.TryGet<ScriptComponent>(entity);
 			        ScriptComponent& sc = existing != nullptr ? *existing : world.Emplace<ScriptComponent>(entity);
-			        ScriptEntry& script = sc.scripts.emplace_back();
-			        script.path = type;
-			        script.attached = false;
-			        if (p.contains("properties") && p["properties"].is_object())
-			        {
-				        for (const auto& [name, value]: p["properties"].items())
-				        {
-					        ScriptPropertyValue property;
-					        if (value.is_boolean())
-					        {
-						        property.type = ScriptPropertyValue::Type::Bool;
-						        property.i64 = value.get<bool>() ? 1 : 0;
-					        }
-					        else if (value.is_number_integer())
-					        {
-						        property.type = ScriptPropertyValue::Type::Int;
-						        property.i64 = value.get<std::int64_t>();
-					        }
-					        else if (value.is_number())
-					        {
-						        property.type = ScriptPropertyValue::Type::Float;
-						        property.f4[0] = value.get<float>();
-					        }
-					        else if (value.is_string())
-					        {
-						        property.type = ScriptPropertyValue::Type::String;
-						        property.str = value.get<std::string>();
-					        }
-					        else if (value.is_array() && value.size() == 3)
-					        {
-						        property.type = ScriptPropertyValue::Type::Vector3;
-						        for (std::size_t axis = 0; axis < 3; ++axis)
-						        {
-							        property.f4[axis] = value[axis].get<float>();
-						        }
-					        }
-					        else
-					        {
-						        return json{{"error", "property '" + name + "' must be a number, bool, string, or [x, y, z] array"}};
-					        }
-					        script.properties[name] = std::move(property);
-				        }
-			        }
+			        ScriptEntry& script = sc.scripts.emplace_back(std::move(authored));
 			        if (auto* undo = ctx.services.TryGet<UndoStack>())
 			        {
 				        undo->Record(std::make_unique<AddScriptCommand>(entity.id, type, script));
@@ -1038,7 +1014,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"scene.scripts",
 		        "list_scripts",
-		        "List the C# scripts attached to an entity: each one's type, whether it is attached yet, and its property values in the same shape add_script takes, so a value read here can be written straight back.",
+		        "List the gameplay scripts attached to an entity: each one's type, whether it is attached yet, and its property values in the same shape add_script takes, so a value read here can be written straight back.",
 		        false,
 		        Obj({{"id", IntProp()}}, {"id"}),
 		        [](const json& p, MethodContext& ctx) -> json
@@ -1054,6 +1030,8 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 			        {
 				        return json{{"error", "entity not found"}};
 			        }
+			        const auto* gameplay = ctx.services.TryGet<app::scripting::GameplayHost>();
+			        const bool rust = gameplay != nullptr && gameplay->Language() == "rust";
 			        json scripts = json::array();
 			        if (auto* sc = world.TryGet<ScriptComponent>(entity))
 			        {
@@ -1099,8 +1077,10 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 							        case ScriptPropertyValue::Type::Vector3:
 								        properties[name] = json::array({value.f4[0], value.f4[1], value.f4[2]});
 								        break;
-							        case ScriptPropertyValue::Type::String:
 							        case ScriptPropertyValue::Type::Component:
+								        properties[name] = rust ? json{{"entity", value.i64}, {"component", value.str}} : json(value.str);
+								        break;
+							        case ScriptPropertyValue::Type::String:
 								        properties[name] = value.str;
 								        break;
 							        case ScriptPropertyValue::Type::None:
@@ -1115,7 +1095,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"scene.script_types",
 		        "list_script_types",
-		        "List the C# script type names add_script accepts, as loaded from the project's built assembly. Empty while no assembly is loaded (a project that has not been built yet), which is also when add_script stops checking the name.",
+		        "List the gameplay script type names add_script accepts, as loaded from the project's gameplay module. Empty while no module is loaded (a project that has not been built yet), which is also when add_script stops checking the name.",
 		        false,
 		        Obj(),
 		        [](const json&, MethodContext& ctx) -> json
@@ -1125,7 +1105,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 			        auto* gameplay = ctx.services.TryGet<app::scripting::GameplayHost>();
 			        if (gameplay == nullptr)
 			        {
-				        return json{{"error", "no C# scripting subsystem"}};
+				        return json{{"error", "no gameplay scripting host"}};
 			        }
 			        const std::vector<std::string>& known = gameplay->GetScriptTypeNames();
 			        return json{{"types", known}, {"count", known.size()}, {"assemblyLoaded", !known.empty()}};
@@ -1133,7 +1113,7 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 
 		methods.push_back({"scene.remove_script",
 		        "remove_script",
-		        "Detach a C# script from an entity by type name.",
+		        "Detach a gameplay script from an entity by type name.",
 		        true,
 		        Obj({{"id", IntProp()}, {"type", StrProp()}}, {"id", "type"}),
 		        [](const json& p, MethodContext& ctx) -> json

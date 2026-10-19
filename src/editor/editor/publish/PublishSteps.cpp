@@ -1,4 +1,5 @@
 #include "editor/publish/PublishSteps.hpp"
+#include "io/FileUtil.hpp"
 
 #include "BakeAll.hpp"
 
@@ -11,11 +12,15 @@
 #include "scripting/DotNetHost.hpp"
 #include "EngineContentPaths.hpp"
 #include "RuntimeProjectSettings.hpp"
+#include "GameplayPrerequisites.hpp"
+#include "scripting/RustGameplayBuild.hpp"
+#include "scripting/RustGameplayHost.hpp"
+#include "scripting/SceneContext.hpp"
+#include "scene/World.hpp"
 #include "editor/ShaderCompiler.hpp"
 #include "editor/publish/PublishPlan.hpp"
 #include "editor/publish/PublishReport.hpp"
 #include "editor/publish/PublishVerify.hpp"
-#include "io/FileUtil.hpp"
 #include "io/Process.hpp"
 #include "project/ProjectStartupScene.hpp"
 #include "scene/SceneWorkflow.hpp"
@@ -129,8 +134,8 @@ namespace aether::editor
 			}
 			if (plan.language == app::GameplayLanguage::Rust)
 			{
-				return Failed("Rust gameplay backend is not implemented yet (Task 5); the project can be edited, but Play and publishing are unavailable.",
-				        "Rust project scaffolding is available; implement the desktop Rust gameplay backend before publishing.");
+				const auto prerequisites = app::BuildGameplayPrerequisiteReport(plan.language, app::InspectGameplayPrerequisites(plan.language));
+				if (prerequisites.status == scripting::AgentJobStatus::Failed) { return Failed(prerequisites.diagnostics.front().message, "Repair the Rust toolchain and engine SDK, then publish again."); }
 			}
 			if (plan.projectRoot.empty() || !io::file_util::Exists(plan.projectFile))
 			{
@@ -281,7 +286,7 @@ namespace aether::editor
 			const std::filesystem::path packageData = plan.outputDir / "data";
 			if (!CopyOne(bundleData / "engine.pak", packageData / "engine.pak", error)
 			        || !CopyOne(bundleData / "config" / "EngineSettings.toml", packageData / "config" / "EngineSettings.toml", error)
-			        || !CopyTree(bundleData / "scripts" / "managed", packageData / "scripts" / "managed", error))
+			        || (plan.language == app::GameplayLanguage::CSharp && !CopyTree(bundleData / "scripts" / "managed", packageData / "scripts" / "managed", error)))
 			{
 				return Failed("Could not stage the shipped data payload: " + error, "Rebuild the editor so its data folder is complete, then publish again.");
 			}
@@ -314,6 +319,16 @@ namespace aether::editor
 
 		StepResult BuildScripts(const PublishPlan& plan, PublishContext&, const PublishToolchain& toolchain)
 		{
+			if (plan.language == app::GameplayLanguage::Rust)
+			{
+				const auto built = app::scripting::BuildRustGameplay({.manifest = plan.scriptsDir / "Cargo.toml", .artifactsDir = plan.projectRoot / "Builds" / "Intermediate" / "rust-publish", .outputDir = plan.outputDir / "data" / "scripts" / "rust", .release = plan.configName == "Release" || plan.configName == "MinSizeRel"});
+				if (!built.Succeeded()) { return Failed(built.report.diagnostics.back().message, "Fix the Cargo diagnostics and publish again."); }
+				World validationWorld;
+				app::scripting::SceneContext validationContext{.world = &validationWorld};
+				app::scripting::RustGameplayHost validationHost;
+				if (const auto loaded = validationHost.Load(built.module, validationWorld, &validationContext); !loaded) { return Failed(loaded.error().message, "The Rust library must pass gameplay ABI registration before publishing."); }
+				return {};
+			}
 			const std::filesystem::path scriptsProject = plan.scriptsDir / "AetherGame.csproj";
 			if (!io::file_util::Exists(scriptsProject))
 			{

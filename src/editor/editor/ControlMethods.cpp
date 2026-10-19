@@ -30,6 +30,7 @@
 #include "PlayState.hpp"
 #include "GameplayPrerequisites.hpp"
 #include "RuntimeProjectSettings.hpp"
+#include "scripting/RustScriptingSubsystem.hpp"
 #include "assets/AssetManager.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
@@ -91,7 +92,7 @@ namespace aether::editor
 			auto report = app::BuildGameplayPrerequisiteReport(language, app::InspectGameplayPrerequisites(language));
 			report.status = ::aether::scripting::AgentJobStatus::Failed;
 			report.requiredChecks.push_back({"project-gameplay-selection", ::aether::scripting::AgentJobStatus::Failed});
-			report.diagnostics.push_back({.code = "AE_GAMEPLAY_SELECTION_INVALID", .severity = ::aether::scripting::AgentDiagnosticSeverity::Error, .message = std::string(message)});
+			report.diagnostics.push_back({.code = "AE_GAMEPLAY_PREFLIGHT_FAILED", .severity = ::aether::scripting::AgentDiagnosticSeverity::Error, .message = std::string(message)});
 			const auto serialized = ::aether::scripting::SerializeAgentReport(report);
 			return json{{"ok", false}, {"state", "failed"}, {"message", message}, {"report", serialized.value()}};
 		}
@@ -428,7 +429,7 @@ namespace aether::editor
 		        }});
 
 		methods.push_back({"project.gameplay_capabilities", "gameplay_capabilities",
-		        "Inspect a project's gameplay language/profile and prerequisites. Defaults to the open project. Rust creation is supported; execution follows separately.",
+		        "Inspect a project's gameplay language/profile and prerequisites. Defaults to the open project. Desktop Rust execution uses Cargo and the safe SDK.",
 		        false, Obj({{"root", StrProp()}, {"language", json{{"type", "string"}, {"enum", {"csharp", "rust"}}}}}),
 		        [](const json& params, MethodContext& ctx) -> json
 		        {
@@ -438,6 +439,38 @@ namespace aether::editor
 				        if (const auto* project = ctx.services.TryGet<app::EditorProjectContext>()) { root = project->root; }
 			        }
 			        return app::DescribeProjectGameplayCapabilities(root, params.value("language", std::string{}));
+		        }});
+
+		methods.push_back({"project.gameplay_status",
+		        "gameplay_status",
+		        "Poll the current Rust build/load report and runtime diagnostics. Compilation failure never enters Play. C# returns its capabilities; its existing scripting diagnostics remain available through engine_info and console logs.",
+		        false,
+		        Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        if (auto* rust = ctx.services.TryGet<app::scripting::RustScriptingSubsystem>())
+			        {
+				        auto report = rust->Report();
+				        if (report.status == ::aether::scripting::AgentJobStatus::Passed)
+				        {
+					        for (const auto& diagnostic: rust->Host().Diagnostics())
+					        {
+						        report.diagnostics.push_back(diagnostic);
+						        if (diagnostic.severity == ::aether::scripting::AgentDiagnosticSeverity::Error)
+						        {
+							        report.status = ::aether::scripting::AgentJobStatus::Failed;
+							        report.phase = "runtime";
+						        }
+					        }
+				        }
+				        const auto serialized = ::aether::scripting::SerializeAgentReport(report);
+				        if (!serialized)
+				        {
+					        return json{{"error", serialized.error().message}};
+				        }
+				        return json{{"language", "rust"}, {"available", rust->Host().Gameplay().IsAvailable()}, {"report", *serialized}};
+			        }
+			        return app::DescribeGameplayCapabilities(app::GameplayLanguage::CSharp);
 		        }});
 
 		methods.push_back({"console.logs",
@@ -3040,10 +3073,6 @@ namespace aether::editor
 			        if (const auto preflight = app::ValidateProjectGameplaySelection(project->root, project->language); !preflight)
 			        {
 				        return GameplayPreflightFailure(project->language, preflight.error().message);
-			        }
-			        if (project->language == app::GameplayLanguage::Rust)
-			        {
-				        return GameplayPreflightFailure(project->language, "Rust publishing is unavailable until the Rust gameplay backend is implemented (Task 5).");
 			        }
 			        PublishJob& job = Job();
 			        if (job.future.valid())

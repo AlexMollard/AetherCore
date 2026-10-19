@@ -5,6 +5,7 @@
 
 #include "RuntimeProjectSettings.hpp"
 #include "PlaySession.hpp"
+#include "GameplayPrerequisites.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/publish/PublishPlan.hpp"
 #include "utils/EngineSettings.hpp"
@@ -170,7 +171,7 @@ TEST_CASE("Play preflight uses active backend and current configured language")
 	CHECK_FALSE(aether::app::ValidatePlaySessionGameplay(services));
 	selected.language = aether::app::GameplayLanguage::Rust;
 	layout.Write(projectRoot / "ProjectSettings.toml", "[scripting]\nlanguage = 'rust'\n");
-	const auto unavailable = aether::app::ValidatePlaySessionGameplay(services);
-	REQUIRE_FALSE(unavailable);
-	CHECK(unavailable.error().message.find("not implemented") != std::string::npos);
+	const auto rust = aether::app::ValidatePlaySessionGameplay(services);
+	const auto prerequisites = aether::app::BuildGameplayPrerequisiteReport(selected.language, aether::app::InspectGameplayPrerequisites(selected.language));
+	CHECK(rust.has_value() == (prerequisites.status == aether::scripting::AgentJobStatus::Passed));
 }

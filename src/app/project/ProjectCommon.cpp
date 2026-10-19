@@ -771,7 +771,7 @@ namespace aether::app::project
 			{
 				const std::filesystem::path manifest = root / "scripts" / "Cargo.toml";
 				std::error_code ec;
-				const std::filesystem::path sdk = AbsolutePath(EngineRustSdkManifest()).parent_path();
+				const std::filesystem::path sdk = AbsolutePath(EngineRustGameplaySdkManifest()).parent_path();
 				std::filesystem::path dependency = std::filesystem::relative(sdk, AbsolutePath(root / "scripts"), ec);
 				if (ec || dependency.empty())
 				{
@@ -779,15 +779,18 @@ namespace aether::app::project
 				}
 				const auto utf8Path = dependency.generic_u8string();
 				const std::string dependencyPath(utf8Path.begin(), utf8Path.end());
-				const std::string cargo = "[package]\nname = \"aether-game\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\ncrate-type = [\"cdylib\", \"staticlib\"]\n\n[dependencies]\naethercore-abi = { path = \""
-				                          + EscapeTomlString(dependencyPath) + "\" }\n\n[profile.release]\npanic = \"abort\"\n";
-				const std::string source = "// The Rust gameplay backend and safe SDK arrive in the next milestone.\n"
-				                           "// Reject loading explicitly until lifecycle and type registration are implemented.\n"
-				                           "use aethercore_abi::{AetherGameplayModuleApi, AE_GAMEPLAY_UNSUPPORTED};\n\n"
-				                           "#[unsafe(no_mangle)]\n"
-				                           "pub unsafe extern \"C\" fn aether_gameplay_query(\n"
-				                           "    _requested_major: u32,\n    _out_size: u32,\n    _out_api: *mut AetherGameplayModuleApi,\n"
-				                           ") -> i32 {\n    AE_GAMEPLAY_UNSUPPORTED\n}\n";
+				const std::string cargo = "[package]\nname = \"aether-game\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\nname = \"aether_gameplay\"\ncrate-type = [\"cdylib\"]\n\n[dependencies]\naethercore = { path = \""
+				                          + EscapeTomlString(dependencyPath) + "\" }\n";
+				const std::string source = "use aethercore::{Context, Result, Script, gameplay_script};\n\n"
+				                           "gameplay_script! { pub struct Player { pub speed: f32 = 3.0 } }\n"
+				                           "impl Script for Player {\n"
+				                           "    fn attach(&mut self, ctx: &mut Context<'_>) -> Result { ctx.log(\"Rust Player attached\") }\n"
+				                           "    fn update(&mut self, ctx: &mut Context<'_>, delta: f32) -> Result {\n"
+				                           "        let mut position = ctx.position(ctx.entity())?;\n"
+				                           "        if ctx.key_down(65)? { position.x -= self.speed * delta; }\n"
+				                           "        if ctx.key_down(68)? { position.x += self.speed * delta; }\n"
+				                           "        ctx.set_position(ctx.entity(), position)\n"
+				                           "    }\n}\n\naethercore::export_gameplay!(Player);\n";
 				if (auto created = io::file_util::CreateDirectories(root / "scripts" / "src"); !created)
 				{
 					error = "Could not create Rust sources directory: " + created.error().message;
@@ -1290,7 +1293,7 @@ namespace aether::app::project
 			error = validated.error().message;
 			return false;
 		}
-		if (language == GameplayLanguage::Rust && EngineRustSdkManifest().empty())
+		if (language == GameplayLanguage::Rust && EngineRustGameplaySdkManifest().empty())
 		{
 			error = "The Rust ABI SDK is missing; expected data/sdk/rust/aethercore-abi/Cargo.toml in the engine install.";
 			return false;

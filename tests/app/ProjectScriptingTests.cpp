@@ -112,7 +112,7 @@ TEST_CASE("Rust project scaffolding remains Rust only and round trips metadata")
 	CHECK_FALSE(std::filesystem::exists(fixture.root / "AetherGame.slnx"));
 	const auto source = aether::io::file_util::ReadText(fixture.root / "scripts/src/lib.rs");
 	REQUIRE(source);
-	CHECK(source->find("AE_GAMEPLAY_UNSUPPORTED") != std::string::npos);
+	CHECK(source->find("export_gameplay!") != std::string::npos);
 }
 
 TEST_CASE("Project creation rejects incompatible language and templates before writing")

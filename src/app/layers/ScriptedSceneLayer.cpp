@@ -3,6 +3,8 @@
 #include <string>
 
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/RustScriptingSubsystem.hpp"
+#include "utils/AetherExceptions.hpp"
 
 #include "AetherCore.hpp"
 #include "audio/AudioSubsystem.hpp"
@@ -164,6 +166,16 @@ namespace aether::app
 			assetDb->SetModelMeshResolver([this](const std::string& path, int primitiveIndex) -> const Mesh* { return m_sceneCtx.assets != nullptr ? scene::ResolveModelPrimitiveMesh(*m_sceneCtx.assets, m_sceneCtx, path, primitiveIndex) : nullptr; });
 		}
 
+		if (auto* rust = context.TryGet<scripting::RustScriptingSubsystem>())
+		{
+			if (const auto initialized = rust->Initialize(m_sceneCtx); !initialized)
+			{
+				AE_ERROR(LogCategory::App, "Rust gameplay initialization failed: {}", initialized.error().message);
+#ifndef AETHERCORE_EDITOR_APP
+				throw aether::EngineError(initialized.error().message);
+#endif
+			}
+		}
 		LoadStartupScene(context);
 	}
 

@@ -1149,7 +1149,7 @@
       "tool": "add_prefab_instance"
     },
     {
-      "description": "Attach a C# script to an entity by type name (the class name in the project's scripts folder, e.g. 'PlayerController'). Optional 'properties' seeds public fields: numbers, bools, strings, or [x, y, z] arrays.",
+      "description": "Attach a gameplay script to an entity by type name (the class name in the project's scripts folder, e.g. 'PlayerController'). Optional 'properties' seeds public fields. Rust declarations determine numeric field types; component references accept {entity, component} or an entity integer for a declared component type.",
       "mutates": true,
       "name": "scene.add_script",
       "paramsSchema": {
@@ -1595,7 +1595,7 @@
       "tool": "save_scene"
     },
     {
-      "description": "List the C# scripts attached to an entity: each one's type, whether it is attached yet, and its property values in the same shape add_script takes, so a value read here can be written straight back.",
+      "description": "List the gameplay scripts attached to an entity: each one's type, whether it is attached yet, and its property values in the same shape add_script takes, so a value read here can be written straight back.",
       "mutates": false,
       "name": "scene.scripts",
       "paramsSchema": {
@@ -2407,7 +2407,7 @@
       "tool": "ui_scroll"
     },
     {
-      "description": "Inspect a project's gameplay language/profile and prerequisites without opening it. Omit root to inspect a language for new project creation. Rust creation is supported; execution follows separately.",
+      "description": "Inspect a project's gameplay language/profile and prerequisites. Defaults to the open project. Desktop Rust execution uses Cargo and the safe SDK.",
       "mutates": false,
       "name": "project.gameplay_capabilities",
       "paramsSchema": {
@@ -2426,6 +2426,16 @@
         "type": "object"
       },
       "tool": "gameplay_capabilities"
+    },
+    {
+      "description": "Poll the current Rust build/load report and runtime diagnostics. Compilation failure never enters Play. C# returns its capabilities; its existing scripting diagnostics remain available through engine_info and console logs.",
+      "mutates": false,
+      "name": "project.gameplay_status",
+      "paramsSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "tool": "gameplay_status"
     }
   ]
 }

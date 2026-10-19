@@ -195,7 +195,7 @@ namespace aether::app
 			        }});
 
 			methods.push_back({"project.gameplay_capabilities", "gameplay_capabilities",
-			        "Inspect a project's gameplay language/profile and prerequisites without opening it. Omit root to inspect a language for new project creation. Rust creation is supported; execution follows separately.",
+			        "Inspect a project's gameplay language/profile and prerequisites without opening it. Omit root to inspect a language for new project creation. Desktop Rust execution uses Cargo and the safe SDK.",
 			        false, Obj({{"root", StrProp()}, {"language", json{{"type", "string"}, {"enum", {"csharp", "rust"}}}}}),
 			        [](const json& params, editor::MethodContext&) -> json
 			        {

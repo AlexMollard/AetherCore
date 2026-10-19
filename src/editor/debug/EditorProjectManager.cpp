@@ -38,6 +38,7 @@
 #include "scene/SceneWorkflow.hpp"
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/RustScriptingSubsystem.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
@@ -438,6 +439,15 @@ namespace aether::editor
 			m_launcherState.error = "This project's gameplay language changed. Reopen the project from the Launcher to select its gameplay backend.";
 			AE_ERROR(LogCategory::App, "{}", m_launcherState.error);
 			return;
+		}
+		if (const auto* rust = m_services != nullptr ? m_services->TryGet<app::scripting::RustScriptingSubsystem>() : nullptr)
+		{
+			std::error_code ec;
+			if (!std::filesystem::equivalent(rust->SourceProject(), projectResult->root, ec))
+			{
+				m_launcherState.error = "Open a different Rust project in its own Editor process from the Launcher.";
+				return;
+			}
 		}
 		m_currentProject = *std::move(projectResult);
 		m_currentProject.loaded = true;

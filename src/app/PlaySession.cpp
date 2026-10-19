@@ -24,6 +24,8 @@
 #include "platform/Input.hpp"
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/RustScriptingSubsystem.hpp"
+#include "GameplayPrerequisites.hpp"
 #include "systems/ScriptComponentSystem.hpp"
 
 namespace aether::app
@@ -85,7 +87,11 @@ namespace aether::app
 		}
 		if (activeLanguage == GameplayLanguage::Rust)
 		{
-			AE_UNEXPECTED(AetherError::Engine("Rust gameplay backend is not implemented yet (Task 5); the project can be edited, but Play and publishing are unavailable."));
+			const auto prerequisites = BuildGameplayPrerequisiteReport(activeLanguage, InspectGameplayPrerequisites(activeLanguage));
+			if (prerequisites.status == aether::scripting::AgentJobStatus::Failed)
+			{
+				AE_UNEXPECTED(AetherError::Engine(prerequisites.diagnostics.front().message));
+			}
 		}
 		return {};
 	}
@@ -112,6 +118,12 @@ namespace aether::app
 			shaderHook->recompile();
 		}
 
+		if (auto* rust = context.TryGet<scripting::RustScriptingSubsystem>())
+		{
+			if (!rust->BeginRebuild()) { return false; }
+			playState->SetMode(PlayState::Mode::Compiling);
+			return true;
+		}
 		if (auto* scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
 		{
 			// Kick the rebuild off on a worker thread and enter Compiling. The editor
@@ -132,6 +144,23 @@ namespace aether::app
 			return;
 		}
 
+		if (auto* rust = context.TryGet<scripting::RustScriptingSubsystem>())
+		{
+			const auto status = rust->PollRebuild();
+			if (status == scripting::RustScriptingSubsystem::BuildStatus::Running) { return; }
+			if (status == scripting::RustScriptingSubsystem::BuildStatus::Succeeded)
+			{
+				if (auto* system = context.TryGet<ScriptComponentSystem>()) { system->Invalidate(context.Get<World>()); }
+				if (const auto loaded = rust->LoadBuiltModule(); loaded)
+				{
+					if (auto* assets = context.TryGet<AssetManager>()) { EnterPlayingMode(context, *playState, *assets); }
+				}
+				else { playState->SetMode(PlayState::Mode::Editing); }
+			}
+			else { playState->SetMode(PlayState::Mode::Editing); }
+			rust->ClearRebuild();
+			return;
+		}
 		auto* scripting = context.TryGet<scripting::CSharpScriptingSubsystem>();
 		auto* assets = context.TryGet<AssetManager>();
 		if (scripting == nullptr || assets == nullptr)
@@ -179,6 +208,7 @@ namespace aether::app
 
 		if (playState->IsCompiling())
 		{
+			if (auto* rust = context.TryGet<scripting::RustScriptingSubsystem>()) { rust->ClearRebuild(); }
 			if (auto* scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
 			{
 				scripting->ClearRebuild();

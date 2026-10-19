@@ -51,6 +51,7 @@
 #	include "net/NetworkContext.hpp"
 #	include "net/NetworkSystems.hpp"
 #	include "scripting/CSharpScriptingSubsystem.hpp"
+#	include "scripting/RustScriptingSubsystem.hpp"
 #	include "systems/DayNightSystem.hpp"
 #	include "systems/ScriptComponentSystem.hpp"
 #	include "PlaySession.hpp"
@@ -198,6 +199,19 @@ namespace aether::app
 			aether::coro::set_default_executor(nullptr);
 		}
 
+#ifdef AETHERCORE_SCENE_APP
+		// Rust detach callbacks require live scene, physics and service objects. Quiesce
+		// gameplay before unregistering systems, including partially attached startup.
+		if (auto* rust = m_engine.GetServiceContainer().TryGet<scripting::RustScriptingSubsystem>())
+		{
+			if (auto* world = m_engine.GetServiceContainer().TryGet<World>())
+			{
+				if (auto* scripts = dynamic_cast<ScriptComponentSystem*>(world->FindSystem("ScriptComponentSystem"))) { scripts->Invalidate(*world); }
+			}
+			rust->Unload();
+		}
+#endif
+
 		if (!m_layersAttached)
 		{
 			AE_VERBOSE(LogCategory::App, "Application destroyed before layers were attached.");
@@ -215,12 +229,9 @@ namespace aether::app
 #ifdef AETHERCORE_SCENE_APP
 		// FIRST, before anything they point at is torn down. CSharpScriptFieldBridge
 		// and CSharpRpcBridge hold `const&` to CSharpScriptingSubsystem and
-		// ScriptComponentSystem, and neither outlives this destructor: main.cpp
-		// declares the Application BEFORE csharpScripting, so the scripting subsystem
-		// is destroyed first, and the UnregisterSystem block just below takes the
-		// script system out from under them - while the ServiceContainer owning the
-		// NetworkContext (and therefore the bridges) is not cleared until later still.
-		// Both references dangle across that whole window.
+		// ScriptComponentSystem. The UnregisterSystem block below destroys the script
+		// system before the ServiceContainer clears NetworkContext and its bridges.
+		// Its script-system reference would dangle across that window.
 		//
 		// Nothing dereferences them there today, which is exactly why this is worth
 		// making explicit rather than leaving to luck: the branch that gave the
