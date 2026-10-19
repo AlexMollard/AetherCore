@@ -164,13 +164,15 @@ At the Task 4 checkpoint Rust gameplay was intentionally unavailable; Task 5 bel
 
 **Files:** CMake/Dependencies.cmake, CMake/DotNet.cmake, CMake/SlangShaders.cmake, src/engine/CMakeLists.txt, src/app/CMakeLists.txt, CMakePresets.json, CMake/WebRuntime.cmake and source-group definitions.
 
-- [ ] Add configure/build checks for native default, runtime-only native, and proposed webgpu-browser preset. The browser configure succeeds without desktop Vulkan/.NET discovery and excludes editor, Vulkan/VMA/Aftermath, ENet/plum, Jolt and unused thread-dependent native systems.
-- [ ] Replace broad inclusion only where target selection requires it; keep shared portable sources shared. Explicitly select Box2D and browser audio/storage/input code. Audit IOThread, asset worker queues and physics workers, not just render-thread startup.
-- [ ] Build AssetPacker and shader compiler for the host and feed their verified executable paths into cross-build packaging. Add a test that rejects a Wasm binary offered as a host tool.
-- [ ] Run build dependency and artifact-import audits: browser output contains neither hostfxr nor Vulkan/native socket imports. Native C# and Launcher UiShell continue configuring and running.
-- [ ] Regenerate clangd using the existing preset and run graphify update after structural changes; never edit generated databases.
+- [x] Add configure/build checks for native default, runtime-only native, and proposed webgpu-browser preset. The browser configure succeeds without desktop Vulkan/.NET discovery and excludes editor, Vulkan/VMA/Aftermath, ENet/plum, Jolt and unused thread-dependent native systems.
+- [x] Replace broad inclusion only where target selection requires it; keep shared portable sources shared. Explicitly select Box2D; keep browser audio/storage/input unavailable until Task 10, as documented in the foundation capability report. Audit IOThread, asset worker queues and physics workers, not just render-thread startup.
+- [x] Build AssetPacker and shader compiler for the host and feed their verified executable paths into cross-build packaging. Add a test that rejects a Wasm binary offered as a host tool.
+- [x] Run build dependency and artifact-import audits: browser output contains neither hostfxr nor Vulkan/native socket imports. Native C# and Launcher UiShell continue configuring and running.
+- [x] Regenerate clangd using the existing preset and run graphify update after structural changes; never edit generated databases.
 
 **Gate:** A runtime-only Wasm target links using the pinned tools, native tools produce its assets, and no unsupported native dependency sneaks into the browser graph.
+
+**Qualified:** Windows default/runtime-only native and pinned Wasm builds; 9 audit tests; detailed native 1,454/1,454 after one non-reproducing failure in an earlier gauntlet run; both hidden GPU smokes with zero validation findings; C#/Rust desktop fixtures and Launcher UiShell. See [build boundary and evidence](../../architecture/browser-runtime-build.md). Browser graphics remain Task 9.
 
 ## Task 9: Add the minimum WebGPU backend and browser frame lifecycle
 
