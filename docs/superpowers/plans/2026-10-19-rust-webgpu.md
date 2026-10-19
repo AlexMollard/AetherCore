@@ -178,14 +178,16 @@ At the Task 4 checkpoint Rust gameplay was intentionally unavailable; Task 5 bel
 
 **Files:** gpu/ backend/capability/resource interfaces, webgpu/ implementation, platform/web/, AetherCore.*, Application.*, RenderFramePacket.hpp consumers, sprite rendering and shader build rules.
 
-- [ ] Document Full/UiShell/native/browser initialization and teardown dependencies before editing them. Add an asynchronous browser initializing/ready/failed/device-lost lifecycle; no main-thread synchronous wait for adapter/device/queue completion.
-- [ ] Separate portable resource/pass intent from Vulkan barriers, descriptor addresses and timeline semaphores. Introduce only operations needed by the 2D path, retaining Vulkan's existing implementations and invariants.
-- [ ] Implement WebGPU buffers, textures, samplers, pipeline/layout creation, upload, render pass, canvas resize and asynchronous retirement/completion. Validate resource lifetimes under delayed completion and shutdown/device loss.
-- [ ] Compile the Task 1 validated sprite WGSL path with explicit frame/instance buffers and bounded texture batches. Add layout, clipping, transparency/sort and texture-batch-overflow tests. Never silently truncate draws to a binding limit.
-- [ ] Drive a browser frame callback through input, game update, extraction and rendering sequentially. Consume actual engine frame packets; do not substitute the standalone spike renderer.
-- [ ] Verify textured sprite pixels, resize, unsupported adapter/limits, device loss and no-hang shutdown. Test on a real GPU and record validation errors. Software-only rendering cannot satisfy the real-GPU gate.
+- [x] Document Full/UiShell/native/browser initialization and teardown dependencies before editing them. Add an asynchronous browser initializing/ready/failed/device-lost lifecycle; no main-thread synchronous wait for adapter/device/queue completion.
+- [x] Separate portable resource/pass intent from Vulkan barriers, descriptor addresses and timeline semaphores. Introduce only operations needed by the 2D path, retaining Vulkan's existing implementations and invariants.
+- [x] Implement WebGPU buffers, textures, samplers, pipeline/layout creation, upload, render pass, canvas resize and asynchronous retirement/completion. Validate resource lifetimes under delayed completion and shutdown/device loss.
+- [x] Compile the Task 1 validated sprite WGSL path with explicit frame/instance buffers and bounded texture batches. Add layout, clipping, transparency/sort and texture-batch-overflow tests. Never silently truncate draws to a binding limit.
+- [x] Drive a browser frame callback through input, game update, extraction and rendering sequentially. Consume actual engine frame packets; do not substitute the standalone spike renderer.
+- [x] Verify textured sprite pixels, resize, unsupported adapter/limits, device loss and no-hang shutdown. Test on a real GPU and record validation errors. Software-only rendering cannot satisfy the real-GPU gate.
 
 **Gate:** A Rust script changes a real scene entity that is rendered through WebGPU with clean validation. M3 is complete.
+
+**Qualified:** Engine World/packet + safe Rust SDK/provider gameplay rendered on hardware Chromium, including input, all 4,096 texture pixels, clipping, transparency, resize, overflow draws, terminal errors and asynchronous shutdown. C#/Rust desktop fixtures, native build/unit/GPU checks preserved. See [lifecycle and qualification](../../architecture/webgpu-lifecycle.md). Complete assets/audio/save/export packaging remain Tasks 10-11.
 
 ## Task 10: Port browser assets, audio, input and saves
 

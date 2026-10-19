@@ -1,6 +1,8 @@
 # Browser runtime build boundary
 
-Task 8 adds the `webgpu-browser` CMake preset and a linked runtime foundation.
+Task 8 added the `webgpu-browser` CMake preset and a linked runtime foundation.
+Task 9 extends it with the [WebGPU runtime and lifecycle](webgpu-lifecycle.md);
+the foundation-only checks below retain their original narrower meaning.
 It is not yet a playable browser export: renderer, browser input, audio and storage
 remain unavailable until Tasks 9–10. Its machine-readable runtime result reports
 those capabilities as false. No feasibility renderer is substituted for the engine.
