@@ -326,6 +326,10 @@ namespace aether::app::scripting
 					return AE_GAMEPLAY_INVALID_ARGUMENT;
 				}
 				const auto path = m_save_directory / (text + ".txt");
+				if (request.operation == AE_GAMEPLAY_SERVICE_READ_SAVE && !m_context.allowSaveReads)
+				{
+					return AE_GAMEPLAY_INVALID_HANDLE;
+				}
 				if (request.operation == AE_GAMEPLAY_SERVICE_WRITE_SAVE)
 				{
 					if (!io::file_util::CreateDirectories(m_save_directory))

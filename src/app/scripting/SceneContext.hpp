@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,8 @@ namespace aether::app::scripting
 		float deltaTime = 0.0f;
 		float elapsedTime = 0.0f;
 		std::uint64_t frameCount = 0;
+		// Isolated agent runs start without persistent saves unless explicitly requested.
+		bool allowSaveReads = true;
 
 		std::vector<aether::Entity> sceneEntities;
 
@@ -67,6 +70,8 @@ namespace aether::app::scripting
 		// of the script update - a load tears down every entity, so it must
 		// never run inside a script callback.
 		std::string pendingSceneLoad;
+		// Isolated runners validate destinations before the shared loader mutates the world.
+		std::function<void(const std::string&)> beforeSceneLoad;
 
 		// Entities destroyed by scripts (Entity.Destroy). Deferred to the end
 		// of the script update: an immediate destroy would free the component

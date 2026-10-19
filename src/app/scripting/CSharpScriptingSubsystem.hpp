@@ -18,7 +18,7 @@ namespace aether::app::scripting
 	class CSharpScriptingSubsystem
 	{
 	public:
-		CSharpScriptingSubsystem();
+		explicit CSharpScriptingSubsystem(std::filesystem::path managedDir = {});
 
 		[[nodiscard]] bool IsAvailable() const
 		{

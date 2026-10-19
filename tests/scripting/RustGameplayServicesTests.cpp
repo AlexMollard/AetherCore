@@ -160,6 +160,9 @@ TEST_CASE("Rust save services persist exact UTF8 lengths and never truncate outp
 	AetherGameplayPropertyValue value{.structSize = sizeof(value)};
 	REQUIRE(api.invoke(api.context, &request, &value, {}) == AE_GAMEPLAY_OK);
 	request.operation = AE_GAMEPLAY_SERVICE_READ_SAVE;
+	context.allowSaveReads = false;
+	CHECK(api.invoke(api.context, &request, &value, {}) == AE_GAMEPLAY_INVALID_HANDLE);
+	context.allowSaveReads = true;
 	uint32_t required = 0;
 	char shortBuffer[] = {'X', 'X'};
 	CHECK(api.invoke(api.context, &request, &value, {shortBuffer, sizeof(shortBuffer), &required}) == AE_GAMEPLAY_BUFFER_TOO_SMALL);

@@ -499,6 +499,10 @@ namespace aether::app
 		if (!sceneCtx->pendingSceneLoad.empty())
 		{
 			const std::string sceneName = std::exchange(sceneCtx->pendingSceneLoad, {});
+			if (sceneCtx->beforeSceneLoad)
+			{
+				sceneCtx->beforeSceneLoad(sceneName);
+			}
 			// Persistent (DontDestroyOnLoad / SceneTransient) entities survive
 			// the switch WITH their live script instances; everything else's
 			// instances are torn down before their entities are.

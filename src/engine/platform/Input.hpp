@@ -415,7 +415,7 @@ namespace aether
 		// Synthetic key injection (headless playtesting via the control server). A
 		// synthetic key is OR'd into the real GLFW state each Update(), so held keys
 		// drive IsKeyDown and the down-edge still fires IsKeyPressed exactly once.
-		void SetSyntheticKey(int key, bool down)
+		void SetSyntheticKey(int key, bool down, bool seedWindowlessState = true)
 		{
 			if (key >= 0 && key < kMaxKeys)
 			{
@@ -430,7 +430,7 @@ namespace aether
 				// into m_prevKeys, so curr and prev are both true and the down-edge is gone -
 				// IsKeyPressed never fires for injected keys, while IsKeyDown still works.
 				// That silently breaks every headless playtest that waits on a key press.
-				if (m_window == nullptr)
+				if (m_window == nullptr && seedWindowlessState)
 				{
 					m_currKeys[key] = m_currKeys[key] || down;
 				}

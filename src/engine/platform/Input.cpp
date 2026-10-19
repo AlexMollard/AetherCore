@@ -914,7 +914,7 @@ namespace aether
 			// for it", so there is no second presence query that can fall out of step with
 			// this one. An unmapped stick reports as absent, which is the honest answer.
 			GLFWgamepadstate state{};
-			const bool present = glfwGetGamepadState(i, &state) == GLFW_TRUE;
+			const bool present = m_window != nullptr && glfwGetGamepadState(i, &state) == GLFW_TRUE;
 
 			if (present)
 			{

@@ -1,0 +1,365 @@
+#include "scripting/GameplayRun.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <memory>
+#include <set>
+#include <stdexcept>
+
+#include "ProjectScripting.hpp"
+#include "io/FileUtil.hpp"
+#include "physics2d/Physics2DSystem.hpp"
+#include "platform/Input.hpp"
+#include "project/ProjectCommon.hpp"
+#include "scene/Hierarchy.hpp"
+#include "scene/SceneSerializer.hpp"
+#include "scene/World.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/RustGameplayHost.hpp"
+#include "scripting/SceneContext.hpp"
+#include "systems/ScriptComponentSystem.hpp"
+#include "utils/ServiceContainer.hpp"
+
+namespace aether::app::scripting
+{
+	namespace
+	{
+		using Json = nlohmann::json;
+		using Status = aether::scripting::AgentJobStatus;
+
+		void Require(bool condition, const std::string& message)
+		{
+			if (!condition)
+			{
+				throw std::runtime_error(message);
+			}
+		}
+
+		void ValidateConfig(const GameplayRunRequest& request)
+		{
+			Require(request.ticks > 0 && request.ticks <= 1000000, "ticks must be in [1, 1000000]");
+			Require(std::isfinite(request.step) && request.step > 0 && request.step <= 1, "step must be finite and in (0, 1]");
+			const auto& config = request.launchConfig;
+			Require(config.is_object(), "launchConfig must be an object");
+			for (const auto& [key, value]: config.items())
+			{
+				Require(key == "readSaves" || key == "input" || key == "assertions", "Unknown launchConfig field: " + key);
+			}
+			Require(!config.contains("readSaves") || config["readSaves"].is_boolean(), "readSaves must be a boolean");
+			for (const char* key: {"input", "assertions"})
+			{
+				Require(!config.contains(key) || config[key].is_array(), std::string(key) + " must be an array");
+			}
+			for (const auto& event: config.value("input", Json::array()))
+			{
+				Require(event.is_object() && event.contains("tick") && event["tick"].is_number_integer() && event["tick"].get<std::int64_t>() >= 0, "input.tick must be a nonnegative integer");
+				Require(event["tick"].get<std::uint64_t>() < request.ticks, "input.tick is outside the run");
+				Require(event.contains("key") && event["key"].is_string() && Input::KeyCodeFromName(event["key"].get<std::string>()) >= 0, "input.key is unknown");
+				Require(event.contains("down") && event["down"].is_boolean(), "input.down must be a boolean");
+			}
+			for (const auto& assertion: config.value("assertions", Json::array()))
+			{
+				Require(assertion.is_object(), "assertion must be an object");
+				for (const char* field: {"entity", "type", "property"})
+				{
+					Require(assertion.contains(field) && assertion[field].is_string() && !assertion[field].get<std::string>().empty(), std::string("assertion requires ") + field);
+				}
+				Require(assertion.contains("equals"), "assertion requires equals");
+				if (assertion.contains("tolerance"))
+				{
+					Require(assertion["tolerance"].is_number(), "assertion tolerance must be numeric");
+					const double tolerance = assertion["tolerance"].get<double>();
+					Require(std::isfinite(tolerance) && tolerance >= 0, "assertion tolerance must be finite and nonnegative");
+				}
+			}
+		}
+
+		// ApplyScene's data-only paths work without a GraphicsDevice. Reject everything
+		// requiring omitted systems before applying so no authored gameplay is silently lost.
+		void ValidateScene(const scene::SceneDescription& description)
+		{
+			Require(description.prefabInstances.empty() && description.includes.empty(), "Headless run does not support linked prefabs or scene includes");
+			Require(description.lights.empty() && !description.environment, "Headless run does not support 3D lighting/environment");
+			const std::set<std::string> supported{"Name", "Transform", "Rigid Body 2D", "Collider 2D", "Joint 2D", "UI Canvas", "UI Rect", "UI Text", "UI Image", "UI Progress Bar", "UI Mask"};
+			for (const auto& record: description.entities)
+			{
+				Require(!record.meshRenderer && !record.mesh && !record.material && !record.skinned && !record.physics && !record.effect && !record.joint && record.scriptJoints.empty() && !record.spriteAnimator, "Headless run requires unavailable model/3D physics/effect/animation systems: " + record.name);
+				for (const auto& component: record.reflected)
+				{
+					Require(supported.contains(component.type), "Headless run does not support component: " + component.type);
+				}
+			}
+		}
+
+		Json CopyProperty(const ScriptPropertyValue& property, World& world)
+		{
+			switch (property.type)
+			{
+				case ScriptPropertyValue::Type::Float:
+					Require(std::isfinite(property.f4[0]), "Script returned a nonfinite property");
+					return property.f4[0];
+				case ScriptPropertyValue::Type::Vector3:
+					Require(std::isfinite(property.f4[0]) && std::isfinite(property.f4[1]) && std::isfinite(property.f4[2]), "Script returned a nonfinite vector");
+					return Json::array({property.f4[0], property.f4[1], property.f4[2]});
+				case ScriptPropertyValue::Type::Bool:
+					return property.i64 != 0;
+				case ScriptPropertyValue::Type::String:
+					return property.str;
+				case ScriptPropertyValue::Type::Entity:
+				case ScriptPropertyValue::Type::Component:
+				{
+					const Entity target{static_cast<std::uint32_t>(property.i64)};
+					if (world.GetRegistry().valid(World::ToEntt(target)))
+					{
+						if (const auto* name = world.TryGet<NameComponent>(target))
+						{
+							return name->name;
+						}
+					}
+					return nullptr;
+				}
+				default:
+					return property.i64;
+			}
+		}
+
+		bool Equal(const Json& actual, const Json& expected, double tolerance)
+		{
+			if (tolerance == 0 && actual.is_number_integer() && expected.is_number_integer())
+			{
+				if (actual.is_number_unsigned() == expected.is_number_unsigned())
+				{
+					return actual == expected;
+				}
+				const auto signedValue = (actual.is_number_unsigned() ? expected : actual).get<std::int64_t>();
+				const auto unsignedValue = (actual.is_number_unsigned() ? actual : expected).get<std::uint64_t>();
+				return signedValue >= 0 && static_cast<std::uint64_t>(signedValue) == unsignedValue;
+			}
+			if (actual.is_number() && expected.is_number())
+			{
+				return std::abs(actual.get<double>() - expected.get<double>()) <= tolerance;
+			}
+			if (actual.is_array() && expected.is_array() && actual.size() == expected.size())
+			{
+				for (std::size_t i = 0; i < actual.size(); ++i)
+				{
+					if (!Equal(actual[i], expected[i], tolerance))
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+			return actual == expected;
+		}
+	}
+
+	aether::scripting::AgentReport RunGameplay(const GameplayRunRequest& request)
+	{
+		const auto started = std::chrono::steady_clock::now();
+		aether::scripting::AgentReport report;
+		report.jobId = "gameplay-run";
+		report.status = Status::Failed;
+		report.phase = "run";
+		report.target = "desktop";
+		report.language = "rust";
+		report.profile = "native-headless-2d-v1";
+		report.requiredChecks = {{"scene-load", Status::Failed}, {"gameplay-ticks", Status::Failed}, {"state-assertions", Status::Failed}};
+		try
+		{
+			ValidateConfig(request);
+			Require(!request.output.empty(), "State artifact output path is required");
+			Require(scene::IsValidAssetName(request.scene), "A valid named scene is required");
+			const auto settings = project::ReadProjectDescriptor(request.project);
+			Require(settings.has_value(), settings ? "" : settings.error().message);
+			report.language = std::string(GameplayLanguageName(settings->language));
+			const auto scenePath = settings->scenesDir / (request.scene + ".scene.toml");
+			const auto text = io::file_util::ReadText(scenePath);
+			Require(text.has_value(), "Cannot read named scene: " + scenePath.string());
+			const auto description = scene::ParseToml(*text);
+			Require(description.has_value(), "Scene TOML is invalid");
+			ValidateScene(*description);
+
+			ServiceContainer services;
+			World world;
+			Input input;
+			SceneContext context;
+			context.world = &world;
+			context.input = &input;
+			context.services = &services;
+			context.allowSaveReads = request.launchConfig.value("readSaves", false);
+			context.beforeSceneLoad = [&](const std::string& name)
+			{
+				Require(scene::IsValidAssetName(name), "Invalid requested scene destination");
+				const auto destination = scene::ReadSceneFile(name);
+				Require(destination.has_value(), "Requested scene destination is missing: " + name);
+				ValidateScene(*destination);
+			};
+			services.Register(context);
+			services.Register(input);
+			services.Register(world);
+			auto physics = std::make_unique<Physics2DSystem>();
+			context.physics2D = physics.get();
+			services.Register(*physics);
+			world.RegisterSystem(std::move(physics));
+			RustGameplayHost rust;
+			std::unique_ptr<CSharpScriptingSubsystem> managed;
+			GameplayHost* host = nullptr;
+			if (settings->language == GameplayLanguage::Rust)
+			{
+				const auto loaded = rust.Load(request.module, world, &context);
+				Require(loaded.has_value(), loaded ? "" : loaded.error().message);
+				host = &rust.Gameplay();
+			}
+			else
+			{
+				Require(std::filesystem::is_regular_file(request.managedDir / "AetherGame.dll"), "Isolated managed directory must contain AetherGame.dll");
+				managed = std::make_unique<CSharpScriptingSubsystem>(request.managedDir);
+				Require(managed->IsAvailable(), "C# host is unavailable");
+				if (!managed->Gameplay().IsAvailable())
+				{
+					managed->LoadScripts();
+				}
+				Require(managed->Gameplay().IsAvailable(), "C# gameplay assembly is unavailable");
+				host = &managed->Gameplay();
+			}
+			services.Register(*host);
+			std::vector<std::string> callbackErrors;
+			host->SetErrorHandler([&](const std::string& message) { callbackErrors.push_back(message); });
+			ScriptComponentSystem scripts(services);
+			struct Cleanup
+			{
+				ScriptComponentSystem& scripts;
+				World& world;
+				GameplayHost& host;
+				bool closed = false;
+				void Close()
+				{
+					if (!closed)
+					{
+						closed = true;
+						scripts.Invalidate(world);
+						host.SetErrorHandler({});
+					}
+				}
+				~Cleanup() { Close(); }
+			} cleanup{scripts, world, *host};
+			scene::SetProjectSceneDirectories(settings->scenesDir, settings->prefabsDir);
+			struct DirectoryCleanup
+			{
+				~DirectoryCleanup() { scene::ClearProjectSceneDirectories(); }
+			} directoryCleanup;
+			scene::ApplySceneDeps deps;
+			deps.sceneContext = &context;
+			scene::ApplyScene(*description, world, deps);
+			report.requiredChecks[0].status = Status::Passed;
+			const auto events = request.launchConfig.value("input", Json::array());
+			for (std::uint32_t tick = 0; tick < request.ticks; ++tick)
+			{
+				for (const auto& event: events)
+				{
+					if (event["tick"].get<std::uint32_t>() == tick)
+					{
+						input.SetSyntheticKey(Input::KeyCodeFromName(event["key"].get<std::string>()), event["down"].get<bool>(), false);
+					}
+				}
+				input.Update();
+				context.physics2D->Update(world, request.step);
+				scripts.Update(world, request.step);
+				for (auto&& [handle, component]: world.View<ScriptComponent>().each())
+				{
+					if (ecs::HasDisabledAncestor(world, World::FromEntt(handle)))
+					{
+						continue;
+					}
+					for (const auto& entry: component.scripts)
+					{
+						Require(entry.path.empty() || entry.attached, "Script type or instance failed: " + entry.path);
+					}
+				}
+				Require(callbackErrors.empty(), callbackErrors.empty() ? "" : callbackErrors.front());
+				if (managed)
+				{
+					Require(managed->ScriptErrors().empty(), managed->ScriptErrors().empty() ? "" : managed->ScriptErrors().front());
+				}
+				for (const auto& diagnostic: rust.Diagnostics())
+				{
+					Require(diagnostic.severity != aether::scripting::AgentDiagnosticSeverity::Error, diagnostic.message);
+				}
+			}
+			report.requiredChecks[1].status = Status::Passed;
+			Json state = {{"schemaVersion", 1}, {"initialFrame", 0}, {"ticks", request.ticks}, {"step", request.step}, {"readSaves", context.allowSaveReads}, {"entities", Json::array()}, {"assertions", Json::array()}};
+			for (auto&& [handle, component]: world.View<ScriptComponent>().each())
+			{
+				const Entity entity = World::FromEntt(handle);
+				const auto* name = world.TryGet<NameComponent>(entity);
+				for (std::uint32_t index = 0; index < component.scripts.size(); ++index)
+				{
+					const auto& entry = component.scripts[index];
+					const auto instance = scripts.GetInstanceHandle(entity.id, index);
+					Require(entry.path.empty() || instance != 0 || !entry.attached, "Script instance missing: " + entry.path);
+					// Disabled authored scripts are intentionally not executed.
+					if (!entry.attached)
+					{
+						continue;
+					}
+					Json values = Json::object();
+					const auto properties = host->GetScriptProperties(entry.path);
+					for (std::size_t p = 0; p < properties.size(); ++p)
+					{
+						ScriptPropertyValue value;
+						Require(host->GetPropertyValue(instance, static_cast<int>(p), value), "Cannot copy property: " + properties[p].name);
+						values[properties[p].name] = CopyProperty(value, world);
+					}
+					state["entities"].push_back({{"entity", name ? name->name : std::to_string(entity.id)}, {"type", entry.path}, {"properties", values}});
+				}
+			}
+			bool assertionsPassed = true;
+			for (const auto& assertion: request.launchConfig.value("assertions", Json::array()))
+			{
+				const Json* actual = nullptr;
+				std::size_t matches = 0;
+				for (const auto& entity: state["entities"])
+				{
+					if (entity["entity"] == assertion["entity"] && entity["type"] == assertion["type"])
+					{
+						++matches;
+						const auto property = assertion["property"].get<std::string>();
+						if (entity["properties"].contains(property))
+						{
+							actual = &entity["properties"][property];
+						}
+					}
+				}
+				const bool passed = matches == 1 && actual != nullptr && Equal(*actual, assertion["equals"], assertion.value("tolerance", 0.0));
+				assertionsPassed &= passed;
+				state["assertions"].push_back({{"entity", assertion["entity"]}, {"type", assertion["type"]}, {"property", assertion["property"]}, {"expected", assertion["equals"]}, {"actual", actual ? *actual : Json(nullptr)}, {"passed", passed}});
+			}
+			Require(request.output.parent_path().empty() || io::file_util::CreateDirectories(request.output.parent_path()).has_value(), "Cannot create artifact directory");
+			const auto written = io::file_util::WriteText(request.output, state.dump(2));
+			Require(written.has_value(), "Cannot write copied script state artifact");
+			report.artifacts.push_back({request.output.string(), std::filesystem::file_size(request.output), std::nullopt});
+			Require(assertionsPassed, "One or more script-state assertions failed (missing/ambiguous entity, type, property, or value mismatch)");
+			cleanup.Close();
+			rust.Unload();
+			Require(callbackErrors.empty(), callbackErrors.empty() ? "" : callbackErrors.front());
+			if (managed)
+			{
+				Require(managed->ScriptErrors().empty(), managed->ScriptErrors().empty() ? "" : managed->ScriptErrors().front());
+			}
+			for (const auto& diagnostic: rust.Diagnostics())
+			{
+				Require(diagnostic.severity != aether::scripting::AgentDiagnosticSeverity::Error, diagnostic.message);
+			}
+			report.requiredChecks[2].status = Status::Passed;
+			report.status = Status::Passed;
+		}
+		catch (const std::exception& error)
+		{
+			report.diagnostics.push_back({"GAMEPLAY_RUN", aether::scripting::AgentDiagnosticSeverity::Error, error.what(), std::nullopt});
+		}
+		report.durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+		return report;
+	}
+}
