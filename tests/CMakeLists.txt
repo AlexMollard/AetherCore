@@ -67,6 +67,7 @@ target_include_directories(EngineTests PRIVATE "${box2d_SOURCE_DIR}/include")
 # Mirror App's scenes dir so ReadSceneFile("default") resolves the committed template.
 target_compile_definitions(EngineTests PRIVATE AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes")
 target_compile_definitions(EngineTests PRIVATE AETHER_TESTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests")
+target_compile_definitions(EngineTests PRIVATE AETHER_TEST_CMAKE="${CMAKE_COMMAND}")
 # The generated-shader compile test drives the editor's ShaderCompiler, which needs the same
 # slangc, arguments and engine include dir the app is given. Absent when CMake found no
 # slangc, and the test skips itself in that case.
