@@ -1,6 +1,7 @@
 #include "io/Process.hpp"
 
 #include <chrono>
+#include <cerrno>
 #include <thread>
 #include <vector>
 
@@ -17,8 +18,9 @@
 
 namespace aether::io
 {
-	int RunProcessArguments(const std::filesystem::path& executable, std::span<const std::string> arguments, const std::filesystem::path& workingDirectory, const std::filesystem::path& logPath, int timeoutMs)
+	int RunProcessArguments(const std::filesystem::path& executable, std::span<const std::string> arguments, const std::filesystem::path& workingDirectory, const std::filesystem::path& logPath, int timeoutMs, std::stop_token stopToken)
 	{
+		if (stopToken.stop_requested()) { return kProcessCancelled; }
 		if (executable.empty() || timeoutMs < 0) { return kProcessLaunchFailed; }
 		for (const auto& arg: arguments) { if (arg.find('\0') != std::string::npos) { return kProcessLaunchFailed; } }
 		std::error_code ec;
@@ -82,22 +84,34 @@ namespace aether::io
 		int result = kProcessLaunchFailed;
 		if (started)
 		{
-			if (AssignProcessToJobObject(job, process.hProcess))
+			if (AssignProcessToJobObject(job, process.hProcess) && ResumeThread(process.hThread) != static_cast<DWORD>(-1))
 			{
-				ResumeThread(process.hThread);
-				if (WaitForSingleObject(process.hProcess, static_cast<DWORD>(timeoutMs)) == WAIT_OBJECT_0)
+				const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+				for (;;)
 				{
-					DWORD code = 0;
-					if (GetExitCodeProcess(process.hProcess, &code)) { result = static_cast<int>(code); }
-				}
-				else
-				{
+					const DWORD waited = WaitForSingleObject(process.hProcess, 0);
+					if (waited == WAIT_OBJECT_0)
+					{
+						DWORD code = 0;
+						if (GetExitCodeProcess(process.hProcess, &code)) { result = static_cast<int>(code); }
+						break;
+					}
+					if (waited == WAIT_TIMEOUT && !stopToken.stop_requested() && std::chrono::steady_clock::now() < end)
+					{
+						WaitForSingleObject(process.hProcess, 10);
+						continue;
+					}
+					result = stopToken.stop_requested() ? kProcessCancelled : (waited == WAIT_TIMEOUT ? kProcessTimedOut : kProcessLaunchFailed);
 					TerminateJobObject(job, 1);
-					WaitForSingleObject(process.hProcess, 2000);
-					result = kProcessTimedOut;
+					WaitForSingleObject(process.hProcess, INFINITE);
+					break;
 				}
 			}
-			else { TerminateProcess(process.hProcess, 1); }
+			else
+			{
+				TerminateProcess(process.hProcess, 1);
+				WaitForSingleObject(process.hProcess, INFINITE);
+			}
 			CloseHandle(process.hThread);
 			CloseHandle(process.hProcess);
 		}
@@ -115,7 +129,7 @@ namespace aether::io
 		const auto child = fork();
 		if (child == 0)
 		{
-			setpgid(0, 0);
+			if (setpgid(0, 0) != 0) { _exit(127); }
 			dup2(output, STDOUT_FILENO);
 			dup2(output, STDERR_FILENO);
 			close(output);
@@ -134,12 +148,17 @@ namespace aether::io
 		{
 			const auto waited = waitpid(child, &status, WNOHANG);
 			if (waited == child) { break; }
-			if (waited < 0) { return kProcessLaunchFailed; }
-			if (std::chrono::steady_clock::now() >= end)
+			if (waited < 0)
 			{
+				if (errno == EINTR) { continue; }
+				return kProcessLaunchFailed;
+			}
+			if (stopToken.stop_requested() || std::chrono::steady_clock::now() >= end)
+			{
+				const int result = stopToken.stop_requested() ? kProcessCancelled : kProcessTimedOut;
 				kill(-child, SIGKILL);
-				waitpid(child, &status, 0);
-				return kProcessTimedOut;
+				while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
+				return result;
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
