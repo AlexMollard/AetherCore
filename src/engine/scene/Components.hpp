@@ -8,7 +8,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "animation/AnimationDatabase.hpp"
 #include "assets/AssetId.hpp"
 #include "assets/SpriteAnimationAsset.hpp"
 #include "assets/AssetTypes.hpp"
@@ -20,6 +19,7 @@
 
 namespace aether
 {
+	class AnimationDatabase;
 	class GraphicsPipeline;
 	class Mesh;
 

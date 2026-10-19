@@ -90,7 +90,9 @@ namespace aether::scripting
 			return AE_GAMEPLAY_INVALID_ARGUMENT;
 		}
 		AetherGameplayModuleApi candidate{};
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		try
+#endif
 		{
 			const auto status = query(requestedMajor, sizeof(candidate), &candidate);
 			if (status != AE_GAMEPLAY_OK)
@@ -98,10 +100,12 @@ namespace aether::scripting
 				return status;
 			}
 		}
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		catch (...)
 		{
 			return AE_GAMEPLAY_SCRIPT_ERROR;
 		}
+#endif
 		return PublishGameplayModule(candidate, requestedMajor, outSize, outApi);
 	}
 
@@ -222,13 +226,17 @@ namespace aether::scripting
 		{
 			return AE_GAMEPLAY_UNSUPPORTED;
 		}
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		try
+#endif
 		{
 			return api.dispatchEvent(api.context, instance, &event);
 		}
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		catch (...)
 		{
 			return AE_GAMEPLAY_SCRIPT_ERROR;
 		}
+#endif
 	}
 } // namespace aether::scripting

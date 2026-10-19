@@ -183,17 +183,21 @@ namespace aether::scripting
 			sinkUser = access->m_sink_user;
 		}
 		AetherGameplayStatus result = AE_GAMEPLAY_UNSUPPORTED;
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		try
+#endif
 		{
 			if (sink != nullptr)
 			{
 				result = sink(sinkUser, *diagnostic);
 			}
 		}
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		catch (...)
 		{
 			result = AE_GAMEPLAY_SCRIPT_ERROR;
 		}
+#endif
 		std::lock_guard lock(s_access_mutex);
 		const auto entry = s_access.find(context);
 		if (entry != s_access.end())

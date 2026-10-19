@@ -1,4 +1,17 @@
+if(AETHERCORE_WEB_RUNTIME)
+    add_executable(GameRuntime web/WebMain.cpp)
+    target_include_directories(GameRuntime PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
+    target_link_libraries(GameRuntime PRIVATE Engine)
+    target_compile_options(GameRuntime PRIVATE -fno-exceptions)
+    target_link_options(GameRuntime PRIVATE -fno-exceptions -sASSERTIONS=2 -sALLOW_MEMORY_GROWTH=1
+        -sEXIT_RUNTIME=1 -sENVIRONMENT=web,node)
+    set_target_properties(GameRuntime PROPERTIES OUTPUT_NAME AetherGame SUFFIX ".js"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/web")
+    return()
+endif()
+
 file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+list(FILTER APP_SOURCES EXCLUDE REGEX "[/\\\\]web[/\\\\]")
 file(GLOB_RECURSE APP_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 
 # ── Editor-side sources (src/editor) ────────────────────────────────────────

@@ -2,6 +2,7 @@ include(get_cpm)
 
 # After the initial download, do not re-check remotes on every configure.
 set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
+include(PortableDependencies)
 
 find_package(Vulkan REQUIRED)
 
@@ -30,12 +31,7 @@ CPMAddPackage(
 )
 
 # ── Math ──────────────────────────────────────────────────────────────────────
-CPMAddPackage(
-    NAME glm
-    GIT_REPOSITORY https://github.com/g-truc/glm
-    GIT_TAG        8d1fd52e5ab5590e2c81768ace50c72bae28f2ed # 1.0.3
-    GIT_SHALLOW    FALSE
-)
+
 
 # ── Vulkan helpers ────────────────────────────────────────────────────────────
 CPMAddPackage(
@@ -122,12 +118,7 @@ CPMAddPackage(
 )
 
 # ── ECS ───────────────────────────────────────────────────────────────────────
-CPMAddPackage(
-    NAME EnTT
-    GIT_REPOSITORY https://github.com/skypjack/entt.git
-    GIT_TAG        v3.16.0
-    GIT_SHALLOW    TRUE
-)
+
 
 # ── Config parsing ────────────────────────────────────────────────────────────
 CPMAddPackage(
@@ -350,18 +341,7 @@ endif()
 # ── 2D physics ────────────────────────────────────────────────────────────────
 # Box2D v3 (C API). Cross-platform deterministic since 3.1 - required for the
 # Physics2D replay tests and future lockstep networking, matching the Jolt policy.
-CPMAddPackage(
-    NAME box2d
-    GIT_REPOSITORY https://github.com/erincatto/box2d.git
-    GIT_TAG        v3.1.1
-    GIT_SHALLOW    TRUE
-    OPTIONS
-        "BOX2D_SAMPLES OFF"
-        "BOX2D_BENCHMARKS OFF"
-        "BOX2D_DOCS OFF"
-        "BOX2D_UNIT_TESTS OFF"
-        "BOX2D_AVX2 OFF"          # match Jolt: no AVX2 so one binary runs everywhere
-)
+
 
 # ── Hashing ───────────────────────────────────────────────────────────────────
 CPMAddPackage(

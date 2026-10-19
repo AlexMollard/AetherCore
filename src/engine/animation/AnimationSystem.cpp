@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "animation/AnimationDatabase.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"

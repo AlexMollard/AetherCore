@@ -1,6 +1,8 @@
 #pragma once
 
 #include <expected>
+#include <cstdio>
+#include <cstdlib>
 #include <format>
 #include <string>
 #include <string_view>
@@ -100,6 +102,7 @@ namespace aether
 
 	[[noreturn]] inline void Throw(const AetherError& err)
 	{
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		switch (err.category)
 		{
 			case LogCategory::Vulkan:
@@ -124,6 +127,10 @@ namespace aether
 			default:
 				throw EngineError(err.message);
 		}
+#else
+		std::fprintf(stderr, "AetherCore fatal error: %s\n", err.message.c_str());
+		std::abort();
+#endif
 	}
 } // namespace aether
 

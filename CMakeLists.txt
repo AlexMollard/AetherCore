@@ -50,6 +50,15 @@ set(AETHER_GAME_RUNTIME_EXE_NAME "AetherGame.exe" CACHE STRING
 set(AETHERCORE_PROJECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/projects/TestingProject"
     CACHE PATH "Default Aether project for the dev runtime and IDE launch args")
 
+option(AETHERCORE_WEB_RUNTIME "Build the isolated single-thread browser runtime" OFF)
+if(EMSCRIPTEN)
+    set(AETHERCORE_WEB_RUNTIME ON CACHE BOOL "Build the isolated single-thread browser runtime" FORCE)
+endif()
+if(AETHERCORE_WEB_RUNTIME)
+    include(WebRuntime)
+    return()
+endif()
+
 include(Dependencies)
 include(DotNet)
 include(TargetDefaults)

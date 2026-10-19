@@ -152,6 +152,29 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "webgpu-browser",
+      "displayName": "WebGPU browser runtime foundation",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/webgpu-browser",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "AETHERCORE_WEB_RUNTIME": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "AETHER_WEB_ASSETPACKER": "$env{AETHER_WEB_ASSETPACKER}",
+        "AETHER_WEB_SLANGC": "$env{AETHER_WEB_SLANGC}"
+      }
+    },
+    {
+      "name": "runtime-only-native",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/runtime-only-native",
+      "cacheVariables": {
+        "AETHERCORE_BUILD_EDITOR": "OFF",
+        "AETHERCORE_BUILD_LAUNCHER": "OFF",
+        "AETHERCORE_BUILD_TESTS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -226,6 +249,21 @@
       "name": "ci-windows-release",
       "configurePreset": "ci-windows-release",
       "configuration": "Release"
+    },
+    {
+      "name": "webgpu-browser",
+      "configurePreset": "webgpu-browser",
+      "targets": [
+        "WebRuntimeAudit"
+      ]
+    },
+    {
+      "name": "runtime-only-native",
+      "configurePreset": "runtime-only-native",
+      "configuration": "RelWithDebInfo",
+      "targets": [
+        "GameRuntime"
+      ]
     }
   ]
 }

@@ -1,10 +1,21 @@
 # Engine core deliberately does NOT link Dear ImGui: it depends only on the abstract
 # rendering/IUiOverlay.hpp, so GameRuntime (Engine without App's imgui sources) never
 # links or initializes imgui. See AetherCore::SetUiOverlay + src/app's source filter.
+if(AETHERCORE_WEB_RUNTIME)
+    include(WebSources)
+    add_library(Engine STATIC ${AETHER_WEB_ENGINE_SOURCES})
+    target_include_directories(Engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(Engine PUBLIC glm::glm EnTT::EnTT box2d)
+    target_compile_definitions(Engine PUBLIC AE_CONFIG_SHIP=1 AETHERCORE_WEB_RUNTIME=1)
+    target_compile_options(Engine PRIVATE -fno-exceptions)
+    return()
+endif()
+
 add_library(Engine STATIC)
 
 # CONFIGURE_DEPENDS re-globs at build time, including the C-compatible ABI headers.
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+list(FILTER ENGINE_SOURCES EXCLUDE REGEX "[/\\\\]platform[/\\\\]web[/\\\\]")
 file(GLOB_RECURSE ENGINE_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 
 target_sources(Engine
