@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <limits>
+#include <cstddef>
 #include <chrono>
 #include <cstdlib>
 #include <thread>
@@ -11,6 +12,24 @@
 #include "scripting/RustGameplayServices.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
+
+// These assertions mirror rust/aethercore-abi/src/services.rs without changing ABI v1.
+static_assert(sizeof(void*) == 4 || sizeof(void*) == 8);
+static_assert(offsetof(AetherGameplayServiceRequest, structSize) == 0);
+static_assert(offsetof(AetherGameplayServiceRequest, operation) == 4);
+static_assert(offsetof(AetherGameplayServiceRequest, entity) == 8);
+static_assert(offsetof(AetherGameplayServiceRequest, vector) == 24);
+static_assert(offsetof(AetherGameplayServiceRequest, integer) == 40);
+static_assert(offsetof(AetherGameplayServiceRequest, text) == 48);
+static_assert(offsetof(AetherGameplayServiceRequest, text2) == (sizeof(void*) == 8 ? 64 : 56));
+static_assert(sizeof(AetherGameplayServiceRequest) == (sizeof(void*) == 8 ? 80 : 64));
+static_assert(offsetof(AetherGameplayServicesApi, structSize) == 0);
+static_assert(offsetof(AetherGameplayServicesApi, abiMajor) == 4);
+static_assert(offsetof(AetherGameplayServicesApi, context) == 8);
+static_assert(offsetof(AetherGameplayServicesApi, capabilities) == 16);
+static_assert(offsetof(AetherGameplayServicesApi, invoke) == 24);
+static_assert(sizeof(decltype(AetherGameplayServicesApi::invoke)) == sizeof(void*));
+static_assert(sizeof(AetherGameplayServicesApi) == (sizeof(void*) == 8 || alignof(uint64_t) == 8 ? 32 : 28));
 
 using namespace aether;
 using namespace aether::app::scripting;
