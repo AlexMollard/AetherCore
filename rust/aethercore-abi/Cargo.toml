@@ -1,0 +1,9 @@
+[package]
+name = "aethercore-abi"
+version = "0.1.0"
+edition = "2024"
+description = "Raw generated AetherCore gameplay ABI declarations"
+publish = false
+
+[lib]
+path = "src/lib.rs"

@@ -132,19 +132,24 @@ def render_abi(source):
     return "\n".join(lines)
 
 
+def generated_outputs(manifest):
+    c, rust = render_calls(manifest)
+    abi = render_abi((ROOT / "src/engine/scripting/GameplayAbi.h").read_text())
+    return {
+        ROOT / "src/engine/scripting/generated/GameplayEngineCalls.h": c,
+        HERE / "generated/engine_calls.rs": rust,
+        HERE / "generated/gameplay_abi.rs": abi,
+        ROOT / "rust/aethercore-abi/src/generated.rs": abi,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Fail if declarations or checked C# exports drift")
     args = parser.parse_args()
     manifest = json.loads((HERE / "engine-calls.json").read_text())
     check_parity(manifest, ROOT)
-    c, rust = render_calls(manifest)
-    outputs = {
-        ROOT / "src/engine/scripting/generated/GameplayEngineCalls.h": c,
-        HERE / "generated/engine_calls.rs": rust,
-        HERE / "generated/gameplay_abi.rs": render_abi((ROOT / "src/engine/scripting/GameplayAbi.h").read_text()),
-    }
-    for filename, contents in outputs.items():
+    for filename, contents in generated_outputs(manifest).items():
         if args.check:
             if not filename.exists() or filename.read_text() != contents:
                 raise ValueError(f"Generated declaration drift: {filename.relative_to(ROOT)}")

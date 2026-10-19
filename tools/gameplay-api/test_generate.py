@@ -44,6 +44,11 @@ class ManifestTests(unittest.TestCase):
         self.assertIn('pub fn aether_gameplay_query', rust)
         self.assertNotIn('pub struct AetherGameplayEntity {\n    pub world: usize', rust)
 
+    def test_distributed_rust_crate_uses_the_same_generated_abi_as_the_fixture(self):
+        outputs = generator.generated_outputs(self.manifest)
+        fixture = outputs[HERE / "generated/gameplay_abi.rs"]
+        self.assertEqual(outputs[ROOT / "rust/aethercore-abi/src/generated.rs"], fixture)
+
 
 if __name__ == "__main__":
     unittest.main()
