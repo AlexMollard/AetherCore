@@ -879,6 +879,16 @@ namespace aether::editor
 		}
 	}
 
+	void DebugLayer::OnBeforeInput(app::LayerContext& context)
+	{
+		// Pending offers must own input before the first UI frame that draws them.
+		// The previous frame's modal stack also covers every panel-owned modal.
+		PollCloseRequest(context);
+		PollRecoveryOffer(context);
+		const bool modalOpen = ImGui::GetCurrentContext() != nullptr && ImGui::GetTopMostPopupModal() != nullptr;
+		context.Get<Input>().SetEditorModalInputBlocked(m_openRecoveryPopup || m_openUnsavedPopup || m_openSavePresetPopup || modalOpen);
+	}
+
 	void DebugLayer::OnUpdate(app::LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -1306,7 +1316,7 @@ namespace aether::editor
 	void DebugLayer::DrawCommandPalette(app::LayerContext& context)
 	{
 		const ImGuiIO& io = ImGui::GetIO();
-		if ((io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kCommandPalette.key, false)) || m_openCommandPalette)
+		if ((!context.Get<Input>().IsEditorModalInputBlocked() && io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kCommandPalette.key, false)) || m_openCommandPalette)
 		{
 			m_openCommandPalette = false;
 			m_paletteQuery[0] = '\0';
@@ -1936,7 +1946,7 @@ namespace aether::editor
 		ImGui::Separator();
 		// Closing without choosing leaves every copy exactly where it is, so the offer
 		// comes back next time the project opens. Nothing here is destructive by default.
-		if (m_recoverable.empty() || chrome::OutlineButton("Decide later", ImVec2(120.0f, 0.0f)))
+		if (m_recoverable.empty() || chrome::OutlineButton("Decide later", ImVec2(120.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
 		{
 			ImGui::CloseCurrentPopup();
 		}
@@ -2053,6 +2063,10 @@ namespace aether::editor
 		// this frame, and the loop re-reads it after the layers run.
 		PollCloseRequest(context);
 		PollRecoveryOffer(context);
+		if (m_openRecoveryPopup || m_openUnsavedPopup || m_openSavePresetPopup || ImGui::GetTopMostPopupModal() != nullptr)
+		{
+			context.Get<Input>().SetEditorModalInputBlocked(true);
+		}
 
 		ImGuizmo::BeginFrame();
 
@@ -2100,6 +2114,7 @@ namespace aether::editor
 		}
 
 		const auto* undoPlayState = context.TryGet<app::PlayState>();
+		const bool modalOwnsKeys = context.Get<Input>().IsEditorModalInputBlocked();
 		const bool undoEditable = undoPlayState != nullptr && !undoPlayState->IsPlaying() && !undoPlayState->IsCompiling();
 		if (!undoEditable)
 		{
@@ -2114,7 +2129,7 @@ namespace aether::editor
 		if (undoEditable)
 		{
 			const ImGuiIO& io = ImGui::GetIO();
-			if (io.KeyCtrl && !io.WantTextInput)
+			if (!modalOwnsKeys && io.KeyCtrl && !io.WantTextInput)
 			{
 				const bool zKey = ImGui::IsKeyPressed(shortcuts::kUndo.key, false);
 				const bool redoCombo = ImGui::IsKeyPressed(shortcuts::kRedo.key, false) || (zKey && io.KeyShift);
@@ -2157,7 +2172,7 @@ namespace aether::editor
 
 		{
 			const ImGuiIO& io = ImGui::GetIO();
-			if (!io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kShortcuts.key, false))
+			if (!modalOwnsKeys && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kShortcuts.key, false))
 			{
 				m_openShortcuts = true;
 			}
@@ -2170,10 +2185,10 @@ namespace aether::editor
 				{
 					documentOwnsKeys = documentOwnsKeys || panel->OwnsEditingKeys();
 				}
-				m_hierarchyPanel->SetDocumentPanelOwnsEditingKeys(documentOwnsKeys);
+				m_hierarchyPanel->SetDocumentPanelOwnsEditingKeys(documentOwnsKeys || modalOwnsKeys);
 			}
 
-			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kSave.key, false))
+			if (!modalOwnsKeys && io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(shortcuts::kSave.key, false))
 			{
 				// Shift is the Save As modifier everywhere else, and this used to ignore it -
 				// so Ctrl+Shift+S silently overwrote the current scene.
@@ -2204,7 +2219,7 @@ namespace aether::editor
 		// F6 toggles pause, F7 steps one frame. Both no-op unless a session is live.
 		{
 			const ImGuiIO& io = ImGui::GetIO();
-			if (!io.WantTextInput)
+			if (!modalOwnsKeys && !io.WantTextInput)
 			{
 				if (ImGui::IsKeyPressed(shortcuts::kPausePlay.key, false))
 				{
@@ -2684,6 +2699,10 @@ namespace aether::editor
 		DrawShortcutsReference();
 		DrawUnsavedChangesPopup(context);
 		DrawRecoveryPopup(context);
+		if (ImGui::GetTopMostPopupModal() != nullptr)
+		{
+			context.Get<Input>().SetEditorModalInputBlocked(true);
+		}
 
 		// An inspector field edit ends when its widget stops being active - a slider
 		// drag and a focused text box both stay active across frames, so this is what

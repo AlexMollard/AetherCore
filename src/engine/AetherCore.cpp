@@ -515,6 +515,7 @@ namespace aether
 
 			const auto beforeTick = std::chrono::steady_clock::now();
 
+			client.OnBeforeInput();
 			Tick(static_cast<float>(rawDt));
 			const double gameDt = rawDt * client.GetTimeScale();
 			m_gameElapsedSeconds += gameDt;

@@ -474,6 +474,12 @@ namespace aether::app
 		return scale;
 	}
 
+	void Application::OnBeforeInput()
+	{
+		LayerContext ctx = MakeLayerContext(0.0, 0);
+		m_layers.BeforeInputAll(ctx);
+	}
+
 	void Application::OnUpdate(double gameDt, std::uint64_t frameIndex)
 	{
 		AE_PROFILE_ZONE();

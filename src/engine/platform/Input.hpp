@@ -229,6 +229,15 @@ namespace aether
 
 		void Update();
 
+		// The host publishes modal ownership before input polling/cameras/scripts. ImGui
+		// reads its own events; gameplay sees neutral input until the modal closes.
+		// Releasing a modal never recaptures the pointer: a viewport click must reclaim it.
+		void SetEditorModalInputBlocked(bool blocked);
+		[[nodiscard]] bool IsEditorModalInputBlocked() const
+		{
+			return m_editorModalInputBlocked;
+		}
+
 		[[nodiscard]] bool IsKeyDown(Key key) const;
 
 		[[nodiscard]] bool IsKeyPressed(Key key) const;
@@ -334,12 +343,12 @@ namespace aether
 
 		[[nodiscard]] bool IsOsCursorVisible() const
 		{
-			return m_osCursorVisible;
+			return m_osCursorVisible || m_editorModalReclaimRequired;
 		}
 
 		[[nodiscard]] bool IsMouseCaptured() const
 		{
-			return m_mouseCaptured;
+			return m_mouseCaptured || m_editorModalInputBlocked;
 		}
 
 		// -- Cursor lock (FPS-style pointer lock) --------------------------------
@@ -404,7 +413,17 @@ namespace aether
 		// by disabling every panel except the viewport while IsPlaying() && GameOwnsInput().
 		void SetGameOwnsInput(bool owns)
 		{
+			if (owns && m_editorModalInputBlocked)
+			{
+				return;
+			}
 			m_gameOwnsInput = owns;
+			if (owns)
+			{
+				m_editorModalReclaimRequired = false;
+				m_cursorLockEscaped = false;
+				ApplyCursorMode();
+			}
 		}
 
 		[[nodiscard]] bool GameOwnsInput() const
@@ -693,6 +712,7 @@ namespace aether
 			std::array<float, kMaxGamepadAxes> syntheticAxes{0.0f, 0.0f, 0.0f, 0.0f, -1.0f, -1.0f};
 			std::array<bool, kMaxGamepadAxes> hasSyntheticAxis{};
 			std::array<bool, kMaxGamepadButtons> consumed{};
+			std::array<bool, kMaxGamepadButtons> modalSuppressed{};
 			// [stick][direction] - whether the stick was past the threshold last frame, and
 			// whether it crossed on this one. Derived during the poll rather than on read, so
 			// reading a flick twice in one frame gives the same answer both times.
@@ -766,6 +786,10 @@ namespace aether
 		// then get out of the way.
 		bool m_mouseNeedsResync = false;
 		bool m_mouseCaptured = false;
+		bool m_editorModalInputBlocked = false;
+		bool m_editorModalReclaimRequired = false;
+		std::array<bool, kMaxKeys> m_modalSuppressedKeys{};
+		std::array<bool, kMaxMouseButtons> m_modalSuppressedMouseButtons{};
 		bool m_mouseViewportInputActive = false;
 
 		std::vector<InputSequenceEvent> m_inputSequence;

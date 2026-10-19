@@ -68,6 +68,7 @@ namespace aether::app
 		[[nodiscard]] const aether::AetherCore& GetEngine() const;
 
 		void OnFrameBegin() override;
+		void OnBeforeInput() override;
 		double GetTimeScale() override;
 		void OnUpdate(double gameDt, std::uint64_t frameIndex) override;
 		void OnBuildUI(double gameDt, std::uint64_t frameIndex) override;

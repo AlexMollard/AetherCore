@@ -30,6 +30,14 @@ namespace aether::app
 		}
 	}
 
+	void LayerStack::BeforeInputAll(LayerContext& context)
+	{
+		for (const auto& layer: m_layers)
+		{
+			layer->OnBeforeInput(context);
+		}
+	}
+
 	void LayerStack::UpdateAll(LayerContext& context)
 	{
 		for (const auto& layer: m_layers)

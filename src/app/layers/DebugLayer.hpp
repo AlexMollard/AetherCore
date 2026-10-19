@@ -39,6 +39,7 @@ namespace aether::editor
 		void OnAttach(app::LayerContext& context) override;
 		void OnDetach(app::LayerContext& context) override;
 		void OnUpdate(app::LayerContext& context) override;
+		void OnBeforeInput(app::LayerContext& context) override;
 		void OnImGui(app::LayerContext& context) override;
 		void OnRenderTargetsInvalidated(app::LayerContext& context) override;
 

@@ -69,3 +69,135 @@ TEST_CASE("Dropping the request releases the lock, and reasserting it locks agai
 	input.UpdateCursorLock(true);
 	CHECK(input.IsCursorLocked());
 }
+
+TEST_CASE("An editor modal releases a captured cursor and owns gameplay input before polling")
+{
+	Input input;
+	input.SetGameOwnsInput(true);
+	input.RequestCursorLock(true);
+	input.UpdateCursorLock(true);
+	input.SetOsCursorVisible(false);
+	REQUIRE(input.IsCursorLocked());
+
+	input.SetEditorModalInputBlocked(true);
+	CHECK_FALSE(input.IsCursorLocked());
+	CHECK_FALSE(input.GameOwnsInput());
+	input.SetSyntheticKey(static_cast<int>(Key::Escape), true, false);
+	input.SetSyntheticKey(static_cast<int>(Key::W), true, false);
+	input.Update();
+	input.UpdateCursorLock(true);
+	CHECK_FALSE(input.IsCursorLocked());
+	CHECK(input.IsOsCursorVisible());
+	CHECK_FALSE(input.GameOwnsInput());
+	CHECK_FALSE(input.IsKeyDown(Key::W));
+	CHECK_FALSE(input.IsKeyPressed(Key::Escape));
+	CHECK(static_cast<int>(input.GetKeyPressedThisFrame()) == -1);
+}
+
+TEST_CASE("Dismissing an editor modal requires a fresh viewport reclaim before locking")
+{
+	Input input;
+	input.SetGameOwnsInput(true);
+	input.RequestCursorLock(true);
+	input.UpdateCursorLock(true);
+	input.SetEditorModalInputBlocked(true);
+	input.SetEditorModalInputBlocked(false);
+	input.RequestCursorLock(false);
+	input.RequestCursorLock(true);
+	input.UpdateCursorLock(true);
+	CHECK_FALSE(input.IsCursorLocked());
+	input.SetGameOwnsInput(true);
+	input.UpdateCursorLock(true);
+	CHECK(input.IsCursorLocked());
+}
+
+TEST_CASE("A game Escape pause menu still receives the press without an editor modal")
+{
+	Input input;
+	input.SetGameOwnsInput(true);
+	input.RequestCursorLock(true);
+	input.UpdateCursorLock(true);
+	input.SetSyntheticKey(static_cast<int>(Key::Escape), true, false);
+	input.Update();
+	input.UpdateCursorLock(true);
+	CHECK_FALSE(input.IsCursorLocked());
+	CHECK(input.IsKeyPressed(Key::Escape));
+}
+
+TEST_CASE("A modal Escape remains quarantined while held after dismissal")
+{
+	Input input;
+	input.SetEditorModalInputBlocked(true);
+	input.SetSyntheticKey(static_cast<int>(Key::Escape), true, false);
+	input.Update();
+	input.SetEditorModalInputBlocked(false);
+	input.Update();
+	CHECK_FALSE(input.IsKeyDown(Key::Escape));
+	input.ClearSyntheticKeys();
+	input.Update();
+	input.SetSyntheticKey(static_cast<int>(Key::Escape), true, false);
+	input.Update();
+	CHECK(input.IsKeyPressed(Key::Escape));
+}
+
+TEST_CASE("An editor modal suppresses mouse and gamepad actions")
+{
+	Input input;
+	input.SetSyntheticMouseButton(0, true);
+	input.SetSyntheticGamepadConnected(0, true);
+	input.SetSyntheticGamepadButton(0, GamepadButton::B, true);
+	input.SetSyntheticGamepadAxis(0, GamepadAxis::LeftX, 1.0f);
+	input.SetEditorModalInputBlocked(true);
+	CHECK_FALSE(input.IsMouseButtonDown(MouseButton::Left));
+	CHECK_FALSE(input.IsMouseButtonPressed(MouseButton::Left));
+	CHECK_FALSE(input.IsGamepadButtonDown(GamepadButton::B));
+	CHECK_FALSE(input.IsGamepadButtonPressed(GamepadButton::B));
+	CHECK(input.GetGamepadStick(GamepadStick::Left) == glm::vec2{});
+	CHECK(input.GetGamepadAxisRaw(GamepadAxis::LeftX) == 0.0f);
+	CHECK(input.GetMouseDelta() == glm::vec2{});
+	CHECK(input.IsGamepadConnected());
+	CHECK(input.GetGamepadName() == "Synthetic Gamepad");
+	input.SetGameOwnsInput(true);
+	input.SetCursorLocked(true);
+	input.SetOsCursorVisible(false);
+	CHECK_FALSE(input.GameOwnsInput());
+	CHECK_FALSE(input.IsCursorLocked());
+	CHECK(input.IsOsCursorVisible());
+}
+
+TEST_CASE("A modal click cannot become a gameplay release after dismissal")
+{
+	Input input;
+	input.SetEditorModalInputBlocked(true);
+	input.SetSyntheticMouseButton(0, true);
+	input.Update();
+	input.SetEditorModalInputBlocked(false);
+	input.Update();
+	CHECK_FALSE(input.IsMouseButtonDown(MouseButton::Left));
+	input.SetSyntheticMouseButton(0, false);
+	input.Update();
+	CHECK_FALSE(input.IsMouseButtonReleased(MouseButton::Left));
+	input.Update();
+	input.SetSyntheticMouseButton(0, true);
+	input.Update();
+	CHECK(input.IsMouseButtonPressed(MouseButton::Left));
+}
+
+TEST_CASE("A modal gamepad button cannot become a gameplay release after dismissal")
+{
+	Input input;
+	input.SetSyntheticGamepadConnected(0, true);
+	input.SetEditorModalInputBlocked(true);
+	input.SetSyntheticGamepadButton(0, GamepadButton::B, true);
+	input.Update();
+	input.SetEditorModalInputBlocked(false);
+	input.Update();
+	CHECK_FALSE(input.IsGamepadButtonDown(GamepadButton::B));
+	input.SetSyntheticGamepadButton(0, GamepadButton::B, false);
+	// The windowless gamepad injector seeds the current/previous button states.
+	CHECK_FALSE(input.IsGamepadButtonReleased(GamepadButton::B));
+	input.Update();
+	input.SetSyntheticGamepadButton(0, GamepadButton::B, true);
+	input.Update();
+	CHECK(input.IsGamepadButtonDown(GamepadButton::B));
+}

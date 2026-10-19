@@ -35,6 +35,9 @@ namespace aether::app
 		virtual void OnDetach(LayerContext& context);
 		virtual void OnUpdate(LayerContext& context);
 		virtual void OnImGui(LayerContext& context);
+		virtual void OnBeforeInput(LayerContext& /*context*/)
+		{
+		}
 
 		// ImGui texture descriptors) must drop them here so they re-acquire
 		virtual void OnRenderTargetsInvalidated(LayerContext& /*context*/)

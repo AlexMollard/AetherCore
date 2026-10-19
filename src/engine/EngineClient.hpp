@@ -19,6 +19,12 @@ namespace aether
 			return 1.0;
 		}
 
+		// After the event pump, before Input::Update, camera updates and simulation.
+		// Hosts can publish input ownership here without depending on a UI backend.
+		virtual void OnBeforeInput()
+		{
+		}
+
 		// Per-frame simulation on the main thread. gameDt is the scaled dt.
 		virtual void OnUpdate(double gameDt, std::uint64_t frameIndex) = 0;
 

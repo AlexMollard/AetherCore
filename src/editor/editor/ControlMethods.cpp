@@ -412,6 +412,7 @@ namespace aether::editor
 			        const auto* identityProject = ctx.services.TryGet<app::EditorProjectContext>();
 			        const auto* identitySettings = ctx.services.TryGet<SettingsService>();
 			        const auto* identityWindow = ctx.services.TryGet<Window>();
+			        const auto* identityInput = ctx.services.TryGet<Input>();
 			        const std::u8string identityRoot = identityProject != nullptr ? identityProject->root.generic_u8string() : std::u8string{};
 			        return json{{"pid", static_cast<std::uint64_t>(
 #ifdef _WIN32
@@ -426,6 +427,11 @@ namespace aether::editor
 			                {"background", io::PlatformPaths::IsAgentSession() && io::PlatformPaths::ReadEnvironmentVariable("AETHER_AGENT_BACKGROUND") == "1"},
 			                {"windowTitle", identityWindow != nullptr ? identityWindow->Title() : ""},
 			                {"windowVisible", identityWindow != nullptr && identityWindow->IsVisible()},
+			                {"cursorLocked", identityInput != nullptr && identityInput->IsCursorLocked()},
+			                {"cursorLockRequested", identityInput != nullptr && identityInput->IsCursorLockRequested()},
+			                {"osCursorVisible", identityInput == nullptr || identityInput->IsOsCursorVisible()},
+			                {"gameOwnsInput", identityInput != nullptr && identityInput->GameOwnsInput()},
+			                {"editorModalInputBlocked", identityInput != nullptr && identityInput->IsEditorModalInputBlocked()},
 			                {"autosaveEnabled", !io::PlatformPaths::IsAgentSession() && (identitySettings == nullptr || identitySettings->Get().app.autosaveSeconds > 0)},
 			                {"cleanupRequired", io::PlatformPaths::IsAgentSession()},
 			                {"frame", ctx.frameIndex},

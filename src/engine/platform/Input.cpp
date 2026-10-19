@@ -466,6 +466,7 @@ namespace aether
 			// Synthetic keys (control-server injection) OR into the real state, so
 			// headless playtests drive the same IsKeyDown/IsKeyPressed paths.
 			m_currKeys[i] = (focused && glfwGetKey(m_window, i) == GLFW_PRESS) || m_syntheticKeys[i];
+			m_modalSuppressedKeys[i] = m_editorModalInputBlocked ? m_currKeys[i] : m_modalSuppressedKeys[i] && (m_currKeys[i] || m_prevKeys[i]);
 		}
 
 		for (int i = 0; i < kMaxMouseButtons; ++i)
@@ -473,6 +474,7 @@ namespace aether
 			// Synthetic buttons OR in like synthetic keys, so injected clicks drive the
 			// same IsMouseButtonDown/Pressed/Released paths a real click does.
 			m_currMouseButtons[i] = (focused && glfwGetMouseButton(m_window, i) == GLFW_PRESS) || m_syntheticMouseButtons[i];
+			m_modalSuppressedMouseButtons[i] = m_editorModalInputBlocked ? m_currMouseButtons[i] : m_modalSuppressedMouseButtons[i] && (m_currMouseButtons[i] || m_prevMouseButtons[i]);
 		}
 
 		m_prevMousePos = m_mousePos;
@@ -541,7 +543,7 @@ namespace aether
 		{
 			return false;
 		}
-		return m_currKeys[k] && !m_consumedKeys[k];
+		return !m_editorModalInputBlocked && !m_modalSuppressedKeys[k] && m_currKeys[k] && !m_consumedKeys[k];
 	}
 
 	bool Input::IsKeyPressed(Key key) const
@@ -551,14 +553,14 @@ namespace aether
 		{
 			return false;
 		}
-		return m_currKeys[k] && !m_prevKeys[k] && !m_consumedKeys[k];
+		return !m_editorModalInputBlocked && !m_modalSuppressedKeys[k] && m_currKeys[k] && !m_prevKeys[k] && !m_consumedKeys[k];
 	}
 
 	Key Input::GetKeyPressedThisFrame() const
 	{
 		for (int i = 0; i < kMaxKeys; ++i)
 		{
-			if (m_currKeys[i] && !m_prevKeys[i] && !m_consumedKeys[i])
+			if (!m_editorModalInputBlocked && !m_modalSuppressedKeys[i] && m_currKeys[i] && !m_prevKeys[i] && !m_consumedKeys[i])
 			{
 				return static_cast<Key>(i);
 			}
@@ -580,7 +582,7 @@ namespace aether
 		{
 			return false;
 		}
-		return !m_currKeys[k] && m_prevKeys[k];
+		return !m_editorModalInputBlocked && !m_modalSuppressedKeys[k] && !m_currKeys[k] && m_prevKeys[k];
 	}
 
 	bool Input::IsMouseButtonDown(MouseButton btn) const
@@ -590,7 +592,7 @@ namespace aether
 		{
 			return false;
 		}
-		return m_currMouseButtons[b];
+		return !m_editorModalInputBlocked && !m_modalSuppressedMouseButtons[b] && m_currMouseButtons[b];
 	}
 
 	bool Input::IsMouseButtonPressed(MouseButton btn) const
@@ -600,7 +602,7 @@ namespace aether
 		{
 			return false;
 		}
-		return m_currMouseButtons[b] && !m_prevMouseButtons[b];
+		return !m_editorModalInputBlocked && !m_modalSuppressedMouseButtons[b] && m_currMouseButtons[b] && !m_prevMouseButtons[b];
 	}
 
 	bool Input::IsMouseButtonReleased(MouseButton btn) const
@@ -610,7 +612,7 @@ namespace aether
 		{
 			return false;
 		}
-		return !m_currMouseButtons[b] && m_prevMouseButtons[b];
+		return !m_editorModalInputBlocked && !m_modalSuppressedMouseButtons[b] && !m_currMouseButtons[b] && m_prevMouseButtons[b];
 	}
 
 	glm::vec2 Input::GetMousePos() const
@@ -647,6 +649,10 @@ namespace aether
 
 	glm::vec2 Input::GetMouseDelta() const
 	{
+		if (m_editorModalInputBlocked)
+		{
+			return {};
+		}
 		if (m_cursorLocked)
 		{
 			// GLFW_CURSOR_DISABLED reports an unbounded virtual position built exactly for
@@ -691,12 +697,13 @@ namespace aether
 
 	glm::vec2 Input::GetScrollDelta() const
 	{
-		return m_scrollDelta;
+		return m_editorModalInputBlocked ? glm::vec2{} : m_scrollDelta;
 	}
 
 	const std::string& Input::GetTypedChars() const
 	{
-		return m_typedChars;
+		static const std::string empty;
+		return m_editorModalInputBlocked ? empty : m_typedChars;
 	}
 
 	std::string Input::GetClipboardText() const
@@ -809,6 +816,7 @@ namespace aether
 
 	void Input::SetCursorLocked(bool locked)
 	{
+		locked = locked && !m_editorModalReclaimRequired;
 		if (locked == m_cursorLocked)
 		{
 			return;
@@ -845,11 +853,39 @@ namespace aether
 		}
 		else
 		{
-			glfwSetInputMode(m_window, GLFW_CURSOR, m_osCursorVisible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+			glfwSetInputMode(m_window, GLFW_CURSOR, IsOsCursorVisible() ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
 			if (glfwRawMouseMotionSupported())
 			{
 				glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
 			}
+		}
+	}
+
+	void Input::SetEditorModalInputBlocked(bool blocked)
+	{
+		m_editorModalInputBlocked = blocked;
+		if (blocked)
+		{
+			m_editorModalReclaimRequired = true;
+			m_gameOwnsInput = false;
+			m_mouseViewportInputActive = false;
+			for (int i = 0; i < kMaxKeys; ++i)
+			{
+				m_modalSuppressedKeys[i] = m_modalSuppressedKeys[i] || m_currKeys[i];
+			}
+			for (int i = 0; i < kMaxMouseButtons; ++i)
+			{
+				m_modalSuppressedMouseButtons[i] = m_modalSuppressedMouseButtons[i] || m_currMouseButtons[i];
+			}
+			for (GamepadState& pad: m_gamepads)
+			{
+				for (int i = 0; i < kMaxGamepadButtons; ++i)
+				{
+					pad.modalSuppressed[i] = pad.modalSuppressed[i] || pad.curr[i];
+				}
+			}
+			SetCursorLocked(false);
+			ApplyCursorMode();
 		}
 	}
 
@@ -944,6 +980,7 @@ namespace aether
 			for (int b = 0; b < kMaxGamepadButtons; ++b)
 			{
 				pad.curr[b] = pad.curr[b] || pad.synthetic[b];
+				pad.modalSuppressed[b] = m_editorModalInputBlocked ? pad.curr[b] : pad.modalSuppressed[b] && (pad.curr[b] || pad.prev[b]);
 			}
 			for (int a = 0; a < kMaxGamepadAxes; ++a)
 			{
@@ -998,6 +1035,10 @@ namespace aether
 
 	const Input::GamepadState* Input::Pad(int pad) const
 	{
+		if (m_editorModalInputBlocked)
+		{
+			return nullptr;
+		}
 		const int slot = ResolveGamepad(pad);
 		return slot >= 0 ? &m_gamepads[static_cast<std::size_t>(slot)] : nullptr;
 	}
@@ -1009,8 +1050,8 @@ namespace aether
 
 	std::string_view Input::GetGamepadName(int pad) const
 	{
-		const GamepadState* p = Pad(pad);
-		return p != nullptr ? std::string_view(p->name) : std::string_view{};
+		const int slot = ResolveGamepad(pad);
+		return slot >= 0 ? std::string_view(m_gamepads[static_cast<std::size_t>(slot)].name) : std::string_view{};
 	}
 
 	bool Input::IsGamepadButtonDown(GamepadButton button, int pad) const
@@ -1021,7 +1062,7 @@ namespace aether
 		{
 			return false;
 		}
-		return p->curr[static_cast<std::size_t>(b)] && !p->consumed[static_cast<std::size_t>(b)];
+		return p->curr[static_cast<std::size_t>(b)] && !p->consumed[static_cast<std::size_t>(b)] && !p->modalSuppressed[static_cast<std::size_t>(b)];
 	}
 
 	bool Input::IsGamepadButtonPressed(GamepadButton button, int pad) const
@@ -1032,7 +1073,7 @@ namespace aether
 		{
 			return false;
 		}
-		return p->curr[static_cast<std::size_t>(b)] && !p->prev[static_cast<std::size_t>(b)] && !p->consumed[static_cast<std::size_t>(b)];
+		return p->curr[static_cast<std::size_t>(b)] && !p->prev[static_cast<std::size_t>(b)] && !p->consumed[static_cast<std::size_t>(b)] && !p->modalSuppressed[static_cast<std::size_t>(b)];
 	}
 
 	bool Input::IsGamepadButtonReleased(GamepadButton button, int pad) const
@@ -1043,7 +1084,7 @@ namespace aether
 		{
 			return false;
 		}
-		return !p->curr[static_cast<std::size_t>(b)] && p->prev[static_cast<std::size_t>(b)];
+		return !p->curr[static_cast<std::size_t>(b)] && p->prev[static_cast<std::size_t>(b)] && !p->modalSuppressed[static_cast<std::size_t>(b)];
 	}
 
 	glm::vec2 Input::GetGamepadStick(GamepadStick stick, int pad) const
