@@ -1,0 +1,23 @@
+# AetherCore project file.
+
+[app]
+startupscene = "default"
+
+[paths]
+assets = "assets"
+prefabs = "assets/prefabs"
+scenes = "scenes"
+scripts = "scripts"
+
+[project]
+kind = "2d"
+name = "AgentPipelineRust"
+template = "blank_2d"
+version = 2
+
+[publish]
+platformname = "Windows"
+productname = "AgentPipelineRust"
+
+[scripting]
+language = "rust"

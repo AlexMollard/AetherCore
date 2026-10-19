@@ -114,20 +114,22 @@ Read directory-local AGENTS.md files before creating/editing these paths. Adapt 
 
 **Task 4 verification (Windows, 2026-10-19):** The full native gauntlet passed with 1,401 native cases and both GPU smokes reporting zero validation findings, including strict metadata, settings serialization, recent projects, missing prerequisites, custom scripts paths, stale selection and moved runtime/module paths. Live agent controls created Rust and default C# projects with Cargo/rustc overrides deliberately unavailable. Rust opened/saved/reopened without CoreCLR, its Cargo scaffold checked offline, and Play/publish returned schema-v1 failures through CLI and MCP. C# Play/Stop and publishing succeeded; the published C# package booted after relocation. Standalone managed results remain 131 passed / 29 failed, with the exact Task 3 failure set. Generator checks, five generator tests, four report-schema tests, eight transport tests and the raw ABI crate test passed. Evidence: `logs/task4/`.
 
-Rust gameplay remains intentionally unavailable until Task 5; this task adds project authoring and explicit capabilities, not a Rust runtime.
+At the Task 4 checkpoint Rust gameplay was intentionally unavailable; Task 5 below adds execution.
 
 ## Task 5: Implement desktop Rust gameplay and the safe SDK
 
 **Files:** rust/ workspace and crates, RustGameplayHost.*, CMake/RustGameplay.cmake, relevant Engine/RuntimeFramework source selections, tests/scripting/ and projects/AgentPipelineRust/.
 
-- [ ] Add ABI/layout tests and Cargo unit/compile-fail tests proving invalid safe-SDK handle use returns errors and safe callers cannot obtain long-lived mutable ECS references.
-- [ ] Generate registration/property metadata from Rust script declarations. Reuse stable names and existing property representations; include property defaults, strings, enums, entity/component references and physics callbacks required by the reference scenario.
-- [ ] Implement native shared-library registration/loading with target-correct C ABI, version checks and backend-owned allocation/destruction. Load the new module only after build success. Safely stop calls, destroy instances and release callbacks before unloading; first version may relaunch the child runtime instead of live unload in editor.
-- [ ] Test missing library, wrong ABI, recoverable script error, caught unwind panic, process-aborting panic/fault and failing rebuild. Report each accurately; never allow failed code to execute via an old pointer.
-- [ ] Add safe SDK operations for transforms, input, sprites, logging, scene/prefab operations and supported physics/UI/audio/save functionality as their fixture needs them. Unsupported Rust APIs return explicit capabilities/errors rather than misleading stubs.
-- [ ] Build/run the Rust fixture on native Windows and Linux where available; report unavailable platform checks explicitly. Package the module and Rust runtime dependencies needed by the selected toolchain.
+- [x] Add ABI/layout tests and Cargo unit/compile-fail tests proving invalid safe-SDK handle use returns errors and safe callers cannot obtain long-lived mutable ECS references.
+- [x] Generate registration/property metadata from Rust script declarations. Reuse stable names and existing property representations; include property defaults, strings, enums, entity/component references and physics callbacks required by the reference scenario.
+- [x] Implement native shared-library registration/loading with target-correct C ABI, version checks and backend-owned allocation/destruction. Load the new module only after build success. Safely stop calls, destroy instances and release callbacks before unloading; first version may relaunch the child runtime instead of live unload in editor.
+- [x] Test missing library, wrong ABI, recoverable script error, caught unwind panic, process-aborting panic/fault and failing rebuild. Report each accurately; never allow failed code to execute via an old pointer.
+- [x] Add safe SDK operations for transforms, input, sprites, logging, scene/prefab operations and supported physics/UI/audio/save functionality as their fixture needs them. Unsupported Rust APIs return explicit capabilities/errors rather than misleading stubs.
+- [x] Build/run the Rust fixture on native Windows and Linux where available; report unavailable platform checks explicitly. Package the module and Rust runtime dependencies needed by the selected toolchain.
 
 **Gate:** Rust executes within the existing engine; property edits and scene round-trips work; desktop C# remains green. Rust does not claim network/editor-tool parity yet.
+
+**Task 5 verification (Windows, 2026-10-19):** The native gauntlet passed 1,425 cases and both validation-enabled Editor/GameRuntime smokes with zero findings. The final review rebuild passed all 1,426 native cases (217,093 assertions), including real CMake/Cargo builds, failed rebuild preservation, loader/ABI failures, strict agent property typing and cancelled-build/staging diagnostics. Cargo passed nine safe-SDK tests, three raw ABI/layout tests and three compile-fail checks. Five bounded provider child checks covered normal callbacks, errors, unwind, abort and panic-abort. Live Rust exercised movement, input, sprite, Box2D events, UI, saves, UTF-8/NUL properties, references, Stop restoration, failed-build recovery, contained panic/sibling continuation and terminal cancellation. Publishing passed and the relocated Rust package executed 60 updates. Existing C# lifecycle, ownership, RPC, physics, hot reload, Stop restoration and publishing passed. Standalone managed tests remain 131 passed / the exact same 29 failures as Task 4. Generator/schema/transport checks passed. Linux could not be qualified: no Linux Rust/C++ development toolchain is available. Evidence: `logs/task5/`. Browser export, network/editor-tool parity and unified headless jobs remain later tasks.
 
 ## Task 6: Make rebuild/run/relaunch an agent operation
 

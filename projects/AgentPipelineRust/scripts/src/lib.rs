@@ -64,6 +64,9 @@ impl Script for Player {
     }
     fn update(&mut self, ctx: &mut Context<'_>, delta: f32) -> Result {
         self.ticks += 1;
+        if self.ticks == 60 {
+            ctx.log("Rust Player reached 60 updates")?;
+        }
         let mut p = ctx.position(ctx.entity())?;
         p.x += self.speed * delta;
         ctx.set_position(ctx.entity(), p)?;

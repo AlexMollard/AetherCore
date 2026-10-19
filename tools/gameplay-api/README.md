@@ -1,6 +1,6 @@
 # Gameplay API contract tooling
 
-The C ABI source of truth is src/engine/scripting/GameplayAbi.h. The five-function legacy engine-call surface is described by engine-calls.json. The generator verifies those signatures against both existing native exports and C# imports, then emits thin declarations. It does not change the C# pipeline or create a Rust gameplay runtime.
+The C ABI source of truth is src/engine/scripting/GameplayAbi.h. The five-function legacy engine-call surface is described by engine-calls.json. The generator verifies those signatures against both existing native exports and C# imports, then emits thin declarations. The desktop safe SDK and native host build on this contract while preserving the C# pipeline.
 
 Run from the repository root:
 
@@ -22,4 +22,15 @@ Check the dependency-free raw crate without network access:
 cargo test --manifest-path rust/aethercore-abi/Cargo.toml --offline --target-dir .temp/gameplay-api-cargo
 ```
 
-Generated Rust projects resolve this crate through AETHERCORE_RUST_SDK (a Cargo.toml file), the source-tree build hint, then data/sdk/rust/aethercore-abi/Cargo.toml beside the executable. Only Cargo.toml and Rust sources are staged; Cargo build outputs are never bundled. This raw crate does not yet implement the safe gameplay SDK or script registration.
+New Rust projects depend on the safe aethercore crate, selected by AETHERCORE_RUST_GAMEPLAY_SDK (a Cargo.toml file), the bundled SDK or the source-tree build hint. AETHERCORE_RUST_SDK selects the underlying raw crate separately. Only Cargo.toml and Rust sources are staged; Cargo build outputs are never bundled. The separate aethercore crate implements the safe SDK and macro-generated script registration.
+
+Run safe SDK unit/compile-fail tests and the real provider subprocess checks:
+
+```powershell
+cargo test --manifest-path rust/Cargo.toml --workspace --offline --target-dir artifacts/task5/sdk
+cargo build --manifest-path projects/AgentPipelineRust/scripts/Cargo.toml --bin provider_probe --offline --target-dir artifacts/task5/fixture
+cargo build --manifest-path projects/AgentPipelineRust/scripts/Cargo.toml --bin provider_probe --profile abort --offline --target-dir artifacts/task5/abort
+python tools/gameplay-api/test_rust_provider_process.py
+```
+
+Set `AETHER_RUST_TEST_MODULE` to the fixture library and `AETHER_RUST_WRONG_ABI_MODULE` to a fixture built with `--features wrong-abi` before the native gauntlet to enable real loader tests. `AETHER_RUST_BUILD_TESTS=1` enables actual CMake/Cargo success and failed-rebuild tests (including non-ASCII paths and shell metacharacters). Without these inputs, only those optional platform integration cases are skipped; never treat them as qualified.
