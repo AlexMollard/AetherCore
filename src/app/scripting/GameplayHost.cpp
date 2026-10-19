@@ -2,32 +2,65 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <limits>
 
 #include "scripting/GameplayAbiValidation.hpp"
+#include "scripting/GameplayAccess.hpp"
 
 namespace aether::app::scripting
 {
 	namespace
 	{
-		template<typename F>
-		AetherGameplayStatus Call(F&& callback)
-		{
-			try
-			{
-				return callback();
-			}
-			catch (...)
-			{
-				return AE_GAMEPLAY_SCRIPT_ERROR;
-			}
-		}
 
 		std::string Own(AetherGameplayUtf8 text)
 		{
 			return text.length == 0 ? std::string{} : std::string(text.data, text.length);
 		}
 	} // namespace
+
+	bool GameplayHost::ValidInstance(std::uint64_t handle) const
+	{
+		return m_available && (m_access == nullptr || m_nativeHandles.contains(handle));
+	}
+
+	std::uint64_t GameplayHost::ProviderHandle(std::uint64_t handle) const
+	{
+		if (m_access == nullptr)
+		{
+			return handle;
+		}
+		const auto it = m_nativeHandles.find(handle);
+		return it == m_nativeHandles.end() ? 0 : it->second.provider;
+	}
+
+	AetherGameplayStatus GameplayHost::Call(const std::function<AetherGameplayStatus()>& callback) const
+	{
+		try
+		{
+			if (m_access != nullptr)
+			{
+				aether::scripting::GameplayAccess::Scope scope(*m_access, aether::scripting::GameplayAccess::ScopeKind::Callback);
+				return scope.Status() == AE_GAMEPLAY_OK ? callback() : scope.Status();
+			}
+			return callback();
+		}
+		catch (...)
+		{
+			return AE_GAMEPLAY_SCRIPT_ERROR;
+		}
+	}
+
+	AetherGameplayEntity GameplayHost::EntityHandle(std::uint32_t id) const
+	{
+		return id == 0 ? AetherGameplayEntity{} : (m_access != nullptr ? m_access->Handle(Entity{id}) : AetherGameplayEntity{0, id, 0});
+	}
+
+	Expected<void> GameplayHost::DispatchPhysics(std::uint64_t handle, std::uint32_t other, std::uint32_t kind) const
+	{
+		AetherGameplayEvent event{.structSize = sizeof(event), .kind = AE_GAMEPLAY_EVENT_PHYSICS, .other = EntityHandle(other), .code = kind};
+		return Result(ValidInstance(handle) ? Call([&] { return aether::scripting::DispatchGameplayEvent(m_module, ProviderHandle(handle), event); }) : AE_GAMEPLAY_UNSUPPORTED, "physics event");
+	}
 
 	Expected<void> GameplayHost::Result(AetherGameplayStatus status, const char* operation) const
 	{
@@ -45,6 +78,22 @@ namespace aether::app::scripting
 
 	void GameplayHost::Clear(std::uint32_t generation)
 	{
+		// Native allocations must die while their provider is still loaded. Managed
+		// adapters retain their own established reset/cleanup behavior.
+		if (m_access != nullptr)
+		{
+			const auto owned = m_ownedInstances;
+			for (const auto& [handle, attached]: owned)
+			{
+				if (attached)
+				{
+					(void) Detach(handle);
+				}
+				(void) Destroy(handle);
+			}
+		}
+		m_ownedInstances.clear();
+		m_nativeHandles.clear();
 		m_available = false;
 		m_module = {};
 		m_typeNames.clear();
@@ -131,43 +180,64 @@ namespace aether::app::scripting
 			return std::unexpected(AetherError::Engine(message));
 		}
 		AetherGameplayInstance instance = 0;
-		AE_TRY_VOID(Result(Call([&] { return m_module.create(m_module.context, type, {0, entityId, 0}, &instance); }), "create"));
+		AE_TRY_VOID(Result(Call([&] { return m_module.create(m_module.context, type, EntityHandle(entityId), &instance); }), "create"));
 		if (instance == 0)
 		{
 			return std::unexpected(AetherError::Engine("Gameplay module returned an empty instance"));
 		}
+		if (m_access != nullptr)
+		{
+			static std::atomic<std::uint64_t> nextHandle{1};
+			const auto publicHandle = nextHandle.fetch_add(1);
+			m_nativeHandles.emplace(publicHandle, NativeInstance{instance, type});
+			instance = publicHandle;
+		}
+		m_ownedInstances.emplace(instance, false);
 		return instance;
 	}
 
 	Expected<void> GameplayHost::Attach(std::uint64_t handle) const
 	{
-		return Result(m_available ? Call([&] { return m_module.attach(m_module.context, handle); }) : AE_GAMEPLAY_UNSUPPORTED, "attach");
+		auto result = Result(ValidInstance(handle) ? Call([&] { return m_module.attach(m_module.context, ProviderHandle(handle)); }) : AE_GAMEPLAY_UNSUPPORTED, "attach");
+		if (result)
+		{
+			m_ownedInstances[handle] = true;
+		}
+		return result;
 	}
 
 	Expected<void> GameplayHost::Update(std::uint64_t handle, float dt) const
 	{
-		return Result(m_available ? Call([&] { return m_module.update(m_module.context, handle, dt); }) : AE_GAMEPLAY_UNSUPPORTED, "update");
+		return Result(ValidInstance(handle) ? Call([&] { return m_module.update(m_module.context, ProviderHandle(handle), dt); }) : AE_GAMEPLAY_UNSUPPORTED, "update");
 	}
 
 	Expected<void> GameplayHost::Detach(std::uint64_t handle) const
 	{
-		return Result(m_available ? Call([&] { return m_module.detach(m_module.context, handle); }) : AE_GAMEPLAY_UNSUPPORTED, "detach");
+		auto result = Result(ValidInstance(handle) ? Call([&] { return m_module.detach(m_module.context, ProviderHandle(handle)); }) : AE_GAMEPLAY_UNSUPPORTED, "detach");
+		if (auto it = m_ownedInstances.find(handle); it != m_ownedInstances.end())
+		{
+			it->second = false;
+		}
+		return result;
 	}
 
 	Expected<void> GameplayHost::Destroy(std::uint64_t handle) const
 	{
-		return Result(m_available ? Call([&] { return m_module.destroy(m_module.context, handle); }) : AE_GAMEPLAY_UNSUPPORTED, "destroy");
+		auto result = Result(ValidInstance(handle) ? Call([&] { return m_module.destroy(m_module.context, ProviderHandle(handle)); }) : AE_GAMEPLAY_UNSUPPORTED, "destroy");
+		m_ownedInstances.erase(handle);
+		m_nativeHandles.erase(handle);
+		return result;
 	}
 
 	Expected<void> GameplayHost::DispatchOwnershipChanged(std::uint64_t handle, std::uint32_t owner, bool isOwner) const
 	{
 		AetherGameplayEvent event{.structSize = sizeof(event), .kind = AE_GAMEPLAY_EVENT_OWNERSHIP, .code = owner, .flags = isOwner ? 1u : 0u};
-		return Result(m_available ? aether::scripting::DispatchGameplayEvent(m_module, handle, event) : AE_GAMEPLAY_UNSUPPORTED, "ownership event");
+		return Result(ValidInstance(handle) ? Call([&] { return aether::scripting::DispatchGameplayEvent(m_module, ProviderHandle(handle), event); }) : AE_GAMEPLAY_UNSUPPORTED, "ownership event");
 	}
 
 	bool GameplayHost::ReadProperty(std::uint64_t handle, int typeIndex, int index, ScriptPropertyValue& out) const
 	{
-		if (!m_available || index < 0)
+		if (!m_available || (typeIndex < 0 && !ValidInstance(handle)) || index < 0)
 		{
 			return false;
 		}
@@ -177,7 +247,7 @@ namespace aether::app::scripting
 		AetherGameplayUtf8Buffer buffer{local.data(), static_cast<std::uint32_t>(local.size()), &required};
 		auto read = [&]
 		{
-			return typeIndex < 0 ? m_module.getProperty(m_module.context, handle, index, &value, buffer) : m_module.getDefaultProperty(m_module.context, typeIndex, index, &value, buffer);
+			return typeIndex < 0 ? m_module.getProperty(m_module.context, ProviderHandle(handle), index, &value, buffer) : m_module.getDefaultProperty(m_module.context, typeIndex, index, &value, buffer);
 		};
 		auto status = Call(read);
 		std::vector<char> storage;
@@ -192,6 +262,10 @@ namespace aether::app::scripting
 		{
 			return false;
 		}
+		if (m_access != nullptr && (value.type == AE_GAMEPLAY_PROPERTY_ENTITY || value.type == AE_GAMEPLAY_PROPERTY_COMPONENT) && value.entity.id != 0 && (value.entity.world != EntityHandle(value.entity.id).world || value.entity.reserved != 0))
+		{
+			return false;
+		}
 		ScriptPropertyValue owned{};
 		owned.type = static_cast<ScriptPropertyValue::Type>(value.type);
 		std::copy(std::begin(value.vector), std::end(value.vector), std::begin(owned.f4));
@@ -199,6 +273,21 @@ namespace aether::app::scripting
 		if (required > 0)
 		{
 			owned.str.assign(buffer.data, required - 1);
+		}
+		if (owned.type == ScriptPropertyValue::Type::Component && owned.str.empty())
+		{
+			int descriptorType = typeIndex;
+			if (descriptorType < 0)
+			{
+				if (const auto instance = m_nativeHandles.find(handle); instance != m_nativeHandles.end())
+				{
+					descriptorType = instance->second.typeIndex;
+				}
+			}
+			if (descriptorType >= 0 && static_cast<std::size_t>(descriptorType) < m_properties.size() && static_cast<std::size_t>(index) < m_properties[descriptorType].size())
+			{
+				owned.str = m_properties[descriptorType][index].componentType;
+			}
 		}
 		out = std::move(owned);
 		return true;
@@ -215,11 +304,11 @@ namespace aether::app::scripting
 		return type >= 0 && ReadProperty(0, type, index, out);
 	}
 
-	void GameplayHost::SetPropertyValue(std::uint64_t handle, int index, const ScriptPropertyValue& value) const
+	Expected<void> GameplayHost::TrySetPropertyValue(std::uint64_t handle, int index, const ScriptPropertyValue& value) const
 	{
-		if (!m_available || handle == 0 || index < 0 || value.str.size() > std::numeric_limits<std::uint32_t>::max())
+		if (!ValidInstance(handle) || handle == 0 || index < 0 || value.str.size() > std::numeric_limits<std::uint32_t>::max())
 		{
-			return;
+			return Result(AE_GAMEPLAY_INVALID_ARGUMENT, "set property");
 		}
 		AetherGameplayPropertyValue abi{.structSize = sizeof(abi), .type = static_cast<std::uint32_t>(value.type)};
 		if (abi.type == AE_GAMEPLAY_PROPERTY_FLOAT || abi.type == AE_GAMEPLAY_PROPERTY_VECTOR3)
@@ -228,24 +317,29 @@ namespace aether::app::scripting
 		}
 		else if (abi.type == AE_GAMEPLAY_PROPERTY_ENTITY || abi.type == AE_GAMEPLAY_PROPERTY_COMPONENT)
 		{
-			abi.entity.id = static_cast<std::uint32_t>(value.i64);
+			abi.entity = EntityHandle(static_cast<std::uint32_t>(value.i64));
 		}
 		else
 		{
 			abi.integer = value.i64;
 		}
-		(void) Result(Call([&] { return m_module.setProperty(m_module.context, handle, index, &abi, {value.str.data(), static_cast<std::uint32_t>(value.str.size())}); }), "set property");
+		return Result(Call([&] { return m_module.setProperty(m_module.context, ProviderHandle(handle), index, &abi, {value.str.data(), static_cast<std::uint32_t>(value.str.size())}); }), "set property");
 	}
 
-	void GameplayHost::ApplyProperties(std::uint64_t handle, const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& props) const
+	Expected<void> GameplayHost::TryApplyProperties(std::uint64_t handle, const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& props) const
 	{
 		for (const auto& [name, value]: props)
 		{
 			const int index = FindPropertyIndex(typeName, name);
 			if (index >= 0)
 			{
-				SetPropertyValue(handle, index, value);
+				auto result = TrySetPropertyValue(handle, index, value);
+				if (!result && m_access != nullptr)
+				{
+					return result;
+				}
 			}
 		}
+		return {};
 	}
 } // namespace aether::app::scripting

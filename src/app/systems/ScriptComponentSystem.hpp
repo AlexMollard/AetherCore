@@ -107,9 +107,10 @@ namespace aether::app
 		// changed hands and, if so, calls the appended
 		// gameplay host's ownership event - see the .cpp for why this
 		// lives inline in the per-instance update rather than as its own system pass.
-		void DispatchOwnershipChanged(World& world, Entity entity, scripting::GameplayHost& host, std::uint64_t handle, Instance& instance);
+		bool DispatchOwnershipChanged(World& world, Entity entity, scripting::GameplayHost& host, std::uint64_t handle, Instance& instance);
 
 		std::unordered_map<std::uint64_t, Instance> m_instances;
 		std::unordered_set<std::string> m_failedTypes;
+		std::unordered_set<std::uint64_t> m_failedInstances;
 	};
 } // namespace aether::app

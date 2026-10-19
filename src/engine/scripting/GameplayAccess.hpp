@@ -48,6 +48,12 @@ namespace aether::scripting
 		GameplayAccess& operator=(const GameplayAccess&) = delete;
 		[[nodiscard]] AetherGameplayEngineApi EngineApi() const noexcept;
 		[[nodiscard]] AetherGameplayEntity Handle(Entity entity) const noexcept;
+
+		[[nodiscard]] bool MatchesWorld(const World& world) const noexcept
+		{
+			return m_world == &world;
+		}
+
 		void Invalidate() noexcept;
 
 	private:

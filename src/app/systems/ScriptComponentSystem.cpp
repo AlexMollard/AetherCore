@@ -7,6 +7,7 @@
 #include "net/NetworkContext.hpp"
 #include "net/NetworkSystems.hpp"
 #include "scene/Components.hpp"
+#include "physics2d/Physics2DComponents.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
@@ -65,7 +66,7 @@ namespace aether::app
 
 	ScriptComponentSystem::~ScriptComponentSystem()
 	{
-		// may already be gone and CoreCLR never unloads, so leaking them is inert.
+		// Explicit Invalidate runs while the scene context and provider are alive.
 		m_instances.clear();
 	}
 
@@ -87,9 +88,7 @@ namespace aether::app
 				// Not the ordinary "never attached this session" case below, which
 				// is silent because the cache already holds the only value that
 				// ever existed.
-				AE_WARN(LogCategory::App,
-				        "ScriptComponent: '{}' on entity {} is marked attached but has no live instance - saving its last-known property cache instead of current values",
-				        entry.path, entity.id);
+				AE_WARN(LogCategory::App, "ScriptComponent: '{}' on entity {} is marked attached but has no live instance - saving its last-known property cache instead of current values", entry.path, entity.id);
 			}
 			return;
 		}
@@ -124,19 +123,18 @@ namespace aether::app
 	// non-networked script in a project - the per-frame cost this hook adds for
 	// them is one bool check, forever, the same "a hook nobody uses costs nothing
 	// ongoing" property DispatchPhysicsEvents gives EntityScript.
-	void ScriptComponentSystem::DispatchOwnershipChanged(World& world, Entity entity,
-	        scripting::GameplayHost& host, std::uint64_t handle, Instance& instance)
+	bool ScriptComponentSystem::DispatchOwnershipChanged(World& world, Entity entity, scripting::GameplayHost& host, std::uint64_t handle, Instance& instance)
 	{
 		if (instance.settled)
 		{
-			return;
+			return true;
 		}
 
 		auto* context = m_services.TryGet<net::NetworkContext>();
 		const net::OwnershipQuery query = net::QueryOwnership(world, context, entity);
 		if (!query.known)
 		{
-			return;
+			return true;
 		}
 
 		const bool firstFire = !instance.known;
@@ -147,7 +145,10 @@ namespace aether::app
 			instance.owner = query.owner;
 			if ((host.Capabilities() & AE_GAMEPLAY_CAP_OWNERSHIP) != 0)
 			{
-				(void) host.DispatchOwnershipChanged(handle, query.owner, query.isOwner);
+				if (!host.DispatchOwnershipChanged(handle, query.owner, query.isOwner))
+				{
+					return false;
+				}
 			}
 		}
 
@@ -155,6 +156,7 @@ namespace aether::app
 		{
 			instance.settled = true; // no `owner` field left that could ever change this again
 		}
+		return true;
 	}
 
 	bool ScriptComponentSystem::UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt)
@@ -176,6 +178,23 @@ namespace aether::app
 		}
 
 		const std::uint64_t key = InstanceKey(entity.id, scriptIndex);
+		if (m_failedInstances.contains(key))
+		{
+			return false;
+		}
+		const bool native = host.Language() == "rust";
+		auto fail = [&](std::uint64_t failedHandle)
+		{
+			(void) host.Detach(failedHandle);
+			(void) host.Destroy(failedHandle);
+			m_instances.erase(key);
+			m_failedInstances.insert(key);
+			if (auto* current = FindScriptEntry(*ctx.world, entity, scriptIndex))
+			{
+				current->attached = false;
+			}
+			return false;
+		};
 		std::uint64_t handle = 0;
 		if (const auto it = m_instances.find(key); it != m_instances.end())
 		{
@@ -197,11 +216,22 @@ namespace aether::app
 
 		if (handle == 0)
 		{
+			if ((host.Capabilities() & AE_GAMEPLAY_CAP_PHYSICS) != 0 && !ctx.world->Has<CollisionEvents2DComponent>(entity))
+			{
+				ctx.world->Emplace<CollisionEvents2DComponent>(entity);
+			}
 			const auto created = host.CreateInstance(typeName, entity.id);
 			if (!created || *created == 0)
 			{
 				AE_WARN(LogCategory::App, "ScriptComponent: type '{}' failed to instantiate - fields retained, disabled until reload", typeName);
-				m_failedTypes.insert(typeName);
+				if (native)
+				{
+					m_failedInstances.insert(key);
+				}
+				else
+				{
+					m_failedTypes.insert(typeName);
+				}
 				return false;
 			}
 			handle = *created;
@@ -213,22 +243,63 @@ namespace aether::app
 				// Orphaned instance; PurgeStaleInstances reclaims it below.
 				return false;
 			}
-			host.ApplyProperties(handle, typeName, entry->properties);
+			const auto properties = entry->properties;
+			const auto applied = host.TryApplyProperties(handle, typeName, properties);
+			if (native && !applied)
+			{
+				return fail(handle);
+			}
+			entry = FindScriptEntry(*ctx.world, entity, scriptIndex);
+			if (entry == nullptr)
+			{
+				return false;
+			}
 			entry->attached = false; // a freshly created instance must attach
 		}
 
 		if (!entry->attached)
 		{
 			entry->attached = true;
-			(void) host.Attach(handle);
+			const auto attached = host.Attach(handle);
+			if (native && !attached)
+			{
+				return fail(handle);
+			}
 		}
 
 		// Every frame, not just on attach: this is also how a later Welcome landing
 		// or an ownership hand-off (see NetworkSystems.cpp's PruneDisconnected) gets
 		// noticed on an instance that has been live for a while.
-		DispatchOwnershipChanged(*ctx.world, entity, host, handle, m_instances[key]);
+		if (!DispatchOwnershipChanged(*ctx.world, entity, host, handle, m_instances[key]) && native)
+		{
+			return fail(handle);
+		}
 
-		(void) host.Update(handle, dt);
+		// Snapshot the event lists before calling user code: callbacks may add components
+		// and invalidate ECS storage. Managed scripts retain their own event polling.
+		if ((host.Capabilities() & AE_GAMEPLAY_CAP_PHYSICS) != 0)
+		{
+			if (const auto* events = ctx.world->TryGet<CollisionEvents2DComponent>(entity))
+			{
+				const auto snapshot = *events;
+				const std::vector<Entity>* lists[] = {&snapshot.collisionEnter, &snapshot.collisionExit, &snapshot.triggerEnter, &snapshot.triggerExit, &snapshot.overlapping};
+				for (std::uint32_t kind = 0; kind < 5; ++kind)
+				{
+					for (const auto other: *lists[kind])
+					{
+						if (!host.DispatchPhysics(handle, other.id, kind) && native)
+						{
+							return fail(handle);
+						}
+					}
+				}
+			}
+		}
+		const auto updated = host.Update(handle, dt);
+		if (native && !updated)
+		{
+			return fail(handle);
+		}
 		return true;
 	}
 
@@ -377,6 +448,47 @@ namespace aether::app
 			{
 				if (world.GetRegistry().valid(World::ToEntt(doomed)))
 				{
+					if (host->Language() == "rust")
+					{
+						// Match World::Destroy's complete subtree, including malformed cycles.
+						// Detach while every owner still exists, so cleanup can use checked ECS APIs.
+						std::vector<Entity> pending{doomed};
+						std::unordered_set<std::uint32_t> subtree;
+						while (!pending.empty())
+						{
+							const Entity current = pending.back();
+							pending.pop_back();
+							if (!world.GetRegistry().valid(World::ToEntt(current)) || !subtree.insert(current.id).second)
+							{
+								continue;
+							}
+							if (const auto* hierarchy = world.TryGet<HierarchyComponent>(current))
+							{
+								pending.insert(pending.end(), hierarchy->children.begin(), hierarchy->children.end());
+							}
+						}
+						std::vector<std::uint64_t> destroyedKeys;
+						for (const auto& [key, instance]: m_instances)
+						{
+							if (subtree.contains(InstanceEntityId(key)))
+							{
+								destroyedKeys.push_back(key);
+							}
+						}
+						const ActiveContextScope scope(*sceneCtx);
+						for (const auto key: destroyedKeys)
+						{
+							const auto found = m_instances.find(key);
+							if (found == m_instances.end())
+							{
+								continue;
+							}
+							const auto handle = found->second.handle;
+							(void) host->Detach(handle);
+							(void) host->Destroy(handle);
+							m_instances.erase(key);
+						}
+					}
 					world.Destroy(doomed);
 				}
 			}
@@ -443,6 +555,7 @@ namespace aether::app
 		}
 		m_instances.clear();
 		m_failedTypes.clear();
+		m_failedInstances.clear();
 
 		for (auto&& [enttE, sc]: world.GetRegistry().view<ScriptComponent>().each())
 		{
