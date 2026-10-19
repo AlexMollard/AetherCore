@@ -37,7 +37,8 @@ namespace aether::editor::dragdrop
 	// UI at all, while the same file clicked in the browser did.
 	[[nodiscard]] inline FileKind ClassifyFile(const std::filesystem::path& path)
 	{
-		std::string ext = path.extension().generic_string();
+		const auto extensionBytes = path.extension().generic_u8string();
+		std::string ext(extensionBytes.begin(), extensionBytes.end());
 		for (char& c: ext)
 		{
 			c = static_cast<char>((c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c);
@@ -64,7 +65,8 @@ namespace aether::editor::dragdrop
 		}
 		if (ext == ".toml")
 		{
-			const std::string generic = path.generic_string();
+			const auto pathBytes = path.generic_u8string();
+			const std::string generic(pathBytes.begin(), pathBytes.end());
 			// A material GRAPH is not a material: it generates one. Checked before the
 			// material suffix and before the folder heuristic below, or the Inspector renders
 			// a graph file as a set of material properties and parses a graph as a material.

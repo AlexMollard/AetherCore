@@ -30,6 +30,7 @@
 #endif
 
 #include "Icons.hpp"
+#include "io/PlatformPaths.hpp"
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/TileAssetStore.hpp"
@@ -53,7 +54,7 @@ namespace aether::editor
 	{
 		std::string DisplayPath(const std::filesystem::path& path)
 		{
-			return path.empty() ? std::string{} : path.lexically_normal().string();
+			return io::PlatformPaths::PathToUtf8(path.lexically_normal());
 		}
 
 		// The part of a project folder's path that actually differs between rows.

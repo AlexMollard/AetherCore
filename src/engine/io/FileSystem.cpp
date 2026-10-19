@@ -159,7 +159,7 @@ namespace aether::io
 
 		std::optional<std::filesystem::path> EnvironmentPath(const char* name)
 		{
-			const std::string value = EnvironmentString(name);
+			const std::filesystem::path value = PlatformPaths::ReadEnvironmentPath(name);
 			return value.empty() ? std::nullopt : std::optional<std::filesystem::path>(NormalPath(value));
 		}
 
@@ -233,7 +233,7 @@ namespace aether::io
 		void MountEngineDirectory(std::filesystem::path directory)
 		{
 			directory = NormalPath(std::move(directory));
-			AE_WARN(LogCategory::FileSystem, "Mounting loose engine resource directory. Built-in resources such as fonts may be unavailable unless this directory contains generated outputs: {}", directory.string());
+			AE_WARN(LogCategory::FileSystem, "Mounting loose engine resource directory. Built-in resources such as fonts may be unavailable unless this directory contains generated outputs: {}", PlatformPaths::PathToUtf8(directory));
 			FileSystem::Mount("engine", std::move(directory));
 		}
 
@@ -250,7 +250,7 @@ namespace aether::io
 				return;
 			}
 
-			AE_INFO(LogCategory::FileSystem, "Mounting loose project directory: {}", directory.string());
+			AE_INFO(LogCategory::FileSystem, "Mounting loose project directory: {}", PlatformPaths::PathToUtf8(directory));
 			FileSystem::Mount("project", std::move(directory));
 		}
 	} // namespace
@@ -475,7 +475,7 @@ namespace aether::io
 			AE_ASSERT_ALWAYS(false, "FileSystem::Mount() called before Initialize().");
 		}
 
-		AE_INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, physicalPath.string());
+		AE_INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, PlatformPaths::PathToUtf8(physicalPath));
 		const std::scoped_lock lock(s_backend->mountsMutex);
 		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<DirectoryBackend>(std::move(physicalPath)));
 	}
@@ -488,7 +488,7 @@ namespace aether::io
 			AE_ASSERT_ALWAYS(false, "FileSystem::MountPak() called before Initialize().");
 		}
 
-		AE_INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
+		AE_INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, PlatformPaths::PathToUtf8(pakPath));
 		const std::scoped_lock lock(s_backend->mountsMutex);
 		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<PakBackend>(std::move(pakPath)));
 	}

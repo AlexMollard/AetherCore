@@ -17,6 +17,17 @@
 #include "scripting/RustScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 
+#if defined(_WIN32)
+# ifndef WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
+# endif
+# ifndef NOMINMAX
+#  define NOMINMAX
+# endif
+# include <Windows.h>
+# include <shellapi.h>
+# pragma comment(lib, "Shell32.lib")
+#endif
 #ifdef AETHERCORE_EDITOR_APP
 #	include "editor/ControlServerLayer.hpp"
 #	include "layers/DebugLayer.hpp"
@@ -75,6 +86,70 @@ int main(int argc, char** argv)
 	}
 #endif
 
+#ifdef AETHERCORE_EDITOR_APP
+	constexpr bool kRequireAgentControlPort = true;
+#else
+	constexpr bool kRequireAgentControlPort = false;
+#endif
+	auto agentLaunch = aether::app::ParseAgentLaunchOptions(argc, argv, kRequireAgentControlPort);
+	if (!agentLaunch.error.empty())
+	{
+		std::println(stderr, "{}", agentLaunch.error);
+		return 2;
+	}
+#ifdef _WIN32
+	std::wstring agentProject;
+#endif
+	if (agentLaunch.enabled)
+	{
+		// Establish the session before cached PlatformPaths queries, window creation,
+		// audio initialization, autosave, or recovery can observe it.
+#ifdef _WIN32
+		// GLFW and the control protocol consume UTF-8. Windows' narrow argv uses
+		// the active code page, so take the display name from the native command line.
+		// Project overrides keep their native wide spelling through the environment.
+		int wideCount = 0;
+		wchar_t** wideArgs = CommandLineToArgvW(GetCommandLineW(), &wideCount);
+		if (wideArgs == nullptr)
+		{
+			std::println(stderr, "Cannot read the agent name from the Windows command line.");
+			return 2;
+		}
+		for (int i = 1; i + 1 < wideCount; ++i)
+		{
+			if (std::wstring_view(wideArgs[i]) == L"--project")
+			{
+				agentProject = wideArgs[i + 1];
+			}
+			if (std::wstring_view(wideArgs[i]) == L"--agent-name")
+			{
+				const int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wideArgs[i + 1], -1, nullptr, 0, nullptr, nullptr);
+				if (size <= 1)
+				{
+					LocalFree(wideArgs);
+					std::println(stderr, "Agent name must be valid Unicode and nonempty.");
+					return 2;
+				}
+				agentLaunch.name.resize(static_cast<std::size_t>(size));
+				WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wideArgs[i + 1], -1, agentLaunch.name.data(), size, nullptr, nullptr);
+				agentLaunch.name.pop_back();
+			}
+		}
+		LocalFree(wideArgs);
+#endif
+		const std::string controlPort = std::to_string(agentLaunch.controlPort);
+#ifdef _WIN32
+		_putenv_s("AETHER_AGENT_SESSION", "1");
+		_putenv_s("AETHER_AGENT_BACKGROUND", agentLaunch.background ? "1" : "0");
+		_putenv_s("AETHER_AGENT_NAME", agentLaunch.name.c_str());
+		_putenv_s("AETHER_CONTROL_PORT", controlPort.c_str());
+#else
+		setenv("AETHER_AGENT_SESSION", "1", 1);
+		setenv("AETHER_AGENT_BACKGROUND", agentLaunch.background ? "1" : "0", 1);
+		setenv("AETHER_AGENT_NAME", agentLaunch.name.c_str(), 1);
+		setenv("AETHER_CONTROL_PORT", controlPort.c_str(), 1);
+#endif
+	}
 	// mount already read - so nothing has to thread through the engine config.
 	const std::string project = aether::app::ParseProjectArg(argc, argv);
 	const std::string readyEvent = aether::app::ParseOptionArg(argc, argv, "--ready-event");
@@ -85,7 +160,14 @@ int main(int argc, char** argv)
 	if (!project.empty())
 	{
 #ifdef _WIN32
-		_putenv_s("AETHER_PROJECT_DIR", project.c_str());
+		if (agentLaunch.enabled && !agentProject.empty())
+		{
+			_wputenv_s(L"AETHER_PROJECT_DIR", agentProject.c_str());
+		}
+		else
+		{
+			_putenv_s("AETHER_PROJECT_DIR", project.c_str());
+		}
 #else
 		setenv("AETHER_PROJECT_DIR", project.c_str(), 1);
 #endif
@@ -118,7 +200,7 @@ int main(int argc, char** argv)
 	{
 		aether::Logger::SetMinimumLevel(aether::LogLevel::Info);
 		aether::app::RuntimeProjectSettingsInputs scriptingInputs;
-		scriptingInputs.envProjectDir = aether::io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR");
+		scriptingInputs.envProjectDir = aether::io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR");
 		scriptingInputs.exeDir = aether::io::PlatformPaths::GetExecutableDir();
 #ifdef AETHER_DEFAULT_PROJECT_DIR
 		scriptingInputs.compiledDefaultDir = AETHER_DEFAULT_PROJECT_DIR;
@@ -144,7 +226,7 @@ int main(int argc, char** argv)
 		// Only when the launcher started us. Run directly, a window that stays invisible for
 		// several seconds reads as "it didn't launch", and there is nothing watching to say
 		// otherwise.
-		engineConfig.startWindowHidden = !readyEvent.empty();
+		engineConfig.startWindowHidden = !readyEvent.empty() || agentLaunch.background;
 		// "x,y" from the launcher: the point to centre on before the window is revealed.
 		if (const std::string center = aether::app::ParseOptionArg(argc, argv, "--window-center"); !center.empty())
 		{

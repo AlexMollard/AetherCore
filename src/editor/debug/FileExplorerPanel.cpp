@@ -63,7 +63,8 @@ namespace aether::editor
 
 		std::string ToUtf8Path(const std::filesystem::path& path)
 		{
-			return path.generic_string();
+			const auto bytes = path.generic_u8string();
+			return std::string(bytes.begin(), bytes.end());
 		}
 
 		bool IsSubpath(const std::filesystem::path& relativePath)
@@ -974,7 +975,7 @@ namespace aether::editor
 			{
 				for (const std::string& path: m_selectedPaths)
 				{
-					moved = MoveEntry(std::filesystem::path(path), destDir) || moved;
+					moved = MoveEntry(std::filesystem::u8path(path), destDir) || moved;
 				}
 				m_selectedPaths.clear();
 			}
@@ -988,7 +989,7 @@ namespace aether::editor
 			// A script's payload already carries its physical path, because a script is
 			// dragged to be attached rather than to be resolved through the VFS.
 			const auto* script = static_cast<const dragdrop::ScriptPayload*>(scriptPayload->Data);
-			moved = MoveEntry(std::filesystem::path(script->sourcePath), destDir);
+			moved = MoveEntry(std::filesystem::u8path(script->sourcePath), destDir);
 		}
 		ImGui::EndDragDropTarget();
 		if (moved)
@@ -1177,7 +1178,7 @@ namespace aether::editor
 		{
 			if (std::string reveal = selection->ConsumeRevealRequest(); !reveal.empty())
 			{
-				const std::filesystem::path revealPath(reveal);
+				const std::filesystem::path revealPath = std::filesystem::u8path(reveal);
 				std::error_code revealEc;
 				if (std::filesystem::is_directory(revealPath, revealEc))
 				{
@@ -1379,7 +1380,7 @@ namespace aether::editor
 
 	void FileExplorerPanel::DrawFileRow(app::LayerContext& context, const Entry& entry)
 	{
-		ImGui::PushID(entry.path.generic_string().c_str());
+		ImGui::PushID(ToUtf8Path(entry.path).c_str());
 
 		if (DrawActiveRename(entry))
 		{
@@ -1527,7 +1528,7 @@ namespace aether::editor
 
 	void FileExplorerPanel::DrawFolderTree(app::LayerContext& context, Entry& entry)
 	{
-		ImGui::PushID(entry.path.generic_string().c_str());
+		ImGui::PushID(ToUtf8Path(entry.path).c_str());
 
 		if (DrawActiveRename(entry))
 		{
@@ -2059,7 +2060,7 @@ namespace aether::editor
 
 	void FileExplorerPanel::DrawFileTile(app::LayerContext& context, const Entry& entry, const float tileSize)
 	{
-		ImGui::PushID(entry.path.generic_string().c_str());
+		ImGui::PushID(ToUtf8Path(entry.path).c_str());
 
 		// The grid needs the rename field too. Only the list row drew it, so renaming from
 		// the context menu (or F2) in the default view set a target that nothing rendered -

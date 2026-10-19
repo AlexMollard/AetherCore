@@ -50,8 +50,8 @@ namespace aether::app::scripting
 			{
 				return {};
 			}
-			const char* project = std::getenv("AETHER_PROJECT_DIR");
-			auto source = project != nullptr && project[0] != '\0' ? std::filesystem::path(project).lexically_normal() : io::PlatformPaths::GetExecutableDir();
+			const auto project = io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR");
+			auto source = !project.empty() ? project.lexically_normal() : io::PlatformPaths::GetExecutableDir();
 			if (source.filename().empty())
 			{
 				source = source.parent_path();

@@ -34,6 +34,7 @@
 #include "ui/UiComponents.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -89,7 +90,7 @@ namespace aether::app::scene
 			{
 				std::error_code removeEc;
 				std::filesystem::remove(temp, removeEc);
-				AE_WARN(LogCategory::App, "WriteTextAtomic: cannot replace '{}': {}", path.string(), ec.message());
+				AE_WARN(LogCategory::App, "WriteTextAtomic: cannot replace '{}': {}", io::PlatformPaths::PathToUtf8(path), ec.message());
 				return false;
 			}
 			return true;
@@ -258,26 +259,26 @@ namespace aether::app::scene
 	{
 		if (!g_projectScenesDirectory.empty())
 		{
-			return g_projectScenesDirectory.string();
+			return io::PlatformPaths::PathToUtf8(g_projectScenesDirectory);
 		}
 		if (const std::filesystem::path templates = EngineSceneTemplatesDir(); !templates.empty())
 		{
-			return templates.string();
+			return io::PlatformPaths::PathToUtf8(templates);
 		}
-		return EngineSettingsIO::ResolvePath("scenes").string();
+		return io::PlatformPaths::PathToUtf8(EngineSettingsIO::ResolvePath("scenes"));
 	}
 
 	std::string PrefabsDirectory()
 	{
 		if (!g_projectPrefabsDirectory.empty())
 		{
-			return g_projectPrefabsDirectory.string();
+			return io::PlatformPaths::PathToUtf8(g_projectPrefabsDirectory);
 		}
 		if (const std::filesystem::path templates = EnginePrefabTemplatesDir(); !templates.empty())
 		{
-			return templates.string();
+			return io::PlatformPaths::PathToUtf8(templates);
 		}
-		return EngineSettingsIO::ResolvePath("prefabs").string();
+		return io::PlatformPaths::PathToUtf8(EngineSettingsIO::ResolvePath("prefabs"));
 	}
 
 	void AssignPrefabGuids(SceneDescription& prefab)
@@ -314,10 +315,10 @@ namespace aether::app::scene
 			AE_WARN(LogCategory::App, "SavePrefabFile: '{}' is not a usable prefab name", prefabName);
 			return false;
 		}
-		const std::filesystem::path dir{PrefabsDirectory()};
+		const std::filesystem::path dir = std::filesystem::u8path(PrefabsDirectory());
 		if (!io::file_util::CreateDirectories(dir))
 		{
-			AE_WARN(LogCategory::App, "SavePrefabFile: cannot create directory '{}'", dir.string());
+			AE_WARN(LogCategory::App, "SavePrefabFile: cannot create directory '{}'", io::PlatformPaths::PathToUtf8(dir));
 			return false;
 		}
 		const std::filesystem::path path = dir / (prefabName + ".prefab.toml");
@@ -336,7 +337,7 @@ namespace aether::app::scene
 			const std::lock_guard<std::mutex> lock(g_sceneWriteMutex);
 			if (!WriteTextAtomic(path, tomlText))
 			{
-				AE_WARN(LogCategory::App, "SavePrefabFile: cannot write '{}'", path.string());
+				AE_WARN(LogCategory::App, "SavePrefabFile: cannot write '{}'", io::PlatformPaths::PathToUtf8(path));
 				return false;
 			}
 			// Cook the binary sibling (best-effort; the TOML is the source of truth).
@@ -350,7 +351,7 @@ namespace aether::app::scene
 			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
 			g_prefabCache[prefabName] = CachedPrefab{prefab, PrefabSourceStamp(prefabName)};
 		}
-		AE_INFO(LogCategory::App, "Prefab saved: {} ({} entities)", path.string(), prefab.entities.size());
+		AE_INFO(LogCategory::App, "Prefab saved: {} ({} entities)", io::PlatformPaths::PathToUtf8(path), prefab.entities.size());
 		return true;
 	}
 
@@ -398,7 +399,7 @@ namespace aether::app::scene
 			if (!diskText)
 			{
 				AE_WARN(LogCategory::App, "ReadPrefabFile: cannot read prefab '{}' from project:// {}", prefabName,
-				        prefabsDir.empty() ? std::string{"(no project prefabs directory scoped)"} : prefabsDir.string());
+				        prefabsDir.empty() ? std::string{"(no project prefabs directory scoped)"} : io::PlatformPaths::PathToUtf8(prefabsDir));
 				return std::nullopt;
 			}
 			parsed = ParseToml(*diskText);
@@ -420,7 +421,7 @@ namespace aether::app::scene
 			return names;
 		}
 
-		const std::filesystem::path dir{PrefabsDirectory()};
+		const std::filesystem::path dir = std::filesystem::u8path(PrefabsDirectory());
 		std::error_code ec;
 		for (const auto& entry: std::filesystem::directory_iterator(dir, ec))
 		{
@@ -468,10 +469,10 @@ namespace aether::app::scene
 			AE_WARN(LogCategory::App, "SaveSceneFile: '{}' is not a usable scene name", sceneName);
 			return false;
 		}
-		const std::filesystem::path dir{ScenesDirectory()};
+		const std::filesystem::path dir = std::filesystem::u8path(ScenesDirectory());
 		if (!io::file_util::CreateDirectories(dir))
 		{
-			AE_WARN(LogCategory::App, "SaveSceneFile: cannot create directory '{}'", dir.string());
+			AE_WARN(LogCategory::App, "SaveSceneFile: cannot create directory '{}'", io::PlatformPaths::PathToUtf8(dir));
 			return false;
 		}
 		const std::filesystem::path path = dir / (sceneName + ".scene.toml");
@@ -483,7 +484,7 @@ namespace aether::app::scene
 		const std::lock_guard<std::mutex> lock(g_sceneWriteMutex);
 		if (!WriteTextAtomic(path, tomlText))
 		{
-			AE_WARN(LogCategory::App, "SaveSceneFile: cannot write '{}'", path.string());
+			AE_WARN(LogCategory::App, "SaveSceneFile: cannot write '{}'", io::PlatformPaths::PathToUtf8(path));
 			return false;
 		}
 		// Cook the binary sibling for fast runtime loads (best-effort; TOML is source).
@@ -491,7 +492,7 @@ namespace aether::app::scene
 		{
 			AE_WARN(LogCategory::App, "SaveSceneFile: cannot cook binary for '{}': {}", sceneName, cooked.error().message);
 		}
-		AE_INFO(LogCategory::App, "Scene saved: {} ({} entities)", path.string(), scene.entities.size());
+		AE_INFO(LogCategory::App, "Scene saved: {} ({} entities)", io::PlatformPaths::PathToUtf8(path), scene.entities.size());
 		return true;
 	}
 
@@ -590,7 +591,7 @@ namespace aether::app::scene
 			}
 		}
 
-		AE_WARN(LogCategory::App, "ReadSceneFile: cannot read scene '{}' from project:// {}", sceneName, scenesDir.empty() ? std::string{"(no project scenes directory scoped)"} : scenesDir.string());
+		AE_WARN(LogCategory::App, "ReadSceneFile: cannot read scene '{}' from project:// {}", sceneName, scenesDir.empty() ? std::string{"(no project scenes directory scoped)"} : io::PlatformPaths::PathToUtf8(scenesDir));
 		return std::nullopt;
 	}
 
@@ -602,7 +603,7 @@ namespace aether::app::scene
 			return names;
 		}
 
-		const std::filesystem::path dir{ScenesDirectory()};
+		const std::filesystem::path dir = std::filesystem::u8path(ScenesDirectory());
 		std::error_code ec;
 		for (const auto& entry: std::filesystem::directory_iterator(dir, ec))
 		{

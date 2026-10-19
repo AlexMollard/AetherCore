@@ -48,6 +48,10 @@ namespace aether::io
 
 		[[nodiscard]] static std::string ReadEnvironmentVariable(std::string_view name);
 
+		// Filesystem paths use the native wide environment on Windows.
+		[[nodiscard]] static std::filesystem::path ReadEnvironmentPath(std::string_view name);
+		[[nodiscard]] static std::string PathToUtf8(const std::filesystem::path& path);
+
 		[[nodiscard]] static std::filesystem::path GetUserConfigDir();
 
 		// Where the user's own documents live, for content they author and keep - not the

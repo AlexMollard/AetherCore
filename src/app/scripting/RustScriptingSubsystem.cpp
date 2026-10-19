@@ -33,7 +33,7 @@ namespace aether::app::scripting
 	Expected<void> RustScriptingSubsystem::Initialize(SceneContext& context)
 	{
 		m_context = &context;
-		const auto root = m_projectRoot.empty() ? std::filesystem::u8path(io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR")) : m_projectRoot;
+		const auto root = m_projectRoot.empty() ? io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR") : m_projectRoot;
 		if (!root.empty())
 		{
 			AE_TRY(descriptor, project::ReadProjectDescriptor(root));

@@ -9,6 +9,7 @@
 
 #include "vulkan/volk.hpp"
 
+#define STBIW_WINDOWS_UTF8
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
@@ -25,7 +26,7 @@ namespace aether
 		bool WritePng(const std::string& path, const std::uint8_t* rgba, std::uint32_t w, std::uint32_t h)
 		{
 			std::error_code ec;
-			std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+			std::filesystem::create_directories(std::filesystem::u8path(path).parent_path(), ec);
 			return stbi_write_png(path.c_str(), static_cast<int>(w), static_cast<int>(h), 4, rgba, static_cast<int>(w * 4u)) != 0;
 		}
 

@@ -21,6 +21,7 @@
 #endif
 
 #include "Icons.hpp"
+#include "io/PlatformPaths.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "layers/AppLayer.hpp"
@@ -32,7 +33,7 @@ namespace aether::editor
 	{
 		std::string DisplayPath(const std::filesystem::path& path)
 		{
-			return path.empty() ? std::string{} : path.lexically_normal().string();
+			return io::PlatformPaths::PathToUtf8(path.lexically_normal());
 		}
 
 		bool FolderExists(const std::filesystem::path& path)

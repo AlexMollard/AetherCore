@@ -104,6 +104,32 @@ namespace aether::io
 		return EnvironmentString(name);
 	}
 
+	std::filesystem::path PlatformPaths::ReadEnvironmentPath(std::string_view name)
+	{
+#ifdef _WIN32
+		const std::wstring wideName(name.begin(), name.end());
+		const DWORD size = GetEnvironmentVariableW(wideName.c_str(), nullptr, 0);
+		if (size == 0)
+		{
+			return {};
+		}
+		std::wstring value(size, L'\0');
+		const DWORD copied = GetEnvironmentVariableW(wideName.c_str(), value.data(), size);
+		if (copied == 0 || copied >= size)
+		{
+			return {};
+		}
+		value.resize(copied);
+		return std::filesystem::path(value);
+#else
+		return std::filesystem::path(EnvironmentString(name));
+#endif
+	}
+	std::string PlatformPaths::PathToUtf8(const std::filesystem::path& path)
+	{
+		const auto bytes = path.u8string();
+		return std::string(bytes.begin(), bytes.end());
+	}
 	std::filesystem::path PlatformPaths::GetExecutableDir()
 	{
 		if (const std::filesystem::path exePath = ResolveExecutablePath(); !exePath.empty())

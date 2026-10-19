@@ -1,4 +1,10 @@
 #include "AetherCore.hpp"
+
+#ifdef _WIN32
+# include <process.h>
+#else
+# include <unistd.h>
+#endif
 #include "editor/ControlMethods.hpp"
 #include "editor/ControlSchema.hpp"
 
@@ -403,7 +409,26 @@ namespace aether::editor
 			        // actually running - the exact case worth being able to see.
 			        const float loopFrameMs = LoopFrameMs(ctx.services);
 			        auto* engineForIdle = ctx.services.TryGet<AetherCore>();
-			        return json{{"frame", ctx.frameIndex},
+			        const auto* identityProject = ctx.services.TryGet<app::EditorProjectContext>();
+			        const auto* identitySettings = ctx.services.TryGet<SettingsService>();
+			        const auto* identityWindow = ctx.services.TryGet<Window>();
+			        const std::u8string identityRoot = identityProject != nullptr ? identityProject->root.generic_u8string() : std::u8string{};
+			        return json{{"pid", static_cast<std::uint64_t>(
+#ifdef _WIN32
+			                _getpid()
+#else
+			                getpid()
+#endif
+			                )},
+			                {"projectRoot", std::string(identityRoot.begin(), identityRoot.end())},
+			                {"agentName", io::PlatformPaths::AgentSessionName()},
+			                {"agentSession", io::PlatformPaths::IsAgentSession()},
+			                {"background", io::PlatformPaths::IsAgentSession() && io::PlatformPaths::ReadEnvironmentVariable("AETHER_AGENT_BACKGROUND") == "1"},
+			                {"windowTitle", identityWindow != nullptr ? identityWindow->Title() : ""},
+			                {"windowVisible", identityWindow != nullptr && identityWindow->IsVisible()},
+			                {"autosaveEnabled", !io::PlatformPaths::IsAgentSession() && (identitySettings == nullptr || identitySettings->Get().app.autosaveSeconds > 0)},
+			                {"cleanupRequired", io::PlatformPaths::IsAgentSession()},
+			                {"frame", ctx.frameIndex},
 			                {"fps", ctx.fps},
 			                {"frameMs", loopFrameMs},
 			                {"loopFps", loopFrameMs > 0.0f ? 1000.0f / loopFrameMs : 0.0f},
@@ -1617,7 +1642,7 @@ namespace aether::editor
 				        // A save that quietly does nothing is the one failure in this surface
 				        // that loses work, so it says which file it could not write. The
 				        // specific cause - unwritable directory, failed write - is in the log.
-				        const std::string path = (std::filesystem::path{app::scene::ScenesDirectory()} / (name + ".scene.toml")).string();
+				        const std::string path = io::PlatformPaths::PathToUtf8(std::filesystem::u8path(app::scene::ScenesDirectory()) / (name + ".scene.toml"));
 				        return json{{"saved", false}, {"scene", name}, {"error", "could not write '" + path + "' - see the log for the reason"}};
 			        }
 			        return json{{"saved", ok}, {"scene", name}};
@@ -2268,7 +2293,7 @@ namespace aether::editor
 			        if (path.empty())
 			        {
 				        const std::filesystem::path dir = io::PlatformPaths::GetUserConfigDir() / "screenshots";
-				        path = (dir / ("shot_" + std::to_string(ctx.frameIndex) + ".png")).string();
+				        path = io::PlatformPaths::PathToUtf8(dir / ("shot_" + std::to_string(ctx.frameIndex) + ".png"));
 			        }
 			        std::future<std::string> fut = shot->Request(path);
 			        // The render thread fulfils this within a queued frame; a short wait is
@@ -2422,7 +2447,7 @@ namespace aether::editor
 						        c = '_';
 					        }
 				        }
-				        path = (io::PlatformPaths::GetUserConfigDir() / "screenshots" / ("tex_" + safe + ".png")).string();
+				        path = io::PlatformPaths::PathToUtf8(io::PlatformPaths::GetUserConfigDir() / "screenshots" / ("tex_" + safe + ".png"));
 			        }
 			        std::future<std::string> fut = shot->RequestImage(image, it->extent, it->format, it->aspect, gpu::ImageLayout::ShaderReadOnly, path);
 			        if (fut.wait_for(std::chrono::seconds(8)) != std::future_status::ready)

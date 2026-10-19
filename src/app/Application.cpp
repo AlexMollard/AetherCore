@@ -124,7 +124,7 @@ namespace aether::app
 			return {};
 #else
 			app::RuntimeProjectSettingsInputs inputs;
-			inputs.envProjectDir = io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR");
+			inputs.envProjectDir = io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR");
 			inputs.exeDir = io::PlatformPaths::GetExecutableDir();
 #	ifdef AETHER_DEFAULT_PROJECT_DIR
 			inputs.compiledDefaultDir = AETHER_DEFAULT_PROJECT_DIR;

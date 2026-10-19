@@ -219,7 +219,7 @@ namespace aether::app
 				        if (path.empty())
 				        {
 					        const std::filesystem::path dir = io::PlatformPaths::GetUserConfigDir() / "screenshots";
-					        path = (dir / ("launcher_" + std::to_string(ctx.frameIndex) + ".png")).string();
+					        path = io::PlatformPaths::PathToUtf8(dir / ("launcher_" + std::to_string(ctx.frameIndex) + ".png"));
 				        }
 				        std::future<std::string> result = screenshot->Request(path);
 				        if (result.wait_for(std::chrono::seconds(8)) != std::future_status::ready)

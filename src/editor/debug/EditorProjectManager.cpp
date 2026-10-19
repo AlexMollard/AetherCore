@@ -233,7 +233,7 @@ namespace aether::editor
 	void EditorProjectManager::LoadSettings(TomlConfig& config)
 	{
 		m_launcherState.openLastProject = config.GetBool("launcher.open_last", false);
-		m_currentProject.root = NormalizePath(config.GetString("launcher.current.path"));
+		m_currentProject.root = NormalizePath(std::filesystem::u8path(config.GetString("launcher.current.path")));
 		m_currentProject.name = config.GetString("launcher.current.name");
 		if (!m_currentProject.root.empty() && m_currentProject.name.empty())
 		{
@@ -259,7 +259,7 @@ namespace aether::editor
 		std::snprintf(m_launcherState.newName.data(), m_launcherState.newName.size(), "%s", "AetherProject");
 
 		std::filesystem::path bootProject;
-		if (const std::string env = io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"); !env.empty())
+		if (const std::filesystem::path env = io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR"); !env.empty())
 		{
 			bootProject = NormalizePath(env);
 		}
@@ -412,8 +412,8 @@ namespace aether::editor
 		std::error_code ec;
 		std::filesystem::create_directories(previewPath.parent_path(), ec);
 		// Fire and forget: the render thread fulfils the request and writes the PNG.
-		(void) shot->RequestImage(image, it->extent, it->format, it->aspect, gpu::ImageLayout::ShaderReadOnly, previewPath.string());
-		AE_VERBOSE(LogCategory::App, "Captured project preview -> {}", previewPath.string());
+		(void) shot->RequestImage(image, it->extent, it->format, it->aspect, gpu::ImageLayout::ShaderReadOnly, io::PlatformPaths::PathToUtf8(previewPath));
+		AE_VERBOSE(LogCategory::App, "Captured project preview -> {}", io::PlatformPaths::PathToUtf8(previewPath));
 	}
 
 	void EditorProjectManager::OpenProject(std::filesystem::path root, bool reloadScene)

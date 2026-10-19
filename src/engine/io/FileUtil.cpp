@@ -1,4 +1,5 @@
 #include "FileUtil.hpp"
+#include "PlatformPaths.hpp"
 
 #include <ctime>
 #include <cstdlib>
@@ -187,13 +188,13 @@ namespace aether::io::file_util
 		std::error_code ec;
 		if (!std::filesystem::exists(path, ec))
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("File not found: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("File not found: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		const std::ifstream in(path, std::ios::binary);
 		if (!in.is_open())
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for reading: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for reading: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		std::ostringstream buffer;
@@ -201,7 +202,7 @@ namespace aether::io::file_util
 
 		if (in.bad())
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to read file: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to read file: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		return buffer.str();
@@ -217,14 +218,14 @@ namespace aether::io::file_util
 			std::filesystem::create_directories(parent, ec);
 			if (ec)
 			{
-				return std::unexpected(AetherError::FileSystem(std::format("Failed to create directories for '{}': {}", path.string(), ec.message())));
+				return std::unexpected(AetherError::FileSystem(std::format("Failed to create directories for '{}': {}", PlatformPaths::PathToUtf8(path), ec.message())));
 			}
 		}
 
 		std::ofstream out(path, std::ios::binary | std::ios::trunc);
 		if (!out.is_open())
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for writing: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for writing: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		out << text;
@@ -232,7 +233,7 @@ namespace aether::io::file_util
 
 		if (out.fail())
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to write file: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to write file: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		return {};
@@ -243,19 +244,19 @@ namespace aether::io::file_util
 		std::error_code ec;
 		if (!std::filesystem::exists(path, ec))
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("File not found: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("File not found: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		std::ifstream in(path, std::ios::binary | std::ios::ate);
 		if (!in.is_open())
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for reading: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for reading: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		const auto size = in.tellg();
 		if (size < 0)
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to determine file size: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to determine file size: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		in.seekg(0, std::ios::beg);
@@ -263,7 +264,7 @@ namespace aether::io::file_util
 		std::vector<std::byte> data(static_cast<std::size_t>(size));
 		if (!in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(data.size())))
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to read file: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to read file: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		return data;
@@ -279,14 +280,14 @@ namespace aether::io::file_util
 			std::filesystem::create_directories(parent, ec);
 			if (ec)
 			{
-				return std::unexpected(AetherError::FileSystem(std::format("Failed to create directories for '{}': {}", path.string(), ec.message())));
+				return std::unexpected(AetherError::FileSystem(std::format("Failed to create directories for '{}': {}", PlatformPaths::PathToUtf8(path), ec.message())));
 			}
 		}
 
 		std::ofstream out(path, std::ios::binary | std::ios::trunc);
 		if (!out.is_open())
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for writing: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to open file for writing: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
@@ -294,7 +295,7 @@ namespace aether::io::file_util
 
 		if (out.fail())
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to write file: {}", path.string())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to write file: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
 		return {};
@@ -306,7 +307,7 @@ namespace aether::io::file_util
 		std::filesystem::create_directories(path, ec);
 		if (ec)
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to create directories '{}': {}", path.string(), ec.message())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to create directories '{}': {}", PlatformPaths::PathToUtf8(path), ec.message())));
 		}
 		return {};
 	}
@@ -330,7 +331,7 @@ namespace aether::io::file_util
 		std::filesystem::copy_file(from, to, options, ec);
 		if (ec)
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to copy '{}' to '{}': {}", from.string(), to.string(), ec.message())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to copy '{}' to '{}': {}", PlatformPaths::PathToUtf8(from), PlatformPaths::PathToUtf8(to), ec.message())));
 		}
 		return {};
 	}
@@ -347,7 +348,7 @@ namespace aether::io::file_util
 		std::filesystem::remove(path, ec);
 		if (ec)
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to remove '{}': {}", path.string(), ec.message())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to remove '{}': {}", PlatformPaths::PathToUtf8(path), ec.message())));
 		}
 		return {};
 	}
@@ -358,7 +359,7 @@ namespace aether::io::file_util
 		auto size = std::filesystem::file_size(path, ec);
 		if (ec)
 		{
-			return std::unexpected(AetherError::FileSystem(std::format("Failed to get file size for '{}': {}", path.string(), ec.message())));
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to get file size for '{}': {}", PlatformPaths::PathToUtf8(path), ec.message())));
 		}
 		return size;
 	}

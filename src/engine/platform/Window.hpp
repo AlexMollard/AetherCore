@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <string>
 
 struct GLFWwindow;
 
@@ -74,6 +75,8 @@ namespace aether
 		// background wakes up and renders flat out because the mouse moved over some other
 		// application.
 		[[nodiscard]] bool IsFocused() const;
+		[[nodiscard]] bool IsVisible() const;
+		[[nodiscard]] std::string Title() const;
 		// Requests a clean application-loop exit on the next close check. Main thread only.
 		void RequestClose();
 		// Withdraws a close request the OS has already recorded (the title-bar X, Alt+F4).

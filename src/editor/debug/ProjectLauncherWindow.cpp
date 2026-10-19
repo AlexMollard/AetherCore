@@ -67,7 +67,7 @@ namespace aether::app
 
 		[[nodiscard]] std::string DisplayPath(const std::filesystem::path& path)
 		{
-			return path.empty() ? std::string{} : path.lexically_normal().string();
+			return project::DisplayPath(path);
 		}
 
 		// Trim a path from the LEFT, keeping the end.
@@ -402,7 +402,7 @@ namespace aether::app
 				ImGui::Spacing();
 				if (state.openPath[0] != '\0')
 				{
-					const bool found = project::HasProjectDescriptor(project::ResolveProjectRoot(std::filesystem::path(state.openPath.data())));
+					const bool found = project::HasProjectDescriptor(project::ResolveProjectRoot(std::filesystem::u8path(state.openPath.data())));
 					ImGui::PushStyleColor(ImGuiCol_Text, found ? kAccentHi : kError);
 					ImGui::TextWrapped("%s", found ? "Project found" : ICON_FA_XMARK "  No ProjectSettings.toml here");
 					ImGui::PopStyleColor();
@@ -476,12 +476,12 @@ namespace aether::app
 				}
 
 				// Live preview + inline validation.
-				const std::filesystem::path composed = project::ComposeNewProjectRoot(std::filesystem::path(state.newPath.data()), state.newName.data());
+				const std::filesystem::path composed = project::ComposeNewProjectRoot(std::filesystem::u8path(state.newPath.data()), state.newName.data());
 				ImGui::Spacing();
 				if (!composed.empty())
 				{
 					ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
-					ImGui::TextWrapped("Creates: %s", composed.string().c_str());
+					ImGui::TextWrapped("Creates: %s", project::DisplayPath(composed).c_str());
 					ImGui::PopStyleColor();
 					std::error_code existsEc;
 					if (std::filesystem::exists(composed, existsEc) && !std::filesystem::is_empty(composed, existsEc))
@@ -508,8 +508,8 @@ namespace aether::app
 			}
 
 			ImGui::Spacing();
-			const bool openReady = opening && state.openPath[0] != '\0' && project::HasProjectDescriptor(project::ResolveProjectRoot(std::filesystem::path(state.openPath.data())));
-			const std::filesystem::path createRoot = opening ? std::filesystem::path{} : project::ComposeNewProjectRoot(std::filesystem::path(state.newPath.data()), state.newName.data());
+			const bool openReady = opening && state.openPath[0] != '\0' && project::HasProjectDescriptor(project::ResolveProjectRoot(std::filesystem::u8path(state.openPath.data())));
+			const std::filesystem::path createRoot = opening ? std::filesystem::path{} : project::ComposeNewProjectRoot(std::filesystem::u8path(state.newPath.data()), state.newName.data());
 			const bool incomplete = opening ? !openReady : createRoot.empty();
 			const float cancelWidth = dp(100.0f);
 			const float actionWidth = dp(108.0f);
@@ -530,11 +530,11 @@ namespace aether::app
 			{
 				if (opening && actions.openProject)
 				{
-					actions.openProject(std::filesystem::path(state.openPath.data()));
+					actions.openProject(std::filesystem::u8path(state.openPath.data()));
 				}
 				else if (!opening && actions.createProject)
 				{
-					actions.createProject(std::filesystem::path(state.newPath.data()), state.newName.data(), state.newTemplate, state.newLanguage);
+					actions.createProject(std::filesystem::u8path(state.newPath.data()), state.newName.data(), state.newTemplate, state.newLanguage);
 				}
 				state.dialog = ProjectLauncherDialog::None;
 				ImGui::CloseCurrentPopup();

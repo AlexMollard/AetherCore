@@ -308,12 +308,12 @@ namespace aether
 			std::error_code ec;
 			if (!text && std::filesystem::exists(projectFile, ec))
 			{
-				error = "Could not read project settings; refusing to overwrite " + projectFile.generic_string();
+				error = "Could not read project settings; refusing to overwrite " + io::PlatformPaths::PathToUtf8(projectFile);
 				return false;
 			}
 			if (text && !config.Load(*text))
 			{
-				error = "Could not parse project settings; refusing to overwrite " + projectFile.generic_string();
+				error = "Could not parse project settings; refusing to overwrite " + io::PlatformPaths::PathToUtf8(projectFile);
 				return false;
 			}
 		}
@@ -446,7 +446,7 @@ namespace aether
 			if (auto text = io::file_util::ReadText(projectFile))
 			{
 				Apply(*text, result.values);
-				AE_INFO(LogCategory::Engine, "Project settings loaded from {}", projectFile.string());
+				AE_INFO(LogCategory::Engine, "Project settings loaded from {}", io::PlatformPaths::PathToUtf8(projectFile));
 			}
 		}
 

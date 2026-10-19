@@ -78,7 +78,7 @@ namespace aether::app::scripting
 			// because none of its code is present. Warn rather than refuse: the gauntlet's
 			// runtime smoke runs in exactly this shape on purpose, and a diagnostic must not
 			// be the thing that fails a build.
-			if (!explicitManagedDir && ProjectScriptsCannotBeLoaded({io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"), io::PlatformPaths::GetExecutableDir(), m_managedDir}))
+			if (!explicitManagedDir && ProjectScriptsCannotBeLoaded({io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR"), io::PlatformPaths::GetExecutableDir(), m_managedDir}))
 			{
 				AE_WARN(LogCategory::App,
 				        "Loaded {} script type(s) from '{}', which is NOT the project's own assembly - it is whatever this build tree staged. The "

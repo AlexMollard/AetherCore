@@ -34,7 +34,7 @@ namespace aether
 #endif
 	}
 
-	Window::Window(const char* title, int width, int height, const Mode mode, const bool startHidden)
+	Window::Window(const char* title, int width, int height, Mode mode, const bool startHidden)
 	{
 		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::Window, "Initializing window '{}' ({}x{})", title, width, height);
@@ -51,6 +51,10 @@ namespace aether
 		// mode, silently drops back to composition and gives up the frame it was created to
 		// save. Falling back to windowed on a headless/monitor-less system is deliberate:
 		// failing to create a window at all would be worse than losing the latency.
+		if (io::PlatformPaths::IsAgentSession() && io::PlatformPaths::ReadEnvironmentVariable("AETHER_AGENT_BACKGROUND") == "1")
+		{
+			mode = Mode::Windowed;
+		}
 		GLFWmonitor* monitor = (mode == Mode::Windowed) ? nullptr : glfwGetPrimaryMonitor();
 		const GLFWvidmode* videoMode = (monitor != nullptr) ? glfwGetVideoMode(monitor) : nullptr;
 		if (videoMode != nullptr)
@@ -89,7 +93,7 @@ namespace aether
 		std::string windowTitle = title;
 		if (const std::string agent = io::PlatformPaths::AgentSessionName(); !agent.empty())
 		{
-			windowTitle += " [agent: " + agent + "]";
+			windowTitle += " [agent: " + agent + "] [close when finished]";
 		}
 		m_window = glfwCreateWindow(width, height, windowTitle.c_str(), monitor, nullptr);
 		if (m_window == nullptr)
@@ -337,8 +341,23 @@ namespace aether
 		glfwSetWindowPos(m_window, fit.outerX + frameLeft, fit.outerY + frameTop);
 	}
 
+	bool Window::IsVisible() const
+	{
+		return m_window != nullptr && glfwGetWindowAttrib(m_window, GLFW_VISIBLE) == GLFW_TRUE;
+	}
+
+	std::string Window::Title() const
+	{
+		const char* title = m_window != nullptr ? glfwGetWindowTitle(m_window) : nullptr;
+		return title != nullptr ? title : "";
+	}
+
 	void Window::Show()
 	{
+		if (io::PlatformPaths::IsAgentSession() && io::PlatformPaths::ReadEnvironmentVariable("AETHER_AGENT_BACKGROUND") == "1")
+		{
+			return;
+		}
 		if (m_window != nullptr)
 		{
 			if (io::PlatformPaths::IsAgentSession())
@@ -417,6 +436,10 @@ namespace aether
 
 	void Window::SetMode(Mode mode)
 	{
+		if (io::PlatformPaths::IsAgentSession() && io::PlatformPaths::ReadEnvironmentVariable("AETHER_AGENT_BACKGROUND") == "1")
+		{
+			mode = Mode::Windowed;
+		}
 		if (m_window == nullptr || mode == m_mode)
 		{
 			return;

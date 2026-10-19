@@ -3,6 +3,7 @@
 #include <system_error>
 
 #include "project/ProjectCommon.hpp"
+#include "io/PlatformPaths.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
@@ -28,7 +29,7 @@ namespace aether::app
 		// project that is not the one compiled in.
 		if (!inputs.envProjectDir.empty())
 		{
-			AE_INFO(LogCategory::App, "Runtime project settings: AETHER_PROJECT_DIR override -> {}", inputs.envProjectDir.string());
+			AE_INFO(LogCategory::App, "Runtime project settings: AETHER_PROJECT_DIR override -> {}", io::PlatformPaths::PathToUtf8(inputs.envProjectDir));
 			return SettingsIn(inputs.envProjectDir);
 		}
 
@@ -58,7 +59,7 @@ namespace aether::app
 		}
 
 		const std::filesystem::path compiled = SettingsIn(inputs.compiledDefaultDir);
-		AE_INFO(LogCategory::App, "Runtime project settings: {}", compiled.empty() ? std::string{"none found; using the settings beside the executable"} : compiled.string());
+		AE_INFO(LogCategory::App, "Runtime project settings: {}", compiled.empty() ? std::string{"none found; using the settings beside the executable"} : io::PlatformPaths::PathToUtf8(compiled));
 		return compiled;
 	}
 

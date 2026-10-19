@@ -16,6 +16,7 @@
 
 #include "EngineContentPaths.hpp"
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "utils/AetherExceptions.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
@@ -945,7 +946,7 @@ namespace aether::app::project
 
 	std::string DisplayPath(const std::filesystem::path& path)
 	{
-		return path.empty() ? std::string{} : path.lexically_normal().string();
+		return path.empty() ? std::string{} : io::PlatformPaths::PathToUtf8(path.lexically_normal());
 	}
 
 	std::filesystem::path ProjectFilePath(const std::filesystem::path& root)
@@ -974,7 +975,7 @@ namespace aether::app::project
 
 	std::string FallbackProjectName(const std::filesystem::path& root)
 	{
-		const std::string name = root.filename().string();
+		const std::string name = io::PlatformPaths::PathToUtf8(root.filename());
 		return name.empty() ? "Aether Project" : name;
 	}
 
@@ -1470,7 +1471,7 @@ namespace aether::app::project
 		{
 			const std::string key = std::format("launcher.recent_{}", i);
 			EditorProjectContext project;
-			project.root = NormalizePath(config.GetString(key + ".path"));
+			project.root = NormalizePath(std::filesystem::u8path(config.GetString(key + ".path")));
 			project.name = config.GetString(key + ".name");
 			if (project.root.empty())
 			{
