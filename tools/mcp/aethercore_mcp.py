@@ -5,8 +5,10 @@ A dependency-free (stdlib-only) Model Context Protocol server over stdio.
 
   * run_gauntlet - runs scripts/Run-DebugGauntlet.ps1 and returns its report
                    (build + unit + optional GPU validation smokes). No running
-                   engine required. This is the one static tool.
-  * everything else - GENERATED from the editor control endpoint's own "describe"
+                   engine required.
+  * gameplay_job_start/status/cancel - persistent project pipeline jobs, with no
+                   editor endpoint required.
+  * engine/launcher tools - GENERATED from the editor control endpoint's "describe"
                    manifest. The endpoint (src/app/editor/ControlMethods.cpp) is
                    the single source of truth; adding a capability there makes the
                    MCP tool appear automatically, with zero changes here. The
@@ -23,13 +25,18 @@ Path/port resolution (all overridable by environment):
   AETHER_CTL           path to aether-ctl(.exe) (default: found under the build dir)
   AETHER_CONTROL_PORT  editor control port (default: 8787)
   AETHER_PWSH          PowerShell executable for the gauntlet (default: pwsh)
+  AETHER_PROJECT_TOOL  standalone aether-project worker (default: newest app bundle)
 """
 
 import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'project'))
+import gameplay_jobs
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
@@ -201,6 +208,95 @@ def _run_gauntlet(mode: str, config: str) -> dict:
 
 # ── Tools ────────────────────────────────────────────────────────────────────
 
+def _agent_editor_helper(script: str, params: list[str], timeout: float) -> dict:
+    log_root = REPO / 'logs/agent-editor/requests'
+    log_root.mkdir(parents=True, exist_ok=True)
+    helper_logs = Path(tempfile.mkdtemp(prefix='helper-', dir=log_root))
+    try:
+        # A detached GUI child can retain inherited pipe handles after PowerShell
+        # exits. Files let us wait for the helper itself, without waiting for EOF
+        # from an editor that is intentionally still running.
+        with (helper_logs / 'stdout.log').open('wb') as output, (helper_logs / 'stderr.log').open('wb') as errors:
+            process = subprocess.run([PWSH, '-NoProfile', '-File', str(REPO / 'scripts' / script), *params],
+                                     stdout=output, stderr=errors, text=True, encoding='utf-8', timeout=timeout, cwd=str(REPO),
+                                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {'error': f'Pog Champ, owned editor helper failed: {exc}. Close any successfully launched editor with agent_editor_close using its receiptPath.'}
+    try:
+        stdout = (helper_logs / 'stdout.log').read_text(encoding='utf-8-sig')
+        stderr = (helper_logs / 'stderr.log').read_text(encoding='utf-8-sig')
+    except (OSError, UnicodeError) as exc:
+        return {'error': f'Pog Champ, could not read owned editor helper JSON: {exc}. Logs: {helper_logs}. Use the launch receipt with agent_editor_close for any editor requiring cleanup.'}
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        message = (stderr or stdout or 'Pog Champ, owned editor helper produced no JSON receipt.').strip()
+        return {'error': message + '\nPog Champ, use the launch receipt with agent_editor_close for any editor that still requires cleanup.'}
+    if not isinstance(payload, dict):
+        return {'error': 'Pog Champ, owned editor helper returned an invalid JSON object.'}
+    if '-Receipt' in params:
+        payload.setdefault('receiptPath', params[params.index('-Receipt') + 1])
+    payload.setdefault('cleanupInstructions', 'Pog Champ, close this owned editor with agent_editor_close using its receiptPath when finished.'
+                       if payload.get('cleanupRequired', True) else 'Pog Champ, this owned editor is closed; no cleanup remains.')
+    response = {'result': payload}
+    if process.returncode != 0 or payload.get('ok') is False:
+        response['error'] = payload.get('message') or (stderr.strip() if stderr else 'Pog Champ, owned editor operation failed.')
+    return response
+
+
+def _agent_editor(name: str, arguments: dict) -> dict:
+    if name == 'agent_editor_launch':
+        port = arguments.get('port')
+        if type(port) is not int or not 1 <= port <= 65535:
+            raise ValueError('Pog Champ, port must be an integer from 1 through 65535.')
+        timeout = arguments.get('timeoutSeconds', 90)
+        params = ['-Project', arguments.get('project', ''), '-Name', arguments.get('name', ''), '-Port', str(port), '-TimeoutSeconds', str(timeout)]
+        if arguments.get('buildDir'):
+            params += ['-BuildDir', arguments['buildDir']]
+        if arguments.get('background', True) is False:
+            params.append('-Visible')
+        return _agent_editor_helper('Start-AgentEditor.ps1', params, timeout + 25)
+    receipt = arguments.get('receiptPath', arguments.get('receipt', ''))
+    if name == 'agent_editor_close':
+        timeout = arguments.get('timeoutSeconds', 30)
+        params = ['-Receipt', receipt, '-TimeoutSeconds', str(timeout)]
+        if arguments.get('discardChanges', False):
+            params.append('-DiscardChanges')
+        return _agent_editor_helper('Stop-AgentEditor.ps1', params, timeout + 5)
+    timeout = arguments.get('timeoutMs', 45000)
+    params_root = REPO / 'logs/agent-editor/requests'
+    params_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='call-', dir=params_root) as temporary:
+        params_path = Path(temporary) / 'params.json'
+        params_path.write_text(json.dumps(arguments.get('arguments', {}), ensure_ascii=False), encoding='utf-8')
+        return _agent_editor_helper('Invoke-AgentEditor.ps1', ['-Receipt', receipt, '-Method', arguments.get('method', ''),
+                                   '-ParamsPath', str(params_path), '-TimeoutMs', str(timeout)], timeout / 1000 + 15)
+
+
+AGENT_EDITOR_TOOLS = [
+    {'name': 'agent_editor_launch',
+     'description': 'Launch an owned, named editor on an explicit control port, in the background by default. Returns an ownership receipt and cleanup reminder. Use agent_editor_call with that receiptPath for every call to this window; default engine tools may address another editor. Close it with agent_editor_close when finished.',
+     'inputSchema': {'type': 'object', 'properties': {
+         'project': {'type': 'string'}, 'name': {'type': 'string'},
+         'port': {'type': 'integer', 'minimum': 1, 'maximum': 65535},
+         'background': {'type': 'boolean', 'default': True}, 'buildDir': {'type': 'string'},
+         'timeoutSeconds': {'type': 'integer', 'minimum': 1, 'maximum': 600, 'default': 90},
+     }, 'required': ['project', 'name', 'port']}},
+    {'name': 'agent_editor_call',
+     'description': 'Call a wire method (such as info or scene.create) or MCP tool name (such as engine_info) on the editor identified by receiptPath. Validates PID, start time, executable, port, project, name, and autosave policy before calling. Uses that editor\'s manifest and never the default control port. Keep the receipt for agent_editor_close cleanup.',
+     'inputSchema': {'type': 'object', 'properties': {
+         'receiptPath': {'type': 'string'}, 'method': {'type': 'string'},
+         'arguments': {'type': 'object', 'default': {}},
+         'timeoutMs': {'type': 'integer', 'minimum': 1, 'maximum': 120000, 'default': 45000},
+     }, 'required': ['receiptPath', 'method']}},
+    {'name': 'agent_editor_close',
+     'description': 'Gracefully close only the editor owned by receiptPath and validate its exit. Saves changes by default; discardChanges must be explicit. Never kills another process. Returns cleanupRequired=false only after this owned editor exits.',
+     'inputSchema': {'type': 'object', 'properties': {
+         'receiptPath': {'type': 'string'}, 'discardChanges': {'type': 'boolean', 'default': False},
+         'timeoutSeconds': {'type': 'integer', 'minimum': 1, 'maximum': 120, 'default': 30},
+     }, 'required': ['receiptPath']}},
+]
+
 RUN_GAUNTLET = {
     "name": "run_gauntlet",
     "description": "Build Editor/GameRuntime/EngineTests, run the unit suite, and (in full mode, needs a GPU) smoke-run the editor + runtime under Vulkan validation. Returns the structured pass/fail report. Does not need the editor running.",
@@ -212,6 +308,51 @@ RUN_GAUNTLET = {
         },
     },
 }
+
+
+GAMEPLAY_JOB_START = {
+    'name': 'gameplay_job_start',
+    'description': 'Start a persistent gameplay pipeline job and return its queued report immediately. Create, inspect, build, bounded run/relaunch/test, or publish a desktop project without a running editor. Poll gameplay_job_status; cancel only this job with gameplay_job_cancel.',
+    'inputSchema': {
+        'type': 'object',
+        'properties': {
+            'project': {'type': 'string', 'description': 'Project root path; create uses the destination root.'},
+            'operation': {'type': 'string', 'enum': list(gameplay_jobs.OPERATIONS)},
+            'target': {'type': 'string', 'enum': ['desktop'], 'default': 'desktop'},
+            'scene': {'type': 'string'},
+            'name': {'type': 'string'},
+            'template': {'type': 'string'},
+            'language': {'type': 'string'},
+            'ticks': {'type': 'integer', 'minimum': 1, 'maximum': 1000000, 'default': 60},
+            'step': {'type': 'number', 'exclusiveMinimum': 0, 'maximum': 1, 'default': 1 / 60},
+            'timeoutMs': {'type': 'integer', 'minimum': 100, 'maximum': 600000, 'default': 180000},
+            'launchConfig': {
+                'type': 'object',
+                'properties': {
+                    'readSaves': {'type': 'boolean', 'default': False},
+                    'input': {'type': 'array', 'items': {'type': 'object', 'properties': {
+                        'tick': {'type': 'integer', 'minimum': 0}, 'key': {'type': 'string'}, 'down': {'type': 'boolean'}
+                    }, 'required': ['tick', 'key', 'down']}},
+                    'assertions': {'type': 'array', 'items': {'type': 'object', 'properties': {
+                        'entity': {'type': 'string'}, 'type': {'type': 'string'}, 'property': {'type': 'string'},
+                        'equals': {}, 'tolerance': {'type': 'number', 'minimum': 0}
+                    }, 'required': ['entity', 'type', 'property', 'equals']}},
+                },
+            },
+        },
+        'required': ['project', 'operation'],
+    },
+}
+
+GAMEPLAY_JOB_TOOLS = [GAMEPLAY_JOB_START] + [
+    {'name': 'gameplay_job_' + action,
+     'description': description + ' Works across MCP restarts and needs no editor endpoint.',
+     'inputSchema': {'type': 'object', 'properties': {'jobId': {'type': 'string'}}, 'required': ['jobId']}}
+    for action, description in (
+        ('status', 'Read the persisted snapshot or terminal schema-v1 report for one gameplay job.'),
+        ('cancel', 'Request cancellation of this owned gameplay job and its worker tree; poll status for terminal cleanup.'),
+    )
+]
 
 
 KENNEY_LIST_PACKS = {
@@ -345,10 +486,23 @@ def _engine_tools() -> list:
 
 
 def _list_tools() -> list:
-    return [RUN_GAUNTLET, KENNEY_LIST_PACKS, KENNEY_LIST_MODELS, KENNEY_IMPORT, KENNEY_IMPORT_PACK, KENNEY_IMPORT_FONT] + _engine_tools()
+    return [RUN_GAUNTLET, KENNEY_LIST_PACKS, KENNEY_LIST_MODELS, KENNEY_IMPORT, KENNEY_IMPORT_PACK, KENNEY_IMPORT_FONT] + GAMEPLAY_JOB_TOOLS + AGENT_EDITOR_TOOLS + _engine_tools()
 
 
 def _call_tool(name: str, arguments: dict) -> dict:
+    if name in ('agent_editor_launch', 'agent_editor_call', 'agent_editor_close'):
+        return _agent_editor(name, arguments)
+    if name in ('gameplay_job_start', 'gameplay_job_status', 'gameplay_job_cancel'):
+        if name == 'gameplay_job_start':
+            result = gameplay_jobs.start_job(arguments, repo=REPO)
+        elif name == 'gameplay_job_status':
+            result = gameplay_jobs.status_job(arguments.get('jobId'), repo=REPO)
+        else:
+            result = gameplay_jobs.cancel_job(arguments.get('jobId'), repo=REPO)
+        response = {'result': result}
+        if result['report']['status'] in ('failed', 'cancelled', 'skipped'):
+            response['error'] = 'Gameplay job ' + result['report']['status']
+        return response
     if name == "run_gauntlet":
         return _run_gauntlet(arguments.get("mode", "ci"), arguments.get("config", "Debug"))
     if name == "kenney_list_packs":
@@ -434,7 +588,10 @@ def _handle(msg: dict):
         is_error = isinstance(out, dict) and "error" in out
         payload = out.get("result", out.get("error")) if isinstance(out, dict) else out
         text = json.dumps(payload, indent=2)
-        return _result(msg_id, {"content": [{"type": "text", "text": text}], "isError": is_error})
+        response = {"content": [{"type": "text", "text": text}], "isError": is_error}
+        if isinstance(payload, dict):
+            response['structuredContent'] = payload
+        return _result(msg_id, response)
 
     if msg_id is not None:
         return _error(msg_id, -32601, f"method not found: {method}")
