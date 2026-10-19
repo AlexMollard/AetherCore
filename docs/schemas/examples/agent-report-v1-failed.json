@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "jobId": "publish-42",
+  "status": "failed",
+  "phase": "publish",
+  "target": "windows-x64",
+  "language": "csharp",
+  "profile": "desktop",
+  "diagnostics": [
+    {
+      "code": "PUBLISH_FAILED",
+      "severity": "error",
+      "message": "Asset packer failed",
+      "source": {"file": "assets/player.png"}
+    }
+  ],
+  "toolchains": [],
+  "artifacts": [],
+  "requiredChecks": [],
+  "durationMs": 321,
+  "exitCode": 1
+}

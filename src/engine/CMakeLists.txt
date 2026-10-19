@@ -3,9 +3,9 @@
 # links or initializes imgui. See AetherCore::SetUiOverlay + src/app's source filter.
 add_library(Engine STATIC)
 
-# CONFIGURE_DEPENDS re-globs at build time, so a new .cpp/.hpp needs no edit here.
+# CONFIGURE_DEPENDS re-globs at build time, including the C-compatible ABI headers.
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-file(GLOB_RECURSE ENGINE_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
+file(GLOB_RECURSE ENGINE_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 
 target_sources(Engine
     PRIVATE ${ENGINE_SOURCES}

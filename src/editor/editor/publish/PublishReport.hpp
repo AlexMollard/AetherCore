@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "scripting/AgentDiagnostics.hpp"
+
 namespace aether::editor
 {
 	struct PublishPlan;
@@ -16,4 +18,8 @@ namespace aether::editor
 	};
 
 	[[nodiscard]] PublishReport BuildPublishReport(const PublishPlan& plan);
+
+	// Adapts a status snapshot without altering the legacy report or inferring failure
+	// from its default false `ok` while publishing is still in progress.
+	[[nodiscard]] Expected<scripting::AgentReport> BuildPublishAgentReport(const PublishReport& report, scripting::AgentReport context, bool completed);
 } // namespace aether::editor

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "abiMajor": 1,
+  "nativeSource": "src/app/scripting/interop/WorldExports.cpp",
+  "managedSource": "managed/AetherCore/Internal/Native.cs",
+  "functions": [
+    { "name": "aether_entity_create", "result": "u32", "params": [] },
+    { "name": "aether_entity_destroy", "result": "void", "params": [{ "name": "id", "type": "u32" }] },
+    { "name": "aether_entity_valid", "result": "i32", "params": [{ "name": "id", "type": "u32" }] },
+    { "name": "aether_get_position", "result": "vec3", "params": [{ "name": "id", "type": "u32" }] },
+    { "name": "aether_set_position", "result": "void", "params": [{ "name": "id", "type": "u32" }, { "name": "pos", "type": "vec3" }] }
+  ]
+}

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>AetherCore gameplay ABI contract</title></head>
+<body><pre id="output">Starting</pre>
+<script>
+var Module = {
+  print(text) {
+    document.getElementById('output').textContent = text;
+    try {
+      const result = JSON.parse(text);
+      if (result.probe === 'gameplay_abi') globalThis.gameplayAbiResult = result;
+    } catch (_) {}
+  },
+  printErr(text) { console.error(text); },
+  onAbort(reason) {
+    globalThis.gameplayAbiResult = {schemaVersion: 1, probe: 'gameplay_abi', status: 'failed', error: String(reason)};
+  }
+};
+</script>
+{{{ SCRIPT }}}
+</body></html>

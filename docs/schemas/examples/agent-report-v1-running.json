@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "jobId": "publish-42",
+  "status": "running",
+  "phase": "publish",
+  "target": "windows-x64",
+  "language": "csharp",
+  "profile": "desktop",
+  "diagnostics": [],
+  "toolchains": [],
+  "artifacts": [],
+  "requiredChecks": [],
+  "durationMs": 321,
+  "exitCode": null
+}

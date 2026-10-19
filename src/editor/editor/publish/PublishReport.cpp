@@ -121,4 +121,22 @@ namespace aether::editor
 		report.ok = !files.empty();
 		return report;
 	}
+
+	Expected<scripting::AgentReport> BuildPublishAgentReport(const PublishReport& report, scripting::AgentReport context, const bool completed)
+	{
+		if (completed)
+		{
+			context.status = report.ok ? scripting::AgentJobStatus::Passed : scripting::AgentJobStatus::Failed;
+			if (!report.ok && std::ranges::none_of(context.diagnostics, [](const auto& diagnostic) { return diagnostic.severity == scripting::AgentDiagnosticSeverity::Error; }))
+			{
+				context.diagnostics.push_back({"PUBLISH_FAILED", scripting::AgentDiagnosticSeverity::Error, report.summary.empty() ? "Publishing failed without a legacy summary." : report.summary});
+			}
+		}
+		else if (context.status != scripting::AgentJobStatus::Queued && context.status != scripting::AgentJobStatus::Running)
+		{
+			AE_UNEXPECTED(AetherError::Engine("Incomplete publishing requires queued or running agent status."));
+		}
+		AE_TRY(validated, scripting::SerializeAgentReport(context));
+		return context;
+	}
 } // namespace aether::editor

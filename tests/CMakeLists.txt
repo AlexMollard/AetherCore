@@ -35,6 +35,7 @@ add_executable(EngineTests
     # Publish planning and package verification. Pure/near-pure halves of the publish
     # pipeline; the IO steps stay out of the test build.
     "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishPlan.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishReport.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishVerify.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/imgui/UiInputScript.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/imgui/UiAutomation.cpp"
@@ -86,6 +87,15 @@ if(MSVC)
 endif()
 set_target_properties(EngineTests PROPERTIES FOLDER "Tests")
 add_test(NAME EngineTests COMMAND EngineTests)
+
+# The manifest keeps the additive raw declarations aligned with the existing C# exports.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME GameplayApiParity
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/gameplay-api/generate.py" --check)
+    add_test(NAME GameplayApiGeneratorTests
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/gameplay-api/test_generate.py")
+endif()
 
 # ── Managed (C#) SDK tests ──────────────────────────────────────────────────
 # The xUnit suite over managed/AetherCore (the C# SDK). Registered as a CTest test so
