@@ -11,7 +11,7 @@
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
-#include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/GameplayHost.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/FontRegistry.hpp"
 #include "ui/UiNavigationSystem.hpp"
@@ -93,17 +93,17 @@ namespace aether::app
 			}
 			return;
 		}
-		auto* csScripting = m_services.TryGet<scripting::CSharpScriptingSubsystem>();
-		if (csScripting == nullptr)
+		auto* host = m_services.TryGet<scripting::GameplayHost>();
+		if (host == nullptr)
 		{
 			return;
 		}
-		const auto props = csScripting->GetScriptProperties(entry.path);
+		const auto props = host->GetScriptProperties(entry.path);
 		for (std::size_t i = 0; i < props.size(); ++i)
 		{
 			ScriptPropertyValue value;
 			value.type = props[i].type;
-			if (csScripting->GetPropertyValue(handle, static_cast<int>(i), value))
+			if (host->GetPropertyValue(handle, static_cast<int>(i), value))
 			{
 				entry.properties[props[i].name] = value;
 			}
@@ -116,7 +116,7 @@ namespace aether::app
 	// tests/net/NetworkSystemsTests.cpp) rather than reimplemented here, so this
 	// function is only ever the state-machine/dispatch half: did that answer just
 	// become decidable, or change, and if so, call the appended
-	// ManagedScriptApi::InvokeOwnershipChanged slot.
+	// gameplay host's ownership event.
 	//
 	// `instance.settled` retires an unreplicated entity's instance after its first
 	// (necessarily unconditional, per QueryOwnership) firing: it has no `owner`
@@ -125,7 +125,7 @@ namespace aether::app
 	// them is one bool check, forever, the same "a hook nobody uses costs nothing
 	// ongoing" property DispatchPhysicsEvents gives EntityScript.
 	void ScriptComponentSystem::DispatchOwnershipChanged(World& world, Entity entity,
-	        const ::aether::scripting::ManagedScriptApi& api, std::uint64_t handle, Instance& instance)
+	        scripting::GameplayHost& host, std::uint64_t handle, Instance& instance)
 	{
 		if (instance.settled)
 		{
@@ -145,9 +145,9 @@ namespace aether::app
 			instance.known = true;
 			instance.isOwner = query.isOwner;
 			instance.owner = query.owner;
-			if (api.InvokeOwnershipChanged != nullptr)
+			if ((host.Capabilities() & AE_GAMEPLAY_CAP_OWNERSHIP) != 0)
 			{
-				api.InvokeOwnershipChanged(handle, query.owner, query.isOwner ? 1 : 0);
+				(void) host.DispatchOwnershipChanged(handle, query.owner, query.isOwner);
 			}
 		}
 
@@ -157,16 +157,14 @@ namespace aether::app
 		}
 	}
 
-	bool ScriptComponentSystem::UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt)
+	bool ScriptComponentSystem::UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt)
 	{
-		const auto* api = cs.Api();
-		if (api == nullptr)
+		if (!host.IsAvailable())
 		{
 			return false;
 		}
 
-		// The managed calls below (CreateInstance runs the C# constructor, Invoke*
-		// run user callbacks) can add a ScriptComponent to any entity via
+		// The host calls below (including constructors and user callbacks) can add a ScriptComponent to any entity via
 		// aether_add_script, growing the entt pool and dangling every
 		// ScriptComponent*/ScriptEntry& held across the call. So typeName is a copy,
 		// and the entry is re-fetched from the world after every managed call.
@@ -186,14 +184,8 @@ namespace aether::app
 
 		if (!entry->attached && handle != 0)
 		{
-			if (api->InvokeDetach != nullptr)
-			{
-				api->InvokeDetach(handle);
-			}
-			if (api->DestroyInstance != nullptr)
-			{
-				api->DestroyInstance(handle);
-			}
+			(void) host.Detach(handle);
+			(void) host.Destroy(handle);
 			m_instances.erase(key);
 			handle = 0;
 			entry = FindScriptEntry(*ctx.world, entity, scriptIndex);
@@ -205,50 +197,44 @@ namespace aether::app
 
 		if (handle == 0)
 		{
-			handle = api->CreateInstance != nullptr ? api->CreateInstance(typeName.c_str(), entity.id) : 0;
-			if (handle == 0)
+			const auto created = host.CreateInstance(typeName, entity.id);
+			if (!created || *created == 0)
 			{
-				AE_WARN(LogCategory::App, "ScriptComponent: C# type '{}' failed to instantiate - disabled until reload", typeName);
+				AE_WARN(LogCategory::App, "ScriptComponent: type '{}' failed to instantiate - fields retained, disabled until reload", typeName);
 				m_failedTypes.insert(typeName);
 				return false;
 			}
+			handle = *created;
 			m_instances[key] = Instance{.handle = handle, .typeName = typeName};
 			// The constructor may have grown the pool or killed the entry.
 			entry = FindScriptEntry(*ctx.world, entity, scriptIndex);
 			if (entry == nullptr)
 			{
-				// Orphaned instance; PurgeStaleCSharpInstances reclaims it below.
+				// Orphaned instance; PurgeStaleInstances reclaims it below.
 				return false;
 			}
-			cs.ApplyProperties(handle, typeName, entry->properties);
+			host.ApplyProperties(handle, typeName, entry->properties);
 			entry->attached = false; // a freshly created instance must attach
 		}
 
 		if (!entry->attached)
 		{
 			entry->attached = true;
-			if (api->InvokeAttach != nullptr)
-			{
-				api->InvokeAttach(handle);
-			}
+			(void) host.Attach(handle);
 		}
 
 		// Every frame, not just on attach: this is also how a later Welcome landing
 		// or an ownership hand-off (see NetworkSystems.cpp's PruneDisconnected) gets
 		// noticed on an instance that has been live for a while.
-		DispatchOwnershipChanged(*ctx.world, entity, *api, handle, m_instances[key]);
+		DispatchOwnershipChanged(*ctx.world, entity, host, handle, m_instances[key]);
 
-		if (api->InvokeUpdate != nullptr)
-		{
-			api->InvokeUpdate(handle, dt);
-		}
+		(void) host.Update(handle, dt);
 		return true;
 	}
 
-	void ScriptComponentSystem::PurgeStaleCSharpInstances(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx)
+	void ScriptComponentSystem::PurgeStaleInstances(World& world, scripting::GameplayHost& host, scripting::SceneContext& ctx)
 	{
-		const auto* api = cs.Api();
-		if (api == nullptr || m_instances.empty())
+		if (!host.IsAvailable() || m_instances.empty())
 		{
 			return;
 		}
@@ -278,22 +264,15 @@ namespace aether::app
 		for (const std::uint64_t key: stale)
 		{
 			const std::uint64_t handle = m_instances[key].handle;
-			if (api->InvokeDetach != nullptr)
-			{
-				api->InvokeDetach(handle);
-			}
-			if (api->DestroyInstance != nullptr)
-			{
-				api->DestroyInstance(handle);
-			}
+			(void) host.Detach(handle);
+			(void) host.Destroy(handle);
 			m_instances.erase(key);
 		}
 	}
 
-	void ScriptComponentSystem::DestroyAllCSharpInstances(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx)
+	void ScriptComponentSystem::DestroyAllInstances(scripting::GameplayHost& host, scripting::SceneContext& ctx)
 	{
-		const auto* api = cs.Api();
-		if (api == nullptr || m_instances.empty())
+		if (!host.IsAvailable() || m_instances.empty())
 		{
 			m_instances.clear();
 			return;
@@ -302,14 +281,8 @@ namespace aether::app
 		const ActiveContextScope scope(ctx);
 		for (const auto& [key, instance]: m_instances)
 		{
-			if (api->InvokeDetach != nullptr)
-			{
-				api->InvokeDetach(instance.handle);
-			}
-			if (api->DestroyInstance != nullptr)
-			{
-				api->DestroyInstance(instance.handle);
-			}
+			(void) host.Detach(instance.handle);
+			(void) host.Destroy(instance.handle);
 		}
 		m_instances.clear();
 	}
@@ -322,8 +295,8 @@ namespace aether::app
 		{
 			return;
 		}
-		auto* csScripting = m_services.TryGet<scripting::CSharpScriptingSubsystem>();
-		if (csScripting == nullptr || !csScripting->IsAvailable())
+		auto* host = m_services.TryGet<scripting::GameplayHost>();
+		if (host == nullptr || !host->IsAvailable())
 		{
 			return;
 		}
@@ -366,7 +339,7 @@ namespace aether::app
 				continue;
 			}
 			// Re-fetch the component EVERY iteration; nothing derived from it crosses
-			// UpdateCSharpEntity. Its managed callbacks can call World.AddScript on an
+			// UpdateScriptEntity. Its callbacks can call World.AddScript on an
 			// entity without a ScriptComponent yet, and that Emplace grows/reallocates
 			// the entt pool - dangling any ScriptComponent* or ScriptEntry& held here.
 			// The per-iteration validity/index re-check also ends the loop cleanly when a
@@ -390,11 +363,11 @@ namespace aether::app
 				}
 
 				const ActiveContextScope scope(*sceneCtx);
-				UpdateCSharpEntity(*csScripting, *sceneCtx, e, static_cast<std::uint32_t>(i), script, dt);
+				UpdateScriptEntity(*host, *sceneCtx, e, static_cast<std::uint32_t>(i), script, dt);
 			}
 		}
 
-		PurgeStaleCSharpInstances(world, *csScripting, *sceneCtx);
+		PurgeStaleInstances(world, *host, *sceneCtx);
 
 		// Entity.Destroy from script: deferred to here so no callback ever
 		// frees the component storage the loop above was iterating.
@@ -417,7 +390,7 @@ namespace aether::app
 			// Persistent (DontDestroyOnLoad / SceneTransient) entities survive
 			// the switch WITH their live script instances; everything else's
 			// instances are torn down before their entities are.
-			PruneInstancesForSceneSwitch(world, *csScripting, *sceneCtx);
+			PruneInstancesForSceneSwitch(world, *host, *sceneCtx);
 			if (scene::LoadSceneFile(sceneName, world, scene::MakeApplySceneDeps(m_services), scene::SceneLoadMode::GameplaySwitch))
 			{
 				if (auto* scenes = m_services.TryGet<SceneSubsystem>())
@@ -433,13 +406,12 @@ namespace aether::app
 		}
 	}
 
-	void ScriptComponentSystem::PruneInstancesForSceneSwitch(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx)
+	void ScriptComponentSystem::PruneInstancesForSceneSwitch(World& world, scripting::GameplayHost& host, scripting::SceneContext& ctx)
 	{
-		const auto* api = cs.Api();
 		auto& reg = world.GetRegistry();
 		// The OnDetach callbacks invoked below read ActiveContext() (e.g. CustomPass.Unregister ->
 		// Registry() -> ActiveContext().services). Establish the active context first, exactly like the
-		// sibling teardown helpers PurgeStaleCSharpInstances / DestroyAllCSharpInstances do - otherwise
+		// sibling teardown helpers PurgeStaleInstances / DestroyAllInstances do - otherwise
 		// g_activeContext is null here and any such OnDetach dereferences it and crashes.
 		const ActiveContextScope scope(ctx);
 		for (auto it = m_instances.begin(); it != m_instances.end();)
@@ -451,16 +423,10 @@ namespace aether::app
 				++it;
 				continue;
 			}
-			if (api != nullptr)
+			if (host.IsAvailable())
 			{
-				if (api->InvokeDetach != nullptr)
-				{
-					api->InvokeDetach(it->second.handle);
-				}
-				if (api->DestroyInstance != nullptr)
-				{
-					api->DestroyInstance(it->second.handle);
-				}
+				(void) host.Detach(it->second.handle);
+				(void) host.Destroy(it->second.handle);
 			}
 			it = m_instances.erase(it);
 		}
@@ -468,11 +434,11 @@ namespace aether::app
 
 	void ScriptComponentSystem::Invalidate(World& world)
 	{
-		if (auto* csScripting = m_services.TryGet<scripting::CSharpScriptingSubsystem>())
+		if (auto* host = m_services.TryGet<scripting::GameplayHost>())
 		{
 			if (auto* sceneCtx = m_services.TryGet<scripting::SceneContext>())
 			{
-				DestroyAllCSharpInstances(*csScripting, *sceneCtx);
+				DestroyAllInstances(*host, *sceneCtx);
 			}
 		}
 		m_instances.clear();

@@ -10,14 +10,10 @@
 
 #include "scene/Components.hpp"
 #include "scripting/DotNetHost.hpp"
+#include "scripting/CSharpGameplayHost.hpp"
 
 namespace aether::app::scripting
 {
-	struct ScriptPropertyInfo
-	{
-		std::string name;
-		aether::ScriptPropertyValue::Type type = aether::ScriptPropertyValue::Type::None;
-	};
 
 	class CSharpScriptingSubsystem
 	{
@@ -32,6 +28,16 @@ namespace aether::app::scripting
 		[[nodiscard]] const aether::scripting::ManagedScriptApi* Api() const;
 
 		int LoadScripts();
+
+		[[nodiscard]] GameplayHost& Gameplay()
+		{
+			return m_gameplay.Gameplay();
+		}
+
+		[[nodiscard]] const GameplayHost& Gameplay() const
+		{
+			return m_gameplay.Gameplay();
+		}
 
 		// Bumped by every successful or failed LoadScripts(). A consumer that caches
 		// anything derived from the loaded script types (property tables, RPC method
@@ -70,7 +76,7 @@ namespace aether::app::scripting
 
 		[[nodiscard]] const std::vector<std::string>& GetScriptTypeNames() const
 		{
-			return m_typeNames;
+			return Gameplay().GetScriptTypeNames();
 		}
 
 		[[nodiscard]] std::vector<ScriptPropertyInfo> GetScriptProperties(const std::string& typeName) const;
@@ -84,8 +90,7 @@ namespace aether::app::scripting
 		// NetRpcTarget the method's attribute declared (untouched when the lookup
 		// fails) - the declaration is the single source of truth for direction, so
 		// the caller reads it here rather than being told at the call site.
-		[[nodiscard]] int FindNetRpcMethod(const std::string& typeName, const std::string& methodName,
-		        int& outTarget) const;
+		[[nodiscard]] int FindNetRpcMethod(const std::string& typeName, const std::string& methodName, int& outTarget) const;
 		// Invokes RPC method `methodIndex` on the live instance `handle` names. A
 		// no-op if the api is unavailable or the handle is 0.
 		void InvokeNetRpc(std::uint64_t handle, int methodIndex, std::span<const std::byte> args) const;
@@ -135,17 +140,16 @@ namespace aether::app::scripting
 		{
 			return m_scriptErrors;
 		}
+
 		[[nodiscard]] std::vector<std::string> PollPendingErrors();
 		void ClearErrors();
 		[[nodiscard]] bool ConsumeErrorsCleared();
 
 	private:
-		void RefreshTypeNames();
-
 		aether::scripting::DotNetHost m_host;
 		std::filesystem::path m_managedDir;
 		std::string m_scriptsAssemblyPath;
-		std::vector<std::string> m_typeNames;
+		CSharpGameplayHost m_gameplay;
 		std::uint32_t m_reloadGeneration = 0;
 
 		std::filesystem::path m_scriptProject;

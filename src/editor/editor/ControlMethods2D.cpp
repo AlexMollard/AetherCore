@@ -32,7 +32,7 @@
 #include "scene/Entity.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
-#include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/GameplayHost.hpp"
 #include "systems/ScriptComponentSystem.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -971,9 +971,9 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 			        // succeed and only fail on Play, by which point the dead entry is in the
 			        // saved scene. Skipped while the assembly is unloaded (no project built
 			        // yet) so this cannot reject every name just because nothing is loaded.
-			        if (const auto* csharp = ctx.services.TryGet<app::scripting::CSharpScriptingSubsystem>())
+			        if (const auto* gameplay = ctx.services.TryGet<app::scripting::GameplayHost>())
 			        {
-				        const std::vector<std::string>& known = csharp->GetScriptTypeNames();
+				        const std::vector<std::string>& known = gameplay->GetScriptTypeNames();
 				        if (!known.empty() && std::find(known.begin(), known.end(), type) == known.end())
 				        {
 					        std::string message = "unknown script type '" + type + "'; loaded types: ";
@@ -1122,12 +1122,12 @@ constexpr std::size_t kMaxListedSprites = 2'000;
 		        {
 			        // The names were only reachable by getting one wrong: add_script listed
 			        // them in its refusal and nothing else would say them.
-			        auto* csharp = ctx.services.TryGet<app::scripting::CSharpScriptingSubsystem>();
-			        if (csharp == nullptr)
+			        auto* gameplay = ctx.services.TryGet<app::scripting::GameplayHost>();
+			        if (gameplay == nullptr)
 			        {
 				        return json{{"error", "no C# scripting subsystem"}};
 			        }
-			        const std::vector<std::string>& known = csharp->GetScriptTypeNames();
+			        const std::vector<std::string>& known = gameplay->GetScriptTypeNames();
 			        return json{{"types", known}, {"count", known.size()}, {"assemblyLoaded", !known.empty()}};
 		        }});
 

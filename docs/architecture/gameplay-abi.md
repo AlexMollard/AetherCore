@@ -1,6 +1,6 @@
 # Shared gameplay ABI and agent diagnostics v1
 
-Implemented for Task 2 of the Rust/WebGPU plan. The existing C# loader, ManagedInterop.hpp, managed ABI, compiler, reload machinery and script runner retain their current implementation. This contract is additive; selecting/routing new hosts is Task 3 and project language selection is Task 4.
+Implemented in Tasks 2 and 3 of the Rust/WebGPU plan. C# lifecycle, discovery and properties now route through the shared host and v1 module table. The existing CoreCLR loader, ManagedInterop.hpp, managed ABI, compiler and project format remain compatible. Project language selection is Task 4; Rust execution is Task 5.
 
 ## Ownership and negotiation
 
@@ -24,13 +24,25 @@ Optional events use capability bits Physics=1, Ownership=2 and Network=4. A prov
 
 Providers contain their own exceptions/panics. Query and event helpers additionally translate C++ exceptions into SCRIPT_ERROR. The test fixture enables Emscripten C++ exception catching to exercise this behavior; Rust remains panic=abort. This does not make Rust panic-abort, native access violations or arbitrary foreign unwinding recoverable.
 
+## C# host routing
+
+`src/app/scripting/GameplayHost` owns copies of validated module descriptors and marshals lifecycle, ownership events and property values through the v1 function table. `CSharpGameplayHost` adapts the existing managed table, retaining its opaque managed handles so RPC dispatch still resolves the same instances. The registered host object's address stays stable across reloads.
+
+`CSharpScriptingSubsystem` retains CoreCLR hosting, source compilation, build/reload state, error queues, RPC reflection/invocation, GC and managed editor windows. Its compatibility discovery/property methods forward to `Gameplay()`. The runner, inspector, MCP discovery and replication property bridge use the shared host; scene capture reaches it through the runner's existing live-property synchronization. Serialization stays name-based and preserves unknown types and fields.
+
+Every load attempt refreshes the shared metadata generation and invalidates the adapter's active-handle set. Descriptor discovery does not instantiate scripts or read default getters. Legacy enum/component metadata strings, long UTF-8 strings and embedded NULs cross caller-owned buffers without retaining managed scratch pointers. Managed void callback failures are observed through the existing error callback; native C++ exceptions are contained, while native faults and runtime fail-fast remain unrecoverable.
+
+Bootstrapping and shutdown remain backend-owned. The current uint32 entity creation path explicitly represents legacy C# world identity zero. It does not install `GameplayAccess` guards around existing C# exports. Rust must supply scoped entity identities and checked engine access when its backend is implemented. Physics events still execute inside the managed update callback; the adapter advertises only its shared ownership-event capability, rather than claiming a new physics or RPC event implementation.
+
+Nine focused native adapter/runner tests cover lifecycle, missing types, stale handles, reported errors, property kinds, callback-driven storage growth and live scene-reference round-trips. A real C# fixture additionally exercises in-place reload, failed rebuild/Play recovery, sibling scripts, UTF-8/NUL strings, ownership, local RPC, 2D collision callbacks, movement and Stop restoration. Its published package also runs after relocation. Evidence is under `logs/task3/`.
+
 ## Engine access guard
 
 GameplayAccess provides a minimal checked engine table for entity validation, copied position get/set and diagnostic delivery. Each access session receives a unique token and records the owner thread. It validates world/session, full generation-bearing ID and registry liveness before touching components. Stale tables fail after Invalidate or destruction. Wrong-thread calls fail without accessing the World.
 
 The World must outlive GameplayAccess, or Invalidate must run before World teardown. A future host is responsible for that ownership order. Callback and structural-mutation scopes are exclusive and reject nested entry. They are not yet installed into the existing C# runner, and do not intercept direct calls to World. Diagnostic sinks execute synchronously outside the context registry lock and cannot recursively report on the same session.
 
-The new position callback edits scene transforms; it is not a replacement for existing app-level physics-aware C# exports. Physics/controller semantics must be preserved when host routing is implemented. No borrowed ECS reference is exposed.
+The new position callback edits scene transforms; it is not a replacement for existing app-level physics-aware C# exports. The C# adapter retains those exports and their physics/controller semantics. No borrowed ECS reference is exposed.
 
 ## Declaration generation and compatibility checks
 

@@ -1,13 +1,14 @@
 #include "net/CSharpScriptFieldBridge.hpp"
 
 #include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/GameplayHost.hpp"
 #include "systems/ScriptComponentSystem.hpp"
 
 namespace aether::net
 {
 	void CSharpScriptFieldBridge::SyncToScriptReload() const
 	{
-		const std::uint32_t generation = m_scripting.ScriptReloadGeneration();
+		const std::uint32_t generation = m_scripting.Gameplay().ScriptReloadGeneration();
 		if (m_cacheSeeded && generation == m_cacheGeneration)
 		{
 			return;
@@ -41,7 +42,7 @@ namespace aether::net
 
 		// The managed side reports indices only; the type comes from the same property
 		// table the inspector reads, so there is one description of a script property.
-		const std::vector<aether::app::scripting::ScriptPropertyInfo> props = m_scripting.GetScriptProperties(typeName);
+		const std::vector<aether::app::scripting::ScriptPropertyInfo> props = m_scripting.Gameplay().GetScriptProperties(typeName);
 		std::vector<ScriptPropertyDesc> out;
 		out.reserve(indices.size());
 		for (const int index: indices)
@@ -66,7 +67,7 @@ namespace aether::net
 		{
 			return false; // no live instance yet (not attached, or edit mode)
 		}
-		return m_scripting.GetPropertyValue(handle, static_cast<int>(propertyIndex), out);
+		return m_scripting.Gameplay().GetPropertyValue(handle, static_cast<int>(propertyIndex), out);
 	}
 
 	void CSharpScriptFieldBridge::SetProperty(Entity entity, std::uint32_t scriptIndex, std::uint16_t propertyIndex,
@@ -77,6 +78,6 @@ namespace aether::net
 		{
 			return;
 		}
-		m_scripting.SetPropertyValue(handle, static_cast<int>(propertyIndex), value);
+		m_scripting.Gameplay().SetPropertyValue(handle, static_cast<int>(propertyIndex), value);
 	}
 } // namespace aether::net

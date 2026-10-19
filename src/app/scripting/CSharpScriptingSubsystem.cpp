@@ -9,9 +9,9 @@
 #include <utility>
 
 #ifdef _WIN32
-#include <process.h>
+#	include <process.h>
 #else
-#include <unistd.h>
+#	include <unistd.h>
 #endif
 
 #include "EngineContentPaths.hpp"
@@ -54,25 +54,13 @@ namespace aether::app::scripting
 			return candidates[0];
 		}
 
-		// A PropertyValue string crosses as explicit UTF-8 bytes with the byte count
-		// in `reserved` (managed FillValue writes it): a replicated string field may
-		// contain embedded NULs, which a plain C-string copy would silently truncate
-		// at the first one. The pointer is NUL-terminated as well, so a negative
-		// length (a writer that predates the explicit count) falls back to strlen.
-		[[nodiscard]] std::size_t PropertyStrLen(const aether::scripting::PropertyValue& pv)
-		{
-			if (pv.str == nullptr)
-			{
-				return 0;
-			}
-			return pv.reserved >= 0 ? static_cast<std::size_t>(pv.reserved) : std::strlen(pv.str);
-		}
 	} // namespace
 
 	CSharpScriptingSubsystem::CSharpScriptingSubsystem()
 	{
 		m_managedDir = ResolveManagedDir();
 		m_host.SetErrorHandler([this](const std::string& error) { ReportScriptError(error); });
+		m_gameplay.Gameplay().SetErrorHandler([this](const std::string& error) { ReportScriptError(error); });
 
 		if (m_host.Initialize(m_managedDir))
 		{
@@ -89,14 +77,15 @@ namespace aether::app::scripting
 			// because none of its code is present. Warn rather than refuse: the gauntlet's
 			// runtime smoke runs in exactly this shape on purpose, and a diagnostic must not
 			// be the thing that fails a build.
-			if (ProjectScriptsCannotBeLoaded({io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"),
-			            io::PlatformPaths::GetExecutableDir(), m_managedDir}))
+			if (ProjectScriptsCannotBeLoaded({io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"), io::PlatformPaths::GetExecutableDir(), m_managedDir}))
 			{
 				AE_WARN(LogCategory::App,
 				        "Loaded {} script type(s) from '{}', which is NOT the project's own assembly - it is whatever this build tree staged. The "
 				        "project at '{}' has its own scripts and NONE of them are running, so the game will start and look correct while responding "
 				        "to nothing. Publish the project and run that package, or run it from the editor.",
-				        loadedTypes, m_scriptsAssemblyPath, io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"));
+				        loadedTypes,
+				        m_scriptsAssemblyPath,
+				        io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"));
 			}
 #else
 			// The editor does not. m_managedDir is one directory shared by every project, and
@@ -120,11 +109,12 @@ namespace aether::app::scripting
 		const auto* api = Api();
 		if (api == nullptr || api->LoadScripts == nullptr)
 		{
+			++m_reloadGeneration;
+			(void) m_gameplay.Reset(nullptr, m_reloadGeneration);
 			return -1;
 		}
 
 		const int count = api->LoadScripts(m_scriptsAssemblyPath.c_str());
-		RefreshTypeNames();
 
 		// Every reload path - the initial load in the constructor, the editor's
 		// in-place reload, EditorProjectManager's project open, PlaySession - funnels
@@ -132,6 +122,12 @@ namespace aether::app::scripting
 		// be missed. Anything caching per-type reflection (net replication's
 		// CSharpScriptFieldBridge) compares this and drops its table.
 		++m_reloadGeneration;
+		const auto reset = m_gameplay.Reset(count < 0 ? nullptr : api, m_reloadGeneration);
+		if (count >= 0 && !reset)
+		{
+			ReportScriptError(reset.error().message);
+			return -1;
+		}
 		if (count < 0)
 		{
 			AE_WARN(LogCategory::App, "C# scripts failed to load from '{}'", m_scriptsAssemblyPath);
@@ -209,9 +205,7 @@ namespace aether::app::scripting
 
 		std::string BuildProfileStamp(const std::filesystem::path& managedDir)
 		{
-			return std::string(kEditorScriptBuildProfile) + "\n"
-			       + "game=" + DeployedDllFingerprint(managedDir / "AetherGame.dll") + "\n"
-			       + "sdk=" + DeployedDllFingerprint(managedDir / "AetherCore.dll") + "\n";
+			return std::string(kEditorScriptBuildProfile) + "\n" + "game=" + DeployedDllFingerprint(managedDir / "AetherGame.dll") + "\n" + "sdk=" + DeployedDllFingerprint(managedDir / "AetherCore.dll") + "\n";
 		}
 
 		constexpr std::string_view kScriptInputSignatureFile = ".aethercore-script-inputs";
@@ -507,7 +501,7 @@ namespace aether::app::scripting
 			{
 				return;
 			}
-				auto job = std::make_shared<ScriptBuildJob>();
+			auto job = std::make_shared<ScriptBuildJob>();
 			m_buildJob = job;
 			// Copies; the worker never touches `this`. The api pointer is owned by the host
 			// and outlives every build, so it travels by value like the paths do.
@@ -563,60 +557,14 @@ namespace aether::app::scripting
 		return m_buildJob && !m_buildJob->done.load(std::memory_order_acquire);
 	}
 
-	void CSharpScriptingSubsystem::RefreshTypeNames()
-	{
-		m_typeNames.clear();
-		const auto* api = Api();
-		if (api == nullptr || api->GetScriptTypeCount == nullptr || api->GetScriptTypeName == nullptr)
-		{
-			return;
-		}
-
-		const int count = api->GetScriptTypeCount();
-		std::array<char, 256> buffer{};
-		for (int i = 0; i < count; ++i)
-		{
-			const int written = api->GetScriptTypeName(i, buffer.data(), static_cast<int>(buffer.size()));
-			if (written > 0)
-			{
-				m_typeNames.emplace_back(buffer.data(), static_cast<size_t>(written));
-			}
-		}
-	}
-
 	std::vector<ScriptPropertyInfo> CSharpScriptingSubsystem::GetScriptProperties(const std::string& typeName) const
 	{
-		std::vector<ScriptPropertyInfo> out;
-		const auto* api = Api();
-		if (api == nullptr || api->GetPropertyCount == nullptr || api->GetPropertyInfo == nullptr)
-		{
-			return out;
-		}
-		const int count = api->GetPropertyCount(typeName.c_str());
-		std::array<char, 128> buffer{};
-		for (int i = 0; i < count; ++i)
-		{
-			std::int32_t typeTag = 0;
-			const int written = api->GetPropertyInfo(typeName.c_str(), i, buffer.data(), static_cast<int>(buffer.size()), &typeTag);
-			if (written > 0)
-			{
-				out.push_back(ScriptPropertyInfo{.name = std::string(buffer.data(), static_cast<size_t>(written)), .type = static_cast<aether::ScriptPropertyValue::Type>(typeTag)});
-			}
-		}
-		return out;
+		return Gameplay().GetScriptProperties(typeName);
 	}
 
 	int CSharpScriptingSubsystem::FindPropertyIndex(const std::string& typeName, const std::string& name) const
 	{
-		const auto props = GetScriptProperties(typeName);
-		for (size_t i = 0; i < props.size(); ++i)
-		{
-			if (props[i].name == name)
-			{
-				return static_cast<int>(i);
-			}
-		}
-		return -1;
+		return Gameplay().FindPropertyIndex(typeName, name);
 	}
 
 	std::vector<int> CSharpScriptingSubsystem::GetReplicatedPropertyIndices(const std::string& typeName) const
@@ -646,8 +594,7 @@ namespace aether::app::scripting
 		return std::vector<int>(indices.begin(), indices.end());
 	}
 
-	int CSharpScriptingSubsystem::FindNetRpcMethod(const std::string& typeName, const std::string& methodName,
-	        int& outTarget) const
+	int CSharpScriptingSubsystem::FindNetRpcMethod(const std::string& typeName, const std::string& methodName, int& outTarget) const
 	{
 		const auto* api = Api();
 		if (api == nullptr || api->GetNetRpcMethod == nullptr)
@@ -671,8 +618,7 @@ namespace aether::app::scripting
 		{
 			return;
 		}
-		api->InvokeNetRpc(handle, methodIndex, reinterpret_cast<const std::uint8_t*>(args.data()),
-		        static_cast<std::int32_t>(args.size()));
+		api->InvokeNetRpc(handle, methodIndex, reinterpret_cast<const std::uint8_t*>(args.data()), static_cast<std::int32_t>(args.size()));
 	}
 
 	bool CSharpScriptingSubsystem::InvokeScriptCommand(const std::string& typeName, std::string& error)
@@ -694,91 +640,27 @@ namespace aether::app::scripting
 
 	bool CSharpScriptingSubsystem::GetPropertyValue(std::uint64_t handle, int index, aether::ScriptPropertyValue& out) const
 	{
-		const auto* api = Api();
-		if (api == nullptr || api->GetProperty == nullptr || handle == 0)
-		{
-			return false;
-		}
-		aether::scripting::PropertyValue pv{};
-		if (api->GetProperty(handle, index, &pv) == 0)
-		{
-			return false;
-		}
-		out.type = static_cast<aether::ScriptPropertyValue::Type>(static_cast<std::int32_t>(pv.type));
-		out.f4[0] = pv.f4[0];
-		out.f4[1] = pv.f4[1];
-		out.f4[2] = pv.f4[2];
-		out.f4[3] = pv.f4[3];
-		out.i64 = pv.i64;
-		out.str.assign(pv.str != nullptr ? pv.str : "", PropertyStrLen(pv));
-		return true;
+		return Gameplay().GetPropertyValue(handle, index, out);
 	}
 
 	void CSharpScriptingSubsystem::SetPropertyValue(std::uint64_t handle, int index, const aether::ScriptPropertyValue& value) const
 	{
-		const auto* api = Api();
-		if (api == nullptr || api->SetProperty == nullptr || handle == 0)
-		{
-			return;
-		}
-		aether::scripting::PropertyValue pv{};
-		pv.type = static_cast<aether::scripting::PropertyType>(static_cast<std::int32_t>(value.type));
-		pv.f4[0] = value.f4[0];
-		pv.f4[1] = value.f4[1];
-		pv.f4[2] = value.f4[2];
-		pv.f4[3] = value.f4[3];
-		pv.i64 = value.i64;
-		pv.str = value.str.c_str();
-		// Explicit byte length so an embedded NUL in a replicated string field
-		// reaches managed code intact; PtrToStringUTF8 alone stops at the first one.
-		pv.reserved = static_cast<std::int32_t>(value.str.size());
-		api->SetProperty(handle, index, &pv);
+		Gameplay().SetPropertyValue(handle, index, value);
 	}
 
 	bool CSharpScriptingSubsystem::GetDefaultPropertyValue(const std::string& typeName, int index, aether::ScriptPropertyValue& out) const
 	{
-		const auto* api = Api();
-		if (api == nullptr || api->GetDefaultProperty == nullptr)
-		{
-			return false;
-		}
-		aether::scripting::PropertyValue pv{};
-		if (api->GetDefaultProperty(typeName.c_str(), index, &pv) == 0)
-		{
-			return false;
-		}
-		out.type = static_cast<aether::ScriptPropertyValue::Type>(static_cast<std::int32_t>(pv.type));
-		out.f4[0] = pv.f4[0];
-		out.f4[1] = pv.f4[1];
-		out.f4[2] = pv.f4[2];
-		out.f4[3] = pv.f4[3];
-		out.i64 = pv.i64;
-		out.str.assign(pv.str != nullptr ? pv.str : "", PropertyStrLen(pv));
-		return true;
+		return Gameplay().GetDefaultPropertyValue(typeName, index, out);
 	}
 
 	void CSharpScriptingSubsystem::ApplyProperties(std::uint64_t handle, const std::string& typeName, const std::map<std::string, aether::ScriptPropertyValue>& props) const
 	{
-		if (props.empty() || handle == 0)
-		{
-			return;
-		}
-		const auto infos = GetScriptProperties(typeName);
-		for (const auto& [name, value]: props)
-		{
-			for (size_t i = 0; i < infos.size(); ++i)
-			{
-				if (infos[i].name == name)
-				{
-					SetPropertyValue(handle, static_cast<int>(i), value);
-					break;
-				}
-			}
-		}
+		Gameplay().ApplyProperties(handle, typeName, props);
 	}
 
 	void CSharpScriptingSubsystem::ReportScriptError(const std::string& error)
 	{
+		m_gameplay.ReportManagedError();
 		AE_ERROR(LogCategory::App, "C# script error: {}", error);
 		m_pendingErrors.push_back(error);
 		m_scriptErrors.push_back(error);

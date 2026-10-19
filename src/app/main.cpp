@@ -156,6 +156,7 @@ int main(int argc, char** argv)
 		// Disabled-safe - a missing runtime just means no entity-script behavior.
 		aether::app::scripting::CSharpScriptingSubsystem csharpScripting;
 		application.AddService(csharpScripting);
+		application.AddService(csharpScripting.Gameplay());
 
 		// Layers
 #ifdef AETHERCORE_EDITOR_APP

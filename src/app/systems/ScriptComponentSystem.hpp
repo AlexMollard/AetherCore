@@ -19,13 +19,8 @@ namespace aether
 namespace aether::app::scripting
 {
 	struct SceneContext;
-	class CSharpScriptingSubsystem;
+	class GameplayHost;
 } // namespace aether::app::scripting
-
-namespace aether::scripting
-{
-	struct ManagedScriptApi;
-} // namespace aether::scripting
 
 namespace aether::app
 {
@@ -54,7 +49,7 @@ namespace aether::app
 
 		// Scene.Load support: destroys instances whose entities die in the switch
 		// while keeping persistent (SceneTransient) entities' instances alive.
-		void PruneInstancesForSceneSwitch(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);
+		void PruneInstancesForSceneSwitch(World& world, scripting::GameplayHost& host, scripting::SceneContext& ctx);
 
 		[[nodiscard]] std::uint64_t GetInstanceHandle(std::uint32_t entityId, std::uint32_t scriptIndex) const;
 
@@ -81,9 +76,9 @@ namespace aether::app
 		void SyncPropertiesFromLiveInstance(Entity entity, std::uint32_t scriptIndex, ScriptEntry& entry) const;
 
 	private:
-		bool UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt);
-		void PurgeStaleCSharpInstances(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);
-		void DestroyAllCSharpInstances(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);
+		bool UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt);
+		void PurgeStaleInstances(World& world, scripting::GameplayHost& host, scripting::SceneContext& ctx);
+		void DestroyAllInstances(scripting::GameplayHost& host, scripting::SceneContext& ctx);
 
 		ServiceContainer& m_services;
 
@@ -110,9 +105,9 @@ namespace aether::app
 
 		// Detects whether `instance`'s entity's ownership just became known or just
 		// changed hands and, if so, calls the appended
-		// ManagedScriptApi::InvokeOwnershipChanged slot - see the .cpp for why this
+		// gameplay host's ownership event - see the .cpp for why this
 		// lives inline in the per-instance update rather than as its own system pass.
-		void DispatchOwnershipChanged(World& world, Entity entity, const ::aether::scripting::ManagedScriptApi& api, std::uint64_t handle, Instance& instance);
+		void DispatchOwnershipChanged(World& world, Entity entity, scripting::GameplayHost& host, std::uint64_t handle, Instance& instance);
 
 		std::unordered_map<std::uint64_t, Instance> m_instances;
 		std::unordered_set<std::string> m_failedTypes;

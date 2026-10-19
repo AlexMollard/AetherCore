@@ -93,10 +93,10 @@ Read directory-local AGENTS.md files before creating/editing these paths. Adapt 
 
 **Proposed internal interface:** GameplayHost exposes language/capabilities, script type/property discovery, create/destroy, attach/update/detach, event dispatch, property get/set/defaults and diagnostic reporting using existing Expected/error conventions. It adapts the v1 function table without exposing a .NET pointer to generic consumers. Backend-private operations are not forced into universal no-op methods.
 
-- [ ] Add characterization checks for attach/update/detach, multiple scripts, missing scripts, property defaults, scene/prefab entity-reference remapping, physics events, C# RPC/replication, C# editor commands and script rebuild failure.
-- [ ] Route the runner, persistence, inspector/MCP property access and networking bridge through the shared host where necessary. Retain C#-specific compilation/reload behavior behind its adapter and preserve cache-generation invalidation.
-- [ ] Verify unknown script types retain their serialized fields and report a diagnostic. Inactive/missing backends must not erase scenes or convert type identities.
-- [ ] Run existing C++/managed checks and the native gauntlet. Open/run/publish the baseline C# reference project through current control operations.
+- [x] Add characterization checks for attach/update/detach, multiple scripts, missing scripts, property defaults, scene/prefab entity-reference remapping, physics events, C# RPC/replication and script rebuild failure. Review the unchanged backend-private C# editor-command path.
+- [x] Route the runner, persistence, inspector/MCP property access and networking bridge through the shared host where necessary. Retain C#-specific compilation/reload behavior behind its adapter and preserve cache-generation invalidation.
+- [x] Verify unknown script types retain their serialized fields and report a diagnostic. Inactive/missing backends must not erase scenes or convert type identities.
+- [x] Run existing C++/managed checks and the native gauntlet. Open/run/publish the baseline C# reference project through current control operations.
 
 **Gate:** C# behavior and package operation remain valid. No Rust execution is necessary to prove this task.
 
@@ -273,3 +273,11 @@ Completed the isolated Rust/C++ native and browser ABI checks, real-GPU WebGPU s
 Implemented the additive C-compatible v1 ABI, native validation and world/thread/lifetime access guards; generated C/Rust declarations with five-export C#/native parity checks; owning diagnostics and schema v1 with a pure legacy publisher adapter. The existing C# loader, managed ABI, compiler, hot reload and gameplay runner remain on their prior path. Production host routing is Task 3, not part of this task.
 
 Verification: native and Chrome Wasm32 foreign-consumer fixtures each pass139 checks including85 layout comparisons. Native gauntlet passes1367 cases plus editor/runtime GPU smokes. Generator/parity checks and four JSON Schema tests pass. Standalone managed results remain131 passed/29 failed with the exact same failing-test set as the Task1 baseline. Fresh review found no actionable P1/P2 issues. See docs/architecture/gameplay-abi.md and logs/gameplay-api/. M0 Tasks1-2 are complete; Task3 has not begun.
+
+## Task 3 execution record (2026-10-19)
+
+Added the reusable `GameplayHost` consumer and `CSharpGameplayHost` v1 adapter. The runner, inspector, MCP type discovery, live scene capture and replicated-property bridge now use the shared path. CoreCLR compilation/reload, RPC metadata/invocation, GC and editor commands/windows retain their backend-specific implementation. Managed exports, scene formats and publisher payloads remain compatible. Legacy C# uses world identity zero; checked Rust world access remains Task 5.
+
+Verification: nine focused adapter/runner tests pass145 assertions; the full native gauntlet passes1376 cases plus editor/runtime GPU validation smokes with zero findings. API parity/generator CTests pass. Managed results remain131 passed/29 failed with exactly the same failing names as Task2. A fresh independent source review found no actionable P1/P2 defects. The first gauntlet had a transient native failure and a control-port clash from a concurrent fixture; a detailed native rerun and the final isolated full gauntlet pass without product changes.
+
+Created a blank C# 2D reference project through the Launcher control endpoint under `.temp/task3-csharp-reference`. Live checks verify sibling scripts, movement, explicit UTF-8/NUL strings, ownership, local RPC, physics callbacks, Stop restoration, added-field/default/behavior reload and failing-build recovery. Publishing succeeds, and its relocated standalone package executes the expected script/RPC/ownership/collision markers and exits cleanly. Editor command and replication metadata implementations remain unchanged and were reviewed alongside existing tests; no new generic editor-command operation is introduced. Evidence is under `logs/task3/`. Task3 is complete; project language selection is next (Task4).

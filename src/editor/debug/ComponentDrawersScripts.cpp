@@ -31,7 +31,7 @@
 #include "SceneSelection.hpp"
 #include "debug/SpriteAuthoringUi.hpp"
 #include "layers/AppLayer.hpp"
-#include "scripting/CSharpScriptingSubsystem.hpp"
+#include "scripting/GameplayHost.hpp"
 #include "scripting/SceneContext.hpp"
 #include "systems/ScriptComponentSystem.hpp"
 #include "material/EffectParamBuffer.hpp"
@@ -120,8 +120,8 @@ namespace aether::editor
 	void DrawScriptEntry(app::LayerContext& context, World& world, Entity entity, ScriptComponent& sc, ScriptEntry& script, std::size_t scriptIndex)
 	{
 		ImGui::PushID(static_cast<int>(scriptIndex));
-		auto* cs = context.TryGet<app::scripting::CSharpScriptingSubsystem>();
-		const bool scriptingAvailable = cs != nullptr && cs->IsAvailable();
+		auto* gameplay = context.TryGet<app::scripting::GameplayHost>();
+		const bool scriptingAvailable = gameplay != nullptr && gameplay->IsAvailable();
 		const char* preview = script.path.empty() ? "Drop or choose a script" : script.path.c_str();
 		// The label goes in the shared left column like every other inspector row. Left on the
 		// combo it was drawn to the RIGHT of the widget, past the space reserved for the remove
@@ -136,9 +136,9 @@ namespace aether::editor
 			{
 				AssignScriptType(script, {});
 			}
-			if (cs != nullptr)
+			if (gameplay != nullptr)
 			{
-				for (const std::string& typeName: cs->GetScriptTypeNames())
+				for (const std::string& typeName: gameplay->GetScriptTypeNames())
 				{
 					const bool selected = script.path == typeName;
 					if (ImGui::Selectable(typeName.c_str(), selected))
@@ -193,7 +193,7 @@ namespace aether::editor
 			ImGui::PopID();
 			return;
 		}
-		const auto props = cs->GetScriptProperties(script.path);
+		const auto props = gameplay->GetScriptProperties(script.path);
 		if (props.empty())
 		{
 			ImGui::PopID();
@@ -227,7 +227,7 @@ namespace aether::editor
 			ScriptPropertyValue value;
 			value.type = info.type;
 			bool haveValue = false;
-			if (handle != 0 && cs->GetPropertyValue(handle, i, value))
+			if (handle != 0 && gameplay->GetPropertyValue(handle, i, value))
 			{
 				haveValue = true;
 			}
@@ -241,7 +241,7 @@ namespace aether::editor
 				value.i64 = entity.id;
 				haveValue = true;
 			}
-			else if (cs->GetDefaultPropertyValue(script.path, i, value))
+			else if (gameplay->GetDefaultPropertyValue(script.path, i, value))
 			{
 				haveValue = true;
 			}
@@ -420,7 +420,7 @@ namespace aether::editor
 				script.properties[info.name] = value;
 				if (handle != 0)
 				{
-					cs->SetPropertyValue(handle, i, value);
+					gameplay->SetPropertyValue(handle, i, value);
 				}
 			}
 		}
