@@ -1,10 +1,10 @@
 if(AETHERCORE_WEB_RUNTIME)
-    add_executable(GameRuntime web/WebMain.cpp)
+    add_executable(GameRuntime web/WebMain.cpp web/WebApplication.cpp)
     target_include_directories(GameRuntime PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
     target_link_libraries(GameRuntime PRIVATE Engine)
-    target_compile_options(GameRuntime PRIVATE -fno-exceptions)
-    target_link_options(GameRuntime PRIVATE -fno-exceptions -sASSERTIONS=2 -sALLOW_MEMORY_GROWTH=1
-        -sEXIT_RUNTIME=1 -sENVIRONMENT=web,node)
+    target_compile_options(GameRuntime PRIVATE -fno-exceptions --use-port=emdawnwebgpu)
+    target_link_options(GameRuntime PRIVATE -fno-exceptions --use-port=emdawnwebgpu -sASSERTIONS=2 -sALLOW_MEMORY_GROWTH=1
+        -sEXIT_RUNTIME=0 -sENVIRONMENT=web,node)
     set_target_properties(GameRuntime PROPERTIES OUTPUT_NAME AetherGame SUFFIX ".js"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/web")
     return()

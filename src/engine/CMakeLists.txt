@@ -4,6 +4,7 @@
 if(AETHERCORE_WEB_RUNTIME)
     include(WebSources)
     add_library(Engine STATIC ${AETHER_WEB_ENGINE_SOURCES})
+    target_compile_options(Engine PRIVATE --use-port=emdawnwebgpu)
     target_include_directories(Engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(Engine PUBLIC glm::glm EnTT::EnTT box2d)
     target_compile_definitions(Engine PUBLIC AE_CONFIG_SHIP=1 AETHERCORE_WEB_RUNTIME=1)
@@ -16,6 +17,7 @@ add_library(Engine STATIC)
 # CONFIGURE_DEPENDS re-globs at build time, including the C-compatible ABI headers.
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "[/\\\\]platform[/\\\\]web[/\\\\]")
+list(FILTER ENGINE_SOURCES EXCLUDE REGEX "[/\\\\]webgpu[/\\\\]")
 file(GLOB_RECURSE ENGINE_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 
 target_sources(Engine

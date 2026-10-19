@@ -5,4 +5,5 @@ set(AETHER_WEB_ENGINE_SOURCES
     scripting/GameplayAccess.cpp
     scripting/GameplayAbiValidation.cpp
     platform/web/WebLog.cpp
+    webgpu/WebGpuDevice.cpp
 )

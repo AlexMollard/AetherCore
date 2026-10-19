@@ -32,8 +32,23 @@ endforeach()
 include(get_cpm)
 set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 include(PortableDependencies)
+find_program(AETHER_CARGO cargo REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+string(JSON _rust_pin GET "${_pins}" rustWasm)
+set(_rust_library "${CMAKE_BINARY_DIR}/rust/wasm32-unknown-emscripten/release/libaether_browser_gameplay.a")
+file(GLOB_RECURSE _rust_sdk CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/*.rs" "${CMAKE_SOURCE_DIR}/rust/*/Cargo.toml")
+add_custom_command(OUTPUT "${_rust_library}"
+    COMMAND "${AETHER_CARGO}" "+${_rust_pin}" build -Zbuild-std=std,panic_abort
+        --manifest-path "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.toml" --locked
+        --release --target wasm32-unknown-emscripten --target-dir "${CMAKE_BINARY_DIR}/rust"
+    DEPENDS ${_rust_sdk} "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.toml"
+        "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.lock" "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/src/lib.rs"
+    VERBATIM)
+add_custom_target(WebGameplay DEPENDS "${_rust_library}")
 add_subdirectory(src/engine)
 add_subdirectory(src/app)
+add_dependencies(GameRuntime WebGameplay)
+target_link_libraries(GameRuntime PRIVATE "${_rust_library}")
+configure_file("${CMAKE_SOURCE_DIR}/resources/web/index.html" "${CMAKE_BINARY_DIR}/web/index.html" COPYONLY)
 
 set(_assets "${CMAKE_BINARY_DIR}/web-assets")
 file(MAKE_DIRECTORY "${_assets}")
@@ -45,9 +60,9 @@ add_custom_command(OUTPUT "${_assets}/reference.pak"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/prefabs/ReferencePickup.prefab.toml"
     VERBATIM)
 add_custom_command(OUTPUT "${_assets}/sprite.wgsl"
-    COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/tools/experiments/rust-webgpu/webgpu/sprite.slang"
+    COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/sprite.slang"
         -target wgsl -entry vertexMain -entry fragmentMain -o "${_assets}/sprite.wgsl"
-    DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/tools/experiments/rust-webgpu/webgpu/sprite.slang"
+    DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/sprite.slang"
     VERBATIM)
 add_custom_target(WebAssets DEPENDS "${_assets}/reference.pak" "${_assets}/sprite.wgsl")
 add_dependencies(GameRuntime WebAssets)

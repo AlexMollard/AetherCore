@@ -62,7 +62,7 @@ namespace aether::gpu
 
 		void Fail(bool deviceLost = false)
 		{
-			if (m_state != RenderState::Stopping && m_state != RenderState::Stopped)
+			if (m_state == RenderState::Initializing || m_state == RenderState::Ready)
 			{
 				m_state = deviceLost ? RenderState::DeviceLost : RenderState::Failed;
 			}

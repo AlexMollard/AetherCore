@@ -1,4 +1,6 @@
 #include "WebMain.hpp"
+#include "WebApplication.hpp"
+#include <emscripten.h>
 
 #include <box2d/box2d.h>
 #include <cmath>
@@ -12,6 +14,7 @@
 
 int main()
 {
+	if (EM_ASM_INT({return typeof window !== "undefined";})) { return RunBrowserApplication(); }
 	// Runtime foundation: execute the engine's actual ECS/ABI and pinned Box2D.
 	// Browser GPU/audio/input/storage lifecycle is deliberately not ready yet.
 	aether::World world;
