@@ -2,14 +2,14 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AetherCore WebGPU runtime</title>
 <style>body{background:#171b22;color:#eee;font:16px monospace}canvas{width:512px;height:512px;max-width:90vw;image-rendering:pixelated}pre{white-space:pre-wrap}</style>
-<h1>AetherCore WebGPU runtime</h1><p>Focus the canvas and use the arrow keys to move the Rust sprite.</p>
-<canvas id="canvas" width="64" height="64" tabindex="0"></canvas><p><button id="capture">Capture frame</button> <button id="stop">Stop</button></p><pre id="result">Loading…</pre>
+<h1>AetherCore WebGPU runtime</h1><p id="instructions">Focus the canvas and use the arrow keys to move the Rust sprite.</p>
+<canvas id="canvas" width="64" height="64" tabindex="0"></canvas><p><button id="start">Start / resume audio</button> <button id="capture">Capture frame</button> <button id="stop">Stop</button></p><pre id="result">Loading…</pre>
 <script>
  globalThis.aetherRuntime={status:'loading',state:'initializing',diagnostics:[],ticks:0,rendererReady:false,audioReady:false,storageReady:false};
- var Module={canvas:document.getElementById('canvas'),onAbort(message){aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WASM_ABORT',message:String(message)})},printErr(message){console.error(message)}};
+ var Module={canvas:document.getElementById('canvas'),onAbort(message){aetherPlatform?.stop();aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WASM_ABORT',message:String(message)})},printErr(message){console.error(message)}};
  document.getElementById('canvas').addEventListener('pointerdown',()=>Module.canvas.focus());
  document.getElementById('capture').onclick=()=>Module._aether_web_capture();
  document.getElementById('stop').onclick=()=>Module._aether_web_stop();
  setInterval(()=>{const {capture,...summary}=aetherRuntime;document.getElementById('result').textContent=JSON.stringify({...summary,capture:capture?{width:capture.width,height:capture.height}:null},null,2)},200);
  setTimeout(()=>{if(aetherRuntime.state==='initializing'){aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WEBGPU_TIMEOUT',message:'Initialization did not complete within 30 seconds'})}},30000);
-</script><script src="AetherGame.js"></script></html>
+</script><script src="platform.js"></script><script src="AetherGame.js"></script></html>

@@ -36,7 +36,9 @@ namespace aether::app::scripting
 
 	AetherGameplayStatus GameplayHost::Call(const std::function<AetherGameplayStatus()>& callback) const
 	{
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		try
+#endif
 		{
 			if (m_access != nullptr)
 			{
@@ -45,10 +47,12 @@ namespace aether::app::scripting
 			}
 			return callback();
 		}
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		catch (...)
 		{
 			return AE_GAMEPLAY_SCRIPT_ERROR;
 		}
+#endif
 	}
 
 	AetherGameplayEntity GameplayHost::EntityHandle(std::uint32_t id) const

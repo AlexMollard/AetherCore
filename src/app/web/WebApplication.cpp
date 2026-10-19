@@ -1,4 +1,6 @@
 #include "WebApplication.hpp"
+#include "WebGameplay.hpp"
+#include "platform/web/BrowserKey.hpp"
 
 #include <array>
 #include <cmath>
@@ -13,6 +15,10 @@
 #include "scripting/GameplayAbiValidation.hpp"
 #include "scripting/GameplayServices.h"
 #include "webgpu/WebGpuDevice.hpp"
+#include "platform/web/WebAssetLoader.hpp"
+#include "platform/web/WebFileSystem.hpp"
+#include "io/FileSystem.hpp"
+#include "WebAssetFormat.hpp"
 
 namespace
 {
@@ -23,8 +29,11 @@ namespace
 		AetherGameplayModuleApi module{};
 		AetherGameplayInstance instance = 0;
 		aether::webgpu::WebGpuDevice graphics;
+		aether::web::WebAssetLoader assets, engineAssets;
+		std::unique_ptr<aether::app::web::WebGameplay> game;
+		bool gameReady = false;
 		aether::Entity player;
-		std::array<bool, 512> keys{};
+		std::array<bool, 512> keys{}, pressedKeys{};
 		bool initialized = false, attached = false, stopped = false, texturesReady = false, capture = false;
 		unsigned ticks = 0, frames = 0;
 		double previous = 0, accumulator = 0;
@@ -56,9 +65,20 @@ namespace
 				return;
 			}
 			stopped = true;
+			game.reset();
+			EM_ASM({
+				if (globalThis.aetherPlatform)
+				{
+					aetherPlatform.stop();
+				}
+			});
+			aether::io::FileSystem::Shutdown();
+			assets.Stop();
+			engineAssets.Stop();
 			emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, nullptr);
 			emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, nullptr);
 			emscripten_set_blur_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, nullptr);
+			emscripten_set_blur_callback("#canvas", nullptr, false, nullptr);
 			emscripten_set_visibilitychange_callback(nullptr, false, nullptr);
 			{
 				aether::scripting::GameplayAccess::Scope scope(access, aether::scripting::GameplayAccess::ScopeKind::Callback);
@@ -90,48 +110,66 @@ namespace
 					initialized = false;
 				}
 			}
+			const auto roots = world.Roots();
+			for (const auto root: roots)
+			{
+				world.Destroy(root);
+			}
 			access.Invalidate();
 			graphics.Stop();
-			EM_ASM({ aetherRuntime.gameplayStopped = true; });
+			EM_ASM({
+				aetherRuntime.gameplayStopped = true;
+				if (aetherRuntime.status != "failed")
+				{
+					aetherRuntime.status = "stopped";
+				}
+			});
 		}
 
 		bool Start()
 		{
-			player = world.Create();
-			world.Emplace<aether::TransformComponent>(player);
-			auto& sprite = world.Emplace<aether::SpriteRendererComponent>(player);
-			sprite.pixelSize = {2, 2};
-			sprite.pixelsPerUnit = 1;
-			sprite.pixelArt = true;
-			sprite.texturePath = "quadrants";
-			const int scenario = EM_ASM_INT({
-				const scene = new URLSearchParams(location.search).get('scene');
-				return scene == 'layers' ? 1 : scene == 'capacity' ? 2 : 0;
-			});
-			auto addSprite = [&](float x, glm::vec2 size, glm::vec4 tint, int order)
+			EM_ASM({ aetherRuntime.assetsReady = false; });
+			aether::io::FileSystem::Initialize();
+			assets.Start("game.pak");
+			engineAssets.Start("engine.pak");
+			const bool reference = EM_ASM_INT({ return new URLSearchParams(location.search).has("reference"); });
+			if (!reference)
 			{
-				const auto entity = world.Create();
-				world.Emplace<aether::TransformComponent>(entity).localToWorld[3].x = x;
-				auto& sprite = world.Emplace<aether::SpriteRendererComponent>(entity);
-				sprite.pixelSize = size;
+				player = world.Create();
+				world.Emplace<aether::TransformComponent>(player);
+				auto& sprite = world.Emplace<aether::SpriteRendererComponent>(player);
+				sprite.pixelSize = {2, 2};
 				sprite.pixelsPerUnit = 1;
-				sprite.tint = tint;
-				sprite.orderInLayer = order;
-				sprite.texturePath = "white";
-			};
-			if (scenario == 1)
-			{
-				addSprite(0, {2, 2}, {0, 1, 0, 0.5f}, 2);
-				addSprite(0, {1, 1}, {0, 0, 1, 1}, 1);
-			}
-			if (scenario == 2)
-			{
-				for (int index = 0; index < 1025; ++index)
+				sprite.pixelArt = true;
+				sprite.texturePath = "quadrants";
+				const int scenario = EM_ASM_INT({
+					const scene = new URLSearchParams(location.search).get('scene');
+					return scene == 'layers' ? 1 : scene == 'capacity' ? 2 : 0;
+				});
+				auto addSprite = [&](float x, glm::vec2 size, glm::vec4 tint, int order)
 				{
-					addSprite(index == 1024 ? 0.0f : 10.0f, {2, 2}, {0, 0, 1, 1}, 1 + index);
+					const auto entity = world.Create();
+					world.Emplace<aether::TransformComponent>(entity).localToWorld[3].x = x;
+					auto& sprite = world.Emplace<aether::SpriteRendererComponent>(entity);
+					sprite.pixelSize = size;
+					sprite.pixelsPerUnit = 1;
+					sprite.tint = tint;
+					sprite.orderInLayer = order;
+					sprite.texturePath = "white";
+				};
+				if (scenario == 1)
+				{
+					addSprite(0, {2, 2}, {0, 1, 0, 0.5f}, 2);
+					addSprite(0, {1, 1}, {0, 0, 1, 1}, 1);
+				}
+				if (scenario == 2)
+				{
+					for (int index = 0; index < 1025; ++index)
+					{
+						addSprite(index == 1024 ? 0.0f : 10.0f, {2, 2}, {0, 0, 1, 1}, 1 + index);
+					}
 				}
 			}
-
 			if (!Check(aether::scripting::QueryGameplayModule(aether_gameplay_query, 1, sizeof(module), &module), "Rust module ABI query failed"))
 			{
 				return false;
@@ -142,11 +180,15 @@ namespace
 				return false;
 			}
 			initialized = true;
+			if (reference)
+			{
+				game = std::make_unique<aether::app::web::WebGameplay>(world, access, graphics, keys, pressedKeys, module);
+			}
 			AetherGameplayServicesApi services{sizeof(services),
 			        1,
 			        engine.context,
-			        AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN),
-			        [](std::uint64_t context, const AetherGameplayServiceRequest* request, AetherGameplayPropertyValue* result, AetherGameplayUtf8Buffer) -> AetherGameplayStatus
+			        reference ? ((UINT64_C(1) << 14) - 2) : AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN),
+			        [](std::uint64_t context, const AetherGameplayServiceRequest* request, AetherGameplayPropertyValue* result, AetherGameplayUtf8Buffer buffer) -> AetherGameplayStatus
 			        {
 				        auto& app = Get();
 				        if (context != app.access.EngineApi().context || !app.initialized)
@@ -156,6 +198,10 @@ namespace
 				        if (!request || request->structSize < sizeof(*request) || !result || result->structSize < sizeof(*result))
 				        {
 					        return AE_GAMEPLAY_INVALID_ARGUMENT;
+				        }
+				        if (app.game)
+				        {
+					        return app.game->Invoke(*request, *result, buffer);
 				        }
 				        if (request->operation != AE_GAMEPLAY_SERVICE_KEY_DOWN)
 				        {
@@ -175,16 +221,19 @@ namespace
 			{
 				return false;
 			}
-			aether::scripting::GameplayAccess::Scope scope(access, aether::scripting::GameplayAccess::ScopeKind::Callback);
-			if (!Check(module.create(module.context, 0, access.Handle(player), &instance), "Rust instance creation failed"))
+			if (!reference)
 			{
-				return false;
+				aether::scripting::GameplayAccess::Scope scope(access, aether::scripting::GameplayAccess::ScopeKind::Callback);
+				if (!Check(module.create(module.context, 0, access.Handle(player), &instance), "Rust instance creation failed"))
+				{
+					return false;
+				}
+				if (!Check(module.attach(module.context, instance), "Rust attach failed"))
+				{
+					return false;
+				}
+				attached = true;
 			}
-			if (!Check(module.attach(module.context, instance), "Rust attach failed"))
-			{
-				return false;
-			}
-			attached = true;
 			auto key = [](int type, const EmscriptenKeyboardEvent* event, void* data) -> bool
 			{
 				auto& app = *static_cast<BrowserApplication*>(data);
@@ -192,14 +241,14 @@ namespace
 				{
 					return false;
 				}
-				if (std::strcmp(event->code, "ArrowRight") == 0)
+				const int mapped = aether::web::BrowserKey(event->code);
+				if (mapped >= 0)
 				{
-					app.keys[262] = type == EMSCRIPTEN_EVENT_KEYDOWN;
-					return true;
-				}
-				if (std::strcmp(event->code, "ArrowLeft") == 0)
-				{
-					app.keys[263] = type == EMSCRIPTEN_EVENT_KEYDOWN;
+					app.keys[mapped] = type == EMSCRIPTEN_EVENT_KEYDOWN;
+					if (type == EMSCRIPTEN_EVENT_KEYDOWN)
+					{
+						app.pressedKeys[mapped] = true;
+					}
 					return true;
 				}
 				return false;
@@ -211,7 +260,25 @@ namespace
 			        false,
 			        [](int, const EmscriptenFocusEvent*, void* data) -> bool
 			        {
-				        static_cast<BrowserApplication*>(data)->keys.fill(false);
+				        auto& app = *static_cast<BrowserApplication*>(data);
+				        app.keys.fill(false);
+				        app.pressedKeys.fill(false);
+				        app.previous = 0;
+				        app.accumulator = 0;
+				        if (app.game)
+				        {
+					        app.game->ResetTiming();
+				        }
+				        return false;
+			        });
+			emscripten_set_blur_callback("#canvas",
+			        this,
+			        false,
+			        [](int, const EmscriptenFocusEvent*, void* data) -> bool
+			        {
+				        auto& app = *static_cast<BrowserApplication*>(data);
+				        app.keys.fill(false);
+				        app.pressedKeys.fill(false);
 				        return false;
 			        });
 			emscripten_set_visibilitychange_callback(this,
@@ -221,7 +288,12 @@ namespace
 				        auto& app = *static_cast<BrowserApplication*>(data);
 				        app.previous = 0;
 				        app.accumulator = 0;
+				        if (app.game)
+				        {
+					        app.game->ResetTiming();
+				        }
 				        app.keys.fill(false);
+				        app.pressedKeys.fill(false);
 				        return false;
 			        });
 			EM_ASM({ aetherRuntime.status = 'running'; });
@@ -246,6 +318,27 @@ namespace
 			{
 				return false;
 			}
+			if (assets.GetState() == aether::web::WebAssetLoader::State::Failed || engineAssets.GetState() == aether::web::WebAssetLoader::State::Failed)
+			{
+				EM_ASM(
+				        {
+					        aetherRuntime.status = 'failed';
+					        aetherRuntime.diagnostics.push({code : 'BROWSER_ASSETS', message : UTF8ToString($0)});
+				        },
+				        (assets.Error().empty() ? engineAssets.Error() : assets.Error()).c_str());
+				return false;
+			}
+			if (assets.GetState() != aether::web::WebAssetLoader::State::Ready || engineAssets.GetState() != aether::web::WebAssetLoader::State::Ready)
+			{
+				previous = 0;
+				return true;
+			}
+			aether::web::SetWebPackage(assets.Package(), engineAssets.Package());
+			EM_ASM({ aetherRuntime.assetsReady = true; });
+			if (graphics.State() == aether::gpu::RenderState::Failed || graphics.State() == aether::gpu::RenderState::DeviceLost)
+			{
+				return false;
+			}
 			if (graphics.State() != aether::gpu::RenderState::Ready)
 			{
 				previous = now;
@@ -259,6 +352,40 @@ namespace
 			}
 			if (!texturesReady)
 			{
+				const auto texture = aether::io::FileSystem::ReadFile("project://assets/textures/reference.texture");
+				WebTextureHeader header;
+				if (!texture || !ReadWebTextureHeader(*texture, header))
+				{
+					Failure("Missing, corrupt or incompatible browser texture");
+					return false;
+				}
+				EM_ASM({ aetherRuntime.assetBytes = $0; }, texture->size());
+				if (EM_ASM_INT({ return !!globalThis.aetherPlatform; }))
+				{
+					for (const auto& path: assets.Package()->Paths())
+					{
+						if (!path.ends_with(".wav"))
+						{
+							continue;
+						}
+						const std::string uri = "project://" + path;
+						const auto audio = aether::io::FileSystem::ReadFile(uri);
+						if (!audio)
+						{
+							Failure("Browser audio asset is missing or corrupt");
+							return false;
+						}
+						EM_ASM({ aetherPlatform.prepareAudio(UTF8ToString($0), HEAPU8.slice($1, $1 + $2).buffer); }, uri.c_str(), audio->data(), audio->size());
+					}
+					EM_ASM({ aetherPlatform.finishAudioPreparation(); });
+					const auto font = aether::io::FileSystem::ReadFile("engine://Roboto-Regular.ttf");
+					if (!font)
+					{
+						Failure("Browser Roboto font is missing or corrupt");
+						return false;
+					}
+					EM_ASM({ aetherPlatform.prepareFont(HEAPU8.slice($0, $0 + $1).buffer); }, font->data(), font->size());
+				}
 				constexpr std::array<std::uint8_t, 16> quadrants{255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255};
 				constexpr std::array<std::uint8_t, 4> white{255, 255, 255, 255};
 				if (!graphics.UploadTexture(0, 2, 2, quadrants) || !graphics.UploadTexture(1, 1, 1, white))
@@ -272,6 +399,36 @@ namespace
 					Stop();
 					return false;
 				}
+			}
+			if (game)
+			{
+				if (!gameReady)
+				{
+					if (EM_ASM_INT({ return aetherPlatform.failed; }))
+					{
+						Failure("Browser platform initialization failed");
+						return false;
+					}
+					if (!EM_ASM_INT({ return aetherPlatform.storageReady && aetherPlatform.fontReady; }))
+					{
+						return true;
+					}
+					const auto initializedGame = game->Initialize();
+					if (!initializedGame)
+					{
+						Failure(initializedGame.error().message.c_str());
+						return false;
+					}
+					gameReady = true;
+				}
+				const auto frame = game->Frame(now, capture);
+				capture = false;
+				if (!frame)
+				{
+					Failure(frame.error().message.c_str());
+					return false;
+				}
+				return true;
 			}
 			const bool hidden = EM_ASM_INT({ return document.hidden; });
 			if (hidden)

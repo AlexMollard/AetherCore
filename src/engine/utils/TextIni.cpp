@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include "utils/TomlParse.hpp"
 #include <sstream>
 #include <toml++/toml.hpp>
 
@@ -129,6 +131,11 @@ namespace aether::text
 
 	std::optional<int> ParseInt(std::string_view value)
 	{
+#if !defined(__cpp_exceptions) && !defined(_CPPUNWIND)
+		int number{};
+		const auto parsed = std::from_chars(value.data(), value.data() + value.size(), number);
+		return parsed.ec == std::errc{} ? std::optional<int>{number} : std::nullopt;
+#else
 		try
 		{
 			return std::stoi(std::string(value));
@@ -137,10 +144,16 @@ namespace aether::text
 		{
 			return std::nullopt;
 		}
+#endif
 	}
 
 	std::optional<float> ParseFloat(std::string_view value)
 	{
+#if !defined(__cpp_exceptions) && !defined(_CPPUNWIND)
+		float number{};
+		const auto parsed = std::from_chars(value.data(), value.data() + value.size(), number);
+		return parsed.ec == std::errc{} ? std::optional<float>{number} : std::nullopt;
+#else
 		try
 		{
 			return std::stof(std::string(value));
@@ -149,21 +162,18 @@ namespace aether::text
 		{
 			return std::nullopt;
 		}
+#endif
 	}
 
 	bool ParseToml(std::string_view text, const std::function<void(const IniEntry&)>& onEntry)
 	{
-		toml::table parsed;
-		try
+		auto parsed = ParseTomlDocument(text);
+		if (!parsed)
 		{
-			parsed = toml::parse(text);
-		}
-		catch (const toml::parse_error& err)
-		{
-			AE_ERROR(LogCategory::Engine, "TOML parse error at line {}: {}", err.source().begin.line, err.description());
+			AE_ERROR(LogCategory::Engine, "TOML parse error: {}", parsed.error().message);
 			return false;
 		}
-		EmitTomlTable(parsed, {}, onEntry);
+		EmitTomlTable(*parsed, {}, onEntry);
 		return true;
 	}
 } // namespace aether::text

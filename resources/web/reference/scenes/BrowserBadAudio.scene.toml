@@ -1,0 +1,8 @@
+[scene]
+version = 16
+kind = '2d'
+[[entities]]
+name = 'Audio'
+[entities.audio_source]
+clip_path = 'project://assets/audio/reference.wav'
+play_on_start = true

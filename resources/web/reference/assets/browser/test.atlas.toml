@@ -1,0 +1,22 @@
+[atlas]
+schema_version = 1
+texture = 'project://assets/textures/browser-frames.png'
+texture_width = 16
+texture_height = 8
+pixels_per_unit = 8
+sprite_count = 2
+filter = 'nearest'
+
+[sprite]
+0.id = '0000000000000001'
+0.name = 'Red'
+0.x = 0
+0.y = 0
+0.width = 8
+0.height = 8
+1.id = '0000000000000002'
+1.name = 'Blue'
+1.x = 8
+1.y = 0
+1.width = 8
+1.height = 8

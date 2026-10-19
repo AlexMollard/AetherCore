@@ -6,6 +6,34 @@ CPMAddPackage(
     GIT_SHALLOW    FALSE
 )
 
+if(AETHERCORE_WEB_RUNTIME)
+    CPMAddPackage(
+        NAME tomlplusplus
+        GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+        GIT_TAG v3.4.0
+        GIT_SHALLOW TRUE
+    )
+    CPMAddPackage(
+        NAME xxHash
+        GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
+        GIT_TAG v0.8.2
+        GIT_SHALLOW TRUE
+        DOWNLOAD_ONLY YES
+    )
+    CPMAddPackage(
+        NAME zstd
+        GIT_REPOSITORY https://github.com/facebook/zstd.git
+        GIT_TAG v1.5.6
+        GIT_SHALLOW TRUE
+        SOURCE_SUBDIR build/cmake
+        OPTIONS "ZSTD_BUILD_PROGRAMS OFF" "ZSTD_BUILD_TESTS OFF"
+            "ZSTD_BUILD_CONTRIB OFF" "ZSTD_BUILD_SHARED OFF" "ZSTD_MULTITHREAD_SUPPORT OFF"
+    )
+    if(NOT TARGET zstd::libzstd_static)
+        add_library(zstd::libzstd_static ALIAS libzstd_static)
+    endif()
+endif()
+
 CPMAddPackage(
     NAME EnTT
     GIT_REPOSITORY https://github.com/skypjack/entt.git

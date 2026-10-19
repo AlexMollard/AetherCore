@@ -19,6 +19,7 @@ namespace aether::io
 		[[nodiscard]] static Expected<MemoryPak> Open(std::span<const std::byte> bytes, std::string_view expectedTarget);
 		[[nodiscard]] Expected<std::vector<std::byte>> Read(std::string_view path) const;
 		[[nodiscard]] bool Exists(std::string_view path) const;
+		[[nodiscard]] std::vector<std::string> Paths() const;
 
 	private:
 		std::vector<std::byte> m_bytes;

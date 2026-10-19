@@ -1,0 +1,9 @@
+[scene]
+version = 16
+kind = '2d'
+
+[[entities]]
+name = 'Unsupported atlas'
+[entities.sprite]
+atlas = 'project://assets/browser/future.atlas.toml'
+sprite_id = 1

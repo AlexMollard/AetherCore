@@ -21,31 +21,13 @@
 #include "utils/BinaryReader.hpp"
 #include "utils/BinaryWriter.hpp"
 
-#include "assets/AssetDatabase.hpp"
-#include "assets/AssetManager.hpp"
-#include "assets/AssetTypes.hpp"
-#include "material/EffectManager.hpp"
-#include "material/EffectParamBuffer.hpp"
-#include "material/MaterialRegistry.hpp"
-#include "material/MaterialSystem.hpp"
-#include "material/TextureRegistry.hpp"
-#include "mesh/Mesh.hpp"
-#include "mesh/PrimitiveMeshes.hpp"
-#include "physics/PhysicsSystem.hpp"
-#include "rendering/Renderer.hpp"
-#include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
-#include "scene/TransformEdit.hpp"
-#include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "scene/reflection/Reflection.hpp"
-#include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
-#include "io/FileSystem.hpp"
-#include "io/FileUtil.hpp"
-#include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
-#include "utils/ServiceContainer.hpp"
+#include "utils/TomlParse.hpp"
+#include <sstream>
 
 #include "scene/SceneSerializerDetail.hpp"
 
@@ -525,19 +507,38 @@ namespace aether::app::scene
 		{
 			switch (type)
 			{
-				case reflect::FieldType::Float: arr.push_back(v.num); break;
+				case reflect::FieldType::Float:
+					arr.push_back(v.num);
+					break;
 				case reflect::FieldType::Int:
-				case reflect::FieldType::UInt: arr.push_back(static_cast<std::int64_t>(v.num)); break;
-				case reflect::FieldType::Bool: arr.push_back(v.boolean); break;
-				case reflect::FieldType::Vec2: arr.push_back(Vec2ToToml(glm::vec2(v.vec))); break;
+				case reflect::FieldType::UInt:
+					arr.push_back(static_cast<std::int64_t>(v.num));
+					break;
+				case reflect::FieldType::Bool:
+					arr.push_back(v.boolean);
+					break;
+				case reflect::FieldType::Vec2:
+					arr.push_back(Vec2ToToml(glm::vec2(v.vec)));
+					break;
 				case reflect::FieldType::Vec3:
-				case reflect::FieldType::Color3: arr.push_back(Vec3ToToml(glm::vec3(v.vec))); break;
+				case reflect::FieldType::Color3:
+					arr.push_back(Vec3ToToml(glm::vec3(v.vec)));
+					break;
 				case reflect::FieldType::Vec4:
-				case reflect::FieldType::Color4: arr.push_back(Vec4ToToml(v.vec)); break;
-				case reflect::FieldType::String: arr.push_back(v.str); break;
-				case reflect::FieldType::EntityRef: arr.push_back(static_cast<std::int64_t>(v.entity)); break;
-				case reflect::FieldType::Enum: arr.push_back(static_cast<std::int64_t>(v.enumValue)); break;
-				case reflect::FieldType::List: break; // nested lists are not modelled
+				case reflect::FieldType::Color4:
+					arr.push_back(Vec4ToToml(v.vec));
+					break;
+				case reflect::FieldType::String:
+					arr.push_back(v.str);
+					break;
+				case reflect::FieldType::EntityRef:
+					arr.push_back(static_cast<std::int64_t>(v.entity));
+					break;
+				case reflect::FieldType::Enum:
+					arr.push_back(static_cast<std::int64_t>(v.enumValue));
+					break;
+				case reflect::FieldType::List:
+					break; // nested lists are not modelled
 			}
 		}
 
@@ -546,18 +547,36 @@ namespace aether::app::scene
 		{
 			switch (f.type)
 			{
-				case reflect::FieldType::Float: tbl.insert(key, f.meta.isAngleDegrees ? glm::radians(v.num) : v.num); break;
+				case reflect::FieldType::Float:
+					tbl.insert(key, f.meta.isAngleDegrees ? glm::radians(v.num) : v.num);
+					break;
 				case reflect::FieldType::Int:
-				case reflect::FieldType::UInt: tbl.insert(key, static_cast<std::int64_t>(v.num)); break;
-				case reflect::FieldType::Bool: tbl.insert(key, v.boolean); break;
-				case reflect::FieldType::Vec2: tbl.insert(key, Vec2ToToml(glm::vec2(v.vec))); break;
+				case reflect::FieldType::UInt:
+					tbl.insert(key, static_cast<std::int64_t>(v.num));
+					break;
+				case reflect::FieldType::Bool:
+					tbl.insert(key, v.boolean);
+					break;
+				case reflect::FieldType::Vec2:
+					tbl.insert(key, Vec2ToToml(glm::vec2(v.vec)));
+					break;
 				case reflect::FieldType::Vec3:
-				case reflect::FieldType::Color3: tbl.insert(key, Vec3ToToml(glm::vec3(v.vec))); break;
+				case reflect::FieldType::Color3:
+					tbl.insert(key, Vec3ToToml(glm::vec3(v.vec)));
+					break;
 				case reflect::FieldType::Vec4:
-				case reflect::FieldType::Color4: tbl.insert(key, Vec4ToToml(v.vec)); break;
-				case reflect::FieldType::Enum: tbl.insert(key, f.meta.enumTable != nullptr ? f.meta.enumTable->NameOf(v.enumValue) : std::to_string(v.enumValue)); break;
-				case reflect::FieldType::String: tbl.insert(key, v.str); break;
-				case reflect::FieldType::EntityRef: tbl.insert(key, static_cast<std::int64_t>(v.entity)); break;
+				case reflect::FieldType::Color4:
+					tbl.insert(key, Vec4ToToml(v.vec));
+					break;
+				case reflect::FieldType::Enum:
+					tbl.insert(key, f.meta.enumTable != nullptr ? f.meta.enumTable->NameOf(v.enumValue) : std::to_string(v.enumValue));
+					break;
+				case reflect::FieldType::String:
+					tbl.insert(key, v.str);
+					break;
+				case reflect::FieldType::EntityRef:
+					tbl.insert(key, static_cast<std::int64_t>(v.entity));
+					break;
 				case reflect::FieldType::List:
 				{
 					// Flat list -> bare array of values; otherwise an array of tables, one
@@ -593,23 +612,39 @@ namespace aether::app::scene
 			v.type = f.type;
 			switch (f.type)
 			{
-				case reflect::FieldType::Float: v.num = f.meta.isAngleDegrees ? glm::degrees(node.value_or(glm::radians(fallback.num))) : node.value_or(fallback.num); break;
+				case reflect::FieldType::Float:
+					v.num = f.meta.isAngleDegrees ? glm::degrees(node.value_or(glm::radians(fallback.num))) : node.value_or(fallback.num);
+					break;
 				case reflect::FieldType::Int:
-				case reflect::FieldType::UInt: v.num = static_cast<double>(node.value_or(static_cast<std::int64_t>(fallback.num))); break;
-				case reflect::FieldType::Bool: v.boolean = node.value_or(fallback.boolean); break;
-				case reflect::FieldType::Vec2: v.vec = glm::vec4(Vec2FromToml(node, glm::vec2(fallback.vec)), 0.0f, 0.0f); break;
+				case reflect::FieldType::UInt:
+					v.num = static_cast<double>(node.value_or(static_cast<std::int64_t>(fallback.num)));
+					break;
+				case reflect::FieldType::Bool:
+					v.boolean = node.value_or(fallback.boolean);
+					break;
+				case reflect::FieldType::Vec2:
+					v.vec = glm::vec4(Vec2FromToml(node, glm::vec2(fallback.vec)), 0.0f, 0.0f);
+					break;
 				case reflect::FieldType::Vec3:
-				case reflect::FieldType::Color3: v.vec = glm::vec4(Vec3FromToml(node, glm::vec3(fallback.vec)), 0.0f); break;
+				case reflect::FieldType::Color3:
+					v.vec = glm::vec4(Vec3FromToml(node, glm::vec3(fallback.vec)), 0.0f);
+					break;
 				case reflect::FieldType::Vec4:
-				case reflect::FieldType::Color4: v.vec = Vec4FromToml(node, fallback.vec); break;
+				case reflect::FieldType::Color4:
+					v.vec = Vec4FromToml(node, fallback.vec);
+					break;
 				case reflect::FieldType::Enum:
 					if (f.meta.enumTable != nullptr)
 					{
 						v.enumValue = node.is_string() ? f.meta.enumTable->ValueOf(node.value_or(std::string{}), fallback.enumValue) : static_cast<int>(node.value_or(static_cast<std::int64_t>(fallback.enumValue)));
 					}
 					break;
-				case reflect::FieldType::String: v.str = node.value_or(fallback.str); break;
-				case reflect::FieldType::EntityRef: v.entity = static_cast<std::uint64_t>(node.value_or(static_cast<std::int64_t>(fallback.entity))); break;
+				case reflect::FieldType::String:
+					v.str = node.value_or(fallback.str);
+					break;
+				case reflect::FieldType::EntityRef:
+					v.entity = static_cast<std::uint64_t>(node.value_or(static_cast<std::int64_t>(fallback.entity)));
+					break;
 				case reflect::FieldType::List:
 					if (const auto* arr = node.as_array())
 					{
@@ -1019,37 +1054,103 @@ namespace aether::app::scene
 				{
 					m.insert("asset", rec.material->assetPath);
 				}
-				if (wants("base_color")) { m.insert("base_color", Vec4ToToml(a.baseColorFactor)); }
-				if (wants("metallic")) { m.insert("metallic", a.metallicFactor); }
-				if (wants("roughness")) { m.insert("roughness", a.roughnessFactor); }
-				if (wants("occlusion")) { m.insert("occlusion", a.occlusionStrength); }
-				if (wants("alpha_cutoff")) { m.insert("alpha_cutoff", a.alphaCutoff); }
-				if (wants("emissive")) { m.insert("emissive", Vec3ToToml(a.emissiveFactor)); }
-				if (wants("double_sided")) { m.insert("double_sided", a.doubleSided); }
-				if (wants("alpha_blend")) { m.insert("alpha_blend", a.alphaBlend); }
-				if (wants("alpha_mask")) { m.insert("alpha_mask", a.alphaMask); }
-				if (wants("vertex_color")) { m.insert("vertex_color", a.modulateVertexColor); }
-				if (wants("receive_shadows")) { m.insert("receive_shadows", a.receiveShadows); }
+				if (wants("base_color"))
+				{
+					m.insert("base_color", Vec4ToToml(a.baseColorFactor));
+				}
+				if (wants("metallic"))
+				{
+					m.insert("metallic", a.metallicFactor);
+				}
+				if (wants("roughness"))
+				{
+					m.insert("roughness", a.roughnessFactor);
+				}
+				if (wants("occlusion"))
+				{
+					m.insert("occlusion", a.occlusionStrength);
+				}
+				if (wants("alpha_cutoff"))
+				{
+					m.insert("alpha_cutoff", a.alphaCutoff);
+				}
+				if (wants("emissive"))
+				{
+					m.insert("emissive", Vec3ToToml(a.emissiveFactor));
+				}
+				if (wants("double_sided"))
+				{
+					m.insert("double_sided", a.doubleSided);
+				}
+				if (wants("alpha_blend"))
+				{
+					m.insert("alpha_blend", a.alphaBlend);
+				}
+				if (wants("alpha_mask"))
+				{
+					m.insert("alpha_mask", a.alphaMask);
+				}
+				if (wants("vertex_color"))
+				{
+					m.insert("vertex_color", a.modulateVertexColor);
+				}
+				if (wants("receive_shadows"))
+				{
+					m.insert("receive_shadows", a.receiveShadows);
+				}
 				// The lighting flags, written only when set so ordinary sun-lit materials' captured
 				// tables stay byte-identical (the same rule as uv_scroll below). Dropped, every
 				// baked entity's material loads as plain sun-lit PBR: a prefab bake of a level whose
 				// models carry PS2 lighting (object_lit props - crates, wumpa, gems - prelit
 				// scenery, the sky dome, foliage cards, additive water, god rays) then lights differently
 				// from the same level built from JSON at play.
-				if (wants("baked_lighting") && a.bakedLighting) { m.insert("baked_lighting", true); }
-				if (wants("object_lit") && a.objectLit) { m.insert("object_lit", true); }
-				if (wants("foliage") && a.foliage) { m.insert("foliage", true); }
-				if (wants("sky") && a.sky) { m.insert("sky", true); }
-				if (wants("light_shaft") && a.lightShaft) { m.insert("light_shaft", true); }
-				if (wants("gem") && a.gem) { m.insert("gem", true); }
-				if (wants("sheen") && a.sheen) { m.insert("sheen", true); }
-				if (wants("water") && a.water) { m.insert("water", true); }
-				if (wants("character") && a.character) { m.insert("character", true); }
-				if (wants("additive_blend") && a.additiveBlend) { m.insert("additive_blend", true); }
+				if (wants("baked_lighting") && a.bakedLighting)
+				{
+					m.insert("baked_lighting", true);
+				}
+				if (wants("object_lit") && a.objectLit)
+				{
+					m.insert("object_lit", true);
+				}
+				if (wants("foliage") && a.foliage)
+				{
+					m.insert("foliage", true);
+				}
+				if (wants("sky") && a.sky)
+				{
+					m.insert("sky", true);
+				}
+				if (wants("light_shaft") && a.lightShaft)
+				{
+					m.insert("light_shaft", true);
+				}
+				if (wants("gem") && a.gem)
+				{
+					m.insert("gem", true);
+				}
+				if (wants("sheen") && a.sheen)
+				{
+					m.insert("sheen", true);
+				}
+				if (wants("water") && a.water)
+				{
+					m.insert("water", true);
+				}
+				if (wants("character") && a.character)
+				{
+					m.insert("character", true);
+				}
+				if (wants("additive_blend") && a.additiveBlend)
+				{
+					m.insert("additive_blend", true);
+				}
 				// Written only when it scrolls, so every static material's captured table stays
 				// byte-identical (the same rule as the .material asset format's uvscroll key).
 				// Dropped, a baked sea/waterfall loads with scroll 0 and never animates.
-				if (wants("uv_scroll") && a.uvScroll != glm::vec2(0.0f)) { m.insert("uv_scroll", Vec2ToToml(a.uvScroll)); }
+				if (wants("uv_scroll") && a.uvScroll != glm::vec2(0.0f))
+				{
+					m.insert("uv_scroll", Vec2ToToml(a.uvScroll));
+				}
 				const auto tex = [&m, &wants](const char* key, const std::string& path)
 				{
 					if (!path.empty() && wants(key))
@@ -1291,13 +1392,14 @@ namespace aether::app::scene
 						toml::table ot;
 						if (!ov.partialToml.empty())
 						{
-							try
+							auto parsed = ParseTomlDocument(ov.partialToml);
+							if (parsed)
 							{
-								ot = toml::parse(ov.partialToml);
+								ot = std::move(*parsed);
 							}
-							catch (const toml::parse_error& err)
+							else
 							{
-								AE_WARN(LogCategory::App, "Prefab override serialize error: {}", err.description());
+								AE_WARN(LogCategory::App, "Prefab override serialize error: {}", parsed.error().message);
 							}
 						}
 						ot.insert_or_assign("guid", static_cast<std::int64_t>(ov.guid));
@@ -1676,7 +1778,7 @@ namespace aether::app::scene
 			}
 			if (const auto* sj = tv["script_joints"].as_array())
 			{
-				for (const toml::node& jointNode : *sj)
+				for (const toml::node& jointNode: *sj)
 				{
 					const auto* jt = jointNode.as_table();
 					if (jt == nullptr)
@@ -1969,17 +2071,13 @@ namespace aether::app::scene
 
 	std::optional<SceneDescription> ParseToml(std::string_view text)
 	{
-		toml::table root;
-		try
+		auto root = ParseTomlDocument(text);
+		if (!root)
 		{
-			root = toml::parse(text);
-		}
-		catch (const toml::parse_error& err)
-		{
-			AE_WARN(LogCategory::App, "Scene parse error: {}", err.description());
+			AE_WARN(LogCategory::App, "Scene parse error: {}", root.error().message);
 			return std::nullopt;
 		}
-		return BuildSceneFromToml(std::move(root));
+		return BuildSceneFromToml(std::move(*root));
 	}
 
 	bool SceneTextHasNoCameraSource(std::string_view sceneToml)
@@ -2113,10 +2211,10 @@ namespace aether::app::scene
 		toml::table merged = EntityToTable(prefab);
 		if (!partialToml.empty())
 		{
-			try
+			auto over = ParseTomlDocument(partialToml);
+			if (over)
 			{
-				const toml::table over = toml::parse(partialToml);
-				for (auto&& [k, v]: over)
+				for (auto&& [k, v]: *over)
 				{
 					const std::string key(k.str());
 					if (key == "guid")
@@ -2126,9 +2224,9 @@ namespace aether::app::scene
 					v.visit([&](auto&& concrete) { merged.insert_or_assign(key, concrete); });
 				}
 			}
-			catch (const toml::parse_error& err)
+			else
 			{
-				AE_WARN(LogCategory::App, "Prefab override parse error: {}", err.description());
+				AE_WARN(LogCategory::App, "Prefab override parse error: {}", over.error().message);
 			}
 		}
 		return TableToEntity(std::move(merged));
@@ -2242,14 +2340,27 @@ namespace aether::app::scene
 				const std::string key = ReadBinaryString(reader);
 				switch (static_cast<TomlTag>(reader.Read<std::uint8_t>()))
 				{
-					case TomlTag::Table: table.insert(key, ReadTomlTableBody(reader, depth + 1)); break;
-					case TomlTag::Array: table.insert(key, ReadTomlArrayBody(reader, depth + 1)); break;
-					case TomlTag::String: table.insert(key, ReadBinaryString(reader)); break;
-					case TomlTag::Int: table.insert(key, reader.Read<std::int64_t>()); break;
-					case TomlTag::Float: table.insert(key, reader.Read<double>()); break;
-					case TomlTag::Bool: table.insert(key, static_cast<bool>(reader.Read<std::uint8_t>())); break;
+					case TomlTag::Table:
+						table.insert(key, ReadTomlTableBody(reader, depth + 1));
+						break;
+					case TomlTag::Array:
+						table.insert(key, ReadTomlArrayBody(reader, depth + 1));
+						break;
+					case TomlTag::String:
+						table.insert(key, ReadBinaryString(reader));
+						break;
+					case TomlTag::Int:
+						table.insert(key, reader.Read<std::int64_t>());
+						break;
+					case TomlTag::Float:
+						table.insert(key, reader.Read<double>());
+						break;
+					case TomlTag::Bool:
+						table.insert(key, static_cast<bool>(reader.Read<std::uint8_t>()));
+						break;
 					case TomlTag::Null:
-					default: break;
+					default:
+						break;
 				}
 			}
 			return table;
@@ -2267,14 +2378,27 @@ namespace aether::app::scene
 			{
 				switch (static_cast<TomlTag>(reader.Read<std::uint8_t>()))
 				{
-					case TomlTag::Table: array.push_back(ReadTomlTableBody(reader, depth + 1)); break;
-					case TomlTag::Array: array.push_back(ReadTomlArrayBody(reader, depth + 1)); break;
-					case TomlTag::String: array.push_back(ReadBinaryString(reader)); break;
-					case TomlTag::Int: array.push_back(reader.Read<std::int64_t>()); break;
-					case TomlTag::Float: array.push_back(reader.Read<double>()); break;
-					case TomlTag::Bool: array.push_back(static_cast<bool>(reader.Read<std::uint8_t>())); break;
+					case TomlTag::Table:
+						array.push_back(ReadTomlTableBody(reader, depth + 1));
+						break;
+					case TomlTag::Array:
+						array.push_back(ReadTomlArrayBody(reader, depth + 1));
+						break;
+					case TomlTag::String:
+						array.push_back(ReadBinaryString(reader));
+						break;
+					case TomlTag::Int:
+						array.push_back(reader.Read<std::int64_t>());
+						break;
+					case TomlTag::Float:
+						array.push_back(reader.Read<double>());
+						break;
+					case TomlTag::Bool:
+						array.push_back(static_cast<bool>(reader.Read<std::uint8_t>()));
+						break;
 					case TomlTag::Null:
-					default: break;
+					default:
+						break;
 				}
 			}
 			return array;

@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "mesh/PrimitiveMeshes.hpp"
+#include "mesh/PrimitiveMesh.hpp"
 #include "scene/Components.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/Entity.hpp"

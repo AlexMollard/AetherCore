@@ -10,4 +10,7 @@ impl Script for BrowserMover {
         ctx.set_position(ctx.entity(), position)
     }
 }
-export_gameplay!(BrowserMover);
+#[path = "../../../../projects/AgentPipelineRust/scripts/src/reference.rs"]
+mod reference;
+use reference::{ReferencePlayer, ReferenceResult};
+export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult);

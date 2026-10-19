@@ -1,0 +1,69 @@
+#pragma once
+
+#include <array>
+
+#include "scene/SceneSerializer.hpp"
+#include "scene/World.hpp"
+#include "assets/SpriteAssetStore.hpp"
+#include "assets/TileAssetStore.hpp"
+#include "material/TextureRegistry.hpp"
+#include "rendering/SpriteSystem.hpp"
+#include "rendering/TileMapSystem.hpp"
+#include "webgpu/WebGpuDevice.hpp"
+
+namespace aether::app::web
+{
+	class WebTextureSink final : public ITextureSlotSink
+	{
+	public:
+		explicit WebTextureSink(webgpu::WebGpuDevice& graphics)
+		      : m_graphics(graphics)
+		{
+		}
+
+		std::string ResolvePath(std::string_view path) const override;
+		Expected<TextureResource> Load(std::string_view path, TextureColorSpace colorSpace) override;
+
+		std::uint32_t Capacity() const override
+		{
+			return 255;
+		}
+
+		std::string error;
+
+	private:
+		webgpu::WebGpuDevice& m_graphics;
+		std::uint32_t m_next_slot = 2;
+	};
+
+	struct WebScriptRecord
+	{
+		Entity entity;
+		scene::ScriptRecord record;
+	};
+
+	class WebScene
+	{
+	public:
+		WebScene(World& world, webgpu::WebGpuDevice& graphics);
+		~WebScene();
+		Expected<std::vector<WebScriptRecord>> Load(std::string_view name);
+		Expected<Entity> Instantiate(std::string_view name);
+		Expected<void> Extract(RenderFramePacket& packet, unsigned width, unsigned height, float elapsed);
+		World& world;
+
+	private:
+		Expected<std::vector<Entity>> Apply(const scene::SceneDescription& description);
+		WebTextureSink m_sink;
+		TextureRegistry m_textures;
+		SpriteAssetStore m_sprites;
+		TileAssetStore m_tiles;
+		SpriteSystem m_sprite_system;
+		TileMapSystem m_tile_system;
+		webgpu::WebGpuDevice& m_graphics;
+		std::array<float, 256> m_advances{};
+		bool m_font_ready = false;
+		std::unordered_map<std::string, TextureHandle> m_ui_textures;
+		Expected<void> ExtractUi(RenderFramePacket& packet, unsigned width, unsigned height);
+	};
+} // namespace aether::app::web

@@ -7,6 +7,7 @@
 
 #include "io/FileSystem.hpp"
 #include "utils/TomlConfig.hpp"
+#include "assets/AssetValidation.hpp"
 
 namespace aether
 {
@@ -204,10 +205,13 @@ namespace aether
 		}
 
 		TileSetAsset tileSet;
-		tileSet.schemaVersion = static_cast<std::uint32_t>(config.GetFloat("tileset.schema_version", 1.0f));
+		AE_TRY(schemaVersion, ReadAssetVersion(config, "tileset.schema_version", TileSetAsset::kSchemaVersion));
+		tileSet.schemaVersion = *schemaVersion;
 		tileSet.name = config.GetString("tileset.name", "Tile Set");
 		tileSet.cellSize = std::max(config.GetFloat("tileset.cell_size", 1.0f), 0.001f);
-		const auto tileCount = static_cast<std::size_t>(config.GetFloat("tileset.tile_count", 0.0f));
+		AE_TRY(tileCountValue, ReadAssetCount(config, "tileset.tile_count", 65536));
+		const auto tileCount = *tileCountValue;
+		std::size_t totalMetadata = 0;
 		tileSet.tiles.reserve(tileCount);
 		for (std::size_t index = 0; index < tileCount; ++index)
 		{
@@ -226,13 +230,25 @@ namespace aether
 				tile.collisionRect.w = config.GetFloat(TileKey(index, "collision_h"), 1.0f);
 			}
 			tile.animationFps = std::max(config.GetFloat(TileKey(index, "animation_fps"), 8.0f), 0.001f);
-			const auto frameCount = static_cast<std::size_t>(config.GetFloat(TileKey(index, "frame_count"), 0.0f));
+			AE_TRY(frameCountValue, ReadAssetCount(config, TileKey(index, "frame_count"), 65536));
+			const auto frameCount = *frameCountValue;
+			totalMetadata += frameCount;
+			if (totalMetadata > 1048576)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Tile set metadata budget exceeded"));
+			}
 			tile.animationFrames.reserve(frameCount);
 			for (std::size_t frameIndex = 0; frameIndex < frameCount; ++frameIndex)
 			{
 				tile.animationFrames.push_back(ParseId(config.GetString(FrameKey(index, frameIndex))));
 			}
-			const auto propertyCount = static_cast<std::size_t>(config.GetFloat(TileKey(index, "property_count"), 0.0f));
+			AE_TRY(propertyCountValue, ReadAssetCount(config, TileKey(index, "property_count"), 65536));
+			const auto propertyCount = *propertyCountValue;
+			totalMetadata += propertyCount;
+			if (totalMetadata > 1048576)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Tile set metadata budget exceeded"));
+			}
 			for (std::size_t propertyIndex = 0; propertyIndex < propertyCount; ++propertyIndex)
 			{
 				tile.properties.emplace(config.GetString(PropertyKey(index, propertyIndex, "key")), config.GetString(PropertyKey(index, propertyIndex, "value")));

@@ -1,6 +1,7 @@
 #include "MemoryPak.hpp"
 
 #include <bit>
+#include <algorithm>
 #include <cstring>
 #include <zstd.h>
 
@@ -135,5 +136,17 @@ namespace aether::io
 	bool MemoryPak::Exists(std::string_view path) const
 	{
 		return m_index.contains(std::string(path));
+	}
+
+	std::vector<std::string> MemoryPak::Paths() const
+	{
+		std::vector<std::string> paths;
+		paths.reserve(m_index.size());
+		for (const auto& [path, entry]: m_index)
+		{
+			paths.push_back(path);
+		}
+		std::ranges::sort(paths);
+		return paths;
 	}
 } // namespace aether::io

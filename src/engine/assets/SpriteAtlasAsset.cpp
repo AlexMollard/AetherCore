@@ -7,10 +7,13 @@
 #include <sstream>
 #include <unordered_set>
 
-#include <stb_image.h>
+#if !defined(AETHERCORE_WEB_RUNTIME)
+#	include <stb_image.h>
+#endif
 
 #include "io/FileSystem.hpp"
 #include "utils/TomlConfig.hpp"
+#include "assets/AssetValidation.hpp"
 
 namespace aether
 {
@@ -109,12 +112,7 @@ namespace aether
 		return atlas;
 	}
 
-	SpriteAtlasAsset SpriteAtlasAsset::SliceGrid(std::string sourceTexturePath,
-	        std::int32_t textureWidth,
-	        std::int32_t textureHeight,
-	        const SpriteSliceSettings& settings,
-	        const SpriteAtlasAsset* previous,
-	        std::span<const std::uint8_t> rgbaPixels)
+	SpriteAtlasAsset SpriteAtlasAsset::SliceGrid(std::string sourceTexturePath, std::int32_t textureWidth, std::int32_t textureHeight, const SpriteSliceSettings& settings, const SpriteAtlasAsset* previous, std::span<const std::uint8_t> rgbaPixels)
 	{
 		SpriteAtlasAsset atlas;
 		atlas.texturePath = std::move(sourceTexturePath);
@@ -178,7 +176,8 @@ namespace aether
 		do
 		{
 			key = std::format("manual:{}", suffix++);
-		} while (FindByPersistentKey(key) != nullptr);
+		}
+		while (FindByPersistentKey(key) != nullptr);
 		const AssetId owner = ComputeAssetId(MakeSpriteAtlasSource(texturePath));
 		sprites.push_back(SpriteRegion{
 		        .id = ComputeAssetObjectId(owner, key),
@@ -305,10 +304,13 @@ namespace aether
 			AE_UNEXPECTED(AetherError::Asset("Failed to load sprite atlas '" + path.string() + "'."));
 		}
 		SpriteAtlasAsset atlas;
-		atlas.schemaVersion = static_cast<std::uint32_t>(config.GetFloat("atlas.schema_version", 1.0f));
+		AE_TRY(schemaVersion, ReadAssetVersion(config, "atlas.schema_version", SpriteAtlasAsset::kSchemaVersion));
+		atlas.schemaVersion = *schemaVersion;
 		atlas.texturePath = config.GetString("atlas.texture");
-		atlas.textureWidth = std::max(static_cast<std::int32_t>(config.GetFloat("atlas.texture_width", 1.0f)), 1);
-		atlas.textureHeight = std::max(static_cast<std::int32_t>(config.GetFloat("atlas.texture_height", 1.0f)), 1);
+		AE_TRY(textureWidth, ReadAssetCount(config, "atlas.texture_width", 16384, 1));
+		atlas.textureWidth = std::max(static_cast<std::int32_t>(*textureWidth), 1);
+		AE_TRY(textureHeight, ReadAssetCount(config, "atlas.texture_height", 16384, 1));
+		atlas.textureHeight = std::max(static_cast<std::int32_t>(*textureHeight), 1);
 		atlas.pixelsPerUnit = std::max(config.GetFloat("atlas.pixels_per_unit", 100.0f), 0.001f);
 		atlas.filterRecommendation = config.GetString("atlas.filter", "nearest");
 		atlas.wrapRecommendation = config.GetString("atlas.wrap", "clamp");
@@ -325,7 +327,9 @@ namespace aether
 		atlas.sliceSettings.origin = config.GetString("slice.origin", "top-left") == "bottom-left" ? SpriteSliceOrigin::BottomLeft : SpriteSliceOrigin::TopLeft;
 		atlas.sliceSettings.trimAlpha = config.GetBool("slice.trim_alpha", false);
 		atlas.sliceSettings.alphaThreshold = static_cast<std::uint8_t>(std::clamp(config.GetFloat("slice.alpha_threshold", 1.0f), 0.0f, 255.0f));
-		const std::size_t spriteCount = static_cast<std::size_t>(std::max(config.GetFloat("atlas.sprite_count", 0.0f), 0.0f));
+		AE_TRY(spriteCountValue, ReadAssetCount(config, "atlas.sprite_count", 65536));
+		const auto spriteCount = *spriteCountValue;
+		std::size_t totalCollisionPoints = 0;
 		atlas.sprites.reserve(spriteCount);
 		for (std::size_t index = 0; index < spriteCount; ++index)
 		{
@@ -350,7 +354,13 @@ namespace aether
 			        config.GetFloat(RegionKey(index, "border_right"), 0.0f),
 			        config.GetFloat(RegionKey(index, "border_bottom"), 0.0f),
 			};
-			const std::size_t collisionCount = static_cast<std::size_t>(std::max(config.GetFloat(RegionKey(index, "collision_count"), 0.0f), 0.0f));
+			AE_TRY(collisionCountValue, ReadAssetCount(config, RegionKey(index, "collision_count"), 4096));
+			const auto collisionCount = *collisionCountValue;
+			totalCollisionPoints += collisionCount;
+			if (totalCollisionPoints > 1048576)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Atlas collision point budget exceeded"));
+			}
 			sprite.collisionOutline.reserve(collisionCount);
 			for (std::size_t pointIndex = 0; pointIndex < collisionCount; ++pointIndex)
 			{
@@ -396,6 +406,9 @@ namespace aether
 
 	Expected<SpriteSourceImage> DecodeSpriteSourceImage(std::string_view path)
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		AE_UNEXPECTED(AetherError::Asset("Browser runtime requires cooked RGBA8 assets"));
+#else
 		AE_TRY(fileData, io::FileSystem::ReadFile(path));
 		int width = 0;
 		int height = 0;
@@ -411,5 +424,6 @@ namespace aether
 		image.rgbaPixels.assign(pixels, pixels + static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
 		stbi_image_free(pixels);
 		return image;
+#endif
 	}
 } // namespace aether

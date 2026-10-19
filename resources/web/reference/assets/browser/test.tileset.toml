@@ -1,0 +1,11 @@
+[tileset]
+schema_version = 1
+name = 'Browser Tiles'
+cell_size = 1
+tile_count = 1
+
+[tile]
+0.id = '0000000000000064'
+0.atlas = 'project://assets/browser/test.atlas.toml'
+0.sprite_id = '0000000000000001'
+0.collision = 'full'

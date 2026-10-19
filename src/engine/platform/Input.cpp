@@ -1,9 +1,16 @@
 #include "platform/Input.hpp"
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#if defined(AETHERCORE_WEB_RUNTIME)
+#	include <emscripten.h>
+#	include <emscripten/html5.h>
+#else
+#	define GLFW_INCLUDE_NONE
+#	include <GLFW/glfw3.h>
+#endif
 
 #include <algorithm>
+#include <cstdlib>
+#include <cerrno>
 #include <cctype>
 #include <sstream>
 
@@ -114,7 +121,7 @@ namespace aether
 				}
 			}
 #else
-			(void)motors;
+			(void) motors;
 #endif
 		}
 	} // namespace
@@ -126,7 +133,10 @@ namespace aether
 			Stop();
 			return;
 		}
-		const auto unit = [](float v) { return v > 0.0f ? std::min(v, 1.0f) : 0.0f; }; // NaN -> 0
+		const auto unit = [](float v)
+		{
+			return v > 0.0f ? std::min(v, 1.0f) : 0.0f;
+		}; // NaN -> 0
 		m_motors = {unit(low), unit(high)};
 		m_until = now + static_cast<double>(seconds);
 	}
@@ -144,6 +154,9 @@ namespace aether
 
 	Input::~Input()
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+
+#else
 		if (m_window)
 		{
 			// A pad left buzzing outlives the process otherwise: XInput holds the last state.
@@ -155,6 +168,7 @@ namespace aether
 			glfwSetCharCallback(m_window, nullptr);
 			glfwSetWindowUserPointer(m_window, nullptr);
 		}
+#endif
 	}
 
 	void Input::Rumble(float low, float high, float seconds)
@@ -190,11 +204,15 @@ namespace aether
 
 	void Input::Init(GLFWwindow* window)
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		(void) window;
+#else
 		AE_PROFILE_ZONE();
 		m_window = window;
 		glfwSetWindowUserPointer(window, this);
 		glfwSetScrollCallback(window, &Input::OnScroll);
 		glfwSetCharCallback(window, &Input::OnChar);
+#endif
 	}
 
 	void Input::PlayInputSequence(std::vector<InputSequenceEvent> events)
@@ -308,6 +326,16 @@ namespace aether
 				continue; // blank / comment-only line
 			}
 			float t = 0.0f;
+#if defined(AETHERCORE_WEB_RUNTIME)
+			char* timeEnd = nullptr;
+			errno = 0;
+			t = std::strtof(timeTok.c_str(), &timeEnd);
+			if (timeEnd == timeTok.c_str() || *timeEnd || errno == ERANGE || !std::isfinite(t))
+			{
+				error = "line " + std::to_string(lineNo) + ": invalid time";
+				return {};
+			}
+#else
 			try
 			{
 				t = std::stof(timeTok);
@@ -317,6 +345,7 @@ namespace aether
 				error = "line " + std::to_string(lineNo) + ": expected a time, got '" + timeTok + "'";
 				return {};
 			}
+#endif
 			std::string op;
 			if (!(ls >> op))
 			{
@@ -346,6 +375,12 @@ namespace aether
 				bool ok = keys.size() == 2;
 				for (std::size_t i = 0; ok && i < 2; ++i)
 				{
+#if defined(AETHERCORE_WEB_RUNTIME)
+					char* axisEnd = nullptr;
+					errno = 0;
+					xy[i] = std::strtof(keys[i].c_str(), &axisEnd);
+					ok = axisEnd != keys[i].c_str() && !*axisEnd && errno != ERANGE && std::isfinite(xy[i]);
+#else
 					try
 					{
 						std::size_t used = 0;
@@ -356,6 +391,7 @@ namespace aether
 					{
 						ok = false;
 					}
+#endif
 				}
 				if (!ok)
 				{
@@ -459,13 +495,19 @@ namespace aether
 		// GLFW asserts on a null window, and Input is legitimately constructed without
 		// one in tests and headless runtimes - treat a missing window as unfocused and
 		// rely on synthetic injection (see the key loop below).
+#if !defined(AETHERCORE_WEB_RUNTIME)
 		const bool focused = m_window != nullptr && glfwGetWindowAttrib(m_window, GLFW_FOCUSED) != 0;
+#endif
 
 		for (int i = 0; i < kMaxKeys; ++i)
 		{
 			// Synthetic keys (control-server injection) OR into the real state, so
 			// headless playtests drive the same IsKeyDown/IsKeyPressed paths.
+#if defined(AETHERCORE_WEB_RUNTIME)
+			m_currKeys[i] = m_syntheticKeys[i];
+#else
 			m_currKeys[i] = (focused && glfwGetKey(m_window, i) == GLFW_PRESS) || m_syntheticKeys[i];
+#endif
 			m_modalSuppressedKeys[i] = m_editorModalInputBlocked ? m_currKeys[i] : m_modalSuppressedKeys[i] && (m_currKeys[i] || m_prevKeys[i]);
 		}
 
@@ -473,11 +515,16 @@ namespace aether
 		{
 			// Synthetic buttons OR in like synthetic keys, so injected clicks drive the
 			// same IsMouseButtonDown/Pressed/Released paths a real click does.
+#if defined(AETHERCORE_WEB_RUNTIME)
+			m_currMouseButtons[i] = m_syntheticMouseButtons[i];
+#else
 			m_currMouseButtons[i] = (focused && glfwGetMouseButton(m_window, i) == GLFW_PRESS) || m_syntheticMouseButtons[i];
+#endif
 			m_modalSuppressedMouseButtons[i] = m_editorModalInputBlocked ? m_currMouseButtons[i] : m_modalSuppressedMouseButtons[i] && (m_currMouseButtons[i] || m_prevMouseButtons[i]);
 		}
 
 		m_prevMousePos = m_mousePos;
+#if !defined(AETHERCORE_WEB_RUNTIME)
 		if (focused)
 		{
 			double cx = 0.0, cy = 0.0;
@@ -503,6 +550,8 @@ namespace aether
 			// zero instead of merely small.
 			m_mousePos = m_prevMousePos;
 		}
+
+#endif
 
 		if (m_firstUpdate || m_mouseNeedsResync)
 		{
@@ -629,6 +678,11 @@ namespace aether
 
 	glm::vec2 Input::GetMouseTargetSize() const
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		int width = 0, height = 0;
+		emscripten_get_canvas_element_size("#canvas", &width, &height);
+		return {width, height};
+#else
 		if (m_mouseViewportTransformActive)
 		{
 			return m_mouseViewportTargetSize;
@@ -641,6 +695,7 @@ namespace aether
 			return {static_cast<float>(w), static_cast<float>(h)};
 		}
 		return {0.0f, 0.0f};
+#endif
 	}
 
 	// Sentinel written by TransformMousePos when the cursor is outside the viewport;
@@ -708,16 +763,23 @@ namespace aether
 
 	std::string Input::GetClipboardText() const
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		return m_clipboardFallback;
+#else
 		if (m_window != nullptr)
 		{
 			const char* text = glfwGetClipboardString(m_window);
 			return text != nullptr ? std::string{text} : std::string{};
 		}
 		return m_clipboardFallback;
+#endif
 	}
 
 	void Input::SetClipboardText(std::string_view text)
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		m_clipboardFallback = text;
+#else
 		const std::string owned{text};
 		if (m_window != nullptr)
 		{
@@ -725,6 +787,7 @@ namespace aether
 			return;
 		}
 		m_clipboardFallback = owned;
+#endif
 	}
 
 	void Input::SetMouseViewportTransform(glm::vec2 viewportMin, glm::vec2 viewportSize, glm::vec2 targetSize)
@@ -766,15 +829,25 @@ namespace aether
 
 	void Input::OnScroll(GLFWwindow* window, double xOffset, double yOffset)
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		(void) window;
+		(void) xOffset;
+		(void) yOffset;
+#else
 		auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
 		if (self)
 		{
 			self->m_pendingScroll += glm::vec2{static_cast<float>(xOffset), static_cast<float>(yOffset)};
 		}
+#endif
 	}
 
 	void Input::OnChar(GLFWwindow* window, unsigned int codepoint)
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		(void) window;
+		(void) codepoint;
+#else
 		auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
 		if (!self)
 		{
@@ -803,7 +876,9 @@ namespace aether
 			self->m_pendingChars += static_cast<char>(0x80u | ((codepoint >> 6u) & 0x3Fu));
 			self->m_pendingChars += static_cast<char>(0x80u | (codepoint & 0x3Fu));
 		}
+#endif
 	}
+
 	void Input::SetOsCursorVisible(bool visible)
 	{
 		if (visible == m_osCursorVisible)
@@ -837,6 +912,10 @@ namespace aether
 	// moment it unlocks - so the two settings never fight over which GLFW call runs last.
 	void Input::ApplyCursorMode()
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		m_cursorLocked = false;
+		EM_ASM({ Module.canvas.style.cursor = $0 ? "auto" : "none"; }, m_osCursorVisible);
+#else
 		if (m_window == nullptr)
 		{
 			return;
@@ -859,6 +938,7 @@ namespace aether
 				glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
 			}
 		}
+#endif
 	}
 
 	void Input::SetEditorModalInputBlocked(bool blocked)
@@ -941,6 +1021,9 @@ namespace aether
 	void Input::UpdateGamepads()
 	{
 		AE_PROFILE_ZONE();
+#if defined(AETHERCORE_WEB_RUNTIME)
+		emscripten_sample_gamepad_data();
+#endif
 		for (int i = 0; i < kMaxGamepads; ++i)
 		{
 			GamepadState& pad = m_gamepads[i];
@@ -949,6 +1032,25 @@ namespace aether
 			// One call answers both "is a pad in this slot" and "does GLFW have a mapping
 			// for it", so there is no second presence query that can fall out of step with
 			// this one. An unmapped stick reports as absent, which is the honest answer.
+#if defined(AETHERCORE_WEB_RUNTIME)
+			EmscriptenGamepadEvent state{};
+			const bool present = EM_ASM_INT({ return document.activeElement == Module.canvas && document.hasFocus() && !document.hidden; }) && emscripten_get_gamepad_status(i, &state) == EMSCRIPTEN_RESULT_SUCCESS && state.connected;
+			if (present)
+			{
+				constexpr std::array<int, 15> mapping{0, 1, 2, 3, 4, 5, 8, 9, 16, 10, 11, 12, 15, 13, 14};
+				for (int button = 0; button < kMaxGamepadButtons; ++button)
+				{
+					pad.curr[button] = mapping[button] < state.numButtons && state.digitalButton[mapping[button]];
+				}
+				for (int axis = 0; axis < 4; ++axis)
+				{
+					pad.axes[axis] = axis < state.numAxes ? static_cast<float>(state.axis[axis]) : 0.0f;
+				}
+				pad.axes[4] = state.numButtons > 6 ? static_cast<float>(state.analogButton[6]) * 2 - 1 : -1;
+				pad.axes[5] = state.numButtons > 7 ? static_cast<float>(state.analogButton[7]) * 2 - 1 : -1;
+			}
+			else
+#else
 			GLFWgamepadstate state{};
 			const bool present = m_window != nullptr && glfwGetGamepadState(i, &state) == GLFW_TRUE;
 
@@ -964,6 +1066,7 @@ namespace aether
 				}
 			}
 			else
+#endif
 			{
 				// Reset to the resting pose rather than leaving the last poll behind: an
 				// unplugged pad must not keep reporting the buttons it held on the way out.
@@ -1004,7 +1107,11 @@ namespace aether
 				pad.connected = connected;
 				if (connected)
 				{
+#if defined(AETHERCORE_WEB_RUNTIME)
+					const char* name = "Browser Gamepad";
+#else
 					const char* name = present ? glfwGetGamepadName(i) : nullptr;
+#endif
 					pad.name = name != nullptr ? name : "Synthetic Gamepad";
 					AE_INFO(LogCategory::Input, "Gamepad {} connected: {}", i, pad.name);
 				}

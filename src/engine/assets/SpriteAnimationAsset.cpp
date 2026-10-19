@@ -7,6 +7,7 @@
 
 #include "io/FileSystem.hpp"
 #include "utils/TomlConfig.hpp"
+#include "assets/AssetValidation.hpp"
 
 namespace aether
 {
@@ -129,11 +130,13 @@ namespace aether
 			AE_UNEXPECTED(AetherError::Asset("Failed to load sprite animation '" + path.string() + "'."));
 		}
 		SpriteAnimationAsset animation;
-		animation.schemaVersion = static_cast<std::uint32_t>(config.GetFloat("animation.schema_version", 1.0f));
+		AE_TRY(schemaVersion, ReadAssetVersion(config, "animation.schema_version", SpriteAnimationAsset::kSchemaVersion));
+		animation.schemaVersion = *schemaVersion;
 		animation.name = config.GetString("animation.name", "Animation");
 		animation.atlasPath = config.GetString("animation.atlas");
 		animation.loopMode = ParseLoopMode(config.GetString("animation.loop_mode", "loop"));
-		const std::size_t frameCount = static_cast<std::size_t>(std::max(config.GetFloat("animation.frame_count", 0.0f), 0.0f));
+		AE_TRY(frameCountValue, ReadAssetCount(config, "animation.frame_count", 65536));
+		const auto frameCount = *frameCountValue;
 		animation.frames.reserve(frameCount);
 		for (std::size_t index = 0; index < frameCount; ++index)
 		{
@@ -142,7 +145,8 @@ namespace aether
 			        .durationSeconds = std::max(config.GetFloat(FrameKey(index, "duration"), 0.1f), 0.001f),
 			});
 		}
-		const std::size_t eventCount = static_cast<std::size_t>(std::max(config.GetFloat("animation.event_count", 0.0f), 0.0f));
+		AE_TRY(eventCountValue, ReadAssetCount(config, "animation.event_count", 65536));
+		const auto eventCount = *eventCountValue;
 		animation.events.reserve(eventCount);
 		for (std::size_t index = 0; index < eventCount; ++index)
 		{

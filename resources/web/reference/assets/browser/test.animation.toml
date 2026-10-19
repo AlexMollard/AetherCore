@@ -1,0 +1,11 @@
+[animation]
+schema_version = 1
+atlas = 'project://assets/browser/test.atlas.toml'
+loop_mode = 'loop'
+frame_count = 2
+
+[frame]
+0.sprite_id = '0000000000000001'
+0.duration = 0.2
+1.sprite_id = '0000000000000002'
+1.duration = 0.2

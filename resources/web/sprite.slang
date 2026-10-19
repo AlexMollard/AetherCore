@@ -38,6 +38,8 @@ VertexOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_Instan
     float4 world = sprite.world0 * local.x + sprite.world1 * local.y + sprite.world3;
     VertexOutput output;
     output.position = float4(dot(frame.clip0,world),dot(frame.clip1,world),dot(frame.clip2,world),dot(frame.clip3,world));
+    // Render packets use Vulkan clip Y; WebGPU NDC has +Y up.
+    output.position.y = -output.position.y;
     if ((sprite.metadata.x & 4) != 0)
     {
         float2 pixel = (output.position.xy / output.position.w * 0.5 + 0.5) * frame.extent.xy;
@@ -45,7 +47,7 @@ VertexOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_Instan
     }
     if ((sprite.metadata.x & 1) != 0) { uv.x = 1 - uv.x; }
     if ((sprite.metadata.x & 2) != 0) { uv.y = 1 - uv.y; }
-    output.uv = lerp(sprite.uvRect.xy,sprite.uvRect.zw,uv);
+    output.uv = lerp(sprite.uvRect.xy,sprite.uvRect.zw,float2(uv.x,1-uv.y));
     output.color = sprite.color;
     output.flags = sprite.metadata.x;
     return output;

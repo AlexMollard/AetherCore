@@ -1,0 +1,18 @@
+[scene]
+version = 16
+kind = '2d'
+
+[[entities]]
+name = 'Camera'
+position = [0.0, 0.0, 10.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+
+[[entities]]
+name = 'Invalid Font'
+[entities.ui_canvas]
+[entities.ui_rect]
+[entities.ui_text]
+text = 'No silent fallback'
+font = 'Missing Font'

@@ -2,8 +2,30 @@
 set(AETHER_WEB_ENGINE_SOURCES
     scene/World.cpp
     scene/System.cpp
+    io/MemoryPak.cpp
+    physics2d/Physics2DSystem.cpp
+    physics2d/PhysicsDomainGate.cpp
+    physics2d/TileMapCollision.cpp
+    assets/TileAssetStore.cpp
+    assets/TileSetAsset.cpp
+    assets/TileMapAsset.cpp
+    assets/SpriteAssetStore.cpp
+    assets/SpriteAtlasAsset.cpp
+    assets/SpriteAnimationAsset.cpp
+    animation/SpriteAnimationSystem.cpp
+    material/TextureRegistry.cpp
+    rendering/SpriteSystem.cpp
+    rendering/TileMapSystem.cpp
+    ui/UiLayoutSystem.cpp
+    ui/UiNavigationSystem.cpp
+    ui/UiWidgetSystem.cpp
+    platform/Input.cpp
+    utils/TomlConfig.cpp
+    utils/TextIni.cpp
     scripting/GameplayAccess.cpp
     scripting/GameplayAbiValidation.cpp
     platform/web/WebLog.cpp
+    platform/web/WebAssetLoader.cpp
+    platform/web/WebFileSystem.cpp
     webgpu/WebGpuDevice.cpp
 )

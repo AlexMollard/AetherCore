@@ -1,0 +1,135 @@
+[scene]
+version = 16
+kind = '2d'
+features = ['sprites', 'physics_2d', 'tilemaps']
+
+[[entities]]
+name = 'Animated'
+position = [-1.0, 0.0, 0.0]
+[entities.sprite]
+atlas = 'project://assets/browser/test.atlas.toml'
+sprite_id = 1
+[entities.sprite_animator]
+animation = 'project://assets/browser/test.animation.toml'
+autoplay = true
+
+[[entities]]
+name = 'Tiles'
+position = [-2.0, -2.0, 0.0]
+[entities.tile_map]
+tilemap = 'project://assets/browser/test.tilemap'
+
+[[entities]]
+name = 'Camera'
+position = [0.0, 0.0, 10.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 6.0
+near = 0.1
+far = 100.0
+
+[[entities]]
+name = 'Canvas'
+[entities.ui_canvas]
+[entities.ui_rect]
+
+[[entities]]
+name = 'Toggle'
+parent = 3
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [8.0, 8.0]
+offset_max = [88.0, 40.0]
+[entities.ui_toggle]
+on = false
+
+[[entities]]
+name = 'Slider'
+parent = 3
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [8.0, 56.0]
+offset_max = [168.0, 80.0]
+[entities.ui_slider]
+value = 0.5
+
+[[entities]]
+name = 'Image'
+parent = 3
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [200.0, 8.0]
+offset_max = [232.0, 40.0]
+[entities.ui_image]
+texture = 'project://assets/textures/browser-frames.png'
+
+[[entities]]
+name = 'Label'
+parent = 3
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [8.0, 96.0]
+offset_max = [240.0, 128.0]
+[entities.ui_text]
+text = 'Browser café'
+font = 'Roboto'
+size = 24.0
+
+[[entities]]
+name = 'Background'
+parent = 3
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [260.0, 8.0]
+offset_max = [300.0, 40.0]
+[entities.ui_image]
+color = [1.0, 0.0, 0.0, 1.0]
+
+[[entities]]
+name = 'Foreground'
+parent = 8
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [1.0, 1.0]
+[entities.ui_image]
+color = [0.0, 1.0, 0.0, 1.0]
+
+[[entities]]
+name = 'HighCanvas'
+[entities.ui_canvas]
+sort_bias = 10
+[entities.ui_rect]
+
+[[entities]]
+name = 'LowCanvas'
+[entities.ui_canvas]
+sort_bias = -10
+[entities.ui_rect]
+
+[[entities]]
+name = 'HighImage'
+parent = 10
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [320.0, 8.0]
+offset_max = [360.0, 40.0]
+[entities.ui_image]
+color = [1.0, 0.0, 1.0, 1.0]
+
+[[entities]]
+name = 'LowImage'
+parent = 11
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [320.0, 8.0]
+offset_max = [360.0, 40.0]
+[entities.ui_image]
+color = [0.0, 1.0, 0.0, 1.0]

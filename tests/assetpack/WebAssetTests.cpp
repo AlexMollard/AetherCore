@@ -2,6 +2,10 @@
 #include <filesystem>
 #include <fstream>
 #include <cstring>
+#include <chrono>
+#include "assets/SpriteAtlasAsset.hpp"
+#include "assets/SpriteAnimationAsset.hpp"
+#include "assets/TileSetAsset.hpp"
 #include "AssetPipeline.hpp"
 #include "io/MemoryPak.hpp"
 #include "WebAssetFormat.hpp"
@@ -56,4 +60,53 @@ TEST_CASE("Web texture validates layout format version and bounded dimensions")
 	header.width = 5000;
 	std::memcpy(bytes.data(), &header, sizeof(header));
 	CHECK_FALSE(ReadWebTextureHeader(bytes, parsed));
+}
+
+TEST_CASE("Sprite and tile asset loaders reject future schemas")
+{
+	const auto directory = std::filesystem::temp_directory_path() / ("aether-asset-schema-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	std::filesystem::create_directories(directory);
+	const auto path = directory / "invalid.toml";
+	{
+		std::ofstream file(path);
+		file << "[atlas]\nschema_version=999\n";
+	}
+	CHECK_FALSE(aether::SpriteAtlasAsset::Load(path).has_value());
+	{
+		std::ofstream file(path);
+		file << "[animation]\nschema_version=999\n";
+	}
+	CHECK_FALSE(aether::SpriteAnimationAsset::Load(path).has_value());
+	{
+		std::ofstream file(path);
+		file << "[tileset]\nschema_version=999\n";
+	}
+	CHECK_FALSE(aether::TileSetAsset::Load(path).has_value());
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("Sprite and tile asset loaders bound allocation counts before allocating")
+{
+	const auto directory = std::filesystem::temp_directory_path() / ("aether-asset-count-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	std::filesystem::create_directories(directory);
+	const auto path = directory / "invalid.toml";
+	for (const auto* number: {"65537", "-1", "nan", "1e30"})
+	{
+		{
+			std::ofstream file(path);
+			file << "[atlas]\nsprite_count=" << number << "\n";
+		}
+		CHECK_FALSE(aether::SpriteAtlasAsset::Load(path).has_value());
+		{
+			std::ofstream file(path);
+			file << "[animation]\nframe_count=" << number << "\n";
+		}
+		CHECK_FALSE(aether::SpriteAnimationAsset::Load(path).has_value());
+		{
+			std::ofstream file(path);
+			file << "[tileset]\ntile_count=" << number << "\n";
+		}
+		CHECK_FALSE(aether::TileSetAsset::Load(path).has_value());
+	}
+	std::filesystem::remove_all(directory);
 }

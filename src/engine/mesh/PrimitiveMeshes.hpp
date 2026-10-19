@@ -3,17 +3,10 @@
 #include "gpu/UploadContext.hpp"
 
 #include "mesh/Mesh.hpp"
+#include "mesh/PrimitiveMesh.hpp"
 
 namespace aether
 {
-	enum class PrimitiveMesh
-	{
-		Triangle,
-		Quad,
-		Cube,
-		Plane,
-		Sphere,
-	};
 
 	class PrimitiveMeshes
 	{

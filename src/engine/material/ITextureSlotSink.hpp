@@ -5,7 +5,10 @@
 #include <string_view>
 #include <utility>
 
-#include "material/Texture.hpp"
+#include "material/TextureHandle.hpp"
+#if !defined(AETHERCORE_WEB_RUNTIME)
+#	include "material/Texture.hpp"
+#endif
 #include "utils/Expected.hpp"
 
 namespace aether
@@ -19,10 +22,13 @@ namespace aether
 		TextureResource() = default;
 		~TextureResource() = default;
 
+#if !defined(AETHERCORE_WEB_RUNTIME)
 		explicit TextureResource(Texture&& texture)
 		      : m_texture(std::move(texture)), m_slot(m_texture.GetBindlessSlot())
 		{
 		}
+
+#endif
 
 		explicit TextureResource(std::uint32_t slot)
 		      : m_slot(slot)
@@ -40,7 +46,9 @@ namespace aether
 		}
 
 	private:
+#if !defined(AETHERCORE_WEB_RUNTIME)
 		Texture m_texture;
+#endif
 		std::uint32_t m_slot = kInvalidSlot;
 	};
 

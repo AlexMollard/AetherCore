@@ -131,6 +131,9 @@ namespace aether
 
 	bool TomlConfig::LoadFile(std::string_view fileName)
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		return false;
+#else
 		const std::string virtualPath = std::format("config://{}.toml", fileName);
 
 		if (io::FileSystem::IsInitialized())
@@ -164,6 +167,7 @@ namespace aether
 		}
 
 		return Load(*text);
+#endif
 	}
 
 	bool TomlConfig::SaveIfDirty(std::string_view fileName, std::string_view headerComment)
@@ -182,6 +186,9 @@ namespace aether
 
 	bool TomlConfig::SaveFile(std::string_view fileName, std::string_view headerComment) const
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		return false;
+#else
 		const std::string tomlName = std::format("{}.toml", fileName);
 		const std::filesystem::path path = EngineSettingsIO::ResolvePath(tomlName);
 
@@ -196,20 +203,31 @@ namespace aether
 		}
 
 		return true;
+#endif
 	}
 
 	bool TomlConfig::LoadFromPath(const std::filesystem::path& path)
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		auto text = io::FileSystem::ReadFileText(path.generic_string());
+		return text && Load(*text);
+#else
 		auto text = io::file_util::ReadText(path);
 		if (!text)
 		{
 			return false;
 		}
 		return Load(*text);
+#endif
 	}
 
 	bool TomlConfig::SaveToPath(const std::filesystem::path& path, std::string_view headerComment) const
 	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		std::ostringstream buffer;
+		Save(buffer, headerComment);
+		return io::FileSystem::WriteFileText(path.generic_string(), buffer.str()).has_value();
+#else
 		std::ostringstream buffer;
 		Save(buffer, headerComment);
 		if (auto result = io::file_util::WriteText(path, buffer.str()); !result)
@@ -218,6 +236,7 @@ namespace aether
 			return false;
 		}
 		return true;
+#endif
 	}
 
 	bool TomlConfig::GetBool(std::string_view key, bool defaultValue) const
