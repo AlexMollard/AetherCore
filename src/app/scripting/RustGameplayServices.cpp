@@ -20,6 +20,7 @@
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
 #include "scripting/GameplayAccess.hpp"
+#include "scripting/GameplaySaveStore.hpp"
 #include "scripting/GameplayAbiValidation.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
@@ -43,35 +44,11 @@ namespace aether::app::scripting
 			return !name.empty() && name.size() <= 128 && std::all_of(name.begin(), name.end(), [](unsigned char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-'; });
 		}
 
-		std::filesystem::path SaveDirectory()
-		{
-			const auto root = io::PlatformPaths::GetUserConfigDir();
-			if (root.empty())
-			{
-				return {};
-			}
-			const auto project = io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR");
-			auto source = !project.empty() ? project.lexically_normal() : io::PlatformPaths::GetExecutableDir();
-			if (source.filename().empty())
-			{
-				source = source.parent_path();
-			}
-			const auto name = source.filename().u8string();
-			// Encode the complete UTF-8 project-directory name, preserving uniqueness
-			// and keeping Unicode, separators, and platform-reserved names out of paths.
-			constexpr char kHex[] = "0123456789abcdef";
-			std::string nameSpace = "project-";
-			for (unsigned char byte: name)
-			{
-				nameSpace += kHex[byte >> 4];
-				nameSpace += kHex[byte & 15];
-			}
-			return root / "rust-saves" / nameSpace;
-		}
+
 	} // namespace
 
 	RustGameplayServices::RustGameplayServices(SceneContext& context, aether::scripting::GameplayAccess& access)
-	      : m_context(context), m_access(access), m_token(s_next_token.fetch_add(1)), m_owner(std::this_thread::get_id()), m_save_directory(SaveDirectory())
+	      : m_context(context), m_access(access), m_token(s_next_token.fetch_add(1)), m_owner(std::this_thread::get_id()), m_save_directory(GameplaySaveStore::ProjectDirectory())
 	{
 		std::lock_guard lock(s_services_mutex);
 		s_services.emplace(m_token, this);
@@ -317,34 +294,19 @@ namespace aether::app::scripting
 			case AE_GAMEPLAY_SERVICE_READ_SAVE:
 			case AE_GAMEPLAY_SERVICE_WRITE_SAVE:
 			{
-				if (m_save_directory.empty())
-				{
-					return AE_GAMEPLAY_UNSUPPORTED;
-				}
-				if (!SafeName(text))
-				{
-					return AE_GAMEPLAY_INVALID_ARGUMENT;
-				}
-				const auto path = m_save_directory / (text + ".txt");
-				if (request.operation == AE_GAMEPLAY_SERVICE_READ_SAVE && !m_context.allowSaveReads)
-				{
-					return AE_GAMEPLAY_INVALID_HANDLE;
-				}
+				GameplaySaveStore store(m_save_directory);
 				if (request.operation == AE_GAMEPLAY_SERVICE_WRITE_SAVE)
 				{
-					if (!io::file_util::CreateDirectories(m_save_directory))
-					{
-						return AE_GAMEPLAY_SCRIPT_ERROR;
-					}
-					return io::file_util::WriteText(path, Text(request.text2)) ? AE_GAMEPLAY_OK : AE_GAMEPLAY_SCRIPT_ERROR;
+					return store.Write(text, Text(request.text2));
 				}
-				const auto saved = io::file_util::ReadText(path);
-				if (!saved)
+				std::string saved;
+				const auto status = store.Read(text, saved, m_context.allowSaveReads);
+				if (status != AE_GAMEPLAY_OK)
 				{
-					return AE_GAMEPLAY_INVALID_HANDLE;
+					return status;
 				}
 				value.type = AE_GAMEPLAY_PROPERTY_STRING;
-				return aether::scripting::CopyGameplayUtf8({saved->data(), static_cast<uint32_t>(saved->size())}, stringBuffer);
+				return aether::scripting::CopyGameplayUtf8({saved.data(), static_cast<uint32_t>(saved.size())}, stringBuffer);
 			}
 			case AE_GAMEPLAY_SERVICE_CREATE_ENTITY:
 			{

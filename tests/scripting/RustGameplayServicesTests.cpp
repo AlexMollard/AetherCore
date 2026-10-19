@@ -11,6 +11,7 @@
 #include "scripting/GameplayAccess.hpp"
 #include "scripting/RustGameplayServices.hpp"
 #include "scripting/SceneContext.hpp"
+#include "scripting/GameplaySaveStore.hpp"
 #include "ui/UiComponents.hpp"
 
 // These assertions mirror rust/aethercore-abi/src/services.rs without changing ABI v1.
@@ -33,6 +34,28 @@ static_assert(sizeof(AetherGameplayServicesApi) == (sizeof(void*) == 8 || aligno
 
 using namespace aether;
 using namespace aether::app::scripting;
+
+TEST_CASE("Shared gameplay saves preserve bytes, enforce keys, and honor read isolation")
+{
+	const auto directory = std::filesystem::temp_directory_path() / ("aether-save-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	GameplaySaveStore store(directory);
+	const std::string payload("score=42\0caf\xc3\xa9", 14);
+	CHECK(store.Write("score", payload) == AE_GAMEPLAY_OK);
+	std::string output = "unchanged";
+	CHECK(store.Read("score", output, false) == AE_GAMEPLAY_INVALID_HANDLE);
+	CHECK(output == "unchanged");
+	REQUIRE(store.Read("score", output, true) == AE_GAMEPLAY_OK);
+	CHECK(output == payload);
+	CHECK(store.Write("../escape", payload) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(store.Write("", payload) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(store.Read("missing", output, true) == AE_GAMEPLAY_INVALID_HANDLE);
+	CHECK(GameplaySaveStore({}).Write("score", payload) == AE_GAMEPLAY_UNSUPPORTED);
+	std::error_code error;
+	std::filesystem::remove(directory / "score.txt", error);
+	CHECK_FALSE(error);
+	std::filesystem::remove(directory, error);
+	CHECK_FALSE(error);
+}
 
 namespace
 {
