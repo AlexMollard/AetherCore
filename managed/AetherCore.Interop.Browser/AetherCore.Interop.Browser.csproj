@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <PropertyGroup>
+    <AssemblyName>AetherCore.Interop</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>
+    <WasmMainJSPath>browser-main.mjs</WasmMainJSPath>
+    <WasmBuildNative>true</WasmBuildNative>
+    <PublishTrimmed>true</PublishTrimmed>
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <WasmEnableExceptionHandling>false</WasmEnableExceptionHandling>
+    <WasmNativeStrip>false</WasmNativeStrip>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../AetherCore/AetherCore.csproj" />
+    <ProjectReference Include="$(AetherGameProject)" />
+    <Compile Include="../AetherCore.Interop/Abi.cs" Link="Abi.cs" />
+    <Compile Include="../AetherCore.Interop/Bootstrap.cs" Link="Bootstrap.cs" />
+    <Compile Include="../AetherCore.Interop/ScriptRegistry.cs" Link="ScriptRegistry.cs" />
+    <Compile Include="../AetherCore.Interop/Properties/AssemblyInfo.cs" Link="Properties/AssemblyInfo.cs" />
+    <TrimmerRootAssembly Include="AetherGame" />
+    <TrimmerRootDescriptor Include="BrowserRoots.xml" />
+    <EmccExportedRuntimeMethod Include="HEAP8;HEAPU8;HEAP16;HEAPU16;HEAP32;HEAPU32;HEAPF32;HEAPF64;HEAP64;HEAPU64" />
+    <Content Include="browser-main.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="wwwroot/browser-main.mjs" />
+  </ItemGroup>
+  <Target Name="ValidateBrowserInputs" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(AetherBrowser)' != 'true'" Text="Use the CMake-driven browser publishing pipeline" />
+    <Error Condition="!Exists('$(AetherGameProject)')" Text="Selected prebuilt gameplay project is missing" />
+    <Error Condition="!Exists('$(AetherManagedLibraries)')" Text="Build WebManagedRuntime with CMake first" />
+    <ReadLinesFromFile File="$(AetherManagedLibraries)">
+      <Output TaskParameter="Lines" ItemName="_AetherNativeLibraries" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <NativeFileReference Include="@(_AetherNativeLibraries)" />
+    </ItemGroup>
+  </Target>
+</Project>

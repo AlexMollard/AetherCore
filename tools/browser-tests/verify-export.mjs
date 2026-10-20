@@ -8,6 +8,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {checkBudgets, measureDistribution, qualifyAgentGame} from './distribution-metrics.mjs';
 import {isHardwareAdapter} from '../experiments/rust-webgpu/browser-checks.mjs';
+import {isExportPath} from './export-paths.mjs';
 
 const options=Object.fromEntries(process.argv.slice(2).map(arg=>{const i=arg.indexOf('=');return [arg.slice(2,i),arg.slice(i+1)];}));
 const root=path.resolve(options.root), reportPath=path.resolve(options.report);
@@ -17,7 +18,7 @@ try {
  const manifest=JSON.parse(await readFile(path.join(root,'manifest.json'),'utf8'));
  assert.equal(manifest.schemaVersion,1);assert.equal(manifest.target,'web');assert.equal(manifest.profile,'webgpu-2d-v1');
  for(const file of manifest.files){
-  assert.equal(path.basename(file.path),file.path);assert.ok(!/[:\\]/.test(file.path));
+  assert.ok(isExportPath(file.path),'Manifest file must stay inside the package');
   const bytes=await readFile(path.join(root,file.path));assert.equal(bytes.length,file.sizeBytes);
   assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256);
   if(/\.(js|html|wasm)$/.test(file.path))for(const marker of ['aetherTestInternal','aether_web_lose_device','aether_browser_test_panic','test-bridge.js'])assert.equal(bytes.includes(Buffer.from(marker)),false,marker+' leaked into export');
@@ -32,9 +33,9 @@ try {
    if(url.pathname==='/embed.html'){const src=options.measure ? `http://localhost:${server.address().port}/nested/game/` : '/nested/game/';res.writeHead(200,{'Content-Type':'text/html'}).end(`<!doctype html><title>Relocated Web export iframe</title><iframe title="Game" sandbox="allow-scripts allow-same-origin" allow="autoplay; fullscreen; gamepad; webgpu" src="${src}" style="width:640px;height:700px;border:0"></iframe>`);return;}
    if(!url.pathname.startsWith('/nested/game/')){res.writeHead(404).end();return;}
    const name=decodeURIComponent(url.pathname.slice('/nested/game/'.length)) || 'index.html';
-   if(name!==path.basename(name)){res.writeHead(403).end();return;}
+   if(!isExportPath(name) || !manifest.files.some(file=>file.path===name)){res.writeHead(403).end();return;}
    const bytes=await readFile(path.join(root,name));
-   const mime={'.js':'text/javascript','.html':'text/html','.wasm':'application/wasm'}[path.extname(name)] || 'application/octet-stream';
+   const mime={'.js':'text/javascript','.mjs':'text/javascript','.html':'text/html','.wasm':'application/wasm','.json':'application/json'}[path.extname(name)] || 'application/octet-stream';
    res.writeHead(200,{'Content-Type':mime,'Cache-Control':options.measure ? 'public, max-age=3600' : 'no-store'}).end(bytes);
   } catch {res.writeHead(404).end();}
  });

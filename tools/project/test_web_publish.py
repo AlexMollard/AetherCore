@@ -19,8 +19,19 @@ class WebPreflightTests(unittest.TestCase):
   self.assertEqual(error.exception.code,code)
  def test_default_scene_and_target_profile(self):
   result=self.api.preflight(self.root);self.assertEqual(result['profile'],'webgpu-2d-v1');self.assertIn('Start',result['scenes'])
- def test_csharp_is_specific_failure(self):
-  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust','csharp'),encoding='utf-8');self.expect('WEB_CSHARP_UNAVAILABLE')
+ def test_csharp_selects_managed_project(self):
+  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust','csharp'),encoding='utf-8')
+  (self.root/'scripts/AetherGame.csproj').write_text('<Project Sdk="Microsoft.NET.Sdk"/>',encoding='utf-8')
+  result=self.api.preflight(self.root)
+  self.assertEqual(result['language'],'csharp');self.assertEqual(result['managed_project'].name,'AetherGame.csproj')
+ def test_csharp_requires_project_and_rejects_native_imports(self):
+  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust','csharp'),encoding='utf-8');self.expect('WEB_MANAGED_PROJECT')
+  (self.root/'scripts/AetherGame.csproj').write_text('<Project/>',encoding='utf-8')
+  (self.root/'scripts/Bad.cs').write_text('[DllImport("external")] static extern void Native();',encoding='utf-8');self.expect('WEB_NATIVE_API_UNSUPPORTED')
+ def test_csharp_reachable_scenes_use_existing_scene_contract(self):
+  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust','csharp'),encoding='utf-8')
+  (self.root/'scripts/AetherGame.csproj').write_text('<Project/>',encoding='utf-8')
+  (self.root/'scripts/Game.cs').write_text('Scene.Load("Results");',encoding='utf-8');self.expect('WEB_SCENE_MISSING')
  def test_missing_dynamic_scene(self):
   (self.root/'scripts/src/lib.rs').write_text('ctx.load_scene("Missing")',encoding='utf-8');self.expect('WEB_SCENE_MISSING')
  def test_dynamic_scene_needs_declaration(self):

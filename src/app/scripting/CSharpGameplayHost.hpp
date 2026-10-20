@@ -18,6 +18,11 @@ namespace aether::app::scripting
 		CSharpGameplayHost& operator=(const CSharpGameplayHost&) = delete;
 		Expected<void> Reset(const aether::scripting::ManagedScriptApi* api, std::uint32_t generation);
 
+		[[nodiscard]] AetherGameplayModuleApi ModuleApi()
+		{
+			return MakeModule();
+		}
+
 		[[nodiscard]] GameplayHost& Gameplay()
 		{
 			return m_gameplay;

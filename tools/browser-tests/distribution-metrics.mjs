@@ -33,7 +33,7 @@ export async function measureDistribution(page, context, url) {
         // Populate an ordinary HTTP cache before measuring a cache-enabled reload.
         await sample();await page.evaluate(()=>Module._aether_web_stop());
         const warm=await sample();
-        const memory=await page.evaluate(()=>({wasmLinearMemoryBytes:HEAPU8.byteLength, jsHeapUsedBytes:performance.memory?.usedJSHeapSize ?? null}));
+        const memory=await page.evaluate(()=>({wasmLinearMemoryBytes:(globalThis.HEAPU8 || Module.HEAPU8).byteLength, jsHeapUsedBytes:performance.memory?.usedJSHeapSize ?? null}));
         const frames=await page.evaluate(()=>new Promise((resolve,reject)=>{
             const samples=[];let previous=performance.now(),last=aetherRuntime.frames;
             const deadline=setTimeout(()=>reject(new Error('120 engine frames did not complete in 15s')),15000);
@@ -60,6 +60,9 @@ export async function qualifyAgentGame(page, context, url, embedded=false) {
     assert.equal(state.status,'running');assert.equal(state.scene,'ReferenceResult');
     assert.equal(state.platform.committedWrites,2);assert.ok(state.platform.peak>0);assert.ok(state.platform.scheduledSounds>0);
     assert.match(state.uiText,/^Saved score [1-9][0-9]*$/);
+    const saves=await page.evaluate(()=>({score:aetherPlatform.read('reference_score'),label:aetherPlatform.read('reference_label')}));
+    assert.match(saves.score,/^[1-9][0-9]*,true,true$/,'Physics collision and trigger callbacks reach gameplay');
+    assert.equal(saves.label,'caf\u00e9\0agent','Length-aware UTF-8/NUL survives durable saving');
     const fresh=embedded ? page : await context.newPage();
     try {
         await fresh.goto(url+'?scene=ReferenceResult');

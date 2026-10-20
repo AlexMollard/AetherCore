@@ -44,7 +44,9 @@ internal static unsafe class Bootstrap
             // Point the SDK's "AetherHost" P/Invokes at the running executable
             // before any script runs. Native is an SDK internal, reachable here
             // via InternalsVisibleTo.
+#if !AETHERCORE_BROWSER
             Native.RegisterResolver();
+#endif
 
             *outApi = default;
 
@@ -81,9 +83,11 @@ internal static unsafe class Bootstrap
             outApi->SetEditorWindowVisible = &ScriptRegistry.SetEditorWindowVisible;
 
             // Networking
+#if !AETHERCORE_BROWSER
             outApi->GetReplicatedPropertyIndices = &ScriptRegistry.GetReplicatedPropertyIndices;
             outApi->GetNetRpcMethod = &ScriptRegistry.GetNetRpcMethod;
             outApi->InvokeNetRpc = &ScriptRegistry.InvokeNetRpc;
+#endif
         outApi->CompileScripts = &Api_CompileScripts;
 
             // Appended at the end - see Abi.cs's InvokeOwnershipChanged for why.
@@ -144,6 +148,10 @@ internal static unsafe class Bootstrap
     [UnmanagedCallersOnly]
     private static int Api_CompileScripts(byte* scriptDir, byte* outputPath, byte* referenceDir, int optimize, byte* diagBuf, int diagLen)
     {
+#if AETHERCORE_BROWSER
+        Utf8.Write("Browser gameplay is prebuilt; compile scripts during publishing", diagBuf, diagLen);
+        return 3;
+#else
         try
         {
             int rc = ScriptCompiler.Compile(
@@ -161,6 +169,7 @@ internal static unsafe class Bootstrap
             Utf8.Write(ex.ToString(), diagBuf, diagLen);
             return 3;
         }
+#endif
     }
 
     [UnmanagedCallersOnly]

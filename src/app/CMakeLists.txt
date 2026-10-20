@@ -1,6 +1,5 @@
 if(AETHERCORE_WEB_RUNTIME)
-    add_executable(GameRuntime web/WebMain.cpp web/WebApplication.cpp)
-    target_sources(GameRuntime PRIVATE
+    set(_web_app_sources
         scene/SceneSerializerToml.cpp
         web/WebScene.cpp
         web/WebSceneUi.cpp
@@ -12,6 +11,9 @@ if(AETHERCORE_WEB_RUNTIME)
         scene/reflection/Reflection.cpp
         scene/reflection/Physics2D.reflect.cpp
         scene/reflection/MoreComponents.reflect.cpp)
+    if(NOT AETHERCORE_WEB_MANAGED)
+    add_executable(GameRuntime web/WebMain.cpp web/WebApplication.cpp)
+    target_sources(GameRuntime PRIVATE ${_web_app_sources})
     target_include_directories(GameRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_include_directories(GameRuntime PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
     target_link_libraries(GameRuntime PRIVATE Engine)
@@ -20,6 +22,33 @@ if(AETHERCORE_WEB_RUNTIME)
         -sEXIT_RUNTIME=0 -sENVIRONMENT=web,node -sFETCH=1)
     set_target_properties(GameRuntime PROPERTIES OUTPUT_NAME AetherGame SUFFIX ".js"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/web")
+    endif()
+    if(AETHERCORE_WEB_MANAGED)
+        set(_managed_sources ${_web_app_sources})
+        list(FILTER _managed_sources EXCLUDE REGEX "\\.reflect\\.cpp$")
+        set(_managed_registrations ${_web_app_sources})
+        list(FILTER _managed_registrations INCLUDE REGEX "\\.reflect\\.cpp$")
+        add_library(WebManagedRegistrations OBJECT ${_managed_registrations})
+        target_include_directories(WebManagedRegistrations PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+        target_link_libraries(WebManagedRegistrations PRIVATE Engine)
+        target_compile_options(WebManagedRegistrations PRIVATE -fno-exceptions --use-port=emdawnwebgpu)
+        add_library(WebManagedRuntime STATIC web/BrowserManaged.cpp web/WebApplication.cpp
+            scripting/CSharpGameplayHost.cpp ${_managed_sources})
+        add_dependencies(WebManagedRuntime WebManagedRegistrations)
+        target_include_directories(WebManagedRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/src/include")
+        target_link_libraries(WebManagedRuntime PRIVATE Engine)
+        target_compile_definitions(WebManagedRuntime PRIVATE AE_WEB_MANAGED=1)
+        target_compile_options(WebManagedRuntime PRIVATE -fno-exceptions --use-port=emdawnwebgpu)
+        # This existing adapter contains native exception guards; the engine remains exception-free.
+        set_source_files_properties(scripting/CSharpGameplayHost.cpp PROPERTIES COMPILE_OPTIONS -fexceptions)
+        set_target_properties(WebManagedRuntime PROPERTIES OUTPUT_NAME AetherHost PREFIX "")
+        file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/web-managed-libraries.txt"
+            CONTENT "$<TARGET_FILE:WebManagedRuntime>\n$<TARGET_FILE:Engine>\n$<TARGET_FILE:box2d>\n$<TARGET_FILE:libzstd_static>\n$<JOIN:$<TARGET_OBJECTS:WebManagedRegistrations>,\n>\n")
+        add_custom_target(GameRuntime
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/project/dotnet_wasm.py"
+                --project "${AETHER_WEB_MANAGED_PROJECT}" --build "${CMAKE_BINARY_DIR}"
+            DEPENDS WebManagedRuntime VERBATIM)
+    endif()
     return()
 endif()
 

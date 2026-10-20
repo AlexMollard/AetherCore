@@ -12,6 +12,9 @@
 #include "scene/World.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scripting/GameplayAccess.hpp"
+#if defined(AE_WEB_MANAGED)
+#include "BrowserManaged.hpp"
+#endif
 #include "scripting/GameplayAbiValidation.hpp"
 #include "scripting/GameplayServices.h"
 #include "webgpu/WebGpuDevice.hpp"
@@ -106,7 +109,7 @@ namespace
 					{
 						EM_ASM({
 							aetherRuntime.status = 'failed';
-							aetherRuntime.diagnostics.push({code : 'BROWSER_DETACH', message : 'Rust detach failed'});
+							aetherRuntime.diagnostics.push({code : 'BROWSER_DETACH', message : 'Gameplay detach failed'});
 						});
 					}
 					attached = false;
@@ -115,7 +118,7 @@ namespace
 				{
 					if (module.destroy(module.context, instance) != AE_GAMEPLAY_OK)
 					{
-						Failure("Rust instance destroy failed");
+						Failure("Gameplay instance destroy failed");
 					}
 					instance = 0;
 				}
@@ -123,7 +126,7 @@ namespace
 				{
 					if (module.shutdown(module.context) != AE_GAMEPLAY_OK)
 					{
-						Failure("Rust module shutdown failed");
+						Failure("Gameplay module shutdown failed");
 					}
 					initialized = false;
 				}
@@ -134,6 +137,9 @@ namespace
 				world.Destroy(root);
 			}
 			access.Invalidate();
+#if defined(AE_WEB_MANAGED)
+			aether::app::web::BindManagedBrowserWorld(nullptr, nullptr);
+#endif
 			graphics.Stop();
 			EM_ASM({
 				aetherRuntime.gameplayStopped = true;
@@ -146,6 +152,9 @@ namespace
 
 		bool Start()
 		{
+#if defined(AE_WEB_MANAGED)
+			aether::app::web::BindManagedBrowserWorld(&world, &access);
+#endif
 			EM_ASM({ aetherRuntime.assetsReady = false; });
 			aether::io::FileSystem::Initialize();
 			assets.Start("game.pak");
@@ -188,12 +197,12 @@ namespace
 					}
 				}
 			}
-			if (!Check(aether::scripting::QueryGameplayModule(aether_gameplay_query, 1, sizeof(module), &module), "Rust module ABI query failed"))
+			if (!Check(aether::scripting::QueryGameplayModule(aether_gameplay_query, 1, sizeof(module), &module), "Gameplay module ABI query failed"))
 			{
 				return false;
 			}
 			const auto engine = access.EngineApi();
-			if (!Check(module.initialize(module.context, &engine), "Rust module initialization failed"))
+			if (!Check(module.initialize(module.context, &engine), "Gameplay module initialization failed"))
 			{
 				return false;
 			}
@@ -235,18 +244,18 @@ namespace
 				        result->integer = app.keys[request->integer] ? 1 : 0;
 				        return AE_GAMEPLAY_OK;
 			        }};
-			if (!Check(aether_gameplay_bind_services(1, sizeof(services), &services), "Rust services negotiation failed"))
+			if (!Check(aether_gameplay_bind_services(1, sizeof(services), &services), "Gameplay services negotiation failed"))
 			{
 				return false;
 			}
 			if (!reference)
 			{
 				aether::scripting::GameplayAccess::Scope scope(access, aether::scripting::GameplayAccess::ScopeKind::Callback);
-				if (!Check(module.create(module.context, 0, access.Handle(player), &instance), "Rust instance creation failed"))
+				if (!Check(module.create(module.context, 0, access.Handle(player), &instance), "Gameplay instance creation failed"))
 				{
 					return false;
 				}
-				if (!Check(module.attach(module.context, instance), "Rust attach failed"))
+				if (!Check(module.attach(module.context, instance), "Gameplay attach failed"))
 				{
 					return false;
 				}

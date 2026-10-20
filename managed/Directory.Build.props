@@ -20,6 +20,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>disable</ImplicitUsings>
     <Deterministic>true</Deterministic>
+    <DefineConstants Condition="'$(AetherBrowser)' == 'true'">$(DefineConstants);AETHERCORE_BROWSER</DefineConstants>
     <DebugType>portable</DebugType>
 
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>

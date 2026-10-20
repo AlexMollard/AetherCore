@@ -1,0 +1,11 @@
+<linker>
+  <assembly fullname="AetherCore">
+    <!-- Override discovery compares inherited callback metadata against EntityScript. -->
+    <type fullname="AetherCore.EntityScript" preserve="all" />
+    <type fullname="AetherCore.*Ref" preserve="nothing">
+      <method name=".ctor" />
+      <method name="get_ComponentType" />
+      <method name="get_Owner" />
+    </type>
+  </assembly>
+</linker>

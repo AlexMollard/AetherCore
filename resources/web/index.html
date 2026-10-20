@@ -96,7 +96,7 @@ setTimeout(()=>{if(aetherRuntime.state==='initializing'){aetherRuntime.status='f
 <script src="platform.js"></script>@AETHER_WEB_BRIDGE_SCRIPT@
 <script>
 if(location.protocol!=='file:'){
- const loader=document.createElement('script');loader.src='AetherGame.js';loader.onerror=()=>{aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WASM_LOAD',message:'The game files are missing or could not be downloaded. Re-export the game and serve the complete folder.'});};document.body.append(loader);
+ const loader=document.createElement('script');const managed=globalThis.aetherProject?.language==='csharp';loader.src=managed?'browser-main.mjs':'AetherGame.js';if(managed){loader.type='module';}loader.onerror=()=>{aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WASM_LOAD',message:'The game files are missing or could not be downloaded. Re-export the game and serve the complete folder.'});};document.body.append(loader);
 }
 </script>
 </body>

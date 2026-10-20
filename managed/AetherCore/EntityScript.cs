@@ -102,7 +102,7 @@ public abstract class EntityScript
     private bool _dispatch2D;
 
     private static bool Overrides(System.Type t, string method)
-        => t.GetMethod(method)?.DeclaringType != typeof(EntityScript);
+        => t.GetMethod(method) is { } callback && callback.DeclaringType != typeof(EntityScript);
 
     internal void DispatchPhysicsEvents()
     {
@@ -122,17 +122,26 @@ public abstract class EntityScript
                 _physicsDispatch = 2;
                 return;
             }
-            if (_dispatch3D) { Physics.EnableEvents(Self); }
+            if (_dispatch3D)
+            {
+#if AETHERCORE_BROWSER
+                throw new System.PlatformNotSupportedException("WEB_FEATURE_UNSUPPORTED: 3D physics is outside the browser 2D profile");
+#else
+                Physics.EnableEvents(Self);
+#endif
+            }
             if (_dispatch2D) { Physics2D.EnableEvents(Self); }
             _physicsDispatch = 1;
             return; // events start recording after enable; dispatch from next frame
         }
         if (_dispatch3D)
         {
+#if !AETHERCORE_BROWSER
             foreach (Entity e in Physics.GetCollisionEnter(Self)) { OnCollisionEnter(e); }
             foreach (Entity e in Physics.GetCollisionExit(Self)) { OnCollisionExit(e); }
             foreach (Entity e in Physics.GetTriggerEnter(Self)) { OnTriggerEnter(e); }
             foreach (Entity e in Physics.GetTriggerExit(Self)) { OnTriggerExit(e); }
+#endif
         }
         if (_dispatch2D)
         {

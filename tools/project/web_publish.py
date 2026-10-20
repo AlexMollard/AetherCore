@@ -35,8 +35,9 @@ def preflight(project, startup_override=None):
         # Native Settings/Config lookup folds keys, including newly authored startupScene.
         return {key.lower(): settings_keys(child) for key, child in value.items()} if isinstance(value, dict) else value
     settings = settings_keys(tomllib.loads((project / 'ProjectSettings.toml').read_text(encoding='utf-8-sig')))
-    if settings.get('scripting', {}).get('language', 'csharp').lower() != 'rust':
-        reject('WEB_CSHARP_UNAVAILABLE', 'C# browser execution is not implemented; select desktop or a Rust project')
+    language = settings.get('scripting', {}).get('language', 'csharp').lower()
+    if language not in ('rust', 'csharp'):
+        reject('WEB_LANGUAGE_UNSUPPORTED', 'Web gameplay requires Rust or C#')
     web = settings.get('publish', {}).get('web', {})
     if web.get('profile', PROFILE) != PROFILE:
         reject('WEB_PROFILE_UNSUPPORTED', 'Only webgpu-2d-v1 is supported')
@@ -47,7 +48,19 @@ def preflight(project, startup_override=None):
             reject('WEB_ASSET_PATH', 'Project path escapes its root: ' + value)
         return path
     scripts = local(paths.get('scripts', 'scripts'))
-    source = '\n'.join(path.read_text(encoding='utf-8') for path in scripts.rglob('*.rs'))
+    managed_project = None
+    if language == 'csharp':
+        projects = list(scripts.glob('*.csproj'))
+        if len(projects) != 1:
+            reject('WEB_MANAGED_PROJECT', 'C# Web publishing requires exactly one gameplay .csproj in the scripts directory')
+        managed_project = projects[0]
+    extension = '*.rs' if language == 'rust' else '*.cs'
+    source = '\n'.join(path.read_text(encoding='utf-8-sig') for path in scripts.rglob(extension)
+                       if not any(part in ('obj', 'bin', 'artifacts') for part in path.relative_to(scripts).parts))
+    if language == 'csharp' and re.search(r'\b(?:DllImport|LibraryImport|NativeLibrary)\b', source):
+        reject('WEB_NATIVE_API_UNSUPPORTED', 'External native imports are not supported in C# Web games')
+    if language == 'csharp' and re.search(r'\b(?:Net\s*\.|System\s*\.\s*Net\b|NetRpc|IEditorWindow|EditorGui)\b', source):
+        reject('WEB_CAPABILITY_UNSUPPORTED', 'Networking and editor tooling are outside the C# browser 2D profile')
     if re.search(r'\b(?:std\s*::\s*net|TcpStream|UdpSocket|network_\w*|net_connect|enet)\b', source):
         reject('WEB_NETWORK_UNSUPPORTED', 'Rust networking is outside webgpu-2d-v1')
     requested = web.get('capabilities', [])
@@ -60,7 +73,8 @@ def preflight(project, startup_override=None):
     scenes = set(declared)
     startup = startup_override or settings.get('app', {}).get('startupscene', 'default')
     scenes.add(startup)
-    for call in re.findall(r'\.load_scene\s*\(([^)]*)\)', source):
+    scene_calls = r'\.load_scene\s*\(([^)]*)\)' if language == 'rust' else r'\bScene\s*\.\s*Load\s*\(([^)]*)\)'
+    for call in re.findall(scene_calls, source):
         literal = re.fullmatch(r'\s*"([^"\\]+)"\s*', call)
         if literal:
             scenes.add(literal[1])
@@ -138,19 +152,22 @@ def preflight(project, startup_override=None):
             reject('WEB_SCENE_MISSING', 'Missing declared/reachable scene: ' + scene)
         visit(path)
     prefabs = local(paths.get('prefabs', 'assets/prefabs'))
-    for name in re.findall(r'\.instantiate_prefab\s*\(\s*"([^"\\]+)"', source):
+    prefab_calls = r'\.instantiate_prefab\s*\(\s*"([^"\\]+)"' if language == 'rust' else r'\bScene\s*\.\s*Instantiate\s*\(\s*"([^"\\]+)"'
+    for name in re.findall(prefab_calls, source):
         visit(prefabs / (name + '.prefab.toml'))
     for uri in re.findall(r'"(project://[^"\\]+)"', source):
         asset(uri)
     additional = web.get('additional_assets', [])
     if not isinstance(additional, list):
         reject('WEB_ASSET_PATH', 'additional_assets must be a list')
-    for call in re.findall(r'\.(?:play_audio|instantiate_prefab)\s*\(([^)]*)\)', source):
-        if not re.fullmatch(r'\s*"[^"\\]+"\s*', call) and not additional:
+    asset_calls = r'\.(?:play_audio|instantiate_prefab)\s*\(([^)]*)\)' if language == 'rust' else r'\b(?:Audio\s*\.\s*Play|Scene\s*\.\s*Instantiate)\s*\(([^)]*)\)'
+    for call in re.findall(asset_calls, source):
+        if not re.match(r'^\s*"[^"\\]+"\s*(?:,|$)', call) and not additional:
             reject('WEB_DYNAMIC_ASSET_UNDECLARED', 'Dynamic asset loads require publish.web.additional_assets')
     for uri in additional:
         asset(uri)
-    return dict(project=project, settings=settings, scripts=scripts, profile=PROFILE, scenes=sorted(scenes), startup=startup, files=files)
+    return dict(project=project, settings=settings, scripts=scripts, language=language, managed_project=managed_project,
+                profile=PROFILE, scenes=sorted(scenes), startup=startup, files=files)
 
 
 def publish(request, directory, output=None):
@@ -183,7 +200,7 @@ def publish(request, directory, output=None):
         report['artifacts'].append(dict(path=str(log), bytes=log.stat().st_size))
     try:
         data = preflight(request['project'], request.get('scene'))
-        report['language'] = 'rust'
+        report['language'] = data['language']
         report['requiredChecks'].append(dict(name='web-preflight', status='passed'))
         pins = json.loads((REPO / 'tools/experiments/rust-webgpu/toolchain.json').read_text(encoding='utf-8'))
         sdk = Path(os.environ.get('EMSDK', REPO / '.temp/toolchains/emsdk-main')).resolve()
@@ -198,10 +215,10 @@ def publish(request, directory, output=None):
             slang = str(Path(os.environ['VULKAN_SDK']) / 'Bin/slangc.exe')
         if not packer.is_file() or not slang or not Path(slang).is_file():
             reject('WEB_TOOLCHAIN_MISSING', 'Build native AssetPacker and install pinned Slang; set AETHER_WEB_ASSETPACKER/AETHER_WEB_SLANGC')
-        for tool in ('cmake', 'cargo', 'node'):
+        for tool in ('cmake', 'node') + (('cargo',) if data['language'] == 'rust' else ()):
             if not shutil.which(tool):
                 reject('WEB_TOOLCHAIN_MISSING', tool + ' is unavailable')
-        for name in ('emscripten', 'rustWasm', 'slang', 'emdawnwebgpu'):
+        for name in ('emscripten', 'slang', 'emdawnwebgpu') + (('rustWasm',) if data['language'] == 'rust' else ()):
             report['toolchains'].append(dict(name=name, version=pins[name], target='web'))
         project = data['project']
         identity = hashlib.sha256(str(project).encode('utf-8')).hexdigest()[:16]
@@ -227,34 +244,49 @@ def publish(request, directory, output=None):
             target = inputs / path.relative_to(project)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
-        manifest_path = data['scripts'] / 'Cargo.toml'
-        cargo = tomllib.loads(manifest_path.read_text(encoding='utf-8'))
-        library = cargo.get('lib', {}).get('name', cargo['package']['name']).replace('-', '_')
         identity = hashlib.sha256(str(project).encode('utf-8')).hexdigest()[:16]
         build = REPO / 'build' / ('web-publish-' + identity)
         # Reuse only project-qualified build products. Configure always enforces bridge OFF.
-        run('configure', ['cmake', '--preset', 'webgpu-browser', '-B', build,
+        configure = ['cmake', '--preset', 'webgpu-browser', '-B', build,
             '-DAETHERCORE_WEB_TEST_BRIDGE=OFF', '-DAETHER_WEB_PROJECT=' + str(project),
-            '-DAETHER_WEB_STAGED_PROJECT=' + str(inputs), '-DAETHER_WEB_GAMEPLAY_MANIFEST=' + str(manifest_path),
-            '-DAETHER_WEB_GAMEPLAY_NAME=' + library, '-DAETHER_WEB_ASSETPACKER=' + str(packer), '-DAETHER_WEB_SLANGC=' + slang])
+            '-DAETHER_WEB_STAGED_PROJECT=' + str(inputs), '-DAETHER_WEB_ASSETPACKER=' + str(packer), '-DAETHER_WEB_SLANGC=' + slang]
+        if data['language'] == 'rust':
+            manifest_path = data['scripts'] / 'Cargo.toml'
+            cargo = tomllib.loads(manifest_path.read_text(encoding='utf-8'))
+            library = cargo.get('lib', {}).get('name', cargo['package']['name']).replace('-', '_')
+            configure += ['-DAETHERCORE_WEB_MANAGED=OFF', '-DAETHER_WEB_GAMEPLAY_MANIFEST=' + str(manifest_path), '-DAETHER_WEB_GAMEPLAY_NAME=' + library]
+        else:
+            configure += ['-DAETHERCORE_WEB_MANAGED=ON', '-DAETHER_WEB_MANAGED_PROJECT=' + str(data['managed_project'])]
+        run('configure', configure)
         run('build', ['cmake', '--build', build, '-j6'])
         report['requiredChecks'].append(dict(name='web-compilation-and-import-audit', status='passed'))
-        for name in ('index.html', 'platform.js', 'aethercore-icon.png', 'AetherGame.js', 'AetherGame.wasm', 'AetherGame.data', 'game.pak', 'engine.pak'):
+        names = ['index.html', 'platform.js', 'aethercore-icon.png', 'game.pak', 'engine.pak']
+        if data['language'] == 'rust':
+            names += ['AetherGame.js', 'AetherGame.wasm', 'AetherGame.data']
+        else:
+            names += ['browser-main.mjs', 'sprite.wgsl']
+            shutil.copytree(build / 'web/_framework', stage / '_framework')
+            managed = json.loads((build / 'web-managed-build.json').read_text(encoding='utf-8'))
+            pins['managed'] = {key: managed[key] for key in ('sdk', 'runtime', 'manifest', 'mode', 'nativeModule')}
+            pins.pop('rustWasm', None)
+            report['toolchains'].extend(dict(name='managed-' + key, version=managed[key], target='web')
+                for key in ('sdk', 'runtime', 'manifest', 'mode'))
+        for name in names:
             shutil.copy2(build / 'web' / name, stage / name)
         identifier = data['settings'].get('publish', {}).get('web', {}).get('id', product)
-        config = dict(schemaVersion=1, id=identifier, name=product, startupScene=data['startup'], scenes=data['scenes'], profile=PROFILE,
+        config = dict(schemaVersion=1, id=identifier, name=product, language=data['language'], startupScene=data['startup'], scenes=data['scenes'], profile=PROFILE,
             paths=data['settings'].get('paths', {}), instructions=data['settings'].get('publish', {}).get('web', {}).get('instructions', 'Select Play to use the keyboard.'))
         (stage / 'project.js').write_text('globalThis.aetherProject=' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
         revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
-        files = [dict(path=path.name, sizeBytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in sorted(stage.iterdir())]
-        manifest = dict(schemaVersion=1, target='web', profile=PROFILE, language='rust', engineRevision=revision,
+        files = [dict(path=path.relative_to(stage).as_posix(), sizeBytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in sorted(stage.rglob('*')) if path.is_file()]
+        manifest = dict(schemaVersion=1, target='web', profile=PROFILE, language=data['language'], engineRevision=revision,
             project=dict(id=identifier, name=product, startupScene=data['startup'], scenes=data['scenes']), toolchains=pins, files=files)
         (stage / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
         package = stage / (product + '.zip')
         with zipfile.ZipFile(package, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in sorted(stage.iterdir()):
-                if path != package:
-                    archive.write(path, path.name)
+            for path in sorted(stage.rglob('*')):
+                if path.is_file() and path != package:
+                    archive.write(path, path.relative_to(stage).as_posix())
         relocated = directory / ('relocated-' + uuid.uuid4().hex)
         relocated.mkdir()
         with zipfile.ZipFile(package) as archive:

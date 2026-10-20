@@ -81,7 +81,11 @@ namespace aether::app::web
 		m_host.Clear(++m_generation);
 		m_instances.clear();
 		AE_TRY(records, m_scene->Load(name));
+#if defined(AE_WEB_MANAGED)
+		AE_TRY_VOID(m_host.Reset(m_module, "csharp", m_generation));
+#else
 		AE_TRY_VOID(m_host.Reset(m_module, "rust", m_generation));
+#endif
 		for (const auto& record: *records)
 		{
 			AE_TRY(handle, m_host.CreateInstance(record.record.type, record.entity.id));
@@ -193,6 +197,10 @@ namespace aether::app::web
 				m_world.UpdateSystems(1.0f / 60.0f);
 				for (const auto& instance: m_instances)
 				{
+					if ((m_module.capabilities & AE_GAMEPLAY_CAP_PHYSICS) == 0)
+					{
+						continue;
+					}
 					if (const auto* events = m_world.TryGet<CollisionEvents2DComponent>(instance.entity))
 					{
 						for (auto other: events->collisionEnter)

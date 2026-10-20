@@ -294,6 +294,9 @@ internal static unsafe class ScriptRegistry
 
         // Load from bytes so the .dll on disk is never locked (mandatory for the
         // next `dotnet build` to overwrite it during hot reload on Windows).
+#if AETHERCORE_BROWSER
+        Assembly assembly = Assembly.Load(new AssemblyName("AetherGame"));
+#else
         var context = new ScriptsLoadContext(assemblyPath);
         Assembly assembly;
         byte[] dllBytes = File.ReadAllBytes(assemblyPath);
@@ -310,6 +313,7 @@ internal static unsafe class ScriptRegistry
                 assembly = context.LoadFromStream(dll);
             }
         }
+#endif
 
         var names = new List<string>();
         // Server-target [NetRpc] methods that declare no MaxPerSecond, collected
@@ -375,7 +379,9 @@ internal static unsafe class ScriptRegistry
         names.Sort(StringComparer.Ordinal);
         unlimitedServerRpcs.Sort(StringComparer.Ordinal);
         s_typeNames = names.ToArray();
+#if !AETHERCORE_BROWSER
         s_context = context;
+#endif
 
         Log.Info($"Loaded {s_typeNames.Length} C# script type(s) from {Path.GetFileName(assemblyPath)}");
         if (unlimitedServerRpcs.Count > 0)
