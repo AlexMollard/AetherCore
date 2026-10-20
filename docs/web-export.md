@@ -28,6 +28,7 @@ Each project gets a separate `build/web-publish-<identity>` cache. A project-sco
 [publish.web]
 profile = "webgpu-2d-v1"
 id = "my-studio.my-game"
+instructions = "WASD to move. Space to dash. R to retry."
 scenes = ["Start", "Level2", "Results"]
 additional_assets = ["project://assets/audio/theme.wav"]
 capabilities = ["sprites", "audio", "saves", "scenes"]
@@ -47,4 +48,29 @@ Publishing stages content privately, extracts the ZIP into a separate directory 
 
 The terminal report links `web-verification.json`, logs, manifest and ZIP; browser evidence includes environment, state, screenshot and cleanup. Failed builds or browser verification leave the previous valid export intact. The final directory is swapped only after successful verification. Interrupted jobs can leave hidden staging directories for inspection; they do not expose a partial package as the final export.
 
-Serve the extracted directory over HTTPS or localhost; opening `index.html` through `file://` is not supported. Use a WebGPU-capable hardware browser and appropriate iframe permissions (`autoplay; fullscreen; gamepad`, plus host-specific WebGPU policy when required). Start enables audio through a real gesture. Local nested-URL/iframe verification does not establish support on itch.io or another external host. No upload or broad browser/OS qualification is part of Task 12; those remain Task 13.
+Serve the extracted directory over HTTPS or localhost; opening `index.html` through `file://` is not supported. Use a WebGPU-capable hardware browser and appropriate iframe permissions (`autoplay; fullscreen; gamepad`, plus host-specific WebGPU policy when required). Start enables audio through a real gesture. Local nested-URL/iframe verification does not establish support on itch.io or another external host. Use [autonomous distribution qualification](distribution-qualification.md) for Task 13 measurements and the browser/host matrix. External hosting remains pending until an authorized uploaded draft is exercised.
+
+## Playable sample and local preview
+
+[Ember Run](../projects/EmberRun/README.md) is a Rust collect-and-dodge sample with
+movement, dash, three lives, 30-second rounds, retry and a saved best score. It runs
+through the same shared gameplay host as other games. The empty development preview
+URL selects Ember Run; explicit reference-fixture URLs retain their deterministic
+regression behavior. Publish the sample using the normal project command above.
+
+The player uses the real editor icon and the default Night Amber colors. Play focuses
+the canvas immediately, including inside an iframe. Clicking outside releases keyboard
+input. Optional `publish.web.instructions` supplies the game's controls below the canvas.
+The technical state stays in a collapsed details panel.
+
+For sample-specific browser qualification after publishing:
+
+```powershell
+node tools/browser-tests/verify-export.mjs `
+    '--root=projects/EmberRun/Builds/Web/Ember Run' `
+    --report=logs/ember-browser.json --scenario=ember-run-v1
+```
+
+This checks immediate keyboard movement/scoring, audible collection, retry, a completed
+round and best-score persistence after reload, alongside normal export/iframe checks.
+Set `AETHER_PLAYWRIGHT_MODULE` to the pinned dependency as for publishing.

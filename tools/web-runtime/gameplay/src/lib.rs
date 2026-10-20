@@ -13,7 +13,10 @@ impl Script for BrowserMover {
 #[path = "../../../../projects/AgentPipelineRust/scripts/src/reference.rs"]
 mod reference;
 use reference::{ReferencePlayer, ReferenceResult};
-export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult);
+#[path = "../../../../projects/EmberRun/scripts/src/game.rs"]
+mod ember;
+use ember::EmberRun;
+export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult, EmberRun);
 
 #[cfg(feature = "automation")]
 #[unsafe(no_mangle)]

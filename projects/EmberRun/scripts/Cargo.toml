@@ -1,0 +1,11 @@
+[package]
+name = "aether-game"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "aether_gameplay"
+crate-type = ["cdylib"]
+
+[dependencies]
+aethercore = { path = "../../../rust/aethercore" }

@@ -5,6 +5,7 @@ import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {checkBudgets, measureDistribution, qualifyAgentGame} from './distribution-metrics.mjs';
 import {isHardwareAdapter} from '../experiments/rust-webgpu/browser-checks.mjs';
 
@@ -48,13 +49,38 @@ try {
   await page.goto(base+'/nested/game/');
   await page.waitForFunction(()=>(aetherRuntime.rendererReady && aetherRuntime.fontReady && aetherRuntime.scene) || aetherRuntime.status==='failed');
   assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
+  report.environment.viewport=page.viewportSize();report.environment.canvas=await page.locator('#canvas').evaluate(canvas=>({width:canvas.width,height:canvas.height,devicePixelRatio}));
   report.environment.gpu=await page.evaluate(()=>aetherRuntime.adapter);assert.ok(isHardwareAdapter(report.environment.gpu),'Hardware WebGPU adapter required');
   assert.equal(await page.evaluate(()=>typeof globalThis.aetherTest),'undefined');
+  assert.equal(await page.locator('#brand-icon').count(),1,'Use the actual editor icon');
+  assert.ok(await page.locator('#brand-icon').evaluate(icon=>icon.complete && icon.naturalWidth>0));
+  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).backgroundColor),'rgb(15, 13, 11)');
+  assert.equal(await page.locator('#start').evaluate(button=>getComputedStyle(button).backgroundColor),'rgb(255, 148, 41)');
   assert.equal(await page.evaluate(()=>aetherRuntime.scene),manifest.project.startupScene);
-  await page.locator('#start').click();await page.locator('#canvas').focus();await page.keyboard.down('Space');
+  await page.locator('#start').click();assert.equal(await page.evaluate(()=>document.activeElement?.id),'canvas','Play must focus the game without an extra click');await page.keyboard.down('Space');
   await page.waitForFunction(()=>aetherRuntime.ticks>=5 || aetherRuntime.status==='failed');
   await page.keyboard.up('Space');
   if(options.scenario==='agent-reference-v1'){report.agentGame=await qualifyAgentGame(page,context,base+'/nested/game/');}
+  if(options.scenario==='ember-run-v1'){
+   await page.keyboard.down('w');
+   try{await page.waitForFunction(()=>/^10 EMBERS/.test(aetherRuntime.uiText),undefined,{timeout:4000});}finally{await page.keyboard.up('w');}
+   await page.waitForFunction(()=>aetherRuntime.ticks>=120);
+   assert.match(await page.evaluate(()=>aetherRuntime.uiText),/^10 EMBERS.*LIVES/,'Game remains playable beyond the old one-second fixture');
+   assert.ok(await page.evaluate(()=>aetherRuntime.platform.scheduledSounds>0 && aetherRuntime.platform.peak>0),'Collectible produces real audio');
+   await page.keyboard.press('r');
+   await page.waitForFunction(()=>/^0 EMBERS.*3 LIVES/.test(aetherRuntime.uiText));
+   await page.keyboard.down('w');
+   try{await page.waitForFunction(()=>/^10 EMBERS/.test(aetherRuntime.uiText),undefined,{timeout:4000});}finally{await page.keyboard.up('w');}
+   await page.waitForFunction(()=>/BEST/.test(aetherRuntime.uiText),undefined,{timeout:40000});
+   await page.waitForFunction(()=>aetherRuntime.platform.committedWrites>0);
+   assert.equal(await page.evaluate(()=>aetherPlatform.read('ember_best')),'10');
+   report.emberRun={score:10,keyboardMovement:true,retry:true,realAudio:true,completedRun:true,savedBest:10};
+   await page.reload();await page.waitForFunction(()=>aetherRuntime.rendererReady && aetherRuntime.fontReady && aetherRuntime.storageReady);
+   assert.equal(await page.evaluate(()=>aetherPlatform.read('ember_best')),'10','Best score survives a fresh reload');
+   await page.locator('#start').click();assert.equal(await page.evaluate(()=>document.activeElement?.id),'canvas');
+   await page.waitForFunction(()=>aetherRuntime.ticks>=3);
+   report.checks.push({name:'ember-movement-score-audio-retry-and-persistent-best',status:'passed'});
+  }
   report.directState=await page.evaluate(()=>{const{capture,...state}=aetherRuntime;return state;});
   assert.equal(report.directState.status,'running');assert.equal(report.directState.diagnostics.length,0);
   report.checks.push({name:'relocated-nested-path-gameplay',status:'passed'});
@@ -64,7 +90,7 @@ try {
   await page.locator('iframe').waitFor();
   const frame=page.frames().find(frame=>frame.url().includes('/nested/game/'));
   assert.ok(frame);await frame.waitForFunction(()=>aetherRuntime.scene && aetherRuntime.rendererReady && aetherRuntime.fontReady);
-  await frame.locator('#start').click();await frame.locator('#canvas').focus();
+  await frame.locator('#start').click();assert.equal(await frame.evaluate(()=>document.activeElement?.id),'canvas','Iframe Play must focus the game');
   await frame.waitForFunction(()=>aetherRuntime.ticks>=3 || aetherRuntime.status==='failed');
   assert.equal(await frame.evaluate(()=>aetherRuntime.status),'running');
   report.iframePolicy=await frame.evaluate(()=>{const policy=document.featurePolicy;const supported=policy?.features() || [];return {origin:location.origin,secureContext:isSecureContext,webgpuPolicyRecognized:supported.includes('webgpu'),webgpuAllowed:supported.includes('webgpu') ? policy.allowsFeature('webgpu') : null,autoplayAllowed:policy?.allowsFeature('autoplay') ?? null};});
@@ -73,6 +99,13 @@ try {
   report.checks.push({name:'local-iframe-gesture-and-gameplay',status:'passed'});
   await frame.evaluate(()=>Module._aether_web_stop());
   assert.equal(report.pageErrors.length,0,report.pageErrors.join('\n'));assert.equal(report.console.filter(item=>item.type==='error').length,0,JSON.stringify(report.console));
+  const localFile=await context.newPage();try{
+   await localFile.goto(pathToFileURL(path.join(root,'index.html')).href);
+   assert.equal(await localFile.locator('#local-command').count(),1,'Direct file launches must explain how to start a local server');
+   assert.equal(await localFile.locator('#local-command').isVisible(),true);
+   assert.match(await localFile.locator('#result').innerText(),/local server/i);
+  }finally{await localFile.close();}
+  report.checks.push({name:'direct-file-launch-guidance',status:'passed'});
   const unavailable=await context.newPage();try{
    await unavailable.addInitScript(()=>Object.defineProperty(navigator,'gpu',{value:undefined,configurable:true}));
    await unavailable.goto(base+'/nested/game/');await unavailable.waitForFunction(()=>aetherRuntime.status==='failed');

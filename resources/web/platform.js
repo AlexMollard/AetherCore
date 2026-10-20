@@ -291,13 +291,18 @@ globalThis.aetherPlatform = null;
 if (globalThis.aetherProject || new URLSearchParams(location.search).has('reference') || new URLSearchParams(location.search).has('platform')) {
     globalThis.aetherPlatform = new AetherBrowserPlatform(globalThis.aetherProject?.id || 'AgentPipelineRust');
 }
-document.getElementById('start').onclick = () => aetherPlatform?.startAudio();
+document.getElementById('start').onclick = () => {
+    inputCanvas.focus();
+    aetherPlatform?.startAudio();
+};
 
-if (aetherPlatform) {
+if (aetherPlatform && !globalThis.aetherProject) {
     document.getElementById('instructions').textContent =
-	new URLSearchParams(location.search).get('scene') === 'BrowserFeatures'
+	new URLSearchParams(location.search).get('scene') === 'EmberRun'
+        ? 'WASD / arrows: move · Space: dash · R: retry. Collect amber embers and dodge red hazards.'
+        : new URLSearchParams(location.search).get('scene') === 'BrowserFeatures'
 	    ? 'Start audio, then click the canvas toggle and slider. The sprite animates above the tile map.'
-	    : 'Start audio, focus the canvas and hold Space to score. After 60 ticks the game saves and changes scenes.';
-} else {
+	    : 'Hold Space to score. Your run saves automatically.';
+} else if (!aetherPlatform) {
     document.getElementById('start').hidden = true;
 }

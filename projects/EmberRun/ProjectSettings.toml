@@ -1,0 +1,27 @@
+# AetherCore project file.
+
+[project]
+version = 2
+name = "Ember Run"
+kind = "2d"
+template = "blank_2d"
+
+[scripting]
+language = "rust"
+
+[paths]
+assets = "assets"
+scenes = "scenes"
+prefabs = "assets/prefabs"
+scripts = "scripts"
+
+[app]
+startupScene = "EmberRun"
+
+[publish]
+platformName = "Windows"
+productName = "Ember Run"
+
+[publish.web]
+id = "aethercore.ember-run"
+instructions = "WASD / arrows to move. Collect amber embers, dodge red hazards. Space to dash. R to retry. Best score saves locally."

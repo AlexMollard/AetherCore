@@ -30,7 +30,7 @@ try
     $projectPath = [IO.Path]::GetFullPath($Project)
     if ($projectPath -ne (Join-Path $repo 'projects/AgentPipelineRust'))
     {
-        throw 'Only AgentPipelineRust is qualified; generic exports and C# browser execution are not implemented'
+        throw 'This regression gauntlet qualifies AgentPipelineRust only; use Web publishing for generic Rust exports. C# browser execution is not implemented'
     }
     if (!$SkipBuild)
     {

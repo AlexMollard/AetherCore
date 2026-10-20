@@ -17,6 +17,8 @@ await mkdir(directory, {recursive : true});
 for (const name of ['assets', 'scenes', 'ProjectSettings.toml'])
     await cp(path.join(project, name), path.join(directory, name), {recursive : true});
 await cp(path.join(project, 'assets/audio/reference.wav'), path.join(directory, 'assets/audio/secondary.wav'));
+await cp(path.join(repo, 'projects/EmberRun/assets/ember'), path.join(directory, 'assets/ember'), {recursive: true});
+await cp(path.join(repo, 'projects/EmberRun/scenes/EmberRun.scene.toml'), path.join(directory, 'scenes/EmberRun.scene.toml'));
 const fixture = path.join(repo, 'resources/web/reference');
 await cp(fixture, directory, {recursive : true});
 const u32 = value => {

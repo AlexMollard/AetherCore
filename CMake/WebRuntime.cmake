@@ -66,6 +66,7 @@ add_custom_command(OUTPUT "${_rust_library}"
     DEPENDS ${_rust_sdk} "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.toml"
         "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.lock" "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/src/lib.rs"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/reference.rs"
+        "${CMAKE_SOURCE_DIR}/projects/EmberRun/scripts/src/game.rs"
     VERBATIM)
 endif()
 add_custom_target(WebGameplay DEPENDS "${_rust_library}")
@@ -86,6 +87,7 @@ else()
 endif()
 configure_file("${CMAKE_SOURCE_DIR}/resources/web/index.html" "${CMAKE_BINARY_DIR}/web/index.html" @ONLY)
 configure_file("${CMAKE_SOURCE_DIR}/resources/web/platform.js" "${CMAKE_BINARY_DIR}/web/platform.js" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/resources/branding/aethercore-app-icon.png" "${CMAKE_BINARY_DIR}/web/aethercore-icon.png" COPYONLY)
 
 file(WRITE "${CMAKE_BINARY_DIR}/web/project.js" "globalThis.aetherProject=null;\n")
 set(_assets "${CMAKE_BINARY_DIR}/web-assets")
@@ -119,7 +121,7 @@ if(AETHER_WEB_PROJECT)
         DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_game_sources}
         VERBATIM)
 else()
-file(GLOB_RECURSE _game_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/*" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scenes/*" "${CMAKE_SOURCE_DIR}/resources/web/reference/*")
+file(GLOB_RECURSE _game_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/*" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scenes/*" "${CMAKE_SOURCE_DIR}/resources/web/reference/*" "${CMAKE_SOURCE_DIR}/projects/EmberRun/assets/ember/*" "${CMAKE_SOURCE_DIR}/projects/EmberRun/scenes/EmberRun.scene.toml")
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${AETHER_WEB_NODE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust" "${CMAKE_BINARY_DIR}"
     COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target webgpu-2d-v1 "${CMAKE_BINARY_DIR}/reference-project"

@@ -242,14 +242,28 @@ Verification: native full gauntlet 1,462/1,462 with Editor/GameRuntime builds an
 
 **Files:** scripts/ gauntlet entry points, tools/browser-tests/, tools/mcp/README.md, docs/getting-started.md and new docs/rust-gameplay.md / docs/web-export.md.
 
-- [ ] Start from a fresh agent-created Rust project, generate gameplay/content through supported services, deliberately introduce and correct a compiler error, then build/test/publish. Assert no modal or human editor action is required at any step.
-- [ ] Run native C# regression, desktop Rust and browser suites. Extend the existing gauntlet report or aggregate it without changing the meaning of full native verification. Do not automatically install toolchains/browsers or trigger hosted CI.
-- [ ] Measure ZIP download bytes, uncached first interactive frame, warm startup, memory, p95 frame time and edit-to-ready. Report measured values with machine/test details; set numerical budgets from this baseline before expanding content scope.
-- [ ] Qualify real-GPU Chromium/Windows first; record named browser/OS versions for Firefox/macOS/Safari checks and explicit unsupported combinations. Test iframe WebGPU permission policy, audio gesture, keyboard capture and reload behavior.
+- [x] Start from a fresh agent-created Rust project, generate gameplay/content through supported services, deliberately introduce and correct a compiler error, then build/test/publish. Assert no modal or human editor action is required at any step.
+- [x] Run native C# regression, desktop Rust and browser suites. Extend the existing gauntlet report or aggregate it without changing the meaning of full native verification. Do not automatically install toolchains/browsers or trigger hosted CI.
+- [x] Measure ZIP download bytes, uncached first interactive frame, warm startup, memory, p95 frame time and edit-to-ready. Report measured values with machine/test details; set numerical budgets from this baseline before expanding content scope.
+- [x] Qualify real-GPU Chromium/Windows first; record named browser/OS versions for Firefox/macOS/Safari checks and explicit unsupported combinations. Test iframe WebGPU permission policy, audio gesture, keyboard capture and reload behavior.
 - [ ] Prepare an itch.io-compatible package and instructions. Exercise an actual draft/test upload only when Pog Champ authorizes the upload or provides an existing authorized destination. Local iframe success does not substitute for host qualification. Missing authorization blocks only this external qualification step, not local verification.
-- [ ] Document supported capabilities, deferred features, troubleshooting codes, example commands, dependency pins and how agents reproduce failures. Correct affected stale feature claims rather than adding contradictory docs.
+- [x] Document supported capabilities, deferred features, troubleshooting codes, example commands, dependency pins and how agents reproduce failures. Correct affected stale feature claims rather than adding contradictory docs.
 
 **Gate:** M5 passes unattended local acceptance. Mark host qualification separately pending/passed with a URL and evidence. No first-release claim of broad browser support without recorded qualification.
+
+Local gate passed (2026-10-20): `logs/task13/distribution-ui-final.json` records fresh
+create/error/repair/build/native/publish/edit/re-publish, rejected-content preservation,
+measured hardware direct/iframe behavior, full native 1462/1462 plus GPU smokes and
+41/41 browser cases. Windows Chrome 155.0.8059.85 / NVIDIA hardware observed; other
+browser/OS combinations remain explicitly unqualified. Chrome did not recognize a
+`webgpu` permissions-policy token, recorded as unknown rather than claimed enforced.
+External-host qualification remains pending by Pog Champ's explicit choice.
+
+User-facing follow-up: the player uses the actual editor PNG and Night Amber colors,
+explains file:// local serving, and focuses the canvas on Play. Empty development URLs
+select the playable Ember Run sample. `logs/task13/ember-browser.json` verifies movement,
+score, collection audio, retry, completed round, durable best score/reload and direct/iframe
+Play focus; `logs/task13/ember-native.json` verifies the desktop sample. Review clear.
 
 ## Task 14: Deliver C# browser support as the explicit follow-on
 

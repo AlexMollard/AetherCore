@@ -239,11 +239,11 @@ def publish(request, directory, output=None):
             '-DAETHER_WEB_GAMEPLAY_NAME=' + library, '-DAETHER_WEB_ASSETPACKER=' + str(packer), '-DAETHER_WEB_SLANGC=' + slang])
         run('build', ['cmake', '--build', build, '-j6'])
         report['requiredChecks'].append(dict(name='web-compilation-and-import-audit', status='passed'))
-        for name in ('index.html', 'platform.js', 'AetherGame.js', 'AetherGame.wasm', 'AetherGame.data', 'game.pak', 'engine.pak'):
+        for name in ('index.html', 'platform.js', 'aethercore-icon.png', 'AetherGame.js', 'AetherGame.wasm', 'AetherGame.data', 'game.pak', 'engine.pak'):
             shutil.copy2(build / 'web' / name, stage / name)
         identifier = data['settings'].get('publish', {}).get('web', {}).get('id', product)
         config = dict(schemaVersion=1, id=identifier, name=product, startupScene=data['startup'], scenes=data['scenes'], profile=PROFILE,
-            paths=data['settings'].get('paths', {}))
+            paths=data['settings'].get('paths', {}), instructions=data['settings'].get('publish', {}).get('web', {}).get('instructions', 'Select Play to use the keyboard.'))
         (stage / 'project.js').write_text('globalThis.aetherProject=' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
         revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
         files = [dict(path=path.name, sizeBytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in sorted(stage.iterdir())]

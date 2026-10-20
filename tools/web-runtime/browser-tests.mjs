@@ -174,7 +174,7 @@ try {
 			: name === 'batch-capacity'    ? '?scene=capacity'
 			: name === 'drop-owner-init'   ? '?dropOwner=1'
 			: name === 'stop-after-upload' ? '?stopAfterUpload=1'
-						       : '';
+						       : '?fixture=1';
 	    if (name.startsWith('platform-'))
 		query = '?platform=1';
 	    if (name === 'reference-gameplay' || name === 'browser-key-latch')
@@ -230,6 +230,8 @@ try {
 		await page.waitForFunction(() => aetherRuntime.audioReady);
 		await page.locator('#canvas').click({position : {x : 400, y : 400}});
 		await page.waitForFunction(() => aetherRuntime.gamepadConnected === true);
+        const clickTick = await page.evaluate(() => aetherRuntime.ticks);
+        await page.waitForFunction(tick => aetherRuntime.ticks > tick + 2, clickTick);
 		await page.evaluate(() => {__pad.buttons[13] = { pressed: true, touched: true, value: 1 }});
 		await page.waitForFunction(() => aetherRuntime.focusedName === 'Toggle');
 		await page.evaluate(() => {__pad.buttons[13] = { pressed: false, touched: false, value: 0 }});
@@ -285,12 +287,15 @@ try {
 		await page.waitForFunction(() => aetherRuntime.toggleOn === true, undefined, {timeout : 5000});
 		await page.locator('#canvas').click({position : {x : 145, y : 68}});
 		await page.waitForFunction(() => aetherRuntime.sliderValue > 0.75);
-		await page.waitForFunction(() => aetherRuntime.animationFrame === 0 && aetherRuntime.ticks > 1);
-		const red = await capture(page);
-		assert.ok(pixel(red, 171, 256)[0] > 180, JSON.stringify(await page.evaluate(() => aetherRuntime)));
-		await page.waitForFunction(() => aetherRuntime.animationFrame === 1);
-		const blue = await capture(page);
-		assert.ok(pixel(blue, 171, 256)[2] > 180);
+		// GPU readback completes asynchronously; sample actual pixels across a full animation cycle.
+        let red, blue;
+        for (let attempt = 0; attempt < 30 && (!red || !blue); ++attempt) {
+            const image = await capture(page);
+            const [r, g, b] = pixel(image, 171, 256);
+            if (r > 180 && g < 60 && b < 60) red = image;
+            if (b > 180 && r < 60 && g < 60) blue = image;
+        }
+        assert.ok(red && blue, 'Both animation colors reach GPU readback');
 		assert.ok(await page.evaluate(() => aetherRuntime.tileSprites >= 4));
 		assert.ok(pixel(blue, 128, 384)[0] > 180, 'Tile map reaches GPU readback');
 		assert.ok(pixel(blue, 205, 20)[0] > 180, 'Authored UI image reaches GPU readback');
@@ -440,11 +445,15 @@ try {
 		    assert.ok((await page.evaluate(() => aetherRuntime.diagnostics)).some(d => d.code === 'WEBGPU_DEVICE_LOST'));
 		} else if (name === 'responsive') {
 		    let image = await capture(page);
-		    assert.equal(image.width, 512);
+		    assert.equal(image.width, await page.locator('#canvas').evaluate(canvas=>Math.round(canvas.getBoundingClientRect().width)));
+		    const initialWidth=image.width;
 		    await page.setViewportSize({width : 320, height : 640});
 		    await page.waitForFunction(() => Module.canvas.width === Math.round(Module.canvas.getBoundingClientRect().width));
 		    image = await capture(page);
-		    assert.equal(image.width, 288);
+		    assert.equal(image.width, await page.locator('#canvas').evaluate(canvas=>Math.round(canvas.getBoundingClientRect().width)));
+		    assert.ok(image.width < initialWidth, 'Backing surface shrinks with the viewport');
+		    assert.ok(image.width <= 320, 'Canvas stays inside the narrow viewport');
+		    assert.equal(image.height, await page.locator('#canvas').evaluate(canvas=>Math.round(canvas.getBoundingClientRect().height)));
 		    item.resize = {width : image.width, height : image.height};
 		} else if (name === 'layers') {
 		    const image = await capture(page);

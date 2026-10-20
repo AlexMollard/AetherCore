@@ -1,0 +1,1113 @@
+[scene]
+version = 16
+kind = '2d'
+features = ['sprites']
+
+[[entities]]
+name = 'Floor-6_-3'
+position = [-6.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-5_-3'
+position = [-5.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-4_-3'
+position = [-4.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-3_-3'
+position = [-3.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-2_-3'
+position = [-2.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-1_-3'
+position = [-1.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor0_-3'
+position = [0.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor1_-3'
+position = [1.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor2_-3'
+position = [2.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor3_-3'
+position = [3.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor4_-3'
+position = [4.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor5_-3'
+position = [5.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor6_-3'
+position = [6.0, -3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-6_-2'
+position = [-6.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-5_-2'
+position = [-5.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-4_-2'
+position = [-4.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-3_-2'
+position = [-3.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-2_-2'
+position = [-2.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-1_-2'
+position = [-1.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor0_-2'
+position = [0.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor1_-2'
+position = [1.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor2_-2'
+position = [2.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor3_-2'
+position = [3.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor4_-2'
+position = [4.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor5_-2'
+position = [5.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor6_-2'
+position = [6.0, -2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-6_-1'
+position = [-6.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-5_-1'
+position = [-5.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-4_-1'
+position = [-4.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-3_-1'
+position = [-3.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-2_-1'
+position = [-2.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-1_-1'
+position = [-1.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor0_-1'
+position = [0.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor1_-1'
+position = [1.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor2_-1'
+position = [2.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor3_-1'
+position = [3.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor4_-1'
+position = [4.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor5_-1'
+position = [5.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor6_-1'
+position = [6.0, -1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-6_0'
+position = [-6.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-5_0'
+position = [-5.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-4_0'
+position = [-4.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-3_0'
+position = [-3.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-2_0'
+position = [-2.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-1_0'
+position = [-1.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor0_0'
+position = [0.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor1_0'
+position = [1.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor2_0'
+position = [2.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor3_0'
+position = [3.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor4_0'
+position = [4.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor5_0'
+position = [5.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor6_0'
+position = [6.0, 0.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-6_1'
+position = [-6.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-5_1'
+position = [-5.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-4_1'
+position = [-4.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-3_1'
+position = [-3.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-2_1'
+position = [-2.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-1_1'
+position = [-1.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor0_1'
+position = [0.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor1_1'
+position = [1.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor2_1'
+position = [2.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor3_1'
+position = [3.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor4_1'
+position = [4.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor5_1'
+position = [5.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor6_1'
+position = [6.0, 1.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-6_2'
+position = [-6.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-5_2'
+position = [-5.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-4_2'
+position = [-4.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-3_2'
+position = [-3.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-2_2'
+position = [-2.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-1_2'
+position = [-1.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor0_2'
+position = [0.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor1_2'
+position = [1.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor2_2'
+position = [2.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor3_2'
+position = [3.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor4_2'
+position = [4.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor5_2'
+position = [5.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor6_2'
+position = [6.0, 2.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-6_3'
+position = [-6.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-5_3'
+position = [-5.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-4_3'
+position = [-4.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-3_3'
+position = [-3.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-2_3'
+position = [-2.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor-1_3'
+position = [-1.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor0_3'
+position = [0.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor1_3'
+position = [1.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor2_3'
+position = [2.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor3_3'
+position = [3.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor4_3'
+position = [4.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor5_3'
+position = [5.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Floor6_3'
+position = [6.0, 3.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/floor.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = -10
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Player'
+position = [0.0, -2.4, 0.0]
+scale = [0.8, 0.8, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/player.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = 5
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities.scripts]]
+type = 'EmberRun'
+
+[[entities]]
+name = 'Ember0'
+position = [0.0, -0.9, 0.0]
+scale = [0.7, 0.7, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/ember.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = 2
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Ember1'
+position = [-3.8, 1.8, 0.0]
+scale = [0.7, 0.7, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/ember.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = 2
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Ember2'
+position = [3.8, 1.8, 0.0]
+scale = [0.7, 0.7, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/ember.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = 2
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Hazard0'
+position = [-5.0, 0.4, 0.0]
+scale = [0.9, 0.9, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/hazard.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = 3
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Hazard1'
+position = [-5.0, -1.5, 0.0]
+scale = [0.9, 0.9, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/hazard.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = 3
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Hazard2'
+position = [-5.0, 1.9, 0.0]
+scale = [0.9, 0.9, 1.0]
+[entities.sprite]
+texture = 'project://assets/ember/hazard.png'
+pixel_size = [64.0, 64.0]
+pixels_per_unit = 64.0
+sorting_layer = 3
+tint = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Camera'
+position = [0.0, 0.0, 10.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+background = 'solid_colour'
+clear_color = [0.059, 0.051, 0.043]
+near = 0.1
+far = 100.0
+
+[[entities]]
+name = 'Counter'
+[entities.ui_canvas]
+reference = [640.0, 360.0]
+scale_mode = 'constant_pixel'
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [16.0, 12.0]
+offset_max = [600.0, 45.0]
+[entities.ui_text]
+text = 'COLLECT EMBERS / DODGE THE RED'
+font = 'Roboto'
+size = 16.0
+color = [1.0, 0.83, 0.62, 1.0]
