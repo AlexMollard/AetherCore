@@ -13,6 +13,10 @@
 #include "ui/UiWidgetSystem.hpp"
 #include "scene/Hierarchy.hpp"
 
+#if AE_WEB_TEST_BRIDGE
+extern "C" void aether_browser_test_panic();
+#endif
+
 namespace aether::app::web
 {
 	namespace
@@ -91,10 +95,22 @@ namespace aether::app::web
 		{
 			AE_UNEXPECTED(AetherError::Engine("Browser platform service failed"));
 		}
+#if AE_WEB_TEST_BRIDGE
+		const bool testStep = EM_ASM_INT({ return aetherTestInternal.beginFrame(); });
+		std::array<std::uint8_t, 512> testKeys{};
+		EM_ASM({ HEAPU8.set(aetherTestInternal.keys, $0); }, testKeys.data());
+#endif
 		const bool canvasFocused = EM_ASM_INT({ return document.activeElement == Module.canvas && document.hasFocus() && !document.hidden; });
 		for (size_t key = 0; key < m_keys.size(); ++key)
 		{
-			m_input.SetSyntheticKey(static_cast<int>(key), canvasFocused && (m_keys[key] || m_pressed_keys[key]), false);
+			m_input.SetSyntheticKey(static_cast<int>(key),
+			        canvasFocused
+			                && (m_keys[key] || m_pressed_keys[key]
+#if AE_WEB_TEST_BRIDGE
+			                        || testKeys[key]
+#endif
+			                        ),
+			        false);
 		}
 		const int buttons = EM_ASM_INT({
 			const buttons = aetherInput.buttons | aetherInput.pressed;
@@ -144,8 +160,20 @@ namespace aether::app::web
 			const double delta = m_previous == 0 ? 0 : std::clamp((now - m_previous) / 1000.0, 0.0, 0.1);
 			m_previous = now;
 			m_accumulator += delta;
+#if AE_WEB_TEST_BRIDGE
+			if (EM_ASM_INT({ return aetherTestInternal.manual(); }))
+			{
+				m_accumulator = testStep ? 1.0 / 60.0 : 0;
+			}
+#endif
 			while (m_accumulator >= 1.0 / 60.0)
 			{
+#if AE_WEB_TEST_BRIDGE
+				if (EM_ASM_INT({ return aetherTestInternal.takeFault(); }))
+				{
+					aether_browser_test_panic();
+				}
+#endif
 				for (const auto& instance: m_instances)
 				{
 					if (m_world.Has<DisabledComponent>(instance.entity) || ecs::HasDisabledAncestor(m_world, instance.entity))
@@ -198,6 +226,12 @@ namespace aether::app::web
 				// A render frame may not run a fixed tick. Retain short presses until gameplay consumes them.
 				m_pressed_keys.fill(false);
 				++m_ticks;
+#if AE_WEB_TEST_BRIDGE
+				if (testStep)
+				{
+					EM_ASM({ aetherTestInternal.afterTick(); });
+				}
+#endif
 				m_accumulator -= 1.0 / 60.0;
 				if (!m_pending_scene.empty() || EM_ASM_INT({ return aetherPlatform.pending.size > 0; }))
 				{
@@ -246,6 +280,9 @@ namespace aether::app::web
 		        },
 		        m_ticks,
 		        m_frames);
+#if AE_WEB_TEST_BRIDGE
+		EM_ASM({ aetherTestInternal.endFrame(); });
+#endif
 		return {};
 	}
 

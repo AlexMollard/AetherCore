@@ -26,7 +26,9 @@ namespace aether::webgpu
 		[[nodiscard]] bool UploadTexture(std::uint32_t slot, std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba);
 		void Resize(std::uint32_t width, std::uint32_t height);
 		void Stop();
+#if AE_WEB_TEST_BRIDGE
 		void LoseDeviceForTest();
+#endif
 
 	private:
 		struct Impl;

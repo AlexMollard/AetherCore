@@ -14,3 +14,7 @@ impl Script for BrowserMover {
 mod reference;
 use reference::{ReferencePlayer, ReferenceResult};
 export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult);
+
+#[cfg(feature = "automation")]
+#[unsafe(no_mangle)]
+pub extern "C" fn aether_browser_test_panic() { panic!("Browser automation panic fixture"); }

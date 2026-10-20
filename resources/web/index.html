@@ -12,4 +12,4 @@
  document.getElementById('stop').onclick=()=>Module._aether_web_stop();
  setInterval(()=>{const {capture,...summary}=aetherRuntime;document.getElementById('result').textContent=JSON.stringify({...summary,capture:capture?{width:capture.width,height:capture.height}:null},null,2)},200);
  setTimeout(()=>{if(aetherRuntime.state==='initializing'){aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WEBGPU_TIMEOUT',message:'Initialization did not complete within 30 seconds'})}},30000);
-</script><script src="platform.js"></script><script src="AetherGame.js"></script></html>
+</script><script src="platform.js"></script>@AETHER_WEB_BRIDGE_SCRIPT@<script src="AetherGame.js"></script></html>

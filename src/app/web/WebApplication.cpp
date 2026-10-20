@@ -394,7 +394,7 @@ namespace
 					return false;
 				}
 				texturesReady = true;
-				if (EM_ASM_INT({ return new URLSearchParams(location.search).has("stopAfterUpload"); }))
+				if (AE_WEB_TEST_BRIDGE && EM_ASM_INT({ return new URLSearchParams(location.search).has("stopAfterUpload"); }))
 				{
 					Stop();
 					return false;
@@ -484,7 +484,7 @@ namespace
 				        .flags = static_cast<aether::SpriteInstanceFlags>(flags),
 				        .blendMode = static_cast<unsigned>(sprite.blendMode)});
 			}
-			const bool stopAfterSubmit = EM_ASM_INT({ return new URLSearchParams(location.search).has("stopAfterSubmit"); });
+			const bool stopAfterSubmit = (AE_WEB_TEST_BRIDGE && EM_ASM_INT({ return new URLSearchParams(location.search).has("stopAfterSubmit"); }));
 			if (graphics.Draw(packet, capture || stopAfterSubmit))
 			{
 				++frames;
@@ -528,15 +528,17 @@ extern "C"
 		BrowserApplication::Get().Stop();
 	}
 
+#if AE_WEB_TEST_BRIDGE
 	EMSCRIPTEN_KEEPALIVE void aether_web_lose_device()
 	{
 		BrowserApplication::Get().graphics.LoseDeviceForTest();
 	}
+#endif
 }
 
 int RunBrowserApplication()
 {
-	if (EM_ASM_INT({ return new URLSearchParams(location.search).has('dropOwner'); }))
+	if (AE_WEB_TEST_BRIDGE && EM_ASM_INT({ return new URLSearchParams(location.search).has('dropOwner'); }))
 	{
 		aether::webgpu::WebGpuDevice pending;
 		pending.Initialize();
@@ -545,7 +547,7 @@ int RunBrowserApplication()
 	auto& application = BrowserApplication::Get();
 	if (application.Start())
 	{
-		if (EM_ASM_INT({ return new URLSearchParams(location.search).has("stopBeforeReady"); }))
+		if (AE_WEB_TEST_BRIDGE && EM_ASM_INT({ return new URLSearchParams(location.search).has("stopBeforeReady"); }))
 		{
 			application.Stop();
 			return 0;

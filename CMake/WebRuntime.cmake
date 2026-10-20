@@ -2,6 +2,7 @@
 if(NOT EMSCRIPTEN)
     message(FATAL_ERROR "AETHERCORE_WEB_RUNTIME requires the pinned Emscripten toolchain")
 endif()
+option(AETHERCORE_WEB_TEST_BRIDGE "Include development-only browser automation" OFF)
 enable_language(C)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 execute_process(COMMAND "${CMAKE_CXX_COMPILER}" --version OUTPUT_VARIABLE _em_version RESULT_VARIABLE _em_exit)
@@ -37,9 +38,12 @@ find_program(AETHER_WEB_NODE node REQUIRED NO_CMAKE_FIND_ROOT_PATH)
 string(JSON _rust_pin GET "${_pins}" rustWasm)
 set(_rust_library "${CMAKE_BINARY_DIR}/rust/wasm32-unknown-emscripten/release/libaether_browser_gameplay.a")
 file(GLOB_RECURSE _rust_sdk CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/*.rs" "${CMAKE_SOURCE_DIR}/rust/*/Cargo.toml")
+if(AETHERCORE_WEB_TEST_BRIDGE)
+    set(_rust_test_features --features automation)
+endif()
 add_custom_command(OUTPUT "${_rust_library}"
     COMMAND "${AETHER_CARGO}" "+${_rust_pin}" build -Zbuild-std=std,panic_abort
-        --manifest-path "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.toml" --locked
+        --manifest-path "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.toml" --locked ${_rust_test_features}
         --release --target wasm32-unknown-emscripten --target-dir "${CMAKE_BINARY_DIR}/rust"
     DEPENDS ${_rust_sdk} "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.toml"
         "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.lock" "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/src/lib.rs"
@@ -50,7 +54,15 @@ add_subdirectory(src/engine)
 add_subdirectory(src/app)
 add_dependencies(GameRuntime WebGameplay)
 target_link_libraries(GameRuntime PRIVATE "${_rust_library}")
-configure_file("${CMAKE_SOURCE_DIR}/resources/web/index.html" "${CMAKE_BINARY_DIR}/web/index.html" COPYONLY)
+target_compile_definitions(Engine PUBLIC AE_WEB_TEST_BRIDGE=$<BOOL:${AETHERCORE_WEB_TEST_BRIDGE}>)
+set(AETHER_WEB_BRIDGE_SCRIPT "")
+if(AETHERCORE_WEB_TEST_BRIDGE)
+    configure_file("${CMAKE_SOURCE_DIR}/resources/web/test-bridge.js" "${CMAKE_BINARY_DIR}/web/test-bridge.js" COPYONLY)
+    set(AETHER_WEB_BRIDGE_SCRIPT "<script src=\"test-bridge.js\"></script>")
+else()
+    file(REMOVE "${CMAKE_BINARY_DIR}/web/test-bridge.js")
+endif()
+configure_file("${CMAKE_SOURCE_DIR}/resources/web/index.html" "${CMAKE_BINARY_DIR}/web/index.html" @ONLY)
 configure_file("${CMAKE_SOURCE_DIR}/resources/web/platform.js" "${CMAKE_BINARY_DIR}/web/platform.js" COPYONLY)
 
 set(_assets "${CMAKE_BINARY_DIR}/web-assets")

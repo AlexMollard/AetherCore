@@ -146,7 +146,8 @@ namespace aether::webgpu
 			queue = wgpuDeviceGetQueue(device);
 			WGPULimits limits = WGPU_LIMITS_INIT;
 			wgpuDeviceGetLimits(device, &limits);
-			if (limits.maxStorageBufferBindingSize < 128 * 65536 || limits.maxSampledTexturesPerShaderStage < 1 || limits.maxBindingsPerBindGroup < 4 || EM_ASM_INT({ return new URLSearchParams(location.search).has('forceLimits'); }))
+			if (limits.maxStorageBufferBindingSize < 128 * 65536 || limits.maxSampledTexturesPerShaderStage < 1 || limits.maxBindingsPerBindGroup < 4
+			        || (AE_WEB_TEST_BRIDGE && EM_ASM_INT({ return new URLSearchParams(location.search).has('forceLimits'); })))
 			{
 				Fail("WEBGPU_LIMITS", Text("Device lacks the supported sprite pass limits"));
 				return;
@@ -293,7 +294,12 @@ namespace aether::webgpu
 		}
 		self.started = true;
 		self.callbackLifetime = m_impl;
-		if (!EM_ASM_INT({ return !!navigator.gpu && !new URLSearchParams(location.search).has('forceNoAdapter'); }))
+#if AE_WEB_TEST_BRIDGE
+		const bool gpuAvailable = EM_ASM_INT({ return !!navigator.gpu && !new URLSearchParams(location.search).has('forceNoAdapter'); });
+#else
+		const bool gpuAvailable = EM_ASM_INT({ return !!navigator.gpu; });
+#endif
+		if (!gpuAvailable)
 		{
 			self.Fail("WEBGPU_UNAVAILABLE", Text("WebGPU requires a supported adapter and secure context"));
 			return;
@@ -605,6 +611,7 @@ namespace aether::webgpu
 		m_impl->Release();
 	}
 
+#if AE_WEB_TEST_BRIDGE
 	void WebGpuDevice::LoseDeviceForTest()
 	{
 		if (m_impl->device && !m_impl->released)
@@ -612,4 +619,6 @@ namespace aether::webgpu
 			wgpuDeviceDestroy(m_impl->device);
 		}
 	}
+
+#endif
 } // namespace aether::webgpu

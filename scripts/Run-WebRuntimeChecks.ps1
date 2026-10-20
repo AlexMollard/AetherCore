@@ -48,7 +48,7 @@ try
     . (Join-Path $EmsdkPath 'emsdk_env.ps1')
     $env:AETHER_WEB_ASSETPACKER = [IO.Path]::GetFullPath($AssetPackerPath)
     $env:AETHER_WEB_SLANGC = [IO.Path]::GetFullPath($SlangCompiler)
-    Invoke-Checked 'web-configure' 'cmake' @('--preset', 'webgpu-browser', '-DCMAKE_DISABLE_FIND_PACKAGE_Vulkan=TRUE')
+    Invoke-Checked 'web-configure' 'cmake' @('--preset', 'webgpu-browser', '-DCMAKE_DISABLE_FIND_PACKAGE_Vulkan=TRUE', '-DAETHERCORE_WEB_TEST_BRIDGE=ON')
     Invoke-Checked 'web-build' 'cmake' @('--build', '--preset', 'webgpu-browser', '-j', '6')
     $directory = Join-Path $repo 'build/webgpu-browser/web'
     Push-Location $directory

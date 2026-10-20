@@ -10,3 +10,6 @@ crate-type = ["staticlib"]
 aethercore = { path = "../../../rust/aethercore" }
 [profile.release]
 panic = "abort"
+
+[features]
+automation = []
