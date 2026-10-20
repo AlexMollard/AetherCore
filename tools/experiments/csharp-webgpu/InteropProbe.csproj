@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <WasmMainJSPath>main.mjs</WasmMainJSPath>
+    <WasmBuildNative>true</WasmBuildNative>
+    <PublishTrimmed>true</PublishTrimmed>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <NativeFileReference Include="probe.cpp" />
+    <Content Include="main.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="wwwroot/main.mjs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AetherEngineToolchain)' == 'true'">
+    <EmccExportedRuntimeMethod Include="HEAP8;HEAPU8;HEAP16;HEAPU16;HEAP32;HEAPU32;HEAPF32;HEAPF64;HEAP64;HEAPU64" />
+  </ItemGroup>
+</Project>
