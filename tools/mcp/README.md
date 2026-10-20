@@ -185,3 +185,7 @@ printf '%s\n%s\n' \
 ## Gameplay jobs and owned editors
 
 `gameplay_job_start/status/cancel` run persistent desktop Rust/C# project jobs without an editor. `agent_editor_launch/call/close` manage named editors with ownership receipts; launch defaults to a hidden window and disables autosave. Always use the receipt for calls to that editor and close it when finished. See [the gameplay pipeline guide](../../docs/architecture/gameplay-abi.md#agent-gameplay-pipeline) for request fields, PowerShell examples, limits and cleanup policy. Restart the MCP client after updating the server to discover these static tools.
+
+### Browser verification
+
+`run_browser_gauntlet` runs the same bounded `scripts/Run-BrowserGauntlet.ps1` entry point as the CLI, without an editor endpoint. It returns a versioned web-only report and marks blocked/failed/cancelled outcomes as MCP errors. The current project fixture is `projects/AgentPipelineRust`; unsupported projects/C# browser requests are explicit failures. Use `skipBuild: true` only with existing automation and production artifacts. All browser checks remain local/manual; CI triggers are unchanged. See [browser automation](../../docs/architecture/browser-automation.md) for arguments, bridge boundaries, evidence and qualification limits. Restart the MCP client to discover this new static tool after updating the server.

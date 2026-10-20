@@ -208,15 +208,17 @@ At the Task 4 checkpoint Rust gameplay was intentionally unavailable; Task 5 bel
 
 **Files:** tools/browser-tests/, scripts/Run-BrowserGauntlet.ps1, dev-only runtime/browser test bridge, shared fixture/report definitions and tools/mcp/aethercore_mcp.py.
 
-- [ ] Implement a versioned test-build bridge exposing readiness, queued fixed-step/input commands, state snapshots, logs and capture. Dispatch gameplay commands on the engine tick; do not bypass game behavior by editing arbitrary state from Playwright.
-- [ ] Exclude the bridge from release packages and verify its absence. Native editor ENet control remains native; do not expose subprocess/file operations in the browser bridge.
-- [ ] Launch a bounded local server and real browser process, exercise the reference scenario, capture console/page/WebGPU errors, screenshots, state evidence and timing. Clean up child processes on timeout/cancellation/failure.
-- [ ] Add tests for no WebGPU, failed asset fetch, runtime trap/panic, lost device, visibility resume, input focus and save denial. Required unavailable hardware/browser checks produce skipped/blocked results, never aggregate passed.
-- [ ] Add tolerant rendering assertions independently from deterministic state checks. Record browser/OS/GPU, adapter kind and test-bridge version with every report.
+- [x] Implement a versioned test-build bridge exposing readiness, queued fixed-step/input commands, state snapshots, logs and capture. Dispatch gameplay commands on the engine tick; do not bypass game behavior by editing arbitrary state from Playwright.
+- [x] Exclude the bridge from release packages and verify its absence. Native editor ENet control remains native; do not expose subprocess/file operations in the browser bridge.
+- [x] Launch a bounded local server and real browser process, exercise the reference scenario, capture console/page/WebGPU errors, screenshots, state evidence and timing. Clean up child processes on timeout/cancellation/failure.
+- [x] Add tests for no WebGPU, failed asset fetch, runtime trap/panic, lost device, visibility resume, input focus and save denial. Required unavailable hardware/browser checks produce skipped/blocked results, never aggregate passed.
+- [x] Add tolerant rendering assertions independently from deterministic state checks. Record browser/OS/GPU, adapter kind and test-bridge version with every report.
 
 **Proposed command:** ./scripts/Run-BrowserGauntlet.ps1 -Project projects/AgentPipelineRust -ReportPath logs/browser-report.json
 
 **Gate:** Zero exit code requires all required cases executed and passed. Native gauntlet results and browser results remain distinguishable.
+
+**Qualified:** 41/41 Windows hardware Chromium cases, including engine-owned fixed-step input, actual Rust panic, production bridge absence and oversize-fetch cancellation; real command/descendant timeout tests; native 1,460/1,460, hidden GPU smokes and C#/Rust desktop reference fixtures. Reports and limits are documented in [browser automation](../../architecture/browser-automation.md). Generic project publishing remains Task 12.
 
 ## Task 12: Add target-aware Web publishing with preflight
 

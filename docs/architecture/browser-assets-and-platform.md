@@ -15,7 +15,7 @@ python -m http.server 18989 --bind 127.0.0.1 --directory build/webgpu-browser/we
 
 Open `http://127.0.0.1:18989/?reference=1`. Click Start, focus the canvas and hold Space. The actual Rust reference game moves with Box2D, observes collision/trigger events, instantiates its pickup prefab, plays a WAV, commits two save records and changes to ReferenceResult. `?reference=1&resume=1` reads that result from the same origin in a fresh page. `?reference=1&scene=BrowserFeatures` demonstrates authored sprite animation, tile batches, UI image/text, toggle and slider interaction. The original procedural M3 scene remains available without `reference`.
 
-This is a development fixture with a fixed Rust module and project identity. Rebuilding and refreshing updates the page. Automatic watching/reloading, generic project publishing, hosted embed qualification and C# browser execution are separate milestones. The diagnostic/test hooks are not yet a release-excluded, versioned automation bridge; Task 11 owns that boundary.
+This is a development fixture with a fixed Rust module and project identity. Rebuilding and refreshing updates the page. Automatic watching/reloading, generic project publishing, hosted embed qualification and C# browser execution are separate milestones. Task 11 adds the [release-excluded automation bridge and bounded verification command](browser-automation.md).
 
 ## Package and VFS contract
 
