@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "profile": "webgpu-2d-v1",
+  "scenario": "agent-reference-v1",
+  "zipBytes": 2097152,
+  "coldInteractiveMs": 1000,
+  "warmInteractiveMs": 1000,
+  "wasmLinearMemoryBytes": 33554432,
+  "frameIntervalP95Ms": 34,
+  "editToReadyMs": 60000,
+  "baseline": {
+    "date": "2026-10-20",
+    "browser": "Chrome 155.0.8059.85",
+    "os": "Windows 10.0.26200",
+    "gpu": "NVIDIA Blackwell",
+    "zipBytes": 1067180,
+    "coldInteractiveMs": 261.3,
+    "warmInteractiveMs": 242,
+    "wasmLinearMemoryBytes": 17563648,
+    "frameIntervalP95Ms": 16.8,
+    "priorEditedPublishMs": 21895,
+    "note": "Initial fixture-only guardrails from measured local reference; edit budget includes compile, package, browser verification and promotion. Not a universal gameplay budget."
+  }
+}

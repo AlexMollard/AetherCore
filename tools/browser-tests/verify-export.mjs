@@ -5,6 +5,7 @@ import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import {checkBudgets, measureDistribution, qualifyAgentGame} from './distribution-metrics.mjs';
 import {isHardwareAdapter} from '../experiments/rust-webgpu/browser-checks.mjs';
 
 const options=Object.fromEntries(process.argv.slice(2).map(arg=>{const i=arg.indexOf('=');return [arg.slice(2,i),arg.slice(i+1)];}));
@@ -27,13 +28,13 @@ try {
   try {
    const url=new URL(req.url,'http://localhost');
    if(url.pathname==='/favicon.ico'){res.writeHead(204).end();return;}
-   if(url.pathname==='/embed.html'){res.writeHead(200,{'Content-Type':'text/html'}).end('<!doctype html><title>Relocated Web export iframe</title><iframe title="Game" allow="autoplay; fullscreen; gamepad" src="/nested/game/" style="width:640px;height:700px;border:0"></iframe>');return;}
+   if(url.pathname==='/embed.html'){const src=options.measure ? `http://localhost:${server.address().port}/nested/game/` : '/nested/game/';res.writeHead(200,{'Content-Type':'text/html'}).end(`<!doctype html><title>Relocated Web export iframe</title><iframe title="Game" sandbox="allow-scripts allow-same-origin" allow="autoplay; fullscreen; gamepad; webgpu" src="${src}" style="width:640px;height:700px;border:0"></iframe>`);return;}
    if(!url.pathname.startsWith('/nested/game/')){res.writeHead(404).end();return;}
    const name=decodeURIComponent(url.pathname.slice('/nested/game/'.length)) || 'index.html';
    if(name!==path.basename(name)){res.writeHead(403).end();return;}
    const bytes=await readFile(path.join(root,name));
    const mime={'.js':'text/javascript','.html':'text/html','.wasm':'application/wasm'}[path.extname(name)] || 'application/octet-stream';
-   res.writeHead(200,{'Content-Type':mime,'Cache-Control':'no-store'}).end(bytes);
+   res.writeHead(200,{'Content-Type':mime,'Cache-Control':options.measure ? 'public, max-age=3600' : 'no-store'}).end(bytes);
   } catch {res.writeHead(404).end();}
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -53,18 +54,22 @@ try {
   await page.locator('#start').click();await page.locator('#canvas').focus();await page.keyboard.down('Space');
   await page.waitForFunction(()=>aetherRuntime.ticks>=5 || aetherRuntime.status==='failed');
   await page.keyboard.up('Space');
+  if(options.scenario==='agent-reference-v1'){report.agentGame=await qualifyAgentGame(page,context,base+'/nested/game/');}
   report.directState=await page.evaluate(()=>{const{capture,...state}=aetherRuntime;return state;});
   assert.equal(report.directState.status,'running');assert.equal(report.directState.diagnostics.length,0);
   report.checks.push({name:'relocated-nested-path-gameplay',status:'passed'});
   const screenshot=path.join(path.dirname(reportPath),'web-export.png');await page.screenshot({path:screenshot});report.screenshot=screenshot;
   await page.evaluate(()=>Module._aether_web_stop());
   await page.goto(base+'/embed.html');
-  await page.waitForFunction(()=>!!document.querySelector('iframe')?.contentWindow?.aetherRuntime);
+  await page.locator('iframe').waitFor();
   const frame=page.frames().find(frame=>frame.url().includes('/nested/game/'));
   assert.ok(frame);await frame.waitForFunction(()=>aetherRuntime.scene && aetherRuntime.rendererReady && aetherRuntime.fontReady);
   await frame.locator('#start').click();await frame.locator('#canvas').focus();
   await frame.waitForFunction(()=>aetherRuntime.ticks>=3 || aetherRuntime.status==='failed');
   assert.equal(await frame.evaluate(()=>aetherRuntime.status),'running');
+  report.iframePolicy=await frame.evaluate(()=>{const policy=document.featurePolicy;const supported=policy?.features() || [];return {origin:location.origin,secureContext:isSecureContext,webgpuPolicyRecognized:supported.includes('webgpu'),webgpuAllowed:supported.includes('webgpu') ? policy.allowsFeature('webgpu') : null,autoplayAllowed:policy?.allowsFeature('autoplay') ?? null};});
+  assert.equal(report.iframePolicy.secureContext,true);assert.notEqual(report.iframePolicy.webgpuAllowed,false);
+  if(options.scenario==='agent-reference-v1'){report.iframeGame=await qualifyAgentGame(frame,context,frame.url(),true);}
   report.checks.push({name:'local-iframe-gesture-and-gameplay',status:'passed'});
   await frame.evaluate(()=>Module._aether_web_stop());
   assert.equal(report.pageErrors.length,0,report.pageErrors.join('\n'));assert.equal(report.console.filter(item=>item.type==='error').length,0,JSON.stringify(report.console));
@@ -76,6 +81,7 @@ try {
    assert.ok(report.unavailableState.diagnostics.some(item=>item.code==='WEBGPU_UNAVAILABLE'));
   }finally{await unavailable.close();}
   report.checks.push({name:'actionable-webgpu-unavailable',status:'passed'});
+  if(options.measure){report.measurements=await measureDistribution(page,context,base+'/nested/game/');report.checks.push({name:'measured-hardware-gameplay',status:'passed'});if(options.budgets){const budgets=JSON.parse(await readFile(options.budgets,'utf8'));report.budgetChecks=checkBudgets({...report.measurements,zipBytes:Number(options.zipBytes),editToReadyMs:Number(options.editToReadyMs)},budgets);assert.equal(report.budgetChecks.status,'passed',JSON.stringify(report.budgetChecks));}}
  }catch(error){report.failureStates=await Promise.all(context.pages().map(page=>page.evaluate(()=>globalThis.aetherRuntime).catch(()=>null)));throw error;}finally{await context.close();}
  report.status='passed';
 }catch(error){report.error=error.stack;}
