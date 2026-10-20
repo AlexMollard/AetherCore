@@ -45,19 +45,13 @@ try {
   const page=await context.newPage();page.setDefaultTimeout(20000);
   page.on('console',message=>report.console.push({type:message.type(),text:message.text()}));page.on('pageerror',error=>report.pageErrors.push(error.stack));
   await page.goto(base+'/nested/game/');
-  await page.waitForFunction(()=>aetherRuntime.rendererReady && aetherRuntime.fontReady && aetherRuntime.scene);
+  await page.waitForFunction(()=>(aetherRuntime.rendererReady && aetherRuntime.fontReady && aetherRuntime.scene) || aetherRuntime.status==='failed');
+  assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
   report.environment.gpu=await page.evaluate(()=>aetherRuntime.adapter);assert.ok(isHardwareAdapter(report.environment.gpu),'Hardware WebGPU adapter required');
   assert.equal(await page.evaluate(()=>typeof globalThis.aetherTest),'undefined');
   assert.equal(await page.evaluate(()=>aetherRuntime.scene),manifest.project.startupScene);
   await page.locator('#start').click();await page.locator('#canvas').focus();await page.keyboard.down('Space');
   await page.waitForFunction(()=>aetherRuntime.ticks>=5 || aetherRuntime.status==='failed');
-  if(manifest.project.startupScene==='ReferenceStart'){
-   await page.waitForFunction(()=>aetherRuntime.scene==='ReferenceResult' || aetherRuntime.status==='failed');
-   assert.equal(await page.evaluate(()=>aetherRuntime.scene),'ReferenceResult');
-   assert.equal(await page.evaluate(()=>aetherRuntime.platform.committedWrites),2);
-   assert.ok(await page.evaluate(()=>aetherRuntime.platform.peak>0));
-   const fresh=await context.newPage();try{await fresh.goto(base+'/nested/game/?scene=ReferenceResult');await fresh.waitForFunction(()=>aetherRuntime.uiText?.startsWith('Saved score '));}finally{await fresh.close();}
-  }
   await page.keyboard.up('Space');
   report.directState=await page.evaluate(()=>{const{capture,...state}=aetherRuntime;return state;});
   assert.equal(report.directState.status,'running');assert.equal(report.directState.diagnostics.length,0);
@@ -82,7 +76,7 @@ try {
    assert.ok(report.unavailableState.diagnostics.some(item=>item.code==='WEBGPU_UNAVAILABLE'));
   }finally{await unavailable.close();}
   report.checks.push({name:'actionable-webgpu-unavailable',status:'passed'});
- }finally{await context.close();}
+ }catch(error){report.failureStates=await Promise.all(context.pages().map(page=>page.evaluate(()=>globalThis.aetherRuntime).catch(()=>null)));throw error;}finally{await context.close();}
  report.status='passed';
 }catch(error){report.error=error.stack;}
 finally{

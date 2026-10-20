@@ -19,6 +19,7 @@ namespace aether::editor
 		std::string message;
 		std::string remediation; // what to do about a failure; empty on success
 		std::filesystem::path outputPath;
+		std::filesystem::path reportPath;
 	};
 
 	struct VisualStudioInstallation

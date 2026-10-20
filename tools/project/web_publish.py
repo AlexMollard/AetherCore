@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import struct
 import sys
 import tempfile
 import time
@@ -92,15 +93,16 @@ def preflight(project, startup_override=None):
         files.add(path)
         if path.name.endswith(('.scene.toml', '.prefab.toml')):
             document = tomllib.loads(path.read_text(encoding='utf-8-sig'))
-            if document.get('scene', {}).get('version', 0) > 16 or document.get('scene', {}).get('kind', '2d') != '2d':
+            default_kind = '3d' if path.name.endswith('.scene.toml') else '2d'
+            if document.get('scene', {}).get('version', 0) > 16 or document.get('scene', {}).get('kind', default_kind) != '2d':
                 reject('WEB_FEATURE_UNSUPPORTED', 'Unsupported scene format or 3D scene: ' + path.name)
             if any(key in document for key in ('includes', 'prefab_instances', 'lights', 'environment')):
                 reject('WEB_FEATURE_UNSUPPORTED', 'Linked scenes/3D environment are not supported: ' + path.name)
             for entity in document.get('entities', []):
                 for key, value in entity.items():
                     if isinstance(value, (dict, list)) and (isinstance(value, dict) or value and isinstance(value[0], dict)) and key not in allowed_entity_tables:
-                        reject('WEB_FEATURE_UNSUPPORTED', 'Unsupported component ' + key + ' in ' + path.name)
-                if entity.get('camera', {}).get('projection', 'orthographic') != 'orthographic':
+                        reject('WEB_SHADER_UNSUPPORTED' if key in ('material','effect','ui_effect') else 'WEB_FEATURE_UNSUPPORTED', 'Unsupported component ' + key + ' in ' + path.name)
+                if 'camera' in entity and entity['camera'].get('projection', 'perspective') != 'orthographic':
                     reject('WEB_FEATURE_UNSUPPORTED', 'Only orthographic cameras are supported')
                 for widget in ('ui_text', 'ui_button'):
                     value=entity.get(widget,{})
@@ -117,8 +119,13 @@ def preflight(project, startup_override=None):
                 if value.startswith('project://'):
                     asset(value)
         elif path.suffix == '.tilemap':
-            for value in re.findall(rb'project://[^\x00-\x1f"<>]+', path.read_bytes()):
-                asset(value.decode('utf-8'))
+            blob = path.read_bytes()
+            if len(blob) < 12 or blob[:4] != b'ATLM':
+                reject('WEB_ASSET_FORMAT', 'Invalid ATLM header: ' + path.name)
+            version, length = struct.unpack_from('<II', blob, 4)
+            if version != 1 or length > 4096 or len(blob) < 12 + length:
+                reject('WEB_ASSET_FORMAT', 'Unsupported/truncated ATLM header: ' + path.name)
+            asset(blob[12:12 + length].decode('utf-8'))
     scene_dir = local(paths.get('scenes', 'scenes'))
     for scene in scenes:
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', scene):
@@ -135,6 +142,9 @@ def preflight(project, startup_override=None):
     additional = web.get('additional_assets', [])
     if not isinstance(additional, list):
         reject('WEB_ASSET_PATH', 'additional_assets must be a list')
+    for call in re.findall(r'\.(?:play_audio|instantiate_prefab)\s*\(([^)]*)\)', source):
+        if not re.fullmatch(r'\s*"[^"\\]+"\s*', call) and not additional:
+            reject('WEB_DYNAMIC_ASSET_UNDECLARED', 'Dynamic asset loads require publish.web.additional_assets')
     for uri in additional:
         asset(uri)
     return dict(project=project, settings=settings, scripts=scripts, profile=PROFILE, scenes=sorted(scenes), startup=startup, files=files)
@@ -266,7 +276,10 @@ def publish(request, directory, output=None):
                 backup.rename(destination)
             raise
         if had_previous:
-            shutil.rmtree(backup)
+            try:
+                shutil.rmtree(backup)
+            except OSError as error:
+                report['diagnostics'].append(dict(code='WEB_BACKUP_CLEANUP', severity='warning', message=str(error)))
         report['artifacts'].extend(dict(path=str(destination / name), bytes=(destination / name).stat().st_size) for name in ('manifest.json', product + '.zip'))
         report['status'] = 'passed'
     except Exception as error:
@@ -274,7 +287,10 @@ def publish(request, directory, output=None):
         report['diagnostics'].append(dict(code=getattr(error, 'code', 'WEB_PUBLISH'), severity='error', message=str(error)))
     finally:
         if stage is not None:
-            shutil.rmtree(stage)
+            try:
+                shutil.rmtree(stage)
+            except OSError as error:
+                report['diagnostics'].append(dict(code='WEB_STAGE_CLEANUP', severity='warning', message=str(error)))
         if project_lock is not None:
             project_lock.__exit__(None, None, None)
         report['durationMs'] = int((time.monotonic() - started) * 1000)

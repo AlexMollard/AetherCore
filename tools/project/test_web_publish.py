@@ -29,6 +29,11 @@ class WebPreflightTests(unittest.TestCase):
   (self.root/'scripts/src/lib.rs').write_text('ctx.network_connect("host")',encoding='utf-8');self.expect('WEB_NETWORK_UNSUPPORTED')
  def test_3d_and_shader_fail(self):
   p=self.root/'scenes/Start.scene.toml';p.write_text(p.read_text()+'[entities.mesh]\npath="x.glb"\n',encoding='utf-8');self.expect('WEB_FEATURE_UNSUPPORTED')
+ def test_material_and_unsupported_profile_fail_specifically(self):
+  p=self.root/'scenes/Start.scene.toml';original=p.read_text(encoding='utf-8');p.write_text(original+'[entities.material]\nshader="custom"\n',encoding='utf-8');self.expect('WEB_SHADER_UNSUPPORTED')
+  p.write_text(original,encoding='utf-8');(self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\nprofile="webgpu-3d"\n',encoding='utf-8');self.expect('WEB_PROFILE_UNSUPPORTED')
+ def test_dynamic_audio_requires_additional_assets(self):
+  (self.root/'scripts/src/lib.rs').write_text('ctx.play_audio(path)',encoding='utf-8');self.expect('WEB_DYNAMIC_ASSET_UNDECLARED')
  def test_additional_assets_cannot_escape(self):
   (self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\nadditional_assets=["../secret"]\n',encoding='utf-8');self.expect('WEB_ASSET_PATH')
  def test_failed_preflight_uses_the_agent_report_schema(self):
@@ -39,4 +44,23 @@ class WebPreflightTests(unittest.TestCase):
   gameplay_jobs.validate_report(result,result['jobId'],1)
  def test_shader_additional_asset_fails(self):
   (self.root/'assets/test.slang').write_text('shader',encoding='utf-8');(self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\nadditional_assets=["project://assets/test.slang"]\n',encoding='utf-8');self.expect('WEB_SHADER_UNSUPPORTED')
+ def test_tilemap_dependency_is_length_prefixed(self):
+  import struct
+  uri=b'project://assets/test.tileset.toml'
+  (self.root/'assets/test.tileset.toml').write_text('[tileset]\nname="Test"\n',encoding='utf-8')
+  (self.root/'assets/test.tilemap').write_bytes(b'ATLM'+struct.pack('<II',1,len(uri))+uri+struct.pack('<fII',.3,0,0))
+  (self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\nadditional_assets=["project://assets/test.tilemap"]\n',encoding='utf-8')
+  self.assertIn((self.root/'assets/test.tileset.toml').resolve(),self.api.preflight(self.root)['files'])
+ def test_missing_scene_kind_matches_native_3d_default(self):
+  p=self.root/'scenes/Start.scene.toml';p.write_text(p.read_text(encoding='utf-8').replace('kind="2d"\n',''),encoding='utf-8')
+  self.expect('WEB_FEATURE_UNSUPPORTED')
+ def test_present_camera_defaults_to_native_perspective(self):
+  p=self.root/'scenes/Start.scene.toml';p.write_text(p.read_text(encoding='utf-8').replace('projection="orthographic"\n',''),encoding='utf-8')
+  self.expect('WEB_FEATURE_UNSUPPORTED')
+ def test_headerless_2d_prefab_remains_supported(self):
+  (self.root/'assets/prefabs').mkdir()
+  prefab=self.root/'assets/prefabs/Coin.prefab.toml'
+  prefab.write_text('[[entities]]\nname="Coin"\n[entities.sprite]\n',encoding='utf-8')
+  (self.root/'scripts/src/lib.rs').write_text('ctx.instantiate_prefab("Coin")',encoding='utf-8')
+  self.assertIn(prefab.resolve(),self.api.preflight(self.root)['files'])
 if __name__=='__main__':unittest.main()

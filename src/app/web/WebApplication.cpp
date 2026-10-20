@@ -22,10 +22,28 @@
 
 namespace
 {
+	AetherGameplayStatus ReportGameplayDiagnostic(void*, const AetherGameplayDiagnostic& diagnostic)
+	{
+		EM_ASM(
+		        {
+			        const decode = (address, length) => new TextDecoder().decode(HEAPU8.subarray(address, address + length));
+			        const entry = ({severity : $0, code : decode($1, $2), message : decode($3, $4), file : decode($5, $6), line : $7, column : $8});
+			        const logs = aetherRuntime.gameplayLogs ||= [];
+			        logs.push(entry);
+			        if (logs.length > 256) { logs.shift(); }
+			        const method = $0 == 2 ? 'error' : $0 == 1 ? 'warn' : 'log';
+			        console[method](entry.code + ': ' + entry.message);
+			        if ($0 == 2) { aetherRuntime.diagnostics.push(entry); }
+		        },
+		        diagnostic.severity, diagnostic.code.data, diagnostic.code.length, diagnostic.message.data, diagnostic.message.length,
+		        diagnostic.file.data, diagnostic.file.length, diagnostic.line, diagnostic.column);
+		return AE_GAMEPLAY_OK;
+	}
+
 	struct BrowserApplication
 	{
 		aether::World world;
-		aether::scripting::GameplayAccess access{world};
+		aether::scripting::GameplayAccess access{world, ReportGameplayDiagnostic};
 		AetherGameplayModuleApi module{};
 		AetherGameplayInstance instance = 0;
 		aether::webgpu::WebGpuDevice graphics;

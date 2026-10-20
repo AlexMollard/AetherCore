@@ -3181,6 +3181,10 @@ namespace aether::editor
 			        {
 				        j["remediation"] = job.result.remediation;
 			        }
+			        if (!job.result.reportPath.empty())
+			        {
+				        j["reportPath"] = job.result.reportPath.generic_string();
+			        }
 			        return j;
 		        }});
 

@@ -116,6 +116,7 @@ namespace aether::editor
 		m_status.message = result.message;
 		m_status.remediation = result.remediation;
 		m_status.output = result.outputPath;
+		m_status.report = result.reportPath;
 	}
 
 	void BuildPanel::DrawConfigBanner(const app::EditorProjectContext& project)
@@ -335,6 +336,10 @@ namespace aether::editor
 			if (!m_status.remediation.empty())
 			{
 				ImGui::TextDisabled("%s", m_status.remediation.c_str());
+			}
+			if (!m_status.report.empty())
+			{
+				ImGui::TextDisabled("Verification report: %s", DisplayPath(m_status.report).c_str());
 			}
 			ImGui::PopTextWrapPos();
 		}

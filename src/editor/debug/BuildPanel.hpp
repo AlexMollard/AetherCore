@@ -54,6 +54,7 @@ namespace aether::editor
 			std::string remediation;
 			bool ok = false;
 			std::filesystem::path output;
+			std::filesystem::path report;
 		};
 
 		void DrawConfigBanner(const app::EditorProjectContext& project);

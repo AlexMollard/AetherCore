@@ -129,7 +129,7 @@ namespace aether::editor
 			{
 				progress(1, ok ? "Published" : "Failed");
 			}
-			return {.succeeded = ok, .message = message, .outputPath = plan.outputDir};
+			return {.succeeded = ok, .message = message, .outputPath = plan.outputDir, .reportPath = directory / "web-report.json"};
 		}
 		const PublishToolchain toolchain = MakePublishToolchain();
 		PublishContext context;
