@@ -63,4 +63,8 @@ class WebPreflightTests(unittest.TestCase):
   prefab.write_text('[[entities]]\nname="Coin"\n[entities.sprite]\n',encoding='utf-8')
   (self.root/'scripts/src/lib.rs').write_text('ctx.instantiate_prefab("Coin")',encoding='utf-8')
   self.assertIn(prefab.resolve(),self.api.preflight(self.root)['files'])
+ def test_new_project_camel_case_settings_choose_authored_startup(self):
+  (self.root/'scenes/Start.scene.toml').rename(self.root/'scenes/Launch.scene.toml')
+  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('startupscene="Start"','startupScene="Launch"'),encoding='utf-8')
+  self.assertEqual(self.api.preflight(self.root)['startup'],'Launch')
 if __name__=='__main__':unittest.main()

@@ -31,7 +31,10 @@ def reject(code, message):
 
 def preflight(project, startup_override=None):
     project = Path(project).resolve()
-    settings = tomllib.loads((project / 'ProjectSettings.toml').read_text(encoding='utf-8-sig'))
+    def settings_keys(value):
+        # Native Settings/Config lookup folds keys, including newly authored startupScene.
+        return {key.lower(): settings_keys(child) for key, child in value.items()} if isinstance(value, dict) else value
+    settings = settings_keys(tomllib.loads((project / 'ProjectSettings.toml').read_text(encoding='utf-8-sig')))
     if settings.get('scripting', {}).get('language', 'csharp').lower() != 'rust':
         reject('WEB_CSHARP_UNAVAILABLE', 'C# browser execution is not implemented; select desktop or a Rust project')
     web = settings.get('publish', {}).get('web', {})
