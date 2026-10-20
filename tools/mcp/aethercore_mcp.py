@@ -33,6 +33,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import signal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'project'))
@@ -297,6 +298,65 @@ AGENT_EDITOR_TOOLS = [
      }, 'required': ['receiptPath']}},
 ]
 
+RUN_BROWSER_GAUNTLET = {
+    'name': 'run_browser_gauntlet',
+    'description': 'Build automation and production browser artifacts, run bounded headless hardware Chromium checks, verify the production bridge is absent, and return a versioned web-only report. Does not require or open an editor. Currently qualifies AgentPipelineRust; other projects and C# browser requests are blocked explicitly. Browser processes and local servers are owned and closed by the runner.',
+    'inputSchema': {'type': 'object', 'properties': {
+        'project': {'type': 'string', 'default': 'projects/AgentPipelineRust'},
+        'reportPath': {'type': 'string', 'default': 'logs/browser-report.json'},
+        'skipBuild': {'type': 'boolean', 'default': False},
+        'playwrightModule': {'type': 'string'}, 'browserExecutable': {'type': 'string'},
+        'timeoutSeconds': {'type': 'integer', 'minimum': 1, 'maximum': 1200, 'default': 240},
+    }},
+}
+
+
+def _run_browser_gauntlet(arguments: dict) -> dict:
+    seconds = arguments.get('timeoutSeconds', 240)
+    if type(seconds) is not int or not 1 <= seconds <= 1200:
+        raise ValueError('Pog Champ, timeoutSeconds must be 1..1200')
+    report = Path(arguments.get('reportPath', 'logs/browser-report.json'))
+    if not report.is_absolute():
+        report = REPO / report
+    params = [PWSH, '-NoProfile', '-File', str(REPO / 'scripts/Run-BrowserGauntlet.ps1'),
+              '-Project', arguments.get('project', 'projects/AgentPipelineRust'), '-ReportPath', str(report), '-TimeoutSeconds', str(seconds)]
+    if arguments.get('skipBuild', False):
+        params.append('-SkipBuild')
+    for key, flag in (('playwrightModule', '-PlaywrightModule'), ('browserExecutable', '-BrowserExecutable')):
+        if arguments.get(key):
+            params.extend([flag, arguments[key]])
+    report.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryFile() as output:
+        process = subprocess.Popen(params, cwd=REPO, stdout=output, stderr=output,
+                                   creationflags=(subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == 'nt' else 0,
+                                   start_new_session=os.name != 'nt')
+        try:
+            code = process.wait(timeout=seconds + 30)
+            output.seek(0)
+            response_text = output.read().decode('utf-8-sig')
+        except subprocess.TimeoutExpired:
+            if os.name == 'nt':
+                subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, timeout=30,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=30)
+            return {'result': {'schemaVersion': 1, 'status': 'cancelled', 'target': 'web', 'phase': 'timeout',
+                               'diagnostics': [{'code': 'BROWSER_TIMEOUT', 'message': 'Owned browser process tree exceeded its bound'}]},
+                    'error': 'Pog Champ, browser verification timed out'}
+    try:
+        payload = json.loads(response_text)
+    except (OSError, ValueError) as exc:
+        return {'error': f'Pog Champ, browser runner produced no readable report: {exc}'}
+    if code != 0 and payload.get('status') == 'passed':
+        payload['status'] = 'failed'
+        payload.setdefault('diagnostics', []).append({'code': 'BROWSER_PROCESS_EXIT', 'message': 'Browser process exited unsuccessfully'})
+    result = {'result': payload}
+    if code != 0 or payload.get('status') != 'passed':
+        result['error'] = 'Pog Champ, browser verification ' + str(payload.get('status', 'failed'))
+    return result
+
+
 RUN_GAUNTLET = {
     "name": "run_gauntlet",
     "description": "Build Editor/GameRuntime/EngineTests, run the unit suite, and (in full mode, needs a GPU) smoke-run the editor + runtime under Vulkan validation. Returns the structured pass/fail report. Does not need the editor running.",
@@ -486,7 +546,7 @@ def _engine_tools() -> list:
 
 
 def _list_tools() -> list:
-    return [RUN_GAUNTLET, KENNEY_LIST_PACKS, KENNEY_LIST_MODELS, KENNEY_IMPORT, KENNEY_IMPORT_PACK, KENNEY_IMPORT_FONT] + GAMEPLAY_JOB_TOOLS + AGENT_EDITOR_TOOLS + _engine_tools()
+    return [RUN_GAUNTLET, RUN_BROWSER_GAUNTLET, KENNEY_LIST_PACKS, KENNEY_LIST_MODELS, KENNEY_IMPORT, KENNEY_IMPORT_PACK, KENNEY_IMPORT_FONT] + GAMEPLAY_JOB_TOOLS + AGENT_EDITOR_TOOLS + _engine_tools()
 
 
 def _call_tool(name: str, arguments: dict) -> dict:
@@ -503,6 +563,8 @@ def _call_tool(name: str, arguments: dict) -> dict:
         if result['report']['status'] in ('failed', 'cancelled', 'skipped'):
             response['error'] = 'Gameplay job ' + result['report']['status']
         return response
+    if name == "run_browser_gauntlet":
+        return _run_browser_gauntlet(arguments)
     if name == "run_gauntlet":
         return _run_gauntlet(arguments.get("mode", "ci"), arguments.get("config", "Debug"))
     if name == "kenney_list_packs":

@@ -1,3 +1,4 @@
+import {legacyCaseNames} from '../browser-tests/report.mjs';
 import assert from 'node:assert/strict';
 import {mkdir, readFile, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
@@ -26,6 +27,7 @@ const report = {
 const server = createServer(async (req, res) => {
     try {
 	const name = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+	if (name === '/__hardware_probe') {res.writeHead(200, {'Content-Type':'text/html'}).end('<!doctype html><title>WebGPU qualification</title>');return;}
 	if (name === '/favicon.ico') {
 	    res.writeHead(204).end();
 	    return
@@ -52,6 +54,9 @@ const server = createServer(async (req, res) => {
     }
 });
 let browser;
+let cancelled = false;
+const cancel = () => { cancelled = true; void browser?.close(); };
+process.once('SIGINT', cancel);process.once('SIGTERM', cancel);
 async function capture(page) {
     await page.evaluate(() => {
 	delete aetherRuntime.capture;
@@ -71,19 +76,32 @@ try {
 	args : [ '--enable-gpu' ]
     });
     report.browserVersion = browser.version();
-    for (const name of ['sprite-input-resize-shutdown', 'unavailable', 'limits', 'device-loss', 'stop-during-init', 'stop-in-flight',
-			'layers', 'batch-capacity', 'responsive', 'drop-owner-init', 'stop-after-upload', 'assets-ready', 'assets-missing',
-			'assets-corrupt', 'assets-version', 'assets-target', 'assets-cancel', 'platform-save-reload',
-			'platform-storage-denied', 'platform-storage-quota', 'platform-audio-resume', 'reference-gameplay',
-			'browser-features', 'browser-gamepad', 'browser-focus-resume', 'invalid-font', 'invalid-scene-version',
-			'invalid-atlas-version', 'invalid-audio-component', 'browser-key-latch', 'browser-ui-order']
+    const probeContext=await browser.newContext();
+    try {
+        const probe=await probeContext.newPage();
+        await probe.goto(`http://127.0.0.1:${server.address().port}/__hardware_probe`);
+        report.adapter=await probe.evaluate(async()=>{
+            if(!navigator.gpu)return null;
+            const adapter=await navigator.gpu.requestAdapter();if(!adapter)return null;
+            const info=adapter.info;
+            return {vendor:info.vendor,architecture:info.architecture,device:info.device,description:info.description,isFallbackAdapter:info.isFallbackAdapter??adapter.isFallbackAdapter??false};
+        });
+    } finally {await probeContext.close();}
+    if(!isHardwareAdapter(report.adapter)) {
+        report.status='blocked';
+        report.cases=legacyCaseNames.map(name=>({name,status:'blocked',reason:'Required hardware WebGPU adapter is unavailable'}));
+        throw Error('Required hardware WebGPU adapter is unavailable');
+    }
+
+    for (const name of legacyCaseNames
 	     .filter(name => !options.only || options.only === name)) {
+	if (cancelled) throw Error('Browser checks cancelled');
 	const item = {name, status : 'failed', console : [], pageErrors : []};
 	report.cases.push(item);
 	const context = await browser.newContext();
 	const page = await context.newPage();
 	page.on('console', m => item.console.push({type : m.type(), text : m.text()}));
-	page.on('pageerror', e => item.pageErrors.push(e.message));
+	page.on('pageerror', e => item.pageErrors.push(e.stack || e.message));
 	try {
 	    if (name === 'browser-key-latch')
 		await page.addInitScript(() => {
@@ -525,6 +543,7 @@ try {
     }
     report.status = report.cases.every(c => c.status === 'passed') ? 'passed' : 'failed';
 } catch (error) {
+    if(!browser)report.status='blocked';
     report.error = error.stack
 } finally {
     await browser?.close();

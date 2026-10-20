@@ -5,6 +5,17 @@
 
 namespace aether::web
 {
+	namespace
+	{
+		void CloseFetch(emscripten_fetch_t* fetch)
+		{
+			// close() may synchronously invoke onerror while aborting a request.
+			// Detach callback ownership before freeing it to prevent recursive close.
+			fetch->userData = nullptr;
+			emscripten_fetch_close(fetch);
+		}
+	} // namespace
+
 	WebAssetLoader::~WebAssetLoader()
 	{
 		Stop();
@@ -25,21 +36,28 @@ namespace aether::web
 		attributes.userData = this;
 		attributes.onsuccess = [](emscripten_fetch_t* fetch)
 		{
-			static_cast<WebAssetLoader*>(fetch->userData)->Complete(fetch, true);
+			if (auto* loader = static_cast<WebAssetLoader*>(fetch->userData))
+			{
+				loader->Complete(fetch, true);
+			}
 		};
 		attributes.onerror = [](emscripten_fetch_t* fetch)
 		{
-			static_cast<WebAssetLoader*>(fetch->userData)->Complete(fetch, false);
+			if (auto* loader = static_cast<WebAssetLoader*>(fetch->userData))
+			{
+				loader->Complete(fetch, false);
+			}
 		};
 		attributes.onprogress = [](emscripten_fetch_t* fetch)
 		{
-			if (fetch->totalBytes > io::MemoryPak::kMaxPackageBytes || fetch->dataOffset > io::MemoryPak::kMaxPackageBytes)
+			if (fetch->userData && (fetch->totalBytes > io::MemoryPak::kMaxPackageBytes || fetch->dataOffset > io::MemoryPak::kMaxPackageBytes))
 			{
 				auto& loader = *static_cast<WebAssetLoader*>(fetch->userData);
 				loader.m_state = State::Failed;
 				loader.m_error = "Package exceeds the 256 MiB browser limit";
 				loader.m_fetch = nullptr;
-				emscripten_fetch_close(fetch);
+
+				CloseFetch(fetch);
 			}
 		};
 		m_fetch = emscripten_fetch(&attributes, url);
@@ -75,7 +93,8 @@ namespace aether::web
 				}
 			}
 		}
-		emscripten_fetch_close(fetch);
+
+		CloseFetch(fetch);
 	}
 
 	void WebAssetLoader::Stop()
@@ -85,7 +104,8 @@ namespace aether::web
 			auto* fetch = m_fetch;
 			m_fetch = nullptr;
 			m_state = State::Stopped;
-			emscripten_fetch_close(fetch);
+
+			CloseFetch(fetch);
 		}
 		m_package.reset();
 		if (m_state != State::Failed)
