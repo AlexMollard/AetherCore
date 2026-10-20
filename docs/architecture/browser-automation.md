@@ -1,6 +1,6 @@
 # Browser automation and verification reports
 
-Task 11 provides a development-only browser transport and a bounded local qualification command. Native editor control remains ENet; browser automation exposes no process, host filesystem or arbitrary evaluator operations. C# browser execution remains a later milestone. Generic Rust exports use the separate [target-aware publisher](../web-export.md).
+Task 11 provides a development-only browser transport and a bounded local qualification command. Native editor control remains ENet; browser automation exposes no process, host filesystem or arbitrary evaluator operations. Selected Rust and C# exports use the separate [target-aware publisher](../web-export.md).
 
 ## Run it
 

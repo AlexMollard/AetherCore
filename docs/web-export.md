@@ -1,6 +1,6 @@
 # Web exports
 
-The publisher builds the selected Rust project for `webgpu-2d-v1`, packages its reachable content and verifies the extracted ZIP in hardware Chrome before replacing the previous export. Desktop is still the default target, including for existing C# projects. C# Web requests fail explicitly with `WEB_CSHARP_UNAVAILABLE`.
+The publisher builds the selected Rust or C# project for `webgpu-2d-v1`, packages its reachable content and verifies the extracted ZIP in hardware Chrome before replacing the previous export. Desktop remains the default target and existing projects still default to C#. C# browser exports use the trimmed interpreter described in [C# browser support](csharp-web.md).
 
 ## Publish from an agent or the editor
 
@@ -18,7 +18,7 @@ In the editor Build panel, select **Web** and publish. The existing `project.pub
 
 ## Prerequisites
 
-Build native `AssetPacker`, and install the exact versions in [toolchain.json](../tools/experiments/rust-webgpu/toolchain.json): Emscripten/emdawnwebgpu, Rust Wasm nightly, Slang and Playwright. Python with `tomllib`, CMake, Cargo, Node and installed hardware Chrome must be available. Publishing does not install tools or browsers. `EMSDK` selects the SDK (local fallback `.temp/toolchains/emsdk-main`); `AETHER_WEB_ASSETPACKER` and `AETHER_WEB_SLANGC` override host tools. `AETHER_PYTHON` selects the Python executable. `AETHER_PLAYWRIGHT_MODULE` selects the pinned Playwright module directory. Software GPU execution does not pass required verification. See [toolchain qualification](architecture/rust-webgpu-toolchain.md).
+Build native `AssetPacker`, and install the exact versions in [toolchain.json](../tools/experiments/rust-webgpu/toolchain.json): Emscripten/emdawnwebgpu, Slang and Playwright. Python with `tomllib`, CMake, Node and installed hardware Chrome must be available. Rust games additionally require Cargo and the pinned Wasm nightly; C# games require the pinned .NET browser toolchain in [C# browser support](csharp-web.md). Publishing does not install tools or browsers. `EMSDK` selects the SDK (local fallback `.temp/toolchains/emsdk-main`); `AETHER_WEB_ASSETPACKER` and `AETHER_WEB_SLANGC` override host tools. `AETHER_PYTHON` selects the Python executable. `AETHER_PLAYWRIGHT_MODULE` selects the pinned Playwright module directory. Software GPU execution does not pass required verification. See [toolchain qualification](architecture/rust-webgpu-toolchain.md).
 
 Each project gets a separate `build/web-publish-<identity>` cache. A project-scoped lock serializes publishers sharing that cache. Rust links as a static library with Web-only abort panic policy; desktop Cargo profiles and C# compilation/reload remain unchanged.
 
@@ -34,7 +34,7 @@ additional_assets = ["project://assets/audio/theme.wav"]
 capabilities = ["sprites", "audio", "saves", "scenes"]
 ```
 
-The optional ID namespaces browser storage; otherwise the product name is used, so give distinct games distinct IDs. Static Rust scene/prefab and project asset references supplement the declarations. Dynamic scene names require `scenes`; dynamic audio/prefab paths require `additional_assets`. The browser refuses scene loads outside the packaged scene list. Include every dynamically reachable asset explicitly. Preflight scans authored Rust and reachable files conservatively; it does not prove every possible gameplay branch executes correctly.
+The optional ID namespaces browser storage; otherwise the product name is used, so give distinct games distinct IDs. Static Rust/C# scene, prefab and project asset references supplement the declarations. Dynamic scene names require `scenes`; dynamic audio/prefab paths require `additional_assets`. The browser refuses scene loads outside the packaged scene list. Include every dynamically reachable asset explicitly. Preflight scans authored source and reachable files conservatively; it does not prove every possible gameplay branch executes correctly.
 
 The profile supports 2D sprites, animation, tilemaps, Box2D, supported UI, packaged audio, input, scene/prefab loading and asynchronous browser saves. Scenes must declare `kind = "2d"`; authored cameras must be orthographic. Headerless 2D prefab fragments remain supported. UI currently uses packaged Roboto and Latin-1 glyphs. Custom shaders/materials, 3D content, networking and unsupported component tables are rejected. Native BC texture caches are not reused; the Web asset cooker produces target-qualified RGBA8 textures.
 

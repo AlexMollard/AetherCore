@@ -13,9 +13,10 @@ import zipfile
 
 from gameplay_jobs import _OwnedProcess, project_tool, validate_report
 from reference_fixture import ROOT, assets, config
+from managed_reference import write_fixture
 
 REQUIRED = ('fresh-create', 'compiler-failure', 'repaired-build', 'fresh-native-test', 'web-publish',
-            'edited-web-publish', 'rejected-content-preserves-export', 'csharp-web-rejected', 'measured-export', 'performance-budgets', 'itch-package',
+            'edited-web-publish', 'rejected-content-preserves-export', 'csharp-web-publish', 'edited-csharp-web-publish', 'csharp-reference', 'measured-export', 'performance-budgets', 'itch-package',
             'csharp-native', 'rust-native', 'csharp-publish', 'native-gauntlet', 'browser-gauntlet')
 
 
@@ -62,7 +63,7 @@ def run(args):
             dict(browser='Firefox', os='Windows', version=None, status='not-tested', reason='No Firefox run in this qualification'),
             dict(browser='Safari', os='macOS', version=None, status='not-tested', reason='No macOS executor'),
             dict(browser='Chrome/Firefox', os='macOS/Linux', version=None, status='not-tested', reason='No run on these combinations'),
-            dict(browser='Any', os='Any', status='unsupported', reason='Missing hardware WebGPU; C# Web, 3D and networking remain unsupported')])
+            dict(browser='Any', os='Any', status='unsupported', reason='Missing hardware WebGPU; 3D and networking remain unsupported')])
 
     def command(label, arguments, report_file=None, expected_code=0):
         remaining = deadline - time.monotonic()
@@ -160,7 +161,6 @@ def run(args):
             operation('unsupported-3d','publish',target='web',expected='failed',error_code='WEB_FEATURE_UNSUPPORTED')
         finally:
             scene.write_text(current,encoding='utf-8',newline='\r\n')
-        operation('csharp-web-rejected','publish',selected=ROOT/'projects/AgentPipelineCSharp',target='web',expected='failed',error_code='WEB_CSHARP_UNAVAILABLE')
         if hashlib.sha256(package.read_bytes()).hexdigest() != previous_hash:
             raise RuntimeError('Rejected content replaced a verified export')
         report['checks']['rejected-content-preserves-export']=dict(status='passed',sha256=previous_hash)
@@ -187,6 +187,26 @@ def run(args):
             raise RuntimeError('Performance budget missing or exceeded; retain measured evidence')
         report['checks']['performance-budgets']=measured['budgetChecks']
         report['artifacts'] += [str(package),str(measured_file)]
+        managed_project=project.parent/(project.name+'-csharp')
+        operation('csharp-create','create',selected=managed_project,name='ManagedJam',language='csharp',template='blank_2d')
+        write_fixture(managed_project)
+        settings=managed_project/'ProjectSettings.toml'
+        text=settings.read_text(encoding='utf-8-sig').replace('startupScene = "default"','startupScene = "ReferenceStart"')
+        text += '\n[publish.web]\nid="managedjam.'+project.name+'"\nscenes=["ReferenceStart","ReferenceResult"]\n'
+        settings.write_text(text,encoding='utf-8',newline='\r\n')
+        _, managed_cold=operation('csharp-web-publish','publish',selected=managed_project,target='web')
+        write_fixture(managed_project,revision=2)
+        managed_final, managed_warm=operation('edited-csharp-web-publish','publish',selected=managed_project,target='web')
+        managed_zip=next(Path(item['path']) for item in managed_final['artifacts'] if item['path'].endswith('.zip'))
+        managed_file=directory/'csharp-reference.json'
+        managed,_=command('csharp-reference',['node',ROOT/'tools/browser-tests/verify-export.mjs',
+            '--root='+str(managed_zip.parent),'--report='+str(managed_file),'--measure=true','--scenario=agent-reference-v1'],managed_file)
+        if managed['status'] != 'passed' or not all(managed['cleanup'].values()) or not managed.get('agentGame') or not managed.get('iframeGame'):
+            raise RuntimeError('C# browser/iframe reference qualification incomplete')
+        report['checks']['csharp-reference']=dict(status='passed',reportPath=str(managed_file))
+        report['managedMeasurements']={**managed['measurements'],'zipBytes':managed_zip.stat().st_size,
+            'coldWebPublishMs':managed_cold,'editToReadyMs':managed_warm,'mode':'trimmed-interpreter'}
+        report['artifacts'] += [str(managed_zip),str(managed_file)]
         for language in ('CSharp','Rust'):
             selected=ROOT/'projects'/('AgentPipeline'+language)
             operation(language.lower()+'-native','test',selected=selected,scene='ReferenceStart',ticks=90,launchConfig=config())

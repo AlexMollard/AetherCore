@@ -1,6 +1,6 @@
 # Autonomous distribution qualification
 
-Task 13 provides a local acceptance command that starts from a new Rust project and retains reports for every required stage. It never uploads, installs dependencies, changes CI triggers or opens a human editor.
+Task 13 provides a local acceptance command that starts from new Rust and C# projects and retains reports for every required stage. It never uploads, installs dependencies, changes CI triggers or opens a human editor.
 
 ```powershell
 ./scripts/Run-DistributionGauntlet.ps1 `
@@ -17,9 +17,11 @@ The command uses the existing `aether-project` CLI to create a new blank Rust 2D
 
 The browser verifies keyboard scoring, gesture-enabled audio with a nonzero analyser peak, completed saves, fresh-page save loading, and save loading after iframe navigation. It records hardware/browser/OS identity and observed iframe policy support. A recognized policy must permit the feature; an unrecognized WebGPU policy token is recorded as unknown, not as an enforced allow/deny test. Local cross-origin success does not prove external hosting works.
 
+The C# follow-on creates a separate fresh C# project, applies serialized property overrides under trimming, publishes twice with a semantic source/property edit, and exercises the same direct/iframe reference scenario. It records managed payload/startup/memory/iteration measurements separately from the Rust budgets.
+
 The gate also runs the existing full native gauntlet (including Editor and GameRuntime GPU smokes), C# and Rust native reference scenarios, C# desktop publishing, and the full 41-case browser regression suite. Missing or skipped required phases cannot pass. Every command shares one deadline and owns its child process tree. Logs and individual reports live beside the aggregate report in a unique `distribution-<identity>` directory.
 
-`localAcceptance` reports the local gate. `hostQualification` is independent and remains `pending` without an authorized external URL. A passing local report is not a claim that the full first-browser-release host gate has passed. The report includes an explicit browser matrix: actual Chrome on Windows evidence, untested Firefox/other OS combinations, and unsupported missing-WebGPU/C#-Web/3D/networking cases.
+`localAcceptance` reports the local gate. `hostQualification` is independent and remains `pending` without an authorized external URL. A passing local report is not a claim that the full first-browser-release host gate has passed. The report includes an explicit browser matrix: actual Chrome on Windows evidence, untested Firefox/other OS combinations, and unsupported missing-WebGPU/3D/networking cases.
 
 ## Measurements and budgets
 

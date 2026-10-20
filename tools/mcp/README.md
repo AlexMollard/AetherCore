@@ -188,7 +188,7 @@ printf '%s\n%s\n' \
 
 ### Browser verification
 
-`run_browser_gauntlet` runs the same bounded `scripts/Run-BrowserGauntlet.ps1` entry point as the CLI, without an editor endpoint. It returns a versioned web-only report and marks blocked/failed/cancelled outcomes as MCP errors. The current project fixture is `projects/AgentPipelineRust`; unsupported projects/C# browser requests are explicit failures. Use `skipBuild: true` only with existing automation and production artifacts. All browser checks remain local/manual; CI triggers are unchanged. See [browser automation](../../docs/architecture/browser-automation.md) for arguments, bridge boundaries, evidence and qualification limits. Restart the MCP client to discover this new static tool after updating the server.
+`run_browser_gauntlet` runs the same bounded `scripts/Run-BrowserGauntlet.ps1` entry point as the CLI, without an editor endpoint. It returns a versioned web-only report and marks blocked/failed/cancelled outcomes as MCP errors. The current project fixture is `projects/AgentPipelineRust`; other projects must use the target-aware Web publisher, which supports Rust and C# games. Use `skipBuild: true` only with existing automation and production artifacts. All browser checks remain local/manual; CI triggers are unchanged. See [browser automation](../../docs/architecture/browser-automation.md) for arguments, bridge boundaries, evidence and qualification limits. Restart the MCP client to discover this new static tool after updating the server.
 
 ### Autonomous creation-to-export qualification
 

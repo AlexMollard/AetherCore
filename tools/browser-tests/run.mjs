@@ -115,7 +115,7 @@ try {
 	throw Error('Timeout must be 1000..1200000 ms');
     deadline = setTimeout(cancel, timeout);
     if (project !== path.join(repo, 'projects/AgentPipelineRust'))
-	throw Error('Only AgentPipelineRust is qualified; generic project exports and C# browser execution are not available');
+	throw Error('This regression fixture is AgentPipelineRust; use Web publishing for selected Rust or C# projects');
     const require = createRequire(import.meta.url);
     const module = options.playwright || process.env.AETHER_PLAYWRIGHT_MODULE || 'playwright';
     const {chromium} = require(module);

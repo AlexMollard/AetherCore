@@ -1,7 +1,7 @@
 #requires -Version 7.4
 <#
 .SYNOPSIS
-Qualify a fresh Rust game from CLI creation through measured Web export and native regressions.
+Qualify fresh Rust and C# games from CLI creation through measured Web export and native regressions.
 .EXAMPLE
 ./scripts/Run-DistributionGauntlet.ps1 -PlaywrightModule <pinned-module-path> -SlangCompiler <slangc-path>
 #>

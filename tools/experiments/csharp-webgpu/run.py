@@ -25,7 +25,7 @@ def validate_probe(report):
 def qualify(args):
     started = time.monotonic()
     deadline = started + args.timeout_seconds
-    output = ROOT / '.temp/task14' / ('probe-' + args.mode)
+    output = ROOT / '.temp/task14' / ('probe-' + args.mode + ('-aot' if args.aot else ''))
     logs = Path(args.report).resolve().parent
     logs.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
@@ -72,6 +72,9 @@ def qualify(args):
                                     emscripten='6.0.12' if args.mode == 'engine' else '3.1.56')
         arguments = [dotnet, 'publish', HERE / 'InteropProbe.csproj', '-c', 'Release', '-o', output / 'publish',
                      '-p:ArtifactsPath=' + str(output / 'managed')]
+        if args.aot:
+            arguments.append('-p:RunAOTCompilation=true')
+        report['executionMode'] = 'aot' if args.aot else 'trimmed-interpreter'
         if args.mode == 'engine':
             sdk = Path(args.emsdk).resolve()
             if not (sdk / 'upstream/emscripten/emcc.py').is_file():
@@ -108,6 +111,7 @@ def qualify(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode', choices=('stock', 'engine'), default='stock')
+    parser.add_argument('--aot', action='store_true', help='Experimental AOT probe; not a supported export mode')
     parser.add_argument('--emsdk', default=str(ROOT / '.temp/toolchains/emsdk-main'))
     parser.add_argument('--timeout-seconds', type=int, choices=range(1, 1201), default=300, metavar='1..1200')
     parser.add_argument('--report', default=str(ROOT / 'logs/task14/interop.json'))

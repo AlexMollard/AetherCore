@@ -267,8 +267,9 @@ def publish(request, directory, output=None):
             names += ['browser-main.mjs', 'sprite.wgsl']
             shutil.copytree(build / 'web/_framework', stage / '_framework')
             managed = json.loads((build / 'web-managed-build.json').read_text(encoding='utf-8'))
+            pins = {key: value for key, value in pins.items() if not key.startswith('rust') and key != 'panicStrategy'}
+            pins['cppExceptions'] = 'managed-adapter-only'
             pins['managed'] = {key: managed[key] for key in ('sdk', 'runtime', 'manifest', 'mode', 'nativeModule')}
-            pins.pop('rustWasm', None)
             report['toolchains'].extend(dict(name='managed-' + key, version=managed[key], target='web')
                 for key in ('sdk', 'runtime', 'manifest', 'mode'))
         for name in names:

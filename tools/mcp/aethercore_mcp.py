@@ -300,7 +300,7 @@ AGENT_EDITOR_TOOLS = [
 
 RUN_BROWSER_GAUNTLET = {
     'name': 'run_browser_gauntlet',
-    'description': 'Build automation and production browser artifacts, run bounded headless hardware Chromium checks, verify the production bridge is absent, and return a versioned web-only report. Does not require or open an editor. Currently qualifies AgentPipelineRust; other projects and C# browser requests are blocked explicitly. Browser processes and local servers are owned and closed by the runner.',
+    'description': 'Build automation and production browser artifacts, run bounded headless hardware Chromium checks, verify the production bridge is absent, and return a versioned web-only report. Does not require or open an editor. Currently qualifies AgentPipelineRust; selected Rust and C# games use gameplay_job_start with target web and operation publish. Browser processes and local servers are owned and closed by the runner.',
     'inputSchema': {'type': 'object', 'properties': {
         'project': {'type': 'string', 'default': 'projects/AgentPipelineRust'},
         'reportPath': {'type': 'string', 'default': 'logs/browser-report.json'},

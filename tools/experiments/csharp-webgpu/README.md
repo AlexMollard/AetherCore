@@ -32,3 +32,9 @@ Reports distinguish this ABI prerequisite from actual gameplay qualification:
 scene/SDK behavior, publishing, AOT, iframe behavior or M6. C# Web capability
 must remain disabled until those separate checks pass. Desktop hostfxr and
 collectible assembly loading are not used by this experiment.
+
+The optional --aot flag runs a separate experimental build cache. On the pinned
+engine toolchain it fails with a Target-incompatible DataLayout backend error.
+This does not block trimmed interpretation, which is the supported C# export
+mode. See [C# browser support](../../../docs/csharp-web.md) for actual gameplay
+qualification and the selected SDK surface.
