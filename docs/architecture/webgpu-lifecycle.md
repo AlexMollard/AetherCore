@@ -47,4 +47,4 @@ The final normal native suite passed all 1,455 cases after the new contract was 
 
 ## Task 10 continuation
 
-The historical M3 qualification above is superseded for platform readiness by [browser assets and platform services](browser-assets-and-platform.md). Task 10 adds real packaged reference gameplay, audio, saves and shared input/UI integration. Generic publishing and the release-excluded automation bridge remain later milestones.
+The historical M3 qualification above is superseded for platform readiness by [browser assets and platform services](browser-assets-and-platform.md). Task 10 adds real packaged reference gameplay, audio, saves and shared input/UI integration. The release-excluded bridge is documented in [browser automation](browser-automation.md), and generic Rust publishing in [Web exports](../web-export.md).

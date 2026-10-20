@@ -224,15 +224,19 @@ At the Task 4 checkpoint Rust gameplay was intentionally unavailable; Task 5 bel
 
 **Files:** src/editor/editor/publish/PublishPlan.*, PublishSteps.*, PublishReport.*, PublishVerify.*, shared publish service/CLI, resources/web/; tests/app/Publish*; project additional-assets handling.
 
-- [ ] Add explicit desktop/web target and webgpu-2d-v1 profile selection without confusing host OS or editor build config with runtime target. Preserve old target defaults for existing C# desktop publishing.
-- [ ] Preflight language, toolchains, module capabilities, reachable scenes/prefabs/assets and explicit additional assets. Test unknown dynamic scene paths, Rust networking, unsupported shader/material/3D content and C# Web requested before M6; each gets a specific diagnostic and nonzero result.
-- [ ] Stage index.html, loader, Wasm, target assets and a versioned manifest with relative paths, sizes/hashes, engine revision and toolchain pins. A failed build does not overwrite an existing valid export. Make the HTML start/loading/error flow usable inside an iframe.
-- [ ] Package a ZIP rooted at index.html. Verify unpacking into a different directory and serving at a nested URL with correct MIME types and secure-context requirements. Do not depend on source checkout paths or native executable assets.
-- [ ] Wire CLI/MCP publish/status and the editor Publish panel to this shared service. Include package verification evidence in the terminal report.
+- [x] Add explicit desktop/web target and webgpu-2d-v1 profile selection without confusing host OS or editor build config with runtime target. Preserve old target defaults for existing C# desktop publishing.
+- [x] Preflight language, toolchains, module capabilities, reachable scenes/prefabs/assets and explicit additional assets. Test unknown dynamic scene paths, Rust networking, unsupported shader/material/3D content and C# Web requested before M6; each gets a specific diagnostic and nonzero result.
+- [x] Stage index.html, loader, Wasm, target assets and a versioned manifest with relative paths, sizes/hashes, engine revision and toolchain pins. A failed build does not overwrite an existing valid export. Make the HTML start/loading/error flow usable inside an iframe.
+- [x] Package a ZIP rooted at index.html. Verify unpacking into a different directory and serving at a nested URL with correct MIME types and secure-context requirements. Do not depend on source checkout paths or native executable assets.
+- [x] Wire CLI/MCP publish/status and the editor Publish panel to this shared service. Include package verification evidence in the terminal report.
 
 **Proposed command:** ./scripts/Run-GameplayPipeline.ps1 -Project projects/AgentPipelineRust -Target web -Operation publish -ReportPath logs/web-publish-report.json
 
 **Gate:** Relocated browser ZIP runs locally and in a local iframe; missing WebGPU shows an actionable message. M4 is complete.
+
+**Execution (2026-10-20):** Complete. Selected-project Rust static linking and target cooking, shared editor/agent publisher, declared-content preflight, manifest/ZIP staging and relocated hardware-browser/iframe verification are implemented. Failed compilation preserves the old verified ZIP byte-for-byte. A customized module with different score behavior and another retaining ReferenceStart without the fixture transition both publish correctly. Actual hidden editor publish/status exposes its verification report and closes cleanly. C# Web fails explicitly; C# desktop publishing and C#/Rust desktop references pass.
+
+Verification: native full gauntlet 1,462/1,462 with Editor/GameRuntime builds and hidden GPU smokes; final 41-case hardware Chrome browser suite; 47 focused native publishing/pipeline cases; 29 Python project tests (28 passed, one opt-in integration skipped) and 22 MCP tests. Actual Web export checks run separately and pass. Review findings fixed with regressions: bounded length-prefixed tilemap dependency parsing, canonical scene/camera defaults with headerless prefab support, generic verification without fixture-specific gameplay assertions. A real startup failure also exposed the missing Web diagnostic sink; logging now preserves length-aware UTF-8/NUL and bounded structured evidence. Follow-up review clear. See [Web exports](../../web-export.md) and local reports under `logs/task12/`. External hosting qualification and unattended creation-to-export remain Task 13.
 
 ## Task 13: Verify autonomous creation-to-export and distribution
 

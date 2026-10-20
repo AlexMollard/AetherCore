@@ -1,6 +1,6 @@
 # Browser automation and verification reports
 
-Task 11 provides a development-only browser transport and a bounded local qualification command. Native editor control remains ENet; browser automation exposes no process, host filesystem or arbitrary evaluator operations. C# browser execution and generic web publishing remain later milestones.
+Task 11 provides a development-only browser transport and a bounded local qualification command. Native editor control remains ENet; browser automation exposes no process, host filesystem or arbitrary evaluator operations. C# browser execution remains a later milestone. Generic Rust exports use the separate [target-aware publisher](../web-export.md).
 
 ## Run it
 
@@ -14,7 +14,7 @@ The script builds the native asset tool, automation Wasm and a separate producti
 
 MCP `run_browser_gauntlet` calls this same script and returns its structured report, with `isError` for every outcome except passed. It requires no running editor and never uses the default control port. Restart the MCP client after installing changed server code to discover the new static tool. Arguments include project, reportPath, skipBuild, playwrightModule, browserExecutable and timeoutSeconds.
 
-The current build harness embeds AgentPipelineRust. Requests for another project, including C#, return blocked explicitly rather than silently testing that reference fixture. Task 12 introduces generic export selection.
+The current build harness embeds AgentPipelineRust. Requests for another project, including C#, return blocked explicitly rather than silently testing that reference fixture. Generic project export selection is available through [target-aware publishing](../web-export.md); the qualification gauntlet intentionally retains its fixed reference scenario.
 
 ## Bridge contract version 1
 
