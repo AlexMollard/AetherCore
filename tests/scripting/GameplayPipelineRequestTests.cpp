@@ -31,3 +31,11 @@ TEST_CASE("Gameplay pipeline preserves literal project paths and normalizes expl
 	CHECK(parsed->value("ticks", 0) == 60);
 	CHECK(parsed->at("launchConfig").at("readSaves") == true);
 }
+
+TEST_CASE("Gameplay Web publishing preserves the explicit target and bounds operations")
+{
+    const auto web = ValidateGameplayPipelineRequest({{"project", "p"}, {"operation", "publish"}, {"target", "web"}});
+    REQUIRE(web);
+    CHECK(web->at("target") == "web");
+    CHECK_FALSE(ValidateGameplayPipelineRequest({{"project", "p"}, {"operation", "run"}, {"target", "web"}}));
+}

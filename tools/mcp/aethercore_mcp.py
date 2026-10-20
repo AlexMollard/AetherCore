@@ -372,13 +372,13 @@ RUN_GAUNTLET = {
 
 GAMEPLAY_JOB_START = {
     'name': 'gameplay_job_start',
-    'description': 'Start a persistent gameplay pipeline job and return its queued report immediately. Create, inspect, build, bounded run/relaunch/test, or publish a desktop project without a running editor. Poll gameplay_job_status; cancel only this job with gameplay_job_cancel.',
+    'description': 'Start a persistent gameplay pipeline job and return its queued report immediately. Create, inspect, build, bounded run/relaunch/test, or publish a desktop/Web project without a running editor. Web publishing runs target preflight and relocated browser verification. Poll gameplay_job_status; cancel only this job with gameplay_job_cancel.',
     'inputSchema': {
         'type': 'object',
         'properties': {
             'project': {'type': 'string', 'description': 'Project root path; create uses the destination root.'},
             'operation': {'type': 'string', 'enum': list(gameplay_jobs.OPERATIONS)},
-            'target': {'type': 'string', 'enum': ['desktop'], 'default': 'desktop'},
+            'target': {'type': 'string', 'enum': ['desktop', 'web'], 'default': 'desktop'},
             'scene': {'type': 'string'},
             'name': {'type': 'string'},
             'template': {'type': 'string'},

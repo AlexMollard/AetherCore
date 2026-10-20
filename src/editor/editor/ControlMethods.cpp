@@ -3091,10 +3091,11 @@ namespace aether::editor
 		// same shape the Build panel uses, which is where the work actually happens.
 		methods.push_back({"project.publish",
 		        "publish_project",
-		        "Publish the open project to a standalone package (Builds/<platform>/<product>). Runs asynchronously; poll publish_status for progress and the result. Uses the running editor's build configuration.",
+		        "Publish the open project to a standalone package (Builds/<platform>/<product>). Runs asynchronously; poll publish_status for progress and the result. Desktop uses the editor build configuration; Web builds Release with webgpu-2d-v1 "
+		        "preflight and browser verification.",
 		        true,
-		        Obj({}, {}),
-		        [](const json&, MethodContext& ctx) -> json
+		        Obj({{"target", {{"type", "string"}, {"enum", json::array({"desktop", "web"})}, {"default", "desktop"}}}}, {}),
+		        [](const json& params, MethodContext& ctx) -> json
 		        {
 			        auto* project = ctx.services.TryGet<app::EditorProjectContext>();
 			        if (project == nullptr)
@@ -3105,12 +3106,18 @@ namespace aether::editor
 			        {
 				        return GameplayPreflightFailure(project->language, preflight.error().message);
 			        }
+			        const auto selected = params.value("target", "desktop");
+			        if (selected != "desktop" && selected != "web")
+			        {
+				        return json{{"error", "unsupported publish target"}};
+			        }
+			        const auto target = selected == "web" ? PublishTarget::Web : PublishTarget::Desktop;
 			        PublishJob& job = Job();
 			        if (job.future.valid())
 			        {
 				        return json{{"error", "a publish is already running; poll publish_status"}};
 			        }
-			        const PublishPlan plan = PlanPublish(*project);
+			        const PublishPlan plan = PlanPublish(*project, target);
 			        job.finished = false;
 			        job.result = {};
 			        job.completion.store(0.0f, std::memory_order_release);
@@ -3120,16 +3127,18 @@ namespace aether::editor
 			        }
 			        const app::EditorProjectContext projectCopy = *project;
 			        job.future = std::async(std::launch::async,
-			                [projectCopy]()
+			                [projectCopy, target]()
 			                {
-				                return PublishProject(projectCopy,
+				                return PublishProject(
+				                        projectCopy,
 				                        [](const float completion, const std::string_view stage)
 				                        {
 					                        PublishJob& j = Job();
 					                        j.completion.store(completion, std::memory_order_release);
 					                        const std::scoped_lock lock(j.mutex);
 					                        j.stage = std::string(stage);
-				                        });
+				                        },
+				                        target);
 			                });
 			        return json{{"status", "started"}, {"outputDir", plan.outputDir.string()}, {"config", plan.configName}, {"product", plan.productName}};
 		        }});

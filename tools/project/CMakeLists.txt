@@ -2,6 +2,7 @@ add_executable(aether-project main.cpp ProjectPipeline.cpp DesktopGameplayRun.cp
     "${CMAKE_SOURCE_DIR}/src/app/Application.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/layers/ScriptedSceneLayer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/CSharpScriptingSubsystem.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/WebPublish.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishPlan.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishSteps.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishReport.cpp"

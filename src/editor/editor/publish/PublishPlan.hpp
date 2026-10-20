@@ -13,15 +13,21 @@ namespace aether::app
 
 namespace aether::editor
 {
+	enum class PublishTarget
+	{
+		Desktop,
+		Web
+	};
+
 	// Everything about the machine and build doing the publishing. Separated from the
 	// resolution below so the resolution is pure and can be tested without a real editor.
 	struct PublishEnvironment
 	{
-		std::filesystem::path bundleDir;  // directory the running editor lives in
-		std::string runtimeExeName;       // e.g. "AetherGame.exe"
-		std::string platformName;         // e.g. "Windows"
-		std::string configName;           // e.g. "Debug" - AE_CONFIG_NAME
-		bool shippableConfig = false;     // false for Debug/RelWithDebInfo
+		std::filesystem::path bundleDir; // directory the running editor lives in
+		std::string runtimeExeName;      // e.g. "AetherGame.exe"
+		std::string platformName;        // e.g. "Windows"
+		std::string configName;          // e.g. "Debug" - AE_CONFIG_NAME
+		bool shippableConfig = false;    // false for Debug/RelWithDebInfo
 	};
 
 	// Every path and label a publish needs, resolved once up front. Nothing here is
@@ -29,6 +35,8 @@ namespace aether::editor
 	// "one button, no options" possible.
 	struct PublishPlan
 	{
+		PublishTarget target = PublishTarget::Desktop;
+		std::string profile = "desktop";
 		std::filesystem::path projectRoot;
 		std::filesystem::path projectFile;
 		std::filesystem::path scenesDir;
@@ -48,7 +56,7 @@ namespace aether::editor
 	[[nodiscard]] std::string SanitizePublishSegment(std::string value, std::string_view fallback);
 
 	// Pure. No filesystem access - it only composes paths.
-	[[nodiscard]] PublishPlan MakePublishPlan(const app::EditorProjectContext& project, const PublishEnvironment& environment);
+	[[nodiscard]] PublishPlan MakePublishPlan(const app::EditorProjectContext& project, const PublishEnvironment& environment, PublishTarget target = PublishTarget::Desktop);
 
 	// Reads the running executable's directory and the compile-time build config.
 	[[nodiscard]] PublishEnvironment CurrentPublishEnvironment();

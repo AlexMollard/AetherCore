@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [string]$Project,
-    [ValidateSet('desktop')][string]$Target = 'desktop',
+    [ValidateSet('desktop', 'web')][string]$Target = 'desktop',
     [ValidateSet('create', 'inspect', 'build', 'run', 'relaunch', 'test', 'publish', 'status', 'cancel')][string]$Operation = 'inspect',
     [string]$Scene,
     [string]$LaunchConfig,
@@ -18,6 +18,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Target -eq 'web' -and !$PSBoundParameters.ContainsKey('TimeoutMs')) { $TimeoutMs = 600000 }
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $python = if ($env:AETHER_PYTHON) { $env:AETHER_PYTHON } else { 'python' }
 $jobScript = Join-Path $repoRoot 'tools/project/gameplay_jobs.py'

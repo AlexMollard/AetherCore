@@ -62,7 +62,7 @@ namespace aether::editor
 		return value;
 	}
 
-	PublishPlan MakePublishPlan(const app::EditorProjectContext& project, const PublishEnvironment& environment)
+	PublishPlan MakePublishPlan(const app::EditorProjectContext& project, const PublishEnvironment& environment, PublishTarget target)
 	{
 		PublishPlan plan;
 		plan.projectRoot = project.root;
@@ -76,6 +76,15 @@ namespace aether::editor
 		plan.language = project.language;
 		plan.platformName = SanitizePublishSegment(environment.platformName, HostPlatformName());
 		plan.productName = SanitizePublishSegment(project.name, kProductFallback);
+		plan.target = target;
+		if (target == PublishTarget::Web)
+		{
+			plan.platformName = "Web";
+			plan.profile = "webgpu-2d-v1";
+			plan.runtimeExeName = "index.html";
+			plan.configName = "Release";
+			plan.shippableConfig = true;
+		}
 		plan.outputDir = project.root / "Builds" / plan.platformName / plan.productName;
 		return plan;
 	}

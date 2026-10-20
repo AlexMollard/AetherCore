@@ -1,5 +1,6 @@
 #include "editor/EditorProjectPublisher.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <span>
@@ -18,6 +19,7 @@
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ShaderCompiler.hpp"
 #include "editor/publish/PublishSteps.hpp"
+#include "editor/publish/WebPublish.hpp"
 #include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
 #include "scene/SceneWorkflow.hpp"
@@ -41,9 +43,9 @@ namespace aether::editor
 		}
 	} // namespace
 
-	PublishPlan PlanPublish(const app::EditorProjectContext& project)
+	PublishPlan PlanPublish(const app::EditorProjectContext& project, PublishTarget target)
 	{
-		return MakePublishPlan(project, CurrentPublishEnvironment());
+		return MakePublishPlan(project, CurrentPublishEnvironment(), target);
 	}
 
 	EditorProjectActionResult PackProject(const app::EditorProjectContext& project)
@@ -110,9 +112,25 @@ namespace aether::editor
 		return {.succeeded = true, .message = "Packed project.pak (" + std::to_string(size / 1024) + " KB).", .outputPath = outputPak};
 	}
 
-	EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishProgress& progress)
+	EditorProjectActionResult PublishProject(const app::EditorProjectContext& project, const EditorProjectPublishProgress& progress, PublishTarget target)
 	{
-		const PublishPlan plan = PlanPublish(project);
+		const PublishPlan plan = PlanPublish(project, target);
+		if (target == PublishTarget::Web)
+		{
+			if (progress)
+			{
+				progress(0, "Web preflight, build and browser verification");
+			}
+			const auto directory = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "logs/web-editor" / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+			const auto report = RunWebPublish(plan, {{"jobId", "editor-web-publish"}, {"timeoutMs", 600000}}, directory);
+			const bool ok = report.value("status", "") == "passed";
+			const auto message = ok ? "Published verified Web ZIP" : report["diagnostics"].empty() ? std::string("Web publishing failed") : report["diagnostics"][0].value("message", "Web publishing failed");
+			if (progress)
+			{
+				progress(1, ok ? "Published" : "Failed");
+			}
+			return {.succeeded = ok, .message = message, .outputPath = plan.outputDir};
+		}
 		const PublishToolchain toolchain = MakePublishToolchain();
 		PublishContext context;
 

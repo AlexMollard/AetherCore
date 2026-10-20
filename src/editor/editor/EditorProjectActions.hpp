@@ -38,6 +38,7 @@ namespace aether::editor
 		std::function<void()> reloadProject;
 		std::function<EditorProjectActionResult(const app::EditorProjectContext&)> packProject;
 		std::function<EditorProjectActionResult(const app::EditorProjectContext&, const EditorProjectPublishProgress&)> publishProject;
+		std::function<EditorProjectActionResult(const app::EditorProjectContext&, const EditorProjectPublishProgress&)> publishWebProject;
 		std::vector<VisualStudioInstallation> visualStudioInstallations;
 		std::function<EditorProjectActionResult(const std::filesystem::path& visualStudioInstall)> debugScripts;
 		std::function<EditorProjectActionResult()> rebuildEnginePak;

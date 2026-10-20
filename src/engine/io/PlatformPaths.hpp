@@ -10,6 +10,7 @@ namespace aether::io
 	{
 	public:
 		PlatformPaths() = delete;
+		[[nodiscard]] static std::filesystem::path FindExecutable(std::string_view name);
 
 		[[nodiscard]] static std::filesystem::path GetExecutableDir();
 

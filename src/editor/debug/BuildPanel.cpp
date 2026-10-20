@@ -120,7 +120,7 @@ namespace aether::editor
 
 	void BuildPanel::DrawConfigBanner(const app::EditorProjectContext& project)
 	{
-		const PublishPlan plan = PlanPublish(project);
+		const PublishPlan plan = PlanPublish(project, m_publish_target == 1 ? PublishTarget::Web : PublishTarget::Desktop);
 		if (!plan.shippableConfig)
 		{
 			ImGui::PushTextWrapPos(0.0f);
@@ -210,6 +210,9 @@ namespace aether::editor
 		}
 
 		ImGui::SeparatorText("Build");
+		ImGui::BeginDisabled(m_publishFuture.valid());
+		ImGui::Combo("Publish target", &m_publish_target, "Desktop\0Web (WebGPU 2D)\0");
+		ImGui::EndDisabled();
 		const bool publishing = m_publishFuture.valid();
 		ButtonRow row;
 
@@ -248,12 +251,12 @@ namespace aether::editor
 
 		const char* publishLabel = ICON_FA_ROCKET " Publish";
 		row.Item(publishLabel);
-		ImGui::BeginDisabled(!actions->publishProject || publishing);
+		ImGui::BeginDisabled(!(m_publish_target == 1 ? actions->publishWebProject : actions->publishProject) || publishing);
 		if (chrome::PrimaryButton(publishLabel))
 		{
 			m_status = {};
 			m_publishTask = std::make_shared<PublishTask>();
-			const auto publishAction = actions->publishProject;
+			const auto publishAction = m_publish_target == 1 ? actions->publishWebProject : actions->publishProject;
 			const app::EditorProjectContext projectCopy = project;
 			const std::shared_ptr<PublishTask> task = m_publishTask;
 			m_publishFuture = std::async(std::launch::async,
@@ -346,6 +349,11 @@ namespace aether::editor
 			}
 			ImGui::EndDisabled();
 
+			if (m_lastPublishPath.parent_path().filename() == "Web")
+			{
+				ImGui::TextWrapped("Upload the ZIP to a game host, or serve this folder over HTTPS or localhost. Browser games cannot run from file://.");
+				return;
+			}
 			ImGui::SameLine();
 			const std::string exeName = CurrentPublishEnvironment().runtimeExeName;
 			std::error_code ec;

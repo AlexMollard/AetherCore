@@ -24,7 +24,15 @@ namespace aether::app::scripting
 		}
 		const std::set<std::string> operations{"create", "inspect", "build", "run", "relaunch", "test", "publish"};
 		if (!operations.contains(request["operation"].get<std::string>())) { return invalid("Unsupported gameplay operation"); }
-		if (request.value("target", "desktop") != "desktop") { return invalid("Only desktop gameplay is implemented; browser export is unavailable"); }
+		const auto target = request.value("target", "desktop");
+		if (target != "desktop" && target != "web")
+		{
+			return invalid("Unsupported gameplay target");
+		}
+		if (target == "web" && request["operation"] != "publish")
+		{
+			return invalid("Web target currently supports publish; use browser automation for tests");
+		}
 		for (const auto& [key, bounds]: std::map<std::string, std::pair<std::int64_t, std::int64_t>>{{"ticks", {1, 1000000}}, {"timeoutMs", {100, 600000}}})
 		{
 			if (request.contains(key) && (!request[key].is_number_integer() || request[key].get<double>() < static_cast<double>(bounds.first) || request[key].get<double>() > static_cast<double>(bounds.second))) { return invalid(key + " is outside its supported integer range"); }
@@ -34,7 +42,7 @@ namespace aether::app::scripting
 		auto normalized = request;
 		if (!normalized.contains("target")) { normalized["target"] = "desktop"; }
 		if (!normalized.contains("ticks")) { normalized["ticks"] = 60; }
-		if (!normalized.contains("timeoutMs")) { normalized["timeoutMs"] = 180000; }
+		if (!normalized.contains("timeoutMs")) { normalized["timeoutMs"] = target == "web" ? 600000 : 180000; }
 		if (!normalized.contains("step")) { normalized["step"] = 1.0 / 60.0; }
 		if (!normalized.contains("launchConfig")) { normalized["launchConfig"] = nlohmann::json::object(); }
 		return normalized;

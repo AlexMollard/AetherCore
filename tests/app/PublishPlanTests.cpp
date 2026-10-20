@@ -74,3 +74,12 @@ TEST_CASE("SanitizePublishSegment strips trailing dots and spaces that Windows r
     CHECK(editor::SanitizePublishSegment("Game. ", "fallback") == "Game");
     CHECK(editor::SanitizePublishSegment("   ", "fallback") == "fallback");
 }
+
+TEST_CASE("Web publish target is independent of the editor host and config") {
+    const auto plan = editor::MakePublishPlan(MakeProject("BrowserGame"), MakeEnv(), editor::PublishTarget::Web);
+    CHECK(plan.target == editor::PublishTarget::Web);
+    CHECK(plan.profile == "webgpu-2d-v1");
+    CHECK(plan.platformName == "Web");
+    CHECK(plan.configName == "Release");
+    CHECK(plan.outputDir == std::filesystem::path("D:/work/BrowserGame/Builds/Web/BrowserGame"));
+}

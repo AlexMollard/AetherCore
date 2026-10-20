@@ -12,6 +12,7 @@
 #include "GameplayPrerequisites.hpp"
 #include "RuntimeProjectSettings.hpp"
 #include "editor/publish/PublishPlan.hpp"
+#include "editor/publish/WebPublish.hpp"
 #include "editor/publish/PublishSteps.hpp"
 #include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
@@ -68,27 +69,9 @@ namespace aether::project_tool
 				const auto path = std::filesystem::u8path(overridden);
 				return std::filesystem::is_regular_file(path) ? path : std::filesystem::path{};
 			}
-			const auto paths = io::PlatformPaths::ReadEnvironmentVariable("PATH");
-#ifdef _WIN32
-			constexpr char separator = ';';
-			const auto filename = std::string(name) + ".exe";
-#else
-			constexpr char separator = ':';
-			const std::string filename(name);
-#endif
-			std::size_t begin = 0;
-			while (begin < paths.size())
-			{
-				const auto end = paths.find(separator, begin);
-				auto entry = paths.substr(begin, end == std::string::npos ? end : end - begin);
-				if (entry.size() > 1 && entry.front() == '"' && entry.back() == '"') { entry = entry.substr(1, entry.size() - 2); }
-				const auto candidate = std::filesystem::u8path(entry) / filename;
-				if (!entry.empty() && std::filesystem::is_regular_file(candidate)) { return candidate; }
-				if (end == std::string::npos) { break; }
-				begin = end + 1;
-			}
-			return {};
+			return io::PlatformPaths::FindExecutable(name);
 		}
+
 		void ManagedDiagnostics(const std::filesystem::path& log, scripting::AgentReport& report)
 		{
 			const auto text = io::file_util::ReadText(log);
@@ -191,6 +174,16 @@ namespace aether::project_tool
 		if (!descriptor) { return fail("GAMEPLAY_PROJECT", descriptor.error().message); }
 		report.language = std::string(app::GameplayLanguageName(descriptor->language));
 		report.profile = std::string(app::GameplayProfileName(descriptor->language));
+		if (request.value("target", "desktop") == "web")
+		{
+			report.target = "web";
+			report.profile = "webgpu-2d-v1";
+			report.phase = "web-publish";
+			progress(Serialize(report));
+			const auto plan = editor::MakePublishPlan(*descriptor, editor::CurrentPublishEnvironment(), editor::PublishTarget::Web);
+			request["jobId"] = report.jobId;
+			return editor::RunWebPublish(plan, request, directory, stop);
+		}
 		if (operation == "create" || operation == "inspect")
 		{
 			report.status = Status::Passed;

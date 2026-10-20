@@ -64,6 +64,7 @@ namespace aether::editor
 		void PollPublish(app::LayerContext& context);
 		void SetStatus(const EditorProjectActionResult& result);
 
+		int m_publish_target = 0;
 		ActionStatus m_status;
 		std::filesystem::path m_visualStudioInstall;
 		std::filesystem::path m_lastPublishPath;

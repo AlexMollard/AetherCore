@@ -125,11 +125,13 @@ namespace aether::io
 		return std::filesystem::path(EnvironmentString(name));
 #endif
 	}
+
 	std::string PlatformPaths::PathToUtf8(const std::filesystem::path& path)
 	{
 		const auto bytes = path.u8string();
 		return std::string(bytes.begin(), bytes.end());
 	}
+
 	std::filesystem::path PlatformPaths::GetExecutableDir()
 	{
 		if (const std::filesystem::path exePath = ResolveExecutablePath(); !exePath.empty())
@@ -186,6 +188,39 @@ namespace aether::io
 			return std::string{};
 		}();
 		return name;
+	}
+
+	std::filesystem::path PlatformPaths::FindExecutable(std::string_view name)
+	{
+		const auto paths = ReadEnvironmentVariable("PATH");
+#ifdef _WIN32
+		constexpr char separator = ';';
+		const auto filename = std::string(name) + ".exe";
+#else
+		constexpr char separator = ':';
+		const std::string filename(name);
+#endif
+		std::size_t begin = 0;
+		while (begin < paths.size())
+		{
+			const auto end = paths.find(separator, begin);
+			auto entry = paths.substr(begin, end == std::string::npos ? end : end - begin);
+			if (entry.size() > 1 && entry.front() == '"' && entry.back() == '"')
+			{
+				entry = entry.substr(1, entry.size() - 2);
+			}
+			const auto candidate = std::filesystem::u8path(entry) / filename;
+			if (!entry.empty() && std::filesystem::is_regular_file(candidate))
+			{
+				return candidate;
+			}
+			if (end == std::string::npos)
+			{
+				break;
+			}
+			begin = end + 1;
+		}
+		return {};
 	}
 
 	std::filesystem::path PlatformPaths::ResolveToolExecutable(std::string_view envVar, std::string_view devHint, std::string_view fileName)

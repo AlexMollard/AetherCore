@@ -279,13 +279,13 @@ def cancel_job(job_id, *, repo=None):
 def start_job(request, *, repo=None, _worker_command=None):
     if not isinstance(request, dict) or not isinstance(request.get('project'), str) or not request['project'].strip():
         raise ValueError('project must be a nonempty path')
-    if request.get('operation') not in OPERATIONS or request.get('target', 'desktop') != 'desktop':
+    if request.get('operation') not in OPERATIONS or request.get('target', 'desktop') not in ('desktop', 'web'):
         raise ValueError('operation or target is unsupported')
-    timeout = request.get('timeoutMs', 180000)
+    timeout = request.get('timeoutMs', 600000 if request.get('target') == 'web' else 180000)
     if type(timeout) is not int or not 100 <= timeout <= 600000:
         raise ValueError('timeoutMs must be an integer from 100 through 600000')
     repo = Path(repo or os.environ.get('AETHER_REPO', REPO)).resolve()
-    request = dict(request, jobId=str(uuid.uuid4()), target='desktop', timeoutMs=timeout)
+    request = dict(request, jobId=str(uuid.uuid4()), target=request.get('target', 'desktop'), timeoutMs=timeout)
     if not Path(request['project']).is_absolute():
         request['project'] = str((repo / request['project']).resolve())
     directory = _job_dir(request['jobId'], repo)

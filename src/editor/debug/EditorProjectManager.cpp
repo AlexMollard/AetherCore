@@ -184,6 +184,11 @@ namespace aether::editor
 		{
 			return PublishProject(project, progress);
 		};
+		m_actions.publishWebProject = [](const app::EditorProjectContext& project, const EditorProjectPublishProgress& progress)
+		{
+			return PublishProject(project, progress, PublishTarget::Web);
+		};
+
 		m_actions.visualStudioInstallations = FindVisualStudioInstallations();
 		m_actions.debugScripts = [this](const std::filesystem::path& visualStudioInstall) -> EditorProjectActionResult
 		{
@@ -433,8 +438,7 @@ namespace aether::editor
 			m_launcherState.error = projectResult.error().message;
 			return;
 		}
-		if (const auto* selected = m_services != nullptr ? m_services->TryGet<app::ProjectScriptingSettings>() : nullptr;
-		    selected != nullptr && selected->language != projectResult->language)
+		if (const auto* selected = m_services != nullptr ? m_services->TryGet<app::ProjectScriptingSettings>() : nullptr; selected != nullptr && selected->language != projectResult->language)
 		{
 			m_launcherState.error = "This project's gameplay language changed. Reopen the project from the Launcher to select its gameplay backend.";
 			AE_ERROR(LogCategory::App, "{}", m_launcherState.error);

@@ -29,7 +29,7 @@ if mode in ('cancel', 'late-pass'):
     while not pathlib.Path(a.cancel_file).exists(): time.sleep(.01)
 status = 'cancelled' if mode == 'cancel' else ('failed' if mode == 'failed' else 'passed')
 code = {'passed': 0, 'failed': 1, 'cancelled': 130}[status]
-out = dict(schemaVersion=1, jobId=r['jobId'], status=status, phase='complete', target='desktop',
+out = dict(schemaVersion=1, jobId=r['jobId'], status=status, phase='complete', target=r.get('target','desktop'),
            language='csharp', profile='default', diagnostics=[], toolchains=[], artifacts=[],
            requiredChecks=[dict(name='worker', status='passed')], durationMs=1, exitCode=code)
 if status == 'failed': out['diagnostics'] = [dict(code='fixture.failure',severity='error',message='fixture failed')]
@@ -58,6 +58,13 @@ class GameplayJobTests(unittest.TestCase):
                 if attempt == 99:
                     raise
                 time.sleep(.02)
+
+    def test_web_target_survives_start_and_status(self):
+        started=jobs.start_job({'project':str(self.repo/'project'), 'operation':'publish', 'target':'web'},repo=self.repo,_worker_command=[sys.executable,str(self.worker)])
+        self.assertEqual(started['report']['target'],'web')
+        terminal=self.wait(started['jobId'])
+        self.assertEqual(terminal['report']['target'],'web')
+        self.assertEqual(terminal['report']['status'],'passed')
 
     def start(self, mode='passed', timeout=5000):
         return jobs.start_job({'project': str(self.repo / 'project & 世界'), 'operation': 'inspect',
