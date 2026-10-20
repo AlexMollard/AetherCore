@@ -58,18 +58,26 @@ namespace aether::app::web
 	Expected<void> WebGameplay::Initialize()
 	{
 		m_scene = std::make_unique<WebScene>(m_world, m_graphics);
-		const int length = EM_ASM_INT({ return lengthBytesUTF8(new URLSearchParams(location.search).get('scene') || (new URLSearchParams(location.search).has('resume') ? 'ReferenceResult' : 'ReferenceStart')); });
+		const int length =
+		        EM_ASM_INT({ return lengthBytesUTF8(new URLSearchParams(location.search).get('scene') || (globalThis.aetherProject ?.startupScene || (new URLSearchParams(location.search).has('resume') ? 'ReferenceResult' : 'ReferenceStart'))); });
 		if (length < 1 || length > 128)
 		{
 			AE_UNEXPECTED(AetherError::Asset("Invalid browser startup scene name"));
 		}
 		std::string name(length, '\0');
-		EM_ASM({ stringToUTF8(new URLSearchParams(location.search).get('scene') || (new URLSearchParams(location.search).has('resume') ? 'ReferenceResult' : 'ReferenceStart'), $0, $1); }, name.data(), name.size() + 1);
+		EM_ASM(
+		        { stringToUTF8(new URLSearchParams(location.search).get('scene') || (globalThis.aetherProject ?.startupScene || (new URLSearchParams(location.search).has('resume') ? 'ReferenceResult' : 'ReferenceStart')), $0, $1); },
+		        name.data(),
+		        name.size() + 1);
 		return Load(name);
 	}
 
 	Expected<void> WebGameplay::Load(const std::string& name)
 	{
+		if (!EM_ASM_INT({ return !globalThis.aetherProject || aetherProject.scenes.includes(UTF8ToString($0)); }, name.c_str()))
+		{
+			AE_UNEXPECTED(AetherError::Asset("WEB_DYNAMIC_SCENE_UNDECLARED: scene is not in the export manifest"));
+		}
 		m_host.Clear(++m_generation);
 		m_instances.clear();
 		AE_TRY(records, m_scene->Load(name));
@@ -365,7 +373,7 @@ namespace aether::app::web
 				}
 				return AE_GAMEPLAY_INVALID_HANDLE;
 			case AE_GAMEPLAY_SERVICE_LOAD_SCENE:
-				if (!io::FileSystem::Exists("project://scenes/" + text + ".scene.toml"))
+				if (!io::FileSystem::Exists(WebScene::ProjectPath("scenes", text, ".scene.toml")))
 				{
 					return AE_GAMEPLAY_INVALID_ARGUMENT;
 				}

@@ -132,7 +132,7 @@ namespace
 			aether::io::FileSystem::Initialize();
 			assets.Start("game.pak");
 			engineAssets.Start("engine.pak");
-			const bool reference = EM_ASM_INT({ return new URLSearchParams(location.search).has("reference"); });
+			const bool reference = EM_ASM_INT({ return !!globalThis.aetherProject || new URLSearchParams(location.search).has("reference"); });
 			if (!reference)
 			{
 				player = world.Create();
@@ -352,14 +352,18 @@ namespace
 			}
 			if (!texturesReady)
 			{
-				const auto texture = aether::io::FileSystem::ReadFile("project://assets/textures/reference.texture");
-				WebTextureHeader header;
-				if (!texture || !ReadWebTextureHeader(*texture, header))
+				if (!EM_ASM_INT({ return !!globalThis.aetherProject; }))
 				{
-					Failure("Missing, corrupt or incompatible browser texture");
-					return false;
+					const auto texture = aether::io::FileSystem::ReadFile("project://assets/textures/reference.texture");
+					WebTextureHeader header;
+					if (!texture || !ReadWebTextureHeader(*texture, header))
+					{
+						Failure("Missing, corrupt or incompatible browser texture");
+						return false;
+					}
+					EM_ASM({ aetherRuntime.assetBytes = $0; }, texture->size());
 				}
-				EM_ASM({ aetherRuntime.assetBytes = $0; }, texture->size());
+
 				if (EM_ASM_INT({ return !!globalThis.aetherPlatform; }))
 				{
 					for (const auto& path: assets.Package()->Paths())

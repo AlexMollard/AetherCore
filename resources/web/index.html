@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AetherCore WebGPU runtime</title>
-<style>body{background:#171b22;color:#eee;font:16px monospace}canvas{width:512px;height:512px;max-width:90vw;image-rendering:pixelated}pre{white-space:pre-wrap}</style>
+<style>body{background:#171b22;color:#eee;font:16px monospace}canvas{width:512px;height:512px;max-width:90vw;image-rendering:pixelated}pre{white-space:pre-wrap}body.game{margin:8px;text-align:center}body.game canvas{width:min(90vw,calc(100vh - 150px));height:auto;aspect-ratio:1}body.game h1{font-size:20px}button{min-height:36px}</style>
 <h1>AetherCore WebGPU runtime</h1><p id="instructions">Focus the canvas and use the arrow keys to move the Rust sprite.</p>
 <canvas id="canvas" width="64" height="64" tabindex="0"></canvas><p><button id="start">Start / resume audio</button> <button id="capture">Capture frame</button> <button id="stop">Stop</button></p><pre id="result">Loading…</pre>
 <script>
@@ -10,6 +10,15 @@
  document.getElementById('canvas').addEventListener('pointerdown',()=>Module.canvas.focus());
  document.getElementById('capture').onclick=()=>Module._aether_web_capture();
  document.getElementById('stop').onclick=()=>Module._aether_web_stop();
- setInterval(()=>{const {capture,...summary}=aetherRuntime;document.getElementById('result').textContent=JSON.stringify({...summary,capture:capture?{width:capture.width,height:capture.height}:null},null,2)},200);
+ setInterval(()=>{
+ const result=document.getElementById('result');
+ if(globalThis.aetherProject){
+  document.body.classList.add('game');document.querySelector('h1').textContent=aetherProject.name || aetherProject.id;
+  document.title=aetherProject.name || aetherProject.id;document.getElementById('instructions').textContent='Start the game, then use the keyboard, mouse or controller.';
+  document.getElementById('capture').hidden=true;
+  const start=document.getElementById('start');start.textContent=aetherPlatform?.started?'Resume':'Start game';start.disabled=!aetherPlatform?.fontReady || !aetherRuntime.assetsReady;
+  result.textContent=aetherRuntime.status==='failed' ? (aetherRuntime.diagnostics.some(d=>d.code==='WEBGPU_UNAVAILABLE') ? 'WebGPU is unavailable. Open this game in a WebGPU-capable browser using HTTPS or localhost, and check hardware acceleration.' : 'The game could not start: '+(aetherRuntime.diagnostics.at(-1)?.message || 'Unknown error')) : aetherRuntime.status==='stopped' ? 'Game stopped.' : !aetherRuntime.rendererReady ? 'Loading game…' : !aetherPlatform?.started ? 'Ready. Press Start game to enable sound and play.' : '';
+ }else{const {capture,...summary}=aetherRuntime;result.textContent=JSON.stringify({...summary,capture:capture?{width:capture.width,height:capture.height}:null},null,2);}
+ },200);
  setTimeout(()=>{if(aetherRuntime.state==='initializing'){aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WEBGPU_TIMEOUT',message:'Initialization did not complete within 30 seconds'})}},30000);
-</script><script src="platform.js"></script>@AETHER_WEB_BRIDGE_SCRIPT@<script src="AetherGame.js"></script></html>
+</script><script src="project.js"></script><script src="platform.js"></script>@AETHER_WEB_BRIDGE_SCRIPT@<script src="AetherGame.js"></script></html>

@@ -16,6 +16,7 @@ namespace aether::app::web
 	class WebTextureSink final : public ITextureSlotSink
 	{
 	public:
+
 		explicit WebTextureSink(webgpu::WebGpuDevice& graphics)
 		      : m_graphics(graphics)
 		{
@@ -45,6 +46,7 @@ namespace aether::app::web
 	class WebScene
 	{
 	public:
+		static std::string ProjectPath(std::string_view kind, std::string_view name, std::string_view suffix);
 		WebScene(World& world, webgpu::WebGpuDevice& graphics);
 		~WebScene();
 		Expected<std::vector<WebScriptRecord>> Load(std::string_view name);

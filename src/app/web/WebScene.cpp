@@ -17,6 +17,15 @@
 
 namespace aether::app::web
 {
+	std::string WebScene::ProjectPath(std::string_view kind, std::string_view name, std::string_view suffix)
+	{
+		const std::string key(kind);
+		const auto length = EM_ASM_INT({ return lengthBytesUTF8(globalThis.aetherProject ?.paths ?.[UTF8ToString($0)] || (UTF8ToString($0) == 'prefabs' ? 'assets/prefabs' : 'scenes')); }, key.c_str());
+		std::string base(length, '\0');
+		EM_ASM({ stringToUTF8(globalThis.aetherProject ?.paths ?.[UTF8ToString($0)] || (UTF8ToString($0) == 'prefabs' ? 'assets/prefabs' : 'scenes'), $1, $2); }, key.c_str(), base.data(), base.size() + 1);
+		return "project://" + base + "/" + std::string(name) + std::string(suffix);
+	}
+
 	namespace
 	{
 		bool ValidName(std::string_view name)
@@ -263,7 +272,7 @@ namespace aether::app::web
 		{
 			AE_UNEXPECTED(AetherError::Asset("Invalid scene name"));
 		}
-		AE_TRY(text, io::FileSystem::ReadFileText("project://scenes/" + std::string(name) + ".scene.toml"));
+		AE_TRY(text, io::FileSystem::ReadFileText(ProjectPath("scenes", name, ".scene.toml")));
 		auto description = scene::ParseToml(*text);
 		if (!description)
 		{
@@ -307,7 +316,7 @@ namespace aether::app::web
 		{
 			AE_UNEXPECTED(AetherError::Asset("Invalid prefab name"));
 		}
-		AE_TRY(text, io::FileSystem::ReadFileText("project://assets/prefabs/" + std::string(name) + ".prefab.toml"));
+		AE_TRY(text, io::FileSystem::ReadFileText(ProjectPath("prefabs", name, ".prefab.toml")));
 		auto description = scene::ParseToml(*text);
 		if (!description)
 		{

@@ -36,6 +36,24 @@ include(PortableDependencies)
 find_program(AETHER_CARGO cargo REQUIRED NO_CMAKE_FIND_ROOT_PATH)
 find_program(AETHER_WEB_NODE node REQUIRED NO_CMAKE_FIND_ROOT_PATH)
 string(JSON _rust_pin GET "${_pins}" rustWasm)
+set(AETHER_WEB_PROJECT "" CACHE PATH "Selected Rust project root (empty uses qualification fixture)")
+set(AETHER_WEB_STAGED_PROJECT "" CACHE PATH "Preflight-validated selected project assets")
+set(AETHER_WEB_GAMEPLAY_MANIFEST "" CACHE FILEPATH "Selected Cargo manifest")
+set(AETHER_WEB_GAMEPLAY_NAME "" CACHE STRING "Selected Rust library name")
+if(AETHER_WEB_PROJECT)
+    if(AETHERCORE_WEB_TEST_BRIDGE OR NOT AETHER_WEB_GAMEPLAY_MANIFEST OR NOT AETHER_WEB_STAGED_PROJECT OR NOT AETHER_WEB_GAMEPLAY_NAME MATCHES "^[A-Za-z0-9_]+$")
+        message(FATAL_ERROR "Project Web exports require validated inputs and automation OFF")
+    endif()
+    set(_rust_library "${CMAKE_BINARY_DIR}/rust/wasm32-unknown-emscripten/release/lib${AETHER_WEB_GAMEPLAY_NAME}.a")
+    file(GLOB_RECURSE _project_rust CONFIGURE_DEPENDS "${AETHER_WEB_PROJECT}/*.rs" "${AETHER_WEB_PROJECT}/scripts/Cargo.*")
+    file(GLOB_RECURSE _rust_sdk CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/*.rs" "${CMAKE_SOURCE_DIR}/rust/*/Cargo.toml")
+    add_custom_command(OUTPUT "${_rust_library}"
+        COMMAND "${CMAKE_COMMAND}" -E env CARGO_PROFILE_RELEASE_PANIC=abort "${AETHER_CARGO}" "+${_rust_pin}" rustc -Zbuild-std=std,panic_abort
+            --manifest-path "${AETHER_WEB_GAMEPLAY_MANIFEST}" --release --target wasm32-unknown-emscripten
+            --target-dir "${CMAKE_BINARY_DIR}/rust" --lib --crate-type staticlib
+        DEPENDS ${_project_rust} ${_rust_sdk} "${AETHER_WEB_GAMEPLAY_MANIFEST}"
+        VERBATIM)
+else()
 set(_rust_library "${CMAKE_BINARY_DIR}/rust/wasm32-unknown-emscripten/release/libaether_browser_gameplay.a")
 file(GLOB_RECURSE _rust_sdk CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/*.rs" "${CMAKE_SOURCE_DIR}/rust/*/Cargo.toml")
 if(AETHERCORE_WEB_TEST_BRIDGE)
@@ -49,6 +67,7 @@ add_custom_command(OUTPUT "${_rust_library}"
         "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.lock" "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/src/lib.rs"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/reference.rs"
     VERBATIM)
+endif()
 add_custom_target(WebGameplay DEPENDS "${_rust_library}")
 add_subdirectory(src/engine)
 add_subdirectory(src/app)
@@ -68,8 +87,10 @@ endif()
 configure_file("${CMAKE_SOURCE_DIR}/resources/web/index.html" "${CMAKE_BINARY_DIR}/web/index.html" @ONLY)
 configure_file("${CMAKE_SOURCE_DIR}/resources/web/platform.js" "${CMAKE_BINARY_DIR}/web/platform.js" COPYONLY)
 
+file(WRITE "${CMAKE_BINARY_DIR}/web/project.js" "globalThis.aetherProject=null;\n")
 set(_assets "${CMAKE_BINARY_DIR}/web-assets")
 file(MAKE_DIRECTORY "${_assets}" "${CMAKE_BINARY_DIR}/test-fixtures")
+if(NOT AETHER_WEB_PROJECT)
 add_custom_command(OUTPUT "${_assets}/reference.pak"
     COMMAND "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets" "${_assets}/reference.pak"
     DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" ${_game_sources}
@@ -78,14 +99,26 @@ add_custom_command(OUTPUT "${_assets}/reference.pak"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/textures/reference.png"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/prefabs/ReferencePickup.prefab.toml"
     VERBATIM)
+endif()
 add_custom_command(OUTPUT "${_assets}/sprite.wgsl"
     COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/sprite.slang"
         -target wgsl -entry vertexMain -entry fragmentMain -o "${_assets}/sprite.wgsl"
     DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/sprite.slang"
     VERBATIM)
-add_custom_target(WebAssets DEPENDS "${_assets}/reference.pak" "${_assets}/sprite.wgsl")
+add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl")
+if(NOT AETHER_WEB_PROJECT)
+    add_custom_target(WebFixtureAssets DEPENDS "${_assets}/reference.pak")
+    add_dependencies(WebAssets WebFixtureAssets)
+endif()
 add_dependencies(GameRuntime WebAssets)
 
+if(AETHER_WEB_PROJECT)
+    file(GLOB_RECURSE _game_sources CONFIGURE_DEPENDS "${AETHER_WEB_STAGED_PROJECT}/*")
+    add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
+        COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target webgpu-2d-v1 "${AETHER_WEB_STAGED_PROJECT}" "${CMAKE_BINARY_DIR}/web/game.pak"
+        DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_game_sources}
+        VERBATIM)
+else()
 file(GLOB_RECURSE _game_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/*" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scenes/*" "${CMAKE_SOURCE_DIR}/resources/web/reference/*")
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${AETHER_WEB_NODE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust" "${CMAKE_BINARY_DIR}"
@@ -99,6 +132,7 @@ add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/textures/reference.png"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/prefabs/ReferencePickup.prefab.toml"
     VERBATIM)
+endif()
 add_custom_target(WebGameAssets DEPENDS "${CMAKE_BINARY_DIR}/web/game.pak")
 add_dependencies(GameRuntime WebGameAssets)
 
@@ -110,11 +144,12 @@ add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/engine.pak"
     VERBATIM)
 add_custom_target(WebEngineAssets DEPENDS "${CMAKE_BINARY_DIR}/web/engine.pak")
 add_dependencies(GameRuntime WebEngineAssets)
-set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS
-    "${_assets}/reference.pak" "${_assets}/sprite.wgsl")
-target_link_options(GameRuntime PRIVATE
-    "--preload-file=${_assets}/reference.pak@/assets/reference.pak"
-    "--preload-file=${_assets}/sprite.wgsl@/assets/sprite.wgsl")
+set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/sprite.wgsl")
+target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/sprite.wgsl@/assets/sprite.wgsl")
+if(NOT AETHER_WEB_PROJECT)
+    set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/reference.pak")
+    target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/reference.pak@/assets/reference.pak")
+endif()
 add_custom_target(WebRuntimeAudit ALL
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/audit.py" wasm
         "$<TARGET_FILE_DIR:GameRuntime>/AetherGame.wasm" --report "${CMAKE_BINARY_DIR}/web-imports.json"

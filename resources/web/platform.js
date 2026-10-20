@@ -288,8 +288,8 @@ inputCanvas.addEventListener('blur', () => {
     aetherInput.pressed = 0
 });
 globalThis.aetherPlatform = null;
-if (new URLSearchParams(location.search).has('reference') || new URLSearchParams(location.search).has('platform')) {
-    globalThis.aetherPlatform = new AetherBrowserPlatform('AgentPipelineRust');
+if (globalThis.aetherProject || new URLSearchParams(location.search).has('reference') || new URLSearchParams(location.search).has('platform')) {
+    globalThis.aetherPlatform = new AetherBrowserPlatform(globalThis.aetherProject?.id || 'AgentPipelineRust');
 }
 document.getElementById('start').onclick = () => aetherPlatform?.startAudio();
 
