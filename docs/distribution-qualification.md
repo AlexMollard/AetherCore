@@ -52,3 +52,5 @@ the deterministic distribution fixture. Its standalone export and sample scenari
 passed at `logs/task13/ember-publish.json` and `logs/task13/ember-browser.json`; desktop
 120-tick score/state assertions passed at `logs/task13/ember-native.json`.
 External hosting remains pending by Pog Champ's explicit choice; no upload was made.
+
+The C# follow-on is recorded at `logs/task14/qualified.json`. It adds fresh C# Web exports, actual trimmed serialized-property checks, a semantic edit and the shared direct/iframe reference scenario. [C# browser support](csharp-web.md) records the matched Rust/C# measurements, toolchain pins, interpreter choice and SDK limits. External-host acceptance remains independent and pending.

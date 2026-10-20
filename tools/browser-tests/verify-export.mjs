@@ -17,11 +17,12 @@ const started=performance.now();let browser,server;
 try {
  const manifest=JSON.parse(await readFile(path.join(root,'manifest.json'),'utf8'));
  assert.equal(manifest.schemaVersion,1);assert.equal(manifest.target,'web');assert.equal(manifest.profile,'webgpu-2d-v1');
+ report.language=manifest.language;
  for(const file of manifest.files){
   assert.ok(isExportPath(file.path),'Manifest file must stay inside the package');
   const bytes=await readFile(path.join(root,file.path));assert.equal(bytes.length,file.sizeBytes);
   assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256);
-  if(/\.(js|html|wasm)$/.test(file.path))for(const marker of ['aetherTestInternal','aether_web_lose_device','aether_browser_test_panic','test-bridge.js'])assert.equal(bytes.includes(Buffer.from(marker)),false,marker+' leaked into export');
+  if(/\.(m?js|html|wasm)$/.test(file.path))for(const marker of ['aetherTestInternal','aether_web_lose_device','aether_browser_test_panic','test-bridge.js'])assert.equal(bytes.includes(Buffer.from(marker)),false,marker+' leaked into export');
  }
  report.checks.push({name:'manifest-integrity-and-production-boundary',status:'passed'});
  const require=createRequire(import.meta.url), module=process.env.AETHER_PLAYWRIGHT_MODULE || 'playwright';

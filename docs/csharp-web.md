@@ -30,11 +30,11 @@ Evidence is retained under `logs/task14/`, including the aggregate `distribution
 
 | Measurement | Rust | C# interpreter |
 | --- | ---: | ---: |
-| ZIP bytes | 1,106,219 | 2,151,468 |
-| Cold / warm interactive navigation | 247.1 / 242.5 ms | 389.9 / 541.6 ms |
+| ZIP bytes | 1,106,219 | 2,151,472 |
+| Cold / warm interactive navigation | 525.0 / 489.8 ms | 381.0 / 437.6 ms |
 | Wasm linear memory | 17,563,648 bytes | 33,554,432 bytes |
 | p95 observed frame interval | 16.8 ms | 16.8 ms |
-| Semantic edit to verified export | 16.6 s | 16.5 s |
-| Fresh Web publish | 114.8 s | 117.0 s |
+| Semantic edit to verified export | 17.8 s | 19.2 s |
+| Fresh Web publish | 119.1 s | 141.5 s |
 
-These measurements describe one small fixture on this Windows/hardware-Chrome host, not general game performance. Standalone desktop managed tests returned 137 passed and the exact same 29 pre-existing host-import failures as the previous baseline; the comparison is recorded separately from the passing native/browser acceptance checks. Trim analysis still emits warnings for reflection paths; the explicit roots and actual serialized-field checks qualify this profile, not arbitrary third-party reflection.
+Startup varies between runs; these single samples do not establish a language ordering. These measurements describe one small fixture on this Windows/hardware-Chrome host, not general game performance. Standalone desktop managed tests returned 137 passed and the exact same 29 pre-existing host-import failures as the previous baseline; the comparison is recorded separately from the passing native/browser acceptance checks. Trim analysis still emits warnings for reflection paths; the explicit roots and actual serialized-field checks qualify this profile, not arbitrary third-party reflection.
