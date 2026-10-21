@@ -173,6 +173,16 @@ Add to `opencode.jsonc` under `"mcp"`:
 | `AETHER_CONTROL_PORT` | `8787` | Editor control port (must match the editor's `AETHER_CONTROL_PORT`). |
 | `AETHER_PWSH` | `pwsh` | PowerShell used to run the gauntlet. |
 
+### Rust installation environment on Windows
+
+Gameplay jobs and owned-editor helper launches fill missing `RUSTUP_HOME` and `CARGO_HOME` from persisted Windows user settings, then machine settings. This handles a desktop MCP client started before those settings were saved. The user's configured Rust installation is available automatically to the launched compiler and its descendants, including jobs started through an already-running MCP connection: the detached job supervisor loads the current helper from disk.
+
+Explicit process values (including empty values) take priority. Only these two home variables are recovered; PATH, toolchain selection, the parent environment and Windows settings are unchanged. The helper reads string/expandable-string settings and tolerates absent or inaccessible registry entries. Standard default Rust installations and Linux/macOS keep their inherited behavior. Rust/Cargo still need to be installed and discoverable through PATH or the existing `AETHERCORE_RUSTC` / `AETHERCORE_CARGO` overrides. Updating an already-running server's owned-editor helper code uses the normal MCP server reload.
+
+Qualification reproduced a rustup shim failing with no default toolchain because the old client lacked the persisted Rust home. After the fix, that same MCP connection compiled and ran both Rust and C# headless jobs and their 90-tick desktop reference games, including a checkpoint, score and collision assertions, without changing its configuration or restarting it. Evidence is recorded in `logs/rust-mcp-acceptance.json`. Process/transport regressions include override preservation, registry precedence and failure handling, Unicode child environments, cancellation and timeout cleanup.
+
+Qualification on Windows (2026-10-21): project tests ran 46 cases with two opt-in GPU skips; all 24 MCP tests passed. The full native gauntlet passed 1,463 cases and both GPU validation smokes with zero findings (`logs/rust-mcp-native.json`). Fresh review found no remaining issues. Owned runtime/editor/test processes were closed; smoke-generated shader edits were removed. Browser runtime code and the existing C# build path were unchanged.
+
 ## Quick manual check (no MCP client)
 
 ```bash
