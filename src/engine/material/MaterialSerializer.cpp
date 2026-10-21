@@ -12,6 +12,18 @@ namespace aether
 	{
 	namespace
 	{
+		struct BooleanField
+		{
+			std::string_view key;
+			bool MaterialAsset::* member;
+		};
+		constexpr BooleanField kAdditionalFlags[] = {
+		        {"additiveblend", &MaterialAsset::additiveBlend}, {"foliage", &MaterialAsset::foliage},
+		        {"bakedlighting", &MaterialAsset::bakedLighting}, {"sky", &MaterialAsset::sky},
+		        {"lightshaft", &MaterialAsset::lightShaft}, {"objectlit", &MaterialAsset::objectLit},
+		        {"gem", &MaterialAsset::gem}, {"sheen", &MaterialAsset::sheen},
+		        {"water", &MaterialAsset::water}, {"character", &MaterialAsset::character}};
+
 		// True for "[graph]" and "[graph.node.0]" but not "[graphics]".
 		bool IsGraphHeader(std::string_view trimmed)
 		{
@@ -71,6 +83,14 @@ namespace aether
 		const bool parsed = text::ParseToml(text,
 		        [&spec, path](const text::IniEntry& entry)
 		        {
+			        for (const auto& field: kAdditionalFlags)
+			        {
+				        if (entry.fullKey == field.key || entry.fullKey == std::string("material.") + std::string(field.key))
+				        {
+					        if (const auto parsed = text::ParseBool(entry.value)) { spec.material.*field.member = *parsed; }
+					        return;
+				        }
+			        }
 			        if (entry.fullKey == "material.basecolorfactor" || entry.fullKey == "basecolorfactor")
 			        {
 				        if (const auto parsed = text::ParseFloatArray<4>(entry.value))
@@ -234,6 +254,10 @@ namespace aether
 			out += std::format("alphamask = {}\n", m.alphaMask ? "true" : "false");
 			out += std::format("modulatevertexcolor = {}\n", m.modulateVertexColor ? "true" : "false");
 			out += std::format("receiveshadows = {}\n", m.receiveShadows ? "true" : "false");
+			for (const auto& field: kAdditionalFlags)
+			{
+				if (m.*field.member) { out += std::format("{} = true\n", field.key); }
+			}
 			if (!spec.shaderVfsPath.empty())
 			{
 				out += std::format("shader = '{}'\n", spec.shaderVfsPath);

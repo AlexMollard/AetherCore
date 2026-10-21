@@ -4,6 +4,19 @@
 
 using namespace aether;
 
+TEST_CASE("Specialized and additive material flags survive authored round trips")
+{
+	constexpr bool MaterialAsset::* flags[] = {
+	        &MaterialAsset::additiveBlend, &MaterialAsset::foliage, &MaterialAsset::bakedLighting,
+	        &MaterialAsset::sky, &MaterialAsset::lightShaft, &MaterialAsset::objectLit,
+	        &MaterialAsset::gem, &MaterialAsset::sheen, &MaterialAsset::water, &MaterialAsset::character};
+	MaterialPresetSpec source;
+	source.material.alphaBlend = true;
+	for (const auto field: flags) { source.material.*field = true; }
+	const auto parsed = MaterialSerializer::Parse("project://flags.material.toml", MaterialSerializer::ToToml(source));
+	for (const auto field: flags) { CHECK(parsed.material.*field); }
+}
+
 namespace
 {
 	MaterialPresetSpec MakeNonDefaultSpec()
