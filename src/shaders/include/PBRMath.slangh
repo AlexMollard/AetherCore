@@ -1,0 +1,32 @@
+#ifndef AETHER_PBR_MATH_SLANGH
+#define AETHER_PBR_MATH_SLANGH
+
+// Resource-independent equations shared by native and browser materials.
+static const float kPI = 3.14159265358979323846;
+
+// GGX / Trowbridge-Reitz normal distribution.
+float D_GGX(float NdotH, float roughness)
+{
+    float a  = roughness * roughness;
+    float a2 = a * a;
+    float d  = (NdotH * NdotH) * (a2 - 1.0) + 1.0;
+    return a2 / max(kPI * d * d, 1e-7);
+}
+
+// Smith masking-shadowing (Schlick-GGX).
+float G_SmithSchlick(float NdotV, float NdotL, float roughness)
+{
+    float r = roughness + 1.0;
+    float k = (r * r) * 0.125;    // k = (r+1)^2/8 for direct lighting
+    float gv = NdotV / max(NdotV * (1.0 - k) + k, 1e-7);
+    float gl = NdotL / max(NdotL * (1.0 - k) + k, 1e-7);
+    return gv * gl;
+}
+
+// Fresnel-Schlick approximation.
+float3 F_Schlick(float cosTheta, float3 F0)
+{
+    return F0 + (1.0 - F0) * pow(saturate(1.0 - cosTheta), 5.0);
+}
+
+#endif

@@ -58,28 +58,6 @@ float GtaoVisibility(in FrameConstantsData* fc, in float2 pixelCoord)
 //
 // Diffuse only. This is an interreflection model for a hemisphere gather; a specular lobe
 // gathers one narrow direction, and SpecularOcclusion below is what describes that.
-float3 MultiBounceAo(in float ao, in float3 albedo)
-{
-    const float3 a =  2.0404f * albedo - 0.3324f;
-    const float3 b = -4.7951f * albedo + 0.6417f;
-    const float3 c =  2.7552f * albedo + 0.6903f;
-    return max(float3(ao, ao, ao), ((ao * a + b) * ao + c) * ao);
-}
-
-// Diffuse and specular are not occluded by the same amount. Diffuse gathers the whole
-// hemisphere, so ambient occlusion describes it directly. A specular lobe gathers a cone
-// whose width is set by roughness: the smoother the surface, the narrower that cone, and the
-// less likely the geometry that occludes the hemisphere also occludes the one direction the
-// reflection comes from. Applying the diffuse term to both over-darkens reflections on smooth
-// surfaces inside any crease or contact, so polished materials go dull exactly where they
-// should still catch light.
-//
-// Lagarde's approximation ("Moving Frostbite to Physically Based Rendering") reconstructs the
-// cone's occlusion from the hemisphere's. At roughness 1 it returns the plain AO, because
-// then the lobe IS the hemisphere.
-float SpecularOcclusion(in float ambientAo, in float NdotV, in float roughness)
-{
-    return saturate(pow(NdotV + ambientAo, exp2(-16.0f * roughness - 1.0f)) - 1.0f + ambientAo);
-}
+#include "AmbientOcclusionMath.slangh"
 
 #endif

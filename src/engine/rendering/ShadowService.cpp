@@ -1,6 +1,7 @@
 #include "rendering/ShadowService.hpp"
 
 #include <math.h>
+#include <ShadowCascadeFit.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -30,7 +31,6 @@ namespace
 	constexpr float kFarPlanePadding = 64.0f;
 	constexpr float kCascadeRangePadding = 140.0f;
 
-	
 	constexpr float kOrthoHalfMin = 20.0f;
 
 	// Small outward margin on the fitted sphere so PCF taps near the cascade edge
@@ -50,24 +50,6 @@ namespace
 	// and read as unshadowed - crisp at one distance, broken at the next. A
 	// sphere is also rotation-invariant, so the fit does not breathe as the
 	// camera turns.
-	struct CascadeSphere
-	{
-		float centerDistance;
-		float radius;
-	};
-
-	CascadeSphere FitCascadeSphere(const float nearZ, const float farZ, const float tanHalfX, const float tanHalfY)
-	{
-		const float a2 = tanHalfX * tanHalfX + tanHalfY * tanHalfY;
-		const float center = (farZ + nearZ) * (a2 + 1.0f) * 0.5f;
-		if (center >= farZ)
-		{
-			// Centre would sit past the far plane, so the far corners alone bound it.
-			return CascadeSphere{.centerDistance = farZ, .radius = farZ * std::sqrt(a2)};
-		}
-		const float dz = nearZ - center;
-		return CascadeSphere{.centerDistance = center, .radius = std::sqrt(nearZ * nearZ * a2 + dz * dz)};
-	}
 
 	// Shadow bias budget, in shadow-map texels of the cascade doing the lookup. The
 	// offset only has to clear the filter that is actually in use, which contact
@@ -75,7 +57,6 @@ namespace
 	// where the penumbra opens up the shadow is soft enough that acne cannot form.
 	constexpr float kDepthBiasTexels = 1.5f;
 	constexpr float kNormalOffsetTexels = 6.0f;
-
 
 	void DisableDirectionalShadows(aether::FrameConstants& fc)
 	{
@@ -363,7 +344,7 @@ namespace aether
 			const float cascadeNear = (cascade == 0u) ? camNear : fc.shadowCascadeSplits[static_cast<glm::length_t>(cascade - 1u)];
 			const float cascadeFar = fc.shadowCascadeSplits[static_cast<glm::length_t>(cascade)];
 			const float cascadeRange = std::max(cascadeFar - cascadeNear, 1.0f);
-			const CascadeSphere sphere = FitCascadeSphere(cascadeNear, cascadeFar, tanHalfX, tanHalfY);
+			const auto sphere = FitShadowCascadeSphere(cascadeNear, cascadeFar, tanHalfX, tanHalfY, std::abs(packet.proj[3][3] - 1.0f) < 1e-6f);
 
 			glm::vec3 shadowCenter = camPos + camForward * sphere.centerDistance;
 			glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
