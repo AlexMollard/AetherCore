@@ -12,8 +12,7 @@
 // frequency aliases into the next mip, and a 3x3 tent on the way back up so the
 // chain reconstructs smoothly instead of showing box-filter blocks.
 
-[[vk::binding(0, 0)]] Texture2D    g_textures[];
-[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+#include "include/PostEffectResources.slangh"
 
 #include "include/FullScreenTriangle.slangh"
 
@@ -25,7 +24,7 @@ struct BloomPush
     float filterRadius;  // upsample only, in source texels
     float karisAverage;  // >0.5 on the first downsample only
 };
-[[vk::push_constant]] BloomPush pc;
+AE_POST_PUSH(BloomPush)
 
 // Luminance-weighted average of the first downsample's taps. Fireflies - single
 // pixels far brighter than their neighbours - otherwise survive the whole chain

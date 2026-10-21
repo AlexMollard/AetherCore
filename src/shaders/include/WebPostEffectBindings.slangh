@@ -1,0 +1,109 @@
+#ifndef AETHER_WEB_POST_EFFECT_BINDINGS_SLANGH
+#define AETHER_WEB_POST_EFFECT_BINDINGS_SLANGH
+
+#include "FrameResourceIds.slangh"
+
+struct FrameConstantsData
+{
+    float4x4 view, proj, viewProj, invViewProj, prevViewProj;
+    float4x4 shadowViewProjCascades[3];
+    float4 cameraWorldPos, sunDirectionIntensity, sunColor;
+    float4 skyHorizonColor, skyZenithColor, skyVoidColor;
+    float4 fogParams, skyParams, shadingParams;
+    float4 shadowCascadeSplits, shadowCascadeDepthBias;
+    float4 shadowRegions[3]; // atlas x/y origin, size, unused
+    float4 resourceSizes[8]; // physical texture width/height/present
+    float elapsedTime;
+    uint resourceTableAddr;
+    uint _pad0, _pad1;
+};
+[[vk::binding(0, 0)]] ConstantBuffer<FrameConstantsData> effectFrame;
+[[vk::binding(2, 0)]] Texture2D<float4> effectTexture0;
+[[vk::binding(3, 0)]] Texture2D<float4> effectTexture1;
+[[vk::binding(4, 0)]] Texture2D<float4> effectTexture2;
+[[vk::binding(5, 0)]] Texture2D<float4> effectTexture3;
+[[vk::binding(6, 0)]] Texture2D<float4> effectTexture4;
+[[vk::binding(7, 0)]] Texture2D<float4> effectTexture5;
+[[vk::binding(8, 0)]] Texture2D<float4> effectTexture6;
+[[vk::binding(9, 0)]] Texture2D<float4> effectTexture7;
+[[vk::binding(10, 0)]] SamplerState g_linearSampler;
+
+struct PostTexture
+{
+    uint slot;
+    float4 Load(int3 coordinate)
+    {
+        uint physical = slot;
+        if (slot >= 8u && slot < 11u)
+        {
+            coordinate.xy += int2(effectFrame.shadowRegions[slot - 8u].xy);
+            physical = 7u;
+        }
+        switch (physical)
+        {
+        case 0: return effectTexture0.Load(coordinate);
+        case 1: return effectTexture1.Load(coordinate);
+        case 2: return effectTexture2.Load(coordinate);
+        case 3: return effectTexture3.Load(coordinate);
+        case 4: return effectTexture4.Load(coordinate);
+        case 5: return effectTexture5.Load(coordinate);
+        case 6: return effectTexture6.Load(coordinate);
+        default: return effectTexture7.Load(coordinate);
+        }
+    }
+    float4 SampleLevel(SamplerState samplerState, float2 uv, float lod)
+    {
+        // Each source uses explicit half-texel clamping where native requires it.
+        switch (slot)
+        {
+        case 0: return effectTexture0.SampleLevel(samplerState, uv, lod);
+        case 1: return effectTexture1.Load(int3(clamp(int2(uv * effectFrame.resourceSizes[1].xy), int2(0), int2(effectFrame.resourceSizes[1].xy) - 1), 0));
+        case 2: return effectTexture2.SampleLevel(samplerState, uv, lod);
+        case 3: return effectTexture3.SampleLevel(samplerState, uv, lod);
+        case 4: return effectTexture4.SampleLevel(samplerState, uv, lod);
+        case 5: return effectTexture5.SampleLevel(samplerState, uv, lod);
+        case 6: return effectTexture6.SampleLevel(samplerState, uv, lod);
+        default: return effectTexture7.Load(int3(clamp(int2(uv * effectFrame.resourceSizes[7].xy), int2(0), int2(effectFrame.resourceSizes[7].xy) - 1), 0));
+        }
+    }
+};
+static const PostTexture g_textures[11] = { {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10} };
+// Native effect functions use an unparameterized Texture2D local.
+#define Texture2D PostTexture
+
+struct ResourceEntry { uint address, type, width, height; };
+ResourceEntry LoadResourceEntry(uint unusedAddress, uint id)
+{
+    uint slot = 0xFFFFFFFFu;
+    switch (id)
+    {
+    case kFrameResourceId_HdrColor: slot = 0; break;
+    case kFrameResourceId_SceneDepth: slot = 1; break;
+    case kFrameResourceId_SceneGBuffer: slot = 2; break;
+    case kFrameResourceId_SceneBaseColor: slot = 3; break;
+    case kFrameResourceId_Gtao: slot = 4; break;
+    case kFrameResourceId_DirectionalShadowC0: slot = 8; break;
+    case kFrameResourceId_DirectionalShadowC1: slot = 9; break;
+    case kFrameResourceId_DirectionalShadowC2: slot = 10; break;
+    }
+    ResourceEntry result = {slot, kResourceTypeInvalid, 0, 0};
+    if (slot < 8u && effectFrame.resourceSizes[slot].z > 0)
+    {
+        result.type = kResourceTypeBindlessTexture;
+        result.width = uint(effectFrame.resourceSizes[slot].x);
+        result.height = uint(effectFrame.resourceSizes[slot].y);
+    }
+    else if (slot >= 8u && slot < 11u && effectFrame.shadowRegions[slot - 8u].z > 0)
+    {
+        result.type = kResourceTypeBindlessTexture;
+        result.width = result.height = uint(effectFrame.shadowRegions[slot - 8u].z);
+    }
+    return result;
+}
+
+float LoadCascadeDepth(uint slot, float2 uv, uint width, uint height)
+{
+    const int2 coord = clamp(int2(uv * float2(width, height)), int2(0), int2(width, height) - 1);
+    return g_textures[slot].Load(int3(coord, 0)).r;
+}
+#endif

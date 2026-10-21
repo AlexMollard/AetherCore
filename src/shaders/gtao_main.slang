@@ -1,9 +1,8 @@
 // Half-resolution ground-truth ambient occlusion.
 // Writes one R8 value per half-res pixel; depth is sampled from the predepth pass.
 
-[[vk::binding(0, 0)]] Texture2D g_textures[];
+#include "include/PostEffectResources.slangh"
 
-#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 #include "include/OctNormal.slangh"
 
@@ -12,14 +11,14 @@ struct GTAOPush
     uint fullWidth;
     uint fullHeight;
     uint frameIndex;
-    uint64_t frameConstantsAddr;
+    AE_POST_ADDRESS frameConstantsAddr;
     float radius;
     float strength;
     uint enabled;
     uint _pad1;
 };
 
-[[vk::push_constant]] GTAOPush pc;
+AE_POST_PUSH(GTAOPush)
 
 static float Hash(uint s)
 {
@@ -42,9 +41,9 @@ static uint2 ClampFull(int2 p)
         uint(clamp(p.y, 0, int(pc.fullHeight) - 1)));
 }
 
-static float LoadDepth(uint2 px, FrameConstantsData* fc)
+static float LoadDepth(uint2 px, AE_POST_FRAME_REF fc)
 {
-    ResourceEntry depthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
+    ResourceEntry depthEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_SceneDepth);
     if (depthEntry.type != kResourceTypeBindlessTexture || depthEntry.address == 0xFFFFFFFFu || depthEntry.width == 0u || depthEntry.height == 0u)
     {
         return 1.0f;
@@ -52,12 +51,12 @@ static float LoadDepth(uint2 px, FrameConstantsData* fc)
     return g_textures[uint(depthEntry.address)].Load(int3(px, 0)).r;
 }
 
-static float3 ReconstructWorld(uint2 px, float depth, FrameConstantsData* fc)
+static float3 ReconstructWorld(uint2 px, float depth, AE_POST_FRAME_REF fc)
 {
     float2 uv = (float2(px) + 0.5f) / float2(pc.fullWidth, pc.fullHeight);
     float2 ndc = uv * 2.0f - 1.0f;
     float4 clipPos = float4(ndc, depth, 1.0f);
-    float4 worldPos = mul(fc->invViewProj, clipPos);
+    float4 worldPos = mul(AE_POST_FIELD(fc, invViewProj), clipPos);
     return worldPos.xyz / max(worldPos.w, 1e-6f);
 }
 
@@ -67,10 +66,10 @@ static float3 ReconstructWorld(uint2 px, float depth, FrameConstantsData* fc)
 // the normal comes out somewhere between the two, which is why occlusion softens
 // exactly where geometry meets. Falls back to the estimate when no G-buffer is
 // bound, so this still works if the prepass is ever skipped.
-static bool LoadGBufferNormal(uint2 px, FrameConstantsData* fc, out float3 normal)
+static bool LoadGBufferNormal(uint2 px, AE_POST_FRAME_REF fc, out float3 normal)
 {
     normal = float3(0.0f, 1.0f, 0.0f);
-    ResourceEntry e = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneGBuffer);
+    ResourceEntry e = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_SceneGBuffer);
     if (e.type != kResourceTypeBindlessTexture || e.address == 0xFFFFFFFFu || e.width == 0u || e.height == 0u)
     {
         return false;
@@ -80,7 +79,7 @@ static bool LoadGBufferNormal(uint2 px, FrameConstantsData* fc, out float3 norma
     return true;
 }
 
-static float3 NormalFromDepth(uint2 px, float3 centerWorld, FrameConstantsData* fc)
+static float3 NormalFromDepth(uint2 px, float3 centerWorld, AE_POST_FRAME_REF fc)
 {
     uint2 l = ClampFull(int2(px) + int2(-1, 0));
     uint2 r = ClampFull(int2(px) + int2(1, 0));
@@ -104,11 +103,11 @@ static float3 NormalFromDepth(uint2 px, float3 centerWorld, FrameConstantsData* 
     float nLen2 = dot(n, n);
     if (nLen2 <= 1e-12f)
     {
-        return normalize(fc->cameraWorldPos.xyz - centerWorld);
+        return normalize(AE_POST_FIELD(fc, cameraWorldPos).xyz - centerWorld);
     }
     n *= rsqrt(nLen2);
 
-    if (dot(n, fc->cameraWorldPos.xyz - centerWorld) < 0.0f)
+    if (dot(n, AE_POST_FIELD(fc, cameraWorldPos).xyz - centerWorld) < 0.0f)
     {
         n = -n;
     }
@@ -125,7 +124,7 @@ static float3 NormalFromDepth(uint2 px, float3 centerWorld, FrameConstantsData* 
 // sideways, so it never registers, and wall/floor junctions came out with no occlusion
 // at all. A horizon angle is measured against the view vector instead, so a surface
 // blocking the sky is found wherever it stands.
-static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsData* fc)
+static float ComputeAO(uint2 px, float3 worldPos, float3 normal, AE_POST_FRAME_REF fc)
 {
     static const uint kSliceCount = 4u;
     static const uint kStepCount = 6u;
@@ -156,8 +155,8 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
     // smaller it is, so it sits just high enough to clear depth quantisation.
     static const float kSinBias = 0.008f;
 
-    float3 viewPos = mul(fc->view, float4(worldPos, 1.0f)).xyz;
-    float3 viewNormal = normalize(mul((float3x3)fc->view, normal));
+    float3 viewPos = mul(AE_POST_FIELD(fc, view), float4(worldPos, 1.0f)).xyz;
+    float3 viewNormal = normalize(mul((float3x3)AE_POST_FIELD(fc, view), normal));
     float3 V = normalize(-viewPos);
     float viewDepth = max(-viewPos.z, 1e-4f);
 
@@ -171,7 +170,7 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
     // one-pixel line wherever there was a depth discontinuity and nothing else at all.
     // It also explains why the feature appeared insensitive to its own settings: raising
     // gtaoRadius from 1.4 to 3.0 changed nothing, because the result was clamped either way.
-    float pixelRadius = clamp(pc.radius * abs(fc->proj[1][1]) * 0.5f * float(pc.fullHeight) / viewDepth, 2.0f, 192.0f);
+    float pixelRadius = clamp(pc.radius * abs(AE_POST_FIELD(fc, proj)[1][1]) * 0.5f * float(pc.fullHeight) / viewDepth, 2.0f, 192.0f);
 
     // Not white noise. This renderer has no temporal accumulation to average the sampling
     // error away over frames, so the spatial denoise below is the ONLY thing that gets to
@@ -243,7 +242,7 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
                     continue;
                 }
 
-                float3 sampleView = mul(fc->view, float4(ReconstructWorld(samplePx, sampleDepth, fc), 1.0f)).xyz;
+                float3 sampleView = mul(AE_POST_FIELD(fc, view), float4(ReconstructWorld(samplePx, sampleDepth, fc), 1.0f)).xyz;
                 float3 delta = sampleView - viewPos;
                 float len = length(delta);
                 if (len < 1e-4f)
@@ -326,7 +325,7 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
     uint2 halfPx = uint2(svPos.xy);
-    FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+    AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
 
     // Ambient occlusion off: still write the target rather than leaving the draw out.
     // The graph publishes this image as a frame product whatever happens in here, so a

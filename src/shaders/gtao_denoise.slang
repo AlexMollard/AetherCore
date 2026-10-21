@@ -1,14 +1,13 @@
 // Half-resolution bilateral blur for GTAO.
 
-[[vk::binding(0, 0)]] Texture2D g_textures[];
+#include "include/PostEffectResources.slangh"
 
-#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 
 struct DenoisePush
 {
     uint srcAoSlot;
-    uint64_t frameConstantsAddr;
+    AE_POST_ADDRESS frameConstantsAddr;
     uint fullWidth;
     uint fullHeight;
     uint aoWidth;
@@ -17,7 +16,7 @@ struct DenoisePush
     float spatialSigma;
 };
 
-[[vk::push_constant]] DenoisePush pc;
+AE_POST_PUSH(DenoisePush)
 
 static uint2 ClampAo(int2 p)
 {
@@ -33,9 +32,9 @@ static uint2 ClampFull(int2 p)
         uint(clamp(p.y, 0, int(pc.fullHeight) - 1)));
 }
 
-static float LoadDepthForHalf(uint2 halfPx, FrameConstantsData* fc)
+static float LoadDepthForHalf(uint2 halfPx, AE_POST_FRAME_REF fc)
 {
-    ResourceEntry depthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
+    ResourceEntry depthEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_SceneDepth);
     if (depthEntry.type != kResourceTypeBindlessTexture || depthEntry.address == 0xFFFFFFFFu || depthEntry.width == 0u || depthEntry.height == 0u)
     {
         return 1.0f;
@@ -56,7 +55,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
         return float4(1.0f, 0.0f, 0.0f, 1.0f);
     }
 
-    FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+    AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
     uint2 center = ClampAo(int2(svPos.xy));
     float centerDepth = LoadDepthForHalf(center, fc);
     if (centerDepth >= 1.0f)

@@ -15,15 +15,13 @@
 // Weighting each of the four taps by how well its depth matches this pixel's keeps the
 // fog on the side of the edge it was computed for.
 
-[[vk::binding(0, 0)]] Texture2D    g_textures[];
-[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+#include "include/PostEffectResources.slangh"
 
-#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 
 struct VolumetricCompositePush
 {
-	uint64_t frameConstantsAddr;
+	AE_POST_ADDRESS frameConstantsAddr;
 	uint     volumetricSlot;
 	uint     depthSlot;
 	uint     halfWidth;
@@ -31,23 +29,23 @@ struct VolumetricCompositePush
 	uint     _pad0;
 	uint     _pad1;
 };
-[[vk::push_constant]] VolumetricCompositePush pc;
+AE_POST_PUSH(VolumetricCompositePush)
 
 // Linear view depth, so the tap comparison is in metres rather than in the depth
 // buffer's heavily non-linear units, where every distant pair looks identical.
-float LinearizeDepth(float ndcDepth, FrameConstantsData* fc, float2 uv)
+float LinearizeDepth(float ndcDepth, AE_POST_FRAME_REF fc, float2 uv)
 {
 	const float4 clip = float4(uv * 2.0f - 1.0f, ndcDepth, 1.0f);
-	const float4 world = mul(fc->invViewProj, clip);
-	return distance(world.xyz / max(world.w, 1e-6f), fc->cameraWorldPos.xyz);
+	const float4 world = mul(AE_POST_FIELD(fc, invViewProj), clip);
+	return distance(world.xyz / max(world.w, 1e-6f), AE_POST_FIELD(fc, cameraWorldPos).xyz);
 }
 
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
-	FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+	AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
 
-	if (fc->skyParams.z <= 0.0f || fc->fogParams.x <= 0.0f)
+	if (AE_POST_FIELD(fc, skyParams).z <= 0.0f || AE_POST_FIELD(fc, fogParams).x <= 0.0f)
 	{
 		// Nothing scattered and nothing hidden: the blend leaves the scene untouched.
 		return float4(0.0f, 0.0f, 0.0f, 0.0f);

@@ -33,10 +33,7 @@
 //   set 0, binding 0 - bindless combined image samplers
 //   set 0, binding 1 - global linear sampler
 
-[[vk::binding(0, 0)]]
-Texture2D g_textures[];
-[[vk::binding(1, 0)]]
-SamplerState g_linearSampler;
+#include "include/PostEffectResources.slangh"
 
 #include "include/FullScreenTriangle.slangh"
 
@@ -48,7 +45,7 @@ struct FxaaPush
 	float rcpHeight;
 	float sharpness; // contrast-adaptive sharpening, 0 = off
 };
-[[vk::push_constant]] FxaaPush pc;
+AE_POST_PUSH(FxaaPush)
 
 // Contrast thresholds. Below the absolute one the region is too dark for an
 // edge to be visible; below the relative one it is too flat to be an edge.

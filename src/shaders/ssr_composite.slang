@@ -24,10 +24,8 @@
 // the same COLOURED F0 - a metal reflects its own base colour, so the prepass
 // writes base colour into a second target for exactly this.
 
-[[vk::binding(0, 0)]] Texture2D    g_textures[];
-[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+#include "include/PostEffectResources.slangh"
 
-#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 #include "include/OctNormal.slangh"
 #include "include/EnvBrdf.slangh"
@@ -37,13 +35,13 @@
 
 struct SsrCompositePush
 {
-	uint64_t frameConstantsAddr;
+	AE_POST_ADDRESS frameConstantsAddr;
 	uint     ssrSlot;
 	uint     width;
 	uint     height;
 	uint     _pad0;
 };
-[[vk::push_constant]] SsrCompositePush pc;
+AE_POST_PUSH(SsrCompositePush)
 
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
@@ -58,10 +56,10 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 		return float4(0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
-	FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+	AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
 
-	const ResourceEntry depthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
-	const ResourceEntry gbufEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneGBuffer);
+	const ResourceEntry depthEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_SceneDepth);
+	const ResourceEntry gbufEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_SceneGBuffer);
 	if (depthEntry.type != kResourceTypeBindlessTexture || gbufEntry.type != kResourceTypeBindlessTexture)
 	{
 		// No way to work out what the sky put here, so fall back to adding. Too
@@ -108,21 +106,21 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
 	const float2 uv = (float2(coord) + 0.5f) / float2(pc.width, pc.height);
 	const float4 clip = float4(uv * 2.0f - 1.0f, depth, 1.0f);
-	const float4 worldH = mul(fc->invViewProj, clip);
+	const float4 worldH = mul(AE_POST_FIELD(fc, invViewProj), clip);
 	const float3 worldPos = worldH.xyz / max(worldH.w, 1e-6f);
 
-	const float3 V = normalize(fc->cameraWorldPos.xyz - worldPos);
+	const float3 V = normalize(AE_POST_FIELD(fc, cameraWorldPos).xyz - worldPos);
 	const float NdotV = max(dot(N, V), 0.0f);
 	const float3 R = reflect(-V, N);
 
 	// Exactly the probe direction the forward shader used, so the term cancels
 	// rather than merely resembling what was added.
-	const float3 sunDir = normalize(fc->sunDirectionIntensity.xyz);
-	const float sunIntensity = fc->sunDirectionIntensity.w;
+	const float3 sunDir = normalize(AE_POST_FIELD(fc, sunDirectionIntensity).xyz);
+	const float sunIntensity = AE_POST_FIELD(fc, sunDirectionIntensity).w;
 	const float3 skySpecularDir = normalize(lerp(R, N, roughness * roughness));
-	const float3 skySpecular = SkySpecularProbe(skySpecularDir, worldPos, sunDir, fc->sunColor.rgb, sunIntensity,
-	        fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams,
-	        fc->shadingParams.y, fc->shadingParams.z, fc->elapsedTime, roughness);
+	const float3 skySpecular = SkySpecularProbe(skySpecularDir, worldPos, sunDir, AE_POST_FIELD(fc, sunColor).rgb, sunIntensity,
+	        AE_POST_FIELD(fc, skyHorizonColor).rgb, AE_POST_FIELD(fc, skyZenithColor).rgb, AE_POST_FIELD(fc, skyVoidColor).rgb, AE_POST_FIELD(fc, skyParams),
+	        AE_POST_FIELD(fc, shadingParams).y, AE_POST_FIELD(fc, shadingParams).z, AE_POST_FIELD(fc, elapsedTime), roughness);
 
 	// Shared with the forward shader, so the term this subtracts cannot drift from the
 	// term that was added.
@@ -138,7 +136,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// exactly 0.04 and dielectrics keep cancelling exactly - quantising 0.04 into a
 	// texel would have broken that everywhere it is most visible.
 	float3 tint = float3(1.0f, 1.0f, 1.0f);
-	const ResourceEntry baseEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneBaseColor);
+	const ResourceEntry baseEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_SceneBaseColor);
 	if (baseEntry.type == kResourceTypeBindlessTexture)
 	{
 		tint = g_textures[uint(baseEntry.address)].Load(int3(coord, 0)).rgb;
@@ -154,7 +152,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// by the same amounts.
 	{
 		float ao = 1.0f;
-		ResourceEntry aoEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_Gtao);
+		ResourceEntry aoEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_Gtao);
 		if (aoEntry.type == kResourceTypeBindlessTexture && aoEntry.width > 0u && aoEntry.height > 0u)
 		{
 			ao = saturate(g_textures[uint(aoEntry.address)].SampleLevel(g_linearSampler, uv, 0.0f).r);
@@ -166,9 +164,9 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
 	// Zero while the volumetric pass is running: it fogs the composited result
 	// afterwards, so taking it out here as well would apply the air twice.
-	const float fogAmount = (fc->skyParams.z > 0.0f)
+	const float fogAmount = (AE_POST_FIELD(fc, skyParams).z > 0.0f)
 	        ? 0.0f
-	        : HeightFogAmount(fc->cameraWorldPos.xyz, worldPos, fc->fogParams.x, fc->fogParams.y, fc->fogParams.w);
+	        : HeightFogAmount(AE_POST_FIELD(fc, cameraWorldPos).xyz, worldPos, AE_POST_FIELD(fc, fogParams).x, AE_POST_FIELD(fc, fogParams).y, AE_POST_FIELD(fc, fogParams).w);
 	specWeight *= (1.0f - fogAmount);
 
 	// The march returns the raw colour it landed on. A surface does not reflect all

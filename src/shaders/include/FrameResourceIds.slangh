@@ -1,0 +1,20 @@
+#ifndef AETHER_FRAME_RESOURCE_IDS_SLANGH
+#define AETHER_FRAME_RESOURCE_IDS_SLANGH
+
+#define kFrameResourceCount 16
+
+#define kResourceTypeInvalid         0xFFFFFFFFu
+#define kResourceTypeBindlessTexture 0u
+#define kResourceTypeDeviceAddress   1u
+
+#define kFrameResourceId_SceneDepth           0u
+#define kFrameResourceId_HdrColor             1u
+#define kFrameResourceId_Gtao                 2u
+#define kFrameResourceId_DirectionalShadowC0  3u
+#define kFrameResourceId_DirectionalShadowC1  4u
+#define kFrameResourceId_DirectionalShadowC2  5u
+#define kFrameResourceId_LocalShadowAtlas     6u
+#define kFrameResourceId_SceneGBuffer         7u
+#define kFrameResourceId_SceneBaseColor       8u
+
+#endif

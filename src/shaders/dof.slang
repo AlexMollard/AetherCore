@@ -14,16 +14,14 @@
 // in it to lose, and the taps get a free 2x2 average from sampling the full-res colour
 // bilinearly.
 
-[[vk::binding(0, 0)]] Texture2D    g_textures[];
-[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+#include "include/PostEffectResources.slangh"
 
-#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 #include "include/ShadowSampling.slangh"
 
 struct DofPush
 {
-	uint64_t frameConstantsAddr;
+	AE_POST_ADDRESS frameConstantsAddr;
 	uint     hdrSlot;
 	uint     depthSlot;
 	uint     width;   // half-res target
@@ -32,22 +30,22 @@ struct DofPush
 	float    cocCoeff;
 	float    maxCocPixels;
 };
-[[vk::push_constant]] DofPush pc;
+AE_POST_PUSH(DofPush)
 
 // Enough of the disc to read as bokeh rather than a ring of copies. A Vogel spiral
 // spreads them evenly at any count, so this is a straight cost dial.
 static const uint kTaps = 24u;
 
-float ViewDistance(float ndcDepth, float2 uv, FrameConstantsData* fc)
+float ViewDistance(float ndcDepth, float2 uv, AE_POST_FRAME_REF fc)
 {
 	const float4 clip = float4(uv * 2.0f - 1.0f, ndcDepth, 1.0f);
-	const float4 world = mul(fc->invViewProj, clip);
-	return distance(world.xyz / max(world.w, 1e-6f), fc->cameraWorldPos.xyz);
+	const float4 world = mul(AE_POST_FIELD(fc, invViewProj), clip);
+	return distance(world.xyz / max(world.w, 1e-6f), AE_POST_FIELD(fc, cameraWorldPos).xyz);
 }
 
 // Blur circle DIAMETER in full-resolution pixels, signed: negative in front of the focus
 // plane, positive behind it. The sign only tells near from far; the disc uses the size.
-float CircleOfConfusion(float ndcDepth, float2 uv, FrameConstantsData* fc, float fullHeight)
+float CircleOfConfusion(float ndcDepth, float2 uv, AE_POST_FRAME_REF fc, float fullHeight)
 {
 	if (ndcDepth >= 1.0f)
 	{
@@ -63,7 +61,7 @@ float CircleOfConfusion(float ndcDepth, float2 uv, FrameConstantsData* fc, float
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
-	FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+	AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
 
 	const int2 coord = int2(svPos.xy);
 	const float2 halfSize = float2(pc.width, pc.height);

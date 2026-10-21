@@ -1,0 +1,28 @@
+#ifndef AETHER_POST_EFFECT_RESOURCES_SLANGH
+#define AETHER_POST_EFFECT_RESOURCES_SLANGH
+
+// Effect bodies retain their native resource interface. The browser adapter binds
+// eight concrete images and a copied frame; no device address reaches WGSL.
+#ifdef AE_WEB_POST
+#include "WebPostEffectBindings.slangh"
+#define AE_POST_FRAME_REF FrameConstantsData
+#define AE_POST_LOAD_FRAME(address) effectFrame
+#define AE_POST_FIELD(frame, field) frame.field
+#define AE_POST_ADDRESS uint
+#define AE_POST_PUSH(Type) [[vk::binding(1, 0)]] ConstantBuffer<Type> pc;
+#define AE_POST_BACKGROUND_REF GpuBackgroundParams
+#define AE_POST_LOAD_BACKGROUND(address) effectBackground
+#else
+[[vk::binding(0, 0)]] Texture2D g_textures[];
+[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+#include "FrameConstants.slangh"
+#define AE_POST_FRAME_REF FrameConstantsData*
+#define AE_POST_LOAD_FRAME(address) ((FrameConstantsData*)(address))
+#define AE_POST_FIELD(frame, field) frame->field
+#define AE_POST_ADDRESS uint64_t
+#define AE_POST_PUSH(Type) [[vk::push_constant]] Type pc;
+#define AE_POST_BACKGROUND_REF GpuBackgroundParams*
+#define AE_POST_LOAD_BACKGROUND(address) ((GpuBackgroundParams*)(address))
+#endif
+
+#endif

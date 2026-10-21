@@ -24,24 +24,24 @@
 // medium has no high-frequency detail of its own. The only edges it carries are the
 // depth buffer's, and those are recovered on upsample rather than marched for.
 
-[[vk::binding(0, 0)]] Texture2D    g_textures[];
-[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+#include "include/PostEffectResources.slangh"
 
-#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 #include "include/ShadowSampling.slangh"
+#ifndef AE_WEB_POST
 #include "include/DirectionalShadowCSM.slangh"
+#endif
 #include "include/Sky.slangh"
 
 struct VolumetricPush
 {
-	uint64_t frameConstantsAddr;
+	AE_POST_ADDRESS frameConstantsAddr;
 	uint     width;      // half-res target
 	uint     height;
 	uint     depthSlot;  // full-res scene depth
 	uint     _pad0;
 };
-[[vk::push_constant]] VolumetricPush pc;
+AE_POST_PUSH(VolumetricPush)
 
 // Enough to keep banding under the jitter. More steps buy very little on a medium this
 // smooth and cost a shadow lookup each.
@@ -54,22 +54,22 @@ static const uint kSteps = 32u;
 // along. It is also called 32 times per pixel here, where a blocker search would cost
 // more than the rest of the pass put together. One comparison per step, with the
 // march's own jitter standing in for a filter.
-float SunVisibilityInAir(FrameConstantsData* fc, float3 worldPos)
+float SunVisibilityInAir(AE_POST_FRAME_REF fc, float3 worldPos)
 {
-	const float viewDepth = max(-mul(fc->view, float4(worldPos, 1.0f)).z, 0.0f);
+	const float viewDepth = max(-mul(AE_POST_FIELD(fc, view), float4(worldPos, 1.0f)).z, 0.0f);
 
 	uint cascade = 0u;
-	if (viewDepth > fc->shadowCascadeSplits.x) { cascade = 1u; }
-	if (viewDepth > fc->shadowCascadeSplits.y) { cascade = 2u; }
+	if (viewDepth > AE_POST_FIELD(fc, shadowCascadeSplits).x) { cascade = 1u; }
+	if (viewDepth > AE_POST_FIELD(fc, shadowCascadeSplits).y) { cascade = 2u; }
 
-	const ResourceEntry entry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_DirectionalShadowC0 + cascade);
+	const ResourceEntry entry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_DirectionalShadowC0 + cascade);
 	const uint slot = uint(entry.address);
 	if (entry.type != kResourceTypeBindlessTexture || slot == 0xFFFFFFFFu || entry.width == 0u || entry.height == 0u)
 	{
 		return 1.0f;
 	}
 
-	const float4 clip = mul(fc->shadowViewProjCascades[cascade], float4(worldPos, 1.0f));
+	const float4 clip = mul(AE_POST_FIELD(fc, shadowViewProjCascades)[cascade], float4(worldPos, 1.0f));
 	if (abs(clip.w) < 1e-6f)
 	{
 		return 1.0f;
@@ -84,16 +84,16 @@ float SunVisibilityInAir(FrameConstantsData* fc, float3 worldPos)
 	}
 
 	const float d = LoadCascadeDepth(slot, uv, entry.width, entry.height);
-	return ((saturate(ndc.z) - fc->shadowCascadeDepthBias[cascade]) <= d) ? 1.0f : 0.0f;
+	return ((saturate(ndc.z) - AE_POST_FIELD(fc, shadowCascadeDepthBias)[cascade]) <= d) ? 1.0f : 0.0f;
 }
 
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
-	FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+	AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
 
-	const float density = fc->fogParams.x;
-	const float strength = fc->skyParams.z;
+	const float density = AE_POST_FIELD(fc, fogParams).x;
+	const float strength = AE_POST_FIELD(fc, skyParams).z;
 	if (density <= 0.0f || strength <= 0.0f)
 	{
 		return float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -110,13 +110,13 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
 	// World-space ray for this pixel.
 	const float2 ndcXy = uv * 2.0f - 1.0f;
-	const float4 nearClip = mul(fc->invViewProj, float4(ndcXy, 0.0f, 1.0f));
-	const float4 farClip = mul(fc->invViewProj, float4(ndcXy, 1.0f, 1.0f));
+	const float4 nearClip = mul(AE_POST_FIELD(fc, invViewProj), float4(ndcXy, 0.0f, 1.0f));
+	const float4 farClip = mul(AE_POST_FIELD(fc, invViewProj), float4(ndcXy, 1.0f, 1.0f));
 	const float3 nearPos = nearClip.xyz / max(nearClip.w, 1e-6f);
 	const float3 farPos = farClip.xyz / max(farClip.w, 1e-6f);
 	const float3 rayDir = normalize(farPos - nearPos);
 
-	const float3 camPos = fc->cameraWorldPos.xyz;
+	const float3 camPos = AE_POST_FIELD(fc, cameraWorldPos).xyz;
 
 	// Sky pixels are left alone, exactly as the analytic path leaves them alone: there
 	// is no surface, so there is no segment of air between the eye and anything. The
@@ -135,9 +135,9 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// Past the last cascade every step answers "lit" anyway, so marching further buys
 	// nothing but samples. Taken from the cascade config rather than pushed, so it
 	// cannot drift out of step with the shadows it is sampling.
-	const float maxDistance = max(fc->shadowCascadeSplits.z, 1.0f);
+	const float maxDistance = max(AE_POST_FIELD(fc, shadowCascadeSplits).z, 1.0f);
 
-	const float4 surfClip = mul(fc->invViewProj, float4(ndcXy, sceneDepth, 1.0f));
+	const float4 surfClip = mul(AE_POST_FIELD(fc, invViewProj), float4(ndcXy, sceneDepth, 1.0f));
 	const float3 surfPos = surfClip.xyz / max(surfClip.w, 1e-6f);
 	const float marchLength = min(distance(surfPos, camPos), maxDistance);
 	if (marchLength <= 1e-3f)
@@ -145,21 +145,21 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 		return float4(0.0f, 0.0f, 0.0f, 0.0f);
 	}
 
-	const float3 sunDir = normalize(fc->sunDirectionIntensity.xyz);
-	const float sunIntensity = fc->sunDirectionIntensity.w;
+	const float3 sunDir = normalize(AE_POST_FIELD(fc, sunDirectionIntensity).xyz);
+	const float sunIntensity = AE_POST_FIELD(fc, sunDirectionIntensity).w;
 
 	// Both scattering terms are constant along the ray - the view direction does not
 	// change - so they are evaluated once and only the shadow varies per step.
-	const float3 ambientScatter = SkyGradient(rayDir, sunDir, fc->sunColor.rgb, sunIntensity, fc->skyHorizonColor.rgb, fc->skyZenithColor.rgb, fc->skyVoidColor.rgb, fc->skyParams, fc->shadingParams.y, 0.0f);
+	const float3 ambientScatter = SkyGradient(rayDir, sunDir, AE_POST_FIELD(fc, sunColor).rgb, sunIntensity, AE_POST_FIELD(fc, skyHorizonColor).rgb, AE_POST_FIELD(fc, skyZenithColor).rgb, AE_POST_FIELD(fc, skyVoidColor).rgb, AE_POST_FIELD(fc, skyParams), AE_POST_FIELD(fc, shadingParams).y, 0.0f);
 
-	const float g = clamp(fc->skyParams.w, 0.0f, 0.95f);
+	const float g = clamp(AE_POST_FIELD(fc, skyParams).w, 0.0f, 0.95f);
 	const float cosTheta = dot(rayDir, sunDir);
 	const float denom = 1.0f + g * g - 2.0f * g * cosTheta;
 	const float phase = (1.0f - g * g) / (4.0f * 3.14159265f * max(denom * sqrt(max(denom, 1e-4f)), 1e-4f));
 	const float sunAboveHorizon = saturate(sunDir.y * 4.0f);
-	const float3 sunLobe = fc->sunColor.rgb * sunIntensity * phase * fc->fogParams.z * sunAboveHorizon;
+	const float3 sunLobe = AE_POST_FIELD(fc, sunColor).rgb * sunIntensity * phase * AE_POST_FIELD(fc, fogParams).z * sunAboveHorizon;
 
-	const float k = max(fc->fogParams.y, 1e-4f);
+	const float k = max(AE_POST_FIELD(fc, fogParams).y, 1e-4f);
 	const float dt = marchLength / float(kSteps);
 
 	// Jitter the first step. A fixed start puts every pixel's samples on the same
@@ -198,7 +198,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// a lerp toward the scattered colour, and clamping one side of a lerp while leaving
 	// the other at full strength adds light that was never scattered.
 	const float reached = 1.0f - transmittance;
-	const float opacity = min(reached, fc->fogParams.w);
+	const float opacity = min(reached, AE_POST_FIELD(fc, fogParams).w);
 	const float clampScale = (reached > 1e-5f) ? (opacity / reached) : 0.0f;
 	return float4(inscatter * clampScale * strength, opacity);
 }

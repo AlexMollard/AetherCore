@@ -11,13 +11,8 @@
 // there is no per-draw descriptor set in a full-screen post-process pass.
 
 // Bindless sampled images at set 0 (no per-draw set in this pass).
-[[vk::binding(0, 0)]]
-Texture2D g_textures[];
+#include "include/PostEffectResources.slangh"
 
-[[vk::binding(1, 0)]]
-SamplerState g_linearSampler;
-
-#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 #include "include/ShadowSampling.slangh"
 
@@ -36,7 +31,7 @@ struct TonemapPush
     uint  bloomSlot;      // bloom chain mip 0 (0xFFFFFFFF = bloom off)
     float bloomStrength;  // linear blend toward the bloom result
     uint  dofSlot;        // half-res out-of-focus image (0xFFFFFFFF = lens off)
-    uint64_t backgroundParamsAddr; // BDA -> GpuBackgroundParams (0 = disabled)
+    AE_POST_ADDRESS backgroundParamsAddr; // BDA -> GpuBackgroundParams (0 = disabled)
     float gradeContrast;    // 1 = unchanged
     float gradeSaturation;  // 1 = unchanged, 0 = greyscale
     float gradeTemperature; // 0 = unchanged, >0 warmer
@@ -47,13 +42,13 @@ struct TonemapPush
     float motionBlurStrength;       // shutter fraction of the frame interval; 0 = off
     float motionBlurMaxRadiusPixels;// ceiling, so a teleport cannot smear the screen
     uint  _padMotionBlur;
-    uint64_t frameConstantsAddr;    // BDA -> FrameConstantsData (0 = motion blur off)
+    AE_POST_ADDRESS frameConstantsAddr;    // BDA -> FrameConstantsData (0 = motion blur off)
     float chromaticAberration;      // pixels of channel separation at the corner; 0 = off
     float filmGrain;                // grain strength in display space; 0 = off
     int   sampleOriginX;            // viewport origin in the target; 0 for a full-target pass
     int   sampleOriginY;
 };
-[[vk::push_constant]] TonemapPush pc;
+AE_POST_PUSH(TonemapPush)
 
 // Colour grade, in LINEAR space and BEFORE the tonemap curve.
 //
@@ -159,25 +154,29 @@ struct GpuBackgroundParams
     float4 stops[8];     // xyz = display-space colour, w = position (0..1)
 };
 
+#ifdef AE_WEB_POST
+[[vk::binding(11, 0)]] ConstantBuffer<GpuBackgroundParams> effectBackground;
+#endif
+
 // Evaluate the background colour in display space for a 0..1 screen UV (y-down).
-float3 EvalBackground(GpuBackgroundParams* bg, float2 uv)
+float3 EvalBackground(AE_POST_BACKGROUND_REF bg, float2 uv)
 {
-    if (bg->mode == 0u || bg->stopCount <= 1u)
+    if (AE_POST_FIELD(bg, mode) == 0u || AE_POST_FIELD(bg, stopCount) <= 1u)
     {
-        return bg->stops[0].rgb;
+        return AE_POST_FIELD(bg, stops)[0].rgb;
     }
 
     // Project the pixel onto the gradient axis (0 deg = top->bottom).
-    const float2 dir = float2(sin(bg->angleRadians), cos(bg->angleRadians));
+    const float2 dir = float2(sin(AE_POST_FIELD(bg, angleRadians)), cos(AE_POST_FIELD(bg, angleRadians)));
     const float  t   = saturate(dot(uv - 0.5f, dir) + 0.5f);
 
-    float3 col = bg->stops[0].rgb;
-    for (uint i = 1u; i < bg->stopCount; ++i)
+    float3 col = AE_POST_FIELD(bg, stops)[0].rgb;
+    for (uint i = 1u; i < AE_POST_FIELD(bg, stopCount); ++i)
     {
-        const float p0 = bg->stops[i - 1u].w;
-        const float p1 = bg->stops[i].w;
+        const float p0 = AE_POST_FIELD(bg, stops)[i - 1u].w;
+        const float p1 = AE_POST_FIELD(bg, stops)[i].w;
         const float seg = saturate((t - p0) / max(p1 - p0, 1e-5f));
-        col = (t >= p0) ? lerp(bg->stops[i - 1u].rgb, bg->stops[i].rgb, seg) : col;
+        col = (t >= p0) ? lerp(AE_POST_FIELD(bg, stops)[i - 1u].rgb, AE_POST_FIELD(bg, stops)[i].rgb, seg) : col;
     }
     return col;
 }
@@ -186,12 +185,12 @@ float3 EvalBackground(GpuBackgroundParams* bg, float2 uv)
 // Add a new operator there, then register it in TonemapOperators.slangh.
 #include "include/Tonemap/TonemapOperators.slangh"
 
-// ── Debug header bar: operator labels ──────────────────────────────────────
+// â”€â”€ Debug header bar: operator labels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Each vertical strip gets a colored header bar with the operator index digit.
 // Must match kTonemapCount in TonemapDefs.hpp.
 static const uint kNumOperators = 11u;
 
-// 3×5 bitmap font digits (0 = empty, 1 = filled), rows packed as 3-bit values.
+// 3Ã—5 bitmap font digits (0 = empty, 1 = filled), rows packed as 3-bit values.
 static const uint kDigitRows[10][5] = {
     {7u, 5u, 5u, 5u, 7u}, // 0: ###, #.#, #.#, #.#, ###
     {1u, 1u, 1u, 1u, 1u}, // 1: ..#, ..#, ..#, ..#, ..#
@@ -220,7 +219,7 @@ static const float3 kBarColors[11] = {
     float3(0.59f, 0.47f, 0.78f), // 10 AgX           - violet
 };
 
-// ── Fragment shader ────────────────────────────────────────────────────────
+// â”€â”€ Fragment shader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Triangular-PDF dither, applied in display space immediately before the 8-bit
 // write.
 //
@@ -287,11 +286,11 @@ static const float kMotionBlurMinPixels = 0.75f;
 // up close and the same one far away.
 static const float kMotionBlurDepthRejectRatio = 1.05f;
 
-float MotionBlurViewDistance(float ndcDepth, float2 uv, FrameConstantsData* fc)
+float MotionBlurViewDistance(float ndcDepth, float2 uv, AE_POST_FRAME_REF fc)
 {
     const float4 clip = float4(uv * 2.0f - 1.0f, ndcDepth, 1.0f);
-    const float4 world = mul(fc->invViewProj, clip);
-    return distance(world.xyz / max(world.w, 1e-6f), fc->cameraWorldPos.xyz);
+    const float4 world = mul(AE_POST_FIELD(fc, invViewProj), clip);
+    return distance(world.xyz / max(world.w, 1e-6f), AE_POST_FIELD(fc, cameraWorldPos).xyz);
 }
 
 float3 ApplyCameraMotionBlur(float3 centre, int2 coord, float2 svPos)
@@ -301,7 +300,7 @@ float3 ApplyCameraMotionBlur(float3 centre, int2 coord, float2 svPos)
         return centre;
     }
 
-    FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+    AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
 
     const float2 size = float2(pc.screenWidth, pc.screenHeight);
     if (size.x < 1.0f || size.y < 1.0f)
@@ -319,16 +318,16 @@ float3 ApplyCameraMotionBlur(float3 centre, int2 coord, float2 svPos)
     }
 
     const float4 clip = float4(uv * 2.0f - 1.0f, depth, 1.0f);
-    const float4 world = mul(fc->invViewProj, clip);
+    const float4 world = mul(AE_POST_FIELD(fc, invViewProj), clip);
     const float3 worldPos = world.xyz / max(world.w, 1e-6f);
 
-    const float4 prevClip = mul(fc->prevViewProj, float4(worldPos, 1.0f));
+    const float4 prevClip = mul(AE_POST_FIELD(fc, prevViewProj), float4(worldPos, 1.0f));
     if (abs(prevClip.w) < 1e-6f)
     {
         return centre;
     }
     const float2 prevUv = (prevClip.xy / prevClip.w) * 0.5f + 0.5f;
-    const float centreDistance = distance(worldPos, fc->cameraWorldPos.xyz);
+    const float centreDistance = distance(worldPos, AE_POST_FIELD(fc, cameraWorldPos).xyz);
 
     // The shutter was open for only part of the interval, so the image travelled that far.
     float2 velocityUv = (uv - prevUv) * pc.motionBlurStrength;
@@ -440,8 +439,8 @@ float3 ApplyFilmGrain(float3 color, int2 coord)
     float animate = 0.0f;
     if (pc.frameConstantsAddr != 0)
     {
-        FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
-        animate = frac(fc->elapsedTime * 60.0f) * 71.0f;
+        AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
+        animate = frac(AE_POST_FIELD(fc, elapsedTime) * 60.0f) * 71.0f;
     }
 
     // Triangular again, for the same reason the dither below is: a uniform sample leaves the
@@ -515,21 +514,21 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
         uint stripEnd   = ((stripIdx + 1u) * pc.screenWidth) / numModes;
         uint stripWidth = stripEnd - stripStart;
 
-        // ── Operator-identifying header bar ────────────────────────────
+        // â”€â”€ Operator-identifying header bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         const uint kBarHeight = 24u;
         if (uint(coord.y) < kBarHeight)
         {
             float3 barColor = kBarColors[stripIdx];
 
-            // Render the operator index digit (0–9) using a 3×5 bitmap font
-            // with 4×4 screen-pixel blocks per font pixel.
+            // Render the operator index digit (0â€“9) using a 3Ã—5 bitmap font
+            // with 4Ã—4 screen-pixel blocks per font pixel.
             // kDigitRows is a font indexed by digit, not by operator, so an
             // operator index of 10 or more has to be spelled out across two
             // glyphs rather than used as a row directly.
             uint localX    = uint(coord.x) - stripStart;
-            uint glyphW    = 12u; // 3 font cols × 4 px
+            uint glyphW    = 12u; // 3 font cols Ã— 4 px
             uint glyphGap  = 4u;
-            uint digitH    = 20u; // 5 font rows × 4 px
+            uint digitH    = 20u; // 5 font rows Ã— 4 px
             uint numDigits = (stripIdx >= 10u) ? 2u : 1u;
             uint labelW    = numDigits * glyphW + (numDigits - 1u) * glyphGap;
             uint digitOff  = (stripWidth > labelW) ? (stripWidth - labelW) / 2u : 0u;
@@ -581,9 +580,9 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // WYSIWYG background composite: fill pixels the scene did not cover (HDR
     // alpha) with the camera background, evaluated directly in display space so
     // it matches the authored swatch. Disabled (addr 0) for the sky mode.
-    if (pc.backgroundParamsAddr != 0ull)
+    if (pc.backgroundParamsAddr != 0u)
     {
-        GpuBackgroundParams* bg = (GpuBackgroundParams*)pc.backgroundParamsAddr;
+        AE_POST_BACKGROUND_REF bg = AE_POST_LOAD_BACKGROUND(pc.backgroundParamsAddr);
         const float2 uv = (float2(coord) + 0.5f) / float2(max(pc.screenWidth, 1u), max(pc.screenHeight, 1u));
         // The vignette dims the background too. It is a LENS effect, so it darkens
         // everything the lens sees - leaving the backdrop at full brightness puts a bright
@@ -633,6 +632,6 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // per-pixel coverage, so a render with no background composite - a transparent
     // icon/thumbnail bake onto an alpha-capable target - gets a genuine cutout instead
     // of an alpha channel that can never be anything but 1.0.
-    const float outAlpha = pc.backgroundParamsAddr != 0ull ? 1.0f : coverage;
+    const float outAlpha = pc.backgroundParamsAddr != 0u ? 1.0f : coverage;
     return float4(outColor, outAlpha);
 }

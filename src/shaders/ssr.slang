@@ -21,17 +21,15 @@
 // world-space step projects to wildly different pixel distances depending on
 // depth - fine steps wasted in the distance, gaps up close.
 
-[[vk::binding(0, 0)]] Texture2D    g_textures[];
-[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+#include "include/PostEffectResources.slangh"
 
-#include "include/FrameConstants.slangh"
 #include "include/FullScreenTriangle.slangh"
 #include "include/OctNormal.slangh"
 #include "include/ShadowSampling.slangh"
 
 struct SsrPush
 {
-	uint64_t frameConstantsAddr;
+	AE_POST_ADDRESS frameConstantsAddr;
 	uint     width;
 	uint     height;
 	float    maxRoughness;   // above this the lobe is too wide for a single ray
@@ -39,7 +37,7 @@ struct SsrPush
 	uint     _pad0;
 	uint     _pad1;
 };
-[[vk::push_constant]] SsrPush pc;
+AE_POST_PUSH(SsrPush)
 
 // Steps along the ray. Screen-space, so this is a real pixel budget rather than a
 // distance that means different things at different depths.
@@ -56,24 +54,24 @@ static const float kThickness = 0.55f;
 // faster than shortening the stride everywhere, which would cost the whole march.
 static const uint kRefineSteps = 5u;
 
-float LinearDepth(float ndcDepth, FrameConstantsData* fc)
+float LinearDepth(float ndcDepth, AE_POST_FRAME_REF fc)
 {
 	// Reverse the projection for this NDC depth at the view axis; only the
 	// magnitude matters for the thickness test.
 	const float4 clip = float4(0.0f, 0.0f, ndcDepth, 1.0f);
-	const float4 view = mul(fc->invViewProj, clip);
-	return length(view.xyz / max(view.w, 1e-6f) - fc->cameraWorldPos.xyz);
+	const float4 view = mul(AE_POST_FIELD(fc, invViewProj), clip);
+	return length(view.xyz / max(view.w, 1e-6f) - AE_POST_FIELD(fc, cameraWorldPos).xyz);
 }
 
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
-	FrameConstantsData* fc = (FrameConstantsData*)pc.frameConstantsAddr;
+	AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
 	const int2 coord = int2(svPos.xy);
 
-	const ResourceEntry depthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
-	const ResourceEntry gbufEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneGBuffer);
-	const ResourceEntry hdrEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_HdrColor);
+	const ResourceEntry depthEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_SceneDepth);
+	const ResourceEntry gbufEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_SceneGBuffer);
+	const ResourceEntry hdrEntry = LoadResourceEntry(AE_POST_FIELD(fc, resourceTableAddr), kFrameResourceId_HdrColor);
 	if (depthEntry.type != kResourceTypeBindlessTexture || gbufEntry.type != kResourceTypeBindlessTexture || hdrEntry.type != kResourceTypeBindlessTexture)
 	{
 		return float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -105,10 +103,10 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// Reconstruct this pixel's world position from depth.
 	const float2 uv = (float2(coord) + 0.5f) / float2(pc.width, pc.height);
 	const float4 clip = float4(uv * 2.0f - 1.0f, centreDepth, 1.0f);
-	float4 worldH = mul(fc->invViewProj, clip);
+	float4 worldH = mul(AE_POST_FIELD(fc, invViewProj), clip);
 	const float3 worldPos = worldH.xyz / max(worldH.w, 1e-6f);
 
-	const float3 V = normalize(fc->cameraWorldPos.xyz - worldPos);
+	const float3 V = normalize(AE_POST_FIELD(fc, cameraWorldPos).xyz - worldPos);
 	const float3 R = reflect(-V, N);
 
 	// Lift the ray off the surface before marching. At a contact - the base of an
@@ -122,7 +120,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// Scaled by distance from the camera so it stays a roughly constant number of
 	// pixels: a fixed world offset is far too small up close and far too large in
 	// the distance, where a texel covers more world.
-	const float viewDist = distance(worldPos, fc->cameraWorldPos.xyz);
+	const float viewDist = distance(worldPos, AE_POST_FIELD(fc, cameraWorldPos).xyz);
 	const float3 rayOrigin = worldPos + N * (viewDist * 0.004f);
 
 	// A ray heading back toward the camera exits the frame immediately and cannot
@@ -136,7 +134,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 	// screen space so the stride is measured in pixels.
 	const float rayLength = 40.0f;
 	const float3 endWorld = rayOrigin + R * rayLength;
-	float4 endClip = mul(fc->viewProj, float4(endWorld, 1.0f));
+	float4 endClip = mul(AE_POST_FIELD(fc, viewProj), float4(endWorld, 1.0f));
 	if (endClip.w <= 0.0f)
 	{
 		return float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -146,7 +144,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
 	// Project the lifted origin rather than reusing this pixel's coordinates, so the
 	// depth the march starts from matches where the ray actually begins.
-	float4 startClip = mul(fc->viewProj, float4(rayOrigin, 1.0f));
+	float4 startClip = mul(AE_POST_FIELD(fc, viewProj), float4(rayOrigin, 1.0f));
 	if (startClip.w <= 0.0f)
 	{
 		return float4(0.0f, 0.0f, 0.0f, 0.0f);
