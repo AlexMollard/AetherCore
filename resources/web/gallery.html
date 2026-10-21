@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="/aethercore-icon.png" type="image/png">
+<title>Examples · AetherCore</title>
+<style>
+:root{font-family:Inter,"Segoe UI",system-ui,sans-serif;color:#ede9e3;background:#0f0d0b;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:auto;padding:32px 32px 64px}
+header{display:flex;align-items:center;gap:12px;font-weight:650}header img{width:32px;height:32px}
+.label{margin-left:auto;color:#968d80;font-size:12px;font-weight:400}h1{font-size:clamp(32px,5vw,48px);letter-spacing:-1.5px;margin:48px 0 12px}
+.intro{color:#968d80;max-width:680px;line-height:1.7;margin:0 0 36px}h2{font-size:17px;margin:32px 0 16px;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{display:flex;flex-direction:column;padding:22px;background:#191613;border:1px solid #322c26;border-radius:5px;color:inherit;text-decoration:none;min-height:184px}
+.card:hover{background:#201c18;border-color:#ff9429}.card:focus-visible{outline:2px solid #ffb352;outline-offset:4px}
+h3{font-size:16px;margin:0 0 10px}.card p{font-size:13px;line-height:1.7;color:#968d80;margin:0 0 22px}.card span{color:#ff9429;font-size:12px;margin-top:auto}
+footer{color:#968d80;font-size:12px;line-height:1.7;margin-top:36px;border-top:1px solid #322c26;padding-top:20px}
+@media(max-width:560px){main{padding:24px 16px 40px}.label{display:none}h1{margin-top:36px}}
+</style>
+</head>
+<body><main>
+<header><img src="/aethercore-icon.png" alt="">AetherCore<span class="label">Local development gallery</span></header>
+<h1>Explore the examples.</h1>
+<p class="intro">Playable scenes and focused rendering examples from the current browser build. Open an example, select Play and click the game to use the keyboard. Refresh after a rebuild to see the latest changes.</p>
+<!-- EXAMPLES -->
+<footer>Development previews use WebGPU. These fixtures demonstrate individual features; full Vulkan rendering parity is still in progress. Expected failure examples deliberately exercise error reporting.</footer>
+</main></body>
+</html>
