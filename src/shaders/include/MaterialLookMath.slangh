@@ -1,0 +1,268 @@
+#ifndef AETHER_MATERIAL_LOOK_MATH_SLANGH
+#define AETHER_MATERIAL_LOOK_MATH_SLANGH
+// Resource-independent native material equations. Browser callers capture all
+// screen derivatives before material branches to satisfy WGSL uniformity.
+struct MaterialLookFrame
+{
+	float4 cameraWorldPos, objectAmbient, objectLight0Direction, objectLight0Color;
+	float4 objectLight1Direction, objectLight1Color, skyHorizonColor, skyZenithColor;
+};
+struct MaterialLookDerivatives
+{
+	float3 worldDx, worldDy;
+	float2 uvDx, uvDy;
+	float luminanceDx, luminanceDy;
+};
+float PickupHighlight(float3 N, float3 V, float3 L, float roughness)
+{
+    const float3 H = normalize(V + L);
+    const float NdotH = saturate(dot(N, H));
+    const float NdotL = saturate(dot(N, L));
+    const float a = max(roughness, 0.03);
+    const float power = 2.0 / (a * a);
+    return min(pow(NdotH, power) * (power + 8.0) / (8.0 * kPI), 24.0) * NdotL;
+}
+
+// CrateLook: one light's GGX specular for the object-lit ORM path (the lobe times N.L,
+// already cancelled against the BRDF's 1/N.L). 0 when the light is behind the surface.
+float3 ObjectLitSpecular(float3 N, float3 V, float3 L, float roughness, float3 F0)
+{
+    const float NdotL = saturate(dot(N, L));
+    const float NdotV = max(dot(N, V), 1e-4f);
+    const float3 Hraw = V + L;
+    const float3 H = dot(Hraw, Hraw) > 1e-12f ? normalize(Hraw) : N;
+    return D_GGX(saturate(dot(N, H)), roughness) * G_SmithSchlick(NdotV, NdotL, roughness)
+        * F_Schlick(saturate(dot(V, H)), F0) / (4.0f * NdotV);
+}
+
+
+// Character look (kFlagCharacter: Crash, Aku Aku - logs/look/CrashLook/README.md). Added on top
+// of the PS2 object lighting, which stays the base so the characters keep their original
+// colours; everything is tinted by the surface's own hue so orange fur stays orange.
+// - Relief: a bump from the texture's own luminance (screen-derivative surface gradient, no
+//   extra fetch) - wood grain on Aku Aku, denim and laces on Crash. Faded out once a pixel is
+//   wider than kCharReliefFade so a far character does not sparkle.
+// - Wrap: the key and fill wrap past the terminator and come back in the surface's saturated
+//   hue - the soft, subsurface-like falloff of fur and skin instead of a hard grey edge.
+// - Sheen: a broad, faint key highlight (material roughness sets its size).
+// - Rim: a fresnel rim of the key (strongest on the lit side) plus the ambient and fill, so the
+//   silhouette reads against bright sand and dark jungle alike; the material emissive feeds it
+//   too (Aku Aku's warm glow is brightest at his edge).
+// - Feathers (alpha-masked materials): light through the thin vane from behind, stronger near
+//   the cut-out edge where the feather thins.
+// - Catchlight (material roughness below kCharEyeRoughness = an eye): a painted-style white dot
+//   placed in the eye texture's own UV space, offset from the pupil towards the key light's side
+//   of the screen and upwards, so both (mirrored) eyes carry it on the same side.
+// ponytail: every k* here is a look choice judged on the sheets, not measured - the PS2 had none.
+static const float kCharRelief = 0.06;       // height scale of the luminance bump, metres
+static const float kCharReliefFade = 0.015;   // pixel footprint (m) where the relief is gone
+static const float kCharWrap = 0.5;           // wrap width past the terminator
+static const float kCharWrapStrength = 0.55;
+static const float kCharSheen = 0.06;
+static const float kCharRim = 0.4;
+static const float kCharAmbientRim = 0.2;
+static const float kCharGlowRim = 3.0;
+static const float kCharFeatherLight = 0.45;
+static const float kCharEyeRoughness = 0.25;
+static const float kCharCatchlight = 0.85;
+static const float2 kCharEyeCentre = float2(0.52, 0.5);   // pupil centre in the eye texture
+static const float kCharCatchOffset = 0.14;                // pupil -> catchlight, eye UV units
+static const float kCharCatchRadius = 0.075;               // eye UV units
+
+float3 SharedCharacterLook(MaterialLookFrame fc, float3 albedo, float alpha, float alphaCutoff, bool feather, float3 N,
+    float3 V, float3 worldPos, float2 uv, float roughness, float3 emissive, float keyVisibility, float ao, MaterialLookDerivatives derivatives)
+{
+    const float3 L0 = fc.objectLight0Direction.xyz;
+    const float3 L1 = fc.objectLight1Direction.xyz;
+    const float3 key = pow(max(fc.objectLight0Color.rgb, float3(0.0, 0.0, 0.0)), 2.2) * keyVisibility;
+    const float3 fill = pow(max(fc.objectLight1Color.rgb, float3(0.0, 0.0, 0.0)), 2.2);
+    const float3 amb = pow(max(fc.objectAmbient.rgb, float3(0.0, 0.0, 0.0)), 2.2);
+    // The surface's own hue at full brightness (the disc textures are dark: 0x80 = 1.0).
+    const float peak = max(albedo.r, max(albedo.g, albedo.b));
+    const float3 hue = albedo / max(peak, 1e-3f);
+    // Near-black paint (Crash's nose, brows, Aku Aku's mouth) keeps most of its black: its
+    // "hue" is a neutral grey, and a full rim would turn it lilac-grey.
+    const float rimDark = saturate(peak * 5.0f);
+
+    // Relief from the texture's luminance (Mikkelsen's surface gradient from screen derivatives).
+    const float3 dpdx = derivatives.worldDx;
+    const float3 dpdy = derivatives.worldDy;
+    const float lum = dot(albedo, float3(0.299, 0.587, 0.114));
+    // Every derivative is taken here, in uniform control flow.
+    const float dlumdx = derivatives.luminanceDx;
+    const float dlumdy = derivatives.luminanceDy;
+    const float2 duvdx = derivatives.uvDx;
+    const float2 duvdy = derivatives.uvDy;
+    const float3 r1 = cross(dpdy, N);
+    const float3 r2 = cross(N, dpdx);
+    const float det = dot(dpdx, r1);
+    const float footprint = length(dpdx) + length(dpdy);
+    const float relief = kCharRelief * (1.0f - smoothstep(0.4f * kCharReliefFade, kCharReliefFade, footprint));
+    float3 Nr = N;
+    if (abs(det) > 1e-14f && relief > 0.0f)
+    {
+        const float3 grad = sign(det) * (dlumdx * r1 + dlumdy * r2) / abs(det);
+        Nr = normalize(N - relief * grad);
+    }
+
+    const float n0 = dot(Nr, L0);
+    const float n1 = dot(Nr, L1);
+    float3 add = albedo * key * (saturate(n0) - saturate(dot(N, L0)));   // relief shading
+
+    // Wrapped key and fill, returned in the saturated hue.
+    const float band0 = saturate((n0 + kCharWrap) / (1.0f + kCharWrap)) - saturate(n0);
+    const float band1 = saturate((n1 + kCharWrap) / (1.0f + kCharWrap)) - saturate(n1);
+    add += albedo * hue * (key * band0 + fill * (0.5f * band1)) * kCharWrapStrength;
+
+    // Broad sheen, mostly the light's colour.
+    add += key * lerp(hue, float3(1.0, 1.0, 1.0), 0.6f) * (PickupHighlight(Nr, V, L0, max(roughness, 0.35f)) * kCharSheen);
+
+    // Rim.
+    const float fresnel = 1.0f - saturate(abs(dot(N, V)));
+    // The key rim keeps a little white so it reads as light; the ambient rim is all surface hue,
+    // or the level's lilac sky ambient greys the shaded side (jeans and shoes went chalky).
+    const float3 rimTint = lerp(hue, float3(1.0, 1.0, 1.0), 0.2f);
+    add += rimDark * rimTint * key * (kCharRim * saturate(dot(N, L0) * 0.5f + 0.5f) * pow(fresnel, 3.0f))
+        + rimDark * hue * dot(amb + 0.5f * fill, float3(0.333, 0.333, 0.334)) * (kCharAmbientRim * ao * pow(fresnel, 3.0f));
+    add += emissive * (kCharGlowRim * pow(fresnel, 2.0f));
+
+    // Feathers: key light through the vane from behind, more where it thins at the cut-out edge.
+    if (feather)
+    {
+        const float thin = 1.0f - 0.6f * smoothstep(alphaCutoff, min(alphaCutoff + 0.35f, 1.0f), alpha);
+        add += hue * albedo * key * (kCharFeatherLight * thin * pow(saturate(dot(V, -L0)), 2.0f));
+    }
+
+    // Eye catchlight.
+    if (roughness < kCharEyeRoughness)
+    {
+        const float3 right = cross(-V, float3(0.0, 1.0, 0.0));
+        // Screen pixels grow downwards: up is -y.
+        const float2 screenDir = float2(dot(L0, right) >= 0.0f ? 0.7071f : -0.7071f, -0.7071f);
+        const float2 uvDir = duvdx * screenDir.x + duvdy * screenDir.y;
+        if (dot(uvDir, uvDir) > 1e-12f)
+        {
+            const float2 centre = floor(uv) + kCharEyeCentre + normalize(uvDir) * kCharCatchOffset;
+            const float pixelUv = length(duvdx) + length(duvdy);
+            const float radius = max(kCharCatchRadius, 0.9f * pixelUv);
+            const float d = length(uv - centre);
+            const float dotMask = 1.0f - smoothstep(radius - max(0.5f * pixelUv, 0.2f * radius), radius, d);
+            const float eye = 1.0f - smoothstep(0.6f * kCharEyeRoughness, kCharEyeRoughness, roughness);
+            add += float3(1.0, 1.0, 1.0) * (kCharCatchlight * dotMask * eye * lerp(0.65f, 1.0f, keyVisibility));
+        }
+    }
+    return add;
+}
+
+// CrateLook: the normal-mapped normal for an object-lit surface. Object models carry no
+// TANGENT stream, so the frame comes from screen derivatives (a cotangent frame, Schuler 2013):
+// B follows increasing V, which is how tw-extract's crate normal maps are written.
+float3 SharedObjectLitNormal(float3 Ngeom, float3 worldPos, float2 uv, float3 tn, MaterialLookDerivatives derivatives)
+{
+    const float3 dp1 = derivatives.worldDx;
+    const float3 dp2 = derivatives.worldDy;
+    const float2 duv1 = derivatives.uvDx;
+    const float2 duv2 = derivatives.uvDy;
+    const float3 dp2perp = cross(dp2, Ngeom);
+    const float3 dp1perp = cross(Ngeom, dp1);
+    const float3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+    const float3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+    const float m = max(dot(T, T), dot(B, B));
+    if (m < 1e-20f)
+    {
+        return Ngeom;
+    }
+    const float invMax = rsqrt(m);
+    return normalize(tn.x * (T * invMax) + tn.y * (B * invMax) + tn.z * Ngeom);
+}
+
+// Twinsanity gem crystal (kFlagGem). The PS2 gem is a pale translucent card-cut shape lit flat;
+// this makes it read as a cut crystal while keeping the cartoon hue: flat facets (each facet
+// one colour, so it shades like a cut stone and nothing crawls across a face), a saturated body
+// whose shade changes facet by facet with a fake refracted view ray (the internal facets), light
+// shining through when the key light is behind it, a sky fresnel, and a PickupHighlight glint per
+// facet that flashes whole for a few frames as the gem spins. The glint widens with the pixel
+// footprint so a far gem glows steadily instead of flickering. Lit by the object light records
+// like every Twinsanity object; shadowing removes the key light's diffuse and glint only, so a
+// gem in shade stays coloured (ambient + its own glow).
+// ponytail: every weight here is a look choice (logs/gemlook/README.md), not measured.
+// albedo is this texel's colour; albedoAvg the material's average (the texture's last mip), whose
+// hue colours the whole stone - the disc textures fade to white at their edges, which per texel
+// turned every facet edge into a white smear. The texel only modulates brightness a little.
+float3 SharedGemShade(MaterialLookFrame fc, float3 albedo, float3 albedoAvg, float3 worldPos, float roughness, float3 emissive, float keyVisibility, out float coverage, MaterialLookDerivatives derivatives)
+{
+    const float3 toEye = fc.cameraWorldPos.xyz - worldPos;
+    const float eyeDist = length(toEye);
+    const float3 V = toEye / max(eyeDist, 1e-4);
+    float3 Nf = cross(derivatives.worldDx, derivatives.worldDy);
+    Nf = dot(Nf, Nf) > 1e-14 ? normalize(Nf) : V;
+    Nf = dot(Nf, V) < 0.0 ? -Nf : Nf;
+
+    // The disc colour is a pale half-range PS2 tint: keep its hue at full value. A grey (clear)
+    // gem gets a faint cool cast so it reads as glass rather than grey plastic.
+    // The average is washed pale by the textures' white edges and the PS2 tint is pastel anyway:
+    // push the hue out to a cartoon-vivid one (1.8x its distance from white).
+    const float peak = max(max(albedoAvg.r, albedoAvg.g), max(albedoAvg.b, 1e-4));
+    const float3 hue = saturate(1.0 - (1.0 - albedoAvg / peak) * 1.8);
+    const float sat = 1.0 - min(min(hue.r, hue.g), hue.b);
+    const float3 gemCol = lerp(float3(0.80, 0.92, 1.0), hue, smoothstep(0.08, 0.3, sat));
+    const float3 kLuma = float3(0.2126, 0.7152, 0.0722);
+    const float detail = clamp(dot(albedo, kLuma) / max(dot(albedoAvg, kLuma), 1e-4), 0.8, 1.2);
+
+    const float3 L0 = normalize(fc.objectLight0Direction.xyz);
+    const float3 L1 = normalize(fc.objectLight1Direction.xyz);
+    // Wrapped diffuse per facet: facets differ in brightness but no facet goes black.
+    const float3 lightGamma = fc.objectAmbient.rgb
+        + fc.objectLight0Color.rgb * ((0.15 + 0.85 * saturate(dot(Nf, L0))) * keyVisibility)
+        + fc.objectLight1Color.rgb * (0.15 + 0.85 * saturate(dot(Nf, L1)));
+    const float3 lit = pow(max(lightGamma, float3(0.0, 0.0, 0.0)), 2.2);
+
+    // Internal facets: the refracted view ray against two fixed planes gives each facet its own
+    // depth shade, which moves facet by facet as the gem turns.
+    const float3 Rr = refract(-V, Nf, 1.0 / 1.6);
+    const float band = dot(Rr, float3(0.57, 0.21, 0.79)) * 9.0 + dot(Nf, float3(-0.30, 0.90, 0.20)) * 7.0;
+    const float inner = pow(0.5 + 0.5 * sin(band), 1.5);
+    // Facets square to the eye look into the stone (deep colour); grazing ones catch light.
+    const float depth = lerp(0.6, 1.2, pow(1.0 - saturate(dot(Nf, V)), 1.5));
+    // The brightest internal facets light up paler, like light bouncing inside the cut.
+    const float3 hot = lerp(gemCol, float3(1.0, 1.0, 1.0), 0.45) * (0.7 * smoothstep(0.8, 1.0, inner));
+    const float3 body = lit * (gemCol * ((0.2 + 0.8 * inner) * depth) + hot) * detail;
+
+    // Light through the stone: the key light seen through the gem lifts it towards its hue.
+    const float through = pow(saturate(dot(-V, L0)), 3.0) * keyVisibility;
+    const float3 transmitted = gemCol * pow(max(fc.objectLight0Color.rgb, float3(0.0, 0.0, 0.0)), 2.2) * (0.6 * through);
+
+    // Sky in the facets at grazing angles; facets turned down reflect the ground instead (a dim,
+    // warm horizon), which keeps the pavilion deep and saturated rather than sky-washed.
+    const float NdotV = saturate(dot(Nf, V));
+    const float fresnel = 0.04 + 0.96 * pow(1.0 - NdotV, 5.0);
+    const float3 R = reflect(-V, Nf);
+    const float3 sky = R.y >= 0.0
+        ? lerp(fc.skyHorizonColor.rgb, fc.skyZenithColor.rgb, saturate(R.y))
+        : fc.skyHorizonColor.rgb * lerp(0.35, 0.12, saturate(-R.y * 2.0));
+
+    // Glint: roughness widened by the pixel's world footprint (a gem ~40 px across keeps the
+    // authored sharpness, a speck of a few px gets a broad steady lobe).
+    const float pixel = length((abs(derivatives.worldDx) + abs(derivatives.worldDy)));
+    const float glintRough = max(roughness, saturate(pixel * 6.0));
+    const float3 keyLin = pow(max(fc.objectLight0Color.rgb, float3(0.0, 0.0, 0.0)), 2.2);
+    const float3 fillLin = pow(max(fc.objectLight1Color.rgb, float3(0.0, 0.0, 0.0)), 2.2);
+    const float3 whiteKey = lerp(keyLin, float3(dot(keyLin, float3(0.333, 0.333, 0.333))), 0.6) * 1.5;
+    // A soft studio light above the viewer: some top facet always carries a white highlight,
+    // the cartoon gem read, and it walks facet to facet as the gem turns.
+    const float3 studio = normalize(V + float3(0.0, 1.2, 0.0));
+    const float3 glint = whiteKey * (PickupHighlight(Nf, V, L0, glintRough) * keyVisibility)
+        + fillLin * (0.6 * PickupHighlight(Nf, V, L1, glintRough * 1.5))
+        + 0.35 * PickupHighlight(Nf, V, studio, max(glintRough, 0.15));
+    // Rim in the stone's own colour (a white one read as frosted plastic).
+    const float3 rim = lerp(gemCol, float3(1.0, 1.0, 1.0), 0.3) * (keyLin * keyVisibility + lit * 0.5) * (0.3 * pow(1.0 - NdotV, 4.0));
+
+    // Self glow keeps the colour in shade and at a distance (where the gem is a few pixels).
+    const float3 glow = gemCol * (0.12 + 0.25 * smoothstep(12.0, 50.0, eyeDist)) + emissive;
+
+    coverage = lerp(0.86, 1.0, fresnel);
+    return body + transmitted + sky * (0.5 * fresnel) + glint + rim + glow;
+}
+
+
+#endif

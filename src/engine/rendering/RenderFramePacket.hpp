@@ -9,6 +9,7 @@
 
 #include "rendering/Render2DFrameData.hpp"
 #include "gpu/MeshPass.hpp"
+#include "gpu/PostEffectsPass.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "physics/PhysicsDebugData.hpp"
 #include "rendering/IUiOverlay.hpp"
@@ -73,6 +74,7 @@ namespace aether
 		bool renderLightingEnabled = false;
 		std::uint32_t tonemapMode = 1;
 		float tonemapExposure = 1.0f;
+		gpu::PostEffectsSettings postEffects{};
 		SceneFeatureFlags sceneFeatures = DefaultSceneFeatures(SceneKind::Scene3D);
 
 		// True when the main render queue received at least one 3D mesh draw this frame.
@@ -160,5 +162,10 @@ namespace aether
 		std::uint32_t drawSlot = 0;
 
 		float elapsedTime = 0.0f;
+		std::uint64_t renderSceneGeneration = 0;
+		// Automation warm-up/resize redraws preserve accepted simulation history.
+		bool advanceTemporalEffects = true;
+		std::uint64_t temporalFrameIndex = UINT64_MAX;
+		std::uint64_t simulationTick = 0;
 	};
 } // namespace aether

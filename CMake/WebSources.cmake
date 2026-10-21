@@ -15,6 +15,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     assets/GltfAsset.cpp
     assets/ModelPose.cpp
     animation/SpriteAnimationSystem.cpp
+    particles/ParticleSystem.cpp
     material/TextureRegistry.cpp
     material/MaterialSerializer.cpp
     rendering/SpriteSystem.cpp
@@ -34,6 +35,10 @@ set(AETHER_WEB_ENGINE_SOURCES
     webgpu/WebMeshRenderer.cpp
 	webgpu/WebHdrRenderer.cpp
 	webgpu/WebLight2DRenderer.cpp
+	webgpu/WebPostRenderer.cpp
+	webgpu/WebBillboardRenderer.cpp
+	webgpu/WebExposureRenderer.cpp
+	gpu/PostEffectsPass.cpp
     mesh/PrimitiveMeshData.cpp
     mesh/MeshGen.cpp
 )

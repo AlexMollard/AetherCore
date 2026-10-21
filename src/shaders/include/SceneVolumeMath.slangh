@@ -1,0 +1,90 @@
+#ifndef AETHER_SCENE_VOLUME_MATH_SLANGH
+#define AETHER_SCENE_VOLUME_MATH_SLANGH
+static const float kBlobDarkness = 0.37;
+static const float kBlobFadeHeight = 2.0;
+// CrashLook: character actors (the first blobShadowInfo.y blobs: Crash, Aku Aku) also lay a tight,
+// darker core right under the feet while the feet are within kCharContactHeight of the ground - the
+// contact the soft rig-matched blob is too wide to show. ponytail: a look choice, not measured.
+static const float kCharContactDarkness = 0.35;
+static const float kCharContactHeight = 0.35;
+float SharedBlobShadowVisibility(uint2 blobInfo, float4 blobs[64], float3 worldPos, float upFacing)
+{
+    float shade = 0.0;
+    float contact = 0.0;
+    const uint count = min(blobInfo.x, 64u);
+    for (uint i = 0u; i < count; ++i)
+    {
+        const float4 blob = blobs[i];
+        // A negative radius marks a pickup (see WorldRenderer::GatherBlobShadows): its blob stays
+        // at full strength across its hover height and only fades past that, over a real drop.
+        const bool pickup = blob.w < 0.0;
+        const float r = abs(blob.w);
+        // Below the actor's bounds bottom: fade with the drop. Above it: only up to the
+        // actor's own middle, so the top of a neighbouring crate is not darkened.
+        const float drop = blob.y - worldPos.y;
+        const float dropFade = pickup ? smoothstep(kBlobFadeHeight, 2.0 * kBlobFadeHeight, drop) : smoothstep(0.0, kBlobFadeHeight, drop);
+        const float vertical = (1.0 - dropFade) * (1.0 - smoothstep(1.5 * r, 2.0 * r, -drop));
+        const float horizontal = 1.0 - smoothstep(r, 2.0 * r, length(worldPos.xz - blob.xz));
+        shade = max(shade, horizontal * vertical);
+        if (i < blobInfo.y)
+        {
+            const float core = (1.0 - smoothstep(0.3 * r, 1.1 * r, length(worldPos.xz - blob.xz)))
+                * (1.0 - smoothstep(0.0, kCharContactHeight, drop)) * (1.0 - smoothstep(0.75 * r, 1.5 * r, -drop));
+            contact = max(contact, core);
+        }
+    }
+    return (1.0 - kBlobDarkness * shade * upFacing) * (1.0 - kCharContactDarkness * contact * upFacing);
+}
+
+float SharedDarknessVolumeAmount(uint volumeCount, float4 volumes[32], float3 eye, float3 surface)
+{
+	float darkness = 0.0f;
+	const uint count = min(volumeCount, 16u);
+	for (uint i = 0u; i < count; ++i)
+	{
+		const float4 centreFade = volumes[2u * i];
+		const float4 halfYaw = volumes[2u * i + 1u];
+		const float3 h = halfYaw.xyz;
+		const float c = cos(halfYaw.w);
+		const float s = sin(halfYaw.w);
+		// Into the box's frame: undo its yaw (a y rotation by t maps x to (cos t, 0, -sin t)).
+		const float3 a = eye - centreFade.xyz;
+		const float3 b = surface - centreFade.xyz;
+		const float3 o = float3(c * a.x - s * a.z, a.y, s * a.x + c * a.z);
+		const float3 e = float3(c * b.x - s * b.z, b.y, s * b.x + c * b.z);
+		const float3 d = e - o;
+
+		// Slab clip of o + t d, t in [0, 1].
+		float t0 = 0.0f;
+		float t1 = 1.0f;
+		[unroll]
+		for (int k = 0; k < 3; ++k)
+		{
+			if (abs(d[k]) < 1e-6f)
+			{
+				if (abs(o[k]) > h[k])
+				{
+					t0 = 2.0f; // parallel and outside this slab: no overlap
+				}
+			}
+			else
+			{
+				const float inv = 1.0f / d[k];
+				const float ta = (-h[k] - o[k]) * inv;
+				const float tb = (h[k] - o[k]) * inv;
+				t0 = max(t0, min(ta, tb));
+				t1 = min(t1, max(ta, tb));
+			}
+		}
+		if (t0 > t1)
+		{
+			continue;
+		}
+		const float deepest = min(o.y + d.y * t0, o.y + d.y * t1);
+		darkness = max(darkness, smoothstep(0.0f, 1.0f, (h.y - deepest) / max(centreFade.w, 1e-3f)));
+	}
+	return darkness;
+}
+
+
+#endif

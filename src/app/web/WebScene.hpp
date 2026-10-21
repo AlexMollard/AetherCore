@@ -54,6 +54,8 @@ namespace aether::app::web
 		Expected<std::vector<WebScriptRecord>> Load(std::string_view name);
 		Expected<Entity> Instantiate(std::string_view name);
 		void Tick(float dt);
+		Expected<void> ValidateEffects();
+		std::vector<Entity> TakeRetiredParticles();
 		Expected<void> Extract(RenderFramePacket& packet, unsigned width, unsigned height, float elapsed);
 		World& world;
 
@@ -75,6 +77,8 @@ namespace aether::app::web
 		std::array<float, 256> m_advances{};
 		bool m_font_ready = false;
 		std::unordered_map<std::string, TextureHandle> m_ui_textures;
+		std::vector<Entity> m_retired_particles;
+		std::uint64_t m_scene_generation = 0;
 		Expected<void> ExtractUi(RenderFramePacket& packet, unsigned width, unsigned height);
 	};
 } // namespace aether::app::web

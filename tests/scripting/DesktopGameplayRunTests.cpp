@@ -7,8 +7,28 @@
 #include "io/FileUtil.hpp"
 #include "utils/ServiceContainer.hpp"
 #include <chrono>
+#include <limits>
 
 using namespace aether::app::scripting;
+
+TEST_CASE("Desktop render scale override is ephemeral, finite and profile bounded")
+{
+	GameplayRunRequest request;
+	request.launchConfig = {{"profile", "native-desktop-2d-v1"}, {"renderScale", 0.5}};
+	CHECK_NOTHROW(ValidateGameplayRunConfig(request));
+	for (const auto value: {0.25, 1.0, 2.0})
+	{
+		request.launchConfig["renderScale"] = value;
+		CHECK_NOTHROW(ValidateGameplayRunConfig(request));
+	}
+	for (const nlohmann::json& value: {nlohmann::json(false), nlohmann::json("0.5"), nlohmann::json(nullptr), nlohmann::json(0.249), nlohmann::json(2.01), nlohmann::json(std::numeric_limits<double>::infinity())})
+	{
+		request.launchConfig["renderScale"] = value;
+		CHECK_THROWS(ValidateGameplayRunConfig(request));
+	}
+	request.launchConfig = {{"profile", "native-headless-2d-v1"}, {"renderScale", 0.5}};
+	CHECK_THROWS(ValidateGameplayRunConfig(request));
+}
 
 TEST_CASE("Desktop gameplay launch configuration requires a known bounded profile")
 {

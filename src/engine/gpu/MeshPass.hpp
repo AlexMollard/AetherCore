@@ -21,6 +21,10 @@ namespace aether
 		glm::mat4 world{1.0f};
 		glm::vec4 color{1.0f};
 		std::uint32_t mesh = 0;
+		std::uint32_t customShaderSlot = UINT32_MAX;
+		std::uint32_t proceduralKind = 0;
+		glm::vec4 effectTint{1.0f};
+		glm::vec4 effectParams{1.0f, 1.0f, 1.0f, 0.0f};
 		MaterialAsset material{};
 		std::array<std::uint32_t, 5> textures{UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX};
 		std::vector<glm::mat4> skinMatrices;

@@ -17,6 +17,15 @@ namespace aether
 	class ScreenshotService
 	{
 	public:
+		struct FrameEvidence
+		{
+			std::uint64_t frameIndex = 0;
+			float elapsedTime = 0;
+			float exposureUsed = 1;
+			std::uint32_t renderWidth = 0, renderHeight = 0;
+		};
+
+		void SetFrameEvidence(FrameEvidence evidence) { m_frameEvidence = evidence; }
 		ScreenshotService() = default;
 
 		void Init(gpu::Device device, std::uint32_t graphicsQueueFamily, gpu::Queue queue);
@@ -62,6 +71,7 @@ namespace aether
 
 		struct FrameCapture
 		{
+			FrameEvidence evidence;
 			std::string path;
 			std::promise<std::string> promise;
 			gpu::BufferHandle buffer{};
@@ -72,6 +82,7 @@ namespace aether
 		};
 
 		std::optional<FrameCapture> m_frameCapture;
+		FrameEvidence m_frameEvidence;
 
 		void CompleteFrameCapture();
 	};

@@ -18,7 +18,12 @@
 #include "WebAssetFormat.hpp"
 #include "scene/SceneDocumentExpansion.hpp"
 #include "passes/TonemapDefs.hpp"
+#include "rendering/SceneEffectExtraction.hpp"
+#include "rendering/FrameConstants.hpp"
 #include "scene/LightComponents.hpp"
+#include "utils/EngineSettings.hpp"
+#include "particles/ParticleSystem.hpp"
+#include "particles/ParticleValidation.hpp"
 
 namespace aether::app::web
 {
@@ -36,6 +41,71 @@ namespace aether::app::web
 		bool ValidName(std::string_view name)
 		{
 			return !name.empty() && name.size() <= 128 && name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == std::string_view::npos;
+		}
+
+		Expected<void> ExtractPostSettings(RenderFramePacket& packet)
+		{
+			auto& settings = packet.postEffects;
+			// Real project manifests always carry a graphics object. Internal reference
+			// fixtures without one intentionally retain the neutral comparison settings.
+			const bool authored = EM_ASM_INT({ return globalThis.aetherProject?.graphics != null ? 1 : 0; });
+			const EngineSettings::Graphics defaults;
+			const auto readFloat = [](const char* name, float fallback) -> Expected<float>
+			{
+				const double value = EM_ASM_DOUBLE({ const value = globalThis.aetherProject?.graphics?.[UTF8ToString($0)]; return value == null ? $1 : (typeof value == 'number' ? value : NaN); }, name, fallback);
+				if (!std::isfinite(value) || !std::isfinite(static_cast<float>(value)))
+				{
+					AE_UNEXPECTED(AetherError::Asset("Invalid browser graphics number: " + std::string(name)));
+				}
+				return static_cast<float>(value);
+			};
+			const auto readBool = [](const char* name, bool fallback) -> Expected<bool>
+			{
+				const int value = EM_ASM_INT({ const value = globalThis.aetherProject?.graphics?.[UTF8ToString($0)]; return value == null ? $1 : (typeof value == 'boolean' ? (value ? 1 : 0) : -1); }, name, fallback);
+				if (value < 0)
+				{
+					AE_UNEXPECTED(AetherError::Asset("Invalid browser graphics boolean: " + std::string(name)));
+				}
+				return value != 0;
+			};
+#define AE_WEB_POST_FIELD(name, reader) \
+		{ \
+			AE_TRY(value, reader(#name, authored ? defaults.name : settings.name)); \
+			settings.name = *value; \
+		}
+			AE_WEB_POST_FIELD(fxaa, readBool)
+			AE_WEB_POST_FIELD(gtao, readBool)
+			AE_WEB_POST_FIELD(autoExposure, readBool)
+			AE_WEB_POST_FIELD(reflections, readBool)
+			AE_WEB_POST_FIELD(volumetrics, readBool)
+			AE_WEB_POST_FIELD(gradeContrast, readFloat)
+			AE_WEB_POST_FIELD(gradeSaturation, readFloat)
+			AE_WEB_POST_FIELD(gradeTemperature, readFloat)
+			AE_WEB_POST_FIELD(gradeTint, readFloat)
+			AE_WEB_POST_FIELD(vignetteIntensity, readFloat)
+			AE_WEB_POST_FIELD(vignetteRoundness, readFloat)
+			AE_WEB_POST_FIELD(chromaticAberration, readFloat)
+			AE_WEB_POST_FIELD(sharpness, readFloat)
+			AE_WEB_POST_FIELD(filmGrain, readFloat)
+			AE_WEB_POST_FIELD(motionBlur, readFloat)
+			AE_WEB_POST_FIELD(motionBlurMaxRadius, readFloat)
+			AE_WEB_POST_FIELD(gtaoRadius, readFloat)
+			AE_WEB_POST_FIELD(gtaoStrength, readFloat)
+			AE_WEB_POST_FIELD(specularFilter, readFloat)
+			AE_WEB_POST_FIELD(foliageSkyLook, readFloat)
+			AE_WEB_POST_FIELD(bloomStrength, readFloat)
+			AE_WEB_POST_FIELD(bloomRadius, readFloat)
+			AE_WEB_POST_FIELD(exposureKey, readFloat)
+			AE_WEB_POST_FIELD(exposureSpeed, readFloat)
+			AE_WEB_POST_FIELD(reflectionMaxRoughness, readFloat)
+			AE_WEB_POST_FIELD(reflectionIntensity, readFloat)
+			AE_WEB_POST_FIELD(renderScale, readFloat)
+#undef AE_WEB_POST_FIELD
+			AE_TRY(contact, readBool("contactShadows", authored ? defaults.contactShadows : packet.contactShadows));
+			AE_TRY(split, readFloat("shadowSplitLambda", authored ? defaults.shadowSplitLambda : packet.shadowSplitLambda));
+			packet.contactShadows = *contact;
+			packet.shadowSplitLambda = *split;
+			return {};
 		}
 	} // namespace
 
@@ -75,12 +145,16 @@ namespace aether::app::web
 		auto physics = std::make_unique<Physics2DSystem>();
 		physics->SetTileAssets(&m_tiles);
 		world.RegisterSystem(std::move(physics));
+		auto particles = std::make_unique<ParticleSystem>(m_textures);
+		particles->SetRetireCallback([this](Entity entity) { m_retired_particles.push_back(entity); });
+		world.RegisterSystem(std::move(particles));
 		world.RegisterSystem(std::make_unique<SpriteAnimationSystem>(m_sprites));
 	}
 
 	WebScene::~WebScene()
 	{
 		world.UnregisterSystem("SpriteAnimationSystem");
+		world.UnregisterSystem("ParticleSystem");
 		world.UnregisterSystem("Physics2DSystem");
 		m_tile_system.Shutdown();
 		m_sprite_system.Shutdown();
@@ -97,13 +171,19 @@ namespace aether::app::web
 		}
 		for (const auto& record: description.entities)
 		{
-			if (record.physics || record.effect || record.joint || !record.scriptJoints.empty())
+			if (record.physics || record.joint || !record.scriptJoints.empty())
 			{
 				AE_UNEXPECTED(AetherError::Asset("Unsupported 3D entity in browser scene: " + record.name));
+			}
+			if (record.effect && record.effect->name != "plasma" && record.effect->name != "molten")
+			{
+				AE_UNEXPECTED(AetherError::Asset("Unsupported browser entity effect: " + record.effect->name));
 			}
 			for (const auto& generic: record.reflected)
 			{
 				if (generic.type != "Rigid Body 2D" && generic.type != "Collider 2D" && generic.type != "Tile Map"
+				        && generic.type != "Particle Emitter"
+				        && generic.type != "Darkness Volume"
 				        && generic.type != "Point Light" && generic.type != "Spot Light" && generic.type != "Sky" && generic.type != "Light 2D Settings"
 				        && (generic.type != "UI Canvas" && generic.type != "UI Rect" && generic.type != "UI Text" && generic.type != "UI Image" && generic.type != "UI Selectable" && generic.type != "UI Slider" && generic.type != "UI Toggle"
 				                && generic.type != "UI Button" && generic.type != "UI Progress Bar"))
@@ -164,6 +244,11 @@ namespace aether::app::web
 				TagAdd(&world, entity.id, id);
 			}
 			world.Emplace<TransformComponent>(entity, TransformComponent{.localToWorld = ComposeTransform(record.position, record.eulerDeg, record.scale)});
+			if (record.effect)
+			{
+				world.Emplace<EffectRefComponent>(entity, EffectRefComponent{.name = record.effect->name});
+				world.Emplace<EffectParamsComponent>(entity, EffectParamsComponent{.params = record.effect->params});
+			}
 			if (record.disabled)
 			{
 				world.Emplace<DisabledComponent>(entity);
@@ -320,6 +405,7 @@ namespace aether::app::web
 		if (!expanded) { AE_UNEXPECTED(AetherError::Asset(expanded.error())); }
 		*description = *expanded;
 		const auto roots = world.Roots();
+		++m_scene_generation;
 		for (const auto root: roots)
 		{
 			world.Destroy(root);
@@ -328,6 +414,7 @@ namespace aether::app::web
 		world.SetSceneFeatures(description->features);
 		m_tile_system.InvalidateAll();
 		m_models.ClearEntities();
+		m_retired_particles.clear();
 		m_environment = description->environment;
 		m_default_lighting = defaultLighting;
 		m_light_time = 0.0f;
@@ -410,6 +497,50 @@ namespace aether::app::web
 		return (*created)[rootIndex];
 	}
 
+	std::vector<Entity> WebScene::TakeRetiredParticles()
+	{
+		std::vector<Entity> retired;
+		retired.swap(m_retired_particles);
+		return retired;
+	}
+
+	Expected<void> WebScene::ValidateEffects()
+	{
+		std::uint64_t particleCapacity = 0;
+		std::uint64_t spawnWork = 0;
+		for (const auto raw: world.View<ParticleEmitterComponent>())
+		{
+			const auto entity = World::FromEntt(raw);
+			const auto& emitter = world.Get<ParticleEmitterComponent>(entity);
+			if (const auto* transform = world.TryGet<TransformComponent>(entity))
+			{
+				for (unsigned column = 0; column < 4; ++column)
+				{
+					for (unsigned row = 0; row < 4; ++row)
+					{
+						if (!std::isfinite(transform->localToWorld[column][row]))
+						{
+							AE_UNEXPECTED(AetherError::Asset("Non-finite browser particle transform"));
+						}
+					}
+				}
+			}
+			const auto valid = ValidateBrowserParticleEmitter(emitter);
+			if (!valid)
+			{
+				AE_UNEXPECTED(AetherError::Asset(valid.error()));
+			}
+			particleCapacity += emitter.maxParticles;
+			spawnWork += emitter.pendingBurst + (emitter.emitOnStart && !emitter.started ? static_cast<std::uint64_t>(emitter.burstCount) : 0);
+			spawnWork += static_cast<std::uint64_t>(std::ceil(emitter.spawnAccumulator + emitter.rate / 60.0f));
+			if (particleCapacity > kWebParticleCapacity || spawnWork > kWebParticleCapacity)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Browser aggregate particle capacity or spawn-work budget exceeded (65536)"));
+			}
+		}
+		return {};
+	}
+
 	void WebScene::Tick(float dt)
 	{
 		m_light_time += dt;
@@ -440,10 +571,8 @@ namespace aether::app::web
 		if (m_environment)
 		{
 			const auto& env = *m_environment;
-			if (env.cloudCoverage != 0.0f)
-			{
-				AE_UNEXPECTED(AetherError::Asset("Browser clouds require the post-effects milestone"));
-			}
+			packet.shadingParams.y = env.cloudCoverage;
+			packet.shadingParams.z = env.cloudSpeed;
 			const float length = glm::dot(env.sunDirection, env.sunDirection);
 			const glm::vec3 direction = length < 1e-8f ? glm::vec3(std::numbers::egamma_v<float>) : glm::normalize(env.sunDirection);
 			packet.sunDirectionIntensity = glm::vec4(direction, std::max(env.sunIntensity, 0.0f));
@@ -467,10 +596,10 @@ namespace aether::app::web
 				continue;
 			}
 			const auto& sky = world.Get<SkyComponent>(entity);
-			if (sky.fogDensity != 0.0f || sky.cloudCoverage != 0.0f || sky.physicalSky || sky.volumetricFog)
-			{
-				AE_UNEXPECTED(AetherError::Asset("Browser fog, clouds and physical atmosphere require the post-effects milestone"));
-			}
+			packet.fogParams = glm::vec4(sky.fogDensity, sky.fogHeightFalloff, sky.fogSunScatter, sky.fogMaxOpacity);
+			packet.skyParams = glm::vec4(sky.physicalSky ? 1.0f : 0.0f, sky.turbidity, sky.volumetricFog ? sky.volumetricIntensity : 0.0f, sky.volumetricAnisotropy);
+			packet.shadingParams.y = sky.cloudCoverage;
+			packet.shadingParams.z = sky.cloudSpeed;
 			packet.skyHorizonColor = glm::vec4(glm::max(sky.horizonColor, glm::vec3(0.0f)), 1.0f);
 			packet.skyZenithColor = glm::vec4(glm::max(sky.zenithColor, glm::vec3(0.0f)), 1.0f);
 			packet.skyVoidColor = glm::vec4(glm::max(sky.groundColor, glm::vec3(0.0f)), packet.skyVoidColor.w);
@@ -552,11 +681,23 @@ namespace aether::app::web
 		}
 		packet.renderLightingEnabled |= !packet.pointLights.empty() || !packet.spotLights.empty();
 		packet.directionalShadowEnabled = packet.renderLightingEnabled && packet.sunDirectionIntensity.w > 0.001f;
+		std::vector<DarknessVolumeSource> darkness;
+		for (const auto raw: world.View<DarknessVolumeComponent, TransformComponent>())
+		{
+			const auto entity = World::FromEntt(raw);
+			if (!world.Has<DisabledComponent>(entity) && !ecs::HasDisabledAncestor(world, entity))
+			{
+				darkness.push_back({world.Get<TransformComponent>(entity).localToWorld, world.Get<DarknessVolumeComponent>(entity).fadeDepth});
+			}
+		}
+		ExtractDarknessVolumes(darkness, glm::vec3(packet.cameraWorldPos), kMaxDarknessVolumes, packet.darknessVolumes);
 		return {};
 	}
 
 	Expected<void> WebScene::Extract(RenderFramePacket& packet, unsigned width, unsigned height, float elapsed)
 	{
+		AE_TRY_VOID(ValidateEffects());
+		AE_TRY_VOID(ExtractPostSettings(packet));
 		// These are the project's native graphics keys, carried through the export manifest.
 		packet.tonemapExposure = static_cast<float>(EM_ASM_DOUBLE({ return globalThis.aetherProject?.graphics?.exposure ?? 1; }));
 		const int tonemapLength = EM_ASM_INT({ return lengthBytesUTF8(globalThis.aetherProject?.graphics?.tonemap || 'ACES Filmic'); });
@@ -594,10 +735,7 @@ namespace aether::app::web
 			packet.view = glm::inverse(transform.localToWorld);
 			packet.cameraWorldPos = glm::vec4(glm::vec3(transform.localToWorld[3]), 1.0f);
 			packet.cameraNearPlane = camera.nearPlane;
-			if (camera.depthOfField)
-			{
-				AE_UNEXPECTED(AetherError::Asset("Browser depth of field requires the post-effects milestone"));
-			}
+			packet.dofParams = ExtractDepthOfFieldParams(camera.focusDistance, camera.focalLengthMm, camera.aperture, camera.depthOfField, camera.projection == CameraProjection::Perspective);
 			packet.backgroundMode = static_cast<std::uint32_t>(camera.background);
 			packet.backgroundAngleRadians = glm::radians(camera.gradientAngleDegrees);
 			packet.skyVoidColor.w = camera.background == CameraBackground::SkyGradient ? 1.0f : 0.0f;
@@ -624,11 +762,23 @@ namespace aether::app::web
 		}
 		packet.proj[1][1] *= -1;
 		AE_TRY_VOID(ExtractLighting(packet));
+		packet.shadingParams.x = packet.postEffects.specularFilter;
+		packet.shadingParams.w = packet.postEffects.foliageSkyLook;
 		m_sprite_system.Extract(world, packet.render2D);
 		AE_TRY_VOID(m_models.Extract(world, packet));
 		const auto beforeTiles = packet.render2D.sprites.size();
 		m_tile_system.Extract(world, {}, elapsed, packet.render2D);
 		EM_ASM({ aetherRuntime.tileSprites = $0; }, packet.render2D.sprites.size() - beforeTiles);
+		auto* particles = static_cast<ParticleSystem*>(world.FindSystem("ParticleSystem"));
+		particles->SetBillboardTarget(&packet.render2D.billboards);
+		particles->Extract(world, packet.render2D);
+		particles->SetBillboardTarget(nullptr);
+		packet.renderSceneGeneration = m_scene_generation;
+		// Display-space particles still need opaque depth and the final composite target.
+		if (!packet.render2D.billboards.empty())
+		{
+			packet.renderLightingEnabled = true;
+		}
 		ui::ResolveCanvases(world, {width, height});
 		AE_TRY_VOID(ExtractUi(packet, width, height));
 		Finalize2DFrame(packet.render2D);

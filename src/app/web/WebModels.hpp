@@ -33,14 +33,17 @@ namespace aether::app::web
 			std::uint32_t slot;
 			Model* model = nullptr;
 			std::int32_t skin = -1;
+			glm::vec4 localSphere{0.0f};
 		};
 
+		Expected<std::uint32_t> ResolveShader(std::string_view uri);
 		Expected<MaterialAsset> ResolveMaterial(const scene::MaterialRecord& record);
 		Expected<MaterialAsset> ResolveTextures(MaterialAsset asset, const std::array<std::string, 5>& paths);
 		webgpu::WebGpuDevice& m_graphics;
 		TextureRegistry& m_textures;
 		WebTextureSink& m_sink;
 		std::map<std::string, Model> m_models;
+		std::map<std::string, std::uint32_t> m_shaders;
 		std::map<std::string, std::uint32_t> m_primitives;
 		std::map<std::pair<std::string, TextureColorSpace>, TextureHandle> m_texture_cache;
 		std::vector<Binding> m_bindings;

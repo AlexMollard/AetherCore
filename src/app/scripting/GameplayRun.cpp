@@ -46,10 +46,16 @@ namespace aether::app::scripting
 			Require(config.is_object(), "launchConfig must be an object");
 			for (const auto& [key, value]: config.items())
 			{
-				Require(key == "readSaves" || key == "input" || key == "assertions" || key == "profile" || key == "checkpoints", "Unknown launchConfig field: " + key);
+				Require(key == "readSaves" || key == "input" || key == "assertions" || key == "profile" || key == "checkpoints" || key == "renderScale", "Unknown launchConfig field: " + key);
 			}
 			Require(!config.contains("profile") || (config["profile"].is_string() && (config["profile"] == "native-headless-2d-v1" || config["profile"] == "native-desktop-2d-v1")), "Unsupported gameplay run profile");
 			Require(!config.contains("readSaves") || config["readSaves"].is_boolean(), "readSaves must be a boolean");
+			if (config.contains("renderScale"))
+			{
+				Require(config.value("profile", "native-headless-2d-v1") == "native-desktop-2d-v1", "renderScale override requires the desktop profile");
+				const auto& scale = config["renderScale"];
+				Require(scale.is_number() && std::isfinite(scale.get<double>()) && scale.get<double>() >= 0.25 && scale.get<double>() <= 2.0, "renderScale must be a finite number in [0.25, 2]");
+			}
 			for (const char* key: {"input", "assertions"})
 			{
 				Require(!config.contains(key) || config[key].is_array(), std::string(key) + " must be an array");

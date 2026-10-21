@@ -81,6 +81,7 @@ namespace aether::app::web
 		m_host.Clear(++m_generation);
 		m_instances.clear();
 		AE_TRY(records, m_scene->Load(name));
+		m_manual_warm_frames = 0;
 #if defined(AE_WEB_MANAGED)
 		AE_TRY_VOID(m_host.Reset(m_module, "csharp", m_generation));
 #else
@@ -108,7 +109,9 @@ namespace aether::app::web
 			AE_UNEXPECTED(AetherError::Engine("Browser platform service failed"));
 		}
 #if AE_WEB_TEST_BRIDGE
-		const bool testStep = EM_ASM_INT({ return aetherTestInternal.beginFrame(); });
+		const bool testManual = EM_ASM_INT({ return aetherTestInternal.manual(); });
+		const bool testStep = !m_manual_pending_frame && EM_ASM_INT({ return aetherTestInternal.beginFrame(); });
+		const auto ticksBeforeFrame = m_ticks;
 		std::array<std::uint8_t, 512> testKeys{};
 		EM_ASM({ HEAPU8.set(aetherTestInternal.keys, $0); }, testKeys.data());
 #endif
@@ -194,7 +197,12 @@ namespace aether::app::web
 					}
 					AE_TRY_VOID(m_host.Update(instance.handle, 1.0f / 60.0f));
 				}
+				AE_TRY_VOID(m_scene->ValidateEffects());
 				m_world.UpdateSystems(1.0f / 60.0f);
+				for (const auto entity: m_scene->TakeRetiredParticles())
+				{
+					m_pending_destroys.push_back(entity);
+				}
 				m_scene->Tick(1.0f / 60.0f);
 				for (const auto& instance: m_instances)
 				{
@@ -258,14 +266,49 @@ namespace aether::app::web
 		}
 		unsigned width = 0, height = 0;
 		emscripten_get_canvas_element_size("#canvas", reinterpret_cast<int*>(&width), reinterpret_cast<int*>(&height));
+#if AE_WEB_TEST_BRIDGE
+		const bool advanceTemporal = testManual && (m_ticks != ticksBeforeFrame || m_manual_pending_advance);
+		if (testManual && !testStep && !m_manual_pending_frame && !capture && m_manual_warm_frames >= 3
+		        && width == m_last_render_width && height == m_last_render_height)
+		{
+			return {};
+		}
+		// Cache every bounded manual-step readback so capture() observes the actual
+		// moving tick rather than submitting a second, motionless temporal frame.
+		if (testManual && advanceTemporal) { capture = true; }
+#endif
 		RenderFramePacket packet;
 		packet.frameIndex = m_frames;
+		packet.simulationTick = m_ticks;
+#if AE_WEB_TEST_BRIDGE
+		if (testManual)
+		{
+			packet.advanceTemporalEffects = advanceTemporal;
+			packet.temporalFrameIndex = m_ticks > 0 ? m_ticks - 1 : 0;
+		}
+#endif
 		AE_TRY_VOID(m_scene->Extract(packet, width, height, m_ticks / 60.0f));
-		if (m_graphics.Draw(packet, capture))
+		const bool readbackRequested = capture;
+		const bool accepted = m_graphics.Draw(packet, capture);
+		if (accepted)
 		{
 			++m_frames;
 			capture = false;
+			m_last_render_width = width;
+			m_last_render_height = height;
+			EM_ASM({ aetherRuntime.lastRenderedFrameIndex = $0; aetherRuntime.renderSceneGeneration = $1; aetherRuntime.lastRenderedFrameCaptured = !!$2; }, static_cast<double>(packet.frameIndex), static_cast<double>(packet.renderSceneGeneration), readbackRequested);
 		}
+#if AE_WEB_TEST_BRIDGE
+		if (testManual)
+		{
+			m_manual_pending_frame = !accepted;
+			m_manual_pending_advance = !accepted && advanceTemporal;
+			if (accepted)
+			{
+				m_manual_warm_frames = advanceTemporal ? 3 : m_manual_warm_frames + 1;
+			}
+		}
+#endif
 		for (const auto entity: m_world.View<ui::UIText>())
 		{
 			const auto& text = m_world.GetRegistry().get<ui::UIText>(entity).text;
@@ -299,7 +342,7 @@ namespace aether::app::web
 		        m_ticks,
 		        m_frames);
 #if AE_WEB_TEST_BRIDGE
-		EM_ASM({ aetherTestInternal.endFrame(); });
+		if (accepted) { EM_ASM({ aetherTestInternal.endFrame(); }); }
 #endif
 		return {};
 	}

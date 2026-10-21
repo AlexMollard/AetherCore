@@ -46,6 +46,9 @@ namespace aether::app::web
 		std::vector<Entity> m_pending_destroys;
 		std::string m_pending_scene;
 		std::uint32_t m_generation = 0, m_ticks = 0, m_frames = 0;
+		std::uint32_t m_manual_warm_frames = 0;
+		unsigned m_last_render_width = 0, m_last_render_height = 0;
+		bool m_manual_pending_frame = false, m_manual_pending_advance = false;
 		double m_previous = 0, m_accumulator = 0;
 	};
 } // namespace aether::app::web

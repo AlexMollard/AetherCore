@@ -93,21 +93,12 @@ float SoftFade(float4 svPosition, float3 viewPos, float size)
 // sky-tinted shadow side and a warm rim where the sun is behind it. The lights only tint (a
 // quarter of their hue): the sun colour here is a saturated sunset orange that would dye every
 // puff, and the smoke must keep its keyed colour (the nitro's stays green).
+#include "include/ParticleLightingMath.slangh"
 float3 LitBall(float2 ball)
 {
-    FrameConstantsData* frame = pc.frameConstants.Ptr();
-    const float r2 = saturate(dot(ball, ball));
-    const float3 nView = normalize(float3(ball, sqrt(1.0 - r2) + 0.1));
-    const float3 sunTrue = normalize(mul(frame->view, float4(normalize(frame->sunDirectionIntensity.xyz), 0.0)).xyz);
-    // Cartoon key: a sun behind the puff still lights its crown from the sun's side of the screen
-    // (a true back light would leave a flat dark disc); the back light shows as the rim below.
-    const float3 sunView = normalize(float3(sunTrue.xy, max(sunTrue.z, 0.25)));
-    const float3 sunHue = lerp(float3(1.0, 1.0, 1.0), frame->sunColor.rgb / max(max(frame->sunColor.r, max(frame->sunColor.g, frame->sunColor.b)), 1e-3), 0.25);
-    const float3 skyHue = lerp(float3(1.0, 1.0, 1.0), frame->skyZenithColor.rgb / max(max(frame->skyZenithColor.r, max(frame->skyZenithColor.g, frame->skyZenithColor.b)), 1e-3), 0.3);
-    const float wrap = saturate((dot(nView, sunView) + 0.45) / 1.45);
-    const float back = saturate(-sunTrue.z) * r2; // sun behind the puff: its thin edges glow
-    const float3 shade = lerp(skyHue * 0.62, sunHue * 1.15, wrap * wrap * (3.0 - 2.0 * wrap));
-    return shade + sunHue * back * 0.35;
+	FrameConstantsData* frame = pc.frameConstants.Ptr();
+	const float3 sunView = normalize(mul(frame->view, float4(normalize(frame->sunDirectionIntensity.xyz), 0.0)).xyz);
+	return SharedParticleLitBall(ball, sunView, frame->sunColor.rgb, frame->skyZenithColor.rgb);
 }
 
 [shader("fragment")]

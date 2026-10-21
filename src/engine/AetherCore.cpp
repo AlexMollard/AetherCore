@@ -42,6 +42,7 @@
 #include "rendering/RenderingSubsystem.hpp"
 #include "rendering/ShadowService.hpp"
 #include "rendering/WorldRenderer.hpp"
+#include "rendering/SceneEffectExtraction.hpp"
 #include "particles/ParticleSystem.hpp"
 #include "physics2d/Physics2DDebugDraw.hpp"
 #include "scene/CameraComponents.hpp"
@@ -516,8 +517,9 @@ namespace aether
 			const auto beforeTick = std::chrono::steady_clock::now();
 
 			client.OnBeforeInput();
-			Tick(static_cast<float>(rawDt));
-			const double gameDt = rawDt * client.GetTimeScale();
+			const double simulationDt = client.GetSimulationDelta(rawDt);
+			Tick(static_cast<float>(simulationDt));
+			const double gameDt = simulationDt * client.GetTimeScale();
 			m_gameElapsedSeconds += gameDt;
 			m_realElapsedSeconds += rawDt; // advances even when the game is paused (time scale 0)
 
@@ -1299,29 +1301,7 @@ namespace aether
 		{
 			if (const auto* cam = world.TryGet<CameraComponent>(mainCamera); cam != nullptr)
 			{
-				// Thin lens against a full-frame 24 mm sensor height, so aperture and focal
-				// length mean what they mean on a camera:
-				//   c = (f^2 / N) * |d - S| / (d * (S - f))    blur circle on the sensor
-				// Everything but the per-pixel depth is constant for the frame, so it
-				// folds into one coefficient and the shader multiplies by |d - S| / d.
-				{
-					constexpr float kSensorHeightMetres = 0.024f;
-					const float focal = std::clamp(cam->focalLengthMm, 1.0f, 1000.0f) * 0.001f;
-					const float subjectGap = std::max(cam->focusDistance - focal, 1e-4f);
-					const float coeff = (focal * focal) / (std::max(cam->aperture, 0.1f) * kSensorHeightMetres * subjectGap);
-					packet.dofParams = glm::vec4(std::max(cam->focusDistance, 1e-3f),
-					        coeff,
-					        // Ceiling on the blur circle, in pixels. Not a taste setting: it
-					        // is tied to the gather's tap count. Twenty-four taps spread
-					        // over a disc this size already sit about two texels apart, and
-					        // widening the disc without adding taps turns the bokeh into
-					        // visible rings. It keeps the effect subtle - a defocused
-					        // surface loses about 5% of its detail rather than dissolving -
-					        // so a stronger look means more taps and more cost, not a
-					        // bigger number here.
-					        24.0f,
-					        (cam->depthOfField && cam->projection == CameraProjection::Perspective) ? 1.0f : 0.0f);
-				}
+				packet.dofParams = ExtractDepthOfFieldParams(cam->focusDistance, cam->focalLengthMm, cam->aperture, cam->depthOfField, cam->projection == CameraProjection::Perspective);
 
 				packet.backgroundMode = static_cast<std::uint32_t>(cam->background);
 				packet.backgroundAngleRadians = glm::radians(cam->gradientAngleDegrees);
@@ -1519,6 +1499,14 @@ namespace aether
 		}
 
 		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);
+		float exposureUsed = 1;
+		if (m_rendering)
+		{
+			const auto& post = m_rendering->GetPostProcessStack();
+			exposureUsed = post.GetExposure() * (post.IsAutoExposureEnabled() ? post.GetAutoExposureValue() : 1.0f);
+		}
+		const auto renderExtent = m_rendering ? m_rendering->GetPostProcessStack().GetExtent() : m_gpu->GetSwapchainExtent();
+		m_screenshotService.SetFrameEvidence({packet.frameIndex, packet.elapsedTime, exposureUsed, renderExtent.width, renderExtent.height});
 		if (m_uiOverlay && packet.uiOverlay)
 		{
 			m_uiOverlay->RenderFrame(*packet.uiOverlay, m_currentCmdList, m_gpu->BuildFrameTarget());

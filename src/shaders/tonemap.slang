@@ -50,6 +50,19 @@ struct TonemapPush
 };
 AE_POST_PUSH(TonemapPush)
 
+#ifdef AE_WEB_POST
+[[vk::binding(13, 0)]] StructuredBuffer<float> effectExposure;
+#endif
+
+float EffectiveExposure()
+{
+#ifdef AE_WEB_POST
+    return pc.exposure * (pc._padMotionBlur != 0u ? effectExposure[0] : 1.0f);
+#else
+    return pc.exposure;
+#endif
+}
+
 // Colour grade, in LINEAR space and BEFORE the tonemap curve.
 //
 // Order matters and this is the order a grading desk uses: white balance, then saturation,
@@ -425,6 +438,19 @@ float3 SampleSceneWithAberration(int2 coord)
 // Applied after the tonemap because grain belongs to the film, not to the scene - putting it
 // in linear light would let exposure scale it, so the same setting would grain a dark scene
 // differently from a bright one.
+float FilmGrainSample(uint2 pixel, uint frame, uint stream)
+{
+    // Integer avalanche keeps the same sample across SPIR-V and WGSL. Tiny
+    // differences in a floating-point fract hash become visible at grain gain.
+    uint hash = pixel.x * 0x9e3779b9u ^ pixel.y * 0x85ebca6bu ^ frame * 0xc2b2ae35u ^ stream;
+    hash ^= hash >> 16u;
+    hash *= 0x7feb352du;
+    hash ^= hash >> 15u;
+    hash *= 0x846ca68bu;
+    hash ^= hash >> 16u;
+    return float(hash >> 8u) * (1.0f / 16777216.0f);
+}
+
 float3 ApplyFilmGrain(float3 color, int2 coord)
 {
     if (pc.filmGrain <= 0.0f)
@@ -436,17 +462,16 @@ float3 ApplyFilmGrain(float3 color, int2 coord)
     // the lens rather than grain in the image. elapsedTime is only available when frame
     // constants were bound - the two preview services pass none, and a static grain there is
     // better than none at all.
-    float animate = 0.0f;
+    uint frame = 0u;
     if (pc.frameConstantsAddr != 0)
     {
         AE_POST_FRAME_REF fc = AE_POST_LOAD_FRAME(pc.frameConstantsAddr);
-        animate = frac(AE_POST_FIELD(fc, elapsedTime) * 60.0f) * 71.0f;
+        frame = uint(floor(max(AE_POST_FIELD(fc, elapsedTime), 0.0f) * 60.0f + 0.5f));
     }
 
     // Triangular again, for the same reason the dither below is: a uniform sample leaves the
     // residual correlated with the signal.
-    const float2 p = float2(coord) + animate;
-    const float n = Hash12Dither(p) - Hash12Dither(p + 17.0f);
+    const float n = FilmGrainSample(uint2(coord), frame, 0x68bc21ebu) - FilmGrainSample(uint2(coord), frame, 0x02e5be93u);
 
     const float luma = dot(color, float3(0.2126f, 0.7152f, 0.0722f));
     const float response = saturate(luma * (1.0f - luma) * 4.0f);
@@ -499,7 +524,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // scene's range the curve sees, and the grade shapes what lands there.
     const float2 gradeUv = (float2(coord) + 0.5f) / float2(pc.screenWidth, pc.screenHeight);
     const float vignette = VignetteFactor(gradeUv);
-    const float3 hdr = ApplyGrade(scene * pc.exposure) * vignette;
+    const float3 hdr = ApplyGrade(scene * EffectiveExposure()) * vignette;
 
     float3 mapped;
 

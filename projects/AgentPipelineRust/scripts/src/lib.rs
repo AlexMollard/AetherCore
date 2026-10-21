@@ -99,14 +99,8 @@ impl Script for Player {
         Ok(())
     }
 }
-gameplay_script! { pub struct ModelProbe {} }
-impl Script for ModelProbe {
-    fn update(&mut self, ctx: &mut Context<'_>, delta: f32) -> Result {
-        let mut position = ctx.position(ctx.entity())?;
-        position.x += delta;
-        ctx.set_position(ctx.entity(), position)
-    }
-}
+mod model_probe;
+pub use model_probe::ModelProbe;
 #[cfg(not(feature = "wrong-abi"))]
 aethercore::export_gameplay!(Player, Probe, ReferencePlayer, ReferenceResult, ModelProbe);
 #[cfg(feature = "wrong-abi")]

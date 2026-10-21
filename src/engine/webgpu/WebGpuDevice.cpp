@@ -2,6 +2,8 @@
 #include "WebMeshRenderer.hpp"
 #include "WebHdrRenderer.hpp"
 #include "WebLight2DRenderer.hpp"
+#include "WebPostRenderer.hpp"
+#include "WebBillboardRenderer.hpp"
 
 #include <array>
 #include <cstring>
@@ -36,10 +38,11 @@ namespace aether::webgpu
   EM_JS(void, AdapterReport, (const char* vendor, size_t vendorSize, const char* architecture, size_t architectureSize, const char* text, size_t size, int type), {
    globalThis.aetherRuntime.adapter={vendor:UTF8ToString(vendor,vendorSize),architecture:UTF8ToString(architecture,architectureSize),description:UTF8ToString(text,size),adapterType:type,isFallbackAdapter:type===3};
   });
-  EM_JS(void, Pixels, (const unsigned char* bytes, unsigned width, unsigned height, unsigned row), {
+  EM_JS(void, Pixels, (const unsigned char* bytes, unsigned width, unsigned height, unsigned row, double frameIndex, double temporalFrameIndex, double simulationTick, double generation, double exposureUsed, unsigned renderWidth, unsigned renderHeight), {
+   if(globalThis.aetherRuntime.capture?.frameIndex>frameIndex) { return; }
    const pixels=[];
    for(let y=0;y<height;++y) { pixels.push(...HEAPU8.subarray(bytes+y*row,bytes+y*row+width*4)); }
-   globalThis.aetherRuntime.capture={width,height,pixels};
+   globalThis.aetherRuntime.capture={width,height,pixels,frameIndex,temporalFrameIndex,simulationTick,generation,exposureUsed,renderWidth,renderHeight};
   });
 		// clang-format on
 	} // namespace
@@ -61,6 +64,8 @@ namespace aether::webgpu
 		WebMeshRenderer meshes;
 		WebHdrRenderer hdr;
 		WebLight2DRenderer lights2D;
+		WebPostRenderer post;
+		WebBillboardRenderer billboards;
 		unsigned width = 0, height = 0;
 		bool released = false;
 		unsigned callbacks = 0;
@@ -85,6 +90,8 @@ namespace aether::webgpu
 				meshes.Shutdown();
 				hdr.Shutdown();
 				lights2D.Shutdown();
+				post.Shutdown();
+				billboards.Shutdown();
 				for (auto texture: textures)
 				{
 					if (texture)
@@ -215,6 +222,14 @@ namespace aether::webgpu
 			{
 				Fail("WEBGPU_LIGHT2D_SHADER", Text(lights2D.error.c_str()));
 			}
+			if (!post.Initialize(device, queue))
+			{
+				Fail("WEBGPU_EFFECT_SHADER", Text(post.error.c_str()));
+			}
+			if (!billboards.Initialize(device))
+			{
+				Fail("WEBGPU_BILLBOARD_SHADER", Text(billboards.error.c_str()));
+			}
 			WGPUSamplerDescriptor sample = WGPU_SAMPLER_DESCRIPTOR_INIT;
 			sample.magFilter = WGPUFilterMode_Linear;
 			sample.minFilter = WGPUFilterMode_Linear;
@@ -263,15 +278,23 @@ namespace aether::webgpu
 		struct Frame
 		{
 			Impl* owner;
-			WGPUBuffer uniform = nullptr, instances = nullptr, readback = nullptr;
+			WGPUBuffer uniform = nullptr, displayUniform = nullptr, instances = nullptr, readback = nullptr;
 			std::vector<WGPUBindGroup> bindings;
 			std::unique_ptr<WebMeshFrame> meshes;
 			std::unique_ptr<WebHdrFrame> hdr;
 			std::unique_ptr<WebLight2DFrame> lights2D;
+			std::unique_ptr<WebPostFrame> post;
+			std::unique_ptr<WebBillboardFrame> billboards;
 			unsigned width, height, row;
+			unsigned renderWidth = 0, renderHeight = 0;
+			std::uint64_t frameIndex = 0, temporalFrameIndex = 0, simulationTick = 0, generation = 0;
+			float exposure = 1;
+			bool autoExposure = false;
 
 			void Finish()
 			{
+				post.reset();
+				billboards.reset();
 				meshes.reset();
 				lights2D.reset();
 				hdr.reset();
@@ -279,7 +302,7 @@ namespace aether::webgpu
 				{
 					wgpuBindGroupRelease(binding);
 				}
-				for (auto buffer: {uniform, instances, readback})
+				for (auto buffer: {uniform, displayUniform, instances, readback})
 				{
 					if (buffer)
 					{
@@ -442,6 +465,16 @@ namespace aether::webgpu
 		return m_impl->meshes.error;
 	}
 
+	bool WebGpuDevice::UploadShader(std::uint32_t slot, std::string_view wgsl)
+	{
+		if (State() != gpu::RenderState::Ready)
+		{
+			m_impl->meshes.error = "WEB_SHADER_DEVICE: shader upload requires a ready WebGPU device";
+			return false;
+		}
+		return m_impl->meshes.UploadShader(m_impl->device, slot, wgsl);
+	}
+
 	bool WebGpuDevice::UploadTexture(unsigned slot, unsigned width, unsigned height, std::span<const std::uint8_t> rgba, bool srgb, bool mipmapped)
 	{
 		auto& self = *m_impl;
@@ -567,18 +600,35 @@ namespace aether::webgpu
 			}
 		}
 		std::vector<gpu::MeshGpuInstance> meshInstances;
+		const auto billboardPlan = self.billboards.Prepare(packet, self.textures);
+		if (!billboardPlan)
+		{
+			self.Fail("WEBGPU_BILLBOARDS", Text(billboardPlan.error().c_str()));
+			return false;
+		}
 		std::optional<gpu::HdrPlan> hdrPlan;
+		std::optional<gpu::PostEffectsPlan> postPlan;
+		unsigned sceneWidth = self.width, sceneHeight = self.height;
 		bool light2DActive = false;
 		if (packet.renderLightingEnabled)
 		{
-			auto prepared = self.hdr.Prepare(packet, self.width, self.height);
+			auto effects = gpu::PlanPostEffects(packet.postEffects, self.width, self.height, packet.dofParams.w > .5f);
+			if (!effects)
+			{
+				self.Fail("WEBGPU_EFFECTS", Text(effects.error().c_str()));
+				return false;
+			}
+			postPlan = *effects;
+			sceneWidth = effects->width;
+			sceneHeight = effects->height;
+			auto prepared = self.hdr.Prepare(packet, sceneWidth, sceneHeight);
 			if (!prepared)
 			{
 				self.Fail("WEBGPU_HDR", Text(prepared.error().c_str()));
 				return false;
 			}
 			hdrPlan = *prepared;
-			auto lights = self.lights2D.Prepare(packet, self.textures, self.width, self.height);
+			auto lights = self.lights2D.Prepare(packet, self.textures, sceneWidth, sceneHeight);
 			if (!lights)
 			{
 				self.Fail("WEBGPU_LIGHT2D", Text(lights.error().c_str()));
@@ -614,9 +664,19 @@ namespace aether::webgpu
 		        plan->instances.size(),
 		        packet.render3D.meshes.size());
 		auto* frame = new Impl::Frame{.owner = &self, .width = self.width, .height = self.height, .row = ((self.width * 4 + 255) / 256) * 256};
+		frame->frameIndex = packet.frameIndex;
+		frame->temporalFrameIndex = packet.temporalFrameIndex == UINT64_MAX ? packet.frameIndex : packet.temporalFrameIndex;
+		frame->simulationTick = packet.simulationTick;
+		frame->generation = packet.renderSceneGeneration;
+		frame->renderWidth = sceneWidth;
+		frame->renderHeight = sceneHeight;
+		frame->exposure = hdrPlan ? packet.tonemapExposure : 1.0f;
+		frame->autoExposure = packet.postEffects.autoExposure;
 		const auto clip = glm::transpose(packet.proj * packet.view);
-		const std::array<glm::vec4, 5> constants{clip[0], clip[1], clip[2], clip[3], glm::vec4(self.width, self.height, hdrPlan ? 1 : 0, 0)};
+		const std::array<glm::vec4, 5> constants{clip[0], clip[1], clip[2], clip[3], glm::vec4(sceneWidth, sceneHeight, hdrPlan ? 1 : 0, 0)};
 		frame->uniform = self.Buffer(WGPUBufferUsage_Uniform, constants.data(), sizeof(constants));
+		const std::array<glm::vec4, 5> displayConstants{clip[0], clip[1], clip[2], clip[3], glm::vec4(self.width, self.height, 0, 0)};
+		frame->displayUniform = self.Buffer(WGPUBufferUsage_Uniform, displayConstants.data(), sizeof(displayConstants));
 		frame->instances = self.Buffer(WGPUBufferUsage_Storage, plan->instances.empty() ? nullptr : plan->instances.data(), std::max(size_t(128), plan->instances.size() * 128));
 		WGPUSurfaceTexture current = WGPU_SURFACE_TEXTURE_INIT;
 		wgpuSurfaceGetCurrentTexture(self.surface, &current);
@@ -639,6 +699,16 @@ namespace aether::webgpu
 				return false;
 			}
 			frame->hdr = std::move(*allocated);
+			auto effects = self.post.Allocate(self.device, self.queue, *postPlan, packet);
+			if (!effects)
+			{
+				self.Fail("WEBGPU_EFFECTS", Text(effects.error().c_str()));
+				wgpuTextureViewRelease(view);
+				wgpuTextureRelease(current.texture);
+				frame->Finish();
+				return false;
+			}
+			frame->post = std::move(*effects);
 		}
 		const auto sceneView = frame->hdr ? frame->hdr->view : view;
 		WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
@@ -656,7 +726,27 @@ namespace aether::webgpu
 		}
 		if (!packet.render3D.meshes.empty())
 		{
-			self.meshes.Encode(self.device, self.queue, encoder, sceneView, self.width, self.height, packet, meshInstances, self.textures, frame->meshes, hdrPlan.has_value());
+			WebMeshInputs inputs;
+			if (frame->post)
+			{
+				const auto opaque = frame->post->OpaqueInputs();
+				self.meshes.EncodeAuxiliary(self.device, self.queue, encoder, sceneWidth, sceneHeight, packet, meshInstances, self.textures, opaque, frame->meshes);
+				self.post.EncodeAmbient(self.device, self.queue, encoder, packet, *frame->post, frame->meshes->directional);
+				inputs = frame->post->OpaqueInputs();
+			}
+			self.meshes.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, meshInstances, self.textures, frame->meshes, hdrPlan.has_value(), inputs);
+		}
+		else if (frame->post)
+		{
+			self.post.ClearOpaque(encoder, *frame->post);
+			self.post.EncodeAmbient(self.device, self.queue, encoder, packet, *frame->post, {});
+		}
+		if (frame->post)
+		{
+			self.post.EncodeScene(self.device, self.queue, encoder, sceneView, packet, *frame->post,
+			        frame->meshes ? frame->meshes->directional : WebShadowInputs{});
+			self.billboards.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, self.textures,
+			        frame->post->depth->view, frame->billboards, false);
 		}
 		const auto drawSprites = [&](WGPURenderPassEncoder pass, bool displaySpace)
 		{
@@ -670,7 +760,7 @@ namespace aether::webgpu
 			auto textureView = wgpuTextureCreateView(self.textures[batch.texture], nullptr);
 			WGPUBindGroupEntry entries[4] = {};
 			entries[0].binding = 0;
-			entries[0].buffer = frame->uniform;
+			entries[0].buffer = displaySpace ? frame->displayUniform : frame->uniform;
 			entries[0].size = sizeof(constants);
 			entries[1].binding = 1;
 			entries[1].buffer = frame->instances;
@@ -701,9 +791,15 @@ namespace aether::webgpu
 		{
 			if (light2DActive)
 			{
-				self.lights2D.Encode(self.device, self.queue, encoder, sceneView, self.width, self.height, packet, self.textures, frame->lights2D);
+				self.lights2D.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, self.textures, frame->lights2D);
 			}
-			self.hdr.EncodeComposite(encoder, view, *frame->hdr);
+			self.post.EncodeDisplay(self.device, self.queue, encoder, sceneView, view, self.width, self.height, packet, *frame->post,
+			        frame->meshes ? frame->meshes->directional : WebShadowInputs{},
+			        [&](WGPUTextureView displayTarget, unsigned displayWidth, unsigned displayHeight)
+			        {
+				        self.billboards.Encode(self.device, self.queue, encoder, displayTarget, displayWidth, displayHeight, packet, self.textures,
+				                frame->post->depth->view, frame->billboards, true);
+			        });
 			color.view = view;
 			color.loadOp = WGPULoadOp_Load;
 			pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
@@ -713,7 +809,7 @@ namespace aether::webgpu
 		}
 		if (capture)
 		{
-			frame->readback = self.Buffer(WGPUBufferUsage_MapRead, nullptr, frame->row * frame->height);
+			frame->readback = self.Buffer(WGPUBufferUsage_MapRead, nullptr, frame->row * frame->height + 16);
 			WGPUTexelCopyTextureInfo source = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
 			source.texture = current.texture;
 			WGPUTexelCopyBufferInfo destination = WGPU_TEXEL_COPY_BUFFER_INFO_INIT;
@@ -722,6 +818,10 @@ namespace aether::webgpu
 			destination.layout.rowsPerImage = frame->height;
 			WGPUExtent3D extent = {frame->width, frame->height, 1};
 			wgpuCommandEncoderCopyTextureToBuffer(encoder, &source, &destination, &extent);
+			if (frame->post && frame->autoExposure)
+			{
+				wgpuCommandEncoderCopyBufferToBuffer(encoder, frame->post->exposureState->buffer, 0, frame->readback, frame->row * frame->height, 16);
+			}
 		}
 		auto commands = wgpuCommandEncoderFinish(encoder, nullptr);
 		wgpuQueueSubmit(self.queue, 1, &commands);
@@ -758,13 +858,18 @@ namespace aether::webgpu
 				}
 				else
 				{
-					const auto* bytes = static_cast<const std::uint8_t*>(wgpuBufferGetConstMappedRange(frame->readback, 0, frame->row * frame->height));
-					Pixels(bytes, frame->width, frame->height, frame->row);
+					const auto* bytes = static_cast<const std::uint8_t*>(wgpuBufferGetConstMappedRange(frame->readback, 0, frame->row * frame->height + 16));
+					float adaptation = 1;
+					if (frame->post && frame->autoExposure)
+					{
+						std::memcpy(&adaptation, bytes + frame->row * frame->height, sizeof(adaptation));
+					}
+					Pixels(bytes, frame->width, frame->height, frame->row, double(frame->frameIndex), double(frame->temporalFrameIndex), double(frame->simulationTick), double(frame->generation), frame->exposure * adaptation, frame->renderWidth, frame->renderHeight);
 					wgpuBufferUnmap(frame->readback);
 				}
 				frame->Finish();
 			};
-			wgpuBufferMapAsync(frame->readback, WGPUMapMode_Read, 0, frame->row * frame->height, map);
+			wgpuBufferMapAsync(frame->readback, WGPUMapMode_Read, 0, frame->row * frame->height + 16, map);
 		};
 		wgpuQueueOnSubmittedWorkDone(self.queue, done);
 		return true;

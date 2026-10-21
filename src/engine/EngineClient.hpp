@@ -19,6 +19,12 @@ namespace aether
 			return 1.0;
 		}
 
+		// Deterministic hosts use the same clock for simulation and shader animation.
+		virtual double GetSimulationDelta(double realDelta)
+		{
+			return realDelta;
+		}
+
 		// After the event pump, before Input::Update, camera updates and simulation.
 		// Hosts can publish input ownership here without depending on a UI backend.
 		virtual void OnBeforeInput()

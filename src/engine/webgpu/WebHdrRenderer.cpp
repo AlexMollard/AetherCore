@@ -130,10 +130,6 @@ namespace aether::webgpu
 
 	std::expected<gpu::HdrPlan, std::string> WebHdrRenderer::Prepare(const RenderFramePacket& packet, unsigned width, unsigned height) const
 	{
-		if (!packet.darknessVolumes.empty())
-		{
-			return std::unexpected("WEB_HDR_EFFECT_UNSUPPORTED: darkness volumes require the separately qualified effects profile");
-		}
 		gpu::HdrUniforms constants{};
 		const auto copy = [](const glm::vec4& value)
 		{

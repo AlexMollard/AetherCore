@@ -156,11 +156,13 @@ float3 ResolveFxaa(float4 svPos)
 	float lumaLocalAverage;
 	if (is1Steepest)
 	{
-		stepLength = -stepLength;
 		lumaLocalAverage = 0.5f * (luma1 + lumaM);
 	}
 	else
 	{
+		// luma1 is S/E (+axis); luma2 is N/W (-axis). Sample toward
+		// the selected neighbour, including the final subpixel resolve.
+		stepLength = -stepLength;
 		lumaLocalAverage = 0.5f * (luma2 + lumaM);
 	}
 

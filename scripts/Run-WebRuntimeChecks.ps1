@@ -33,7 +33,7 @@ try
     {
         $hostPreset = if ($IsWindows) { 'default' } else { 'linux-clang' }
         Invoke-Checked 'host-configure' 'cmake' @('--preset', $hostPreset)
-        Invoke-Checked 'host-tools-build' 'cmake' @('--build', '--preset', $hostPreset, '--target', 'AssetPacker')
+        Invoke-Checked 'host-tools-build' 'cmake' @('--build', '--preset', $hostPreset, '--target', 'AssetPacker', 'WebMaterialCompiler')
     }
     if (!$AssetPackerPath)
     {
@@ -74,6 +74,8 @@ try
         $required += 'lighting-solid', 'lighting-gradient', 'lighting-sky', 'lighting-hdr', 'lighting-sun', 'lighting-point', 'lighting-spot', 'lighting-pbr-maps', 'lighting-2d-alpha', 'lighting-nonfinite', 'lighting-budget'
         $required += 'lighting-shadow-sun', 'lighting-shadow-point', 'lighting-shadow-spot', 'lighting-shadow-mask', 'lighting-shadow-skin'
         $required += 'lighting-shadow-no-cast'
+        $required += 'effects-object-lights', 'effects-baked', 'effects-gem', 'effects-sheen', 'effects-character', 'effects-fog', 'effects-clouds', 'effects-physical-sky', 'effects-darkness', 'effects-dof', 'effects-particles-2d', 'effects-particles-3d'
+        $required += 'invalid-particle-rate', 'invalid-particle-capacity'
         foreach ($case in $required)
         {
             $matches = @($report.browser.cases | Where-Object { $_.name -eq $case -and $_.status -eq 'passed' })

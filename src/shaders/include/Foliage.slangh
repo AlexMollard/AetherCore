@@ -28,39 +28,12 @@ float FoliageSkyLookStrength(FrameConstantsData* fc)
 // before the weight existed reads 0 and stays still.
 
 // ponytail: every k* here is a look choice judged on the sheets, not measured - the PS2 had no wind.
-static const float2 kWindDir = float2(0.8f, 0.6f); // unit, world xz: the sea breeze
-static const float kWindSway = 0.05f;              // metres of lean at the top of a gust
-static const float kWindFlutter = 0.012f;          // metres of per-leaf flutter
-static const float kWindGustWavenumber = 0.045f;   // 1/m: gusts ~140 m apart roll across the level
-static const float kWindGustSpeed = 0.5f;          // rad/s of the gust wave
-
-// World-space offset for a vertex at `worldPos` (unswayed) with baked sway weight `swayWeight`
-// (uv2.x). Every pass must pass the same expressions.
-// Visual only: colliders are built from the mesh on the CPU and never see it.
+#include "FoliageWindMath.slangh"
 float3 FoliageWindOffset(FrameConstantsData* fc, uint materialIndex, float3 worldPos, float swayWeight)
 {
-    if (materialIndex == kNoTexture)
-    {
-        return float3(0.0f, 0.0f, 0.0f);
-    }
-    const float look = FoliageSkyLookStrength(fc);
-    const uint flags = ((GpuMaterial*)(fc->materialBufferAddr))[materialIndex].flags;
-    if (look <= 0.0f || !IsSceneryFoliage(flags))
-    {
-        return float3(0.0f, 0.0f, 0.0f);
-    }
-    const float t = fc->elapsedTime;
-    const float along = dot(worldPos.xz, kWindDir);
-    // A slow gust wave travelling downwind scales everything, so a field of grass leans in waves.
-    const float gust = 0.55f + 0.45f * sin(along * kWindGustWavenumber - t * kWindGustSpeed);
-    // The lean: two incommensurate periods so it never loops visibly; phase follows the wind and
-    // height, so a tuft's tip lags its base (it bends rather than slides).
-    const float sway = 0.7f * sin(t * 1.4f - along * 0.3f - worldPos.y * 1.2f) + 0.3f * sin(t * 2.3f - along * 0.8f + worldPos.y * 0.6f);
-    // Flutter: a fast, spatially incoherent shiver per vertex (neighbouring leaves disagree).
-    const float flutter = sin(t * 6.1f + dot(worldPos, float3(3.1f, 2.3f, 2.7f)));
-    float3 offset = float3(kWindDir.x, 0.0f, kWindDir.y) * (kWindSway * gust * sway);
-    offset += float3(0.6f, 1.0f, -0.8f) * (kWindFlutter * gust * flutter);
-    return offset * (saturate(swayWeight) * look);
+	if (materialIndex == kNoTexture) { return float3(0); }
+	const uint flags = ((GpuMaterial*)(fc->materialBufferAddr))[materialIndex].flags;
+	return SharedFoliageWindOffset(FoliageSkyLookStrength(fc), flags, fc->elapsedTime, worldPos, swayWeight);
 }
 
 #endif

@@ -40,6 +40,17 @@ endif()
 find_program(AETHER_WEB_NODE node REQUIRED NO_CMAKE_FIND_ROOT_PATH)
 string(JSON _rust_pin GET "${_pins}" rustWasm)
 set(AETHER_WEB_PROJECT "" CACHE PATH "Selected Rust project root (empty uses qualification fixture)")
+set(AETHER_WEB_MATERIAL_COMPILER "" CACHE FILEPATH "Native material graph compiler (resolved lazily for development fixtures)")
+if(NOT AETHER_WEB_PROJECT)
+    execute_process(COMMAND "${Python3_EXECUTABLE}" -c
+        "import sys; sys.path.insert(0,sys.argv[1]); from web_materials import resolve_compiler; print(resolve_compiler(sys.argv[2] or None))"
+        "${CMAKE_SOURCE_DIR}/tools/shaders" "${AETHER_WEB_MATERIAL_COMPILER}"
+        RESULT_VARIABLE _material_exit OUTPUT_VARIABLE _material_compiler ERROR_VARIABLE _material_error OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT _material_exit EQUAL 0)
+        message(FATAL_ERROR "Native material compiler preflight failed: ${_material_error}")
+    endif()
+    set(AETHER_WEB_MATERIAL_COMPILER "${_material_compiler}")
+endif()
 set(AETHER_WEB_STAGED_PROJECT "" CACHE PATH "Preflight-validated selected project assets")
 set(AETHER_WEB_GAMEPLAY_MANIFEST "" CACHE FILEPATH "Selected Cargo manifest")
 set(AETHER_WEB_GAMEPLAY_NAME "" CACHE STRING "Selected Rust library name")
@@ -73,6 +84,7 @@ add_custom_command(OUTPUT "${_rust_library}"
     DEPENDS ${_rust_sdk} "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.toml"
         "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.lock" "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/src/lib.rs"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/reference.rs"
+        "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/model_probe.rs"
         "${CMAKE_SOURCE_DIR}/projects/EmberRun/scripts/src/game.rs"
     VERBATIM)
 endif()
@@ -114,10 +126,12 @@ add_custom_command(OUTPUT "${_assets}/reference.pak"
     VERBATIM)
 endif()
 file(GLOB_RECURSE _shared_shader_includes CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/include/*.slangh")
-foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d)
+file(GLOB _material_shader_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/resources/web/*.slang*")
+configure_file("${CMAKE_SOURCE_DIR}/resources/web/exposure.wgsl" "${_assets}/exposure.wgsl" COPYONLY)
+foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard)
 	set(_shader_entries -entry vertexMain -entry fragmentMain)
 	if(_shader STREQUAL "mesh")
-		list(APPEND _shader_entries -entry shadowMain)
+		list(APPEND _shader_entries -entry shadowMain -entry auxiliaryMain)
 	elseif(_shader STREQUAL "hdr")
 		set(_shader_entries -entry vertexMain -entry backgroundMain -entry compositeMain)
 	endif()
@@ -127,7 +141,21 @@ foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d)
         DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang" ${_shared_shader_includes}
         VERBATIM)
 endforeach()
-add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl" "${_assets}/hdr.wgsl" "${_assets}/light2d.wgsl" "${_assets}/occluder2d.wgsl")
+set(_post_effects bloom fxaa tonemap gtao_main gtao_denoise ssr ssr_composite dof volumetric_fog volumetric_composite)
+set(_post_outputs)
+foreach(_effect IN LISTS _post_effects)
+    set(_entries -entry vertexMain -stage vertex -entry fragmentMain -stage fragment)
+    if(_effect STREQUAL "bloom")
+        set(_entries -entry vertexMain -stage vertex -entry downsampleMain -stage fragment -entry upsampleMain -stage fragment)
+    endif()
+    add_custom_command(OUTPUT "${_assets}/post-${_effect}.wgsl"
+        COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/src/shaders/${_effect}.slang"
+            -D AE_WEB_POST=1 -target wgsl -matrix-layout-column-major ${_entries} -o "${_assets}/post-${_effect}.wgsl"
+        DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/src/shaders/${_effect}.slang" ${_shared_shader_includes}
+        VERBATIM)
+    list(APPEND _post_outputs "${_assets}/post-${_effect}.wgsl")
+endforeach()
+add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl" "${_assets}/hdr.wgsl" "${_assets}/light2d.wgsl" "${_assets}/occluder2d.wgsl" "${_assets}/billboard.wgsl" "${_assets}/exposure.wgsl" ${_post_outputs})
 if(NOT AETHER_WEB_PROJECT)
     add_custom_target(WebFixtureAssets DEPENDS "${_assets}/reference.pak")
     add_dependencies(WebAssets WebFixtureAssets)
@@ -144,11 +172,16 @@ else()
 file(GLOB_RECURSE _game_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/*" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scenes/*" "${CMAKE_SOURCE_DIR}/resources/web/reference/*" "${CMAKE_SOURCE_DIR}/projects/EmberRun/assets/ember/*" "${CMAKE_SOURCE_DIR}/projects/EmberRun/scenes/EmberRun.scene.toml")
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${AETHER_WEB_NODE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust" "${CMAKE_BINARY_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py"
+        --project "${CMAKE_BINARY_DIR}/reference-project" --compiler "${AETHER_WEB_MATERIAL_COMPILER}" --slangc "${AETHER_WEB_SLANGC}"
+        --report "${CMAKE_BINARY_DIR}/web/material-cook.json"
     COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target webgpu-2d-v1 "${CMAKE_BINARY_DIR}/reference-project"
         "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets"
         "${CMAKE_BINARY_DIR}/test-fixtures/desktop-reference.pak"
     DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" ${_game_sources}
+        "${AETHER_WEB_MATERIAL_COMPILER}" "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py" "${CMAKE_SOURCE_DIR}/tools/shaders/web_materials.py"
+        ${_shared_shader_includes} ${_material_shader_sources}
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/ProjectSettings.toml"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/audio/reference.wav"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/textures/reference.png"
@@ -170,10 +203,16 @@ if(TARGET WebManagedRuntime)
     add_dependencies(WebManagedRuntime WebAssets WebGameAssets WebEngineAssets)
 endif()
 if(NOT AETHERCORE_WEB_MANAGED)
-foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d)
+foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard)
     set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/${_shader}.wgsl")
     target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/${_shader}.wgsl@/assets/${_shader}.wgsl")
 endforeach()
+foreach(_effect IN LISTS _post_effects)
+    set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/post-${_effect}.wgsl")
+    target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/post-${_effect}.wgsl@/assets/post-${_effect}.wgsl")
+endforeach()
+set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/exposure.wgsl")
+target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/exposure.wgsl@/assets/exposure.wgsl")
 if(NOT AETHER_WEB_PROJECT)
     set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/reference.pak")
     target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/reference.pak@/assets/reference.pak")

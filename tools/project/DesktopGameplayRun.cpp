@@ -113,6 +113,11 @@ namespace aether::project_tool
 				updateTimes.push_back(std::chrono::duration<double, std::milli>(Clock::now() - started).count());
 			}
 
+			double GetSimulationDelta(double) override
+			{
+				return m_step;
+			}
+
 			std::vector<double> updateTimes;
 
 		private:
@@ -130,6 +135,12 @@ namespace aether::project_tool
 			void OnAttach(LayerContext& context) override
 			{
 				context.Get<SettingsService>().Values().app.startupScene = m_request.scene;
+				if (m_request.launchConfig.contains("renderScale"))
+				{
+					auto& settings = context.Get<SettingsService>();
+					settings.Values().graphics.renderScale = m_request.launchConfig["renderScale"].get<float>();
+					settings.ApplyField("graphics.renderScale");
+				}
 				context.Get<PlayState>().SetMode(PlayState::Mode::Playing);
 				context.Get<GameplayHost>().SetErrorHandler([this](const std::string& message) { m_errors.push_back(message); });
 			}

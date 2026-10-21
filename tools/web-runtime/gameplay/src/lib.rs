@@ -16,7 +16,10 @@ use reference::{ReferencePlayer, ReferenceResult};
 #[path = "../../../../projects/EmberRun/scripts/src/game.rs"]
 mod ember;
 use ember::EmberRun;
-export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult, EmberRun);
+#[path = "../../../../projects/AgentPipelineRust/scripts/src/model_probe.rs"]
+mod model_probe;
+use model_probe::ModelProbe;
+export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult, EmberRun, ModelProbe);
 
 #[cfg(feature = "automation")]
 #[unsafe(no_mangle)]

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <vector>
 
 #include "vulkan/volk.hpp"
@@ -16,6 +17,7 @@
 #include "gpu/GpuDeviceFactory.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "utils/Logger.hpp"
+#include "io/FileUtil.hpp"
 #include "vulkan/QueueSubmit.hpp"
 
 namespace aether
@@ -292,6 +294,7 @@ namespace aether
 				return;
 			}
 			m_frameCapture.emplace();
+			m_frameCapture->evidence = m_frameEvidence;
 			m_frameCapture->path = std::move(m_pending->path);
 			m_frameCapture->promise = std::move(m_pending->promise);
 			m_pending.reset();
@@ -379,6 +382,15 @@ namespace aether
 			std::memcpy(raw.data(), fc.mapped, byteSize);
 			std::vector<std::uint8_t> rgba = ConvertToRgba(fc.format, raw.data(), fc.width, fc.height);
 			ok = !rgba.empty() && WritePng(fc.path, rgba.data(), fc.width, fc.height);
+			if (ok)
+			{
+				const auto& evidence = fc.evidence;
+				const auto receipt = std::format("{{\"frameIndex\":{},\"elapsedTime\":{},\"exposureUsed\":{},\"width\":{},\"height\":{},\"renderWidth\":{},\"renderHeight\":{}}}", evidence.frameIndex, evidence.elapsedTime, evidence.exposureUsed, fc.width, fc.height, evidence.renderWidth, evidence.renderHeight);
+				if (!io::file_util::WriteText(std::filesystem::u8path(fc.path + ".json"), receipt))
+				{
+					AE_WARN(LogCategory::Render, "ScreenshotService: cannot write frame evidence for '{}'.", fc.path);
+				}
+			}
 		}
 		if (fc.buffer.IsValid())
 		{

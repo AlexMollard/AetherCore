@@ -1,0 +1,208 @@
+#ifndef AETHER_PROCEDURAL_MATERIAL_MATH_SLANGH
+#define AETHER_PROCEDURAL_MATERIAL_MATH_SLANGH
+#include "EffectParams.slangh"
+float3 ProceduralPalette(float t)
+{
+    float3 a = float3(0.5, 0.5, 0.5);
+    float3 b = float3(0.5, 0.5, 0.5);
+    float3 c = float3(1.0, 1.0, 1.0);
+    float3 d = float3(0.0, 0.15, 0.25);
+    return a + b * cos(6.28318 * (c * t + d));
+}
+
+// ── Fragment shader ────────────────────────────────────────────────────────
+
+float4 SharedPlasmaShade(float3 worldNormal, float3 worldTangent, float tangentSign, float2 uv2,
+	float3 worldPos, float3 cameraWorldPos, float elapsed, EffectParams fx)
+{
+    float scale = max(fx.scale, 0.01);
+    float speed = max(fx.speed, 0.0);
+    float intensity = max(fx.intensity, 0.0);
+    float3 tint = fx.tint.rgb;
+
+    float t = elapsed * speed;
+
+    // ── 3D normal-space plasma ───────────────────────────────────────────
+    float3 n = normalize(worldNormal);
+    float3 p = n * scale;
+
+    float plasma =
+          sin(p.x * 6.0 + t)
+        + sin(p.y * 7.0 - t * 0.7)
+        + sin(p.z * 5.0 + t * 0.5)
+        + sin(length(p.xy) * 12.0 - t * 1.3);
+    plasma *= 0.25;
+
+    // ── Spherical flow bands ─────────────────────────────────────────────
+    float longitude = atan2(n.z, n.x);
+    float latitude = asin(n.y);
+
+    float flow =
+        sin(longitude * 8.0 + t * 2.0)
+      + sin(latitude * 12.0 - t * 1.4);
+    flow *= 0.5;
+
+    plasma += flow * 0.4;
+
+    // ── Cosine palette ───────────────────────────────────────────────────
+    float3 plasmaColor = ProceduralPalette(plasma * 0.5 + 0.5);
+
+    float3 tintFactor = any(tint > 0.001) ? tint : float3(1.0, 1.0, 1.0);
+    plasmaColor *= tintFactor;
+    plasmaColor *= (0.5 + intensity * 0.5);
+    plasmaColor = min(plasmaColor, float3(10.0, 10.0, 10.0));
+
+    // ── Filament structures (bright electric veins) ──────────────────────
+    float filaments = pow(saturate(1.0 - abs(plasma)), 10.0);
+    plasmaColor += filaments * float3(2.0, 1.5, 3.0);
+
+    // ── View-dependent effects ───────────────────────────────────────────
+    float3 V = normalize(cameraWorldPos - worldPos);
+    float NdotV = max(dot(n, V), 0.0);
+
+    // Stronger rim fresnel (blue energy-field rim).
+    float fresnel = pow(1.0 - NdotV, 5.0);
+    plasmaColor += fresnel * float3(0.4, 0.8, 2.0);
+
+    // Fake volumetric depth glow - energy appears to live inside the sphere.
+    float depthGlow = pow(1.0 - abs(dot(n, V)), 2.0);
+    plasmaColor *= 1.0 + depthGlow * 0.75;
+
+    // ── Core arcs (electrode tendrils) ───────────────────────────────────
+    float3 centerDir = normalize(float3(
+        sin(t * 0.4),
+        cos(t * 0.3),
+        sin(t * 0.2)));
+    float arc = dot(n, centerDir);
+    arc = pow(saturate(arc), 32.0);
+    plasmaColor += arc * float3(4.0, 2.0, 8.0);
+
+    // ── Consume remaining VSOutput fields ────────────────────────────────
+    // worldTangent / tangentSign / uv2 - perturb the normal so every
+    // vertex->fragment interface slot is genuinely used in the output.
+    float3 T = normalize(worldTangent);
+    float3 B = cross(n, T) * tangentSign;
+    float2 uv2Used = uv2;
+    float3 nrmPerturbed = normalize(n + (T * sin(elapsed * 0.5) + B * cos(elapsed * 0.3)) * 0.02);
+    float perturbMix = sin(uv2Used.x * 10.0 + uv2Used.y * 7.0) * 0.01;
+    nrmPerturbed = normalize(nrmPerturbed + T * perturbMix);
+    float volNdotV = max(dot(nrmPerturbed, V), 0.0);
+    float volGlow = pow(1.0 - volNdotV, 3.0);
+
+    float3 finalColor = plasmaColor + volGlow * float3(0.05, 0.1, 0.2);
+
+    return float4(finalColor, fx.tint.a);
+}
+
+float ProceduralHash31(float3 p)
+{
+    p = frac(p * 0.3183099 + float3(0.1, 0.2, 0.3));
+    p *= 17.0;
+    return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float ProceduralValueNoise(float3 x)
+{
+    float3 i = floor(x);
+    float3 f = frac(x);
+    f = f * f * (3.0 - 2.0 * f); // smoothstep fade
+
+    float n000 = ProceduralHash31(i + float3(0.0, 0.0, 0.0));
+    float n100 = ProceduralHash31(i + float3(1.0, 0.0, 0.0));
+    float n010 = ProceduralHash31(i + float3(0.0, 1.0, 0.0));
+    float n110 = ProceduralHash31(i + float3(1.0, 1.0, 0.0));
+    float n001 = ProceduralHash31(i + float3(0.0, 0.0, 1.0));
+    float n101 = ProceduralHash31(i + float3(1.0, 0.0, 1.0));
+    float n011 = ProceduralHash31(i + float3(0.0, 1.0, 1.0));
+    float n111 = ProceduralHash31(i + float3(1.0, 1.0, 1.0));
+
+    float nx00 = lerp(n000, n100, f.x);
+    float nx10 = lerp(n010, n110, f.x);
+    float nx01 = lerp(n001, n101, f.x);
+    float nx11 = lerp(n011, n111, f.x);
+    float nxy0 = lerp(nx00, nx10, f.y);
+    float nxy1 = lerp(nx01, nx11, f.y);
+    return lerp(nxy0, nxy1, f.z);
+}
+
+float ProceduralFbm(float3 p)
+{
+    float sum = 0.0;
+    float amp = 0.5;
+    for (int i = 0; i < 4; ++i)
+    {
+        sum += amp * ProceduralValueNoise(p);
+        p *= 2.02;
+        amp *= 0.5;
+    }
+    return sum;
+}
+
+// ── Fragment shader ────────────────────────────────────────────────────────
+
+float4 SharedMoltenShade(float3 worldNormal, float3 worldTangent, float tangentSign, float2 uv2,
+	float3 worldPos, float3 cameraWorldPos, float elapsed, EffectParams fx)
+{
+    float scale = max(fx.scale, 0.01);
+    float speed = max(fx.speed, 0.0);
+    float intensity = max(fx.intensity, 0.0);
+    float3 glow = fx.tint.rgb;
+
+    float t = elapsed * speed;
+    float3 n = normalize(worldNormal);
+
+    // ── Domain-warped fbm over the surface normal: organic, slowly churning
+    //    lava cells. The warp makes the veins wander instead of reading as a
+    //    static noise field; the drift term convects them "upward". ──────────
+    float3 q = n * (scale * 2.5);
+    float3 drift = float3(0.0, t * 0.15, t * 0.05);
+    float warp = ProceduralFbm(q + drift);
+    float cells = ProceduralFbm(q * 1.7 + warp * 1.2 + drift);
+
+    // ── Crust vs. molten split. Low fbm = cool basalt crust, high = hot rock.
+    //    A pulsing threshold makes the whole surface breathe. ────────────────
+    float pulse = 0.5 + 0.5 * sin(t * 1.3);
+    float heat = smoothstep(0.35, 0.75, cells + pulse * 0.12);
+
+    // ── Narrow incandescent veins where fbm crosses its mid level-set. ──────
+    float ridge = abs(cells - 0.5);
+    float veins = pow(saturate(1.0 - ridge * 6.0), 4.0);
+
+    // ── Colour ramp: near-black rock -> deep ember -> bright ember -> core. ─
+    float3 crust     = float3(0.02, 0.015, 0.02);
+    float3 emberLow  = glow * 0.35;
+    float3 emberHigh = glow;
+    float3 whiteHot  = lerp(glow, float3(1.6, 1.4, 1.1), 0.6);
+
+    float3 col = crust;
+    col = lerp(col, emberLow,  smoothstep(0.25, 0.55, heat));
+    col = lerp(col, emberHigh, smoothstep(0.55, 0.85, heat));
+    col += veins * whiteHot * (0.6 + intensity);
+
+    // ── Emissive boost so the hot regions bloom (HDR > 1). ──────────────────
+    col *= (0.4 + intensity * 1.1);
+    col += emberHigh * heat * heat * intensity * 1.5;
+
+    // ── View-dependent heat rim (bright edge where the crust thins). ────────
+    float3 V = normalize(cameraWorldPos - worldPos);
+    float NdotV = max(dot(n, V), 0.0);
+    float rim = pow(1.0 - NdotV, 4.0);
+    col += rim * glow * (0.3 + heat * 0.8);
+
+    // ── Consume the remaining VSOutput interpolants so every vertex->fragment
+    //    slot is genuinely used (parity with plasma.slang). worldTangent /
+    //    tangentSign build a bitangent that adds view-grazing shimmer; uv2
+    //    drives a fine flicker along the veins. ──────────────────────────────
+    float3 T = normalize(worldTangent);
+    float3 B = cross(n, T) * tangentSign;
+    float2 uv2Used = uv2;
+    float flicker = 0.5 + 0.5 * sin((uv2Used.x + uv2Used.y) * 30.0 + t * 6.0);
+    col += veins * flicker * glow * 0.15;
+    col += max(dot(B, V), 0.0) * glow * 0.05;
+
+    col = min(col, float3(12.0, 12.0, 12.0));
+    return float4(col, fx.tint.a);
+}
+
+
+#endif

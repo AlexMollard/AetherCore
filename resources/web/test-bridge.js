@@ -61,6 +61,25 @@
 	async capture(timeoutMs = 10000) {
 	    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000)
 		throw RangeError('Invalid timeout');
+	    if (manual && Number.isInteger(aetherRuntime.lastRenderedFrameIndex)) {
+		const desired = {tick:aetherRuntime.ticks || 0, generation:aetherRuntime.renderSceneGeneration,
+		    width:Module.canvas.width,height:Module.canvas.height};
+		const matches = image => image && image.frameIndex === aetherRuntime.lastRenderedFrameIndex &&
+		    image.simulationTick === desired.tick && image.generation === desired.generation &&
+		    image.width === desired.width && image.height === desired.height;
+		// Every accepted manual tick already queued its own readback. Waiting for
+		// that immutable frame preserves motion/history and cannot advance exposure.
+		if (!aetherRuntime.lastRenderedFrameCaptured) {
+		    Module._aether_web_capture();
+		}
+		const deadline=performance.now()+timeoutMs;
+		while (!matches(aetherRuntime.capture)) {
+		    if (bridge.readiness().terminal || performance.now()>=deadline)
+			throw Error('Accepted-frame capture failed or timed out');
+		    await new Promise(resolve=>setTimeout(resolve,10));
+		}
+		return structuredClone(aetherRuntime.capture);
+	    }
 	    delete aetherRuntime.capture;
 	    Module._aether_web_capture();
 	    const deadline = performance.now() + timeoutMs;
