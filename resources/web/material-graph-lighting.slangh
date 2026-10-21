@@ -33,6 +33,7 @@ GraphInput MakeGraphInput(VertexOutput input)
 
 float4 ShadeGraphMaterial(VertexOutput input, bool front)
 {
+    const float2 uvDx = ddx(input.rawUv), uvDy = ddy(input.rawUv);
     const MeshData mesh = meshes[input.instance];
     const GraphInput graphInput = MakeGraphInput(input);
     const GraphSurface surface = EvaluateGraphSurface(graphInput);
@@ -88,7 +89,8 @@ float4 ShadeGraphMaterial(VertexOutput input, bool front)
     uint width, height;
     sceneDepth.GetDimensions(width, height);
     const float gtao = saturate(ambientOcclusion.SampleLevel(sceneSampler, saturate(input.position.xy / float2(max(width, 1u), max(height, 1u))), 0).r);
-    const float materialAo = GraphTexturePresent(graphInput.textureMask, 3) ? lerp(1, occlusion.Sample(materialSampler, input.rawUv).r, mesh.factors.y) : 1;
+    const float bakedOcclusion = occlusion.SampleGrad(materialSampler, input.rawUv, uvDx, uvDy).r;
+    const float materialAo = GraphTexturePresent(graphInput.textureMask, 3) ? lerp(1, bakedOcclusion, mesh.factors.y) : 1;
     const float ao = saturate(materialAo * gtao);
     float3 color = direct + ambientDiffuse * MultiBounceAo(ao, surface.baseColor) + ambientSpecular * SpecularOcclusion(ao, nv, roughness) + surface.emissive;
     const float fog = frame.skyParams.z > 0 ? 0 : HeightFogAmount(frame.camera.xyz, input.world, frame.fogParams.x, frame.fogParams.y, frame.fogParams.w);
