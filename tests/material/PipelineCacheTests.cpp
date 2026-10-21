@@ -18,7 +18,7 @@ static MaterialTemplate GltfTemplate()
 TEST_CASE("PipelineCache dedups identical templates to one pipeline pointer") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
-	cache.Initialize({}, std::ref(factory));
+	cache.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
 
 	const GraphicsPipeline* a = cache.Acquire(GltfTemplate());
 	const GraphicsPipeline* b = cache.Acquire(GltfTemplate());
@@ -32,7 +32,7 @@ TEST_CASE("PipelineCache dedups identical templates to one pipeline pointer") {
 TEST_CASE("PipelineCache builds distinct pipelines for differing blend/cull/program") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
-	cache.Initialize({}, std::ref(factory));
+	cache.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
 
 	MaterialTemplate opaque = GltfTemplate();
 	MaterialTemplate blended = GltfTemplate(); blended.blendEnable = true;
@@ -54,7 +54,7 @@ TEST_CASE("PipelineCache builds distinct pipelines for differing blend/cull/prog
 TEST_CASE("PipelineCache pointers stay stable as more templates are added") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
-	cache.Initialize({}, std::ref(factory));
+	cache.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
 
 	const GraphicsPipeline* first = cache.Acquire(GltfTemplate());
 	for (int i = 0; i < 32; ++i)
@@ -73,7 +73,7 @@ TEST_CASE("PipelineCache pointers stay stable as more templates are added") {
 TEST_CASE("PipelineCache::Reload rebuilds the pipelines built from one shader") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
-	cache.Initialize({}, std::ref(factory));
+	cache.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
 
 	MaterialTemplate opaque = GltfTemplate();
 	MaterialTemplate blended = GltfTemplate(); blended.blendEnable = true;
@@ -94,7 +94,7 @@ TEST_CASE("PipelineCache::Reload rebuilds the pipelines built from one shader") 
 TEST_CASE("PipelineCache::Reload keeps the pointer materials already hold") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
-	cache.Initialize({}, std::ref(factory));
+	cache.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
 
 	const GraphicsPipeline* before = cache.Acquire(GltfTemplate());
 	cache.Reload("shaders://gltf_mesh.spv");
@@ -104,7 +104,7 @@ TEST_CASE("PipelineCache::Reload keeps the pointer materials already hold") {
 TEST_CASE("PipelineCache::Reload ignores a shader nothing was built from") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
-	cache.Initialize({}, std::ref(factory));
+	cache.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
 
 	cache.Acquire(GltfTemplate());
 	CHECK(cache.Reload("shaders://never_used.spv") == 0);
@@ -116,7 +116,7 @@ TEST_CASE("PipelineCache::Reload ignores a shader nothing was built from") {
 TEST_CASE("PipelineCache retires a replaced pipeline instead of destroying it immediately") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
-	cache.Initialize({}, std::ref(factory));
+	cache.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
 
 	cache.Acquire(GltfTemplate());
 	cache.Reload("shaders://gltf_mesh.spv");
@@ -171,7 +171,7 @@ TEST_CASE("PrepareReload builds one pipeline per affected template without touch
 	PipelineCache cache;
 	FakePipelineFactory factory;
 	FakePrepare fake;
-	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard());
+	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard(), ReadFakeLegacyShader);
 
 	MaterialTemplate opaque = GltfTemplate();
 	MaterialTemplate blended = GltfTemplate(); blended.blendEnable = true;
@@ -199,7 +199,7 @@ TEST_CASE("DiscardPrepared hands back pipelines that are never committed") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
 	FakePrepare fake;
-	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard());
+	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard(), ReadFakeLegacyShader);
 
 	cache.Acquire(GltfTemplate());
 	auto prepared = cache.PrepareReload("shaders://gltf_mesh.spv");
@@ -214,7 +214,7 @@ TEST_CASE("PrepareReload is empty when no pipeline uses that shader") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
 	FakePrepare fake;
-	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard());
+	cache.Initialize({}, std::ref(factory), fake.Prepare(), fake.Commit(), fake.Discard(), ReadFakeLegacyShader);
 
 	cache.Acquire(GltfTemplate());
 	CHECK(cache.PrepareReload("shaders://never_used.spv").empty());
@@ -226,7 +226,7 @@ TEST_CASE("PrepareReload is empty when no pipeline uses that shader") {
 TEST_CASE("PrepareReload is inert when no async factory was supplied") {
 	PipelineCache cache;
 	FakePipelineFactory factory;
-	cache.Initialize({}, std::ref(factory));
+	cache.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
 
 	cache.Acquire(GltfTemplate());
 	CHECK(cache.PrepareReload("shaders://gltf_mesh.spv").empty());

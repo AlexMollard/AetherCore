@@ -17,7 +17,7 @@ TEST_CASE("AssignMaterial same-content reassign dedups instead of freeing") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
 
     Entity e = world.Create();
@@ -41,7 +41,7 @@ TEST_CASE("AssignMaterial changed content acquires before releasing the old slot
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
 
     Entity e = world.Create();
@@ -62,7 +62,7 @@ TEST_CASE("Destroying an entity releases its material handle via the hook") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
     MaterialSystem::ConnectLifecycle(world, reg);
 
@@ -85,7 +85,7 @@ TEST_CASE("Soft-cutout scenery foliage writes depth as a cutout and blends only 
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
 
     Entity leaf = world.Create();

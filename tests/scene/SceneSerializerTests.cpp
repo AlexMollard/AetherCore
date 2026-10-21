@@ -572,7 +572,7 @@ TEST_CASE("Effect records apply through the real effect path on load") {
     effects.Register("molten", molten);
     PipelineCache pipelines;
     FakePipelineFactory factory;
-    pipelines.Initialize({}, std::ref(factory));
+    pipelines.Initialize({}, std::ref(factory), {}, {}, {}, ReadFakeLegacyShader);
     EffectParamBuffer params;
 
     World world = MakeWorld();

@@ -25,6 +25,7 @@ namespace aether
 		{
 			gpu::Device device = nullptr;
 			gpu::Extent2D extent;
+			gpu::Extent2D outputExtent{};
 			gpu::Format swapchainFormat = gpu::Format::Undefined;
 			BindlessManager* bindlessManager = nullptr;
 			RenderGraph* renderGraph = nullptr;
@@ -57,6 +58,7 @@ namespace aether
 		// Registered right after the tonemap, drawing into the display-space LDR target before
 		// FXAA: for passes that must blend in gamma space like the PS2 GS (additive particles).
 		using AfterTonemapPass = std::function<void(RenderGraph& graph, RGImage ldrColor, gpu::Extent2D extent)>;
+
 		void SetAfterTonemapPass(AfterTonemapPass pass)
 		{
 			m_afterTonemap = std::move(pass);
@@ -166,25 +168,65 @@ namespace aether
 			m_vignetteRoundness = roundness;
 		}
 
-		void SetChromaticAberration(float pixels) { m_chromaticAberration = pixels; }
+		void SetChromaticAberration(float pixels)
+		{
+			m_chromaticAberration = pixels;
+		}
 
-		void SetFilmGrain(float amount) { m_filmGrain = amount; }
+		void SetFilmGrain(float amount)
+		{
+			m_filmGrain = amount;
+		}
 
-		[[nodiscard]] float GetFilmGrain() const { return m_filmGrain; }
+		[[nodiscard]] float GetFilmGrain() const
+		{
+			return m_filmGrain;
+		}
 
-		void SetSharpness(float sharpness) { m_sharpness = sharpness; }
+		void SetSharpness(float sharpness)
+		{
+			m_sharpness = sharpness;
+		}
 
-		[[nodiscard]] float GetSharpness() const { return m_sharpness; }
+		[[nodiscard]] float GetSharpness() const
+		{
+			return m_sharpness;
+		}
 
-		[[nodiscard]] float GetChromaticAberration() const { return m_chromaticAberration; }
+		[[nodiscard]] float GetChromaticAberration() const
+		{
+			return m_chromaticAberration;
+		}
 
-		[[nodiscard]] float GetVignetteIntensity() const { return m_vignetteIntensity; }
-		[[nodiscard]] float GetVignetteRoundness() const { return m_vignetteRoundness; }
+		[[nodiscard]] float GetVignetteIntensity() const
+		{
+			return m_vignetteIntensity;
+		}
 
-		[[nodiscard]] float GetGradeContrast() const { return m_gradeContrast; }
-		[[nodiscard]] float GetGradeSaturation() const { return m_gradeSaturation; }
-		[[nodiscard]] float GetGradeTemperature() const { return m_gradeTemperature; }
-		[[nodiscard]] float GetGradeTint() const { return m_gradeTint; }
+		[[nodiscard]] float GetVignetteRoundness() const
+		{
+			return m_vignetteRoundness;
+		}
+
+		[[nodiscard]] float GetGradeContrast() const
+		{
+			return m_gradeContrast;
+		}
+
+		[[nodiscard]] float GetGradeSaturation() const
+		{
+			return m_gradeSaturation;
+		}
+
+		[[nodiscard]] float GetGradeTemperature() const
+		{
+			return m_gradeTemperature;
+		}
+
+		[[nodiscard]] float GetGradeTint() const
+		{
+			return m_gradeTint;
+		}
 
 		void SetExposure(float exposure)
 		{
@@ -256,6 +298,7 @@ namespace aether
 		// mode mirrors CameraBackground (0 solid, 1 gradient, 2 sky => disabled).
 		// stops pack xyz = display-space colour, w = position (0..1).
 		static constexpr std::uint32_t kMaxBackgroundStops = 8;
+
 		void SetBackgroundParams(std::uint32_t mode, float angleRadians, std::uint32_t stopCount, const std::array<glm::vec4, kMaxBackgroundStops>& stops)
 		{
 			m_bgMode = mode;
@@ -415,8 +458,10 @@ namespace aether
 		gpu::TextureHandle m_finalColorHandle;
 		RGImage m_finalColor{};
 		gpu::ImageView m_finalColorView = nullptr;
+		std::uint32_t m_finalBindlessSlot = 0xFFFFFFFFu;
 		gpu::Format m_swapchainFormat = gpu::Format::Undefined;
 		gpu::Extent2D m_extent;
+		gpu::Extent2D m_outputExtent{};
 
 		// ACES by default. Reinhard has no shoulder worth the name - it compresses
 		// everything toward white and takes the colour with it - which undercuts both
@@ -424,8 +469,8 @@ namespace aether
 		// Auto exposure. The histogram was already being computed every frame purely to
 		// draw the HDR probe graph; this reads the same data and actually uses it.
 		bool m_autoExposureEnabled = true;
-		float m_autoExposureKey = 0.18f;   // middle grey the average is driven toward
-		float m_autoExposureSpeed = 2.0f;  // adaptation rate, in e-folds per second
+		float m_autoExposureKey = 0.18f;  // middle grey the average is driven toward
+		float m_autoExposureSpeed = 2.0f; // adaptation rate, in e-folds per second
 		float m_autoExposureValue = 1.0f;
 
 		TonemapMode m_tonemapMode = TonemapMode::AcesFilmic;
@@ -472,6 +517,7 @@ namespace aether
 		{
 			return m_histogramCaptureEnabled || m_autoExposureEnabled;
 		}
+
 		std::uint32_t m_histogramUpdatePeriod = 6;
 		std::uint32_t m_histogramSampleStride = 4;
 	};

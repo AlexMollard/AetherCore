@@ -75,7 +75,7 @@ TEST_CASE("Instance setters seed from the entity's CURRENT material, not default
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
     Entity e = world.Create();
 

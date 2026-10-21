@@ -41,7 +41,12 @@ namespace aether
 		AE_INFO(LogCategory::Render, "RenderQueue::Initialize({}): maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", m_debugName, m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
 		if (m_outputDrawCapacity > m_maxDraws && static_cast<std::uint64_t>(m_outputDrawCapacity) < static_cast<std::uint64_t>(m_maxDraws) * kCullMultiFrustumCount)
 		{
-			AE_WARN(LogCategory::Render, "RenderQueue::Initialize({}): outputDrawCapacity={} cannot hold {} cascade regions of {} draws; multi-frustum cull disabled, falling back to single-frustum cull.", m_debugName, m_outputDrawCapacity, kCullMultiFrustumCount, m_maxDraws);
+			AE_WARN(LogCategory::Render,
+			        "RenderQueue::Initialize({}): outputDrawCapacity={} cannot hold {} cascade regions of {} draws; multi-frustum cull disabled, falling back to single-frustum cull.",
+			        m_debugName,
+			        m_outputDrawCapacity,
+			        kCullMultiFrustumCount,
+			        m_maxDraws);
 		}
 
 		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
@@ -99,7 +104,6 @@ namespace aether
 			m_batchDesc[i].mapped = view.mappedPtr;
 			m_batchDesc[i].address = view.deviceAddress;
 		}
-
 
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
@@ -802,6 +806,7 @@ namespace aether
 			        .meshGeneration = batchMesh ? batchMesh->GetGeneration() : 0,
 			        .outputStart = batchOutputStart,
 			        .drawCount = batchDrawCount,
+			        .blended = commands[i].blended,
 			});
 
 			++batchIdx;
@@ -814,9 +819,13 @@ namespace aether
 		// layout is deterministic. Nothing else refers to a job by its position: skin jobs
 		// read their pose by offset, and draws read their palette by offset.
 		const auto sampleBefore = [](const PendingSampleJob& a, const PendingSampleJob& b)
-		{ return a.db != b.db ? std::less<>{}(a.db, b.db) : a.job.nodePoseOffset < b.job.nodePoseOffset; };
+		{
+			return a.db != b.db ? std::less<>{}(a.db, b.db) : a.job.nodePoseOffset < b.job.nodePoseOffset;
+		};
 		const auto skinBefore = [](const PendingSkinJob& a, const PendingSkinJob& b)
-		{ return a.db != b.db ? std::less<>{}(a.db, b.db) : a.job.dstPaletteOffset < b.job.dstPaletteOffset; };
+		{
+			return a.db != b.db ? std::less<>{}(a.db, b.db) : a.job.dstPaletteOffset < b.job.dstPaletteOffset;
+		};
 		std::ranges::sort(m_pendingSampleJobs, sampleBefore);
 		std::ranges::sort(m_pendingSkinJobs, skinBefore);
 		const auto sampleJobsThisFrame = static_cast<std::uint32_t>(m_pendingSampleJobs.size());
@@ -1237,6 +1246,11 @@ namespace aether
 		FlushDrawImpl(cmd, frameIndex, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, cullModeOverride, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
+	void RenderQueue::FlushScenePrepass(gpu::CommandList& cmd, std::uint32_t frameIndex, gpu::DeviceAddress frameAddr, const GraphicsPipeline* fallback, const gpu::CullMode* cullModeOverride)
+	{
+		FlushDrawImpl(cmd, frameIndex, frameAddr, nullptr, fallback, 0, cullModeOverride, "RenderQueue.ScenePrepass", 0.85f, 0.40f, 0.60f, true);
+	}
+
 	void RenderQueue::FlushDrawImpl(gpu::CommandList& cmd,
 	        std::uint32_t frameIndex,
 	        gpu::DeviceAddress frameAddr,
@@ -1247,7 +1261,8 @@ namespace aether
 	        const char* debugLabel,
 	        float r,
 	        float g,
-	        float b)
+	        float b,
+	        bool scenePrepass)
 	{
 		AE_PROFILE_ZONE();
 		if (!cmd.IsValid())
@@ -1278,7 +1293,11 @@ namespace aether
 
 		for (const auto& batch: prepared.batchRenderInfos)
 		{
-			const GraphicsPipeline* activePipeline = overridePipeline != nullptr ? overridePipeline : batch.pipeline;
+			const GraphicsPipeline* activePipeline = scenePrepass ? SelectScenePrepassPipeline(batch.pipeline, overridePipeline, batch.blended) : overridePipeline != nullptr ? overridePipeline : batch.pipeline;
+			if (scenePrepass && activePipeline == nullptr)
+			{
+				continue;
+			}
 
 			if (activePipeline != nullptr && activePipeline != lastPipeline)
 			{

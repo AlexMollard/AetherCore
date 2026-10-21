@@ -25,7 +25,7 @@ TEST_CASE("Many entities bound to one unedited material share a single slot") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     MaterialAuthoring authoring(reg, cache);
     World world;
 
@@ -44,7 +44,7 @@ TEST_CASE("Editing a material re-binds every bound entity to the new content") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     MaterialAuthoring authoring(reg, cache);
     World world;
 
@@ -69,7 +69,7 @@ TEST_CASE("Two ids with identical seeds dedup, then diverge on edit") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     MaterialAuthoring authoring(reg, cache);
     World world;
 
@@ -93,7 +93,7 @@ TEST_CASE("No-op edit on a material does not churn slots") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     MaterialAuthoring authoring(reg, cache);
     World world;
 
@@ -112,7 +112,7 @@ TEST_CASE("Re-binding an entity untracks it from the previous material") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     MaterialAuthoring authoring(reg, cache);
     World world;
 
@@ -136,7 +136,7 @@ TEST_CASE("ReleaseAll drops bookkeeping without touching the sink") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     MaterialAuthoring authoring(reg, cache);
     World world;
 

@@ -3,6 +3,8 @@
 #include <utility>
 
 #include "utils/Logger.hpp"
+#include "io/FileSystem.hpp"
+#include "gpu/SpirvEntryPoints.hpp"
 
 namespace aether
 {
@@ -13,7 +15,7 @@ namespace aether
 		constexpr std::uint64_t kPipelineRetireDelayFrames = kMaxFramesInFlight + 1u;
 	} // namespace
 
-	void PipelineCache::Initialize(Context context, Factory factory, PrepareFn prepare, CommitFn commit, DiscardFn discard)
+	void PipelineCache::Initialize(Context context, Factory factory, PrepareFn prepare, CommitFn commit, DiscardFn discard, ShaderReader shaderReader)
 	{
 		const std::scoped_lock lock(m_mutex);
 		m_context = context;
@@ -21,6 +23,7 @@ namespace aether
 		m_prepare = std::move(prepare);
 		m_commit = std::move(commit);
 		m_discard = std::move(discard);
+		m_shader_reader = std::move(shaderReader);
 	}
 
 	GraphicsPipeline::Desc PipelineCache::DescribeFor(const MaterialTemplate& tmpl) const
@@ -40,6 +43,55 @@ namespace aether
 		return desc;
 	}
 
+	GraphicsPipeline::Desc PipelineCache::DescribePrepassFor(const MaterialTemplate& tmpl) const
+	{
+		auto desc = DescribeFor(tmpl);
+		desc.fragmentEntry = gpu::kGraphPrepassEntry;
+		desc.colorFormat = gpu::Format::R8G8B8A8Unorm;
+		desc.colorAttachmentCount = 2;
+		desc.depthWriteEnable = true;
+		desc.blendEnable = false;
+		return desc;
+	}
+
+	Expected<PipelineCache::ShaderCapability> PipelineCache::ReadShaderCapability(const MaterialTemplate& tmpl) const
+	{
+		if (tmpl.blendEnable || (!m_shader_reader && !io::FileSystem::IsInitialized()))
+		{
+			return ShaderCapability{};
+		}
+		const auto path = tmpl.fragmentVfsPath.empty() ? tmpl.shaderVfsPath : tmpl.fragmentVfsPath;
+		const auto bytes = m_shader_reader ? m_shader_reader(path) : io::FileSystem::ReadFile(path);
+		if (!bytes)
+		{
+			return std::unexpected(bytes.error());
+		}
+		const auto found = gpu::HasSpirvFragmentEntry(*bytes, gpu::kGraphPrepassEntry);
+		if (!found)
+		{
+			return std::unexpected(AetherError::Asset("Material shader capability: " + std::string(path) + ": " + found.error()));
+		}
+		const std::string_view source(reinterpret_cast<const char*>(bytes->data()), bytes->size());
+		return ShaderCapability{*found, utils::Fnv1a(source)};
+	}
+
+	Expected<GraphicsPipeline> PipelineCache::BuildPair(const MaterialTemplate& tmpl) const
+	{
+		AE_TRY(capability, ReadShaderCapability(tmpl));
+		AE_TRY(forward, m_factory(DescribeFor(tmpl)));
+		if (capability->prepass)
+		{
+			AE_TRY(prepass, m_factory(DescribePrepassFor(tmpl)));
+			forward->SetScenePrepass(std::move(*prepass));
+		}
+		AE_TRY(after, ReadShaderCapability(tmpl));
+		if (after->fingerprint != capability->fingerprint)
+		{
+			AE_UNEXPECTED(AetherError::Asset("Shader changed while building its forward/prepass pair"));
+		}
+		return std::move(*forward);
+	}
+
 	const GraphicsPipeline* PipelineCache::Acquire(const MaterialTemplate& tmpl)
 	{
 		const std::uint64_t hash = HashMaterialTemplate(tmpl);
@@ -54,15 +106,13 @@ namespace aether
 			}
 		}
 
-		const GraphicsPipeline::Desc desc = DescribeFor(tmpl);
-
 		if (!m_factory)
 		{
 			AE_ERROR(LogCategory::Render, "PipelineCache: no factory configured");
 			return nullptr;
 		}
 
-		Expected<GraphicsPipeline> built = m_factory(desc);
+		Expected<GraphicsPipeline> built = BuildPair(tmpl);
 		if (!built)
 		{
 			AE_ERROR(LogCategory::Render, "PipelineCache: pipeline build failed for '{}'", tmpl.shaderVfsPath);
@@ -89,7 +139,7 @@ namespace aether
 				continue;
 			}
 
-			Expected<GraphicsPipeline> built = m_factory(DescribeFor(entry.tmpl));
+			Expected<GraphicsPipeline> built = BuildPair(entry.tmpl);
 			if (!built)
 			{
 				// The old pipeline is left in place on purpose: a shader that now fails to
@@ -110,7 +160,9 @@ namespace aether
 	{
 		std::vector<MaterialTemplate> matching;
 		PrepareFn prepare;
+		DiscardFn discard;
 		std::vector<GraphicsPipeline::Desc> descs;
+		std::vector<ShaderCapability> capabilities;
 		{
 			// The lock is held only to SNAPSHOT what needs rebuilding. Building the pipelines
 			// under it would block Acquire on the main thread for the whole duration, which is
@@ -121,12 +173,20 @@ namespace aether
 				return {};
 			}
 			prepare = m_prepare;
+			discard = m_discard;
 			for (const auto& [hash, entry]: m_entries)
 			{
 				if (entry.tmpl.shaderVfsPath == shaderVfsPath || entry.tmpl.fragmentVfsPath == shaderVfsPath)
 				{
+					const auto capability = ReadShaderCapability(entry.tmpl);
+					if (!capability)
+					{
+						AE_ERROR(LogCategory::Render, "PipelineCache: reload capability check failed for '{}'; keeping previous pair", entry.tmpl.shaderVfsPath);
+						continue;
+					}
 					matching.push_back(entry.tmpl);
 					descs.push_back(DescribeFor(entry.tmpl));
+					capabilities.push_back(*capability);
 				}
 			}
 		}
@@ -137,9 +197,57 @@ namespace aether
 		{
 			const MaterialTemplate& tmpl = matching[i];
 			gpu::ResourceRegistry::PreparedPipeline prepared = prepare(descs[i]);
+			gpu::ResourceRegistry::PreparedPipeline prepass;
+			if (prepared.IsValid() && capabilities[i].prepass)
+			{
+				auto desc = descs[i];
+				desc.fragmentEntry = gpu::kGraphPrepassEntry;
+				desc.colorFormat = gpu::Format::R8G8B8A8Unorm;
+				desc.colorAttachmentCount = 2;
+				desc.depthWriteEnable = true;
+				desc.blendEnable = false;
+				prepass = prepare(desc);
+				if (!prepass.IsValid())
+				{
+					if (discard)
+					{
+						discard(prepared);
+					}
+					else
+					{
+						GraphicsPipeline::Discard(prepared);
+					}
+					prepared = {};
+				}
+			}
 			if (prepared.IsValid())
 			{
-				out.push_back(PreparedReload{tmpl, prepared});
+				const auto after = ReadShaderCapability(tmpl);
+				if (!after || after->fingerprint != capabilities[i].fingerprint)
+				{
+					if (discard)
+					{
+						discard(prepared);
+						if (prepass.IsValid())
+						{
+							discard(prepass);
+						}
+					}
+					else
+					{
+						GraphicsPipeline::Discard(prepared);
+						if (prepass.IsValid())
+						{
+							GraphicsPipeline::Discard(prepass);
+						}
+					}
+					prepared = {};
+					prepass = {};
+				}
+			}
+			if (prepared.IsValid())
+			{
+				out.push_back(PreparedReload{tmpl, prepared, prepass});
 			}
 			else
 			{
@@ -154,6 +262,25 @@ namespace aether
 		const std::scoped_lock lock(m_mutex);
 		if (!m_commit)
 		{
+			for (const auto& item: prepared)
+			{
+				if (m_discard)
+				{
+					m_discard(item.prepared);
+					if (item.prepass.IsValid())
+					{
+						m_discard(item.prepass);
+					}
+				}
+				else
+				{
+					GraphicsPipeline::Discard(item.prepared);
+					if (item.prepass.IsValid())
+					{
+						GraphicsPipeline::Discard(item.prepass);
+					}
+				}
+			}
 			return 0;
 		}
 
@@ -163,7 +290,27 @@ namespace aether
 			Expected<GraphicsPipeline> built = m_commit(item.prepared);
 			if (!built)
 			{
+				if (item.prepass.IsValid())
+				{
+					if (m_discard)
+					{
+						m_discard(item.prepass);
+					}
+					else
+					{
+						GraphicsPipeline::Discard(item.prepass);
+					}
+				}
 				continue;
+			}
+			if (item.prepass.IsValid())
+			{
+				auto prepass = m_commit(item.prepass);
+				if (!prepass)
+				{
+					continue;
+				}
+				built->SetScenePrepass(std::move(*prepass));
 			}
 			// Found again rather than remembered: an entry could in principle have been added
 			// since the snapshot, and swapping into a stale address would be a use-after-free.
@@ -193,13 +340,24 @@ namespace aether
 	void PipelineCache::DiscardPrepared(std::vector<PreparedReload> prepared)
 	{
 		const std::scoped_lock lock(m_mutex);
-		if (!m_discard)
-		{
-			return;
-		}
 		for (const PreparedReload& item: prepared)
 		{
-			m_discard(item.prepared);
+			if (m_discard)
+			{
+				m_discard(item.prepared);
+				if (item.prepass.IsValid())
+				{
+					m_discard(item.prepass);
+				}
+			}
+			else
+			{
+				GraphicsPipeline::Discard(item.prepared);
+				if (item.prepass.IsValid())
+				{
+					GraphicsPipeline::Discard(item.prepass);
+				}
+			}
 		}
 	}
 

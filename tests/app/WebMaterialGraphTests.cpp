@@ -4,6 +4,36 @@
 
 using namespace aether::editor;
 
+TEST_CASE("Web graph normal maps sample before divergent texture presence selection")
+{
+	auto graph = MakeDefaultMaterialGraph();
+	graph.nodes.push_back(MakeMaterialNode(100, MaterialNodeType::NormalMap));
+	graph.nodes.push_back(MakeMaterialNode(101, MaterialNodeType::Uv));
+	graph.links.push_back({102, 101, 0, 100, 0});
+	graph.links.push_back({103, 100, 0, 1, 4});
+	std::string error;
+	const auto shader = GenerateWebMaterialSurface(graph, error);
+	REQUIRE(error.empty());
+	const auto sample = shader.find("graph_sample_100 = GraphSampleTexture");
+	const auto select = shader.find("GraphTexturePresent(input.textureMask");
+	REQUIRE(sample != std::string::npos);
+	REQUIRE(select != std::string::npos);
+	CHECK(sample < select);
+	CHECK(shader.find("? normalize(mul(GraphSampleTexture") == std::string::npos);
+}
+
+TEST_CASE("Native graph forward and prepass share the same evaluated surface")
+{
+	std::string error;
+	const auto shader = GenerateMaterialShader(MakeDefaultMaterialGraph(), error);
+	REQUIRE(error.empty());
+	CHECK(shader.find("graphPrepassMain") != std::string::npos);
+	const std::string evaluation = "EvaluateNativeGraphSurface(input,";
+	const auto first = shader.find(evaluation);
+	REQUIRE(first != std::string::npos);
+	CHECK(shader.find(evaluation, first + evaluation.size()) != std::string::npos);
+}
+
 TEST_CASE("Web material source rejects parser repairs instead of silently changing the graph")
 {
 	std::string error;

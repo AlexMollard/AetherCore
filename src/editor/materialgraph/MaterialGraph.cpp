@@ -654,11 +654,17 @@ namespace aether::editor
 						// Unpacked from [0,1] and rotated into world space by the same TBN the
 						// standard shader builds, so a normal map reads identically in both.
 						const std::string uv = Input(nodeId, 0, kF2, 0.0f);
-						expr = portable ? std::format("(GraphTexturePresent(input.textureMask, {}u) ? normalize(mul(GraphSampleTexture({}u, {}).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal)",
-						                          static_cast<unsigned>(node->slot),
-						                          static_cast<unsigned>(node->slot),
-						                          uv)
-						                : std::format("(({} != kNoTexture) ? normalize(mul(g_textures[{}].Sample(g_linearSampler, {}).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal)", SlotExpression(node->slot), SlotExpression(node->slot), uv);
+						if (portable)
+						{
+							// Texture presence varies per instance. Evaluate UV derivatives and
+							// sample before selecting the missing-map geometric fallback.
+							body += std::format("    const float4 graph_sample_{} = GraphSampleTexture({}u, {});\n", nodeId, static_cast<unsigned>(node->slot), uv);
+							expr = std::format("(GraphTexturePresent(input.textureMask, {}u) ? normalize(mul(graph_sample_{}.xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal)", static_cast<unsigned>(node->slot), nodeId);
+						}
+						else
+						{
+							expr = std::format("(({} != kNoTexture) ? normalize(mul(g_textures[{}].Sample(g_linearSampler, {}).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal)", SlotExpression(node->slot), SlotExpression(node->slot), uv);
+						}
 						break;
 					}
 					case MaterialNodeType::Panner:
@@ -968,6 +974,83 @@ GraphSurface EvaluateGraphSurface(GraphInput input)
 			return {};
 		}
 
+		const auto surfaceSource = std::format(R"SURFACE(
+struct NativeGraphSurface
+{{
+    float3 baseColor;
+    float metallic, roughness;
+    float3 emissive, normal;
+}};
+
+GpuMaterial LoadNativeGraphMaterial(VSOutput input, FrameConstantsData* fc)
+{{
+    GpuMaterial mat;
+    mat.albedoSlot = kNoTexture;
+    mat.normalSlot = kNoTexture;
+    mat.metallicRoughnessSlot = kNoTexture;
+    mat.occlusionSlot = kNoTexture;
+    mat.emissiveSlot = kNoTexture;
+    mat.flags = 0u;
+    if (input.materialIndex != kNoTexture)
+    {{
+        mat = ((GpuMaterial*)(fc->materialBufferAddr))[input.materialIndex];
+    }}
+    return mat;
+}}
+
+NativeGraphSurface EvaluateNativeGraphSurface(VSOutput input, GpuMaterial mat, FrameConstantsData* fc)
+{{
+    const float3 graphGeometricNormal = normalize(input.worldNormal);
+    float3 graphT = input.worldTangent;
+    if (dot(graphT, graphT) < 1e-8f)
+    {{
+        graphT = abs(graphGeometricNormal.y) < 0.99f ? cross(float3(0, 1, 0), graphGeometricNormal)
+                                                     : cross(float3(1, 0, 0), graphGeometricNormal);
+    }}
+    graphT = normalize(graphT - graphGeometricNormal * dot(graphGeometricNormal, graphT));
+    const float3 graphB = cross(graphGeometricNormal, graphT) * input.tangentSign;
+    const float3x3 graphTBN = float3x3(graphT, graphB, graphGeometricNormal);
+{}
+    NativeGraphSurface result;
+    result.baseColor = {};
+    result.metallic = saturate({});
+    result.roughness = clamp({}, 0.04f, 1.0f);
+    result.emissive = {};
+    result.normal = normalize({});
+    return result;
+}}
+
+float NativeGraphFilteredRoughness(NativeGraphSurface surface)
+{{
+    const float3 dx = ddx(surface.normal), dy = ddy(surface.normal);
+    const float variance = 0.15915494f * (dot(dx, dx) + dot(dy, dy));
+    return sqrt(saturate(surface.roughness * surface.roughness + min(2.0f * variance, 0.18f)));
+}}
+
+struct NativeGraphPrepassOutput
+{{
+    float4 surface : SV_Target0;
+    float4 baseColor : SV_Target1;
+}};
+
+[shader("fragment")]
+NativeGraphPrepassOutput graphPrepassMain(VSOutput input)
+{{
+    FrameConstantsData* fc = pc.frame.Ptr();
+    const NativeGraphSurface graph = EvaluateNativeGraphSurface(input, LoadNativeGraphMaterial(input, fc), fc);
+    NativeGraphPrepassOutput output;
+    output.surface = float4(EncodeOctNormal(graph.normal), saturate(NativeGraphFilteredRoughness(graph)), saturate(graph.metallic));
+    output.baseColor = float4(saturate(graph.baseColor), 1.0f);
+    return output;
+}}
+)SURFACE",
+		        body,
+		        baseColor,
+		        metallic,
+		        roughness,
+		        emissive,
+		        normal);
+
 		// Sun, cascade shadows, local lights and a sky-based ambient - diffuse AND specular -
 		// all through the same helpers gltf_mesh uses, so a graph-driven material sits in a
 		// scene looking like the materials around it: fog, occlusion and all. The remaining
@@ -993,63 +1076,26 @@ GraphSurface EvaluateGraphSurface(GraphInput input)
 #include "include/DarknessVolume.slangh"
 #include "include/MeshVertex.slangh"
 #include "include/DefaultVertex.slangh"
+#include "include/OctNormal.slangh"
 
 [[vk::push_constant]] DrawPushConstants pc;
+
+{}
 
 {}
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {{
-    FrameConstantsData* fc        = pc.frame.Ptr();
-    GpuMaterial*        materials = (GpuMaterial*)(fc->materialBufferAddr);
-
-    GpuMaterial mat;
-    mat.albedoSlot = kNoTexture;
-    mat.normalSlot = kNoTexture;
-    mat.metallicRoughnessSlot = kNoTexture;
-    mat.occlusionSlot = kNoTexture;
-    mat.emissiveSlot = kNoTexture;
-    mat.flags = 0u;
-    if (input.materialIndex != kNoTexture)
-    {{
-        mat = materials[input.materialIndex];
-    }}
-
-    // Built before the graph body because a Normal map node rotates through it. Same
-    // construction as the standard shader, so a normal map reads the same in both.
+    FrameConstantsData* fc = pc.frame.Ptr();
+    const GpuMaterial mat = LoadNativeGraphMaterial(input, fc);
+    const NativeGraphSurface graph = EvaluateNativeGraphSurface(input, mat, fc);
     const float3 graphGeometricNormal = normalize(input.worldNormal);
-    float3 graphT = input.worldTangent;
-    if (dot(graphT, graphT) < 1e-8f)
-    {{
-        graphT = abs(graphGeometricNormal.y) < 0.99f ? cross(float3(0, 1, 0), graphGeometricNormal)
-                                                     : cross(float3(1, 0, 0), graphGeometricNormal);
-    }}
-    graphT = normalize(graphT - graphGeometricNormal * dot(graphGeometricNormal, graphT));
-    const float3 graphB = cross(graphGeometricNormal, graphT) * input.tangentSign;
-    const float3x3 graphTBN = float3x3(graphT, graphB, graphGeometricNormal);
-
-{}
-    const float3 albedo    = {};
-    const float  metallic  = saturate({});
-    float        roughness = clamp({}, 0.04f, 1.0f);
-    const float3 emissive  = {};
-
-    const float3 N = normalize({});
-
-    // Geometric specular anti-aliasing, the same filter gltf_mesh applies. A normal that
-    // swings hard across one pixel - a normal map, or curvature at distance - concentrates
-    // the highlight into single pixels that sparkle as the camera moves. Widening the
-    // roughness by the normal's screen-space variance makes the surface as rough as its
-    // footprint actually is, so the highlight resolves instead of aliasing.
-    {{
-        const float3 dNdx = ddx(N);
-        const float3 dNdy = ddy(N);
-        const float kSigma2 = 0.15915494f; // half-pixel Gaussian width, the paper's fit
-        const float kKappa = 0.18f;        // ceiling, so a crease cannot turn the material matte
-        const float variance = kSigma2 * (dot(dNdx, dNdx) + dot(dNdy, dNdy));
-        roughness = sqrt(saturate(roughness * roughness + min(2.0f * variance, kKappa)));
-    }}
+    const float3 albedo = graph.baseColor;
+    const float metallic = graph.metallic;
+    const float roughness = NativeGraphFilteredRoughness(graph);
+    const float3 emissive = graph.emissive;
+    const float3 N = graph.normal;
     const float3 V = normalize(fc->cameraWorldPos.xyz - input.worldPos);
     // sunDirectionIntensity.xyz points TOWARDS the sun - the scene's sun_direction reaches the
     // renderer unnegated, DayNightSystem treats a positive y as daytime, and gltf_mesh feeds it
@@ -1143,11 +1189,6 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 }}
 )SHADER",
 		        kGraphMathSource,
-		        body,
-		        baseColor,
-		        metallic,
-		        roughness,
-		        emissive,
-		        normal);
+		        surfaceSource);
 	}
 } // namespace aether::editor

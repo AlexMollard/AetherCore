@@ -221,11 +221,17 @@ def cook_native(project, material, output_dir, compiler, slang, timeout=120):
         data = binary.read_bytes()
         if len(data) < 20 or data[:4] != bytes.fromhex('03022307'):
             raise ValueError('NATIVE_GRAPH_SPIRV: compiler did not produce a SPIR-V module')
+        inspection = scratch/'entry-points.json'
+        run([compiler, '--inspect', binary], inspection, deadline)
+        entries = json.loads(inspection.read_text(encoding='utf-8-sig'))
+        if entries.get('graphPrepassMain') is not True or entries.get('fragmentMain') is not True:
+            raise ValueError('NATIVE_GRAPH_PREPASS: compiled graph module must expose both forward and graph prepass fragment entries')
         metadata = dict(output=str(output), sha256=hashlib.sha256(data).hexdigest(),
                         materialSha256=hashlib.sha256(material.read_bytes()).hexdigest(),
                         generatedSourceSha256=hashlib.sha256(generated.read_bytes()).hexdigest(),
                         compilerSha256=hashlib.sha256(compiler.read_bytes()).hexdigest(), slang=version,
                         slangSha256=hashlib.sha256(slang.read_bytes()).hexdigest(),
+                        fragmentEntries=entries,
                         nativeIncludeSha256={path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
                                              for path in sorted((ROOT/'src/shaders/include').rglob('*.slangh'))})
         os.replace(binary, output)

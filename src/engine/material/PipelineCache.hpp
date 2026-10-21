@@ -31,8 +31,9 @@ namespace aether
 		using PrepareFn = std::function<gpu::ResourceRegistry::PreparedPipeline(const GraphicsPipeline::Desc&)>;
 		using CommitFn = std::function<Expected<GraphicsPipeline>(gpu::ResourceRegistry::PreparedPipeline)>;
 		using DiscardFn = std::function<void(gpu::ResourceRegistry::PreparedPipeline)>;
+		using ShaderReader = std::function<Expected<std::vector<std::byte>>(std::string_view)>;
 
-		void Initialize(Context context, Factory factory, PrepareFn prepare = {}, CommitFn commit = {}, DiscardFn discard = {});
+		void Initialize(Context context, Factory factory, PrepareFn prepare = {}, CommitFn commit = {}, DiscardFn discard = {}, ShaderReader shaderReader = {});
 
 		[[nodiscard]] const GraphicsPipeline* Acquire(const MaterialTemplate& tmpl);
 
@@ -60,6 +61,7 @@ namespace aether
 		{
 			MaterialTemplate tmpl{};
 			gpu::ResourceRegistry::PreparedPipeline prepared{};
+			gpu::ResourceRegistry::PreparedPipeline prepass{};
 		};
 
 		[[nodiscard]] std::vector<PreparedReload> PrepareReload(std::string_view shaderVfsPath);
@@ -81,6 +83,16 @@ namespace aether
 		// Shared by Acquire and Reload so a rebuilt pipeline is built from exactly the same
 		// description as the one it replaces.
 		[[nodiscard]] GraphicsPipeline::Desc DescribeFor(const MaterialTemplate& tmpl) const;
+		[[nodiscard]] GraphicsPipeline::Desc DescribePrepassFor(const MaterialTemplate& tmpl) const;
+
+		struct ShaderCapability
+		{
+			bool prepass = false;
+			std::uint64_t fingerprint = 0;
+		};
+
+		[[nodiscard]] Expected<ShaderCapability> ReadShaderCapability(const MaterialTemplate& tmpl) const;
+		[[nodiscard]] Expected<GraphicsPipeline> BuildPair(const MaterialTemplate& tmpl) const;
 
 		struct Entry
 		{
@@ -100,6 +112,7 @@ namespace aether
 		PrepareFn m_prepare;
 		CommitFn m_commit;
 		DiscardFn m_discard;
+		ShaderReader m_shader_reader;
 		std::unordered_multimap<std::uint64_t, Entry> m_entries;
 		std::vector<Retired> m_retired;
 		std::uint64_t m_frameIndex = 0;

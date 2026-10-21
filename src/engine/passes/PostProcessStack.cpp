@@ -1,5 +1,8 @@
 #include "passes/PostProcessStack.hpp"
 
+#include "rendering/ExposureMath.hpp"
+#include "passes/FxaaDefs.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -100,6 +103,12 @@ namespace aether
 		}
 		const auto& finalTexture = gpu::ResourceRegistry::ResolveTexture(stack.m_finalColorHandle);
 		stack.m_finalColorView = finalTexture.view;
+		gpu::ResourceRegistry::EnsureBindlessSampled(stack.m_finalColorHandle);
+		stack.m_finalBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(stack.m_finalColorHandle);
+		if (stack.m_finalBindlessSlot == 0xFFFFFFFFu)
+		{
+			Throw(AetherError::Engine("PostProcessStack: FinalColor bindless registration failed"));
+		}
 		stack.m_finalColor = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(stack.m_finalColorHandle), finalTexture.view);
 
 		AE_EXPECT_OR_THROW(tonemapPipeline,
@@ -171,6 +180,7 @@ namespace aether
 
 		stack.m_swapchainFormat = desc.swapchainFormat;
 		stack.m_extent = desc.extent;
+		stack.m_outputExtent = desc.outputExtent.width && desc.outputExtent.height ? desc.outputExtent : desc.extent;
 
 		return stack;
 	}
@@ -191,6 +201,7 @@ namespace aether
 		m_finalColorHandle = {};
 		m_finalColor = RGImage{};
 		m_finalColorView = nullptr;
+		m_finalBindlessSlot = 0xFFFFFFFFu;
 		m_hdrColor = RGImage{};
 		m_hdrBindlessSlot = 0xFFFFFFFFu;
 		for (auto& buf: m_backgroundBuffer)
@@ -221,6 +232,7 @@ namespace aether
 		m_histogramOutputRG = {};
 		m_histogramDataValid = false;
 		m_extent = {};
+		m_outputExtent = {};
 		m_outputToTexture = false;
 	}
 
@@ -284,64 +296,7 @@ namespace aether
 			return;
 		}
 
-		// Matches kLogMin / kLogRange in luminance_histogram.slang.
-		constexpr float kLogMin = -10.0f;
-		constexpr float kLogRange = 20.0f;
-		constexpr float kLowPercentile = 0.30f;
-		constexpr float kHighPercentile = 0.95f;
-
-		double total = 0.0;
-		// Bin 0 collects everything at or below the floor, which is mostly pixels with
-		// no geometry at all. Counting it would peg the average to black.
-		for (std::uint32_t i = 1; i < kHistogramBins; ++i)
-		{
-			total += bins[i];
-		}
-		if (total < 1.0)
-		{
-			return;
-		}
-
-		const double lowCount = total * kLowPercentile;
-		const double highCount = total * kHighPercentile;
-		double seen = 0.0;
-		double weighted = 0.0;
-		double weight = 0.0;
-		for (std::uint32_t i = 1; i < kHistogramBins; ++i)
-		{
-			const double count = bins[i];
-			if (count <= 0.0)
-			{
-				continue;
-			}
-			const double binStart = seen;
-			seen += count;
-			const double lo = std::max(binStart, lowCount);
-			const double hi = std::min(seen, highCount);
-			if (hi <= lo)
-			{
-				continue;
-			}
-			const float logLum = kLogMin + (static_cast<float>(i) / 255.0f) * kLogRange;
-			weighted += logLum * (hi - lo);
-			weight += (hi - lo);
-		}
-		if (weight <= 0.0)
-		{
-			return;
-		}
-
-		const float avgLuminance = std::exp2(static_cast<float>(weighted / weight));
-		const float target = std::clamp(m_autoExposureKey / std::max(avgLuminance, 1e-4f), 0.03f, 30.0f);
-
-		// Adapt in log space at a fixed rate, so going from bright to dark takes the
-		// same time as the reverse. A linear approach would snap one way and crawl the
-		// other, which reads as the image lurching.
-		constexpr float kFrameDt = 1.0f / 60.0f;
-		const float blend = 1.0f - std::exp(-m_autoExposureSpeed * kFrameDt);
-		const float current = std::log2(std::max(m_autoExposureValue, 1e-4f));
-		const float wanted = std::log2(target);
-		m_autoExposureValue = std::exp2(current + (wanted - current) * blend);
+		m_autoExposureValue = AdaptHistogramExposure(std::span<const std::uint32_t, 256>(bins, 256), m_autoExposureValue, m_autoExposureKey, m_autoExposureSpeed);
 	}
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
@@ -431,7 +386,8 @@ namespace aether
 		        .loadOp = gpu::LoadOp::DontCare,
 		        .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
 		});
-		postProcessPass.ReadTexture(m_hdrColor)
+		postProcessPass
+		        .ReadTexture(m_hdrColor)
 		        // Declared even though the slot reaches the shader through a push constant:
 		        // the graph culls passes with no declared reader, and without this the last
 		        // upsample vanished and mip 0 was read without a barrier.
@@ -444,77 +400,77 @@ namespace aether
 			postProcessPass.ReadTexture(m_dofImage);
 		}
 		postProcessPass.Execute(
-		                [this, &bindless](PassContext& ctx)
-		                {
-			                gpu::CommandList& cmd = ctx.recorder;
+		        [this, &bindless](PassContext& ctx)
+		        {
+			        gpu::CommandList& cmd = ctx.recorder;
 
-			                bindless.CmdBindGlobalResources(cmd);
+			        bindless.CmdBindGlobalResources(cmd);
 
-			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline());
+			        cmd.BindPipeline(m_tonemapPipeline.GetPipeline());
 
-			                // Fill this frame's background params buffer (display-space
-			                // WYSIWYG composite). mode 2 (sky) => addr 0 => tonemap
-			                // passes through unchanged.
-			                std::uint64_t backgroundParamsAddr = 0;
-			                if (m_bgMode != 2u)
-			                {
-				                const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
-				                const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_backgroundBuffer[slot]);
-				                if (view.mappedPtr != nullptr)
-				                {
-					                struct GpuBackgroundParams
-					                {
-						                std::uint32_t mode;
-						                std::uint32_t stopCount;
-						                float angleRadians;
-						                std::uint32_t pad;
-						                glm::vec4 stops[kMaxBackgroundStops];
-					                } params{};
-					                params.mode = m_bgMode;
-					                params.stopCount = m_bgStopCount;
-					                params.angleRadians = m_bgAngleRadians;
-					                for (std::uint32_t i = 0; i < kMaxBackgroundStops; ++i)
-					                {
-						                params.stops[i] = m_bgStops[i];
-					                }
-					                std::memcpy(view.mappedPtr, &params, sizeof(params));
-					                backgroundParamsAddr = gpu::ResourceRegistry::ResolveBuffer(m_backgroundBuffer[slot]).deviceAddress;
-				                }
-			                }
+			        // Fill this frame's background params buffer (display-space
+			        // WYSIWYG composite). mode 2 (sky) => addr 0 => tonemap
+			        // passes through unchanged.
+			        std::uint64_t backgroundParamsAddr = 0;
+			        if (m_bgMode != 2u)
+			        {
+				        const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
+				        const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_backgroundBuffer[slot]);
+				        if (view.mappedPtr != nullptr)
+				        {
+					        struct GpuBackgroundParams
+					        {
+						        std::uint32_t mode;
+						        std::uint32_t stopCount;
+						        float angleRadians;
+						        std::uint32_t pad;
+						        glm::vec4 stops[kMaxBackgroundStops];
+					        } params{};
+					        params.mode = m_bgMode;
+					        params.stopCount = m_bgStopCount;
+					        params.angleRadians = m_bgAngleRadians;
+					        for (std::uint32_t i = 0; i < kMaxBackgroundStops; ++i)
+					        {
+						        params.stops[i] = m_bgStops[i];
+					        }
+					        std::memcpy(view.mappedPtr, &params, sizeof(params));
+					        backgroundParamsAddr = gpu::ResourceRegistry::ResolveBuffer(m_backgroundBuffer[slot]).deviceAddress;
+				        }
+			        }
 
-			                TonemapContracts::PushConstants push{};
-			                push.hdrSlot = m_hdrBindlessSlot;
-			                push.bloomSlot = (m_bloomStrength > 0.0f) ? m_bloomSlots[0] : 0xFFFFFFFFu;
-			                push.bloomStrength = m_bloomStrength;
-			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);
-			                // Manual exposure multiplies the adapted value rather than
-				                // replacing it, so the slider stays a compensation control in
-				                // stops rather than fighting the adaptation.
-				                push.exposure = m_autoExposureEnabled ? (m_exposure * m_autoExposureValue) : m_exposure;
-			                push.debugCompare = m_debugCompare ? 1u : 0u;
-			                push.debugModeCount = m_debugModeCount;
-			                push.inspectX = -1;
-			                push.inspectY = -1;
-			                push.screenWidth = m_extent.width;
-			                push.screenHeight = m_extent.height;
-			                push.dofSlot = m_dofSlot;
-			                push.gradeContrast = m_gradeContrast;
-			                push.gradeSaturation = m_gradeSaturation;
-			                push.gradeTemperature = m_gradeTemperature;
-			                push.gradeTint = m_gradeTint;
-			                push.vignetteIntensity = m_vignetteIntensity;
-			                push.vignetteRoundness = m_vignetteRoundness;
-			                push.chromaticAberration = m_chromaticAberration;
-			                push.filmGrain = m_filmGrain;
-			                push.backgroundParamsAddr = backgroundParamsAddr;
-			                push.motionBlurDepthSlot = m_sceneDepthSlot;
-			                push.motionBlurStrength = m_motionBlurStrength;
-			                push.motionBlurMaxRadiusPixels = m_motionBlurMaxRadiusPixels;
-			                push.frameConstantsAddr = ctx.frameConstantsAddr;
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+			        TonemapContracts::PushConstants push{};
+			        push.hdrSlot = m_hdrBindlessSlot;
+			        push.bloomSlot = (m_bloomStrength > 0.0f) ? m_bloomSlots[0] : 0xFFFFFFFFu;
+			        push.bloomStrength = m_bloomStrength;
+			        push.mode = static_cast<std::uint32_t>(m_tonemapMode);
+			        // Manual exposure multiplies the adapted value rather than
+			        // replacing it, so the slider stays a compensation control in
+			        // stops rather than fighting the adaptation.
+			        push.exposure = m_autoExposureEnabled ? (m_exposure * m_autoExposureValue) : m_exposure;
+			        push.debugCompare = m_debugCompare ? 1u : 0u;
+			        push.debugModeCount = m_debugModeCount;
+			        push.inspectX = -1;
+			        push.inspectY = -1;
+			        push.screenWidth = m_extent.width;
+			        push.screenHeight = m_extent.height;
+			        push.dofSlot = m_dofSlot;
+			        push.gradeContrast = m_gradeContrast;
+			        push.gradeSaturation = m_gradeSaturation;
+			        push.gradeTemperature = m_gradeTemperature;
+			        push.gradeTint = m_gradeTint;
+			        push.vignetteIntensity = m_vignetteIntensity;
+			        push.vignetteRoundness = m_vignetteRoundness;
+			        push.chromaticAberration = m_chromaticAberration;
+			        push.filmGrain = m_filmGrain;
+			        push.backgroundParamsAddr = backgroundParamsAddr;
+			        push.motionBlurDepthSlot = m_sceneDepthSlot;
+			        push.motionBlurStrength = m_motionBlurStrength;
+			        push.motionBlurMaxRadiusPixels = m_motionBlurMaxRadiusPixels;
+			        push.frameConstantsAddr = ctx.frameConstantsAddr;
+			        cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
-			                cmd.Draw(3, 1, 0, 0);
-		                });
+			        cmd.Draw(3, 1, 0, 0);
+		        });
 
 		if (m_afterTonemap)
 		{
@@ -522,8 +478,9 @@ namespace aether
 		}
 
 		auto fxaaPass = graph.AddPass("$FXAA");
-		fxaaPass.ReadTexture(m_ldrColor).WriteColor(m_outputToTexture ? m_finalColor : aether::RenderGraph::GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {});
-		if (m_outputToTexture)
+		const bool scaledPresentation = NeedsScaledPresentation(m_extent, m_outputExtent, m_outputToTexture);
+		fxaaPass.ReadTexture(m_ldrColor).WriteColor(m_outputToTexture || scaledPresentation ? m_finalColor : aether::RenderGraph::GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {});
+		if (m_outputToTexture || scaledPresentation)
 		{
 			fxaaPass.SetExtent(m_extent);
 		}
@@ -547,14 +504,7 @@ namespace aether
 
 			        cmd.BindPipeline(m_fxaaPipeline.GetPipeline());
 
-			        struct
-			        {
-				        std::uint32_t ldrSlot;
-				        std::uint32_t fxaaEnabled;
-				        float rcpWidth;
-				        float rcpHeight;
-				        float sharpness;
-			        } push;
+			        FxaaPushConstants push;
 			        push.ldrSlot = m_ldrBindlessSlot;
 			        push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
 			        // The edge search walks in UV across the LDR image, so it needs the size
@@ -567,10 +517,39 @@ namespace aether
 			        push.rcpWidth = 1.0f / static_cast<float>(std::max(m_extent.width, 1u));
 			        push.rcpHeight = 1.0f / static_cast<float>(std::max(m_extent.height, 1u));
 			        push.sharpness = m_sharpness;
+			        push.outputRcpWidth = 1.0f / static_cast<float>(std::max(ctx.extent.width, 1u));
+			        push.outputRcpHeight = 1.0f / static_cast<float>(std::max(ctx.extent.height, 1u));
 			        cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			        cmd.Draw(3, 1, 0, 0);
 		        });
+
+		if (scaledPresentation)
+		{
+			graph.AddPass("$ScenePresent")
+			        .ReadTexture(m_finalColor)
+			        .WriteColor(RenderGraph::GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {})
+			        .Execute(
+			                [this, &bindless](PassContext& ctx)
+			                {
+				                auto cmd = ctx.recorder.View();
+				                cmd.SetViewport(gpu::Viewport{.width = static_cast<float>(ctx.extent.width), .height = static_cast<float>(ctx.extent.height)});
+				                cmd.SetScissor(gpu::Rect2D{.width = ctx.extent.width, .height = ctx.extent.height});
+				                bindless.CmdBindGlobalResources(cmd);
+				                cmd.BindPipeline(m_fxaaPipeline.GetPipeline());
+				                const FxaaPushConstants push{
+				                        .ldrSlot = m_finalBindlessSlot,
+				                        .fxaaEnabled = 2,
+				                        .rcpWidth = 1.0f / static_cast<float>(std::max(m_extent.width, 1u)),
+				                        .rcpHeight = 1.0f / static_cast<float>(std::max(m_extent.height, 1u)),
+				                        .sharpness = 0,
+				                        .outputRcpWidth = 1.0f / static_cast<float>(std::max(ctx.extent.width, 1u)),
+				                        .outputRcpHeight = 1.0f / static_cast<float>(std::max(ctx.extent.height, 1u)),
+				                };
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
+		}
 
 		m_histogramOutputRG = graph.RegisterBuffer(nullptr);
 

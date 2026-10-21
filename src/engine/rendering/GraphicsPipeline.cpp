@@ -6,7 +6,7 @@
 namespace aether
 {
 	GraphicsPipeline::GraphicsPipeline(GraphicsPipeline&& other) noexcept
-	      : m_handle(std::exchange(other.m_handle, {}))
+	      : m_handle(std::exchange(other.m_handle, {})), m_scene_prepass(std::move(other.m_scene_prepass))
 	{
 	}
 
@@ -19,6 +19,7 @@ namespace aether
 				gpu::ResourceRegistry::Destroy(m_handle);
 			}
 			m_handle = std::exchange(other.m_handle, {});
+			m_scene_prepass = std::move(other.m_scene_prepass);
 		}
 		return *this;
 	}
@@ -34,11 +35,17 @@ namespace aether
 	void GraphicsPipeline::Destroy()
 	{
 		AE_PROFILE_ZONE();
+		m_scene_prepass.reset();
 		if (m_handle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_handle);
 			m_handle = {};
 		}
+	}
+
+	void GraphicsPipeline::SetScenePrepass(GraphicsPipeline pipeline)
+	{
+		m_scene_prepass = std::make_unique<GraphicsPipeline>(std::move(pipeline));
 	}
 
 	namespace
@@ -48,27 +55,27 @@ namespace aether
 		gpu::GraphicsPipelineDesc ToFacadeDesc(const GraphicsPipeline::Desc& desc)
 		{
 			return gpu::GraphicsPipelineDesc{
-		        .shaderVfsPath = desc.shaderVfsPath.data() ? desc.shaderVfsPath.data() : "",
-		        .fragmentVfsPath = desc.fragmentVfsPath.data() ? desc.fragmentVfsPath.data() : "",
-		        .vertexEntry = desc.vertexEntry.data() ? desc.vertexEntry.data() : "vertexMain",
-		        .fragmentEntry = desc.fragmentEntry.data() ? desc.fragmentEntry.data() : "fragmentMain",
-		        .colorFormat = desc.colorFormat,
-		        .colorAttachmentCount = desc.colorAttachmentCount,
-		        .depthFormat = desc.depthFormat,
-		        .depthTestEnable = desc.depthTestEnable,
-		        .depthWriteEnable = desc.depthWriteEnable,
-		        .depthCompareOp = desc.depthCompareOp,
-		        .blendEnable = desc.blendEnable,
-		        .blendMode = desc.blendMode,
-		        .topology = desc.topology,
-		        .polygonMode = desc.polygonMode,
-		        .cullMode = desc.cullMode,
-		        .vertexBindings = desc.vertexBindings,
-		        .vertexAttributes = desc.vertexAttributes,
-		        .lineWidthDynamic = desc.lineWidthDynamic,
-		        .debugName = desc.debugName,
-		        .descriptorHeapMappings = desc.descriptorHeapMappings,
-		};
+			        .shaderVfsPath = desc.shaderVfsPath.data() ? desc.shaderVfsPath.data() : "",
+			        .fragmentVfsPath = desc.fragmentVfsPath.data() ? desc.fragmentVfsPath.data() : "",
+			        .vertexEntry = desc.vertexEntry.data() ? desc.vertexEntry.data() : "vertexMain",
+			        .fragmentEntry = desc.fragmentEntry.data() ? desc.fragmentEntry.data() : "fragmentMain",
+			        .colorFormat = desc.colorFormat,
+			        .colorAttachmentCount = desc.colorAttachmentCount,
+			        .depthFormat = desc.depthFormat,
+			        .depthTestEnable = desc.depthTestEnable,
+			        .depthWriteEnable = desc.depthWriteEnable,
+			        .depthCompareOp = desc.depthCompareOp,
+			        .blendEnable = desc.blendEnable,
+			        .blendMode = desc.blendMode,
+			        .topology = desc.topology,
+			        .polygonMode = desc.polygonMode,
+			        .cullMode = desc.cullMode,
+			        .vertexBindings = desc.vertexBindings,
+			        .vertexAttributes = desc.vertexAttributes,
+			        .lineWidthDynamic = desc.lineWidthDynamic,
+			        .debugName = desc.debugName,
+			        .descriptorHeapMappings = desc.descriptorHeapMappings,
+			};
 		}
 	} // namespace
 

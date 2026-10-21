@@ -44,6 +44,8 @@ struct FxaaPush
 	float rcpWidth;
 	float rcpHeight;
 	float sharpness; // contrast-adaptive sharpening, 0 = off
+    float outputRcpWidth;
+    float outputRcpHeight;
 };
 AE_POST_PUSH(FxaaPush)
 
@@ -299,6 +301,12 @@ float3 SharpenDelta(Texture2D tex, int2 coord, float3 center)
 [shader("fragment")]
 float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
+    // The scene resolve runs at scene resolution; presentation then scales the
+    // resolved image without changing the FXAA neighbourhood or UI resolution.
+    if (pc.fxaaEnabled == 2u)
+    {
+        return float4(SampleRGB(g_textures[pc.ldrSlot], svPos.xy * float2(pc.outputRcpWidth, pc.outputRcpHeight)), 1);
+    }
 	const int2 coord = int2(svPos.xy);
 	Texture2D  tex   = g_textures[pc.ldrSlot];
 

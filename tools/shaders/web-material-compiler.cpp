@@ -4,9 +4,32 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <vector>
+#include "gpu/SpirvEntryPoints.hpp"
 
 namespace
 {
+	int Inspect(const std::filesystem::path& binary)
+	{
+		std::error_code error;
+		if (std::filesystem::file_size(binary, error) > 32 * 1024 * 1024 || error)
+		{
+			return 1;
+		}
+		std::ifstream input(binary, std::ios::binary);
+		const std::vector<char> bytes(std::istreambuf_iterator<char>(input), {});
+		const auto source = std::as_bytes(std::span(bytes));
+		const auto graph = aether::gpu::HasSpirvFragmentEntry(source, aether::gpu::kGraphPrepassEntry);
+		const auto forward = aether::gpu::HasSpirvFragmentEntry(source, "fragmentMain");
+		if (!graph || !forward)
+		{
+			std::cerr << "Malformed material SPIR-V\n";
+			return 1;
+		}
+		std::cout << "{\"graphPrepassMain\":" << (*graph ? "true" : "false") << ",\"fragmentMain\":" << (*forward ? "true" : "false") << "}\n";
+		return 0;
+	}
+
 	int Compile(const std::filesystem::path& material, const std::filesystem::path& output, bool native)
 	{
 		std::error_code ec;
@@ -55,6 +78,10 @@ int main(int argc, char** argv)
 	}
 	try
 	{
+		if (argc == 3 && std::filesystem::path(argv[1]) == "--inspect")
+		{
+			return Inspect(std::filesystem::path(argv[2]));
+		}
 		return Compile(std::filesystem::path(argv[native ? 2 : 1]), std::filesystem::path(argv[native ? 3 : 2]), native);
 	}
 	catch (const std::exception& error)

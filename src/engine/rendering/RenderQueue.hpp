@@ -209,6 +209,8 @@ namespace aether
 		        std::uint32_t cascadeOffset = 0,
 		        const gpu::CullMode* cullModeOverride = nullptr);
 
+		void FlushScenePrepass(gpu::CommandList& cmd, std::uint32_t frameIndex, gpu::DeviceAddress frameAddr, const GraphicsPipeline* fallback, const gpu::CullMode* cullModeOverride = nullptr);
+
 		void Clear(std::uint32_t slot);
 		void DiscardPending(std::uint32_t slot);
 		void DiscardAllPending();
@@ -301,6 +303,7 @@ namespace aether
 		bool m_batchOverflowWarned = false;
 		bool m_drawOverflowWarned = false;
 		std::vector<render_queue_batching::DrawKey> m_keyScratch;
+
 		// Per-frame animation job scratch (see AnimJobDedupe.hpp). The draw loop collects one
 		// sample job per distinct animator state and one skin job per distinct (state, skin),
 		// indexed like the dedupe tables; they are then written out grouped by database so
@@ -310,11 +313,13 @@ namespace aether
 			AnimationContracts::AnimatorSampleJob job;
 			const AnimationDatabase* db = nullptr;
 		};
+
 		struct PendingSkinJob
 		{
 			AnimationContracts::SkinCopyJob job;
 			const AnimationDatabase* db = nullptr;
 		};
+
 		struct AnimJobBatch
 		{
 			const AnimationDatabase* db = nullptr;
@@ -322,6 +327,7 @@ namespace aether
 			std::uint32_t startJob = 0;
 			std::uint32_t count = 0;
 		};
+
 		render_queue_anim::DedupeTable<render_queue_anim::SampleKey> m_sampleKeys;
 		render_queue_anim::DedupeTable<render_queue_anim::SkinKey> m_skinKeys;
 		std::vector<PendingSampleJob> m_pendingSampleJobs;
@@ -343,6 +349,7 @@ namespace aether
 			std::uint32_t meshGeneration = 0;
 			std::uint32_t outputStart = 0;
 			std::uint32_t drawCount = 0;
+			bool blended = false;
 		};
 
 		struct PreparedFrame
@@ -386,7 +393,8 @@ namespace aether
 		        const char* debugLabel,
 		        float r,
 		        float g,
-		        float b);
+		        float b,
+		        bool scenePrepass = false);
 
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 

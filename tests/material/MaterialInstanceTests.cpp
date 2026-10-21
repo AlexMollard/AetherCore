@@ -17,7 +17,7 @@ TEST_CASE("First instance setter seeds a default and assigns a material") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
     Entity e = world.Create();
 
@@ -34,7 +34,7 @@ TEST_CASE("No-op instance edit does not re-acquire or churn the slot") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
     Entity e = world.Create();
 
@@ -53,7 +53,7 @@ TEST_CASE("Changed instance field re-acquires a new material") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
     Entity e = world.Create();
 
@@ -72,7 +72,7 @@ TEST_CASE("Edits accumulate on the same instance, not a fresh default each time"
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
     Entity e = world.Create();
 
@@ -108,7 +108,7 @@ TEST_CASE("GetEmissive round-trips exactly what SetEmissive wrote") {
     FakeTextureSink tsink;
     TextureRegistry treg(tsink);
     MaterialRegistry reg(sink, treg);
-    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
+    PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf), {}, {}, {}, ReadFakeLegacyShader);
     World world;
     Entity e = world.Create();
 

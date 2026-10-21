@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <span>
 #include <string_view>
+#include <memory>
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/ResourceRegistry.hpp"
@@ -61,6 +62,12 @@ namespace aether
 		static void Discard(gpu::ResourceRegistry::PreparedPipeline prepared);
 
 		void Destroy();
+		void SetScenePrepass(GraphicsPipeline pipeline);
+
+		[[nodiscard]] const GraphicsPipeline* GetScenePrepass() const
+		{
+			return m_scene_prepass.get();
+		}
 
 		[[nodiscard]] bool IsValid() const
 		{
@@ -76,5 +83,15 @@ namespace aether
 
 	private:
 		gpu::PipelineHandle m_handle{};
+		std::unique_ptr<GraphicsPipeline> m_scene_prepass;
 	};
+
+	[[nodiscard]] inline const GraphicsPipeline* SelectScenePrepassPipeline(const GraphicsPipeline* material, const GraphicsPipeline* fallback, bool blended)
+	{
+		if (blended)
+		{
+			return nullptr;
+		}
+		return material && material->GetScenePrepass() ? material->GetScenePrepass() : fallback;
+	}
 } // namespace aether

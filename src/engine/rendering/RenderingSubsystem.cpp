@@ -436,6 +436,7 @@ namespace aether
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = vk.GetDevice().device,
 		        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
+		        .outputExtent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
@@ -713,6 +714,7 @@ namespace aether
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = gpu.GetDevice(),
 		        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
+		        .outputExtent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
@@ -980,7 +982,7 @@ namespace aether
 					                m_bindlessManager->CmdBindGlobalResources(ctx.recorder);
 				                }
 				                const std::optional<gpu::CullMode> cullMode = m_renderer.GetCullMode();
-				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, nullptr, ctx.frameConstantsAddr, &m_prepassPipeline, 0, cullMode ? &*cullMode : nullptr);
+				                m_renderQueue.FlushScenePrepass(ctx.recorder, ctx.frameSlot, ctx.frameConstantsAddr, &m_prepassPipeline, cullMode ? &*cullMode : nullptr);
 			                });
 		}
 
