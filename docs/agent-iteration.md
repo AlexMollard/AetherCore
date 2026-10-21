@@ -29,6 +29,61 @@ Failed compilation never stages an old cached success as a new run. A running jo
 
 `relaunch` continues to rebuild and start a fresh process using the requested scene/configuration. It does not migrate arbitrary live state. The measured reduction comes from compiler reuse; native hot reload would add lifetime and state-migration complexity without evidence that it is the next throughput bottleneck. Browser publication still performs its compilation/audit, package-integrity and browser/iframe verification checks.
 
+## Build-once test suites
+
+Desktop `test` requests accept optional `cases` with 1..32 uniquely named cases. The project is compiled once into the job's private module/assembly, then each case runs sequentially in a fresh owned process. C# and Rust use the same request/report contract. Existing single-test requests continue to work.
+
+Each case requires `name` and can override `scene`, `ticks`, `step` and `launchConfig`. Omitted values inherit from the top-level request; omitted scene ultimately uses the project's startup scene. A supplied `launchConfig` replaces the whole object. Names are nonblank, unique, at most 128 UTF-8 bytes and contain no NUL. Evidence directories use numeric indexes rather than interpreting names as paths. All case configurations, required final assertions and named scenes are checked before compilation. A compilation failure launches no cases.
+
+For example, save this array as `cases.json` to test two input branches of either reference project:
+
+```json
+[
+  {
+    "name": "score-with-input", "scene": "ReferenceStart", "ticks": 10,
+    "launchConfig": {
+      "profile": "native-desktop-2d-v1",
+      "input": [{"tick": 0, "key": "space", "down": true}],
+      "assertions": [{"entity": "Player", "type": "ReferencePlayer", "property": "score", "equals": 10}]
+    }
+  },
+  {
+    "name": "score-without-input", "scene": "ReferenceStart", "ticks": 10,
+    "launchConfig": {
+      "profile": "native-desktop-2d-v1",
+      "assertions": [{"entity": "Player", "type": "ReferencePlayer", "property": "score", "equals": 0}]
+    }
+  }
+]
+```
+
+```powershell
+./scripts/Run-GameplayPipeline.ps1 -Project projects/AgentPipelineRust `
+    -Operation test -Cases cases.json -ReportPath logs/suite-report.json
+```
+
+The same command works with `projects/AgentPipelineCSharp`. For MCP, pass the array as `cases` to `gameplay_job_start` with `operation: "test"`, then poll `gameplay_job_status`. Direct `aether-project --request ... --report ...` requests use the same `cases` field. MCP stdio explicitly uses UTF-8, including on Windows; refresh an existing client to discover the expanded schema and load the updated stdio entry point.
+
+The aggregate remains AgentReport v1, with profile `native-test-suite-v1`, shared compilation checks and a `case:<name>` check per case. A failed case makes the suite fail, while later cases still run. Each case retains `cases/<index>/report.json`, state/checkpoint snapshots and runtime log. The aggregate links this evidence and `suite-summary.json`; failed assertion diagnostics include `case` alongside expected/actual context. Individual case durations exclude shared compilation; aggregate/benchmark wall time includes it.
+
+One cancellation/deadline covers compilation and all cases. Remaining cases are skipped after interruption. Valid partial worker evidence survives the Python supervisor's terminal status override; a late pass cannot become success after cancellation or timeout. Fresh processes reset ECS, input and script memory. Saves remain project-scoped: `readSaves` keeps its existing per-case meaning, and authored save writes can persist between cases. Suites currently target native headless/desktop profiles; Web publishing/browser tests retain their existing paths.
+
+Three sequential samples of equivalent three-branch, 90-tick desktop runs on Windows measured:
+
+| Language | Independent jobs | Build-once suite | Reduction |
+| --- | ---: | ---: | ---: |
+| Rust | 13.29 s | 10.03 s | 24.5% |
+| C# | 15.40 s | 11.75 s | 23.7% |
+
+Evidence: `logs/agent-test-suite/baseline.json` and `optimized-final.json`. Both use warm compiler caches, fresh runtime processes and the same assertions; these small-fixture medians are not cold-cache or general game-performance claims. An exploratory run overlapping integration tests is retained separately and excluded from these figures. Reproduce sequentially, without other engine jobs:
+
+```powershell
+python tools/project/benchmark_test_suite.py --mode compare --repeats 3 `
+    --report logs/agent-test-suite/measurement.json
+```
+
+The benchmark has bounded repeats/deadlines, closes owned processes and cannot emit passing medians for failed operations. Real qualification covers pass/fail/pass, repair, fresh script state, shared private modules, invalid final cases rejected before compilation, compilation failure, timeout, cancellation and both public entry points.
+
 ## Gameplay failure feedback
 
 Native desktop and headless runs for C# and Rust return assertion evidence directly in the existing CLI/MCP AgentReport. Each failed assertion has an error diagnostic whose `message` is a JSON object and whose `source.file` identifies the copied snapshot in `artifacts`. A checkpoint failure links `checkpoint-N.json` even when execution stops before final `state.json`. Passing checkpoints also remain available as artifacts.
