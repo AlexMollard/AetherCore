@@ -122,8 +122,8 @@ namespace aether::project_tool
 		class DesktopDriver final : public AppLayer
 		{
 		public:
-			DesktopDriver(const GameplayRunRequest& request, Clock::time_point started, std::vector<std::string>& errors)
-			      : m_request(request), m_started(started), m_errors(errors)
+			DesktopDriver(const GameplayRunRequest& request, Clock::time_point started, std::vector<std::string>& errors, aether::scripting::AgentReport& report)
+			      : m_request(request), m_started(started), m_errors(errors), m_report(report)
 			{
 			}
 
@@ -194,11 +194,11 @@ namespace aether::project_tool
 					capture.ticks = m_tick;
 					capture.output = m_request.output.parent_path() / ("checkpoint-" + std::to_string(m_tick) + ".json");
 					capture.launchConfig["assertions"] = checkpoint["assertions"];
-					WriteGameplayState(capture, context.Get<World>(), context.Get<GameplayHost>(), context.Get<ScriptComponentSystem>(), context.Get<SceneContext>().allowSaveReads, observations);
+					WriteGameplayState(capture, context.Get<World>(), context.Get<GameplayHost>(), context.Get<ScriptComponentSystem>(), context.Get<SceneContext>().allowSaveReads, observations, &m_report);
 				}
 				if (m_tick == m_request.ticks)
 				{
-					WriteGameplayState(m_request, context.Get<World>(), context.Get<GameplayHost>(), context.Get<ScriptComponentSystem>(), context.Get<SceneContext>().allowSaveReads, observations);
+					WriteGameplayState(m_request, context.Get<World>(), context.Get<GameplayHost>(), context.Get<ScriptComponentSystem>(), context.Get<SceneContext>().allowSaveReads, observations, &m_report);
 					const auto text = io::file_util::ReadText(m_request.output);
 					Require(text.has_value(), "Cannot read desktop state artifact");
 					auto state = Json::parse(*text);
@@ -226,6 +226,7 @@ namespace aether::project_tool
 			Clock::time_point m_started;
 			Clock::time_point m_previous;
 			std::vector<std::string>& m_errors;
+			aether::scripting::AgentReport& m_report;
 			std::uint32_t m_tick = 0;
 			std::future<std::string> m_capture;
 		};
@@ -277,7 +278,7 @@ namespace aether::project_tool
 				application.AddService(*managed);
 				application.AddService(managed->Gameplay());
 			}
-			auto& driver = application.PushLayer<DesktopDriver>(request, started, errors);
+			auto& driver = application.PushLayer<DesktopDriver>(request, started, errors, report);
 			application.PushLayer<ScriptedSceneLayer>();
 			const int exitCode = application.Run();
 			Require(exitCode == 0 && driver.completed, "Desktop gameplay closed before completing the bounded run");
@@ -312,9 +313,9 @@ namespace aether::project_tool
 		{
 			report.diagnostics.push_back({"DESKTOP_GAMEPLAY_RUN", aether::scripting::AgentDiagnosticSeverity::Error, error.what()});
 		}
-		if (std::filesystem::is_regular_file(request.output))
+		for (auto& artifact: report.artifacts)
 		{
-			report.artifacts.push_back({io::PlatformPaths::PathToUtf8(request.output), std::filesystem::file_size(request.output)});
+			artifact.bytes = std::filesystem::file_size(std::filesystem::u8path(artifact.path));
 		}
 		report.durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - started).count();
 		return report;

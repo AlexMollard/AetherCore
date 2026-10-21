@@ -31,7 +31,9 @@ namespace aether::app::scripting
 	};
 
 	void ValidateGameplayRunConfig(const GameplayRunRequest& request);
-	void WriteGameplayState(const GameplayRunRequest& request, World& world, GameplayHost& host, ScriptComponentSystem& scripts, bool allowSaveReads, const nlohmann::json& observations = nlohmann::json::array());
+	// Publishes copied evidence before an assertion failure unwinds the runtime.
+	void WriteGameplayState(
+	        const GameplayRunRequest& request, World& world, GameplayHost& host, ScriptComponentSystem& scripts, bool allowSaveReads, const nlohmann::json& observations = nlohmann::json::array(), aether::scripting::AgentReport* report = nullptr);
 
 	// Synchronous, owner-thread execution in an isolated child process. No GPU is created.
 	[[nodiscard]] aether::scripting::AgentReport RunGameplay(const GameplayRunRequest& request);

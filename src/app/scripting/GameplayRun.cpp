@@ -180,7 +180,7 @@ namespace aether::app::scripting
 		ValidateConfig(request);
 	}
 
-	void WriteGameplayState(const GameplayRunRequest& request, World& world, GameplayHost& hostRef, ScriptComponentSystem& scripts, bool allowSaveReads, const Json& observations)
+	void WriteGameplayState(const GameplayRunRequest& request, World& world, GameplayHost& hostRef, ScriptComponentSystem& scripts, bool allowSaveReads, const Json& observations, aether::scripting::AgentReport* report)
 	{
 		auto* host = &hostRef;
 		Json state = {{"schemaVersion", 1}, {"initialFrame", 0}, {"ticks", request.ticks}, {"step", request.step}, {"readSaves", allowSaveReads}, {"entities", Json::array()}, {"assertions", Json::array()}};
@@ -227,6 +227,11 @@ namespace aether::app::scripting
 		{
 			state["entities"].push_back(observation);
 		}
+		std::set<std::string> observedEntities;
+		for (const auto& entity: state["entities"])
+		{
+			observedEntities.insert(entity["entity"].get<std::string>());
+		}
 		for (const auto& assertion: request.launchConfig.value("assertions", Json::array()))
 		{
 			if (assertion["type"] != "$engine" || assertion["property"] != "exists")
@@ -240,11 +245,13 @@ namespace aether::app::scripting
 			}
 		}
 
-		bool assertionsPassed = true;
+		std::vector<aether::scripting::AgentDiagnostic> failures;
+		std::size_t assertionIndex = 0;
 		for (const auto& assertion: request.launchConfig.value("assertions", Json::array()))
 		{
 			const Json* actual = nullptr;
 			std::size_t matches = 0;
+			const bool entityFound = observedEntities.contains(assertion["entity"].get<std::string>());
 			for (const auto& entity: state["entities"])
 			{
 				if (entity["entity"] == assertion["entity"] && entity["type"] == assertion["type"])
@@ -258,7 +265,25 @@ namespace aether::app::scripting
 				}
 			}
 			const bool passed = matches == 1 && actual != nullptr && Equal(*actual, assertion["equals"], assertion.value("tolerance", 0.0));
-			assertionsPassed &= passed;
+			if (!passed)
+			{
+				const std::string code = matches > 1         ? "GAMEPLAY_ASSERTION_AMBIGUOUS_TARGET"
+				                         : !entityFound      ? "GAMEPLAY_ASSERTION_MISSING_ENTITY"
+				                         : matches == 0      ? "GAMEPLAY_ASSERTION_MISSING_TYPE"
+				                         : actual == nullptr ? "GAMEPLAY_ASSERTION_MISSING_PROPERTY"
+				                                             : "GAMEPLAY_ASSERTION_VALUE_MISMATCH";
+				const Json detail = {{"assertionIndex", assertionIndex},
+				        {"tick", request.ticks},
+				        {"entity", assertion["entity"]},
+				        {"type", assertion["type"]},
+				        {"property", assertion["property"]},
+				        {"expected", assertion["equals"]},
+				        {"actual", matches == 1 && actual ? *actual : Json(nullptr)},
+				        {"actualPresent", matches == 1 && actual != nullptr},
+				        {"matchCount", matches},
+				        {"tolerance", assertion.value("tolerance", 0.0)}};
+				failures.push_back({.code = code, .severity = aether::scripting::AgentDiagnosticSeverity::Error, .message = detail.dump(), .source = aether::scripting::AgentSourceLocation{.file = io::PlatformPaths::PathToUtf8(request.output)}});
+			}
 			state["assertions"].push_back({{"entity", assertion["entity"]},
 			        {"type", assertion["type"]},
 			        {"property", assertion["property"]},
@@ -266,11 +291,17 @@ namespace aether::app::scripting
 			        {"actual", actual ? *actual : Json(nullptr)},
 			        {"tolerance", assertion.value("tolerance", 0.0)},
 			        {"passed", passed}});
+			++assertionIndex;
 		}
 		Require(request.output.parent_path().empty() || io::file_util::CreateDirectories(request.output.parent_path()).has_value(), "Cannot create artifact directory");
 		const auto written = io::file_util::WriteText(request.output, state.dump(2));
 		Require(written.has_value(), "Cannot write copied script state artifact");
-		Require(assertionsPassed, "One or more script-state assertions failed (missing/ambiguous entity, type, property, or value mismatch)");
+		if (report)
+		{
+			report->artifacts.push_back({io::PlatformPaths::PathToUtf8(request.output), std::filesystem::file_size(request.output)});
+			report->diagnostics.insert(report->diagnostics.end(), failures.begin(), failures.end());
+		}
+		Require(failures.empty(), failures.empty() ? "" : failures.front().code + ": " + failures.front().message);
 	}
 
 	aether::scripting::AgentReport RunGameplay(const GameplayRunRequest& request)
@@ -420,8 +451,7 @@ namespace aether::app::scripting
 				}
 			}
 			report.requiredChecks[1].status = Status::Passed;
-			WriteGameplayState(request, world, *host, scripts, context.allowSaveReads);
-			report.artifacts.push_back({io::PlatformPaths::PathToUtf8(request.output), std::filesystem::file_size(request.output), std::nullopt});
+			WriteGameplayState(request, world, *host, scripts, context.allowSaveReads, Json::array(), &report);
 			cleanup.Close();
 			rust.Unload();
 			Require(callbackErrors.empty(), callbackErrors.empty() ? "" : callbackErrors.front());
