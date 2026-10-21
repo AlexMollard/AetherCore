@@ -1,0 +1,7 @@
+[material]
+baseColorFactor = [1.0, 0.0, 0.0, 1.0]
+alphaBlend = true
+additiveBlend = true
+doubleSided = true
+[textures]
+albedo = 'project://assets/textures/browser-material-alpha.png'

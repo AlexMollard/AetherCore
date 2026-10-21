@@ -1,8 +1,25 @@
 #include <doctest/doctest.h>
+#include <array>
 
 #include "material/MaterialSerializer.hpp"
+#include "material/MaterialOverrides.hpp"
 
 using namespace aether;
+
+TEST_CASE("Linked material fields distinguish inherited and explicitly cleared textures")
+{
+	const std::array<std::string, 2> keys{"albedo", "base_color"};
+	CHECK(IsMaterialFieldOverridden(keys, "albedo"));
+	CHECK_FALSE(IsMaterialFieldOverridden(keys, "emissive_tex"));
+	CHECK_FALSE(IsMaterialFieldOverridden({}, "albedo"));
+	MaterialAsset asset;
+	asset.roughnessFactor = 0.2f;
+	MaterialAsset override;
+	override.baseColorFactor = {0.2f, 0.3f, 0.4f, 0.5f};
+	ApplyMaterialOverrides(asset, override, keys);
+	CHECK(asset.baseColorFactor == override.baseColorFactor);
+	CHECK(asset.roughnessFactor == doctest::Approx(0.2f));
+}
 
 TEST_CASE("Specialized and additive material flags survive authored round trips")
 {

@@ -1,0 +1,6 @@
+[material]
+baseColorFactor = [0.0, 0.0, 0.0, 1.0]
+emissiveFactor = [1.0, 1.0, 1.0]
+doubleSided = true
+[textures]
+emissive = 'project://assets/textures/browser-material-gray.png'

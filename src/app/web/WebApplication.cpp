@@ -429,7 +429,7 @@ namespace
 #if AE_WEB_TEST_BRIDGE
 				if (aether::app::web::IsMeshFixture() && !aether::app::web::CreateMeshFixture(world, graphics))
 				{
-					Failure("Mesh fixture upload failed");
+					Failure(("Mesh fixture upload failed: " + graphics.MeshUploadError()).c_str());
 					return false;
 				}
 #endif

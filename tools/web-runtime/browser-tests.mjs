@@ -181,6 +181,14 @@ try {
 		query = '?platform=1';
 	    if (name === 'reference-gameplay' || name === 'browser-key-latch')
 		query = '?reference=1';
+	    if (name === 'authored-models')
+		query = '?reference=1&scene=BrowserModels';
+	    if (name === 'authored-dependencies')
+		query = '?reference=1&scene=BrowserDependencies';
+	    if (name === 'authored-materials')
+		query = '?reference=1&scene=BrowserMaterials';
+	    if (name === 'authored-skin')
+		query = '?reference=1&scene=BrowserSkin&automation=1';
 	    if (name === 'browser-features' || name === 'browser-gamepad' || name === 'browser-ui-order')
 		query = '?reference=1&scene=BrowserFeatures';
 	    if (name.startsWith('invalid-'))
@@ -194,6 +202,99 @@ try {
 		query += (query ? '&' : '?') + 'test=1';
 	    }
 	    await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);
+	    if (name === 'authored-skin') {
+		await page.waitForFunction(() => aetherRuntime.scene === 'BrowserSkin' || aetherRuntime.status === 'failed');
+		assert.notEqual(await page.evaluate(() => aetherRuntime.status), 'failed', JSON.stringify(await page.evaluate(() => aetherRuntime.diagnostics)));
+		await page.locator('#start').click();
+		await page.locator('#canvas').focus();
+		await page.waitForFunction(() => globalThis.aetherTest?.readiness().ready && aetherRuntime.frames > 2);
+		const initialTicks = await page.evaluate(() => aetherRuntime.ticks);
+		const before = await page.evaluate(() => aetherTest.capture());
+		assert.equal(before.width, 64);
+		assert.equal(before.height, 64);
+		assert.deepEqual(pixel(before, 16, 32), [255, 0, 0, 255], 'First native-cooked primitive uses local joint zero and its red material');
+		assert.deepEqual(pixel(before, 40, 32), [0, 255, 255, 255], 'Second native-cooked primitive shares the authored skin and cyan material');
+		assert.deepEqual(pixel(before, 24, 32), [0, 0, 0, 255]);
+		assert.deepEqual(pixel(before, 48, 32), [0, 0, 0, 255]);
+		await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath), 'authored-skin-before.png')});
+		const stepped = await page.evaluate(() => aetherTest.step(30));
+		assert.equal(stepped.ticks - initialTicks, 30, 'Animation advances exactly thirty fixed simulation ticks');
+		const after = await page.evaluate(() => aetherTest.capture());
+		assert.deepEqual(pixel(after, 16, 32), [0, 0, 0, 255], 'Red primitive leaves its original position');
+		assert.deepEqual(pixel(after, 40, 32), [0, 0, 0, 255], 'Cyan primitive leaves its original position');
+		assert.deepEqual(pixel(after, 24, 32), [255, 0, 0, 255], 'Half-second joint translation moves the red primitive eight pixels right');
+		assert.deepEqual(pixel(after, 48, 32), [0, 255, 255, 255], 'Both primitives receive the same half-unit GPU skin translation');
+		assert.equal(await page.evaluate(() => aetherRuntime.meshDraws), 2);
+		await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath), 'authored-skin-after.png')});
+		item.skinning = {fixedTicks:30, elapsedSeconds:0.5, worldDisplacement:[0.5,0,0], pixelDisplacement:[8,0], primitives:2};
+		await page.evaluate(() => aetherTest.stop());
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
+		item.status = 'passed';
+		continue;
+	    }
+	    if (name === 'authored-models') {
+		await page.waitForFunction(() => aetherRuntime.frames > 2 || aetherRuntime.status === 'failed');
+		assert.notEqual(await page.evaluate(() => aetherRuntime.status), 'failed', JSON.stringify(await page.evaluate(() => aetherRuntime.diagnostics)));
+		const image = await capture(page);
+		assert.deepEqual(pixel(image, 32, 32), [255, 0, 0, 255], 'Saved model uses the linked material with authored overrides');
+		assert.deepEqual(pixel(image, 20, 32), [0, 0, 255, 255], 'Saved perspective camera and primitive share mesh depth');
+		assert.equal(await page.evaluate(() => aetherRuntime.meshDraws), 2);
+		await page.screenshot({path:path.join(path.dirname(reportPath), 'authored-models.png')});
+		await page.evaluate(() => Module._aether_web_stop());
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
+		item.status = 'passed';
+		continue;
+	    }
+	    if (name === 'authored-dependencies') {
+		await page.waitForFunction(() => aetherRuntime.frames > 2 || aetherRuntime.status === 'failed');
+		assert.notEqual(await page.evaluate(() => aetherRuntime.status), 'failed', JSON.stringify(await page.evaluate(() => aetherRuntime.diagnostics)));
+		const image = await capture(page);
+		assert.equal(image.width, 64);
+		assert.equal(image.height, 64);
+		assert.deepEqual(pixel(image, 16, 16), [255, 0, 0, 255], 'Saved include contributes its red primitive');
+		assert.deepEqual(pixel(image, 32, 16), [0, 255, 0, 255], 'Linked prefab root keeps instance placement and receives its GUID material override');
+		assert.deepEqual(pixel(image, 48, 16), [0, 0, 255, 255], 'Prefab child receives the root world-space delta once');
+		assert.deepEqual(pixel(image, 16, 48), [0, 0, 0, 255], 'Removed prefab GUID does not reach the GPU');
+		assert.deepEqual(pixel(image, 48, 48), [0, 255, 255, 255], 'Instance-local added primitive keeps its authored world-space position');
+		assert.deepEqual(pixel(image, 32, 32), [0, 0, 0, 255], 'Prefab source root position remains empty after placement');
+		assert.equal(await page.evaluate(() => aetherRuntime.meshDraws), 4);
+		await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath), 'authored-dependencies.png')});
+		await page.evaluate(() => Module._aether_web_stop());
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
+		item.scope = 'Saved include and linked prefab primitive composition, GUID material override, root world-space delta, removed GUID and instance-local addition';
+		item.status = 'passed';
+		continue;
+	    }
+	    if (name === 'authored-materials') {
+		await page.waitForFunction(() => aetherRuntime.frames > 2 || aetherRuntime.status === 'failed');
+		assert.notEqual(await page.evaluate(() => aetherRuntime.status), 'failed', JSON.stringify(await page.evaluate(() => aetherRuntime.diagnostics)));
+		const image = await capture(page);
+		assert.equal(image.width, 64);
+		assert.equal(image.height, 64);
+		const nearPixel = (x, y, expected, message) => {
+		    const actual = pixel(image, x, y);
+		    assert.ok(actual.every((value, i) => Math.abs(value - expected[i]) <= 1), `${message}: ${actual} vs ${expected}`);
+		};
+		nearPixel(8, 16, [128, 128, 128, 255], 'sRGB albedo 128 decodes and encodes back to 128');
+		nearPixel(24, 16, [128, 128, 128, 255], 'sRGB emissive texture contributes to a black base');
+		nearPixel(32, 32, [32, 32, 32, 255], 'Minified stripes use the shared native cooked mip filter');
+		assert.deepEqual(pixel(image, 37, 13).slice(0, 3), [0, 0, 255], 'Transparent alpha checker reveals the blue backing');
+		assert.deepEqual(pixel(image, 43, 13).slice(0, 3), [255, 0, 0], 'Opaque alpha checker writes the red cutout');
+		assert.deepEqual(pixel(image, 37, 19).slice(0, 3), [255, 0, 0], 'Second checker row retains the opposite cell');
+		assert.deepEqual(pixel(image, 43, 19).slice(0, 3), [0, 0, 255], 'Second checker row discards the opposite cell');
+		assert.deepEqual(pixel(image, 56, 16), [0, 255, 0, 255], 'Mirrored front face remains visible with backface culling');
+		nearPixel(8, 48, [128, 0, 64, 255], 'Transparent textured layers sort far blue before near red');
+		nearPixel(24, 48, [128, 0, 255, 255], 'Additive textured red retains the opaque blue backing');
+		assert.deepEqual(pixel(image, 40, 48), [255, 0, 255, 255], 'Double-sided material renders its back face');
+		assert.deepEqual(pixel(image, 56, 48), [0, 0, 0, 255], 'Single-sided material culls its back face');
+		assert.equal(await page.evaluate(() => aetherRuntime.meshDraws), 12);
+		await page.screenshot({path:path.join(path.dirname(reportPath), 'authored-materials.png')});
+		await page.evaluate(() => Module._aether_web_stop());
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
+		item.scope = 'Authored unlit textures/materials, sRGB, cooked mip filter, cutout, alpha/additive order and mirrored/backface handling; not PBR/HDR or arbitrary glTF samplers';
+		item.status = 'passed';
+		continue;
+	    }
 	    if (name === 'mesh-invalid-frame') {
 		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.gameplayStopped);
 		const state = await page.evaluate(() => aetherRuntime);

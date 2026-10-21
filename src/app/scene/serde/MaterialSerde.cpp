@@ -71,6 +71,7 @@ namespace aether::app::scene
 			}
 			MaterialAsset asset = c.rec.material->asset;
 			TextureRegistry& textures = c.deps.assets->GetTextureRegistry();
+			bool loadedLink = false;
 
 			// A linked material takes its values from the asset, then lets the entity's own
 			// overrides win. Fields the scene did not store are deliberately NOT defaults -
@@ -82,6 +83,7 @@ namespace aether::app::scene
 					MaterialAsset merged = *loaded;
 					ApplyMaterialOverrides(merged, c.rec.material->asset, c.rec.material->overrides);
 					asset = merged;
+					loadedLink = true;
 				}
 				else
 				{
@@ -90,17 +92,19 @@ namespace aether::app::scene
 				c.world.EmplaceOrReplace<MaterialLinkComponent>(c.entity,
 				        MaterialLinkComponent{.assetPath = c.rec.material->assetPath, .overrides = c.rec.material->overrides});
 			}
-			const auto acquire = [&textures](const std::string& path, TextureHandle& out, TextureColorSpace colorSpace)
+			const auto acquire = [&textures, &c, loadedLink](std::string_view key, const std::string& path, TextureHandle& out, TextureColorSpace colorSpace)
 			{
+				if (loadedLink && !IsMaterialFieldOverridden(c.rec.material->overrides, key)) { return; }
+				if (loadedLink && out.IsValid()) { textures.Release(out); }
 				out = path.empty() ? TextureHandle{} : textures.Acquire(path, colorSpace);
 			};
 			// Base colour and emissive encode light; the rest encode numbers and must not
 			// be run through the sampler's sRGB decode.
-			acquire(c.rec.material->albedoPath, asset.albedoTex, TextureColorSpace::Srgb);
-			acquire(c.rec.material->normalPath, asset.normalTex, TextureColorSpace::Linear);
-			acquire(c.rec.material->metallicRoughnessPath, asset.metallicRoughnessTex, TextureColorSpace::Linear);
-			acquire(c.rec.material->occlusionPath, asset.occlusionTex, TextureColorSpace::Linear);
-			acquire(c.rec.material->emissivePath, asset.emissiveTex, TextureColorSpace::Srgb);
+			acquire("albedo", c.rec.material->albedoPath, asset.albedoTex, TextureColorSpace::Srgb);
+			acquire("normal", c.rec.material->normalPath, asset.normalTex, TextureColorSpace::Linear);
+			acquire("metallic_roughness", c.rec.material->metallicRoughnessPath, asset.metallicRoughnessTex, TextureColorSpace::Linear);
+			acquire("occlusion_tex", c.rec.material->occlusionPath, asset.occlusionTex, TextureColorSpace::Linear);
+			acquire("emissive_tex", c.rec.material->emissivePath, asset.emissiveTex, TextureColorSpace::Srgb);
 			if (c.deps.assetDatabase != nullptr)
 			{
 				for (const std::string& texPath: {c.rec.material->albedoPath, c.rec.material->normalPath, c.rec.material->metallicRoughnessPath, c.rec.material->occlusionPath, c.rec.material->emissivePath})

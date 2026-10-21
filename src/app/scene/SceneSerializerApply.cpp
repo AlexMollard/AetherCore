@@ -307,6 +307,10 @@ namespace aether::app::scene
 				std::optional<glm::mat4> rootPose;
 				if (isRoot)
 				{
+					if (const auto* node = world.TryGet<SceneNodeComponent>(target))
+					{
+						merged.nodeId = node->id;
+					}
 					if (const auto* tc = world.TryGet<TransformComponent>(target))
 					{
 						rootPose = tc->localToWorld;

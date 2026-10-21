@@ -1,7 +1,9 @@
 if(AETHERCORE_WEB_RUNTIME)
     set(_web_app_sources
         scene/SceneSerializerToml.cpp
+        scene/SceneDocumentExpansion.cpp
         web/WebScene.cpp
+        web/WebModels.cpp
         web/WebSceneUi.cpp
         web/WebGameplay.cpp
         scripting/GameplayHost.cpp

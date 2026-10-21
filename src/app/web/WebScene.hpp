@@ -10,6 +10,7 @@
 #include "rendering/SpriteSystem.hpp"
 #include "rendering/TileMapSystem.hpp"
 #include "webgpu/WebGpuDevice.hpp"
+#include "web/WebModels.hpp"
 
 namespace aether::app::web
 {
@@ -31,6 +32,7 @@ namespace aether::app::web
 		}
 
 		std::string error;
+		bool colorManaged = false;
 
 	private:
 		webgpu::WebGpuDevice& m_graphics;
@@ -51,6 +53,7 @@ namespace aether::app::web
 		~WebScene();
 		Expected<std::vector<WebScriptRecord>> Load(std::string_view name);
 		Expected<Entity> Instantiate(std::string_view name);
+		void Tick(float dt);
 		Expected<void> Extract(RenderFramePacket& packet, unsigned width, unsigned height, float elapsed);
 		World& world;
 
@@ -58,6 +61,8 @@ namespace aether::app::web
 		Expected<std::vector<Entity>> Apply(const scene::SceneDescription& description);
 		WebTextureSink m_sink;
 		TextureRegistry m_textures;
+		TextureRegistry m_model_textures;
+		WebModels m_models;
 		SpriteAssetStore m_sprites;
 		TileAssetStore m_tiles;
 		SpriteSystem m_sprite_system;

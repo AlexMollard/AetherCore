@@ -1,0 +1,17 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d']
+
+[[entities]]
+name = 'Included red quad'
+node = 9301
+mesh_renderer = true
+position = [-1.0, 1.0, -2.0]
+scale = [0.75, 0.75, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [1.0, 0.0, 0.0, 1.0]
+double_sided = true

@@ -1,0 +1,39 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d']
+
+[[entities]]
+name = 'Camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 90.0
+near = 0.1
+far = 100.0
+
+[[entities]]
+name = 'Cooked near quad'
+mesh_renderer = true
+position = [0.0, 0.0, -2.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/parity.gltf'
+index = 0
+[entities.material]
+asset = 'project://assets/materials/parity.material.toml'
+base_color = [1.0, 0.0, 0.0, 1.0]
+double_sided = true
+
+[[entities]]
+name = 'Far primitive'
+mesh_renderer = true
+position = [0.0, 0.0, -4.0]
+scale = [4.0, 4.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [0.0, 0.0, 1.0, 1.0]
+double_sided = true

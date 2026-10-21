@@ -1,0 +1,52 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d']
+
+[[entities]]
+name = 'Camera'
+parent = -1
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 90.0
+near = 0.1
+far = 100.0
+
+[[entities]]
+name = 'Authored two primitive skin'
+parent = -1
+position = [0.0, 0.0, -2.0]
+
+# Scene transforms are world-space, as in a native multi-primitive model save.
+[[entities]]
+name = 'Red skinned primitive'
+parent = 1
+mesh_renderer = true
+position = [0.0, 0.0, -2.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/parity-skin.gltf'
+index = 0
+[entities.skinned]
+# A model re-export can remove clips; native scene loading clamps saved indices.
+clip = 17
+time = 0.0
+speed = 1.0
+looping = false
+
+[[entities]]
+name = 'Cyan skinned primitive'
+parent = 1
+mesh_renderer = true
+position = [0.0, 0.0, -2.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/parity-skin.gltf'
+index = 1
+[entities.skinned]
+clip = 17
+time = 0.0
+speed = 1.0
+looping = false

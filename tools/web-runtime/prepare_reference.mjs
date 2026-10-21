@@ -55,6 +55,31 @@ const chunk = (name, bytes) => {
     size.writeUInt32BE(bytes.length);
     return Buffer.concat([ size, type, bytes, crc ]);
 };
+// Small deterministic material textures use the same standard PNG/chunk path.
+async function materialPng(name, width, height, rgba) {
+    const materialHeader = Buffer.alloc(13);
+    materialHeader.writeUInt32BE(width);
+    materialHeader.writeUInt32BE(height, 4);
+    materialHeader[8] = 8;
+    materialHeader[9] = 6;
+    const materialPixels = Buffer.alloc(height * (1 + width * 4));
+    for (let y = 0; y < height; ++y)
+        for (let x = 0; x < width; ++x)
+            Buffer.from(rgba(x, y)).copy(materialPixels, y * (1 + width * 4) + 1 + x * 4);
+    await writeFile(path.join(directory, 'assets/textures', name), Buffer.concat([
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', materialHeader),
+        chunk('IDAT', deflateSync(materialPixels)), chunk('IEND', Buffer.alloc(0))
+    ]));
+}
+await materialPng('browser-material-gray.png', 1, 1, () => [128, 128, 128, 255]);
+await materialPng('browser-material-alpha.png', 1, 1, () => [255, 255, 255, 128]);
+await materialPng('browser-material-mask.png', 2, 2, (x, y) => [255, 255, 255, (x + y) % 2 ? 255 : 0]);
+// One white column per eight texels: level 3 is encoded gray 32. Base-only
+// sampling aliases to black at these fixture pixel centers.
+await materialPng('browser-material-mips.png', 64, 64, x => {
+    const value = x % 8 === 7 ? 255 : 0;
+    return [value, value, value, 255];
+});
 const header = Buffer.alloc(13);
 header.writeUInt32BE(16);
 header.writeUInt32BE(8, 4);

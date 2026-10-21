@@ -1,0 +1,159 @@
+# Unlit surface qualification; repeat/bilinear/trilinear sampling with cooked mip math.
+# This fixture does not qualify PBR lighting, HDR blending or arbitrary glTF samplers.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d']
+
+[[entities]]
+name = 'Material camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+
+[[entities]]
+name = 'Gray albedo sRGB round trip'
+mesh_renderer = true
+position = [-3.0, 2.0, -2.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+asset = 'project://assets/materials/browser-gray.material.toml'
+
+[[entities]]
+name = 'Gray emissive sRGB round trip'
+mesh_renderer = true
+position = [-1.0, 2.0, -2.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+asset = 'project://assets/materials/browser-emission.material.toml'
+
+[[entities]]
+name = 'Cutout blue backing'
+mesh_renderer = true
+position = [1.0, 2.0, -3.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [0.0, 0.0, 1.0, 1.0]
+double_sided = true
+
+[[entities]]
+name = 'Red alpha checker cutout'
+mesh_renderer = true
+position = [1.0, 2.0, -2.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+asset = 'project://assets/materials/browser-mask.material.toml'
+
+[[entities]]
+name = 'Mirrored green front face'
+mesh_renderer = true
+position = [3.0, 2.0, -2.0]
+scale = [-1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [0.0, 1.0, 0.0, 1.0]
+double_sided = false
+
+[[entities]]
+name = 'Minified source stripes'
+mesh_renderer = true
+position = [0.0, 0.0, -2.0]
+scale = [1.0, 1.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+albedo = 'project://assets/textures/browser-material-mips.png'
+double_sided = true
+
+# The near layer is deliberately authored before the far layer.
+[[entities]]
+name = 'Near red transparency'
+mesh_renderer = true
+position = [-3.0, -2.0, -2.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+asset = 'project://assets/materials/browser-alpha.material.toml'
+base_color = [1.0, 0.0, 0.0, 1.0]
+
+[[entities]]
+name = 'Far blue transparency'
+mesh_renderer = true
+position = [-3.0, -2.0, -3.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+asset = 'project://assets/materials/browser-alpha.material.toml'
+base_color = [0.0, 0.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Additive blue backing'
+mesh_renderer = true
+position = [-1.0, -2.0, -3.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [0.0, 0.0, 1.0, 1.0]
+double_sided = true
+
+[[entities]]
+name = 'Red additive texture'
+mesh_renderer = true
+position = [-1.0, -2.0, -2.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+asset = 'project://assets/materials/browser-additive.material.toml'
+
+[[entities]]
+name = 'Double sided magenta back face'
+mesh_renderer = true
+position = [1.0, -2.0, -2.0]
+euler = [0.0, 180.0, 0.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [1.0, 0.0, 1.0, 1.0]
+double_sided = true
+
+[[entities]]
+name = 'Culled cyan back face'
+mesh_renderer = true
+position = [3.0, -2.0, -2.0]
+euler = [0.0, 180.0, 0.0]
+scale = [1.5, 1.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [0.0, 1.0, 1.0, 1.0]
+double_sided = false

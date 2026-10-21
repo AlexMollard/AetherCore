@@ -195,6 +195,7 @@ namespace aether::app::web
 					AE_TRY_VOID(m_host.Update(instance.handle, 1.0f / 60.0f));
 				}
 				m_world.UpdateSystems(1.0f / 60.0f);
+				m_scene->Tick(1.0f / 60.0f);
 				for (const auto& instance: m_instances)
 				{
 					if ((m_module.capabilities & AE_GAMEPLAY_CAP_PHYSICS) == 0)

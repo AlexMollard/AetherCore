@@ -159,6 +159,24 @@ namespace
 	}
 } // namespace
 
+TEST_CASE("Prefab root overrides preserve the placed scene node identity")
+{
+	LinkFixture fx("aether_prefab_root_node_override");
+	auto prefab = fx.SaveLinker("root_node");
+	prefab.entities.front().nodeId = 100;
+	REQUIRE(SavePrefabFile("root_node", prefab));
+	SceneDescription scene;
+	PrefabInstanceRecord placed;
+	placed.prefabPath = "root_node";
+	placed.name = "Placed root";
+	placed.node = 200;
+	placed.overrides.push_back({EffectiveGuid(prefab.entities.front(), 0), "tags = ['root_override']\n"});
+	scene.prefabInstances.push_back(placed);
+	World loaded;
+	ApplyScene(scene, loaded, ApplySceneDeps{});
+	CHECK(NodeOf(loaded, FindInstance(loaded, "Placed root")) == 200);
+}
+
 TEST_CASE("E1: an instance root's script and tag edits survive save/load and a prefab re-save") {
 	LinkFixture fx("aether_prefab_link_e1");
 	const SceneDescription prefab = fx.SaveLinker("tw_test_e1");

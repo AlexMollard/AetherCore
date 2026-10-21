@@ -1,0 +1,47 @@
+# Saved document composition: an additive include and a linked prefab instance.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d']
+
+[[entities]]
+name = 'Dependency camera'
+node = 9001
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 90.0
+near = 0.1
+far = 100.0
+
+[[includes]]
+scene = 'BrowserIncluded'
+
+[[prefab_instances]]
+prefab = 'BrowserModel'
+name = 'Placed dependency model'
+node = 9201
+position = [0.0, 1.0, -2.0]
+euler = [0.0, 0.0, 0.0]
+scale = [0.75, 0.75, 1.0]
+removed = [1003]
+
+[[prefab_instances.overrides]]
+guid = 1001
+[prefab_instances.overrides.material]
+base_color = [0.0, 1.0, 0.0, 1.0]
+double_sided = true
+
+[[prefab_instances.added]]
+name = 'Instance-local cyan quad'
+node = 9401
+mesh_renderer = true
+position = [1.0, -1.0, -2.0]
+scale = [0.75, 0.75, 1.0]
+[prefab_instances.added.mesh]
+kind = 'primitive'
+path = 'quad'
+[prefab_instances.added.material]
+base_color = [0.0, 1.0, 1.0, 1.0]
+double_sided = true

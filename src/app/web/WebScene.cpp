@@ -14,6 +14,7 @@
 #include "ui/UiComponents.hpp"
 #include "ui/UiLayoutSystem.hpp"
 #include "WebAssetFormat.hpp"
+#include "scene/SceneDocumentExpansion.hpp"
 
 namespace aether::app::web
 {
@@ -40,7 +41,7 @@ namespace aether::app::web
 		return dot == std::string_view::npos ? std::string(path) : std::string(path.substr(0, dot)) + ".texture";
 	}
 
-	Expected<TextureResource> WebTextureSink::Load(std::string_view path, TextureColorSpace)
+	Expected<TextureResource> WebTextureSink::Load(std::string_view path, TextureColorSpace colorSpace)
 	{
 		auto bytes = io::FileSystem::ReadFile(path);
 		WebTextureHeader header;
@@ -50,7 +51,7 @@ namespace aether::app::web
 			AE_UNEXPECTED(AetherError::Asset(error));
 		}
 		const auto* pixels = reinterpret_cast<const std::uint8_t*>(bytes->data() + sizeof(header));
-		if (!m_graphics.UploadTexture(m_next_slot, header.width, header.height, {pixels, static_cast<size_t>(header.pixelBytes)}))
+		if (!m_graphics.UploadTexture(m_next_slot, header.width, header.height, {pixels, static_cast<size_t>(header.pixelBytes)}, colorManaged && colorSpace == TextureColorSpace::Srgb, colorManaged))
 		{
 			error = "WebGPU texture upload failed: " + std::string(path);
 			AE_UNEXPECTED(AetherError::Asset(error));
@@ -59,10 +60,12 @@ namespace aether::app::web
 	}
 
 	WebScene::WebScene(World& sourceWorld, webgpu::WebGpuDevice& graphics)
-	      : world(sourceWorld), m_sink(graphics), m_textures(m_sink), m_graphics(graphics)
+	      : world(sourceWorld), m_sink(graphics), m_textures(m_sink), m_model_textures(m_sink), m_models(graphics, m_model_textures, m_sink), m_graphics(graphics)
 	{
 		m_textures.InitializeDefault(TextureResource(0));
 		m_textures.InitializeWhite(TextureResource(1));
+		m_model_textures.InitializeDefault(TextureResource(0));
+		m_model_textures.InitializeWhite(TextureResource(1));
 		m_sprite_system.Initialize(m_textures, m_sprites);
 		m_tile_system.Initialize(m_textures, m_sprites, m_tiles);
 		auto physics = std::make_unique<Physics2DSystem>();
@@ -78,6 +81,7 @@ namespace aether::app::web
 		m_tile_system.Shutdown();
 		m_sprite_system.Shutdown();
 		m_textures.ReleaseAll();
+		m_model_textures.ReleaseAll();
 	}
 
 	Expected<std::vector<Entity>> WebScene::Apply(const scene::SceneDescription& description)
@@ -89,7 +93,7 @@ namespace aether::app::web
 		}
 		for (const auto& record: description.entities)
 		{
-			if (record.mesh || record.meshRenderer || record.material || record.skinned || record.physics || record.effect || record.joint || !record.scriptJoints.empty())
+			if (record.physics || record.effect || record.joint || !record.scriptJoints.empty())
 			{
 				AE_UNEXPECTED(AetherError::Asset("Unsupported 3D entity in browser scene: " + record.name));
 			}
@@ -190,10 +194,6 @@ namespace aether::app::web
 			}
 			if (record.camera)
 			{
-				if (record.camera->projection != CameraProjection::Orthographic)
-				{
-					AE_UNEXPECTED(AetherError::Asset("webgpu-2d-v1 requires orthographic cameras"));
-				}
 				world.Emplace<CameraComponent>(entity, *record.camera);
 				if (record.mainCamera)
 				{
@@ -241,6 +241,7 @@ namespace aether::app::web
 				image.texturePath = record.uiImage->texturePath;
 				image.pixelArt = record.uiImage->pixelArt;
 			}
+			AE_TRY_VOID(m_models.Apply(world, entity, record));
 		}
 		for (size_t i = 0; i < created.size(); ++i)
 		{
@@ -278,6 +279,18 @@ namespace aether::app::web
 		{
 			AE_UNEXPECTED(AetherError::Asset("Invalid browser scene TOML"));
 		}
+		const auto expanded = scene::ExpandSceneDocument(*description,
+		        [](std::string_view path, scene::SceneDocumentKind kind) -> std::expected<scene::SceneDescription, std::string>
+		        {
+			        const auto resolved = kind == scene::SceneDocumentKind::Scene ? WebScene::ProjectPath("scenes", path, ".scene.toml") : WebScene::ProjectPath("prefabs", path, ".prefab.toml");
+			        const auto text = io::FileSystem::ReadFileText(resolved);
+			        if (!text) { return std::unexpected("Missing browser scene dependency: " + resolved); }
+			        const auto parsed = scene::ParseToml(*text);
+			        if (!parsed) { return std::unexpected("Invalid browser scene dependency: " + resolved); }
+			        return *parsed;
+		        });
+		if (!expanded) { AE_UNEXPECTED(AetherError::Asset(expanded.error())); }
+		*description = *expanded;
 		const auto roots = world.Roots();
 		for (const auto root: roots)
 		{
@@ -286,6 +299,7 @@ namespace aether::app::web
 		world.SetSceneKind(description->kind);
 		world.SetSceneFeatures(description->features);
 		m_tile_system.InvalidateAll();
+		m_models.ClearEntities();
 		AE_TRY(created, Apply(*description));
 		std::vector<WebScriptRecord> scripts;
 		for (size_t i = 0; i < created->size(); ++i)
@@ -322,6 +336,27 @@ namespace aether::app::web
 		{
 			AE_UNEXPECTED(AetherError::Asset("Invalid browser prefab TOML"));
 		}
+		const auto expanded = scene::ExpandSceneDocument(*description,
+		        [](std::string_view path, scene::SceneDocumentKind kind) -> std::expected<scene::SceneDescription, std::string>
+		        {
+			        const auto resolved = kind == scene::SceneDocumentKind::Scene ? WebScene::ProjectPath("scenes", path, ".scene.toml") : WebScene::ProjectPath("prefabs", path, ".prefab.toml");
+			        const auto text = io::FileSystem::ReadFileText(resolved);
+			        if (!text)
+			        {
+				        return std::unexpected("Missing browser prefab dependency: " + resolved);
+			        }
+			        const auto parsed = scene::ParseToml(*text);
+			        if (!parsed)
+			        {
+				        return std::unexpected("Invalid browser prefab dependency: " + resolved);
+			        }
+			        return *parsed;
+		        });
+		if (!expanded)
+		{
+			AE_UNEXPECTED(AetherError::Asset(expanded.error()));
+		}
+		*description = *expanded;
 		for (const auto& record: description->entities)
 		{
 			if (!record.scripts.empty())
@@ -329,16 +364,37 @@ namespace aether::app::web
 				AE_UNEXPECTED(AetherError::Asset("Scripted browser prefabs are not supported yet"));
 			}
 		}
+		const auto root = std::find_if(description->entities.begin(), description->entities.end(), [](const auto& record) { return record.parentIndex < 0; });
+		if (root == description->entities.end())
+		{
+			AE_UNEXPECTED(AetherError::Asset("Browser prefab has no authored root"));
+		}
+		const auto rootIndex = static_cast<std::size_t>(std::distance(description->entities.begin(), root));
 		AE_TRY(created, Apply(*description));
 		if (created->empty())
 		{
 			AE_UNEXPECTED(AetherError::Asset("Empty browser prefab"));
 		}
-		return created->front();
+		world.SetSceneFeatures(world.GetSceneFeatures() | description->features);
+		return (*created)[rootIndex];
+	}
+
+	void WebScene::Tick(float dt)
+	{
+		for (const auto raw: world.View<SkinnedMeshComponent>())
+		{
+			const auto entity = World::FromEntt(raw);
+			if (!world.Has<DisabledComponent>(entity) && !ecs::HasDisabledAncestor(world, entity))
+			{
+				auto& skin = world.Get<SkinnedMeshComponent>(entity);
+				skin.animTime += dt * skin.playbackSpeed;
+			}
+		}
 	}
 
 	Expected<void> WebScene::Extract(RenderFramePacket& packet, unsigned width, unsigned height, float elapsed)
 	{
+		packet.elapsedTime = elapsed;
 		packet.hasCameraData = true;
 		packet.view = glm::mat4(1);
 		packet.proj = glm::mat4(1);
@@ -348,12 +404,19 @@ namespace aether::app::web
 			const auto& transform = world.GetRegistry().get<TransformComponent>(entity);
 			const float halfHeight = camera.orthographicHeight * 0.5f;
 			const float halfWidth = halfHeight * float(width) / std::max(height, 1u);
-			packet.proj = glm::orthoRH_ZO(-halfWidth, halfWidth, -halfHeight, halfHeight, camera.nearPlane, camera.farPlane);
+			if (camera.nearPlane <= 0 || camera.farPlane <= camera.nearPlane || camera.fovDegrees <= 0 || camera.fovDegrees >= 180 || camera.orthographicHeight <= 0)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Invalid browser camera projection"));
+			}
+			packet.proj = camera.projection == CameraProjection::Orthographic
+			        ? glm::orthoRH_ZO(-halfWidth, halfWidth, -halfHeight, halfHeight, camera.nearPlane, camera.farPlane)
+			        : glm::perspectiveRH_ZO(glm::radians(camera.fovDegrees), float(width) / std::max(height, 1u), camera.nearPlane, camera.farPlane);
 			packet.view = glm::inverse(transform.localToWorld);
 			break;
 		}
 		packet.proj[1][1] *= -1;
 		m_sprite_system.Extract(world, packet.render2D);
+		AE_TRY_VOID(m_models.Extract(world, packet));
 		const auto beforeTiles = packet.render2D.sprites.size();
 		m_tile_system.Extract(world, {}, elapsed, packet.render2D);
 		EM_ASM({ aetherRuntime.tileSprites = $0; }, packet.render2D.sprites.size() - beforeTiles);

@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iterator>
 #include <vector>
+#include <TextureMips.hpp>
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include <webgpu/webgpu.h>
@@ -53,6 +54,7 @@ namespace aether::webgpu
 		std::array<WGPURenderPipeline, 4> pipelines{};
 		WGPUSampler sampler = nullptr;
 		std::vector<WGPUTexture> textures;
+		std::size_t textureBytes = 0;
 		WebMeshRenderer meshes;
 		unsigned width = 0, height = 0;
 		bool released = false;
@@ -398,7 +400,8 @@ namespace aether::webgpu
 	bool WebGpuDevice::UploadMesh(std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices)
 	{
 		auto& self = *m_impl;
-		if (State() != gpu::RenderState::Ready || !self.meshes.Upload(self.device, self.queue, slot, vertices, indices)) { return false; }
+		if (State() != gpu::RenderState::Ready) { self.meshes.error = "Mesh upload requires a ready WebGPU device"; return false; }
+		if (!self.meshes.Upload(self.device, self.queue, slot, vertices, indices)) { return false; }
 		++self.callbacks;
 		WGPUQueueWorkDoneCallbackInfo uploaded = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
 		uploaded.mode = WGPUCallbackMode_AllowSpontaneous;
@@ -414,10 +417,27 @@ namespace aether::webgpu
 		return true;
 	}
 
-	bool WebGpuDevice::UploadTexture(unsigned slot, unsigned width, unsigned height, std::span<const std::uint8_t> rgba)
+	const std::string& WebGpuDevice::MeshUploadError() const
+	{
+		return m_impl->meshes.error;
+	}
+
+	bool WebGpuDevice::UploadTexture(unsigned slot, unsigned width, unsigned height, std::span<const std::uint8_t> rgba, bool srgb, bool mipmapped)
 	{
 		auto& self = *m_impl;
-		if (State() != gpu::RenderState::Ready || slot > 255 || !width || !height || width > 4096 || height > 4096 || rgba.size() != std::uint64_t(width) * height * 4)
+		if (State() != gpu::RenderState::Ready || slot > 255 || !width || !height || width > 4096 || height > 4096 || rgba.size() != std::uint64_t(width) * height * 4
+		        || self.textureBytes > 256 * 1024 * 1024)
+		{
+			return false;
+		}
+		const auto budget = 256 * 1024 * 1024 - self.textureBytes;
+		const auto plan = PlanRgbaTextureMips(width, height, mipmapped, budget);
+		if (!plan || (slot < self.textures.size() && self.textures[slot]))
+		{
+			return false;
+		}
+		const auto levels = BuildRgbaTextureMips(rgba, width, height, mipmapped, budget);
+		if (!levels)
 		{
 			return false;
 		}
@@ -432,16 +452,25 @@ namespace aether::webgpu
 		WGPUTextureDescriptor descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
 		descriptor.dimension = WGPUTextureDimension_2D;
 		descriptor.size = {width, height, 1};
-		descriptor.format = WGPUTextureFormat_RGBA8Unorm;
+		descriptor.mipLevelCount = plan->levelCount;
+		descriptor.format = srgb ? WGPUTextureFormat_RGBA8UnormSrgb : WGPUTextureFormat_RGBA8Unorm;
 		descriptor.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
 		auto texture = wgpuDeviceCreateTexture(self.device, &descriptor);
-		WGPUTexelCopyTextureInfo destination = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
-		destination.texture = texture;
-		WGPUTexelCopyBufferLayout layout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
-		layout.bytesPerRow = width * 4;
-		layout.rowsPerImage = height;
-		wgpuQueueWriteTexture(self.queue, &destination, rgba.data(), rgba.size(), &layout, &descriptor.size);
+		if (!texture) { return false; }
+		for (std::uint32_t index = 0; index < levels->size(); ++index)
+		{
+			const auto& level = (*levels)[index];
+			WGPUTexelCopyTextureInfo destination = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+			destination.texture = texture;
+			destination.mipLevel = index;
+			WGPUTexelCopyBufferLayout layout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
+			layout.bytesPerRow = level.width * 4;
+			layout.rowsPerImage = level.height;
+			const WGPUExtent3D extent{level.width, level.height, 1};
+			wgpuQueueWriteTexture(self.queue, &destination, level.pixels.data(), level.pixels.size(), &layout, &extent);
+		}
 		self.textures[slot] = texture;
+		self.textureBytes += plan->totalBytes;
 		++self.callbacks;
 		WGPUQueueWorkDoneCallbackInfo uploaded = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
 		uploaded.mode = WGPUCallbackMode_AllowSpontaneous;
@@ -508,7 +537,7 @@ namespace aether::webgpu
 		std::vector<gpu::MeshGpuInstance> meshInstances;
 		if (!packet.render3D.meshes.empty())
 		{
-			auto meshPlan = self.meshes.Prepare(packet);
+			auto meshPlan = self.meshes.Prepare(packet, self.textures);
 			if (!meshPlan)
 			{
 				self.Fail("WEBGPU_MESH", Text(meshPlan.error().c_str()));
@@ -558,7 +587,7 @@ namespace aether::webgpu
 		auto encoder = wgpuDeviceCreateCommandEncoder(self.device, nullptr);
 		if (!packet.render3D.meshes.empty())
 		{
-			self.meshes.Encode(self.device, self.queue, encoder, view, self.width, self.height, packet, meshInstances, frame->meshes);
+			self.meshes.Encode(self.device, self.queue, encoder, view, self.width, self.height, packet, meshInstances, self.textures, frame->meshes);
 		}
 		auto pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
 		for (const auto& batch: plan->batches)

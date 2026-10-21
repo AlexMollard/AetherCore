@@ -13,8 +13,10 @@ set(AETHER_WEB_ENGINE_SOURCES
     assets/SpriteAtlasAsset.cpp
     assets/SpriteAnimationAsset.cpp
     assets/GltfAsset.cpp
+    assets/ModelPose.cpp
     animation/SpriteAnimationSystem.cpp
     material/TextureRegistry.cpp
+    material/MaterialSerializer.cpp
     rendering/SpriteSystem.cpp
     rendering/TileMapSystem.cpp
     ui/UiLayoutSystem.cpp

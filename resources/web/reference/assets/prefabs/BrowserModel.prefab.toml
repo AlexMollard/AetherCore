@@ -1,0 +1,46 @@
+# World-space authored transforms: moving the root shifts its children once.
+[[entities]]
+name = 'Source model root'
+guid = 1001
+node = 9101
+mesh_renderer = true
+position = [0.0, 0.0, -2.0]
+scale = [0.75, 0.75, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [1.0, 0.0, 1.0, 1.0]
+double_sided = true
+
+[[entities]]
+name = 'Source blue child'
+guid = 1002
+node = 9102
+parent = 0
+parent_node = 9101
+mesh_renderer = true
+position = [1.0, 0.0, -2.0]
+scale = [0.75, 0.75, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [0.0, 0.0, 1.0, 1.0]
+double_sided = true
+
+[[entities]]
+name = 'Removed yellow child'
+guid = 1003
+node = 9103
+parent = 0
+parent_node = 9101
+mesh_renderer = true
+position = [-1.0, -2.0, -2.0]
+scale = [0.75, 0.75, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+base_color = [1.0, 1.0, 0.0, 1.0]
+double_sided = true

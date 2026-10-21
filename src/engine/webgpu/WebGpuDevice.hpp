@@ -3,6 +3,7 @@
 #include <memory>
 #include <span>
 #include <cstdint>
+#include <string>
 #include "gpu/AsyncRenderLifecycle.hpp"
 #include "mesh/MeshVertex.hpp"
 
@@ -24,8 +25,9 @@ namespace aether::webgpu
 		void Initialize();
 		[[nodiscard]] gpu::RenderState State() const;
 		[[nodiscard]] bool Draw(const RenderFramePacket& packet, bool capture = false);
-		[[nodiscard]] bool UploadTexture(std::uint32_t slot, std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba);
+		[[nodiscard]] bool UploadTexture(std::uint32_t slot, std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba, bool srgb = false, bool mipmapped = false);
 		[[nodiscard]] bool UploadMesh(std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices);
+		[[nodiscard]] const std::string& MeshUploadError() const;
 		void Resize(std::uint32_t width, std::uint32_t height);
 		void Stop();
 #if AE_WEB_TEST_BRIDGE

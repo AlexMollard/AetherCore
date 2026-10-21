@@ -1,4 +1,8 @@
 export const legacyCaseNames = [
+    'authored-models',
+    'authored-skin',
+    'authored-materials',
+    'authored-dependencies',
     'mesh-depth-resize',
     'mesh-invalid-frame',
     'sprite-input-resize-shutdown',
