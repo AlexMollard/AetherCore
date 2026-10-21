@@ -9,9 +9,13 @@
 // Output:
 //   - Per-animator TRS samples (translation, rotation as quat, scale)
 
+// The pure sampling functions below also compile in ModelPoseTests.cpp, which
+// checks the actual native implementation against the portable model evaluator.
+#ifndef __cplusplus
 #include "include/AnimationContracts.slangh"
 
 [[vk::push_constant]] AnimationSamplePush pc;
+#endif
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -63,8 +67,14 @@ Bracket FindBracket(uint timesOffset, uint count, float t, float* allTimes)
     float t0 = allTimes[timesOffset + lo];
     float t1 = allTimes[timesOffset + hi];
     float range = t1 - t0;
-    result.alpha = (range > 1e-6f) ? (t - t0) / range : 0.0f;
+    result.alpha = (range > 0.0f) ? (t - t0) / range : 0.0f;
     return result;
+}
+
+float4 NormalizeSampleRotation(float4 q)
+{
+    float magnitude = max(max(abs(q.x), abs(q.y)), max(abs(q.z), abs(q.w)));
+    return magnitude == 0.0f ? float4(0.0f, 0.0f, 0.0f, 1.0f) : normalize(q / magnitude);
 }
 
 // Nlerp two quaternions (in xyzw format as float4).
@@ -74,33 +84,61 @@ float4 Nlerp(float4 q1, float4 q2, float t)
 {
     if (dot(q1, q2) < 0.0f)
         q2 = -q2;
-    return SafeNormalize(lerp(q1, q2, t));
+    return NormalizeSampleRotation(lerp(q1, q2, t));
 }
 
 float4 SampleChannelValue(GpuChannel channel, float animTime, float* times, float4* values)
 {
     const uint valueBase = channel.valuesOffset / 16u;
 
-    if (channel.timesCount <= 1u || channel.interpolation == 1u)
+    // Cubic values are stored as [in tangent, value, out tangent] per key.
+    const bool cubic = channel.interpolation == 2u;
+    if (channel.timesCount == 0u)
     {
-        return values[valueBase];
+        return float4(0.0f);
+    }
+    if (channel.timesCount == 1u)
+    {
+        return values[valueBase + (cubic ? 1u : 0u)];
     }
 
     Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, animTime, times);
+    if (cubic)
+    {
+        float4 start = values[valueBase + bracket.lo * 3u + 1u];
+        if (bracket.lo == bracket.hi)
+        {
+            return start;
+        }
+        float4 end = values[valueBase + bracket.hi * 3u + 1u];
+        float interval = times[channel.timesOffset / 4u + bracket.hi] - times[channel.timesOffset / 4u + bracket.lo];
+        float alpha = bracket.alpha;
+        float squared = alpha * alpha;
+        float cubed = squared * alpha;
+        return (2.0f * cubed - 3.0f * squared + 1.0f) * start
+            + (cubed - 2.0f * squared + alpha) * interval * values[valueBase + bracket.lo * 3u + 2u]
+            + (-2.0f * cubed + 3.0f * squared) * end
+            + (cubed - squared) * interval * values[valueBase + bracket.hi * 3u];
+    }
+    if (channel.interpolation == 1u)
+    {
+        return values[valueBase + bracket.lo];
+    }
     return lerp(values[valueBase + bracket.lo], values[valueBase + bracket.hi], bracket.alpha);
 }
 
 float4 SampleRotation(GpuChannel channel, float animTime, float* times, float4* values)
 {
     const uint valueBase = channel.valuesOffset / 16u;
-    if (channel.timesCount <= 1u || channel.interpolation == 1u)
+    if (channel.interpolation != 0u || channel.timesCount <= 1u)
     {
-        return values[valueBase];
+        return NormalizeSampleRotation(SampleChannelValue(channel, animTime, times, values));
     }
     Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, animTime, times);
     return Nlerp(values[valueBase + bracket.lo], values[valueBase + bracket.hi], bracket.alpha);
 }
 
+#ifndef __cplusplus
 // Samples every channel of `clipIndex` at `animTime` into the poses. weight 1 overwrites; below 1
 // the sample is blended over what is already there (a crossfade's outgoing clip over the new one).
 // Nodes a clip does not animate keep what is there: the bind pose, or the other clip's value.
@@ -166,3 +204,4 @@ void main(uint3 dtid : SV_DispatchThreadID)
         SampleClip(job, job.fadeClipIndex, job.fadeTime, job.fadeWeight, poses);
     }
 }
+#endif
