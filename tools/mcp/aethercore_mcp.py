@@ -682,6 +682,8 @@ def _handle(msg: dict):
 
 
 def main():
+    sys.stdin.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding='utf-8')
     for line in sys.stdin:
         line = line.strip()
         if not line:

@@ -10,11 +10,42 @@ import uuid
 from benchmark_test_suite import cases, execute
 from compare_reference import prepare
 from gameplay_jobs import validate_report
+import gameplay_jobs as jobs
 from reference_fixture import ROOT
 
 
 @unittest.skipUnless(os.environ.get('AETHER_DESKTOP_REFERENCE_TESTS') == '1', 'requires native SDK, both gameplay toolchains and a GPU')
 class GameplaySuiteTests(unittest.TestCase):
+    def test_cancelled_job_retains_partial_suite_evidence_and_skips_later_cases(self):
+        for language in ('Rust', 'CSharp'):
+            with self.subTest(language=language):
+                authored = cases()[:2]
+                authored[0]['ticks'] = 1000000
+                started = jobs.start_job(dict(project=str(ROOT / 'projects' / ('AgentPipeline' + language)),
+                    operation='test', timeoutMs=60000, cases=authored))
+                job_id = started['jobId']
+                directory = Path(started['reportPath']).parent
+                try:
+                    deadline = time.monotonic() + 40
+                    while not (directory / 'cases/0/ready.json').is_file() and time.monotonic() < deadline:
+                        time.sleep(.025)
+                    self.assertTrue((directory / 'cases/0/ready.json').is_file(), directory)
+                finally:
+                    jobs.cancel_job(job_id)
+                    deadline = time.monotonic() + 15
+                    result = jobs.status_job(job_id)
+                    while result['report']['status'] not in jobs.TERMINAL and time.monotonic() < deadline:
+                        time.sleep(.025)
+                        result = jobs.status_job(job_id)
+                    self.assertIn(result['report']['status'], jobs.TERMINAL, directory)
+                report = result['report']
+                validate_report(report, job_id, 130)
+                self.assertEqual(report['status'], 'cancelled')
+                self.assertTrue(any(Path(item['path']).name == 'suite-summary.json' for item in report['artifacts']), report)
+                summary = json.loads((directory / 'suite-summary.json').read_text(encoding='utf-8'))
+                self.assertEqual(summary['cases'][1]['status'], 'skipped')
+                self.assertFalse((directory / 'cases/1/request.json').exists())
+
     def test_both_languages_compile_once_and_report_each_fresh_case(self):
         root = ROOT / 'logs/agent-test-suite/qualification' / str(uuid.uuid4())
         for language in ('Rust', 'CSharp'):

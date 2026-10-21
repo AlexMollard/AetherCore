@@ -2,7 +2,10 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import unittest
 from unittest import mock
 
@@ -12,6 +15,16 @@ SPEC.loader.exec_module(mcp)
 
 
 class GameplayJobTransportTests(unittest.TestCase):
+    def test_stdio_decodes_utf8_even_when_the_desktop_inherited_a_legacy_encoding(self):
+        method = 'unknown caf\u00e9 \u4e16\u754c'
+        request = dict(jsonrpc='2.0', id=1, method=method)
+        process = subprocess.run([sys.executable, str(Path(mcp.__file__))],
+            input=(json.dumps(request, ensure_ascii=False) + '\n').encode('utf-8'), capture_output=True,
+            env=dict(os.environ, PYTHONIOENCODING='cp1252'), timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(json.loads(process.stdout.decode('utf-8'))['error']['message'], 'method not found: ' + method)
+
     def test_test_suite_schema_reuses_the_existing_launch_contract(self):
         properties = mcp.GAMEPLAY_JOB_START['inputSchema']['properties']
         self.assertIn('cases', properties)
