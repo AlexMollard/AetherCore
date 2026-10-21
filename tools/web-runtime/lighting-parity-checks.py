@@ -21,7 +21,7 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[2]
 SHADOWS = ('Sun', 'Point', 'Spot', 'Mask', 'Skin')
-SCENES = ('BrowserSolid', 'BrowserGradient', 'BrowserSky', 'BrowserHdr', 'BrowserSun',
+SCENES = ('BrowserDefaultLighting', 'BrowserSolid', 'BrowserGradient', 'BrowserSky', 'BrowserHdr', 'BrowserSun',
           'BrowserPoint', 'BrowserSpot', 'BrowserPbrMaps', 'BrowserLight2D') + tuple(
               'BrowserShadow'+kind+state for kind in SHADOWS for state in ('On', 'Off'))
 GRAPHICS = dict(renderScale=1.0, fxaa=False, gtao=False, reflections=False, volumetrics=False,
@@ -29,6 +29,46 @@ GRAPHICS = dict(renderScale=1.0, fxaa=False, gtao=False, reflections=False, volu
                 gradeContrast=1.0, gradeSaturation=1.0, gradeTemperature=0.0, gradeTint=0.0,
                 vignetteIntensity=0.0, chromaticAberration=0.0, filmGrain=0.0,
                 motionBlur=0.0, sharpness=0.0, contactShadows=False, anisotropy=1)
+
+
+def bake_native(project, directory, deadline, *, worker_factory=None, packer=None):
+    project = project.resolve()
+    if not project.is_relative_to((ROOT/'.temp/lighting-parity').resolve()):
+        raise ValueError('Canonical baking is restricted to this helper\'s private project directory')
+    packer = packer or ROOT/('build/default/tools/RelWithDebInfo/AssetPacker.exe' if os.name == 'nt' else 'build/linux-clang/tools/AssetPacker')
+    if not packer.is_file():
+        raise RuntimeError('Build the native AssetPacker before lighting qualification: '+str(packer))
+    if worker_factory is None:
+        from gameplay_jobs import _OwnedProcess
+        worker_factory = _OwnedProcess
+    cooked = lambda path: path.suffix in ('.mesh', '.skel', '.animset', '.texture') or path.name.endswith(('.scene.bin', '.prefab.bin'))
+    source_hashes = {path.relative_to(project).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                     for path in project.rglob('*') if path.is_file() and not cooked(path)}
+    log = directory/'native-bake.log'
+    with log.open('wb') as stream:
+        worker = worker_factory([str(packer), 'bake-all', str(project)], ROOT, stream)
+        try:
+            while worker.poll() is None:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Canonical native model bake exceeded shared qualification deadline')
+                time.sleep(.03)
+            if worker.poll() != 0:
+                raise RuntimeError('Native canonical model bake failed; inspect '+str(log))
+        finally:
+            worker.close()
+    for name, digest in source_hashes.items():
+        path = project/name
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise RuntimeError('Canonical model baking changed an authored source input: '+name)
+    artifacts = [dict(path=path.relative_to(project).as_posix(), bytes=path.stat().st_size,
+                      sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+                 for path in sorted(project.rglob('*')) if path.is_file() and
+                 (cooked(path) or path.relative_to(project).as_posix() not in source_hashes)]
+    return dict(status='passed', command=[str(packer), 'bake-all', str(project)], log=str(log),
+                packerSha256=hashlib.sha256(packer.read_bytes()).hexdigest(),
+                authoredSourceHashesUnchanged=True,
+                authoredSourceTreeSha256=hashlib.sha256(json.dumps(source_hashes, sort_keys=True).encode('utf-8')).hexdigest(),
+                generatedArtifacts=artifacts)
 
 
 def png(path):
@@ -111,7 +151,11 @@ def feature_checks(scene, image, width, height):
     p = lambda x, y, world=True: patch(image, width, height, x, y, world)
     probes = dict(center=p(32, 32), left=p(16, 32), right=p(48, 32))
     checks = {}
-    if scene == 'BrowserSolid':
+    if scene == 'BrowserDefaultLighting':
+        probes['sky'] = p(32, 4, False)
+        checks['nativeStartupLightsRoughMesh'] = 80 < probes['center'][0] < 250
+        checks['nativeStartupSkyWithoutEnvironment'] = probes['sky'][2] > probes['sky'][1] > probes['sky'][0] > 20
+    elif scene == 'BrowserSolid':
         checks['authoredDisplayColor'] = max(abs(a-b) for a, b in zip(probes['center'], [51, 102, 153])) <= 2
     elif scene == 'BrowserGradient':
         probes.update(top=p(32, 4, False), bottom=p(32, 59, False))
@@ -228,11 +272,13 @@ def main():
             raise ValueError('STALE_BROWSER_PACKAGE: rebuild game.pak after its authored fixture inputs')
         report['sharedFixtureTreeSha256'] = tree_hash.hexdigest()
         report['browserPackageSha256'] = hashlib.sha256(package.read_bytes()).hexdigest()
+        deadline = started+args.timeout
+        report['nativeBakeLog'] = str(directory/'native-bake.log')
+        report['nativeBake'] = bake_native(project, directory, deadline)
         launch = lambda scene: dict(profile='native-desktop-2d-v1', assertions=[dict(entity='$runtime', type='$engine', property='scene', equals=scene)])
         request = dict(project=str(project), operation='test', target='desktop', ticks=60, step=1/60, scene=scenes[0], timeoutMs=min(600000,args.timeout*1000),
                        launchConfig=launch(scenes[0]), cases=[dict(name=s, scene=s, launchConfig=launch(s)) for s in scenes])
         job = start_job(request, repo=ROOT)
-        deadline = started+args.timeout
         while job['report']['status'] not in TERMINAL:
             if time.monotonic() >= deadline:
                 raise TimeoutError('Shared native/browser qualification deadline exceeded')
@@ -244,6 +290,10 @@ def main():
         native_dir = Path(job['reportPath']).parent
         captures = []
         for index, scene in enumerate(scenes):
+            runtime_log = native_dir/'cases'/str(index)/'runtime.log'
+            runtime_text = runtime_log.read_text(encoding='utf-8', errors='replace')
+            if any(marker in runtime_text.lower() for marker in ('invalid mesh magic', 'failed to load gltf', 'failed to load model')):
+                raise RuntimeError('Native model load failed despite completed gameplay assertions; inspect '+str(runtime_log))
             source = native_dir/'cases'/str(index)/'reference.png'
             width, height, pixels = png(source)
             destination = directory/(scene+'-native.png')

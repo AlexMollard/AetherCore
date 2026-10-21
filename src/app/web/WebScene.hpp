@@ -69,6 +69,7 @@ namespace aether::app::web
 		TileMapSystem m_tile_system;
 		webgpu::WebGpuDevice& m_graphics;
 		std::optional<scene::EnvironmentRecord> m_environment;
+		bool m_default_lighting = false;
 		float m_light_time = 0.0f;
 		Expected<void> ExtractLighting(RenderFramePacket& packet);
 		std::array<float, 256> m_advances{};

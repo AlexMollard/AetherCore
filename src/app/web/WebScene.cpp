@@ -304,6 +304,9 @@ namespace aether::app::web
 		{
 			AE_UNEXPECTED(AetherError::Asset("Invalid browser scene TOML"));
 		}
+		// Headerless prefab defaults contribute feature metadata during expansion, but
+		// the primary authored scene alone chooses its default lighting policy.
+		const bool defaultLighting = description->kind == SceneKind::Scene3D && HasSceneFeature(description->features, SceneFeatureFlags::Lighting3D);
 		const auto expanded = scene::ExpandSceneDocument(*description,
 		        [](std::string_view path, scene::SceneDocumentKind kind) -> std::expected<scene::SceneDescription, std::string>
 		        {
@@ -326,6 +329,7 @@ namespace aether::app::web
 		m_tile_system.InvalidateAll();
 		m_models.ClearEntities();
 		m_environment = description->environment;
+		m_default_lighting = defaultLighting;
 		m_light_time = 0.0f;
 		AE_TRY(created, Apply(*description));
 		std::vector<WebScriptRecord> scripts;
@@ -422,6 +426,9 @@ namespace aether::app::web
 
 	Expected<void> WebScene::ExtractLighting(RenderFramePacket& packet)
 	{
+		// Authored 3D scenes use native startup lighting even without environment/light records.
+		// Explicit mesh-only fixtures retain the legacy unlit path; 2D scene defaults do not opt in.
+		packet.renderLightingEnabled |= m_default_lighting;
 		// RenderFramePacket's neutral construction defaults are not the native renderer's
 		// startup environment. Match Renderer for authored lights without an environment block.
 		packet.sunDirectionIntensity = glm::vec4(std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f);

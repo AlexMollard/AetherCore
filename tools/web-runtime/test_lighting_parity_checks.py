@@ -4,6 +4,8 @@ import unittest
 import struct
 import tempfile
 import zlib
+import time
+import sys
 
 spec = importlib.util.spec_from_file_location('parity', Path(__file__).with_name('lighting-parity-checks.py'))
 parity = importlib.util.module_from_spec(spec)
@@ -11,6 +13,27 @@ spec.loader.exec_module(parity)
 
 
 class LightingParityTests(unittest.TestCase):
+    def test_failed_native_bake_is_rejected_and_owned_process_is_closed(self):
+        parent = parity.ROOT/'.temp/lighting-parity'
+        parent.mkdir(parents=True, exist_ok=True)
+        workers = []
+        class FailedProcess:
+            def __init__(self, command, cwd, stream):
+                self.closed = False
+                workers.append(self)
+            def poll(self):
+                return 1
+            def close(self):
+                self.closed = True
+        with tempfile.TemporaryDirectory(dir=parent) as directory:
+            project = Path(directory)/'project'
+            project.mkdir()
+            (project/'original.gltf').write_text('{"asset":{"version":"2.0"}}')
+            with self.assertRaisesRegex(RuntimeError, 'Native canonical model bake failed'):
+                parity.bake_native(project, Path(directory), time.monotonic()+10,
+                                   worker_factory=FailedProcess, packer=Path(sys.executable))
+            self.assertTrue(workers[0].closed)
+
     def test_native_rgb_png_sub_filter_and_checksum(self):
         def chunk(kind, data):
             return struct.pack('>I', len(data))+kind+data+struct.pack('>I', zlib.crc32(kind+data))

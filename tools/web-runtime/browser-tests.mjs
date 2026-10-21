@@ -67,6 +67,7 @@ async function capture(page) {
 }
 function pixel(image, x, y) { return image.pixels.slice((y * image.width + x) * 4, (y * image.width + x) * 4 + 4) }
 const lightingScenes = {
+    'lighting-default':'BrowserDefaultLighting',
     'lighting-solid':'BrowserSolid', 'lighting-gradient':'BrowserGradient', 'lighting-sky':'BrowserSky',
     'lighting-hdr':'BrowserHdr', 'lighting-sun':'BrowserSun', 'lighting-point':'BrowserPoint',
     'lighting-spot':'BrowserSpot', 'lighting-pbr-maps':'BrowserPbrMaps', 'lighting-2d-alpha':'BrowserLight2D',
@@ -278,6 +279,10 @@ try {
 		    }
 		    item.shadow={shadowPixels,peakDifference,comparison:'Same camera, lights, receiver and fixed-pose caster; only receiver.receiveShadows differs'};
 		    await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath),name+'-off.png')});
+		} else if (name === 'lighting-default') {
+		    const surface=pixel(image,32,32), sky=pixel(image,32,4);
+		    assert.ok(surface[0]>80 && surface[0]<250, `Default rough white mesh receives native startup lighting instead of unlit white: ${surface}`);
+		    assert.ok(sky[2]>sky[1] && sky[1]>sky[0] && sky[0]>20, `Default camera renders the native blue sky without an environment block: ${sky}`);
 		} else if (name === 'lighting-solid') {
 		    for (const [x,y] of [[0,0],[32,32],[63,63]]) near(x,y,[51,102,153,255],1,'Camera solid display color remains WYSIWYG through HDR');
 		} else if (name === 'lighting-gradient') {

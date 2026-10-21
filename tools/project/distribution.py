@@ -15,6 +15,8 @@ from gameplay_jobs import _OwnedProcess, project_tool, validate_report
 from reference_fixture import ROOT, assets, config
 from managed_reference import write_fixture
 
+BROWSER_CASES = json.loads((Path(__file__).resolve().parents[1] / 'browser-tests/required-cases.json').read_text(encoding='utf-8'))
+
 REQUIRED = ('fresh-create', 'compiler-failure', 'repaired-build', 'fresh-native-test', 'web-publish',
             'edited-web-publish', 'rejected-content-preserves-export', 'csharp-web-publish', 'edited-csharp-web-publish', 'csharp-reference', 'measured-export', 'performance-budgets', 'itch-package',
             'csharp-native', 'rust-native', 'csharp-publish', 'native-gauntlet', 'browser-gauntlet')
@@ -33,8 +35,9 @@ def native_passed(report):
 def browser_passed(report):
     groups = [report.get('cases', []), report.get('legacy', {}).get('cases', [])]
     return report.get('status') == 'passed' and report.get('legacy', {}).get('status') == 'passed' and all(
-        len(group) == count and len({item['name'] for item in group}) == count and all(item['status'] == 'passed' for item in group)
-        for group, count in zip(groups, (10, 31))) and all(report.get('cleanup', {}).get(name) is True for name in ('browserClosed','serverClosed','childClosed'))
+        len(group) == len(required) and {item['name'] for item in group} == set(required)
+        and all(item['status'] == 'passed' and item.get('hardware') is not False for item in group)
+        for group, required in zip(groups, (BROWSER_CASES['requiredBridgeCases'], BROWSER_CASES['legacyCaseNames']))) and all(report.get('cleanup', {}).get(name) is True for name in ('browserClosed','serverClosed','childClosed'))
 
 
 def finish_unvalidated(checks, cancelled):

@@ -1,0 +1,29 @@
+# Native startup lighting and camera background, without an authored environment.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[[entities]]
+name = 'Default sky camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+
+[[entities]]
+name = 'Default lit rough dielectric'
+mesh_renderer = true
+position = [0.0, 0.0, -2.0]
+scale = [2.0, 2.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [1.0, 1.0, 1.0, 1.0]
+roughness = 1.0
+metallic = 0.0
