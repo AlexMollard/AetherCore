@@ -71,10 +71,10 @@ code, Web source closure and asset tests. Consume Task 1 mesh upload/packet API.
 **Files:** shared Slang include adapters, WebGPU render passes, common frame
 constants/extraction and same-scene capture fixtures. Consume Tasks 1/2.
 
-- [ ] Split pure shading math from BDA/resource access; test both targets compile.
-- [ ] Add shared material lighting variants, light extraction, shadow passes and
+- [x] Split pure shading math from BDA/resource access; test both targets compile.
+- [x] Add shared material lighting variants, light extraction, shadow passes and
   explicit HDR intermediates; preserve native equations and effect settings.
-- [ ] Compare stable feature fixtures at fixed tick/camera/exposure, including
+- [x] Compare stable feature fixtures at fixed tick/camera/exposure, including
   2D lighting and camera backgrounds. Verify limit failures before allocation.
 
 ### Task 4: Complete effects and custom shader portability
@@ -112,7 +112,7 @@ schemas, browser export verification and native/browser visual reports.
 - [ ] Record feature coverage, numerical/pixel tolerances, performance/memory,
   browser/device environment and remaining unsupported configurations.
 
-## Current checkpoint: Task 2 complete; lighting/effects remain
+## Task 2 qualification checkpoint
 
 Tasks 1 and 2 are implemented and qualified. Saved perspective/orthographic scenes
 now load shared native-cooked model streams, linked materials (TOML, authored and
@@ -160,8 +160,8 @@ The private 3D language qualifier is reproducible with
 It runs the existing publisher first, stages modified copies under `.temp`, and
 labels them private qualification; it does not bypass the released export gate.
 
-Surface shading is still unlit. Normal/MR/AO maps and specialized flags are carried
-for Tasks 3/4, which must implement lighting, shadows, HDR and effects. Full 3D
+At this checkpoint surface shading was unlit. Normal/MR/AO maps and specialized
+flags were carried for Tasks 3/4 to implement lighting, shadows, HDR and effects. Full 3D
 physics/animation APIs and scripted prefab execution remain Task 5. Production
 `webgpu-2d-v1` still rejects 3D; Task 6 must qualify and unlock full publishing.
 These fixtures do not establish complete native/browser visual equivalence or
@@ -179,3 +179,52 @@ Local evidence (untracked): `logs/task2/qualified-web/report.json`,
 `logs/task2-project-tests-final.log`, `logs/task2-mcp-tests.log`, and
 `logs/task2-browser-tests.log`. The development site remains hosted at
 `http://127.0.0.1:18989/`; refresh after rebuilding to inspect the current fixtures.
+
+## Task 3 implementation checkpoint
+
+The WebGPU frame now supports authored lighting, standard PBR maps, directional
+cascades, point/spot shadows, skinned and alpha-tested casters, camera backgrounds,
+linear HDR intermediates and the shared native tone-map/sky shader families. The
+2D light-map shader shares native equations and samples rasterized tile-art alpha.
+Display-space UI runs after scene lighting and tone mapping. Legacy unlit fixtures
+retain their previous behavior, and both language packages carry the new shaders.
+See [the lifecycle contract](../../architecture/webgpu-lifecycle.md) for scheduling,
+ownership, limits and the persistent shadow atlas budget.
+
+All 56 hardware browser cases pass, including asymmetric cutout shadows that
+reproduced and caught a vertical shadow sampling error before its correction,
+and a visible mesh whose authored shadow-casting flag is disabled.
+The full native gauntlet passes 1,521 cases with zero editor/runtime Vulkan
+findings. Managed SDK tests pass 168.
+Both C# and Rust production 2D publishing/relocation/iframe checks and private 3D
+script movement qualifications pass; the verified original packages remain
+hash-checked unchanged. The development gallery remains hosted at port 18989.
+
+All 21 same-scene native/browser comparisons pass. The maintained
+`tools/web-runtime/lighting-parity-checks.py` captures matching camera/extents at
+fixed tick 10 with manual ACES/exposure, compares actual GPU pixels, and independently
+checks feature behavior on both renderers. All six shadow comparisons pass,
+including asymmetric alpha and disabled-caster checks. Mean RGB error ranges
+from 0.067 to 0.230 on the 0–255 scale; every scene's 95th percentile error is 1.
+Whole-image sampling retains edges and uses unchanged tolerances.
+
+The comparison exposed native bugs as well as browser bugs: colour attachment
+clears overwrote their Vulkan union member, local lights ignored the receive-shadow
+flag, the local shadow override culled two-sided cutouts, and tiled spot-light
+culling assumed perspective projection for orthographic cameras. These are fixed;
+the shared tile-frustum math has 122 geometric regression assertions. Native
+fixtures use canonical asset baking and hash-check their authored inputs.
+
+Local evidence: `logs/task3/qualified-web/report.json`,
+`logs/task3/qualified-web/browser.json`, `logs/task3/qualified-native/report.json`,
+`logs/task3/qualified-parity.json`, and
+`logs/task3/qualified-languages/report.json` with its `browser.json`. The final
+language run passes both C# and Rust with original production packages unchanged.
+Nine comparison-helper tests, seven browser-harness tests, 48 project tests
+(six opt-in skips), and 26 MCP tests pass. Clangd and graphify were refreshed.
+The comparison closes its browser/server
+and native jobs; the requested development gallery remains hosted at port 18989.
+
+The public export profile remains `webgpu-2d-v1`. Automatic exposure, grading,
+other post effects, specialized/custom materials and the remaining gameplay work
+are still Tasks 4/5; full 3D production publishing remains gated by Task 6.

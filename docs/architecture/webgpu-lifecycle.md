@@ -12,7 +12,7 @@ The first foundation adds packet-owned mesh instances, native/browser shared CPU
 primitive geometry, the existing native cooked-model decoder in the portable
 closure, and indexed WebGPU rendering with a per-frame depth attachment. The
 100-byte vertex record is now a GPU-independent `MeshVertex`; `Mesh::Vertex`
-remains an alias. Instance data has explicit 128-byte layout, finite affine
+remains an alias. Mesh instance data has explicit 192-byte layout, finite affine
 transform validation, inverse-transpose normal columns and frame limits.
 
 Mesh uploads use immutable slots (at most 1,024), bounded topology/index validation
@@ -27,9 +27,52 @@ The test-only `mesh3d` fixture uses the actual ECS transforms/material colors,
 shared primitives and a glTF mesh passed through native AssetPacker and the shared
 runtime decoder. Hardware tests cover perspective, near/far depth ordering,
 mirrored/nonuniform geometry, sprite overlay, resize, upload rejection and cleanup.
-The initial mesh shader is intentionally unlit. PBR, lighting/shadows, animation,
-physics, authored 3D scene application and the native effects stack remain work
-in progress; their production preflight rejections remain in place.
+The original procedural fixtures retain their unlit output. A primary 3D scene's
+lighting feature enables native startup lighting, even without an environment.
+Authored environments, lights and explicit camera backgrounds also opt into linear RGBA16Float scene rendering,
+standard PBR material maps, directional/local shadows, and the HDR display transform.
+Scenes, models, materials and skin palettes now load through the shared portable
+path. Physics and the remaining native effects stack are separate milestones;
+production 3D preflight rejections remain in place.
+
+## Authored lighting and HDR frame scheduling
+
+The game thread extracts lights, environment, camera background and material state
+into the owned packet. No WebGPU pass accesses the World. The renderer validates
+the sprite, mesh, lighting and HDR plans before accepting a frame or allocating its
+transient resources. Nonfinite data, unsupported specialized material effects,
+invalid shadow ranges and budget violations produce explicit diagnostics.
+Mesh instances preserve the authored shadow-casting switch; material receive-shadow
+flags independently control whether the lit surface samples shadow maps.
+
+For opted-in frames the order is sky/transparent HDR clear, shadow maps, lit meshes,
+scene sprites, the 2D light map, tone mapping/background composition, then display
+space UI. Scene sprites decode their legacy encoded textures for linear blending;
+UI retains its established display-space output. Camera solid/gradient colors are
+composited in display space, preserving the authored colors. All eleven native
+tone-map operator implementations and the native sky math are shared includes;
+exposure is the native manual multiplier carried in the project graphics settings.
+Automatic exposure and the rest of the post-effects stack require separate work.
+
+The 3D pass supports 128 local lights and 16 shadow maps (three directional
+cascades, six maps per shadowed point light, one per spot). Cascades retain native
+4096/2048/2048 resolution; point maps use the native 384-pixel padded projection
+and spots use 512. A lazy persistent 4096x7168 R32Float/depth atlas costs 224 MiB.
+Submitted frames retain shared ownership; ordered queue submissions permit reuse
+without overwriting earlier reads. Devices must support the atlas extent for a
+shadowed frame. The atlas is never allocated for a rejected plan.
+
+The 2D compositor shares the native lighting equations, rasterizes tile-art alpha
+and capsule occluders into an R8 mask, and multiplies the HDR scene before tone
+mapping. It requires an orthographic camera and bounds input to 1024 lights and
+65536 occluders. UI-only frames do not activate it. Frame-owned masks, HDR/depth
+images, uniforms and bindings retire after queue completion and capture readback.
+
+Run the development gallery with `python tools/web-runtime/serve-preview.py` and
+open `http://127.0.0.1:18989/`. Bare-root requests show the gallery; existing query
+URLs still open the player. It discovers the staged scene list after each rebuild
+and keeps expected diagnostic fixtures separate from working examples. Published
+game shells are unchanged.
 
 The native feature inventory includes: scene prepass, sky/backgrounds, forward PBR
 and object/baked lighting, tiled lights, directional/local/contact/blob shadows,

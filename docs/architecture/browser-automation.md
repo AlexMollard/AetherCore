@@ -16,6 +16,34 @@ MCP `run_browser_gauntlet` calls this same script and returns its structured rep
 
 The current build harness embeds AgentPipelineRust. Requests for another project, including C#, return blocked explicitly rather than silently testing that reference fixture. Generic project export selection is available through [target-aware publishing](../web-export.md); the qualification gauntlet intentionally retains its fixed reference scenario.
 
+## Native/browser lighting comparisons
+
+```powershell
+python tools/web-runtime/lighting-parity-checks.py --build build/webgpu-browser --playwright <absolute-path-to-pinned-playwright> --report logs/lighting-parity.json
+```
+
+This development-only comparison creates a private project, copies the maintained
+fixtures and runs the canonical native `AssetPacker bake-all` path before testing.
+It records generated artifact hashes and verifies that authored sources were not
+changed. Hidden native gameplay tests capture tick 10; an owned hardware browser
+captures the same scene at tick 10 and the measured native output extent. Exposure
+is fixed at 1 with ACES, with unrelated post effects disabled for this qualification.
+
+The report compares RGB samples across the whole image without alignment or edge
+masking: mean absolute error must be at most 8 and the 95th percentile at most 18.
+Feature-specific probe channel errors must be at most 12. Independent checks on
+both renderers verify radiance, backgrounds, material maps, lighting and shadow
+On/Off differences; matching black images cannot pass. An asymmetric cutout must
+cast from its opaque half and transmit through its transparent half. Model-load
+warnings invalidate the comparison instead of being misreported as visual parity.
+Shadow receiver probes avoid caster silhouettes; whole-image sampling still
+includes their edges. The report records the probe coordinates and checks the
+effective machine-local render scale without modifying user settings.
+
+The shared deadline bounds baking, native tests and browser captures. Browser,
+server and native job cleanup are owned by the helper. This does not publish a
+game or unlock the production 3D export profile.
+
 ## Bridge contract version 1
 
 `AETHERCORE_WEB_TEST_BRIDGE` defaults OFF. The gauntlet opts the development build in; production is configured explicitly OFF in `build/webgpu-production`. Only opted-in builds copy `test-bridge.js`, include its HTML script reference, link Rust's automation panic fixture and expose device-loss injection. Production verification scans HTML/JS/Wasm for bridge/fault export markers and loads the production game in a real browser with fault URL parameters to verify those parameters cannot activate automation.
