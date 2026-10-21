@@ -18,7 +18,7 @@ existing native tests and hardware Chromium automation.
 
 Preserve existing 2D/native/both-language behavior, never read ECS from GPU code,
 retain GPU resources until completion, and keep production feature gates honest.
-No git mutations are authorized by the current message. No automatic CI.
+The user authorized incremental commits when continuing Task 2. No automatic CI.
 
 ## Review focus
 
@@ -60,10 +60,10 @@ No git mutations are authorized by the current message. No automatic CI.
 **Files:** Web asset cooker/readers, `WebScene.*`, shared scene/mesh/material
 code, Web source closure and asset tests. Consume Task 1 mesh upload/packet API.
 
-- [ ] Pin native/baked geometry, material and color-space reference cases.
-- [ ] Reuse portable cooked mesh streams; bind textures per material, preserving
+- [x] Pin native/baked geometry, material and color-space reference cases.
+- [x] Reuse portable cooked mesh streams; bind textures per material, preserving
   alpha and sampler semantics. Extract owned draw data on the game thread.
-- [ ] Handle authored linked materials, scene dependencies and skinning, testing
+- [x] Handle authored linked materials, scene dependencies and skinning, testing
   multi-primitive models and script-driven movement in both language runtimes.
 
 ### Task 3: Lighting, shadows, backgrounds and HDR
@@ -91,7 +91,7 @@ material-graph compiler and shader cook/diagnostic paths. Consume Task 3.
 ### Task 5: Full 3D gameplay and scenes
 
 **Files:** physics/animation browser closure, Web scene application and services,
-native/browser Rust/C# gameplay fixtures. Consume Tasks 2–4.
+native/browser Rust/C# gameplay fixtures. Consume Tasks 2â€“4.
 
 - [ ] Build 3D physics/query/joint/animation tests using the native semantics.
 - [ ] Implement portable browser execution with explicit budgets and controlled
@@ -112,37 +112,70 @@ schemas, browser export verification and native/browser visual reports.
 - [ ] Record feature coverage, numerical/pixel tolerances, performance/memory,
   browser/device environment and remaining unsupported configurations.
 
-## Current checkpoint: mesh foundation, not full parity
+## Current checkpoint: Task 2 complete; lighting/effects remain
 
-Task 1 is implemented and qualified. Task 2 has the portable 100-byte MeshVertex
-record and shared native cooked-model reader available in the browser closure;
-authored 3D scene/material application and the remaining tasks are not complete.
-Production 3D publishing remains rejected rather than omitting rendering features.
+Tasks 1 and 2 are implemented and qualified. Saved perspective/orthographic scenes
+now load shared native-cooked model streams, linked materials (TOML, authored and
+cooked folders, and binary presets), includes/prefab composition and skin palettes.
+Owned game-thread draw extraction follows live entity transforms and materials.
+Texture color/data spaces, alpha mask/blend/additive modes, vertex colors,
+mirrored winding, backfaces, UV scrolling and complete mip chains are covered.
+
+The mip filter is shared with the published native BCn cooker, including its
+existing encoded-byte/alpha behavior. Loose native PNG uploads have a different
+filter; this is not a claim that those paths or BCn/RGBA compression are identical.
+Both source and frame validation retain explicit mesh/texture/skin budgets.
+
+Native fixes made while establishing shared semantics:
+
+- Step/CubicSpline animation sampling now evaluates the intended keys/tangents.
+  CPU tests execute the actual native shader functions against the portable pose
+  evaluator. Browser scene application clamps stale clip indices like native.
+- Authored presets preserve additive and specialized material flags; linked
+  materials retain inherited textures unless explicitly overridden/cleared.
+- Prefab root overrides preserve the placed scene-node identity on both paths.
+- Browser captures survive a declined frame until a GPU submission accepts them;
+  a development-only rejection fixture makes this regression deterministic.
 
 Qualification on this Windows host:
 
-- `Run-WebRuntimeChecks.ps1 -SkipHostBuild -BrowserChecks`: passed all 33 cases
-  on hardware NVIDIA Blackwell / Chrome 155.0.8059.85 / Playwright 1.62.1, plus
-  Node foundation and source/import/shared-memory audits. Mesh cases exercise
-  native-cooked glTF geometry, shared primitives, perspective/depth, sprite
-  overlay, resize, retirement and invalid-frame rejection before submission.
-- Native `Run-DebugGauntlet.ps1 -Fast`: 1,475 cases passed, both editor and
-  runtime Vulkan validation smokes had zero findings. An earlier concurrent run
-  hit swapchain-out-of-date advisories; the final complete gate passed. A build
-  attempted while an owned publish worker held aether-project.exe hit a link
-  lock; the final gate ran after that worker finished. No findings were filtered.
-- Real C#/Rust desktop fixture failure/repair and compiler-error exercises passed.
-  Both production Web 2D export/relocation/iframe checks passed; latest managed
-  export was rebuilt after the final internal mesh validation changes.
-- Managed SDK: 168 passed. Project Python: 54 cases, 48 passed and six opt-in
-  skips; MCP: 26 passed; browser harness unit tests: seven passed.
-- Review caught a formatter-split JavaScript operator in EM_ASM; fixed and rebuilt.
-  Final review of the pre-submission validation/encoding split found no blockers.
+- Hardware Chrome 155.0.8059.85 / NVIDIA Blackwell / Playwright 1.62.1: all 38
+  browser cases passed, plus Node foundation and native-import/shared-memory/source
+  audits. Cases read actual GPU pixels for authored models/materials, minification,
+  alpha modes/winding, includes/prefabs, two animated primitives and capture retry.
+- Native full gauntlet: 1,512 cases passed; editor and runtime Vulkan smokes each
+  reported zero errors, warnings or advisories. Managed SDK: 168 passed.
+- Both C# and Rust passed unchanged production Web 2D publishing, relocation and
+  iframe checks. Private copies of those packages then passed authored 3D model
+  movement using real gameplay scripts and simulation ticks, actual GPU captures,
+  diagnostics checks and stop with zero frames in flight. Original verified
+  packages were hash-checked unchanged; qualifier browsers/servers were closed.
+- Project Python: 54 cases, 48 passed and six opt-in skips. MCP: 26 passed.
+  Browser-harness unit tests: seven passed. Clangd and graphify were refreshed.
+- Fresh review found stale clip-index handling, which was reproduced and fixed.
+  Subsequent mip/shared-loader/capture review found no remaining P1/P2 issues.
 
-Local evidence (untracked): `logs/web3d/final-runtime-and-browser.json`,
-`logs/web3d/browser.json`, `logs/web3d/final-native-gauntlet.json`,
-`logs/web3d/desktop-regression.log`, `logs/web3d/export-regression.json`,
-`logs/web3d/managed-export-final.json`, `logs/web3d/managed-tests.log`,
-`logs/web3d/project-tests.log`, `logs/web3d/mcp-tests.log`, and
-`logs/web3d/browser-unit.log`. The fixture screenshot is a depth test, not a
-representative game or a native/browser visual parity comparison.
+The private 3D language qualifier is reproducible with
+`python tools/web-runtime/authored-language-checks.py --playwright <module-path>`.
+It runs the existing publisher first, stages modified copies under `.temp`, and
+labels them private qualification; it does not bypass the released export gate.
+
+Surface shading is still unlit. Normal/MR/AO maps and specialized flags are carried
+for Tasks 3/4, which must implement lighting, shadows, HDR and effects. Full 3D
+physics/animation APIs and scripted prefab execution remain Task 5. Production
+`webgpu-2d-v1` still rejects 3D; Task 6 must qualify and unlock full publishing.
+These fixtures do not establish complete native/browser visual equivalence or
+cross-browser/device support. External-host distribution qualification remains
+pending the previously deferred authorized destination.
+
+Commits: `af460da` (foundation), `935959e` (pose/native sampling), `3125d93`
+(material flags), `e57c39e` (authored Web rendering), `6de11e8` (shared material
+loading/capture retry), followed by the language qualifier/checkpoint commit.
+
+Local evidence (untracked): `logs/task2/qualified-web/report.json`,
+`logs/task2/qualified-web/browser.json`, `logs/task2/qualified-native/report.json`,
+`logs/task2/authored-languages-final/report.json`,
+`logs/task2/authored-languages-final/browser.json`, `logs/task2-managed-tests.log`,
+`logs/task2-project-tests-final.log`, `logs/task2-mcp-tests.log`, and
+`logs/task2-browser-tests.log`. The development site remains hosted at
+`http://127.0.0.1:18989/`; refresh after rebuilding to inspect the current fixtures.

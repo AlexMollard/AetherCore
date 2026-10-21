@@ -55,8 +55,8 @@ qualification land. No runtime streaming or server-side rendering substitute.
   resources referenced by outstanding work.
 - No automatic CI triggers, git hooks, dependency edits under build trees, or
   unsafe browser flags. Qualification runs hidden/owned and closes its processes.
-- No commits this turn: repository policy requires a commit request in the
-  current user message. Changes remain available for review.
+- The user authorized incremental commits while continuing Task 2. Preserve
+  repository policy requiring explicit current-message authorization for git changes.
 
 ## Verification
 

@@ -99,8 +99,16 @@ impl Script for Player {
         Ok(())
     }
 }
+gameplay_script! { pub struct ModelProbe {} }
+impl Script for ModelProbe {
+    fn update(&mut self, ctx: &mut Context<'_>, delta: f32) -> Result {
+        let mut position = ctx.position(ctx.entity())?;
+        position.x += delta;
+        ctx.set_position(ctx.entity(), position)
+    }
+}
 #[cfg(not(feature = "wrong-abi"))]
-aethercore::export_gameplay!(Player, Probe, ReferencePlayer, ReferenceResult);
+aethercore::export_gameplay!(Player, Probe, ReferencePlayer, ReferenceResult, ModelProbe);
 #[cfg(feature = "wrong-abi")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn aether_gameplay_query(
