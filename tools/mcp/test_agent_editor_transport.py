@@ -15,6 +15,12 @@ SPEC.loader.exec_module(mcp)
 
 
 class AgentEditorTransportTests(unittest.TestCase):
+    def test_owned_editor_helper_receives_the_recovered_toolchain_environment(self):
+        environment = {'RUSTUP_HOME': 'Rust cache & \u4e16\u754c', 'CARGO_HOME': 'Cargo cache'}
+        with mock.patch.object(mcp, 'child_environment', return_value=environment, create=True):
+            _, call = self.call('agent_editor_launch', dict(project='p', name='agent', port=8891), {'receiptPath': 'launch.json'})
+        self.assertEqual(call.kwargs.get('env'), environment)
+
     def call(self, name, arguments, stdout, code=0):
         def helper(argv, **kwargs):
             kwargs['stdout'].write(json.dumps(stdout).encode('utf-8'))

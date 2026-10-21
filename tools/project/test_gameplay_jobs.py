@@ -1,12 +1,14 @@
 """Persistent gameplay job behavior with real, isolated worker processes."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import gameplay_jobs as jobs
 
@@ -41,6 +43,24 @@ sys.exit(9 if mode == 'contradiction' else code)
 
 
 class GameplayJobTests(unittest.TestCase):
+    def test_owned_child_receives_repaired_toolchain_environment_without_mutating_parent(self):
+        environment = dict(os.environ)
+        environment.pop('RUSTUP_HOME', None)
+        repaired = dict(environment, RUSTUP_HOME=str(self.repo / 'Rust home & \u4e16\u754c'))
+        output = self.repo / 'environment.json'
+        with mock.patch.dict(os.environ, environment, clear=True), \
+                mock.patch.object(jobs, 'child_environment', return_value=repaired, create=True), output.open('wb') as log:
+            child = jobs._OwnedProcess([sys.executable, '-c', 'import json,os; print(json.dumps(os.environ.get("RUSTUP_HOME")))'], self.repo, log)
+            try:
+                deadline = time.monotonic() + 5
+                while child.poll() is None and time.monotonic() < deadline:
+                    time.sleep(.01)
+                self.assertEqual(child.poll(), 0)
+            finally:
+                child.close()
+            self.assertNotIn('RUSTUP_HOME', os.environ)
+        self.assertEqual(json.loads(output.read_text(encoding='utf-8')), repaired['RUSTUP_HOME'])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='gameplay jobs 世界 & ')
         self.addCleanup(self.cleanup)

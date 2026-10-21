@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'project'))
 import gameplay_jobs
+from toolchain_environment import child_environment
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
@@ -220,7 +221,7 @@ def _agent_editor_helper(script: str, params: list[str], timeout: float) -> dict
         with (helper_logs / 'stdout.log').open('wb') as output, (helper_logs / 'stderr.log').open('wb') as errors:
             process = subprocess.run([PWSH, '-NoProfile', '-File', str(REPO / 'scripts' / script), *params],
                                      stdout=output, stderr=errors, text=True, encoding='utf-8', timeout=timeout, cwd=str(REPO),
-                                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0, env=child_environment())
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {'error': f'Pog Champ, owned editor helper failed: {exc}. Close any successfully launched editor with agent_editor_close using its receiptPath.'}
     try:

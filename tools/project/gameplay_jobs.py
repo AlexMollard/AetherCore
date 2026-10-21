@@ -14,6 +14,8 @@ import threading
 import time
 import uuid
 
+from toolchain_environment import child_environment
+
 TERMINAL = {'passed', 'failed', 'cancelled', 'skipped'}
 EXIT_CODES = {'passed': 0, 'failed': 1, 'cancelled': 130, 'skipped': 3}
 OPERATIONS = ('create', 'inspect', 'build', 'run', 'relaunch', 'test', 'publish')
@@ -159,9 +161,10 @@ class _OwnedProcess:
     def __init__(self, command, cwd, output):
         self.process = None
         self.job = None
+        environment = child_environment()
         if os.name != 'nt':
             self.process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.DEVNULL,
-                                            stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+                                            stdout=output, stderr=subprocess.STDOUT, start_new_session=True, env=environment)
             return
         import ctypes as c
         from ctypes import wintypes as w
@@ -204,7 +207,7 @@ class _OwnedProcess:
                 startup.hStdInput, startup.hStdOutput, startup.hStdError = in_handle, out_handle, out_handle
                 try:
                     process, thread, _, _ = _winapi.CreateProcess(command[0], subprocess.list2cmdline(command),
-                        None, None, True, subprocess.CREATE_NO_WINDOW | 4, None, str(cwd), startup)
+                        None, None, True, subprocess.CREATE_NO_WINDOW | 4, environment, str(cwd), startup)
                 finally:
                     os.set_handle_inheritable(out_handle, False)
                     os.set_handle_inheritable(in_handle, False)
