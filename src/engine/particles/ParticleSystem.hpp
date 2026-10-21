@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <functional>
 #include <unordered_map>
 
 #include <glm/glm.hpp>
@@ -43,7 +44,6 @@ namespace aether
 		void Simulate(World& world, float dt, bool retireFinished);
 
 	public:
-
 		void OnUnregister(World& world) override
 		{
 			(void) world;
@@ -56,12 +56,20 @@ namespace aether
 
 		void Shutdown();
 
+		void SetRetireCallback(std::function<void(Entity)> callback)
+		{
+			m_retire = std::move(callback);
+		}
+
 		// Script-facing: queue a burst / toggle continuous emission.
 		static void QueueBurst(ParticleEmitterComponent& emitter, std::uint32_t count);
 
 		// Frame prep hands over where extracted billboard particles go this frame. The pointer
 		// is packet-owned and only read during Extract.
-		void SetBillboardTarget(std::vector<BillboardParticleInstance>* out) { m_billboardOut = out; }
+		void SetBillboardTarget(std::vector<BillboardParticleInstance>* out)
+		{
+			m_billboardOut = out;
+		}
 
 		// Advance a standalone emitter with no ECS/physics dependency, for an
 		// in-editor preview. Spawns from `origin`, integrates + culls, resolves
@@ -81,5 +89,6 @@ namespace aether
 		TextureRegistry& m_textures;
 		std::unordered_map<std::string, TextureHandle> m_textureCache;
 		std::vector<BillboardParticleInstance>* m_billboardOut = nullptr;
+		std::function<void(Entity)> m_retire;
 	};
 } // namespace aether

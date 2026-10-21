@@ -321,7 +321,7 @@ namespace aether
 		}
 		if (emitter.rngState == 0)
 		{
-			emitter.rngState = 0x9E3779B9u;
+			emitter.rngState = emitter.seed != 0 ? emitter.seed : 0x9E3779B9u;
 		}
 		StepEmitter(emitter, dt, origin, glm::vec3{origin.x, origin.y, 0.0f}, nullptr); // no world collision in preview
 	}
@@ -358,7 +358,7 @@ namespace aether
 			}
 			if (emitter.rngState == 0)
 			{
-				emitter.rngState = (entity.id * 2654435761u) | 1u;
+				emitter.rngState = emitter.seed != 0 ? emitter.seed : (entity.id * 2654435761u) | 1u;
 			}
 			const glm::vec2 origin{transform.localToWorld[3].x, transform.localToWorld[3].y};
 
@@ -375,7 +375,14 @@ namespace aether
 
 		for (const Entity e: toDestroy)
 		{
-			world.Destroy(e);
+			if (m_retire)
+			{
+				m_retire(e);
+			}
+			else
+			{
+				world.Destroy(e);
+			}
 		}
 	}
 

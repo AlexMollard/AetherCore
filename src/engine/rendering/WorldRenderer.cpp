@@ -9,6 +9,7 @@
 #include "material/MaterialRegistry.hpp"
 #include "mesh/Mesh.hpp"
 #include "rendering/FrameConstants.hpp"
+#include "rendering/SceneEffectExtraction.hpp"
 
 #include "physics/PhysicsComponents.hpp"
 #include "rendering/GpuContracts.hpp"
@@ -27,15 +28,9 @@ namespace aether
 	{
 		glm::vec4 TransformBoundingSphere(glm::vec4 localSphere, const glm::mat4& model)
 		{
-			const glm::vec3 center = glm::vec3(model * glm::vec4(localSphere.x, localSphere.y, localSphere.z, 1.0f));
-
-			const glm::vec3 col0(model[0]);
-			const glm::vec3 col1(model[1]);
-			const glm::vec3 col2(model[2]);
-			const float maxScale = std::max({glm::length(col0), glm::length(col1), glm::length(col2)});
-
-			return glm::vec4(center, localSphere.w * maxScale);
+			return TransformEffectBoundingSphere(localSphere, model);
 		}
+
 	} // namespace
 
 	void WorldRenderer::Flush(const World& world, RenderQueue& queue, glm::vec3 eyeWorldPos, bool shadowPass)
@@ -184,16 +179,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		out.clear();
-		// Union of an actor's primitive bounds, as an AABB of their spheres. An actor is one
-		// entity per primitive under a shared root, and one blob must stand for all of them:
-		// a crate's four primitives would otherwise lay four overlapping discs.
-		struct Bounds
-		{
-			glm::vec3 min{std::numeric_limits<float>::max()};
-			glm::vec3 max{std::numeric_limits<float>::lowest()};
-			bool character = false;
-		};
-		std::unordered_map<std::uint32_t, Bounds> actors;
+		std::vector<BlobShadowSource> sources;
 		auto view = world.GetRegistry().view<const MeshComponent, const MaterialComponent, const TransformComponent>();
 		for (auto enttEntity: view)
 		{
@@ -219,65 +205,16 @@ namespace aether
 			const glm::vec4 sphere = TransformBoundingSphere(meshComp.mesh->GetBoundingSphere(), view.get<const TransformComponent>(enttEntity).localToWorld);
 			const auto* hierarchy = world.GetRegistry().try_get<HierarchyComponent>(enttEntity);
 			const std::uint32_t key = (hierarchy != nullptr && hierarchy->parent.IsValid()) ? hierarchy->parent.id : entity.id;
-			Bounds& b = actors[key];
-			b.min = glm::min(b.min, glm::vec3(sphere) - glm::vec3(sphere.w));
-			b.max = glm::max(b.max, glm::vec3(sphere) + glm::vec3(sphere.w));
-			b.character = b.character || (flags & GpuMaterial::kCharacter) != 0u;
+			sources.push_back({key, sphere, (flags & GpuMaterial::kCharacter) != 0u});
 		}
-
-		// The blob covers the inner half of the actor's footprint and fades out past it, which
-		// is the rig's size: a crate's blob just rims its base, Crash's sits under his feet.
-		// Pickups (anything with a smaller blob than a crate's) get one too: the rig lays a small dark
-		// blob under every wumpa at full strength although the fruit hovers about a metre up
-		// (logs/wumpa/rig/idle_00.png). A negative radius tells the shader to skip the hover
-		// fade for them. The floor only drops degenerate bounds.
-		// ponytail: "pickup" is a size test standing in for the per-actor shadow flag the game
-		// scripts carry, until that is extracted.
-		constexpr float kFootprintFraction = 0.5f;
-		constexpr float kMinBlobRadius = 0.05f;
-		// A wumpa's bounds sphere (0.74 m, its model being 0.85 m across) gives 0.37 here, a 1 m
-		// crate 0.43.
-		constexpr float kPickupBlobRadius = 0.4f;
-		// Character actors (a kCharacter material: Crash, Aku Aku) go first, so the shader can add
-		// their contact core (CrashLook) to the first `characters` blobs, and they survive the cap.
-		std::size_t characters = 0;
-		for (const bool characterPass: {true, false})
-		{
-			for (const auto& [key, b]: actors)
-			{
-				if (b.character != characterPass)
-				{
-					continue;
-				}
-				const float radius = kFootprintFraction * 0.5f * std::max(b.max.x - b.min.x, b.max.z - b.min.z);
-				if (radius < kMinBlobRadius)
-				{
-					continue;
-				}
-				out.emplace_back(0.5f * (b.min.x + b.max.x), b.min.y, 0.5f * (b.min.z + b.max.z), radius < kPickupBlobRadius ? -radius : radius);
-				characters += characterPass ? 1u : 0u;
-			}
-		}
-		characters = std::min<std::size_t>(characters, kMaxBlobShadows);
-		const auto distSq = [&](const glm::vec4& blob) { return glm::dot(glm::vec3(blob) - eyeWorldPos, glm::vec3(blob) - eyeWorldPos); };
-		if (out.size() > kMaxBlobShadows)
-		{
-			std::nth_element(out.begin() + characters, out.begin() + kMaxBlobShadows, out.end(), [&](const glm::vec4& a, const glm::vec4& b) { return distSq(a) < distSq(b); });
-			out.resize(kMaxBlobShadows);
-		}
-		return characters;
+		return ExtractBlobShadows(sources, eyeWorldPos, kMaxBlobShadows, out);
 	}
 
 	void WorldRenderer::GatherDarknessVolumes(const World& world, const glm::vec3 eyeWorldPos, std::vector<glm::vec4>& out)
 	{
 		AE_PROFILE_ZONE();
 		out.clear();
-		struct Volume
-		{
-			glm::vec4 centreFade;
-			glm::vec4 halfExtentsYaw;
-		};
-		std::vector<Volume> volumes;
+		std::vector<DarknessVolumeSource> sources;
 		auto view = world.GetRegistry().view<const DarknessVolumeComponent, const TransformComponent>();
 		for (auto enttEntity: view)
 		{
@@ -286,25 +223,9 @@ namespace aether
 			{
 				continue;
 			}
-			const glm::mat4& m = view.get<const TransformComponent>(enttEntity).localToWorld;
-			const glm::vec3 halfExtents = 0.5f * glm::vec3(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
-			const float fadeDepth = view.get<const DarknessVolumeComponent>(enttEntity).fadeDepth;
-			if (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f || fadeDepth <= 0.0f)
-			{
-				continue;
-			}
-			// Yaw of the box's local x axis: a y rotation by t takes x to (cos t, 0, -sin t).
-			const float yaw = std::atan2(-m[0].z, m[0].x);
-			volumes.push_back({glm::vec4(glm::vec3(m[3]), fadeDepth), glm::vec4(halfExtents, yaw)});
+			sources.push_back({view.get<const TransformComponent>(enttEntity).localToWorld, view.get<const DarknessVolumeComponent>(enttEntity).fadeDepth});
 		}
-		const auto distSq = [&](const Volume& v) { return glm::dot(glm::vec3(v.centreFade) - eyeWorldPos, glm::vec3(v.centreFade) - eyeWorldPos); };
-		std::sort(volumes.begin(), volumes.end(), [&](const Volume& a, const Volume& b) { return distSq(a) < distSq(b); });
-		volumes.resize(std::min<std::size_t>(volumes.size(), kMaxDarknessVolumes));
-		for (const Volume& v: volumes)
-		{
-			out.push_back(v.centreFade);
-			out.push_back(v.halfExtentsYaw);
-		}
+		ExtractDarknessVolumes(sources, eyeWorldPos, kMaxDarknessVolumes, out);
 	}
 
 } // namespace aether

@@ -88,6 +88,9 @@ namespace aether
 		bool autoDestroyWhenDone = false;     // destroy the entity once no particles remain
 		float emitDuration = 0.0f;            // seconds 'rate' runs after the first tick; 0 = forever
 		std::uint32_t maxParticles = 256;
+		// Zero preserves legacy per-entity randomness; a nonzero seed reproduces
+		// the same effect across native/browser scene entity generations.
+		std::uint32_t seed = 0;
 
 		// ── Per-particle spawn ────────────────────────────────────────────────
 		float lifetimeMin = 0.5f;

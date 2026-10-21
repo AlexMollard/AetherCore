@@ -1,9 +1,11 @@
 #include <doctest/doctest.h>
 
 #include <glm/glm.hpp>
+#include <limits>
 
 #include "particles/ParticleComponents.hpp"
 #include "particles/ParticleSystem.hpp"
+#include "particles/ParticleValidation.hpp"
 #include "material/TextureRegistry.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "scene/Components.hpp"
@@ -11,6 +13,87 @@
 #include "../material/FakeTextureSink.hpp"
 
 using namespace aether;
+
+TEST_CASE("Explicit particle seed reproduces simulation across different entity identities")
+{
+	FakeTextureSink sink;
+	TextureRegistry textures(sink);
+	ParticleSystem particles(textures);
+	World first, second;
+	static_cast<void>(second.Create());
+	const auto a = first.Create();
+	const auto b = second.Create();
+	REQUIRE(a.id != b.id);
+	ParticleEmitterComponent emitter;
+	emitter.seed = 123456u;
+	emitter.emitOnStart = true;
+	emitter.burstCount = 5;
+	emitter.space = ParticleSpace::Billboard3D;
+	emitter.velocityJitter = glm::vec3(4.0f);
+	emitter.spawnJitter = glm::vec3(2.0f);
+	for (auto* world: {&first, &second})
+	{
+		const auto entity = world == &first ? a : b;
+		world->Emplace<TransformComponent>(entity);
+		world->Emplace<ParticleEmitterComponent>(entity, emitter);
+		particles.Update(*world, 1.0f / 60.0f);
+	}
+	const auto& left = first.Get<ParticleEmitterComponent>(a).particles;
+	const auto& right = second.Get<ParticleEmitterComponent>(b).particles;
+	REQUIRE(left.size() == 5);
+	REQUIRE(right.size() == left.size());
+	for (std::size_t i = 0; i < left.size(); ++i)
+	{
+		CHECK(left[i].position3D == right[i].position3D);
+		CHECK(left[i].velocity3D == right[i].velocity3D);
+		CHECK(left[i].lifetime == right[i].lifetime);
+	}
+}
+
+TEST_CASE("Browser particles reject nonfinite spawn loops and excessive capacity before simulation")
+{
+	ParticleEmitterComponent emitter;
+	CHECK(ValidateBrowserParticleEmitter(emitter).has_value());
+	emitter.rate = std::numeric_limits<float>::infinity();
+	CHECK_FALSE(ValidateBrowserParticleEmitter(emitter).has_value());
+	emitter.rate = 0.0f;
+	emitter.pendingBurst = UINT32_MAX;
+	CHECK_FALSE(ValidateBrowserParticleEmitter(emitter).has_value());
+	emitter.pendingBurst = 0;
+	emitter.maxParticles = kWebParticleCapacity + 1;
+	CHECK_FALSE(ValidateBrowserParticleEmitter(emitter).has_value());
+	emitter.maxParticles = 256;
+	emitter.colorKeys = {{0.5f, glm::vec3(1.0f)}, {0.1f, glm::vec3(1.0f)}};
+	CHECK_FALSE(ValidateBrowserParticleEmitter(emitter).has_value());
+	emitter.colorKeys.clear();
+	emitter.particles.emplace_back();
+	emitter.particles.back().position3D.x = std::numeric_limits<float>::quiet_NaN();
+	CHECK_FALSE(ValidateBrowserParticleEmitter(emitter).has_value());
+}
+
+TEST_CASE("Particle retirement callback leaves entity valid for gameplay detach before destruction")
+{
+	FakeTextureSink sink;
+	TextureRegistry textures(sink);
+	ParticleSystem particles(textures);
+	World world;
+	const auto entity = world.Create();
+	world.Emplace<TransformComponent>(entity);
+	ParticleEmitterComponent emitter;
+	emitter.emitOnStart = true;
+	emitter.burstCount = 1;
+	emitter.lifetimeMin = emitter.lifetimeMax = 0.01f;
+	emitter.autoDestroyWhenDone = true;
+	world.Emplace<ParticleEmitterComponent>(entity, emitter);
+	std::vector<Entity> retired;
+	particles.SetRetireCallback([&](Entity value) { retired.push_back(value); });
+	particles.Update(world, 0.02f);
+	REQUIRE(retired.size() == 1);
+	CHECK(retired[0] == entity);
+	CHECK(world.Has<ParticleEmitterComponent>(entity));
+	CHECK(world.Get<ParticleEmitterComponent>(entity).particles.empty());
+	world.Destroy(entity);
+}
 
 namespace
 {
@@ -261,14 +344,15 @@ TEST_CASE("radial shapes spawn on the disc's sphere and fly out along the radius
 	bool sawNegX = false, sawPosX = false;
 	for (const Particle& p: emitter.particles)
 	{
-		CHECK(std::abs(p.position3D.y) < 0.01f);                           // a flat ring, not a ball
+		CHECK(std::abs(p.position3D.y) < 0.01f);                                  // a flat ring, not a ball
 		CHECK(glm::length(p.position3D) == doctest::Approx(1.5f).epsilon(0.01f)); // on the base radius
 		CHECK(glm::length(p.velocity3D) == doctest::Approx(4.0f).epsilon(0.001f));
 		CHECK(glm::dot(glm::normalize(p.position3D), glm::normalize(p.velocity3D)) == doctest::Approx(1.0f).epsilon(0.001f)); // outward
 		sawNegX = sawNegX || p.position3D.x < -0.5f;
 		sawPosX = sawPosX || p.position3D.x > 0.5f;
 	}
-	CHECK((sawNegX && sawPosX)); // +/-180 of yaw covers the whole circle
+	CHECK(sawNegX); // +/-180 of yaw covers the whole circle
+	CHECK(sawPosX);
 
 	// Radial polar 0 is straight up and -84.6 (CRASH_DROP2) lifts off the ground; ImprovedRadial
 	// measures elevation, so 90 is up.

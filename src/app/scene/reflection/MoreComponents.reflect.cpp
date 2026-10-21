@@ -187,6 +187,7 @@ AE_FIELD_NT("emitting", emitting, Bool, "Spawn new particles at the rate above. 
 AE_FIELD_NT("emit_duration", emitDuration, Float, "Seconds the rate stream runs after the first tick; 0 runs until emitting is turned off.")
 AE_FIELD_NT("auto_destroy", autoDestroyWhenDone, Bool, "One-shot effect entities retire themselves once the last particle dies.")
 AE_FIELD_N("max_particles", maxParticles, UInt)
+AE_FIELD_NT("seed", seed, UInt, "A nonzero seed reproduces particle randomness across native and browser runs. Zero keeps legacy per-entity randomness.")
 AE_FIELD_N("lifetime_min", lifetimeMin, Float)
 AE_FIELD_N("lifetime_max", lifetimeMax, Float)
 AE_FIELD_N("speed_min", speedMin, Float)
