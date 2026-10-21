@@ -16,14 +16,25 @@ namespace aether
 
 namespace aether::webgpu
 {
+	struct WebShadowTargets
+	{
+		WGPUTexture color = nullptr, depth = nullptr;
+		WGPUTextureView sample = nullptr;
+		~WebShadowTargets();
+	};
+
 	// Owned by one submitted frame; destruction happens after queue retirement.
 	struct WebMeshFrame
 	{
-		WGPUBuffer uniform = nullptr, instances = nullptr, skin = nullptr;
+		WGPUBuffer uniform = nullptr, instances = nullptr, skin = nullptr, lights = nullptr;
 		WGPUBindGroup bindings = nullptr;
 		std::vector<WGPUBindGroup> materials;
 		WGPUTexture depth = nullptr;
 		WGPUTextureView depthView = nullptr;
+		std::shared_ptr<WebShadowTargets> shadowTargets;
+		WGPUBuffer shadows = nullptr;
+		std::vector<WGPUBuffer> shadowUniforms;
+		std::vector<WGPUBindGroup> shadowBindings;
 		~WebMeshFrame();
 	};
 
@@ -43,7 +54,8 @@ namespace aether::webgpu
 		        const RenderFramePacket& packet,
 		        std::span<const gpu::MeshGpuInstance> instances,
 		        std::span<const WGPUTexture> textures,
-		        std::unique_ptr<WebMeshFrame>& frame);
+		        std::unique_ptr<WebMeshFrame>& frame,
+		        bool hdr = false);
 		void Shutdown();
 		std::string error;
 
@@ -57,10 +69,15 @@ namespace aether::webgpu
 		};
 
 		std::vector<MeshSlot> m_meshes;
-		std::array<WGPURenderPipeline, 9> m_pipelines{};
+		std::array<WGPURenderPipeline, 18> m_pipelines{};
+		WGPURenderPipeline m_shadow_pipeline = nullptr;
 		WGPUBindGroupLayout m_frame_layout = nullptr, m_material_layout = nullptr;
+		WGPUBindGroupLayout m_shadow_frame_layout = nullptr;
 		WGPUTexture m_white = nullptr;
 		WGPUSampler m_sampler = nullptr;
 		std::size_t m_bytes = 0;
+		unsigned m_max_texture_dimension = 0;
+		std::shared_ptr<WebShadowTargets> m_shadow_targets;
+		std::shared_ptr<WebShadowTargets> m_shadow_fallback;
 	};
 } // namespace aether::webgpu

@@ -63,7 +63,13 @@ float4 fragmentMain(VertexOutput input) : SV_Target
         float2 size = float2(width,height);
         uv = (floor(uv * size) + 0.5) / size;
     }
-    float4 color = spriteTexture.Sample(spriteSampler,uv) * input.color;
+    float4 texel = spriteTexture.Sample(spriteSampler,uv);
+    // Legacy previews store encoded textures. HDR scenes use the native sRGB texture decode.
+    if (frame.extent.z > 0 && (input.flags & 32) == 0)
+    {
+        texel.rgb = select(texel.rgb <= float3(0.04045), texel.rgb / 12.92, pow((texel.rgb + 0.055) / 1.055, float3(2.4)));
+    }
+    float4 color = texel * input.color;
     if ((input.flags & 8) != 0 && color.a < 0.5) { discard; }
     return color;
 }

@@ -266,7 +266,7 @@ def publish(request, directory, output=None):
         if data['language'] == 'rust':
             names += ['AetherGame.js', 'AetherGame.wasm', 'AetherGame.data']
         else:
-            names += ['browser-main.mjs', 'sprite.wgsl', 'mesh.wgsl']
+            names += ['browser-main.mjs', 'sprite.wgsl', 'mesh.wgsl', 'hdr.wgsl', 'light2d.wgsl', 'occluder2d.wgsl']
             shutil.copytree(build / 'web/_framework', stage / '_framework')
             managed = json.loads((build / 'web-managed-build.json').read_text(encoding='utf-8'))
             pins = {key: value for key, value in pins.items() if not key.startswith('rust') and key != 'panicStrategy'}
@@ -278,7 +278,7 @@ def publish(request, directory, output=None):
             shutil.copy2(build / 'web' / name, stage / name)
         identifier = data['settings'].get('publish', {}).get('web', {}).get('id', product)
         config = dict(schemaVersion=1, id=identifier, name=product, language=data['language'], startupScene=data['startup'], scenes=data['scenes'], profile=PROFILE,
-            paths=data['settings'].get('paths', {}), instructions=data['settings'].get('publish', {}).get('web', {}).get('instructions', 'Select Play to use the keyboard.'))
+            paths=data['settings'].get('paths', {}), graphics=data['settings'].get('graphics', {}), instructions=data['settings'].get('publish', {}).get('web', {}).get('instructions', 'Select Play to use the keyboard.'))
         (stage / 'project.js').write_text('globalThis.aetherProject=' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
         revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
         files = [dict(path=path.relative_to(stage).as_posix(), sizeBytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in sorted(stage.rglob('*')) if path.is_file()]

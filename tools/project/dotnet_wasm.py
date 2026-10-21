@@ -78,7 +78,7 @@ def publish(project, build):
             target = web / source.relative_to(output / 'wwwroot')
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
-    for shader in ('sprite', 'mesh'):
+    for shader in ('sprite', 'mesh', 'hdr', 'light2d', 'occluder2d'):
         shutil.copy2(build / ('web-assets/' + shader + '.wgsl'), web / (shader + '.wgsl'))
     sys.path.insert(0, str(ROOT / 'tools/web-runtime'))
     import audit

@@ -1,10 +1,13 @@
 #include "WebGpuDevice.hpp"
 #include "WebMeshRenderer.hpp"
+#include "WebHdrRenderer.hpp"
+#include "WebLight2DRenderer.hpp"
 
 #include <array>
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <vector>
 #include <TextureMips.hpp>
 #include <emscripten.h>
@@ -51,11 +54,13 @@ namespace aether::webgpu
 		WGPUDevice device = nullptr;
 		WGPUQueue queue = nullptr;
 		WGPUSurface surface = nullptr;
-		std::array<WGPURenderPipeline, 4> pipelines{};
+		std::array<WGPURenderPipeline, 8> pipelines{};
 		WGPUSampler sampler = nullptr;
 		std::vector<WGPUTexture> textures;
 		std::size_t textureBytes = 0;
 		WebMeshRenderer meshes;
+		WebHdrRenderer hdr;
+		WebLight2DRenderer lights2D;
 		unsigned width = 0, height = 0;
 		bool released = false;
 		unsigned callbacks = 0;
@@ -78,6 +83,8 @@ namespace aether::webgpu
 			{
 				released = true;
 				meshes.Shutdown();
+				hdr.Shutdown();
+				lights2D.Shutdown();
 				for (auto texture: textures)
 				{
 					if (texture)
@@ -170,8 +177,9 @@ namespace aether::webgpu
 			WGPUShaderModuleDescriptor shaderDesc = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
 			shaderDesc.nextInChain = &source.chain;
 			auto shader = wgpuDeviceCreateShaderModule(device, &shaderDesc);
-			for (unsigned blend = 0; blend < 4; ++blend)
+			for (unsigned variant = 0; variant < 8; ++variant)
 			{
+				const auto blend = variant % 4;
 				WGPUBlendState blending = WGPU_BLEND_STATE_INIT;
 				blending.color.operation = WGPUBlendOperation_Add;
 				blending.alpha.operation = WGPUBlendOperation_Add;
@@ -180,7 +188,7 @@ namespace aether::webgpu
 				blending.alpha.srcFactor = WGPUBlendFactor_One;
 				blending.alpha.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
 				WGPUColorTargetState target = WGPU_COLOR_TARGET_STATE_INIT;
-				target.format = WGPUTextureFormat_RGBA8Unorm;
+				target.format = variant < 4 ? WGPUTextureFormat_RGBA8Unorm : WGPUTextureFormat_RGBA16Float;
 				target.blend = blend == 3 ? nullptr : &blending;
 				WGPUFragmentState fragment = WGPU_FRAGMENT_STATE_INIT;
 				fragment.module = shader;
@@ -192,12 +200,20 @@ namespace aether::webgpu
 				pipeline.vertex.entryPoint = Text("vertexMain");
 				pipeline.fragment = &fragment;
 				pipeline.primitive.topology = WGPUPrimitiveTopology_TriangleList;
-				pipelines[blend] = wgpuDeviceCreateRenderPipeline(device, &pipeline);
+				pipelines[variant] = wgpuDeviceCreateRenderPipeline(device, &pipeline);
 			}
 			wgpuShaderModuleRelease(shader);
 			if (!meshes.Initialize(device))
 			{
 				Fail("WEBGPU_MESH_SHADER", Text(meshes.error.c_str()));
+			}
+			if (!hdr.Initialize(device))
+			{
+				Fail("WEBGPU_HDR_SHADER", Text(hdr.error.c_str()));
+			}
+			if (!lights2D.Initialize(device))
+			{
+				Fail("WEBGPU_LIGHT2D_SHADER", Text(lights2D.error.c_str()));
 			}
 			WGPUSamplerDescriptor sample = WGPU_SAMPLER_DESCRIPTOR_INIT;
 			sample.magFilter = WGPUFilterMode_Linear;
@@ -250,11 +266,15 @@ namespace aether::webgpu
 			WGPUBuffer uniform = nullptr, instances = nullptr, readback = nullptr;
 			std::vector<WGPUBindGroup> bindings;
 			std::unique_ptr<WebMeshFrame> meshes;
+			std::unique_ptr<WebHdrFrame> hdr;
+			std::unique_ptr<WebLight2DFrame> lights2D;
 			unsigned width, height, row;
 
 			void Finish()
 			{
 				meshes.reset();
+				lights2D.reset();
+				hdr.reset();
 				for (auto binding: bindings)
 				{
 					wgpuBindGroupRelease(binding);
@@ -547,6 +567,25 @@ namespace aether::webgpu
 			}
 		}
 		std::vector<gpu::MeshGpuInstance> meshInstances;
+		std::optional<gpu::HdrPlan> hdrPlan;
+		bool light2DActive = false;
+		if (packet.renderLightingEnabled)
+		{
+			auto prepared = self.hdr.Prepare(packet, self.width, self.height);
+			if (!prepared)
+			{
+				self.Fail("WEBGPU_HDR", Text(prepared.error().c_str()));
+				return false;
+			}
+			hdrPlan = *prepared;
+			auto lights = self.lights2D.Prepare(packet, self.textures, self.width, self.height);
+			if (!lights)
+			{
+				self.Fail("WEBGPU_LIGHT2D", Text(lights.error().c_str()));
+				return false;
+			}
+			light2DActive = *lights;
+		}
 		if (!packet.render3D.meshes.empty())
 		{
 			auto meshPlan = self.meshes.Prepare(packet, self.textures);
@@ -576,7 +615,7 @@ namespace aether::webgpu
 		        packet.render3D.meshes.size());
 		auto* frame = new Impl::Frame{.owner = &self, .width = self.width, .height = self.height, .row = ((self.width * 4 + 255) / 256) * 256};
 		const auto clip = glm::transpose(packet.proj * packet.view);
-		const std::array<glm::vec4, 5> constants{clip[0], clip[1], clip[2], clip[3], glm::vec4(self.width, self.height, 0, 0)};
+		const std::array<glm::vec4, 5> constants{clip[0], clip[1], clip[2], clip[3], glm::vec4(self.width, self.height, hdrPlan ? 1 : 0, 0)};
 		frame->uniform = self.Buffer(WGPUBufferUsage_Uniform, constants.data(), sizeof(constants));
 		frame->instances = self.Buffer(WGPUBufferUsage_Storage, plan->instances.empty() ? nullptr : plan->instances.data(), std::max(size_t(128), plan->instances.size() * 128));
 		WGPUSurfaceTexture current = WGPU_SURFACE_TEXTURE_INIT;
@@ -588,23 +627,46 @@ namespace aether::webgpu
 			return false;
 		}
 		auto view = wgpuTextureCreateView(current.texture, nullptr);
+		if (hdrPlan)
+		{
+			auto allocated = self.hdr.Allocate(self.device, self.queue, *hdrPlan);
+			if (!allocated)
+			{
+				self.Fail("WEBGPU_HDR", Text(allocated.error().c_str()));
+				wgpuTextureViewRelease(view);
+				wgpuTextureRelease(current.texture);
+				frame->Finish();
+				return false;
+			}
+			frame->hdr = std::move(*allocated);
+		}
+		const auto sceneView = frame->hdr ? frame->hdr->view : view;
 		WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
-		color.view = view;
-		color.loadOp = packet.render3D.meshes.empty() ? WGPULoadOp_Clear : WGPULoadOp_Load;
+		color.view = sceneView;
+		color.loadOp = hdrPlan || !packet.render3D.meshes.empty() ? WGPULoadOp_Load : WGPULoadOp_Clear;
 		color.storeOp = WGPUStoreOp_Store;
 		color.clearValue = {0, 0, 0, 1};
 		WGPURenderPassDescriptor passDesc = WGPU_RENDER_PASS_DESCRIPTOR_INIT;
 		passDesc.colorAttachmentCount = 1;
 		passDesc.colorAttachments = &color;
 		auto encoder = wgpuDeviceCreateCommandEncoder(self.device, nullptr);
+		if (frame->hdr)
+		{
+			self.hdr.EncodeBackground(encoder, *frame->hdr);
+		}
 		if (!packet.render3D.meshes.empty())
 		{
-			self.meshes.Encode(self.device, self.queue, encoder, view, self.width, self.height, packet, meshInstances, self.textures, frame->meshes);
+			self.meshes.Encode(self.device, self.queue, encoder, sceneView, self.width, self.height, packet, meshInstances, self.textures, frame->meshes, hdrPlan.has_value());
 		}
-		auto pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
+		const auto drawSprites = [&](WGPURenderPassEncoder pass, bool displaySpace)
+		{
 		for (const auto& batch: plan->batches)
 		{
-			auto pipeline = self.pipelines[batch.blend];
+			if (frame->hdr && batch.displaySpace != displaySpace)
+			{
+				continue;
+			}
+			auto pipeline = self.pipelines[batch.blend + (frame->hdr && !displaySpace ? 4 : 0)];
 			auto textureView = wgpuTextureCreateView(self.textures[batch.texture], nullptr);
 			WGPUBindGroupEntry entries[4] = {};
 			entries[0].binding = 0;
@@ -630,8 +692,25 @@ namespace aether::webgpu
 			wgpuRenderPassEncoderSetBindGroup(pass, 0, group, 0, nullptr);
 			wgpuRenderPassEncoderDraw(pass, 6, batch.count, 0, batch.first);
 		}
+		};
+		auto pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
+		drawSprites(pass, false);
 		wgpuRenderPassEncoderEnd(pass);
 		wgpuRenderPassEncoderRelease(pass);
+		if (frame->hdr)
+		{
+			if (light2DActive)
+			{
+				self.lights2D.Encode(self.device, self.queue, encoder, sceneView, self.width, self.height, packet, self.textures, frame->lights2D);
+			}
+			self.hdr.EncodeComposite(encoder, view, *frame->hdr);
+			color.view = view;
+			color.loadOp = WGPULoadOp_Load;
+			pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
+			drawSprites(pass, true);
+			wgpuRenderPassEncoderEnd(pass);
+			wgpuRenderPassEncoderRelease(pass);
+		}
 		if (capture)
 		{
 			frame->readback = self.Buffer(WGPUBufferUsage_MapRead, nullptr, frame->row * frame->height);

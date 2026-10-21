@@ -32,6 +32,8 @@ set(AETHER_WEB_ENGINE_SOURCES
     platform/web/WebFileSystem.cpp
     webgpu/WebGpuDevice.cpp
     webgpu/WebMeshRenderer.cpp
+	webgpu/WebHdrRenderer.cpp
+	webgpu/WebLight2DRenderer.cpp
     mesh/PrimitiveMeshData.cpp
     mesh/MeshGen.cpp
 )

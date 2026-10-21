@@ -1,7 +1,7 @@
 import {dotnet} from './_framework/dotnet.js';
 
 try {
-    const shaders = await Promise.all(['sprite', 'mesh'].map(async name => {
+    const shaders = await Promise.all(['sprite', 'mesh', 'hdr', 'light2d', 'occluder2d'].map(async name => {
         const response = await fetch(new URL(name + '.wgsl', import.meta.url));
         if (!response.ok) throw new Error('Browser ' + name + ' shader could not be loaded');
         return [name, new Uint8Array(await response.arrayBuffer())];

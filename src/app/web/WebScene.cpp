@@ -1,6 +1,8 @@
 #include "WebScene.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 #include <emscripten.h>
 #include "utils/Utf8.hpp"
 #include <glm/gtc/matrix_transform.hpp>
@@ -15,6 +17,8 @@
 #include "ui/UiLayoutSystem.hpp"
 #include "WebAssetFormat.hpp"
 #include "scene/SceneDocumentExpansion.hpp"
+#include "passes/TonemapDefs.hpp"
+#include "scene/LightComponents.hpp"
 
 namespace aether::app::web
 {
@@ -86,8 +90,8 @@ namespace aether::app::web
 
 	Expected<std::vector<Entity>> WebScene::Apply(const scene::SceneDescription& description)
 	{
-		// This profile supports portable components only. Never silently discard a 3D record.
-		if (description.version > scene::kSceneFormatVersion || description.entities.size() > 65536 || !description.prefabInstances.empty() || !description.includes.empty() || !description.lights.empty() || description.environment)
+		// Never silently discard a scene record that belongs to a later browser milestone.
+		if (description.version > scene::kSceneFormatVersion || description.entities.size() > 65536 || !description.prefabInstances.empty() || !description.includes.empty())
 		{
 			AE_UNEXPECTED(AetherError::Asset("Unsupported scene version, size or feature in webgpu-2d-v1"));
 		}
@@ -100,6 +104,7 @@ namespace aether::app::web
 			for (const auto& generic: record.reflected)
 			{
 				if (generic.type != "Rigid Body 2D" && generic.type != "Collider 2D" && generic.type != "Tile Map"
+				        && generic.type != "Point Light" && generic.type != "Spot Light" && generic.type != "Sky" && generic.type != "Light 2D Settings"
 				        && (generic.type != "UI Canvas" && generic.type != "UI Rect" && generic.type != "UI Text" && generic.type != "UI Image" && generic.type != "UI Selectable" && generic.type != "UI Slider" && generic.type != "UI Toggle"
 				                && generic.type != "UI Button" && generic.type != "UI Progress Bar"))
 				{
@@ -264,6 +269,26 @@ namespace aether::app::web
 				world.Emplace<Joint2DComponent>(created[i], joint);
 			}
 		}
+		for (const auto& light: description.lights)
+		{
+			if (light.isSpot)
+			{
+				const auto entity = world.Create();
+				world.Emplace<NameComponent>(entity, NameComponent{.name = "Spot Light"});
+				const float directionLength = glm::dot(light.direction, light.direction);
+				if (!std::isfinite(directionLength) || directionLength < 1e-8f)
+				{
+					AE_UNEXPECTED(AetherError::Asset("Invalid browser legacy spot-light direction"));
+				}
+				world.Emplace<TransformComponent>(entity, TransformComponent{.localToWorld = ecs::LightAimMatrix(light.position, light.direction)});
+				world.Emplace<SpotLightComponent>(entity, SpotLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius,
+				        .innerAngleRad = light.innerAngleRad, .outerAngleRad = light.outerAngleRad, .castsShadow = light.castsShadow});
+			}
+			else
+			{
+				ecs::CreatePointLightEntity(world, light.position, PointLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .castsShadow = light.castsShadow});
+			}
+		}
 		return created;
 	}
 
@@ -300,6 +325,8 @@ namespace aether::app::web
 		world.SetSceneFeatures(description->features);
 		m_tile_system.InvalidateAll();
 		m_models.ClearEntities();
+		m_environment = description->environment;
+		m_light_time = 0.0f;
 		AE_TRY(created, Apply(*description));
 		std::vector<WebScriptRecord> scripts;
 		for (size_t i = 0; i < created->size(); ++i)
@@ -381,6 +408,7 @@ namespace aether::app::web
 
 	void WebScene::Tick(float dt)
 	{
+		m_light_time += dt;
 		for (const auto raw: world.View<SkinnedMeshComponent>())
 		{
 			const auto entity = World::FromEntt(raw);
@@ -392,9 +420,150 @@ namespace aether::app::web
 		}
 	}
 
+	Expected<void> WebScene::ExtractLighting(RenderFramePacket& packet)
+	{
+		// RenderFramePacket's neutral construction defaults are not the native renderer's
+		// startup environment. Match Renderer for authored lights without an environment block.
+		packet.sunDirectionIntensity = glm::vec4(std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f);
+		packet.sunColor = glm::vec4(1.0f, 0.96f, 0.90f, 1.0f);
+		packet.ambientColor = glm::vec4(0.03f, 0.04f, 0.06f, 1.0f);
+		packet.skyHorizonColor = glm::vec4(0.34f, 0.52f, 0.82f, 1.0f);
+		packet.skyZenithColor = glm::vec4(0.08f, 0.19f, 0.45f, 1.0f);
+		packet.skyVoidColor = glm::vec4(0.001f, 0.002f, 0.005f, packet.skyVoidColor.w);
+		if (m_environment)
+		{
+			const auto& env = *m_environment;
+			if (env.cloudCoverage != 0.0f)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Browser clouds require the post-effects milestone"));
+			}
+			const float length = glm::dot(env.sunDirection, env.sunDirection);
+			const glm::vec3 direction = length < 1e-8f ? glm::vec3(std::numbers::egamma_v<float>) : glm::normalize(env.sunDirection);
+			packet.sunDirectionIntensity = glm::vec4(direction, std::max(env.sunIntensity, 0.0f));
+			packet.ambientColor = glm::vec4(glm::max(env.ambient, glm::vec3(0.0f)), 1.0f);
+			packet.sunColor = glm::vec4(glm::max(env.sunColor, glm::vec3(0.0f)), 1.0f);
+			packet.skyHorizonColor = glm::vec4(glm::max(env.skyHorizon, glm::vec3(0.0f)), 1.0f);
+			packet.skyZenithColor = glm::vec4(glm::max(env.skyZenith, glm::vec3(0.0f)), 1.0f);
+			packet.skyVoidColor = glm::vec4(glm::max(env.skyVoid, glm::vec3(0.0f)), packet.skyVoidColor.w);
+			packet.objectAmbient = glm::vec4(env.objectAmbient, 1.0f);
+			packet.objectLight0Direction = glm::vec4(env.objectLight0Direction, 0.0f);
+			packet.objectLight0Color = glm::vec4(env.objectLight0Color, 0.0f);
+			packet.objectLight1Direction = glm::vec4(env.objectLight1Direction, 0.0f);
+			packet.objectLight1Color = glm::vec4(env.objectLight1Color, 0.0f);
+			packet.renderLightingEnabled = true;
+		}
+		for (const auto raw: world.View<SkyComponent>())
+		{
+			const auto entity = World::FromEntt(raw);
+			if (world.Has<DisabledComponent>(entity) || ecs::HasDisabledAncestor(world, entity))
+			{
+				continue;
+			}
+			const auto& sky = world.Get<SkyComponent>(entity);
+			if (sky.fogDensity != 0.0f || sky.cloudCoverage != 0.0f || sky.physicalSky || sky.volumetricFog)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Browser fog, clouds and physical atmosphere require the post-effects milestone"));
+			}
+			packet.skyHorizonColor = glm::vec4(glm::max(sky.horizonColor, glm::vec3(0.0f)), 1.0f);
+			packet.skyZenithColor = glm::vec4(glm::max(sky.zenithColor, glm::vec3(0.0f)), 1.0f);
+			packet.skyVoidColor = glm::vec4(glm::max(sky.groundColor, glm::vec3(0.0f)), packet.skyVoidColor.w);
+			packet.ambientColor = glm::vec4(glm::max(sky.ambientColor, glm::vec3(0.0f)), 1.0f);
+			packet.renderLightingEnabled = true;
+			break;
+		}
+		packet.light2DAmbient = packet.ambientColor;
+		for (const auto raw: world.View<Light2DSettingsComponent>())
+		{
+			const auto entity = World::FromEntt(raw);
+			if (world.Has<DisabledComponent>(entity) || ecs::HasDisabledAncestor(world, entity))
+			{
+				continue;
+			}
+			const auto& settings = world.Get<Light2DSettingsComponent>(entity);
+			if (settings.shaftStrength != 0.0f)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Browser 2D light shafts require the post-effects milestone"));
+			}
+			packet.light2DAmbient = glm::vec4(settings.ambientColor * settings.ambientIntensity, 1.0f);
+			packet.light2DShadowParams = glm::vec4(settings.shadowStrength, settings.shadowSoftness, 0.0f, settings.shaftNoise);
+			packet.light2DHasSettings = true;
+			packet.renderLightingEnabled = true;
+			break;
+		}
+		// Native LightSystem orders by entity before submission, including its per-entity flicker seed.
+		const auto flicker = [this](float amount, float speed, std::uint32_t seed)
+		{
+			if (amount <= 0.0f)
+			{
+				return 1.0f;
+			}
+			const float phase = static_cast<float>(seed & 0xffffu) * 0.001f;
+			const float time = m_light_time * speed;
+			const float noise = std::clamp(0.5f + 0.35f * std::sin(time * 0.7f + phase * 6.3f) + 0.25f * std::sin(time * 1.73f + phase * 11.1f + 1.1f), 0.0f, 1.0f);
+			return 1.0f - amount * (1.0f - noise);
+		};
+		std::vector<entt::entity> lights;
+		for (const auto raw: world.View<PointLightComponent, TransformComponent>())
+		{
+			const auto entity = World::FromEntt(raw);
+			if (!world.Has<DisabledComponent>(entity) && !ecs::HasDisabledAncestor(world, entity))
+			{
+				lights.push_back(raw);
+			}
+		}
+		std::ranges::sort(lights);
+		for (const auto raw: lights)
+		{
+			const auto entity = World::FromEntt(raw);
+			const auto& light = world.Get<PointLightComponent>(entity);
+			packet.pointLights.push_back(Renderer::PointLight{.position = glm::vec3(world.Get<TransformComponent>(entity).localToWorld[3]),
+			        .radius = std::max(light.radius, 0.01f), .color = glm::max(light.color, glm::vec3(0.0f)),
+			        .intensity = std::max(light.intensity * flicker(light.flicker, light.flickerSpeed, static_cast<std::uint32_t>(raw)), 0.0f),
+			        .sourceRadius = light.sourceRadius, .castsShadow = light.castsShadow});
+		}
+		lights.clear();
+		for (const auto raw: world.View<SpotLightComponent, TransformComponent>())
+		{
+			const auto entity = World::FromEntt(raw);
+			if (!world.Has<DisabledComponent>(entity) && !ecs::HasDisabledAncestor(world, entity))
+			{
+				lights.push_back(raw);
+			}
+		}
+		std::ranges::sort(lights);
+		for (const auto raw: lights)
+		{
+			const auto entity = World::FromEntt(raw);
+			const auto& light = world.Get<SpotLightComponent>(entity);
+			const auto forward = -glm::vec3(world.Get<TransformComponent>(entity).localToWorld[2]);
+			const float innerAngle = glm::clamp(light.innerAngleRad, 0.01f, 1.54f);
+			packet.spotLights.push_back(Renderer::SpotLight{.position = glm::vec3(world.Get<TransformComponent>(entity).localToWorld[3]),
+			        .radius = std::max(light.radius, 0.01f), .direction = glm::dot(forward, forward) > 1e-8f ? glm::normalize(forward) : glm::vec3(0.0f, -1.0f, 0.0f),
+			        .innerAngleRad = innerAngle, .color = glm::max(light.color, glm::vec3(0.0f)),
+			        .intensity = std::max(light.intensity * flicker(light.flicker, light.flickerSpeed, static_cast<std::uint32_t>(raw)), 0.0f),
+			        .outerAngleRad = glm::clamp(light.outerAngleRad, innerAngle + 0.01f, 1.55f), .sourceRadius = light.sourceRadius, .castsShadow = light.castsShadow});
+		}
+		packet.renderLightingEnabled |= !packet.pointLights.empty() || !packet.spotLights.empty();
+		packet.directionalShadowEnabled = packet.renderLightingEnabled && packet.sunDirectionIntensity.w > 0.001f;
+		return {};
+	}
+
 	Expected<void> WebScene::Extract(RenderFramePacket& packet, unsigned width, unsigned height, float elapsed)
 	{
+		// These are the project's native graphics keys, carried through the export manifest.
+		packet.tonemapExposure = static_cast<float>(EM_ASM_DOUBLE({ return globalThis.aetherProject?.graphics?.exposure ?? 1; }));
+		const int tonemapLength = EM_ASM_INT({ return lengthBytesUTF8(globalThis.aetherProject?.graphics?.tonemap || 'ACES Filmic'); });
+		if (tonemapLength < 1 || tonemapLength > 128)
+		{
+			AE_UNEXPECTED(AetherError::Asset("Invalid browser tonemap setting"));
+		}
+		std::string tonemap(tonemapLength, '\0');
+		EM_ASM({ stringToUTF8(globalThis.aetherProject?.graphics?.tonemap || 'ACES Filmic', $0, $1); }, tonemap.data(), tonemap.size() + 1);
+		packet.tonemapMode = static_cast<std::uint32_t>(TonemapModeFromName(tonemap));
 		packet.elapsedTime = elapsed;
+		packet.sceneFeatures = world.GetSceneFeatures();
+		packet.renderExtent = {width, height};
+		packet.uiExtent = {width, height};
 		packet.hasCameraData = true;
 		packet.view = glm::mat4(1);
 		packet.proj = glm::mat4(1);
@@ -402,6 +571,10 @@ namespace aether::app::web
 		{
 			const auto& camera = world.GetRegistry().get<CameraComponent>(entity);
 			const auto& transform = world.GetRegistry().get<TransformComponent>(entity);
+			if (world.Has<DisabledComponent>(World::FromEntt(entity)) || ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
+			{
+				continue;
+			}
 			const float halfHeight = camera.orthographicHeight * 0.5f;
 			const float halfWidth = halfHeight * float(width) / std::max(height, 1u);
 			if (camera.nearPlane <= 0 || camera.farPlane <= camera.nearPlane || camera.fovDegrees <= 0 || camera.fovDegrees >= 180 || camera.orthographicHeight <= 0)
@@ -412,9 +585,38 @@ namespace aether::app::web
 			        ? glm::orthoRH_ZO(-halfWidth, halfWidth, -halfHeight, halfHeight, camera.nearPlane, camera.farPlane)
 			        : glm::perspectiveRH_ZO(glm::radians(camera.fovDegrees), float(width) / std::max(height, 1u), camera.nearPlane, camera.farPlane);
 			packet.view = glm::inverse(transform.localToWorld);
+			packet.cameraWorldPos = glm::vec4(glm::vec3(transform.localToWorld[3]), 1.0f);
+			packet.cameraNearPlane = camera.nearPlane;
+			if (camera.depthOfField)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Browser depth of field requires the post-effects milestone"));
+			}
+			packet.backgroundMode = static_cast<std::uint32_t>(camera.background);
+			packet.backgroundAngleRadians = glm::radians(camera.gradientAngleDegrees);
+			packet.skyVoidColor.w = camera.background == CameraBackground::SkyGradient ? 1.0f : 0.0f;
+			if (camera.background == CameraBackground::SolidColour)
+			{
+				packet.backgroundStopCount = 1;
+				packet.backgroundStops[0] = glm::vec4(camera.clearColor, 0.0f);
+				packet.renderLightingEnabled = true;
+			}
+			else if (camera.background == CameraBackground::Gradient)
+			{
+				if (camera.gradientStops.size() < 2 || camera.gradientStops.size() > RenderFramePacket::kMaxBackgroundStops)
+				{
+					AE_UNEXPECTED(AetherError::Asset("Browser gradient requires between two and eight stops"));
+				}
+				packet.backgroundStopCount = static_cast<std::uint32_t>(camera.gradientStops.size());
+				for (std::uint32_t i = 0; i < packet.backgroundStopCount; ++i)
+				{
+					packet.backgroundStops[i] = glm::vec4(camera.gradientStops[i].colour, camera.gradientStops[i].position);
+				}
+				packet.renderLightingEnabled = true;
+			}
 			break;
 		}
 		packet.proj[1][1] *= -1;
+		AE_TRY_VOID(ExtractLighting(packet));
 		m_sprite_system.Extract(world, packet.render2D);
 		AE_TRY_VOID(m_models.Extract(world, packet));
 		const auto beforeTiles = packet.render2D.sprites.size();

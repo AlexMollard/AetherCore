@@ -68,6 +68,9 @@ namespace aether::app::web
 		SpriteSystem m_sprite_system;
 		TileMapSystem m_tile_system;
 		webgpu::WebGpuDevice& m_graphics;
+		std::optional<scene::EnvironmentRecord> m_environment;
+		float m_light_time = 0.0f;
+		Expected<void> ExtractLighting(RenderFramePacket& packet);
 		std::array<float, 256> m_advances{};
 		bool m_font_ready = false;
 		std::unordered_map<std::string, TextureHandle> m_ui_textures;

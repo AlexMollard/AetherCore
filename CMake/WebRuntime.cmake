@@ -113,14 +113,21 @@ add_custom_command(OUTPUT "${_assets}/reference.pak"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/prefabs/ReferencePickup.prefab.toml"
     VERBATIM)
 endif()
-foreach(_shader IN ITEMS sprite mesh)
+file(GLOB_RECURSE _shared_shader_includes CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/include/*.slangh")
+foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d)
+	set(_shader_entries -entry vertexMain -entry fragmentMain)
+	if(_shader STREQUAL "mesh")
+		list(APPEND _shader_entries -entry shadowMain)
+	elseif(_shader STREQUAL "hdr")
+		set(_shader_entries -entry vertexMain -entry backgroundMain -entry compositeMain)
+	endif()
     add_custom_command(OUTPUT "${_assets}/${_shader}.wgsl"
         COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang"
-            -target wgsl -entry vertexMain -entry fragmentMain -o "${_assets}/${_shader}.wgsl"
-        DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang"
+            -target wgsl ${_shader_entries} -o "${_assets}/${_shader}.wgsl"
+        DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang" ${_shared_shader_includes}
         VERBATIM)
 endforeach()
-add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl")
+add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl" "${_assets}/hdr.wgsl" "${_assets}/light2d.wgsl" "${_assets}/occluder2d.wgsl")
 if(NOT AETHER_WEB_PROJECT)
     add_custom_target(WebFixtureAssets DEPENDS "${_assets}/reference.pak")
     add_dependencies(WebAssets WebFixtureAssets)
@@ -163,7 +170,7 @@ if(TARGET WebManagedRuntime)
     add_dependencies(WebManagedRuntime WebAssets WebGameAssets WebEngineAssets)
 endif()
 if(NOT AETHERCORE_WEB_MANAGED)
-foreach(_shader IN ITEMS sprite mesh)
+foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d)
     set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/${_shader}.wgsl")
     target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/${_shader}.wgsl@/assets/${_shader}.wgsl")
 endforeach()

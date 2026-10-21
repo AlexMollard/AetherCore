@@ -69,6 +69,10 @@ namespace aether
 		// where the UI is composited into the scene texture instead.
 		gpu::Extent2D uiExtent;
 		bool hasCameraData = false;
+		// Portable scene lighting is explicitly enabled; legacy unlit browser scenes retain their output.
+		bool renderLightingEnabled = false;
+		std::uint32_t tonemapMode = 1;
+		float tonemapExposure = 1.0f;
 		SceneFeatureFlags sceneFeatures = DefaultSceneFeatures(SceneKind::Scene3D);
 
 		// True when the main render queue received at least one 3D mesh draw this frame.
