@@ -260,8 +260,28 @@ class _OwnedProcess:
 
 def _snapshot(job_id, directory):
     report = json.loads((directory / 'report.json').read_text(encoding='utf-8'))
-    return dict(jobId=job_id, report=report, reportPath=str(directory / 'report.json'),
-                cancellationRequested=(directory / 'cancel').exists())
+    result = dict(jobId=job_id, report=report, reportPath=str(directory / 'report.json'),
+                  cancellationRequested=(directory / 'cancel').exists())
+    inventory_path = directory / 'project-inspection.json'
+    if report['status'] in ('passed', 'failed', 'cancelled') and inventory_path.is_file():
+        try:
+            request = json.loads((directory / 'request.json').read_text(encoding='utf-8'))
+            # Never follow arbitrary worker artifact paths or expose partial writes.
+            if request['operation'] == 'inspect' and any(
+                    Path(item['path']) == inventory_path for item in report.get('artifacts', [])):
+                with inventory_path.open('rb') as stream:
+                    data = stream.read(8 * 1024 * 1024 + 1)
+                if len(data) > 8 * 1024 * 1024:
+                    raise ValueError('inspection exceeds 8 MiB')
+                inventory = json.loads(data.decode('utf-8'))
+                if not isinstance(inventory, dict) or type(inventory.get('schemaVersion')) is not int or inventory['schemaVersion'] != 1 or \
+                        not isinstance(inventory.get('project'), str) or \
+                        Path(inventory['project']).resolve() != Path(request['project']).resolve():
+                    raise ValueError('inspection version or project identity disagrees')
+                result['inspection'] = inventory
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            result['inspectionError'] = str(exc)
+    return result
 
 
 def status_job(job_id, *, repo=None):

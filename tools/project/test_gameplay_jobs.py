@@ -47,6 +47,46 @@ sys.exit(9 if mode == 'contradiction' else code)
 
 
 class GameplayJobTests(unittest.TestCase):
+    def test_inspection_snapshot_exposes_only_current_bounded_inventory(self):
+        directory = self.repo / 'snapshot'
+        directory.mkdir()
+        report = dict(status='passed', phase='inspect', artifacts=[dict(path=str(directory / 'project-inspection.json'))])
+        request = dict(operation='inspect', project=str(self.repo))
+        inventory = dict(schemaVersion=1, project=str(self.repo), language='rust')
+        jobs._atomic_json(directory / 'request.json', request)
+        jobs._atomic_json(directory / 'report.json', report)
+        jobs._atomic_json(directory / 'project-inspection.json', inventory)
+        self.assertEqual(jobs._snapshot('id', directory)['inspection'], inventory)
+        for status, phase in (('cancelled', 'cancelled'), ('failed', 'timeout')):
+            report.update(status=status, phase=phase)
+            jobs._atomic_json(directory / 'report.json', report)
+            self.assertEqual(jobs._snapshot('id', directory)['inspection'], inventory)
+        report.update(status='passed', phase='inspect')
+        jobs._atomic_json(directory / 'report.json', report)
+        inventory['project'] = str(self.repo / 'another-project')
+        jobs._atomic_json(directory / 'project-inspection.json', inventory)
+        self.assertIn('inspectionError', jobs._snapshot('id', directory))
+        (directory / 'project-inspection.json').write_text('x' * (8 * 1024 * 1024 + 1), encoding='utf-8')
+        self.assertIn('inspectionError', jobs._snapshot('id', directory))
+        report['status'] = 'running'
+        jobs._atomic_json(directory / 'report.json', report)
+        self.assertNotIn('inspectionError', jobs._snapshot('id', directory))
+        self.assertNotIn('inspection', jobs._snapshot('id', directory))
+
+    def test_inspection_snapshot_ignores_unrecognized_artifacts_and_operations(self):
+        directory = self.repo / 'snapshot'
+        directory.mkdir()
+        inventory = dict(schemaVersion=1, project=str(self.repo))
+        report = dict(status='passed', phase='inspect', artifacts=[dict(path=str(directory / 'arbitrary.json'))])
+        jobs._atomic_json(directory / 'project-inspection.json', inventory)
+        jobs._atomic_json(directory / 'report.json', report)
+        jobs._atomic_json(directory / 'request.json', dict(operation='inspect', project=str(self.repo)))
+        self.assertNotIn('inspection', jobs._snapshot('id', directory))
+        report['artifacts'][0]['path'] = str(directory / 'project-inspection.json')
+        jobs._atomic_json(directory / 'report.json', report)
+        jobs._atomic_json(directory / 'request.json', dict(operation='build', project=str(self.repo)))
+        self.assertNotIn('inspection', jobs._snapshot('id', directory))
+
     def test_cancel_preserves_valid_worker_partial_evidence(self):
         job_id = self.start('cancel-evidence')['jobId']
         self.started(job_id)

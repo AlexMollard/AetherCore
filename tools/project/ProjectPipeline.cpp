@@ -18,6 +18,7 @@
 #include "io/PlatformPaths.hpp"
 #include "io/Process.hpp"
 #include "project/ProjectCommon.hpp"
+#include "project/ProjectInspection.hpp"
 #include "project/ProjectStartupScene.hpp"
 #include "scripting/DotNetHost.hpp"
 #include "scripting/GameplayPipelineRequest.hpp"
@@ -184,7 +185,21 @@ namespace aether::project_tool
 			request["jobId"] = report.jobId;
 			return editor::RunWebPublish(plan, request, directory, stop);
 		}
-		if (operation == "create" || operation == "inspect")
+		if (operation == "inspect")
+		{
+			auto inspection = app::project::InspectProject(*descriptor, request.value("scene", ""), stop);
+			report.phase = "inspect";
+			report.diagnostics = std::move(inspection.diagnostics);
+			report.status = inspection.cancelled ? Status::Cancelled : (report.diagnostics.empty() ? Status::Passed : Status::Failed);
+			report.requiredChecks.push_back({"authored-project-inspection", report.status});
+			const auto path = directory / "project-inspection.json";
+			const auto written = io::file_util::WriteText(path, inspection.inventory.dump(2));
+			if (!written) { return fail("GAMEPLAY_INSPECT_WRITE", written.error().message); }
+			report.artifacts.push_back({Utf8(path), std::filesystem::file_size(path)});
+			report.artifacts.push_back({Utf8(descriptor->projectFile)});
+			return terminal();
+		}
+		if (operation == "create")
 		{
 			report.status = Status::Passed;
 			report.requiredChecks.push_back({"project-descriptor", Status::Passed});
