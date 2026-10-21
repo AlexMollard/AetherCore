@@ -150,6 +150,51 @@ Build `Editor` (which also builds `aether-project`) through CMake, then run a sa
 
 The same pipeline supports `create`, `inspect`, `build`, `run`, `relaunch`, `test`, and `publish` for desktop Rust and C#. `create` accepts `-Name`, `-Template` and `-Language`; C# remains the default. `-Async` returns a job ID immediately. Use `-Operation status -JobId <id>` or `-Operation cancel -JobId <id>` from another process. Jobs and logs persist under `logs/gameplay-jobs/<id>/`. MCP exposes `gameplay_job_start`, `gameplay_job_status` and `gameplay_job_cancel` with the same request fields. Restart an already-running MCP client once to discover these new static tools.
 
+### Read-only project discovery
+
+```powershell
+./scripts/Run-GameplayPipeline.ps1 -Project projects/AgentPipelineRust -Operation inspect -Scene ReferenceStart
+```
+
+Use `inspect` before planning scene or gameplay edits. Terminal job snapshots expose
+`inspection` beside the unchanged v1 `report`; the same inventory is retained in the
+job-private `project-inspection.json` artifact for direct native CLI users. It includes
+schema version 1, name, kind, language, resolved descriptor/assets/scenes/prefabs/scripts
+paths, startup scene presence, authored scene files, language-specific build entry and
+SDK file presence. Legacy descriptors still default to C#; Rust uses `Cargo.toml` and
+C# uses `AetherGame.csproj` under the configured scripts directory.
+
+Optional `scene` adds authored entities in file order, scene-local indices, stable node
+IDs where authored, names, parents, disabled flags, positions where present, attached
+script type names and authored property override names. These are saved records, not
+runtime entity IDs, reflected script defaults or a live property snapshot. Included
+scene names and prefab instance counts are reported without expanding dependencies.
+Omit `scene` for a smaller project-only inventory.
+
+The scene list is sorted by UTF-8 relative path and capped at 512 entries, with total,
+limit and truncation fields. Nested scene files are discoverable but marked
+`loadableByName: false` because runtime scene selection uses bare names. Explicit
+scene detail accepts at most 1 MiB of authored TOML and returns at most 200 entities,
+with total and truncation fields. Compiled `.scene.bin` caches are excluded.
+
+Inspection invokes no compiler or gameplay module, opens no editor, and leaves project
+files unchanged. `runtimeVerified`, `compilerInvoked`, `toolchainChecked` and
+`scriptTypesReflected` remain false. Missing build inputs/startup scenes, enumeration
+errors or invalid requested scene data fail the inspection with source-linked
+diagnostics and retain the available inventory for repair. SDK `exists` is a file
+presence check, not a toolchain/readiness certification. Use `build`/`test`/`publish`
+for execution evidence. Partial inventory can survive cancellation; it may omit fields.
+Job status only reads its recognized job-private artifact, validates version/project
+identity and caps inline reads at 8 MiB; unavailable or invalid recognized inventory
+is reported as `inspectionError` where readable metadata identifies it.
+
+Qualification: `AETHER_PROJECT_INSPECTION_TESTS=1` enables
+`tools/project/test_project_inspection.py`, which exercises both languages through
+fresh MCP stdio processes, invalid compiler overrides, custom paths, Unicode roots,
+legacy C# defaults, unchanged project sources and actionable missing-build-entry errors.
+
+### Execution and verification
+
 CMake drives Cargo or dotnet into isolated job directories. A failed rebuild preserves prior job artifacts and never runs stale code. Each run/relaunch/test starts a fresh bounded child runtime at frame zero from the saved scene, applying authored fields and remapped entity references. It does not restore live physics, coroutines, or heap state. Default limits are 60 ticks, step 1/60 second, and 180 seconds overall; requests cap ticks at one million and timeout at ten minutes. Cancellation and timeout terminate only the owned process tree.
 
 The opt-in `launchConfig.profile: "native-desktop-2d-v1"` boots a hidden, bounded full runtime for native prefab, audio and rendering checks. It accepts completed-tick checkpoints and writes a first-tick readiness receipt. See [the shared reference comparison](../gameplay-reference-comparison.md) for both language fixtures, requests and measurement limits.

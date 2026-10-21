@@ -263,7 +263,7 @@ def _snapshot(job_id, directory):
     result = dict(jobId=job_id, report=report, reportPath=str(directory / 'report.json'),
                   cancellationRequested=(directory / 'cancel').exists())
     inventory_path = directory / 'project-inspection.json'
-    if report['status'] in ('passed', 'failed', 'cancelled') and inventory_path.is_file():
+    if report['status'] in ('passed', 'failed', 'cancelled'):
         try:
             request = json.loads((directory / 'request.json').read_text(encoding='utf-8'))
             # Never follow arbitrary worker artifact paths or expose partial writes.

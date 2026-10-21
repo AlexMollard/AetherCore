@@ -68,6 +68,10 @@ class GameplayJobTests(unittest.TestCase):
         self.assertIn('inspectionError', jobs._snapshot('id', directory))
         (directory / 'project-inspection.json').write_text('x' * (8 * 1024 * 1024 + 1), encoding='utf-8')
         self.assertIn('inspectionError', jobs._snapshot('id', directory))
+        (directory / 'project-inspection.json').write_text('{invalid', encoding='utf-8')
+        self.assertIn('inspectionError', jobs._snapshot('id', directory))
+        (directory / 'project-inspection.json').unlink()
+        self.assertIn('inspectionError', jobs._snapshot('id', directory))
         report['status'] = 'running'
         jobs._atomic_json(directory / 'report.json', report)
         self.assertNotIn('inspectionError', jobs._snapshot('id', directory))

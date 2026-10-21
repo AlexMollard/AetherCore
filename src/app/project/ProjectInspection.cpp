@@ -1,10 +1,10 @@
 #include "ProjectInspection.hpp"
 
 #include <algorithm>
+#include <fstream>
 #include <set>
 
 #include "EngineContentPaths.hpp"
-#include "io/FileUtil.hpp"
 #include "project/ProjectStartupScene.hpp"
 #include "scene/SceneSerializer.hpp"
 
@@ -118,8 +118,17 @@ namespace aether::app::project
 				issue("GAMEPLAY_INSPECT_SCENE", "Scene must be readable authored TOML of at most 1 MiB", path);
 				return result;
 			}
-			const auto text = io::file_util::ReadText(path);
-			const auto parsed = text ? scene::ParseToml(*text) : std::nullopt;
+			// Bound the read itself, including when a scene is edited after file_size.
+			std::ifstream stream(path, std::ios::binary);
+			std::string text(1024 * 1024 + 1, '\0');
+			stream.read(text.data(), static_cast<std::streamsize>(text.size()));
+			text.resize(static_cast<std::size_t>(stream.gcount()));
+			if (stream.bad() || !stream.eof() || text.size() > 1024 * 1024)
+			{
+				issue("GAMEPLAY_INSPECT_SCENE", "Scene must be readable authored TOML of at most 1 MiB", path);
+				return result;
+			}
+			const auto parsed = scene::ParseToml(text);
 			if (!parsed)
 			{
 				issue("GAMEPLAY_INSPECT_SCENE", "Cannot parse authored scene TOML", path);

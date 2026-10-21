@@ -196,6 +196,13 @@ printf '%s\n%s\n' \
 
 `gameplay_job_start/status/cancel` run persistent desktop Rust/C# project jobs without an editor. `agent_editor_launch/call/close` manage named editors with ownership receipts; launch defaults to a hidden window and disables autosave. Always use the receipt for calls to that editor and close it when finished. See [the gameplay pipeline guide](../../docs/architecture/gameplay-abi.md#agent-gameplay-pipeline) for request fields, PowerShell examples, limits and cleanup policy. Restart the MCP client after updating the server to discover these static tools.
 
+Start with `operation: "inspect"` for resolved paths, language/build inputs, startup and
+authored scenes; optional `scene` adds bounded entity/script records. Terminal status
+includes `inspection` beside `report`, including available repair evidence on failed
+inspection. This reads authored files without compiling or opening a window, and does
+not certify runtime behavior or toolchain readiness. See
+[project discovery](../../docs/architecture/gameplay-abi.md#read-only-project-discovery).
+
 Desktop test jobs also accept `cases`: 1..32 uniquely named scenarios sharing one private compilation, with a fresh owned runtime and separate evidence per case. Scene/ticks/step/launchConfig inherit from the top-level request unless overridden; a supplied launchConfig replaces the whole object. Ordinary case failures do not prevent later cases; cancellation/deadline stops the suite and preserves valid partial evidence. Saves remain project-scoped. The aggregate is still AgentReport v1 with `case:<name>` checks, detailed assertion diagnostics and a suite-summary artifact. The PowerShell equivalent is `Run-GameplayPipeline.ps1 -Operation test -Cases <JSON-array-file>`. Examples, measured throughput and limits are in [agent iteration](../../docs/agent-iteration.md#build-once-test-suites).
 
 The stdio entry point pins input/output to UTF-8, so raw Unicode project/case names remain intact when a Windows desktop client inherits a legacy console encoding. Reload an already-running server to load this entry-point change and discover the expanded cases schema.
