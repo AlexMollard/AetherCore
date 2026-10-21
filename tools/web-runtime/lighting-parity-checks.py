@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -21,6 +22,9 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[2]
 SHADOWS = ('Sun', 'Point', 'Spot', 'Mask', 'Skin')
+# (32,32) intersects the caster's alpha silhouette. Use the receiver at world
+# (0,-1.5), outside the caster's y+-0.5, including the complete probe patch.
+SHADOW_RECEIVER_PROBE = (32, 44)
 SCENES = ('BrowserDefaultLighting', 'BrowserSolid', 'BrowserGradient', 'BrowserSky', 'BrowserHdr', 'BrowserSun',
           'BrowserPoint', 'BrowserSpot', 'BrowserPbrMaps', 'BrowserLight2D') + tuple(
               'BrowserShadow'+kind+state for kind in SHADOWS for state in ('On', 'Off'))
@@ -29,6 +33,40 @@ GRAPHICS = dict(renderScale=1.0, fxaa=False, gtao=False, reflections=False, volu
                 gradeContrast=1.0, gradeSaturation=1.0, gradeTemperature=0.0, gradeTint=0.0,
                 vignetteIntensity=0.0, chromaticAberration=0.0, filmGrain=0.0,
                 motionBlur=0.0, sharpness=0.0, contactShadows=False, anisotropy=1)
+
+
+def native_user_settings_path():
+    # Match PlatformPaths::GetUserConfigDir: Windows' actual LocalAppData known
+    # folder takes precedence over environment overrides; Unix uses XDG then HOME.
+    if os.name == 'nt':
+        import ctypes
+        folder = ctypes.create_unicode_buffer(32768)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 0x1c, None, 0, folder) == 0 and folder.value:
+            root = Path(folder.value)
+        elif os.environ.get('LOCALAPPDATA'):
+            root = Path(os.environ['LOCALAPPDATA'])
+        else:
+            raise ValueError('Cannot resolve native LocalAppData settings directory')
+    else:
+        root = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home()/'.config')
+    return root/'AetherCore/UserSettings.toml'
+
+
+def native_render_scale_guard(user=None):
+    user = user if user is not None else native_user_settings_path()
+    value, origin = 1.0, 'private-project.graphics.renderScale'
+    if user.is_file():
+        settings = tomllib.loads(user.read_text(encoding='utf-8-sig'))
+        for table_name, table in settings.items():
+            if table_name.lower() == 'graphics' and isinstance(table, dict):
+                for key, candidate in table.items():
+                    if key.lower() == 'renderscale':
+                        value, origin = candidate, 'native-user-override'
+    numeric = type(value) in (int, float) and math.isfinite(value)
+    effective = min(2.0, max(.25, value)) if numeric else None
+    return dict(file=str(user), fileExists=user.is_file(), effectiveValue=effective, origin=origin,
+                requestedValue=value if numeric else repr(value),
+                qualified=effective == 1)
 
 
 def bake_native(project, directory, deadline, *, worker_factory=None, packer=None):
@@ -149,7 +187,8 @@ def compare(native, browser, width, height):
 
 def feature_checks(scene, image, width, height):
     p = lambda x, y, world=True: patch(image, width, height, x, y, world)
-    probes = dict(center=p(32, 32), left=p(16, 32), right=p(48, 32))
+    center = SHADOW_RECEIVER_PROBE if scene.startswith('BrowserShadow') else (32, 32)
+    probes = dict(center=p(*center), left=p(16, 32), right=p(48, 32))
     checks = {}
     if scene == 'BrowserDefaultLighting':
         probes['sky'] = p(32, 4, False)
@@ -187,7 +226,7 @@ def feature_checks(scene, image, width, height):
         checks['receiverRendered'] = max(probes['left']+probes['right']) > 70
     else:
         raise ValueError('No maintained semantic oracle for scene: ' + scene)
-    return dict(passed=all(checks.values()), checks=checks, probes=probes)
+    return dict(passed=all(checks.values()), checks=checks, probes=probes, centerProbeSquarePixels=list(center))
 
 
 def shadow_features(kind, on, off, width, height):
@@ -201,7 +240,7 @@ def shadow_features(kind, on, off, width, height):
     result = dict(darkenedProbePixels=darkened, minimumDarkenedProbePixels=6,
                   threshold=25, receiverRoiSquarePixels=dict(x=[4, 28], y=[20, 43]),
                   sample='5x5 patch means on 64x64 world-probe lattice, aspect-corrected')
-    if kind == 'Mask':
+    if kind in ('Mask', 'Point', 'Spot'):
         upper = patch(off, width, height, 20, 30)[0]-patch(on, width, height, 20, 30)[0]
         lower = patch(off, width, height, 20, 33)[0]-patch(on, width, height, 20, 33)[0]
         checks.update(opaqueUpperCasts=upper > 25, transparentLowerPasses=abs(lower) < 12)
@@ -238,12 +277,9 @@ def main():
                 raise ValueError('Shadow qualification requires both On and Off scenes: '+kind)
         report['requestedScenes'] = scenes
         # Authored settings cannot override the machine-local scene resolution scale.
-        user = Path(os.environ.get('LOCALAPPDATA', ''))/'AetherCore/settings.toml' if os.name == 'nt' else Path(os.environ.get('XDG_CONFIG_HOME', Path.home()/'.config'))/'AetherCore/settings.toml'
-        if user.is_file():
-            settings = tomllib.loads(user.read_text(encoding='utf-8-sig'))
-            graphics = {key.lower(): value for key, value in settings.get('graphics', {}).items()}
-            if graphics.get('renderscale', 1) != 1:
-                raise ValueError('NATIVE_RENDER_SCALE_UNQUALIFIED: machine-local renderScale must be 1; user settings were not modified')
+        report['nativeRenderScaleGuard'] = native_render_scale_guard()
+        if not report['nativeRenderScaleGuard']['qualified']:
+            raise ValueError('NATIVE_RENDER_SCALE_UNQUALIFIED: machine-local renderScale must be 1; user settings were not modified')
         directory = args.report.parent/('lighting-parity-'+uuid.uuid4().hex)
         directory.mkdir()
         project = ROOT/'.temp/lighting-parity'/uuid.uuid4().hex
