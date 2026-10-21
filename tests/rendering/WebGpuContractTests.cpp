@@ -57,6 +57,23 @@ TEST_CASE("WebGPU sprite bounds ordering and asynchronous retirement")
 	CHECK(lost.State() == gpu::RenderState::DeviceLost);
 }
 
+TEST_CASE("Portable sprite batches isolate display space UI from HDR scene draws")
+{
+	using namespace aether;
+	Render2DFrameData frame;
+	frame.sprites.push_back({.sortKey = 0});
+	frame.sprites.push_back({.sortKey = 1, .flags = SpriteInstanceFlags::DisplaySpace});
+	frame.sprites.push_back({.sortKey = 2, .flags = SpriteInstanceFlags::DisplaySpace});
+	auto plan = gpu::PlanSpritePass(frame, 1024, 65536);
+	REQUIRE(plan);
+	REQUIRE(plan->batches.size() == 2);
+	CHECK_FALSE(plan->batches[0].displaySpace);
+	CHECK(plan->batches[0].count == 1);
+	CHECK(plan->batches[1].displaySpace);
+	CHECK(plan->batches[1].count == 2);
+	CHECK(plan->batches[1].first == 1);
+}
+
 TEST_CASE("Portable mesh frames validate transforms and preserve draw order")
 {
 	using namespace aether;

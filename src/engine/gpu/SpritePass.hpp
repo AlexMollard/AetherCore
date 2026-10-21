@@ -20,6 +20,7 @@ namespace aether::gpu
 	struct SpriteBatch
 	{
 		std::uint32_t first, count, texture, blend;
+		bool displaySpace = false;
 	};
 
 	struct SpritePass
@@ -50,9 +51,10 @@ namespace aether::gpu
 			{
 				return std::unexpected("Unsupported sprite blend mode");
 			}
-			if (pass.batches.empty() || pass.batches.back().count == batchCapacity || pass.batches.back().texture != sprite->textureIndex || pass.batches.back().blend != sprite->blendMode)
+			const bool displaySpace = (static_cast<std::uint32_t>(sprite->flags) & static_cast<std::uint32_t>(SpriteInstanceFlags::DisplaySpace)) != 0;
+			if (pass.batches.empty() || pass.batches.back().count == batchCapacity || pass.batches.back().texture != sprite->textureIndex || pass.batches.back().blend != sprite->blendMode || pass.batches.back().displaySpace != displaySpace)
 			{
-				pass.batches.push_back({static_cast<std::uint32_t>(pass.instances.size()), 0, sprite->textureIndex, sprite->blendMode});
+				pass.batches.push_back({static_cast<std::uint32_t>(pass.instances.size()), 0, sprite->textureIndex, sprite->blendMode, displaySpace});
 			}
 			++pass.batches.back().count;
 			pass.instances.push_back({sprite->world[0], sprite->world[1], sprite->world[2], sprite->world[3], sprite->uvRect, sprite->color, sprite->sizeAndPivot, {static_cast<std::uint32_t>(sprite->flags), sprite->entityId, 0, 0}});

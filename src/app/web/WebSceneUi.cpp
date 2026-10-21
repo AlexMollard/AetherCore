@@ -56,7 +56,7 @@ namespace aether::app::web
 			        .sortKey = order++,
 			        .textureIndex = slot,
 			        .entityId = entity.id,
-			        .flags = SpriteInstanceFlags::FlipY});
+			        .flags = static_cast<SpriteInstanceFlags>(static_cast<std::uint32_t>(SpriteInstanceFlags::FlipY) | static_cast<std::uint32_t>(SpriteInstanceFlags::DisplaySpace))});
 		};
 		const auto label = [&](const ui::UIText& text, glm::vec4 rect, Entity entity) -> Expected<void>
 		{

@@ -16,6 +16,8 @@ namespace aether
 		// Pixel-art sampling: the shader snaps UVs to texel centres, emulating
 		// a nearest-neighbour sampler (set from the atlas' filter metadata).
 		NearestFilter = 1u << 4u,
+		// UI is composited after the scene display transform and lighting.
+		DisplaySpace = 1u << 5u,
 	};
 
 	struct SpriteRenderInstance
