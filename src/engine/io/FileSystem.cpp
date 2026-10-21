@@ -409,11 +409,18 @@ namespace aether::io
 		}
 		s_backend->engineShaderLayer = engineShaderLayer;
 
-		// (GameRuntime never calls MountShaderOverlay itself - see
+		// Standalone loose-project runs use the same compiled output directory as
+		// the editor. Source shaders remain assets, never shader modules. Packaged
+		// games retain the shipped shaders/ layer and cannot pick up intermediates.
 		if (projectUsesPak)
 		{
 			AE_INFO(LogCategory::FileSystem, "Mounting shaders:// with the project.pak layer prepended ('shaders/' prefix)");
 			MountShaderOverlay(OverlayBackend::Layer{ResolveBackend("project"), "shaders/"});
+		}
+		else if (auto project = TryResolveBackend("project"))
+		{
+			AE_INFO(LogCategory::FileSystem, "Mounting shaders:// with loose project compiled shader layer ('Builds/Intermediate/shaders/' prefix)");
+			MountShaderOverlay(OverlayBackend::Layer{std::move(project), "Builds/Intermediate/shaders/"});
 		}
 		else
 		{

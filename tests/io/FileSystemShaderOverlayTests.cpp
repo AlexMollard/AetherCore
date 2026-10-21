@@ -46,7 +46,7 @@ namespace
 		unsetenv(name);
 #endif
 	}
-}
+} // namespace
 
 TEST_CASE("InitializeDefaultMounts prepends a shipped project.pak shader layer over engine.pak")
 {
@@ -98,4 +98,49 @@ TEST_CASE("InitializeDefaultMounts prepends a shipped project.pak shader layer o
 	ClearEnv("AETHER_PROJECT_PAK");
 	ClearEnv("AETHER_ENGINE_MODE");
 	ClearEnv("AETHER_PROJECT_MODE");
+}
+
+TEST_CASE("InitializeDefaultMounts exposes loose project compiled shaders before engine shaders")
+{
+	if (io::FileSystem::IsInitialized())
+	{
+		io::FileSystem::Shutdown();
+	}
+	const auto engineRoot = MakeTempDir("loose_engine");
+	WriteFile(engineRoot / "shaders/common.spv", "ENGINE_COMMON");
+	WriteFile(engineRoot / "shaders/engine_only.spv", "ENGINE_ONLY");
+	const auto enginePak = engineRoot / "engine.pak";
+	REQUIRE(assetpipeline::PackDirectory(engineRoot, enginePak, {}).ok);
+	const auto project = MakeTempDir("loose_project");
+	WriteFile(project / "Builds/Intermediate/shaders/common.spv", "PROJECT_COMMON");
+	WriteFile(project / "Builds/Intermediate/shaders/custom/graph.spv", "PROJECT_GRAPH");
+	WriteFile(project / "assets/shaders/source.slang", "SOURCE_MUST_NOT_BE_MOUNTED");
+	SetEnv("AETHER_ENGINE_PAK", enginePak);
+	SetEnv("AETHER_ENGINE_MODE", "pak");
+	SetEnv("AETHER_PROJECT_MODE", "dir");
+	SetEnv("AETHER_PROJECT_DIR", project);
+
+	struct Cleanup
+	{
+		~Cleanup()
+		{
+			io::FileSystem::Shutdown();
+			for (const auto* name: {"AETHER_ENGINE_PAK", "AETHER_ENGINE_MODE", "AETHER_PROJECT_MODE", "AETHER_PROJECT_DIR"})
+			{
+				ClearEnv(name);
+			}
+		}
+	} cleanup;
+
+	io::FileSystem::InitializeDefaultMounts();
+	const auto common = io::FileSystem::ReadFileText("shaders://common.spv");
+	REQUIRE(common);
+	CHECK(*common == "PROJECT_COMMON");
+	const auto graph = io::FileSystem::ReadFileText("shaders://custom/graph.spv");
+	REQUIRE(graph);
+	CHECK(*graph == "PROJECT_GRAPH");
+	const auto engineOnly = io::FileSystem::ReadFileText("shaders://engine_only.spv");
+	REQUIRE(engineOnly);
+	CHECK(*engineOnly == "ENGINE_ONLY");
+	CHECK_FALSE(io::FileSystem::Exists("shaders://source.slang"));
 }
