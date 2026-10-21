@@ -1,4 +1,6 @@
 export const legacyCaseNames = [
+    'mesh-depth-resize',
+    'mesh-invalid-frame',
     'sprite-input-resize-shutdown',
     'unavailable',
     'limits',

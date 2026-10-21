@@ -774,7 +774,7 @@ namespace aether::assets
 				AE_VERBOSE(LogCategory::Engine, "  Material[{}]: {}", i, matPaths[i]);
 			}
 
-			auto ConvertVertex = [](const DiskMeshVertex& src, Mesh::Vertex& dst)
+			auto ConvertVertex = [](const DiskMeshVertex& src, MeshVertex& dst)
 			{
 				dst.position = glm::vec3(src.position[0], src.position[1], src.position[2]);
 				dst.normal = glm::vec3(src.normal[0], src.normal[1], src.normal[2]);
@@ -1067,8 +1067,8 @@ namespace aether::assets
 		std::vector<std::byte> meshData;
 		{
 			AE_PROFILE_ZONE();
-			AE_EXPECT_OR_THROW(data, io::FileSystem::ReadFile(meshPath));
-			meshData = std::move(data);
+			AE_TRY(data, io::FileSystem::ReadFile(meshPath));
+			meshData = std::move(*data);
 		}
 		return LoadFromMesh(meshData, meshPath);
 	}

@@ -78,7 +78,8 @@ def publish(project, build):
             target = web / source.relative_to(output / 'wwwroot')
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
-    shutil.copy2(build / 'web-assets/sprite.wgsl', web / 'sprite.wgsl')
+    for shader in ('sprite', 'mesh'):
+        shutil.copy2(build / ('web-assets/' + shader + '.wgsl'), web / (shader + '.wgsl'))
     sys.path.insert(0, str(ROOT / 'tools/web-runtime'))
     import audit
     native = list(framework.glob('dotnet.native.*.wasm'))

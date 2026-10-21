@@ -3,13 +3,13 @@
 #include <cstdint>
 #include <vector>
 
-#include "mesh/Mesh.hpp"
+#include "mesh/MeshVertex.hpp"
 
 namespace aether::MeshGen
 {
 	struct MeshData
 	{
-		std::vector<Mesh::Vertex> vertices;
+		std::vector<MeshVertex> vertices;
 		std::vector<std::uint32_t> indices;
 	};
 

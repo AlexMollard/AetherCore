@@ -2,6 +2,9 @@
 #include <cstddef>
 #include "gpu/SpritePass.hpp"
 #include "gpu/AsyncRenderLifecycle.hpp"
+#include "gpu/MeshPass.hpp"
+#include <limits>
+#include <glm/gtc/matrix_transform.hpp>
 
 TEST_CASE("WebGPU sprite bounds ordering and asynchronous retirement")
 {
@@ -52,4 +55,32 @@ TEST_CASE("WebGPU sprite bounds ordering and asynchronous retirement")
 	lost.Fail();
 	lost.Complete();
 	CHECK(lost.State() == gpu::RenderState::DeviceLost);
+}
+
+TEST_CASE("Portable mesh frames validate transforms and preserve draw order")
+{
+	using namespace aether;
+	Render3DFrameData frame;
+	frame.meshes.push_back({.world = glm::scale(glm::mat4(1), glm::vec3(-2, 4, 0.5f)), .color = {1, 0, 0, 1}, .mesh = 7});
+	frame.meshes.push_back({.color = {0, 0, 1, 1}, .mesh = 3});
+	const auto planned = gpu::PlanMeshPass(frame);
+	REQUIRE(planned);
+	CHECK(planned->size() == 2);
+	CHECK(planned->at(0).normal0.x == doctest::Approx(-0.5f));
+	CHECK(planned->at(0).normal1.y == doctest::Approx(0.25f));
+	CHECK(planned->at(0).normal2.z == doctest::Approx(2));
+	CHECK(planned->at(1).color.b == 1);
+	CHECK_FALSE(gpu::PlanMeshPass(frame, 1));
+	frame.meshes[0].world[0][0] = 0;
+	CHECK_FALSE(gpu::PlanMeshPass(frame));
+	frame.meshes[0].world = glm::mat4(1);
+	frame.meshes[0].world[3][3] = 0;
+	CHECK_FALSE(gpu::PlanMeshPass(frame));
+	frame.meshes[0].world = glm::mat4(1);
+	frame.meshes[0].world[2][1] = std::numeric_limits<float>::quiet_NaN();
+	CHECK_FALSE(gpu::PlanMeshPass(frame));
+	frame.meshes[0].world = glm::mat4(1);
+	frame.meshes[0].color.g = std::numeric_limits<float>::infinity();
+	CHECK_FALSE(gpu::PlanMeshPass(frame));
+	CHECK(gpu::PlanMeshPass(Render3DFrameData{}));
 }

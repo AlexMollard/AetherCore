@@ -70,6 +70,7 @@ try
         $report.browser = Get-Content -LiteralPath $browserReport -Raw | ConvertFrom-Json
         if ($report.browser.status -ne 'passed') { throw 'Browser runtime verification failed' }
         $required = @('sprite-input-resize-shutdown', 'unavailable', 'limits', 'device-loss', 'stop-during-init', 'stop-in-flight', 'layers', 'batch-capacity', 'responsive', 'drop-owner-init', 'stop-after-upload', 'assets-ready', 'assets-missing', 'assets-corrupt', 'assets-version', 'assets-target', 'assets-cancel', 'platform-save-reload', 'platform-storage-denied', 'platform-storage-quota', 'platform-audio-resume', 'reference-gameplay', 'browser-features', 'browser-gamepad', 'browser-focus-resume', 'invalid-font', 'invalid-scene-version', 'invalid-atlas-version', 'invalid-audio-component', 'browser-key-latch', 'browser-ui-order')
+        $required += 'mesh-depth-resize', 'mesh-invalid-frame'
         foreach ($case in $required)
         {
             $matches = @($report.browser.cases | Where-Object { $_.name -eq $case -and $_.status -eq 'passed' })

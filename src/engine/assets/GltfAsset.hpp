@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-#include "mesh/Mesh.hpp"
+#include "mesh/MeshVertex.hpp"
 #include "utils/Expected.hpp"
 
 namespace aether::assets
@@ -90,7 +90,7 @@ namespace aether::assets
 		std::uint32_t nodeIndex = 0;
 		std::int32_t materialIndex = -1;
 		std::int32_t skinIndex = -1;
-		std::vector<Mesh::Vertex> vertices;
+		std::vector<MeshVertex> vertices;
 		std::vector<std::uint32_t> indices;
 
 		float aabbMin[3] = {0, 0, 0};

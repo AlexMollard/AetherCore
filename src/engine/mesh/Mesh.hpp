@@ -7,6 +7,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/UploadContext.hpp"
+#include "mesh/MeshVertex.hpp"
 
 namespace aether
 {
@@ -14,27 +15,7 @@ namespace aether
 	class Mesh
 	{
 	public:
-		struct Vertex
-		{
-			glm::vec3 position;
-			glm::vec3 normal;
-			glm::vec4 tangent;
-			glm::vec2 uv;
-			glm::vec2 uv2;
-			glm::vec3 color;
-			glm::uvec4 jointIndices{0u, 0u, 0u, 0u};
-			glm::vec4 jointWeights{1.0f, 0.0f, 0.0f, 0.0f};
-		};
-
-		static_assert(sizeof(Vertex) == 100, "Mesh::Vertex layout changed - update shaders/include/MeshVertex.slangh.");
-		static_assert(offsetof(Vertex, position) == 0);
-		static_assert(offsetof(Vertex, normal) == 12);
-		static_assert(offsetof(Vertex, tangent) == 24);
-		static_assert(offsetof(Vertex, uv) == 40);
-		static_assert(offsetof(Vertex, uv2) == 48);
-		static_assert(offsetof(Vertex, color) == 56);
-		static_assert(offsetof(Vertex, jointIndices) == 68);
-		static_assert(offsetof(Vertex, jointWeights) == 84);
+		using Vertex = MeshVertex;
 
 		Mesh() = default;
 		~Mesh();

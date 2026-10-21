@@ -266,7 +266,7 @@ def publish(request, directory, output=None):
         if data['language'] == 'rust':
             names += ['AetherGame.js', 'AetherGame.wasm', 'AetherGame.data']
         else:
-            names += ['browser-main.mjs', 'sprite.wgsl']
+            names += ['browser-main.mjs', 'sprite.wgsl', 'mesh.wgsl']
             shutil.copytree(build / 'web/_framework', stage / '_framework')
             managed = json.loads((build / 'web-managed-build.json').read_text(encoding='utf-8'))
             pins = {key: value for key, value in pins.items() if not key.startswith('rust') and key != 'panicStrategy'}

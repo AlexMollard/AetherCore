@@ -1,4 +1,5 @@
 #include "WebGpuDevice.hpp"
+#include "WebMeshRenderer.hpp"
 
 #include <array>
 #include <cstring>
@@ -52,6 +53,7 @@ namespace aether::webgpu
 		std::array<WGPURenderPipeline, 4> pipelines{};
 		WGPUSampler sampler = nullptr;
 		std::vector<WGPUTexture> textures;
+		WebMeshRenderer meshes;
 		unsigned width = 0, height = 0;
 		bool released = false;
 		unsigned callbacks = 0;
@@ -73,6 +75,7 @@ namespace aether::webgpu
 			if (!released)
 			{
 				released = true;
+				meshes.Shutdown();
 				for (auto texture: textures)
 				{
 					if (texture)
@@ -190,6 +193,10 @@ namespace aether::webgpu
 				pipelines[blend] = wgpuDeviceCreateRenderPipeline(device, &pipeline);
 			}
 			wgpuShaderModuleRelease(shader);
+			if (!meshes.Initialize(device))
+			{
+				Fail("WEBGPU_MESH_SHADER", Text(meshes.error.c_str()));
+			}
 			WGPUSamplerDescriptor sample = WGPU_SAMPLER_DESCRIPTOR_INIT;
 			sample.magFilter = WGPUFilterMode_Linear;
 			sample.minFilter = WGPUFilterMode_Linear;
@@ -240,10 +247,12 @@ namespace aether::webgpu
 			Impl* owner;
 			WGPUBuffer uniform = nullptr, instances = nullptr, readback = nullptr;
 			std::vector<WGPUBindGroup> bindings;
+			std::unique_ptr<WebMeshFrame> meshes;
 			unsigned width, height, row;
 
 			void Finish()
 			{
+				meshes.reset();
 				for (auto binding: bindings)
 				{
 					wgpuBindGroupRelease(binding);
@@ -386,6 +395,25 @@ namespace aether::webgpu
 		wgpuInstanceRequestAdapter(self.instance, &options, callback);
 	}
 
+	bool WebGpuDevice::UploadMesh(std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices)
+	{
+		auto& self = *m_impl;
+		if (State() != gpu::RenderState::Ready || !self.meshes.Upload(self.device, self.queue, slot, vertices, indices)) { return false; }
+		++self.callbacks;
+		WGPUQueueWorkDoneCallbackInfo uploaded = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
+		uploaded.mode = WGPUCallbackMode_AllowSpontaneous;
+		uploaded.userdata1 = &self;
+		uploaded.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
+		{
+			auto& self = *static_cast<Impl*>(data);
+			--self.callbacks;
+			if (status != WGPUQueueWorkDoneStatus_Success) { self.Fail("WEBGPU_MESH_UPLOAD", message); }
+			self.Release();
+		};
+		wgpuQueueOnSubmittedWorkDone(self.queue, uploaded);
+		return true;
+	}
+
 	bool WebGpuDevice::UploadTexture(unsigned slot, unsigned width, unsigned height, std::span<const std::uint8_t> rgba)
 	{
 		auto& self = *m_impl;
@@ -477,6 +505,17 @@ namespace aether::webgpu
 				return false;
 			}
 		}
+		std::vector<gpu::MeshGpuInstance> meshInstances;
+		if (!packet.render3D.meshes.empty())
+		{
+			auto meshPlan = self.meshes.Prepare(packet);
+			if (!meshPlan)
+			{
+				self.Fail("WEBGPU_MESH", Text(meshPlan.error().c_str()));
+				return false;
+			}
+			meshInstances = std::move(*meshPlan);
+		}
 		if (!self.lifecycle.Submit())
 		{
 			return false;
@@ -488,10 +527,12 @@ namespace aether::webgpu
 			        aetherRuntime.peakInFlight = Math.max(aetherRuntime.peakInFlight || 0, $0);
 			        aetherRuntime.draws = $1;
 			        aetherRuntime.instances = $2;
+			        aetherRuntime.meshDraws = $3;
 		        },
 		        self.pendingFrames,
 		        plan->batches.size(),
-		        plan->instances.size());
+		        plan->instances.size(),
+		        packet.render3D.meshes.size());
 		auto* frame = new Impl::Frame{.owner = &self, .width = self.width, .height = self.height, .row = ((self.width * 4 + 255) / 256) * 256};
 		const auto clip = glm::transpose(packet.proj * packet.view);
 		const std::array<glm::vec4, 5> constants{clip[0], clip[1], clip[2], clip[3], glm::vec4(self.width, self.height, 0, 0)};
@@ -508,13 +549,17 @@ namespace aether::webgpu
 		auto view = wgpuTextureCreateView(current.texture, nullptr);
 		WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
 		color.view = view;
-		color.loadOp = WGPULoadOp_Clear;
+		color.loadOp = packet.render3D.meshes.empty() ? WGPULoadOp_Clear : WGPULoadOp_Load;
 		color.storeOp = WGPUStoreOp_Store;
 		color.clearValue = {0, 0, 0, 1};
 		WGPURenderPassDescriptor passDesc = WGPU_RENDER_PASS_DESCRIPTOR_INIT;
 		passDesc.colorAttachmentCount = 1;
 		passDesc.colorAttachments = &color;
 		auto encoder = wgpuDeviceCreateCommandEncoder(self.device, nullptr);
+		if (!packet.render3D.meshes.empty())
+		{
+			self.meshes.Encode(self.device, self.queue, encoder, view, self.width, self.height, packet, meshInstances, frame->meshes);
+		}
 		auto pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
 		for (const auto& batch: plan->batches)
 		{

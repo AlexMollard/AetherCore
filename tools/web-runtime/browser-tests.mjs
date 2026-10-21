@@ -167,6 +167,8 @@ try {
 		});
 	    }
 	    let query = name === 'unavailable'	       ? '?forceNoAdapter=1'
+			: name === 'mesh-depth-resize' ? '?scene=mesh3d'
+			: name === 'mesh-invalid-frame' ? '?scene=mesh3d&badMesh=1'
 			: name === 'limits'	       ? '?forceLimits=1'
 			: name === 'stop-during-init'  ? '?stopBeforeReady=1'
 			: name === 'stop-in-flight'    ? '?stopAfterSubmit=1'
@@ -192,6 +194,35 @@ try {
 		query += (query ? '&' : '?') + 'test=1';
 	    }
 	    await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);
+	    if (name === 'mesh-invalid-frame') {
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.gameplayStopped);
+		const state = await page.evaluate(() => aetherRuntime);
+		assert.ok(state.diagnostics.some(item => item.code === 'WEBGPU_MESH' && /unregistered/.test(item.message)));
+		assert.equal(state.frames || 0, 0);
+		assert.equal(state.inFlight || 0, 0);
+		item.status = 'passed';
+		continue;
+	    }
+	    if (name === 'mesh-depth-resize') {
+		await page.waitForFunction(() => aetherRuntime.frames > 2 || aetherRuntime.status === 'failed');
+		let image = await capture(page);
+		assert.deepEqual(pixel(image, 32, 32), [255, 0, 0, 255], 'Near geometry wins despite far geometry being drawn later');
+		assert.deepEqual(pixel(image, 20, 32), [0, 0, 255, 255], 'Perspective exposes the larger far quad');
+		assert.deepEqual(pixel(image, 32, 20), [0, 255, 0, 255], 'Sprite overlay stays visible over nearer mesh geometry');
+		assert.deepEqual(pixel(image, 2, 2), [0, 0, 0, 255], 'Geometry clips to its projected bounds');
+		await page.evaluate(() => Module._aether_web_resize(96, 48));
+		image = await capture(page);
+		assert.equal(image.width, 96);
+		assert.equal(image.height, 48);
+		assert.deepEqual(pixel(image, 48, 24), [255, 0, 0, 255]);
+		await page.screenshot({path:path.join(path.dirname(reportPath), 'mesh-foundation.png')});
+		await page.evaluate(() => Module._aether_web_stop());
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
+		assert.equal(await page.evaluate(() => aetherRuntime.meshDraws), 3);
+		item.scope = 'Unlit native-cooked glTF and shared primitive geometry, perspective, depth, resize and retirement; not full 3D export or effect parity';
+		item.status = 'passed';
+		continue;
+	    }
 	    if (name.startsWith('invalid-')) {
 		await page.waitForFunction(() => aetherRuntime.status === 'failed' && aetherRuntime.gameplayStopped === true);
 		const state = await page.evaluate(() => aetherRuntime);
@@ -533,7 +564,7 @@ try {
 		if (item.status === 'passed') {
 		    assert.equal(item.pageErrors.length, 0, item.pageErrors.join(';'));
 		    const expectedFailure = [
-			'unavailable', 'limits', 'device-loss', 'assets-missing', 'assets-corrupt', 'assets-version', 'assets-target',
+			'mesh-invalid-frame', 'unavailable', 'limits', 'device-loss', 'assets-missing', 'assets-corrupt', 'assets-version', 'assets-target',
 			'platform-storage-denied', 'platform-storage-quota'
 		    ].includes(name) || name.startsWith('invalid-');
 		    if (!expectedFailure) {

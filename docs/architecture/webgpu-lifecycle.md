@@ -1,5 +1,54 @@
 # Task 9 lifecycle and render boundary
 
+## Vulkan parity work in progress
+
+The [parity design](../superpowers/specs/2026-10-21-webgpu-vulkan-parity-design.md)
+and [implementation plan](../superpowers/plans/2026-10-21-webgpu-vulkan-parity.md)
+track the new full-3D/effects objective. The production export profile is still
+`webgpu-2d-v1`; this work has not established full 3D game exports or Vulkan visual
+parity.
+
+The first foundation adds packet-owned mesh instances, native/browser shared CPU
+primitive geometry, the existing native cooked-model decoder in the portable
+closure, and indexed WebGPU rendering with a per-frame depth attachment. The
+100-byte vertex record is now a GPU-independent `MeshVertex`; `Mesh::Vertex`
+remains an alias. Instance data has explicit 128-byte layout, finite affine
+transform validation, inverse-transpose normal columns and frame limits.
+
+Mesh uploads use immutable slots (at most 1,024), bounded topology/index validation
+and a 64 MiB aggregate allocation budget. Upload completion participates in the
+same shutdown retention as textures. Draw validation precedes GPU submission;
+frame buffers, bindings and depth images retire with their frame, so resize does
+not destroy outstanding depth targets. Sprites render after the mesh pass with
+color load, preserving overlays. Rust preloads and C# startup fetches both shader
+adapters with explicit build/package dependencies.
+
+The test-only `mesh3d` fixture uses the actual ECS transforms/material colors,
+shared primitives and a glTF mesh passed through native AssetPacker and the shared
+runtime decoder. Hardware tests cover perspective, near/far depth ordering,
+mirrored/nonuniform geometry, sprite overlay, resize, upload rejection and cleanup.
+The initial mesh shader is intentionally unlit. PBR, lighting/shadows, animation,
+physics, authored 3D scene application and the native effects stack remain work
+in progress; their production preflight rejections remain in place.
+
+The native feature inventory includes: scene prepass, sky/backgrounds, forward PBR
+and object/baked lighting, tiled lights, directional/local/contact/blob shadows,
+darkness volumes, GTAO/denoise, SSR/water, volumetric and height fog, depth of field,
+particles, 2D lighting/occluders, custom passes, render-to-texture cameras, bloom,
+exposure/histograms, eleven tonemap operators, color grading/white balance,
+vignette/chromatic aberration/motion blur/grain, FXAA/sharpening, foliage, gem/sheen/
+character/light-shaft shading, procedural plasma/molten, UI/text and project
+material/custom shaders. Each needs native/browser comparison evidence before a
+full-parity claim.
+
+Shared algorithms can target WGSL, but their resource interfaces need explicit
+adaptation; the current native pointer/address and binding assumptions are not
+the browser contract. See the official
+[Slang WGSL target documentation](https://shader-slang.org/slang/user-guide/wgsl-target-specific)
+and [WGSL specification](https://www.w3.org/TR/WGSL/).
+
+## Historical Task 9 qualification
+
 Task 9 keeps the established native Full and UiShell initialization/shutdown unchanged. Full initializes platform/GPU/scene/assets/cameras/rendering/UI, links dependencies, starts animation/compute/audio, and joins rendering before GPU-backed teardown; audio stops before its VFS/assets. UiShell initializes only window/GPU/UI and its clear pass, without gameplay, cameras, scene passes or audio. Neither path depends on the browser backend.
 
 Browser initialization owns World -> GameplayAccess -> linked Rust module, then asynchronously requests adapter/device and creates WebGPU resources. A browser animation callback runs input latch -> bounded fixed updates -> ECS extraction into an owned RenderFramePacket -> GPU submission. The backend consumes only the packet; it never touches World. Browser input here is the minimal keyboard latch needed for the M3 Rust movement gate; complete platform input/audio/save/package support belongs to Task 10.

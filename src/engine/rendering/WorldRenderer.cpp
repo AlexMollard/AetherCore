@@ -7,6 +7,7 @@
 
 #include "material/GpuMaterial.hpp"
 #include "material/MaterialRegistry.hpp"
+#include "mesh/Mesh.hpp"
 #include "rendering/FrameConstants.hpp"
 
 #include "physics/PhysicsComponents.hpp"

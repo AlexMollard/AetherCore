@@ -19,7 +19,7 @@ namespace
 		assets::GltfPrimitive prim;
 		for (const glm::vec3& p: positions)
 		{
-			Mesh::Vertex v{};
+			MeshVertex v{};
 			v.position = p;
 			prim.vertices.push_back(v);
 		}

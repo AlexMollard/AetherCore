@@ -14,4 +14,10 @@ namespace aether
 	{
 		std::printf("%.*s\n", static_cast<int>(message.size()), message.data());
 	}
+
+	void Logger::Flush()
+	{
+		std::fflush(stdout);
+		std::fflush(stderr);
+	}
 } // namespace aether

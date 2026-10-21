@@ -12,6 +12,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     assets/SpriteAssetStore.cpp
     assets/SpriteAtlasAsset.cpp
     assets/SpriteAnimationAsset.cpp
+    assets/GltfAsset.cpp
     animation/SpriteAnimationSystem.cpp
     material/TextureRegistry.cpp
     rendering/SpriteSystem.cpp
@@ -28,4 +29,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     platform/web/WebAssetLoader.cpp
     platform/web/WebFileSystem.cpp
     webgpu/WebGpuDevice.cpp
+    webgpu/WebMeshRenderer.cpp
+    mesh/PrimitiveMeshData.cpp
+    mesh/MeshGen.cpp
 )

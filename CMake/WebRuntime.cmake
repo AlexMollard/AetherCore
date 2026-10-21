@@ -113,12 +113,14 @@ add_custom_command(OUTPUT "${_assets}/reference.pak"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/prefabs/ReferencePickup.prefab.toml"
     VERBATIM)
 endif()
-add_custom_command(OUTPUT "${_assets}/sprite.wgsl"
-    COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/sprite.slang"
-        -target wgsl -entry vertexMain -entry fragmentMain -o "${_assets}/sprite.wgsl"
-    DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/sprite.slang"
-    VERBATIM)
-add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl")
+foreach(_shader IN ITEMS sprite mesh)
+    add_custom_command(OUTPUT "${_assets}/${_shader}.wgsl"
+        COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang"
+            -target wgsl -entry vertexMain -entry fragmentMain -o "${_assets}/${_shader}.wgsl"
+        DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang"
+        VERBATIM)
+endforeach()
+add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl")
 if(NOT AETHER_WEB_PROJECT)
     add_custom_target(WebFixtureAssets DEPENDS "${_assets}/reference.pak")
     add_dependencies(WebAssets WebFixtureAssets)
@@ -161,8 +163,10 @@ if(TARGET WebManagedRuntime)
     add_dependencies(WebManagedRuntime WebAssets WebGameAssets WebEngineAssets)
 endif()
 if(NOT AETHERCORE_WEB_MANAGED)
-set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/sprite.wgsl")
-target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/sprite.wgsl@/assets/sprite.wgsl")
+foreach(_shader IN ITEMS sprite mesh)
+    set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/${_shader}.wgsl")
+    target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/${_shader}.wgsl@/assets/${_shader}.wgsl")
+endforeach()
 if(NOT AETHER_WEB_PROJECT)
     set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/reference.pak")
     target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/reference.pak@/assets/reference.pak")

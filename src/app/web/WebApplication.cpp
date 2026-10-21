@@ -1,4 +1,5 @@
 #include "WebApplication.hpp"
+#include "WebMeshFixture.hpp"
 #include "WebGameplay.hpp"
 #include "platform/web/BrowserKey.hpp"
 
@@ -425,6 +426,13 @@ namespace
 					return false;
 				}
 				texturesReady = true;
+#if AE_WEB_TEST_BRIDGE
+				if (aether::app::web::IsMeshFixture() && !aether::app::web::CreateMeshFixture(world, graphics))
+				{
+					Failure("Mesh fixture upload failed");
+					return false;
+				}
+#endif
 				if (AE_WEB_TEST_BRIDGE && EM_ASM_INT({ return new URLSearchParams(location.search).has("stopAfterUpload"); }))
 				{
 					Stop();
@@ -515,6 +523,14 @@ namespace
 				        .flags = static_cast<aether::SpriteInstanceFlags>(flags),
 				        .blendMode = static_cast<unsigned>(sprite.blendMode)});
 			}
+#if AE_WEB_TEST_BRIDGE
+			if (aether::app::web::IsMeshFixture())
+			{
+				int width = 0, height = 0;
+				emscripten_get_canvas_element_size("#canvas", &width, &height);
+				aether::app::web::ExtractMeshFixture(world, packet, width, height);
+			}
+#endif
 			const bool stopAfterSubmit = (AE_WEB_TEST_BRIDGE && EM_ASM_INT({ return new URLSearchParams(location.search).has("stopAfterSubmit"); }));
 			if (graphics.Draw(packet, capture || stopAfterSubmit))
 			{

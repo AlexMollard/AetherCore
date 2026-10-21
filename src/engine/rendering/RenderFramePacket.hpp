@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include "rendering/Render2DFrameData.hpp"
+#include "gpu/MeshPass.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "physics/PhysicsDebugData.hpp"
 #include "rendering/IUiOverlay.hpp"
@@ -138,6 +139,7 @@ namespace aether
 		std::vector<PhysicsDebugInstance> physicsDebugShapes;
 
 		Render2DFrameData render2D;
+		Render3DFrameData render3D;
 		RenderCustomPassData renderCustom;
 
 		// the debug toggle and puts the decision here; the render thread branches on

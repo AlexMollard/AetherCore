@@ -21,7 +21,7 @@ namespace aether
 		for (const assets::GltfPrimitive& prim: asset.primitives)
 		{
 			const auto baseIndex = static_cast<std::uint32_t>(geo.positions.size());
-			for (const Mesh::Vertex& v: prim.vertices)
+			for (const MeshVertex& v: prim.vertices)
 			{
 				geo.positions.push_back(v.position);
 			}
