@@ -516,6 +516,18 @@ namespace aether::webgpu
 	bool WebGpuDevice::Draw(const RenderFramePacket& packet, bool capture)
 	{
 		auto& self = *m_impl;
+#if AE_WEB_TEST_BRIDGE
+		// Exercise the same retry path as the bounded in-flight frame limit.
+		if (capture && EM_ASM_INT({
+			if (!globalThis.aetherTestInternal?.rejectCaptureOnce) { return 0; }
+			aetherTestInternal.rejectCaptureOnce = false;
+			aetherRuntime.captureDeferred = (aetherRuntime.captureDeferred || 0) + 1;
+			return 1;
+		}))
+		{
+			return false;
+		}
+#endif
 		if (State() != gpu::RenderState::Ready || !self.width || !self.height || self.pendingFrames >= 3)
 		{
 			return false;

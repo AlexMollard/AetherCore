@@ -52,13 +52,8 @@ namespace aether::app::web
 		std::array<std::string, 5> paths{record.albedoPath, record.normalPath, record.metallicRoughnessPath, record.occlusionPath, record.emissivePath};
 		if (!record.assetPath.empty())
 		{
-			AE_TRY(text, io::FileSystem::ReadFileText(record.assetPath));
-			bool valid = false;
-			const auto preset = MaterialSerializer::Parse(record.assetPath, *text, &valid);
-			if (!valid)
-			{
-				AE_UNEXPECTED(AetherError::Asset("Invalid linked browser material: " + record.assetPath));
-			}
+			AE_TRY(loaded, MaterialSerializer::Load(record.assetPath));
+			const auto& preset = *loaded;
 			asset = preset.material;
 			if (!preset.shaderVfsPath.empty() && preset.shaderVfsPath != "shaders://gltf_mesh.spv")
 			{

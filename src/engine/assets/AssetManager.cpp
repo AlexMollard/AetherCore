@@ -4,15 +4,12 @@
 #include <filesystem>
 #include <stdexcept>
 
-#include <BinaryFormats.hpp>
-
 #include "assets/GltfAsset.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "scene/Hierarchy.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileGlobOptions.hpp"
-#include "utils/BinaryReader.hpp"
 #include "utils/Logger.hpp"
 #include "material/MaterialSerializer.hpp"
 #include "material/MaterialAsset.hpp"
@@ -24,7 +21,6 @@
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
-#include "utils/TextIni.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
 #include "utils/Expected.hpp"
@@ -32,88 +28,6 @@
 
 namespace aether
 {
-	namespace
-	{
-		std::string NormalizeVirtualFolder(std::string path)
-		{
-			while (!path.empty() && (path.back() == '/' || path.back() == '\\'))
-			{
-				path.pop_back();
-			}
-			return path;
-		}
-
-		std::string ResolvePathInFolder(std::string_view folderPath, const std::string& resourcePath)
-		{
-			if (resourcePath.empty())
-			{
-				return {};
-			}
-			if (resourcePath.contains("://"))
-			{
-				return resourcePath;
-			}
-			const std::string folder = NormalizeVirtualFolder(std::string(folderPath));
-			return folder + "/" + resourcePath;
-		}
-
-		std::string ResolveStemInFolder(std::string_view folderPath, const std::string& stem)
-		{
-			if (stem.empty())
-			{
-				return {};
-			}
-
-			if (stem.contains("://"))
-			{
-				return io::FileSystem::Exists(stem) ? stem : std::string();
-			}
-
-			std::string direct = ResolvePathInFolder(folderPath, stem);
-			if (io::FileSystem::Exists(direct))
-			{
-				return direct;
-			}
-
-			const std::string noExt = std::filesystem::path(stem).extension().empty() ? stem : std::filesystem::path(stem).stem().string();
-			constexpr std::string_view kExts[] = {".texture", ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".webp", ".dds", ".ktx2"};
-			for (const std::string_view ext: kExts)
-			{
-				const std::string candidate = ResolvePathInFolder(folderPath, noExt + std::string(ext));
-				if (io::FileSystem::Exists(candidate))
-				{
-					return candidate;
-				}
-			}
-
-			return {};
-		}
-
-		std::string ResolveFirstAliasInFolder(std::string_view folderPath, std::initializer_list<std::string_view> aliases)
-		{
-			for (const std::string_view alias: aliases)
-			{
-				const std::string resolved = ResolveStemInFolder(folderPath, std::string(alias));
-				if (!resolved.empty())
-				{
-					return resolved;
-				}
-			}
-			return {};
-		}
-		Expected<std::string> ReadTextFile(std::string_view path)
-		{
-			AE_TRY(bytes, io::FileSystem::ReadFile(path));
-			std::string text;
-			text.resize(bytes->size());
-			for (std::size_t i = 0; i < bytes->size(); ++i)
-			{
-				text[i] = static_cast<char>((*bytes)[i]);
-			}
-			return text;
-		}
-	} // namespace
-
 	void AssetManager::Initialize(VulkanContext& context,
 	        BindlessManager& bindlessManager,
 	        MaterialRegistry& materialRegistry,
@@ -219,105 +133,11 @@ namespace aether
 	Expected<MaterialAsset> AssetManager::LoadMaterialPreset(std::string_view path)
 	{
 		AE_PROFILE_ZONE();
-		const std::string requestedPath = NormalizeVirtualFolder(std::string(path));
-
-		std::string presetPath = requestedPath;
-		std::string folderPath;
-		const std::string folderTomlPath = requestedPath + "/properties.toml";
-		if (io::FileSystem::Exists(folderTomlPath))
+		AE_TRY(spec, MaterialSerializer::Load(path));
+		MaterialAsset material = spec->material;
+		if (!spec->shaderVfsPath.empty())
 		{
-			presetPath = folderTomlPath;
-			folderPath = requestedPath;
-		}
-
-		if (!io::FileSystem::Exists(presetPath))
-		{
-			AE_UNEXPECTED(AetherError::Asset("file/folder not found: " + requestedPath));
-		}
-
-		const bool isBinary = presetPath.ends_with(".material");
-		if (isBinary)
-		{
-			auto data = io::FileSystem::ReadFile(presetPath);
-			if (data.has_value())
-			{
-				BinaryReader reader(*data);
-				auto hdr = reader.Read<MaterialHeaderDisk>();
-				if (CheckMagic(hdr))
-				{
-					MaterialAsset material;
-					material.baseColorFactor = glm::vec4(hdr.baseColorFactor[0], hdr.baseColorFactor[1], hdr.baseColorFactor[2], hdr.baseColorFactor[3]);
-					material.metallicFactor = hdr.metallicFactor;
-					material.roughnessFactor = hdr.roughnessFactor;
-					material.emissiveFactor = glm::vec3(hdr.emissiveFactor[0], hdr.emissiveFactor[1], hdr.emissiveFactor[2]);
-					material.alphaCutoff = hdr.alphaCutoff;
-					material.doubleSided = hdr.doubleSided != 0;
-					material.alphaBlend = hdr.alphaBlend != 0;
-					material.additiveBlend = hdr.alphaBlend == 2;
-					material.alphaMask = hdr.alphaMask != 0;
-					material.modulateVertexColor = hdr.modulateVertexColor != 0;
-					material.foliage = hdr.foliage != 0;
-					material.bakedLighting = (hdr.bakedLighting & kMaterialDiskBaked) != 0;
-					material.sky = (hdr.bakedLighting & kMaterialDiskSky) != 0;
-					material.lightShaft = (hdr.bakedLighting & kMaterialDiskLightShaft) != 0;
-					material.gem = (hdr.bakedLighting & kMaterialDiskGem) != 0;
-					material.sheen = (hdr.bakedLighting & kMaterialDiskSheen) != 0;
-					material.water = (hdr.bakedLighting & kMaterialDiskWater) != 0;
-					material.character = (hdr.bakedLighting & kMaterialDiskCharacter) != 0;
-					material.objectLit = hdr.objectLit != 0;
-					material.uvScroll = glm::vec2(hdr.uvScroll[0], hdr.uvScroll[1]);
-
-					for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
-					{
-						auto type = reader.Read<uint8_t>();
-						const std::string texRelPath = reader.ReadString();
-						const std::string texPath = io::FileSystem::ResolveRelative(presetPath, texRelPath);
-
-						auto texType = static_cast<TextureTypeDisk>(type);
-
-						// Only base colour and emissive are sRGB-encoded; the rest are data.
-						const TextureColorSpace colorSpace =
-						        (texType == TextureTypeDisk::BaseColor || texType == TextureTypeDisk::Emissive) ? TextureColorSpace::Srgb : TextureColorSpace::Linear;
-						const TextureHandle tex = m_textureRegistry->Acquire(texPath, colorSpace);
-
-						switch (texType)
-						{
-							case TextureTypeDisk::BaseColor:
-								material.albedoTex = tex;
-								break;
-							case TextureTypeDisk::Normal:
-								material.normalTex = tex;
-								break;
-							case TextureTypeDisk::MetallicRoughness:
-								material.metallicRoughnessTex = tex;
-								break;
-							case TextureTypeDisk::Occlusion:
-								material.occlusionTex = tex;
-								break;
-							case TextureTypeDisk::Emissive:
-								material.emissiveTex = tex;
-								break;
-						}
-					}
-
-					std::string shaderVfsPath = reader.ReadString();
-					if (!shaderVfsPath.empty())
-					{
-						material.templateDesc.shaderVfsPath = InternShaderVfsPath(std::move(shaderVfsPath));
-					}
-
-					AE_INFO(LogCategory::Engine, "Loaded binary material '{}'.", requestedPath);
-					return material;
-				}
-			}
-		}
-
-		AE_TRY(text, ReadTextFile(presetPath));
-		const MaterialPresetSpec spec = MaterialSerializer::Parse(presetPath, *text);
-		MaterialAsset material = spec.material;
-		if (!spec.shaderVfsPath.empty())
-		{
-			material.templateDesc.shaderVfsPath = InternShaderVfsPath(spec.shaderVfsPath);
+			material.templateDesc.shaderVfsPath = InternShaderVfsPath(spec->shaderVfsPath);
 		}
 
 		auto acquireTexture = [this](std::string_view texturePath, TextureColorSpace colorSpace) -> TextureHandle
@@ -329,38 +149,18 @@ namespace aether
 			return m_textureRegistry->Acquire(texturePath, colorSpace);
 		};
 
-		std::string autoAlbedo;
-		std::string autoNormal;
-		std::string autoMetallicRoughness;
-		std::string autoOcclusion;
-		std::string autoEmissive;
-		if (!folderPath.empty())
-		{
-			autoAlbedo = ResolveFirstAliasInFolder(folderPath, {"albedo", "basecolor", "base_color", "diffuse", "color"});
-			autoNormal = ResolveFirstAliasInFolder(folderPath, {"normal", "nrm"});
-			autoMetallicRoughness = ResolveFirstAliasInFolder(folderPath, {"metallicroughness", "metal_rough", "metalrough", "orm", "roughness", "metallic"});
-			autoOcclusion = ResolveFirstAliasInFolder(folderPath, {"occlusion", "ao", "ambientocclusion"});
-			autoEmissive = ResolveFirstAliasInFolder(folderPath, {"emissive", "emission"});
-		}
-
-		const std::string albedoPath = !spec.albedoPath.empty() ? spec.albedoPath : autoAlbedo;
-		const std::string normalPath = !spec.normalPath.empty() ? spec.normalPath : autoNormal;
-		const std::string metallicRoughnessPath = !spec.metallicRoughnessPath.empty() ? spec.metallicRoughnessPath : autoMetallicRoughness;
-		const std::string occlusionPath = !spec.occlusionPath.empty() ? spec.occlusionPath : autoOcclusion;
-		const std::string emissivePath = !spec.emissivePath.empty() ? spec.emissivePath : autoEmissive;
-
 		// Base colour and emissive carry light and are sRGB-encoded. The rest carry
 		// numbers - directions, roughness, occlusion - and must not be run through the
 		// sampler's sRGB decode.
-		material.albedoTex = acquireTexture(albedoPath, TextureColorSpace::Srgb);
-		material.normalTex = acquireTexture(normalPath, TextureColorSpace::Linear);
-		material.metallicRoughnessTex = acquireTexture(metallicRoughnessPath, TextureColorSpace::Linear);
-		material.occlusionTex = acquireTexture(occlusionPath, TextureColorSpace::Linear);
-		material.emissiveTex = acquireTexture(emissivePath, TextureColorSpace::Srgb);
+		material.albedoTex = acquireTexture(spec->albedoPath, TextureColorSpace::Srgb);
+		material.normalTex = acquireTexture(spec->normalPath, TextureColorSpace::Linear);
+		material.metallicRoughnessTex = acquireTexture(spec->metallicRoughnessPath, TextureColorSpace::Linear);
+		material.occlusionTex = acquireTexture(spec->occlusionPath, TextureColorSpace::Linear);
+		material.emissiveTex = acquireTexture(spec->emissivePath, TextureColorSpace::Srgb);
 
 		AE_INFO(LogCategory::Engine,
 		        "Loaded material preset '{}' (albedo={}, normal={}, metallicRoughness={}, occlusion={}, emissive={}).",
-		        requestedPath,
+		        path,
 		        material.albedoTex.IsValid() ? "yes" : "no",
 		        material.normalTex.IsValid() ? "yes" : "no",
 		        material.metallicRoughnessTex.IsValid() ? "yes" : "no",

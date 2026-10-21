@@ -1,8 +1,15 @@
 #include <doctest/doctest.h>
 #include <array>
+#include <chrono>
+#include <cstring>
+#include <filesystem>
+#include <vector>
+
+#include <BinaryFormats.hpp>
 
 #include "material/MaterialSerializer.hpp"
 #include "material/MaterialOverrides.hpp"
+#include "io/FileSystem.hpp"
 
 using namespace aether;
 
@@ -131,4 +138,181 @@ TEST_CASE("A texture path written relative to the material resolves against it")
 	const MaterialPresetSpec parsed = MaterialSerializer::Parse("project://assets/materials/rock.material.toml",
 	        "[textures]\nalbedo = 'textures/rock.png'\n");
 	CHECK(parsed.albedoPath == "project://assets/materials/textures/rock.png");
+}
+
+namespace
+{
+	void EnsureMaterialMount()
+	{
+		if (!io::FileSystem::IsInitialized()) { io::FileSystem::Initialize(); }
+		if (!io::FileSystem::IsMounted("material_loader_tests"))
+		{
+			const auto root = std::filesystem::temp_directory_path() / ("aether_material_loader_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+			std::filesystem::create_directories(root / "folder");
+			std::filesystem::create_directories(root / "published");
+			io::FileSystem::Mount("material_loader_tests", root);
+		}
+	}
+
+	void WriteMaterialText(std::string_view name, std::string_view text)
+	{
+		EnsureMaterialMount();
+		REQUIRE(io::FileSystem::WriteFileText("material_loader_tests://" + std::string(name), text).has_value());
+	}
+
+	void WriteMaterialBytes(std::span<const std::byte> bytes)
+	{
+		EnsureMaterialMount();
+		REQUIRE(io::FileSystem::WriteFile("material_loader_tests://cooked.material", bytes).has_value());
+	}
+
+	std::vector<std::byte> CookedMaterial(std::uint8_t type = static_cast<std::uint8_t>(TextureTypeDisk::BaseColor), std::string_view texture = "maps/base.texture")
+	{
+		MaterialHeaderDisk header;
+		header.baseColorFactor[0] = 0.25f;
+		header.metallicFactor = 0.3f;
+		header.roughnessFactor = 0.7f;
+		header.emissiveFactor[1] = 2.5f;
+		header.alphaCutoff = 0.4f;
+		header.doubleSided = header.alphaMask = header.modulateVertexColor = header.foliage = header.objectLit = 1;
+		header.alphaBlend = 2;
+		header.bakedLighting = kMaterialDiskBaked | kMaterialDiskSky | kMaterialDiskLightShaft | kMaterialDiskGem | kMaterialDiskSheen | kMaterialDiskWater | kMaterialDiskCharacter;
+		header.uvScroll[0] = 0.125f;
+		header.uvScroll[1] = -0.25f;
+		header.texturePathCount = 1;
+		std::vector<std::byte> bytes(sizeof(header));
+		std::memcpy(bytes.data(), &header, sizeof(header));
+		bytes.push_back(static_cast<std::byte>(type));
+		auto appendString = [&](std::string_view text)
+		{
+			const auto size = static_cast<std::uint16_t>(text.size());
+			bytes.push_back(static_cast<std::byte>(size & 0xff));
+			bytes.push_back(static_cast<std::byte>(size >> 8));
+			for (const char character: text) { bytes.push_back(static_cast<std::byte>(character)); }
+		};
+		appendString(texture);
+		appendString("shaders://custom.spv");
+		return bytes;
+	}
+} // namespace
+
+TEST_CASE("Material loader resolves folder aliases with native extension and override precedence")
+{
+	WriteMaterialText("folder/properties.toml", "[material]\nroughnessfactor = 0.3\n[textures]\nnormal = 'explicit.texture'\n");
+	for (const auto* name: {"albedo.png", "albedo.texture", "basecolor.texture", "normal.texture", "orm.texture", "ao.texture", "emission.texture"})
+	{
+		WriteMaterialText("folder/" + std::string(name), "fixture");
+	}
+	const auto result = MaterialSerializer::Load("material_loader_tests://folder/");
+	REQUIRE(result.has_value());
+	CHECK(result->material.roughnessFactor == doctest::Approx(0.3f));
+	CHECK(result->albedoPath == "material_loader_tests://folder/albedo.texture");
+	CHECK(result->normalPath == "material_loader_tests://folder/explicit.texture");
+	CHECK(result->metallicRoughnessPath == "material_loader_tests://folder/orm.texture");
+	CHECK(result->occlusionPath == "material_loader_tests://folder/ao.texture");
+	CHECK(result->emissivePath == "material_loader_tests://folder/emission.texture");
+}
+
+TEST_CASE("Material loader reads authored files and reports malformed and missing presets")
+{
+	WriteMaterialText("authored.material.toml", "[material]\nroughnessfactor = 0.6\n[textures]\nalbedo = 'maps/color.texture'\n");
+	const auto result = MaterialSerializer::Load("material_loader_tests://authored.material.toml");
+	REQUIRE(result.has_value());
+	CHECK(result->material.roughnessFactor == doctest::Approx(0.6f));
+	CHECK(result->albedoPath == "material_loader_tests://maps/color.texture");
+	WriteMaterialText("broken.material.toml", "[material\n");
+	CHECK_FALSE(MaterialSerializer::Load("material_loader_tests://broken.material.toml").has_value());
+	CHECK_FALSE(MaterialSerializer::Load("material_loader_tests://missing.material.toml").has_value());
+}
+
+TEST_CASE("Material loader resolves published folder presets and their sibling cooked maps")
+{
+	EnsureMaterialMount();
+	MaterialHeaderDisk header;
+	header.roughnessFactor = 0.45f;
+	std::vector<std::byte> bytes(sizeof(header) + sizeof(std::uint16_t));
+	std::memcpy(bytes.data(), &header, sizeof(header));
+	REQUIRE(io::FileSystem::WriteFile("material_loader_tests://published.material", bytes).has_value());
+	REQUIRE(io::FileSystem::WriteFileText("material_loader_tests://published/albedo.texture", "cooked texture fixture").has_value());
+	const auto result = MaterialSerializer::Load("material_loader_tests://published/");
+	REQUIRE(result.has_value());
+	CHECK(result->material.roughnessFactor == doctest::Approx(0.45f));
+	CHECK(result->albedoPath == "material_loader_tests://published/albedo.texture");
+	CHECK(result->normalPath.empty());
+}
+
+TEST_CASE("Material loader preserves cooked header flags, slot types and optional shader trailer")
+{
+	const auto bytes = CookedMaterial();
+	WriteMaterialBytes(bytes);
+	const auto result = MaterialSerializer::Load("material_loader_tests://cooked.material");
+	REQUIRE(result.has_value());
+	const auto& material = result->material;
+	CHECK(material.baseColorFactor.x == doctest::Approx(0.25f));
+	CHECK(material.metallicFactor == doctest::Approx(0.3f));
+	CHECK(material.roughnessFactor == doctest::Approx(0.7f));
+	CHECK(material.emissiveFactor.y == doctest::Approx(2.5f));
+	CHECK(material.alphaCutoff == doctest::Approx(0.4f));
+	CHECK(material.uvScroll == glm::vec2(0.125f, -0.25f));
+	CHECK(material.doubleSided);
+	CHECK(material.alphaBlend);
+	CHECK(material.additiveBlend);
+	CHECK(material.alphaMask);
+	CHECK(material.modulateVertexColor);
+	CHECK(material.foliage);
+	CHECK(material.bakedLighting);
+	CHECK(material.sky);
+	CHECK(material.lightShaft);
+	CHECK(material.gem);
+	CHECK(material.sheen);
+	CHECK(material.water);
+	CHECK(material.character);
+	CHECK(material.objectLit);
+	CHECK(result->albedoPath == "material_loader_tests://maps/base.texture");
+	CHECK(result->shaderVfsPath == "shaders://custom.spv");
+	const std::string MaterialPresetSpec::* slots[] = {&MaterialPresetSpec::albedoPath, &MaterialPresetSpec::metallicRoughnessPath, &MaterialPresetSpec::normalPath, &MaterialPresetSpec::occlusionPath, &MaterialPresetSpec::emissivePath};
+	for (std::uint8_t type = 0; type < 5; ++type)
+	{
+		auto legacy = CookedMaterial(type);
+		legacy.resize(legacy.size() - 2 - std::string_view("shaders://custom.spv").size());
+		WriteMaterialBytes(legacy);
+		const auto loaded = MaterialSerializer::Load("material_loader_tests://cooked.material");
+		REQUIRE(loaded.has_value());
+		CHECK((*loaded).*slots[type] == "material_loader_tests://maps/base.texture");
+		CHECK(loaded->shaderVfsPath.empty());
+	}
+}
+
+TEST_CASE("Material loader rejects truncated cooked fields rather than inventing defaults")
+{
+	const auto bytes = CookedMaterial();
+	const auto legacyEnd = sizeof(MaterialHeaderDisk) + 3 + std::string_view("maps/base.texture").size();
+	for (std::size_t size = 0; size < bytes.size(); ++size)
+	{
+		if (size == legacyEnd) { continue; }
+		CAPTURE(size);
+		WriteMaterialBytes(std::span(bytes).first(size));
+		CHECK_FALSE(MaterialSerializer::Load("material_loader_tests://cooked.material").has_value());
+	}
+	for (const auto offset: {std::size_t{0}, std::size_t{4}})
+	{
+		auto invalid = bytes;
+		invalid[offset] = std::byte{0xff};
+		WriteMaterialBytes(invalid);
+		CHECK_FALSE(MaterialSerializer::Load("material_loader_tests://cooked.material").has_value());
+	}
+	WriteMaterialBytes(CookedMaterial(255));
+	CHECK_FALSE(MaterialSerializer::Load("material_loader_tests://cooked.material").has_value());
+}
+
+TEST_CASE("Material loader rejects resource paths that escape the VFS or contain embedded nul")
+{
+	for (const auto reference: {std::string("../../outside.texture"), std::string("project://../outside.texture"), std::string("bad\0name.texture", 16)})
+	{
+		WriteMaterialBytes(CookedMaterial(0, reference));
+		CHECK_FALSE(MaterialSerializer::Load("material_loader_tests://cooked.material").has_value());
+	}
+	WriteMaterialText("escape.material.toml", "[textures]\nalbedo = '../../outside.texture'\n");
+	CHECK_FALSE(MaterialSerializer::Load("material_loader_tests://escape.material.toml").has_value());
+	CHECK_FALSE(MaterialSerializer::Load("material_loader_tests://../outside.material").has_value());
 }

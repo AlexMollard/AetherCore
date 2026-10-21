@@ -15,7 +15,7 @@ namespace aether::app::web
 		WebGameplay(World& world, aether::scripting::GameplayAccess& access, webgpu::WebGpuDevice& graphics, std::array<bool, 512>& keys, std::array<bool, 512>& pressedKeys, const AetherGameplayModuleApi& module);
 		~WebGameplay();
 		Expected<void> Initialize();
-		Expected<void> Frame(double now, bool capture);
+		Expected<void> Frame(double now, bool& capture);
 		AetherGameplayStatus Invoke(const AetherGameplayServiceRequest& request, AetherGameplayPropertyValue& result, AetherGameplayUtf8Buffer buffer);
 		void Stop();
 

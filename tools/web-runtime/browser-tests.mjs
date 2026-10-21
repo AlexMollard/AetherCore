@@ -181,7 +181,7 @@ try {
 		query = '?platform=1';
 	    if (name === 'reference-gameplay' || name === 'browser-key-latch')
 		query = '?reference=1';
-	    if (name === 'authored-models')
+	    if (name === 'authored-models' || name === 'capture-backpressure')
 		query = '?reference=1&scene=BrowserModels';
 	    if (name === 'authored-dependencies')
 		query = '?reference=1&scene=BrowserDependencies';
@@ -202,6 +202,19 @@ try {
 		query += (query ? '&' : '?') + 'test=1';
 	    }
 	    await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);
+	    if (name === 'capture-backpressure') {
+		await page.waitForFunction(() => aetherRuntime.frames > 2 || aetherRuntime.status === 'failed');
+		await page.evaluate(() => { aetherTestInternal.rejectCaptureOnce = true; });
+		const image = await capture(page);
+		assert.deepEqual(pixel(image, 32, 32), [255, 0, 0, 255]);
+		assert.equal(await page.evaluate(() => aetherRuntime.captureDeferred), 1);
+		assert.deepEqual(await page.evaluate(() => aetherRuntime.diagnostics), []);
+		await page.evaluate(() => Module._aether_web_stop());
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
+		item.scope = 'A capture survives a declined frame and reads the next submitted GPU frame';
+		item.status = 'passed';
+		continue;
+	    }
 	    if (name === 'authored-skin') {
 		await page.waitForFunction(() => aetherRuntime.scene === 'BrowserSkin' || aetherRuntime.status === 'failed');
 		assert.notEqual(await page.evaluate(() => aetherRuntime.status), 'failed', JSON.stringify(await page.evaluate(() => aetherRuntime.diagnostics)));
@@ -278,6 +291,7 @@ try {
 		nearPixel(8, 16, [128, 128, 128, 255], 'sRGB albedo 128 decodes and encodes back to 128');
 		nearPixel(24, 16, [128, 128, 128, 255], 'sRGB emissive texture contributes to a black base');
 		nearPixel(32, 32, [32, 32, 32, 255], 'Minified stripes use the shared native cooked mip filter');
+		assert.deepEqual(pixel(image, 16, 32), [255, 0, 0, 255], 'Linked cooked binary material retains its native base color');
 		assert.deepEqual(pixel(image, 37, 13).slice(0, 3), [0, 0, 255], 'Transparent alpha checker reveals the blue backing');
 		assert.deepEqual(pixel(image, 43, 13).slice(0, 3), [255, 0, 0], 'Opaque alpha checker writes the red cutout');
 		assert.deepEqual(pixel(image, 37, 19).slice(0, 3), [255, 0, 0], 'Second checker row retains the opposite cell');
@@ -287,7 +301,7 @@ try {
 		nearPixel(24, 48, [128, 0, 255, 255], 'Additive textured red retains the opaque blue backing');
 		assert.deepEqual(pixel(image, 40, 48), [255, 0, 255, 255], 'Double-sided material renders its back face');
 		assert.deepEqual(pixel(image, 56, 48), [0, 0, 0, 255], 'Single-sided material culls its back face');
-		assert.equal(await page.evaluate(() => aetherRuntime.meshDraws), 12);
+		assert.equal(await page.evaluate(() => aetherRuntime.meshDraws), 13);
 		await page.screenshot({path:path.join(path.dirname(reportPath), 'authored-materials.png')});
 		await page.evaluate(() => Module._aether_web_stop());
 		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);

@@ -1,6 +1,11 @@
 #include "material/MaterialSerializer.hpp"
 
 #include <format>
+#include <filesystem>
+
+#include <BinaryFormats.hpp>
+
+#include "utils/BinaryReader.hpp"
 
 #include "io/FileSystem.hpp"
 #include "material/TextureRegistry.hpp"
@@ -12,6 +17,74 @@ namespace aether
 	{
 	namespace
 	{
+		std::string NormalizeVirtualFolder(std::string path)
+		{
+			while (!path.empty() && (path.back() == '/' || path.back() == '\\'))
+			{
+				path.pop_back();
+			}
+			return path;
+		}
+
+		std::string ResolvePathInFolder(std::string_view folderPath, const std::string& resourcePath)
+		{
+			if (resourcePath.empty())
+			{
+				return {};
+			}
+			if (resourcePath.contains("://"))
+			{
+				return resourcePath;
+			}
+			const std::string folder = NormalizeVirtualFolder(std::string(folderPath));
+			return folder + "/" + resourcePath;
+		}
+
+		std::string ResolveStemInFolder(std::string_view folderPath, const std::string& stem)
+		{
+			if (stem.empty())
+			{
+				return {};
+			}
+
+			if (stem.contains("://"))
+			{
+				return io::FileSystem::Exists(stem) ? stem : std::string();
+			}
+
+			std::string direct = ResolvePathInFolder(folderPath, stem);
+			if (io::FileSystem::Exists(direct))
+			{
+				return direct;
+			}
+
+			const std::string noExt = std::filesystem::path(stem).extension().empty() ? stem : std::filesystem::path(stem).stem().string();
+			constexpr std::string_view kExts[] = {".texture", ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".webp", ".dds", ".ktx2"};
+			for (const std::string_view ext: kExts)
+			{
+				const std::string candidate = ResolvePathInFolder(folderPath, noExt + std::string(ext));
+				if (io::FileSystem::Exists(candidate))
+				{
+					return candidate;
+				}
+			}
+
+			return {};
+		}
+
+		std::string ResolveFirstAliasInFolder(std::string_view folderPath, std::initializer_list<std::string_view> aliases)
+		{
+			for (const std::string_view alias: aliases)
+			{
+				const std::string resolved = ResolveStemInFolder(folderPath, std::string(alias));
+				if (!resolved.empty())
+				{
+					return resolved;
+				}
+			}
+			return {};
+		}
+
 		struct BooleanField
 		{
 			std::string_view key;
@@ -23,6 +96,115 @@ namespace aether
 		        {"lightshaft", &MaterialAsset::lightShaft}, {"objectlit", &MaterialAsset::objectLit},
 		        {"gem", &MaterialAsset::gem}, {"sheen", &MaterialAsset::sheen},
 		        {"water", &MaterialAsset::water}, {"character", &MaterialAsset::character}};
+
+		bool IsSafePath(std::string_view path)
+		{
+			if (path.find('\0') != std::string_view::npos)
+			{
+				return false;
+			}
+			const auto mount = path.find("://");
+			const auto relative = mount == std::string_view::npos ? path : path.substr(mount + 3);
+			if (relative.starts_with('/') || relative.starts_with('\\') || relative.contains(':'))
+			{
+				return false;
+			}
+			std::size_t at = 0;
+			while (at < relative.size())
+			{
+				const auto end = relative.find_first_of("/\\", at);
+				if (relative.substr(at, end == std::string_view::npos ? relative.size() - at : end - at) == "..")
+				{
+					return false;
+				}
+				if (end == std::string_view::npos) { break; }
+				at = end + 1;
+			}
+			return true;
+		}
+
+		bool ReadCheckedString(BinaryReader& reader, std::string& value)
+		{
+			std::uint16_t size = 0;
+			if (!reader.TryRead(size) || !reader.CanRead(size))
+			{
+				return false;
+			}
+			value.assign(reinterpret_cast<const char*>(reader.Data()), size);
+			reader.Advance(size);
+			return true;
+		}
+
+		Expected<MaterialPresetSpec> LoadBinary(std::string_view path)
+		{
+			AE_TRY(bytes, io::FileSystem::ReadFile(path));
+			if (bytes->size() < sizeof(MaterialHeaderDisk))
+			{
+				AE_UNEXPECTED(AetherError::Asset("Truncated material header: " + std::string(path)));
+			}
+			BinaryReader reader(*bytes);
+			MaterialHeaderDisk hdr;
+			if (!reader.TryRead(hdr) || !CheckMagic(hdr))
+			{
+				AE_UNEXPECTED(AetherError::Asset("Invalid material header: " + std::string(path)));
+			}
+			MaterialPresetSpec spec;
+			auto& material = spec.material;
+			material.baseColorFactor = glm::vec4(hdr.baseColorFactor[0], hdr.baseColorFactor[1], hdr.baseColorFactor[2], hdr.baseColorFactor[3]);
+			material.metallicFactor = hdr.metallicFactor;
+			material.roughnessFactor = hdr.roughnessFactor;
+			material.emissiveFactor = glm::vec3(hdr.emissiveFactor[0], hdr.emissiveFactor[1], hdr.emissiveFactor[2]);
+			material.alphaCutoff = hdr.alphaCutoff;
+			material.doubleSided = hdr.doubleSided != 0;
+			material.alphaBlend = hdr.alphaBlend != 0;
+			material.additiveBlend = hdr.alphaBlend == 2;
+			material.alphaMask = hdr.alphaMask != 0;
+			material.modulateVertexColor = hdr.modulateVertexColor != 0;
+			material.foliage = hdr.foliage != 0;
+			material.bakedLighting = (hdr.bakedLighting & kMaterialDiskBaked) != 0;
+			material.sky = (hdr.bakedLighting & kMaterialDiskSky) != 0;
+			material.lightShaft = (hdr.bakedLighting & kMaterialDiskLightShaft) != 0;
+			material.gem = (hdr.bakedLighting & kMaterialDiskGem) != 0;
+			material.sheen = (hdr.bakedLighting & kMaterialDiskSheen) != 0;
+			material.water = (hdr.bakedLighting & kMaterialDiskWater) != 0;
+			material.character = (hdr.bakedLighting & kMaterialDiskCharacter) != 0;
+			material.objectLit = hdr.objectLit != 0;
+			material.uvScroll = glm::vec2(hdr.uvScroll[0], hdr.uvScroll[1]);
+
+			for (std::uint8_t t = 0; t < hdr.texturePathCount; ++t)
+			{
+				std::uint8_t type = 0;
+				std::string reference;
+				if (!reader.TryRead(type) || !ReadCheckedString(reader, reference) || reference.empty())
+				{
+					AE_UNEXPECTED(AetherError::Asset("Invalid material texture record: " + std::string(path)));
+				}
+				const auto resolved = io::FileSystem::ResolveRelative(path, reference);
+				if (!IsSafePath(resolved))
+				{
+					AE_UNEXPECTED(AetherError::Asset("Invalid material texture path: " + std::string(path)));
+				}
+				switch (static_cast<TextureTypeDisk>(type))
+				{
+					case TextureTypeDisk::BaseColor: spec.albedoPath = resolved; break;
+					case TextureTypeDisk::Normal: spec.normalPath = resolved; break;
+					case TextureTypeDisk::MetallicRoughness: spec.metallicRoughnessPath = resolved; break;
+					case TextureTypeDisk::Occlusion: spec.occlusionPath = resolved; break;
+					case TextureTypeDisk::Emissive: spec.emissivePath = resolved; break;
+					default: AE_UNEXPECTED(AetherError::Asset("Unknown material texture slot: " + std::string(path)));
+				}
+			}
+			// Original cooked materials predate the optional shader string trailer.
+			if (reader.Remaining() != 0 && !ReadCheckedString(reader, spec.shaderVfsPath))
+			{
+				AE_UNEXPECTED(AetherError::Asset("Truncated material shader path: " + std::string(path)));
+			}
+			if (reader.Remaining() != 0 || !IsSafePath(spec.shaderVfsPath))
+			{
+				AE_UNEXPECTED(AetherError::Asset("Invalid material shader path or trailing data: " + std::string(path)));
+			}
+			return spec;
+		}
 
 		// True for "[graph]" and "[graph.node.0]" but not "[graphics]".
 		bool IsGraphHeader(std::string_view trimmed)
@@ -74,6 +256,61 @@ namespace aether
 			return out;
 		}
 	} // namespace
+
+	Expected<MaterialPresetSpec> Load(std::string_view path)
+	{
+		if (path.empty() || !IsSafePath(path))
+		{
+			AE_UNEXPECTED(AetherError::Asset("Invalid material path: " + std::string(path)));
+		}
+		const auto requested = NormalizeVirtualFolder(std::string(path));
+		std::string presetPath = requested;
+		std::string folderPath;
+		if (io::FileSystem::Exists(requested + "/properties.toml"))
+		{
+			folderPath = requested;
+			presetPath += "/properties.toml";
+		}
+		else if (io::FileSystem::Exists(requested + ".material"))
+		{
+			// Publishing replaces folder/properties.toml with folder.material while
+			// retaining the folder's automatically named texture maps beside it.
+			folderPath = requested;
+			presetPath += ".material";
+		}
+		MaterialPresetSpec spec;
+		if (presetPath.ends_with(".material"))
+		{
+			AE_TRY(loaded, LoadBinary(presetPath));
+			spec = std::move(*loaded);
+		}
+		else
+		{
+			AE_TRY(text, io::FileSystem::ReadFileText(presetPath));
+			bool ok = false;
+			spec = Parse(presetPath, *text, &ok);
+			if (!ok)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Invalid material TOML: " + presetPath));
+			}
+		}
+		if (!folderPath.empty())
+		{
+			if (spec.albedoPath.empty()) { spec.albedoPath = ResolveFirstAliasInFolder(folderPath, {"albedo", "basecolor", "base_color", "diffuse", "color"}); }
+			if (spec.normalPath.empty()) { spec.normalPath = ResolveFirstAliasInFolder(folderPath, {"normal", "nrm"}); }
+			if (spec.metallicRoughnessPath.empty()) { spec.metallicRoughnessPath = ResolveFirstAliasInFolder(folderPath, {"metallicroughness", "metal_rough", "metalrough", "orm", "roughness", "metallic"}); }
+			if (spec.occlusionPath.empty()) { spec.occlusionPath = ResolveFirstAliasInFolder(folderPath, {"occlusion", "ao", "ambientocclusion"}); }
+			if (spec.emissivePath.empty()) { spec.emissivePath = ResolveFirstAliasInFolder(folderPath, {"emissive", "emission"}); }
+		}
+		for (const auto* reference: {&spec.albedoPath, &spec.normalPath, &spec.metallicRoughnessPath, &spec.occlusionPath, &spec.emissivePath, &spec.shaderVfsPath})
+		{
+			if (!IsSafePath(*reference))
+			{
+				AE_UNEXPECTED(AetherError::Asset("Invalid material resource path: " + presetPath));
+			}
+		}
+		return spec;
+	}
 
 	MaterialPresetSpec Parse(std::string_view path, const std::string& text, bool* ok)
 	{

@@ -24,7 +24,7 @@ scale = [1.5, 1.5, 1.0]
 kind = 'primitive'
 path = 'quad'
 [entities.material]
-asset = 'project://assets/materials/browser-gray.material.toml'
+asset = 'project://assets/materials/browser-gray'
 
 [[entities]]
 name = 'Gray emissive sRGB round trip'
@@ -83,6 +83,16 @@ path = 'quad'
 [entities.material]
 albedo = 'project://assets/textures/browser-material-mips.png'
 double_sided = true
+
+[[entities]]
+name = 'Linked cooked binary material'
+mesh_renderer = true
+position = [-2.0, 0.0, -2.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+asset = 'project://assets/models/materials/Red.material'
 
 # The near layer is deliberately authored before the far layer.
 [[entities]]

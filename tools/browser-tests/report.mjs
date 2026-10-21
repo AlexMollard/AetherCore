@@ -3,6 +3,7 @@ export const legacyCaseNames = [
     'authored-skin',
     'authored-materials',
     'authored-dependencies',
+    'capture-backpressure',
     'mesh-depth-resize',
     'mesh-invalid-frame',
     'sprite-input-resize-shutdown',

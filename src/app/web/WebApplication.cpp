@@ -461,7 +461,6 @@ namespace
 					gameReady = true;
 				}
 				const auto frame = game->Frame(now, capture);
-				capture = false;
 				if (!frame)
 				{
 					Failure(frame.error().message.c_str());

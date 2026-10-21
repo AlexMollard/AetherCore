@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "material/MaterialAsset.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether
 {
@@ -46,6 +47,10 @@ namespace aether
 	// This text form is the one a person edits and git diffs.
 	namespace MaterialSerializer
 	{
+		// Loads authored files, folder presets (properties.toml plus map aliases), and cooked binaries.
+		// Texture references remain VFS paths; callers own texture acquisition and shader interning.
+		[[nodiscard]] Expected<MaterialPresetSpec> Load(std::string_view path);
+
 		// `path` is the material's own VFS path, used to resolve relative texture references.
 		// `ok` reports whether the text parsed. A malformed file yields a DEFAULT spec, and
 		// writing that back over the user's material destroys it - so anything that may save

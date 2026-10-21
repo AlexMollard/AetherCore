@@ -101,7 +101,7 @@ namespace aether::app::web
 		return {};
 	}
 
-	Expected<void> WebGameplay::Frame(double now, bool capture)
+	Expected<void> WebGameplay::Frame(double now, bool& capture)
 	{
 		if (EM_ASM_INT({ return aetherPlatform.failed; }))
 		{
@@ -264,6 +264,7 @@ namespace aether::app::web
 		if (m_graphics.Draw(packet, capture))
 		{
 			++m_frames;
+			capture = false;
 		}
 		for (const auto entity: m_world.View<ui::UIText>())
 		{

@@ -72,6 +72,7 @@ async function materialPng(name, width, height, rgba) {
     ]));
 }
 await materialPng('browser-material-gray.png', 1, 1, () => [128, 128, 128, 255]);
+await cp(path.join(directory, 'assets/textures/browser-material-gray.png'), path.join(directory, 'assets/materials/browser-gray/albedo.png'));
 await materialPng('browser-material-alpha.png', 1, 1, () => [255, 255, 255, 128]);
 await materialPng('browser-material-mask.png', 2, 2, (x, y) => [255, 255, 255, (x + y) % 2 ? 255 : 0]);
 // One white column per eight texels: level 3 is encoded gray 32. Base-only
