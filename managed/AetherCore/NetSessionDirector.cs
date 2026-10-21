@@ -513,7 +513,7 @@ public abstract class NetSessionDirector : EntityScript
             Log.Error($"Net session: could not spawn prefab '{PlayerPrefab}' for connection {connection}");
             return player;
         }
-        player.EulerDegrees = SpawnRotation(slot);
+        Api.EntitySetEuler(player, SpawnRotation(slot));
         Log.Info($"Net session: spawned player for connection {connection} at spawn {slot}");
         return player;
     }
@@ -726,7 +726,7 @@ public abstract class NetSessionDirector : EntityScript
         {
             return Vector3.Zero;
         }
-        Vector3 euler = marker.EulerDegrees;
+        Vector3 euler = Api.EntityEuler(marker);
         return new Vector3(0.0f, euler.Y, 0.0f);
     }
 
@@ -1091,7 +1091,7 @@ public abstract class NetSessionDirector : EntityScript
         {
             return;
         }
-        player.EulerDegrees = SpawnRotation(slot);
+        Api.EntitySetEuler(player, SpawnRotation(slot));
         Api.NetSetPlayerName(player, NetSession.LocalPlayerName);
         LocalPlayer = player;
         // Nothing is added to the roster here: SyncRoster picks this player up on the next

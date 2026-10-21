@@ -116,6 +116,12 @@ internal interface IEngineBackend
     /// <summary><see cref="Entity.Position"/>, read half.</summary>
     Vector3 EntityPosition(Entity entity);
 
+    /// <summary><see cref="Entity.EulerDegrees"/>, read half.</summary>
+    Vector3 EntityEuler(Entity entity);
+
+    /// <summary><see cref="Entity.EulerDegrees"/>, write half.</summary>
+    void EntitySetEuler(Entity entity, Vector3 euler);
+
     /// <summary><see cref="Entity.SetActive"/>.</summary>
     void EntitySetActive(Entity entity, bool active);
 
@@ -253,6 +259,12 @@ internal sealed class NativeEngineBackend : IEngineBackend
 
     /// <inheritdoc/>
     public Vector3 EntityPosition(Entity entity) => entity.Position;
+
+    /// <inheritdoc/>
+    public Vector3 EntityEuler(Entity entity) => entity.EulerDegrees;
+
+    /// <inheritdoc/>
+    public void EntitySetEuler(Entity entity, Vector3 euler) => entity.EulerDegrees = euler;
 
     /// <inheritdoc/>
     public void EntitySetActive(Entity entity, bool active) => entity.SetActive(active);

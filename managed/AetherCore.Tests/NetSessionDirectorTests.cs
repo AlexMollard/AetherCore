@@ -193,6 +193,22 @@ public sealed class NetSessionDirectorTests : SdkTestBase
         Assert.Equal(new Vector3(5.0f, 0.0f, 0.0f), Engine.Spawned[1].Position);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SpawnFacingCopiesOnlyMarkerYawThroughTheEngineBackend(bool host)
+    {
+        Engine.IsHost = host;
+        Entity marker = Engine.PlaceEntity("Spawn0", Vector3.Zero);
+        Engine.Eulers[marker.Id] = new Vector3(20.0f, 75.0f, 30.0f);
+        RecordingDirector director = NewDirector();
+        director.OnAttach();
+
+        Tick(director);
+
+        Assert.Equal(new Vector3(0.0f, 75.0f, 0.0f), Assert.Single(Engine.EulerWrites).Euler);
+    }
+
     [Fact]
     public void AConnectionThatIsStillThereIsNotSpawnedAgain()
     {

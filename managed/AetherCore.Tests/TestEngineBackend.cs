@@ -49,6 +49,9 @@ public sealed class TestEngineBackend : IEngineBackend
     /// <summary>World positions of the entities above.</summary>
     public Dictionary<uint, Vector3> Positions = new();
 
+    public Dictionary<uint, Vector3> Eulers = new();
+    public List<(Entity Entity, Vector3 Euler)> EulerWrites = new();
+
     /// <summary>Round-trip times reported per player entity.</summary>
     public Dictionary<uint, uint> Pings = new();
 
@@ -337,6 +340,15 @@ public sealed class TestEngineBackend : IEngineBackend
     /// <inheritdoc/>
     public Vector3 EntityPosition(Entity entity)
         => Positions.TryGetValue(entity.Id, out Vector3 p) ? p : Vector3.Zero;
+
+    public Vector3 EntityEuler(Entity entity)
+        => Eulers.TryGetValue(entity.Id, out Vector3 euler) ? euler : Vector3.Zero;
+
+    public void EntitySetEuler(Entity entity, Vector3 euler)
+    {
+        Eulers[entity.Id] = euler;
+        EulerWrites.Add((entity, euler));
+    }
 
     /// <inheritdoc/>
     public void EntitySetActive(Entity entity, bool active) => ActiveState[entity.Id] = active;
