@@ -327,6 +327,7 @@ def _supervise(job_id, repo):
     worker = None
     reason = None
     report = None
+    valid_worker_report = False
     try:
         with _lock(directory):
             _atomic_json(directory / 'report.json', _report(request, 'running', request['operation']))
@@ -363,6 +364,7 @@ def _supervise(job_id, repo):
                 try:
                     report = json.loads((directory / 'worker-report.json').read_text(encoding='utf-8'))
                     validate_report(report, job_id, code)
+                    valid_worker_report = True
                 except (OSError, ValueError, KeyError, TypeError) as exc:
                     report = _report(request, 'failed', 'worker', 'gameplay.worker_failed', f'Worker exited {code}; invalid or missing terminal report: {exc}')
     except Exception as exc:
@@ -374,9 +376,14 @@ def _supervise(job_id, repo):
             # Cancel and final publication use the same lock. Once cancellation wins,
             # an otherwise valid late worker pass can never become the public result.
             if reason != 'timeout' and (directory / 'cancel').exists():
-                report = _report(request, 'cancelled', 'cancelled')
+                if not valid_worker_report:
+                    report = _report(request, 'cancelled', 'cancelled')
+                report.update(status='cancelled', phase='cancelled', exitCode=130)
             elif reason == 'timeout':
-                report = _report(request, 'failed', 'timeout', 'gameplay.timeout', 'Gameplay job exceeded timeoutMs')
+                if not valid_worker_report:
+                    report = _report(request, 'failed', 'timeout')
+                report.update(status='failed', phase='timeout', exitCode=1)
+                report['diagnostics'].append(dict(code='gameplay.timeout', severity='error', message='Gameplay job exceeded timeoutMs'))
             if report is None:
                 report = _report(request, 'failed', 'supervisor', 'gameplay.missing_report', 'No terminal report was produced')
             report['durationMs'] = max(report['durationMs'], int((time.monotonic() - started) * 1000))

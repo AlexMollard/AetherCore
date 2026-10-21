@@ -27,14 +27,18 @@ if mode == 'tree':
     child = "import pathlib,sys,time; p=pathlib.Path(sys.argv[1]); (p/'descendant-started').touch(); time.sleep(3); (p/'descendant-survived').touch()"
     subprocess.Popen([sys.executable, '-c', child, str(pathlib.Path(a.report).parent)])
     time.sleep(30)
-if mode in ('cancel', 'late-pass'):
+if mode in ('cancel', 'cancel-evidence', 'late-pass'):
     while not pathlib.Path(a.cancel_file).exists(): time.sleep(.01)
-status = 'cancelled' if mode == 'cancel' else ('failed' if mode == 'failed' else 'passed')
+status = 'cancelled' if mode in ('cancel', 'cancel-evidence') else ('failed' if mode == 'failed' else 'passed')
 code = {'passed': 0, 'failed': 1, 'cancelled': 130}[status]
 out = dict(schemaVersion=1, jobId=r['jobId'], status=status, phase='complete', target=r.get('target','desktop'),
            language='csharp', profile='default', diagnostics=[], toolchains=[], artifacts=[],
            requiredChecks=[dict(name='worker', status='passed')], durationMs=1, exitCode=code)
 if status == 'failed': out['diagnostics'] = [dict(code='fixture.failure',severity='error',message='fixture failed')]
+if mode in ('cancel-evidence', 'late-pass'):
+    evidence = pathlib.Path(a.report).parent / 'partial-summary.json'
+    evidence.write_text('{}', encoding='utf-8')
+    out['artifacts'] = [dict(path=str(evidence), bytes=evidence.stat().st_size)]
 if mode == 'bad-check': out['requiredChecks'][0]['status'] = 'failed'
 if mode == 'wrong-id': out['jobId'] = 'wrong'
 pathlib.Path(a.report).write_text(json.dumps(out), encoding='utf-8')
@@ -43,6 +47,22 @@ sys.exit(9 if mode == 'contradiction' else code)
 
 
 class GameplayJobTests(unittest.TestCase):
+    def test_cancel_preserves_valid_worker_partial_evidence(self):
+        job_id = self.start('cancel-evidence')['jobId']
+        self.started(job_id)
+        jobs.cancel_job(job_id, repo=self.repo)
+        result = self.wait(job_id)['report']
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(len(result['artifacts']), 1)
+        self.assertTrue(Path(result['artifacts'][0]['path']).is_file())
+
+    def test_timeout_keeps_worker_evidence_but_cannot_become_late_success(self):
+        result = self.wait(self.start('late-pass', timeout=500)['jobId'])['report']
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['exitCode'], 1)
+        self.assertTrue(any(item['code'] == 'gameplay.timeout' for item in result['diagnostics']))
+        self.assertEqual(len(result['artifacts']), 1)
+
     def test_owned_child_receives_repaired_toolchain_environment_without_mutating_parent(self):
         environment = dict(os.environ)
         environment.pop('RUSTUP_HOME', None)
