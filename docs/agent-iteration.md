@@ -29,7 +29,40 @@ Failed compilation never stages an old cached success as a new run. A running jo
 
 `relaunch` continues to rebuild and start a fresh process using the requested scene/configuration. It does not migrate arbitrary live state. The measured reduction comes from compiler reuse; native hot reload would add lifetime and state-migration complexity without evidence that it is the next throughput bottleneck. Browser publication still performs its compilation/audit, package-integrity and browser/iframe verification checks.
 
-## Reproduce
+## Gameplay failure feedback
+
+Native desktop and headless runs for C# and Rust return assertion evidence directly in the existing CLI/MCP AgentReport. Each failed assertion has an error diagnostic whose `message` is a JSON object and whose `source.file` identifies the copied snapshot in `artifacts`. A checkpoint failure links `checkpoint-N.json` even when execution stops before final `state.json`. Passing checkpoints also remain available as artifacts.
+
+For example, `GAMEPLAY_ASSERTION_VALUE_MISMATCH` can contain:
+
+```json
+{"assertionIndex":0,"tick":90,"entity":"Result","type":"ReferenceResult","property":"score","expected":999,"actual":20,"actualPresent":true,"matchCount":1,"tolerance":0.0}
+```
+
+`tick` is completed simulation ticks; `assertionIndex` is zero-based within that snapshot's assertions. Parse the message with JSON to preserve escaped strings and exact integers. The stable failure codes are:
+
+| Code | Meaning |
+| --- | --- |
+| `GAMEPLAY_ASSERTION_MISSING_ENTITY` | No observed entity has the requested name |
+| `GAMEPLAY_ASSERTION_MISSING_TYPE` | The entity is present but the requested script/observation type is absent |
+| `GAMEPLAY_ASSERTION_MISSING_PROPERTY` | Exactly one target matches but its property is absent |
+| `GAMEPLAY_ASSERTION_AMBIGUOUS_TARGET` | Multiple entries match the entity and type |
+| `GAMEPLAY_ASSERTION_VALUE_MISMATCH` | One property is available but differs from the expected value |
+
+`actualPresent` distinguishes an absent property or ambiguous target from an actual JSON null. An ambiguous diagnostic does not choose one duplicate's value. The existing `$engine.exists` check continues to return false for a missing entity, so expecting true produces a value mismatch with actual false. Every failed assertion in the captured snapshot is reported; later checkpoints are not executed after a failure. Snapshot write failures report the I/O error without advertising an unavailable artifact. No new request flags or report schema version are required.
+
+The MCP `gameplay_job_start` input schema now advertises the existing `launchConfig.profile` and `launchConfig.checkpoints` fields. Refresh/reconnect an already-running MCP client to load the updated tool schema. Runtime validation still rejects headless checkpoints, repeated/out-of-range checkpoint ticks and empty checkpoint assertions. A Rust MCP server must inherit the same toolchain environment as successful CLI jobs: for a nonstandard rustup installation, supply its existing `RUSTUP_HOME` in the server environment. An executable rustup shim alone does not prove that a default compiler is configured.
+
+This removes the need to locate and open a sidecar merely to learn what failed. It does not measure a runtime speed improvement or change browser verification reports. Reproduce the real language/profile failure-and-repair checks after building `aether-project`:
+
+```powershell
+$env:AETHER_DESKTOP_REFERENCE_TESTS = '1'
+python -m unittest discover -s tools/project -p test_desktop_reference.py -v
+```
+
+The opt-in suite uses copied reference projects under `.temp/agent-feedback/`, retains reports under `logs/agent-feedback/`, and owns its hidden runtime processes. It exercises final and checkpoint mismatches, missing entity/type/property, duplicate names, successful repair, headless evidence and detach failures for both languages.
+
+## Reproduce iteration measurements
 
 Build the engine CLI and bundled SDK first, then run:
 
