@@ -268,8 +268,7 @@ namespace aether::app::scripting
 			if (!passed)
 			{
 				const std::string code = matches > 1         ? "GAMEPLAY_ASSERTION_AMBIGUOUS_TARGET"
-				                         : !entityFound      ? "GAMEPLAY_ASSERTION_MISSING_ENTITY"
-				                         : matches == 0      ? "GAMEPLAY_ASSERTION_MISSING_TYPE"
+				                         : matches == 0      ? (entityFound ? "GAMEPLAY_ASSERTION_MISSING_TYPE" : "GAMEPLAY_ASSERTION_MISSING_ENTITY")
 				                         : actual == nullptr ? "GAMEPLAY_ASSERTION_MISSING_PROPERTY"
 				                                             : "GAMEPLAY_ASSERTION_VALUE_MISMATCH";
 				const Json detail = {{"assertionIndex", assertionIndex},

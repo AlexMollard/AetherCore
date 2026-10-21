@@ -117,11 +117,18 @@ TEST_CASE("Gameplay assertion feedback publishes all failures and exact snapshot
 	CHECK(report.diagnostics.empty());
 	REQUIRE(report.artifacts.size() == 1);
 	CHECK(report.artifacts[0].bytes == std::filesystem::file_size(request.output));
+	report.artifacts.clear();
+	request.launchConfig["assertions"] = Json::array({assertion("Absent", "$engine", "exists", true)});
+	CHECK_THROWS_WITH(WriteGameplayState(request, world, host, scripts, false, observations, &report), doctest::Contains("GAMEPLAY_ASSERTION_VALUE_MISMATCH"));
+	REQUIRE(report.diagnostics.size() == 1);
+	CHECK(report.diagnostics[0].code == "GAMEPLAY_ASSERTION_VALUE_MISMATCH");
+	CHECK(Json::parse(report.diagnostics[0].message)["actual"] == false);
+	CHECK(Json::parse(report.diagnostics[0].message)["actualPresent"] == true);
 	std::filesystem::remove(request.output);
 	report.artifacts.clear();
+	report.diagnostics.clear();
 	// A failed write must never advertise an unavailable snapshot as evidence.
 	request.output = std::filesystem::temp_directory_path();
-	request.launchConfig["assertions"][2]["equals"] = 999;
 	CHECK_THROWS(WriteGameplayState(request, world, host, scripts, false, observations, &report));
 	CHECK(report.artifacts.empty());
 	CHECK(report.diagnostics.empty());
