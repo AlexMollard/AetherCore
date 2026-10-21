@@ -1,11 +1,13 @@
 # AetherCore MCP server
 
 A dependency-free (Python stdlib only) [Model Context Protocol](https://modelcontextprotocol.io)
-server that gives an AI agent two capabilities over AetherCore:
+server that gives an AI agent three capabilities over AetherCore:
 
 1. **Run the test gauntlet** — build + unit + (optionally) GPU validation smokes,
    returning the structured pass/fail report. No running engine needed.
-2. **Drive the live editor** — query engine state, list/create/delete entities,
+2. **Run project gameplay jobs** — inspect, create, build, test, run/relaunch and
+   publish Rust/C# projects without a running editor, with persistent reports.
+3. **Drive the live editor** — query engine state, list/create/delete entities,
    edit transforms, and dump the render graph, by shelling out to the `aether-ctl`
    binary which speaks the editor's JSON-over-ENet control endpoint.
 
@@ -24,10 +26,16 @@ This server only spawns subprocesses — it imports nothing beyond the stdlib.
 
 ## Tools
 
-The endpoint's own `describe` is the authoritative, complete list - it is what
-the server generates its tools from, so it is never out of date. The table below
-is a **selection**: the tools worth knowing before you start, plus one row per
-subsystem for the areas whose tools are numerous and self-similar.
+The live endpoint's `describe` is authoritative for that running app's wire
+methods; the MCP server generates the corresponding live tools from it. The server
+also defines offline tools such as gameplay jobs and gauntlets, which are available
+without that endpoint. MCP `tools/list` describes the tools exposed by the connected
+server; reconnect after server/schema updates. The table below is a **selection**.
+
+For gameplay authoring, start with [Script APIs and examples](../../docs/getting-started.md#script-apis-and-examples).
+The public SDK declarations and reference games answer which calls belong inside a
+script. `describe`, component reflection and `list_script_types` answer editor/runtime
+discovery questions; they are not a scripting API reference.
 
 ```powershell
 aether-ctl describe        # every method, with parameters and descriptions
@@ -42,7 +50,8 @@ aether-ctl describe        # every method, with parameters and descriptions
 | `kenney_import_pack` | no | Bulk-import every model in a pack matching a filter (empty = whole pack - use deliberately) as spawnable props, one `kenney_import` per match; one bad model never poisons the batch. Idempotent. |
 | `kenney_import_font` | no | Import a Kenney icon/text font (`.ttf` + optional glyph-map reference) into a project's `assets/fonts/`, baked with the engine's glyph-outline font pipeline. Not a model: no collider, never registered in `PropSpawner.cs`. |
 | `launcher_info` / `list_projects` | Launcher | Inspect hub and recent-project state before handoff. |
-| `gameplay_capabilities` | Launcher + Editor | Inspect project language/profile, supported operations and structured prerequisites. Rust Play/publish remain unavailable until its backend is implemented. |
+| `gameplay_capabilities` | Launcher + Editor | Inspect desktop project language/profile, implemented operations and structured prerequisites. C# and Rust runtime/build/publish are implemented; inspect prerequisite failures before executing. Web publishing has separate target preflight. |
+| `gameplay_job_start` / `gameplay_job_status` / `gameplay_job_cancel` | no | Persistent Rust/C# project inspection, creation, build, bounded run/relaunch/test, and desktop/Web publishing. Start with `operation: "inspect"`; poll the returned job ID. |
 | `open_project` / `create_project` | Launcher | Open an existing project or create a project, then hand the same control port to the Editor. `create_project.language` is `csharp` (default) or `rust`; Rust supports `blank_2d` / `blank_3d` authoring. |
 | `engine_info` | yes | Scene name and 2D/3D kind, entity count, frame index, fps. |
 | `get_console_log` | yes | Bounded, filterable live console tail with levels, categories, source locations, and monotonic sequence ids for polling. |

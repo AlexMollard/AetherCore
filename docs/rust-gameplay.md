@@ -11,6 +11,10 @@ Project gameplay language is selected at creation and recorded in `[scripting].l
 ./scripts/Run-GameplayPipeline.ps1 -Operation publish -Target web -Project .temp/MyJam
 ```
 
+Find exact public declarations, registration macros and paired C#/Rust examples in
+[Script APIs and examples](getting-started.md#script-apis-and-examples). The safe API
+lives in `rust/aethercore/src/lib.rs`; `rust/aethercore-abi` is the raw host contract.
+
 Author gameplay in the generated `scripts/src/lib.rs` using `aethercore`, `gameplay_script!`, `Script`, `Context`, and `export_gameplay!`. The SDK owns ABI string conversion and validates world/entity access. Callbacks return `Result`; propagate recoverable errors with `?`. Desktop uses the native module; Web statically links the selected project with abort panic behavior. A Rust panic terminates that browser session and produces a failure report, rather than unwinding into C++.
 
 Use the existing scene/component TOML schema and project asset paths. An authored 2D scene declares `[scene] kind = "2d"`; a browser camera explicitly declares `projection = "orthographic"`. Public authoring services are also available through the editor MCP; scripts can generate the same files without opening an editor. The fresh distribution fixture uses the shared authored scene/asset generator and a separate module under `tools/project/autonomous_game.rs`, rather than copying an existing project's compiled game.

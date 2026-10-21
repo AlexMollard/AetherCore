@@ -99,6 +99,17 @@ Two complementary graph systems exist here. Use the right one, and prefer both o
 | Library/API docs | Context7 docs | official web docs |
 | Prior decisions/progress | Mind memory/checkpoints | local notes |
 
+## Gameplay API discovery
+
+For script work, start with [Script APIs and examples](docs/getting-started.md#script-apis-and-examples).
+Inspect the project with the existing gameplay pipeline before editing; it resolves the
+language, script/build paths and SDK presence without compiling. Read public declarations
+in `managed/AetherCore/` (C#) or `rust/aethercore/src/lib.rs` (safe Rust `Script`/`Context`),
+then the linked paired reference games and their assertions. Raw ABI bindings are not
+the gameplay authoring SDK. MCP `describe` documents editor operations; reflected
+components and loaded script types do not enumerate the public script API. Check target
+limitations before copying desktop code into a Web game.
+
 ## Hard invariants
 
 Violating any of these causes crashes, GPU corruption, or shutdown use-after-frees. Fix code to respect them; never work around them:
@@ -203,7 +214,7 @@ The MCP server auto-detects the build dir (override with `AETHER_BUILD_DIR`) and
 
 Dependencies are managed through CPM. Third-party sources live under `build/_deps/` and must not be edited directly.
 
-Key libraries: Vulkan SDK, GLFW, GLM, vk-bootstrap, volk, VMA, EnTT, Jolt Physics, Tracy, stb, cgltf, FreeType, zstd, xxHash, toml++, and bc7enc_rdo. Audio is miniaudio (single-header; see docs/audio.md). Gameplay scripting runs on .NET (CoreCLR, hosted through nethost).
+Key libraries: Vulkan SDK, GLFW, GLM, vk-bootstrap, volk, VMA, EnTT, Jolt Physics, Tracy, stb, cgltf, FreeType, zstd, xxHash, toml++, and bc7enc_rdo. Audio is miniaudio (single-header; see docs/audio.md). C# gameplay runs on .NET (CoreCLR, hosted through nethost); Rust gameplay uses the safe `aethercore` SDK and shared gameplay host. See [Script APIs and examples](docs/getting-started.md#script-apis-and-examples).
 
 ## Repo hygiene
 

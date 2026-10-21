@@ -179,6 +179,11 @@ public sealed class Spinner : EntityScript
 
 The CMake build runs `dotnet build` when the .NET SDK is present and deploys the managed assemblies next to the native executable. NuGet dependencies declared by the game project resolve into the script load context.
 
+For exact declarations, SDK boundaries and working C#/Rust examples, start with
+[Script APIs and examples](docs/getting-started.md#script-apis-and-examples).
+[Rust gameplay](docs/rust-gameplay.md) covers the safe Rust SDK, project creation,
+rebuild/relaunch and publishing; Rust does not use C#'s F5 hot-reload path.
+
 ## Engine MCP
 
 AetherCore ships its own MCP server, so a coding agent can run the test gauntlet,
@@ -194,7 +199,8 @@ cmake --build --preset default --target Editor aether-ctl
 The Launcher owns the control port while its hub is open (`8787` by default) and hands
 it off to the Editor it launches, so MCP tools follow the handoff without reconfiguration.
 For a directly started Editor, set `AETHER_CONTROL_PORT=8787` or enable the **Control Server**
-panel. See the [MCP setup guide](docs/mcp-setup.md#aethercore-mcp) and the [full engine MCP reference](tools/mcp/README.md).
+panel. Without an editor, `gameplay_job_start/status/cancel` inspect, build, test and
+publish Rust/C# projects through the existing gameplay pipeline. See the [MCP setup guide](docs/mcp-setup.md#aethercore-mcp) and the [full engine MCP reference](tools/mcp/README.md).
 
 ## Architecture
 
@@ -368,6 +374,7 @@ docs/                       Architecture, asset, tooling, and design notes
 ## Documentation
 
 - [Getting started](docs/getting-started.md) - build a small 2D game end to end
+- [Script APIs and examples](docs/getting-started.md#script-apis-and-examples) - public C#/Rust SDKs, reference games and agent workflow
 - [Asset database](docs/asset-database.md)
 - [Render-frame extraction architecture](docs/architecture/render-frame-extraction.md)
 - [MCP setup](docs/mcp-setup.md)
@@ -377,5 +384,5 @@ docs/                       Architecture, asset, tooling, and design notes
 
 - Third-party dependencies are fetched with CPM and should not be edited under build directories.
 - `clangd` users should regenerate `build/ninja-clang/compile_commands.json` with `cmake --preset clangd` after changing C++ source lists or CMake files.
-- Verify locally before pushing - no workflow will do it for you: `./scripts/Run-DebugGauntlet.ps1` (GPU abstraction guard, build, unit suite, editor and runtime validation smokes). `ctest --test-dir build/default -C RelWithDebInfo` runs just the two registered suites, `EngineTests` and `ManagedTests`.
+- Verify locally before pushing - no workflow will do it for you: `./scripts/Run-DebugGauntlet.ps1` (GPU abstraction guard, build, unit suite, editor and runtime validation smokes). `ctest --test-dir build/default -C RelWithDebInfo -N` lists the suites registered for your configuration; these include `EngineTests` and, when their prerequisites are available, managed and gameplay API checks.
 - Generated shader binaries and local tool state are intentionally excluded from source control.

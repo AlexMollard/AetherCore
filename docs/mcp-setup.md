@@ -23,7 +23,11 @@ This repository ships its own stdlib-only MCP server at
 `tools/mcp/aethercore_mcp.py`. It can run the build-and-test gauntlet without a
 running editor, and can control a live editor through the local `aether-ctl`
 bridge: scene and entity operations, editor panels, render-graph inspection,
-GPU texture captures, screenshots, and play mode.
+GPU texture captures, screenshots, and play mode. It also runs persistent Rust/C#
+project inspection, build/test/run and desktop/Web publish jobs without an editor.
+For public scripting declarations and working examples, start with
+[Script APIs and examples](getting-started.md#script-apis-and-examples); MCP discovery
+describes tool operations rather than the full gameplay SDK.
 
 Build the editor and bridge, then register the server with the coding tools you
 use:

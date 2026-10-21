@@ -21,25 +21,27 @@ Vulkan SDK, .NET 10) and the other presets.
 
 ## 1. Make a project
 
-Start the Launcher. **Run it from the directory it was built into** — `shaders://` resolves
+Start the Launcher. **Run it from the build-tree root** (`build/default/` below) — `shaders://` resolves
 relative to the working directory, and starting it from anywhere else fails at pipeline
 creation.
 
 ```powershell
-cd build/default/src/app/RelWithDebInfo
-./Launcher.exe
+cd build/default
+./src/app/RelWithDebInfo/Launcher.exe
 ```
 
 Choose **Blank 2D**, name it, pick a folder. The Launcher spawns an Editor for that project
 and closes itself.
 
-You get an orthographic camera, a `scripts/` folder with a starter `Player.cs`, and an empty
-scene. The project folder is yours — scenes, assets, prefabs and scripts all live in it, and
+With the default C# language, you get an orthographic camera, a `scripts/` folder with
+a starter `Player.cs`, and a Player with that script already attached. The project folder
+is yours — scenes, assets, prefabs and scripts all live in it, and
 `ProjectSettings.toml` at its root *is* the project.
 
 ## 2. Put something on screen
 
-In the **Scene** panel, click **+** and add a Sprite. Select it and look at the **Inspector**:
+Select the starter Player and look at the **Inspector**. To make another object, use
+**Scene > + > Sprite**:
 a `Sprite Renderer` with no texture renders as a white quad, which is enough to see it move.
 
 To use real art, drop a PNG into the project's `assets/` folder — the **File Explorer** panel
@@ -70,8 +72,9 @@ public sealed class Player : EntityScript
 }
 ```
 
-Select your sprite, then **Add Component → Script → Player**. `Speed` appears in the Inspector
-because it is a public field; edit it there and the value saves with the scene.
+The starter Player already has this script attached. For a new sprite, use
+**Add Component → Script → Player** to give it the same behaviour. `Speed` appears in the
+Inspector because it is a public field; edit it there and the value saves with the scene.
 
 Press **Play**. The editor builds the scripts first — a compile error stops Play and shows the
 file, line and error in the Console. While Play is running, **F5** rebuilds and hot-reloads your
@@ -299,19 +302,68 @@ was merely out of date.
 | You want | Look at |
 |---|---|
 | Multiplayer - what it gives you, what it costs, and every failure mode | [Multiplayer](multiplayer.md) |
-| The full scripting surface | `managed/AetherCore/` — one file per area (`Input`, `Physics2D`, `Ui`, `Scene`, `Time`, `Audio` is **not** among them yet) |
+| Public scripting APIs and working examples | [Script APIs and examples](#script-apis-and-examples) |
+| Audio playback, spatial sources and volume buses | [Audio](audio.md) and [C# Audio API](../managed/AetherCore/Audio.cs) |
 | What a component's fields are called | `list_component_types` over the control endpoint, or the Inspector |
 | Engine architecture | [Render-frame extraction](architecture/render-frame-extraction.md), [Asset database](asset-database.md) |
 | Driving the editor from a script or agent | [tools/mcp/README.md](../tools/mcp/README.md) |
 | Conventions, if you are changing the engine itself | [CONVENTIONS.md](CONVENTIONS.md) |
 
-## Known gaps
+## Script APIs and examples
 
-Worth knowing before you plan a game around them:
+Start with the project's configured language and target. Use the existing CLI
+`./scripts/Run-GameplayPipeline.ps1 -Project <root> -Operation inspect`, or call
+`gameplay_job_start` with `project` and `operation: "inspect"`, then poll
+`gameplay_job_status`. The [project inventory](architecture/gameplay-abi.md#read-only-project-discovery)
+resolves script/build/SDK paths; it does not compile scripts or reflect their types.
+Missing `[scripting].language` means C#. Keep edits in the project's resolved scripts
+folder; the engine SDK is a dependency, not the place to write game behaviour.
 
-- **There is no audio.** No mixer, no `AudioSource`, no API. A game cannot make a sound today.
+### Public APIs
 
-Audio is tracked as the top of the roadmap rather than an oversight.
+Read the actual declarations for signatures and lifecycle rules. Use the symbol graph
+for precise navigation and graphify for subsystem relationships; if those tools are
+unavailable or an index is stale, read these source files directly.
+
+| Area | C# source of truth | Rust source of truth |
+|---|---|---|
+| Lifecycle and script fields | [EntityScript.cs](../managed/AetherCore/EntityScript.cs) | [lib.rs](../rust/aethercore/src/lib.rs): `Script`, `Properties`, `gameplay_script!` |
+| Entities and transforms | [Entity.cs](../managed/AetherCore/Entity.cs), [World.cs](../managed/AetherCore/World.cs) | Same `lib.rs`: `Entity`, `Context::entity`, `position`, `set_position` |
+| Input | [Input.cs](../managed/AetherCore/Input.cs), [InputActions.cs](../managed/AetherCore/InputActions.cs), [Gamepad.cs](../managed/AetherCore/Gamepad.cs) | Same `lib.rs`: `Context::key_down` |
+| Physics | [Physics2D.cs](../managed/AetherCore/Physics2D.cs), [Physics.cs](../managed/AetherCore/Physics.cs), [CharacterController.cs](../managed/AetherCore/CharacterController.cs) | Same `lib.rs`: `Context::velocity_2d`, `set_velocity_2d` and `Script::event` |
+| Components and rendering | [Component.cs](../managed/AetherCore/Component.cs), [ComponentRef.cs](../managed/AetherCore/ComponentRef.cs), [Behaviors.cs](../managed/AetherCore/Behaviors.cs), [SpriteRenderer.cs](../managed/AetherCore/SpriteRenderer.cs) | Same `lib.rs`: `Context::set_sprite_color`, `ComponentRef` fields and `gameplay_component_ref!`; check the available subset |
+| Scenes, prefabs, UI, audio and saves | [Scene.cs](../managed/AetherCore/Scene.cs), [Assets.cs](../managed/AetherCore/Assets.cs), [Ui.cs](../managed/AetherCore/Ui.cs), [Audio.cs](../managed/AetherCore/Audio.cs), [SaveData.cs](../managed/AetherCore/SaveData.cs) | Same `lib.rs`: `Context::load_scene`, `instantiate_prefab`, `set_ui_text`, `play_audio`, `read_save`, `write_save` |
+| Script registration | Project `scripts/AetherGame.csproj` and `EntityScript` subclasses | [provider.rs](../rust/aethercore/src/provider.rs): `export_gameplay!` |
+
+The rest of the [C# SDK](../managed/AetherCore/) includes camera, animation, networking
+and other topic files. The Rust authoring SDK is the safe `aethercore` crate; do not
+start from raw `aethercore-abi` bindings or generated ABI files. The
+[ABI tooling](../tools/gameplay-api/README.md) is for engine/interop maintenance.
+C# and Rust do not promise identical surfaces. Check [Rust limitations](rust-gameplay.md),
+[Web exports](web-export.md) and [C# browser limitations](csharp-web.md) for the target
+before borrowing a desktop example.
+
+### Working examples and agent loop
+
+- **Small C# behaviour:** [EntityFollowerExample.cs](../projects/TestingProject/scripts/EntityFollowerExample.cs).
+- **Paired gameplay examples:** [C# Reference.cs](../projects/AgentPipelineCSharp/scripts/Reference.cs)
+  and [Rust reference.rs](../projects/AgentPipelineRust/scripts/src/reference.rs) exercise
+  input, movement/physics, prefabs, UI, audio, saves and scene changes. The
+  [reference comparison](gameplay-reference-comparison.md) explains their shared fixtures
+  and verification. Each project has a `reference-test.json` launch configuration.
+- **Rust fields and registration:** [fixture lib.rs](../projects/AgentPipelineRust/scripts/src/lib.rs)
+  demonstrates property types and exports; it also contains deliberate host-test failure
+  hooks, so use `reference.rs` first for ordinary gameplay. Fresh starter scripts are
+  generated by [ProjectCommon.cpp](../src/app/project/ProjectCommon.cpp).
+
+Inspect the project, read the relevant SDK declarations and example, edit the project,
+then build and test through the [existing gameplay pipeline](architecture/gameplay-abi.md#agent-gameplay-pipeline).
+Tests require explicit assertions: compiling or launching alone does not verify behaviour.
+Use [agent iteration](agent-iteration.md) for build-once test cases and failure evidence.
+For live editor work, use [MCP](../tools/mcp/README.md); the endpoint's `describe` manifest describes
+editor operations, not the full public scripting SDK. Component reflection describes
+editable component fields, and `list_script_types` lists loaded script types rather
+than all available SDK calls.
 
 ## Browser games and autonomous distribution
 
