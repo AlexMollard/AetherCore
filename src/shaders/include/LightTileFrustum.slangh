@@ -1,0 +1,64 @@
+#ifndef AETHER_LIGHT_TILE_FRUSTUM_SLANGH
+#define AETHER_LIGHT_TILE_FRUSTUM_SLANGH
+
+#ifdef __cplusplus
+#include <algorithm>
+#include <cmath>
+#include <glm/glm.hpp>
+namespace aether::lighting
+{
+using float3 = glm::vec3;
+using float4 = glm::vec4;
+using std::max;
+#define AE_LIGHT_INLINE inline
+#else
+#define AE_LIGHT_INLINE
+#endif
+
+struct LightTilePlanes
+{
+    float4 left, right, bottom, top;
+};
+
+AE_LIGHT_INLINE LightTilePlanes BuildLightTilePlanes(float x0, float x1, float y0, float y1, bool orthographic)
+{
+    LightTilePlanes planes;
+    if (orthographic)
+    {
+        planes.left = float4(1, 0, 0, -x0);
+        planes.right = float4(-1, 0, 0, x1);
+        planes.bottom = float4(0, 1, 0, -y0);
+        planes.top = float4(0, -1, 0, y1);
+        return planes;
+    }
+    planes.left = float4(float3(1, 0, x0) / sqrt(1 + x0 * x0), 0);
+    planes.right = float4(float3(-1, 0, -x1) / sqrt(1 + x1 * x1), 0);
+    planes.bottom = float4(float3(0, 1, y0) / sqrt(1 + y0 * y0), 0);
+    planes.top = float4(float3(0, -1, -y1) / sqrt(1 + y1 * y1), 0);
+    return planes;
+}
+
+// The farthest cone point from a plane is its apex or a point on the base rim.
+// Including plane.w is essential for the parallel planes of orthographic tiles.
+AE_LIGHT_INLINE float LightConeMaxSignedDistance(float4 plane, float3 apex, float3 direction, float height, float tanHalf)
+{
+    const float3 normal = float3(plane.x, plane.y, plane.z);
+    const float apexDistance = dot(normal, apex) + plane.w;
+    const float3 perpendicular = normal - direction * dot(normal, direction);
+    const float rimDistance = dot(normal, apex + direction * height) + plane.w + height * tanHalf * length(perpendicular);
+    return max(apexDistance, rimDistance);
+}
+
+AE_LIGHT_INLINE bool LightTileIntersectsCone(LightTilePlanes planes, float3 apex, float3 direction, float height, float tanHalf)
+{
+    return LightConeMaxSignedDistance(planes.left, apex, direction, height, tanHalf) >= 0
+        && LightConeMaxSignedDistance(planes.right, apex, direction, height, tanHalf) >= 0
+        && LightConeMaxSignedDistance(planes.bottom, apex, direction, height, tanHalf) >= 0
+        && LightConeMaxSignedDistance(planes.top, apex, direction, height, tanHalf) >= 0;
+}
+
+#undef AE_LIGHT_INLINE
+#ifdef __cplusplus
+}
+#endif
+#endif

@@ -120,7 +120,9 @@ namespace aether
 		                        .depthTestEnable = true,
 		                        .depthWriteEnable = true,
 		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
-		                        .cullMode = gpu::CullMode::Back,
+		                        // One override pipeline draws every caster, including two-sided
+		                        // cutouts. Match the directional caster pass's two-sided raster.
+		                        .cullMode = gpu::CullMode::None,
 		                        .debugName = "LocalShadow.Depth",
 		                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
 		                }));

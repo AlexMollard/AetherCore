@@ -124,7 +124,7 @@ namespace aether
 			gpu::DeviceAddress tileLightIndicesAddr = 0;
 			glm::mat4 view{1.0f};
 			glm::vec3 params0{0.0f};  // x=nearClip, y=1/proj[0][0], z=1/proj[1][1] (signed)
-			glm::uvec4 params1{0u};   // x=tilePx, y=tilesX, z=tilesY, w=lightCount
+			glm::uvec4 params1{0u};   // x=tilePx (bit 31 = orthographic), y=tilesX, z=tilesY, w=lightCount
 			glm::uvec3 params2{0u};   // x=maxLightsPerTile, y=screenW(px), z=screenH(px)
 		};
 
