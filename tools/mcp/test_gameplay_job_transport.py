@@ -12,6 +12,16 @@ SPEC.loader.exec_module(mcp)
 
 
 class GameplayJobTransportTests(unittest.TestCase):
+    def test_published_job_schema_can_describe_the_reference_verification(self):
+        fixture = Path(__file__).resolve().parents[2] / 'projects/AgentPipelineCSharp/reference-test.json'
+        launch = json.loads(fixture.read_text(encoding='utf-8'))
+        properties = mcp.GAMEPLAY_JOB_START['inputSchema']['properties']['launchConfig']['properties']
+        self.assertTrue(set(launch).issubset(properties), set(launch) - set(properties))
+        self.assertIn(launch['profile'], properties['profile']['enum'])
+        checkpoint = properties['checkpoints']['items']
+        self.assertTrue({'tick', 'assertions'}.issubset(checkpoint['required']))
+        self.assertEqual(checkpoint['properties']['assertions']['items'], properties['assertions']['items'])
+
     def test_job_tools_remain_listed_without_an_editor(self):
         with mock.patch.object(mcp, '_engine_tools', return_value=[]):
             names = {tool['name'] for tool in mcp._list_tools()}

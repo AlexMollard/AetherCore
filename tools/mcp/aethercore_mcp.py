@@ -370,6 +370,11 @@ RUN_GAUNTLET = {
 }
 
 
+GAMEPLAY_ASSERTION_SCHEMA = {'type': 'object', 'properties': {
+    'entity': {'type': 'string'}, 'type': {'type': 'string'}, 'property': {'type': 'string'},
+    'equals': {}, 'tolerance': {'type': 'number', 'minimum': 0}
+}, 'required': ['entity', 'type', 'property', 'equals']}
+
 GAMEPLAY_JOB_START = {
     'name': 'gameplay_job_start',
     'description': 'Start a persistent gameplay pipeline job and return its queued report immediately. Create, inspect, build, bounded run/relaunch/test, or publish a desktop/Web project without a running editor. Web publishing runs target preflight and relocated browser verification. Poll gameplay_job_status; cancel only this job with gameplay_job_cancel.',
@@ -389,14 +394,17 @@ GAMEPLAY_JOB_START = {
             'launchConfig': {
                 'type': 'object',
                 'properties': {
+                    'profile': {'type': 'string', 'enum': ['native-headless-2d-v1', 'native-desktop-2d-v1'], 'default': 'native-headless-2d-v1'},
                     'readSaves': {'type': 'boolean', 'default': False},
                     'input': {'type': 'array', 'items': {'type': 'object', 'properties': {
                         'tick': {'type': 'integer', 'minimum': 0}, 'key': {'type': 'string'}, 'down': {'type': 'boolean'}
                     }, 'required': ['tick', 'key', 'down']}},
-                    'assertions': {'type': 'array', 'items': {'type': 'object', 'properties': {
-                        'entity': {'type': 'string'}, 'type': {'type': 'string'}, 'property': {'type': 'string'},
-                        'equals': {}, 'tolerance': {'type': 'number', 'minimum': 0}
-                    }, 'required': ['entity', 'type', 'property', 'equals']}},
+                    'assertions': {'type': 'array', 'items': GAMEPLAY_ASSERTION_SCHEMA},
+                    'checkpoints': {'type': 'array', 'description': 'Desktop profile only; assert after these completed simulation ticks.',
+                        'items': {'type': 'object', 'properties': {
+                            'tick': {'type': 'integer', 'minimum': 1, 'maximum': 1000000},
+                            'assertions': {'type': 'array', 'minItems': 1, 'items': GAMEPLAY_ASSERTION_SCHEMA}
+                        }, 'required': ['tick', 'assertions']}},
                 },
             },
         },
