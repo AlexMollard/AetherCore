@@ -52,6 +52,10 @@ TEST_CASE("Portable post stack rejects invalid settings and bounds allocation")
 	REQUIRE(scaled);
 	CHECK(scaled->width == 256);
 	CHECK(scaled->height == 128);
+	const auto small = PlanPostEffects(settings, 64, 63, false);
+	REQUIRE(small);
+	CHECK(small->width == 64);
+	CHECK(small->height == 64);
 	settings.renderScale = 2;
 	settings.gtao = settings.reflections = settings.fxaa = true;
 	CHECK_FALSE(PlanPostEffects(settings, 4096, 4096, true));

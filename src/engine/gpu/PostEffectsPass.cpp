@@ -27,8 +27,8 @@ namespace aether::gpu
 			return std::unexpected("WEB_EFFECTS_SETTINGS: invalid render scale, radius, exposure or motion settings");
 		}
 		PostEffectsPlan plan;
-		plan.width = std::max(1u, static_cast<std::uint32_t>(width * settings.renderScale));
-		plan.height = std::max(1u, static_cast<std::uint32_t>(height * settings.renderScale));
+		plan.width = settings.renderScale == 1 ? width : std::clamp(static_cast<std::uint32_t>(width * settings.renderScale), 64u, 8192u);
+		plan.height = settings.renderScale == 1 ? height : std::clamp(static_cast<std::uint32_t>(height * settings.renderScale), 64u, 8192u);
 		if (plan.width > 4096 || plan.height > 4096)
 		{
 			return std::unexpected("WEB_EFFECTS_EXTENT: scaled scene exceeds the 4096-pixel limit");
@@ -37,7 +37,7 @@ namespace aether::gpu
 		plan.depthOfField = depthOfField;
 		const auto pixels = std::uint64_t(plan.width) * plan.height;
 		// HDR, opaque targets, depth and LDR; optional half-res buffers and five bloom mips.
-		plan.estimatedBytes = pixels * 28 + std::uint64_t(width) * height * 4;
+		plan.estimatedBytes = pixels * 32 + std::uint64_t(width) * height * 4;
 		if (settings.gtao) { plan.estimatedBytes += pixels; }
 		if (settings.reflections) { plan.estimatedBytes += pixels * 8; }
 		if (settings.volumetrics || depthOfField) { plan.estimatedBytes += pixels * 2 * (settings.volumetrics + depthOfField); }
