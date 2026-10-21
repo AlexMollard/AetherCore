@@ -1,0 +1,15 @@
+[atlas]
+schema_version = 1
+texture = 'project://assets/textures/browser-shadow-art.png'
+texture_width = 4
+texture_height = 4
+pixels_per_unit = 2
+sprite_count = 1
+filter = 'nearest'
+[sprite]
+0.id = '0000000000000001'
+0.name = 'Upper half coverage'
+0.x = 0
+0.y = 0
+0.width = 4
+0.height = 4

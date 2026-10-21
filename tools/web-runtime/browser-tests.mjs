@@ -66,6 +66,18 @@ async function capture(page) {
     return page.evaluate(() => aetherRuntime.capture)
 }
 function pixel(image, x, y) { return image.pixels.slice((y * image.width + x) * 4, (y * image.width + x) * 4 + 4) }
+const lightingScenes = {
+    'lighting-solid':'BrowserSolid', 'lighting-gradient':'BrowserGradient', 'lighting-sky':'BrowserSky',
+    'lighting-hdr':'BrowserHdr', 'lighting-sun':'BrowserSun', 'lighting-point':'BrowserPoint',
+    'lighting-spot':'BrowserSpot', 'lighting-pbr-maps':'BrowserPbrMaps', 'lighting-2d-alpha':'BrowserLight2D',
+    'lighting-nonfinite':'BrowserBadLight', 'lighting-budget':'BrowserLight2D'
+};
+for (const kind of ['Sun','Point','Spot','Mask','Skin']) lightingScenes['lighting-shadow-'+kind.toLowerCase()]='BrowserShadow'+kind+'On';
+// Independent CPU evaluation of the native Hill ACES fit and display gamma, for neutral HDR probes.
+function neutralAces(value) {
+    const fit = value => (value * (value + 0.0245786) - 0.000090537) / Math.max(value * (0.983729 * value + 0.432951) + 0.238081, 1e-6);
+    return Math.round(255 * Math.pow(Math.min(1, Math.max(0, fit(value))), 1 / 2.2));
+}
 try {
     const pins = JSON.parse(await readFile(new URL('../experiments/rust-webgpu/toolchain.json', import.meta.url), 'utf8'));
     assert.equal(report.playwrightVersion, pins.playwright, 'Browser qualification requires pinned Playwright');
@@ -189,6 +201,8 @@ try {
 		query = '?reference=1&scene=BrowserMaterials';
 	    if (name === 'authored-skin')
 		query = '?reference=1&scene=BrowserSkin&automation=1';
+	    if (lightingScenes[name])
+		query = '?reference=1&scene=' + lightingScenes[name] + '&automation=1';
 	    if (name === 'browser-features' || name === 'browser-gamepad' || name === 'browser-ui-order')
 		query = '?reference=1&scene=BrowserFeatures';
 	    if (name.startsWith('invalid-'))
@@ -202,6 +216,105 @@ try {
 		query += (query ? '&' : '?') + 'test=1';
 	    }
 	    await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);
+	    if (lightingScenes[name]) {
+		if (name === 'lighting-nonfinite') {
+		    await page.waitForFunction(() => aetherRuntime.status === 'failed' && (aetherRuntime.inFlight || 0) === 0);
+		    const state = await page.evaluate(() => aetherRuntime);
+		    assert.equal(state.frames || 0, 0, 'Invalid light never reaches GPU submission');
+		    assert.ok(state.diagnostics.some(d => /finite|invalid/i.test(d.message)), JSON.stringify(state.diagnostics));
+		    item.scope = 'Authored NaN sun intensity rejected before frame allocation/submission';
+		    item.status = 'passed';
+		    continue;
+		}
+		await page.waitForFunction(scene => aetherRuntime.scene === scene || aetherRuntime.status === 'failed', lightingScenes[name]);
+		assert.notEqual(await page.evaluate(() => aetherRuntime.status), 'failed', JSON.stringify(await page.evaluate(() => aetherRuntime.diagnostics)));
+		await page.locator('#start').click();
+		await page.locator('#canvas').focus();
+		await page.waitForFunction(() => aetherRuntime.frames > 2 || aetherRuntime.status === 'failed');
+		assert.notEqual(await page.evaluate(() => aetherRuntime.status), 'failed', JSON.stringify(await page.evaluate(() => aetherRuntime.diagnostics)));
+		if (name === 'lighting-budget') {
+		    await page.evaluate(() => Module._aether_web_resize(8193, 64));
+		    await page.waitForFunction(() => aetherRuntime.status === 'failed' && aetherRuntime.inFlight === 0);
+		    const state = await page.evaluate(() => aetherRuntime);
+		    assert.ok(state.diagnostics.some(d => /budget|viewport|extent/i.test(d.message)), JSON.stringify(state.diagnostics));
+		    item.scope = 'Oversized 2D lighting target rejected before target allocation; prior frames retire';
+		    item.status = 'passed';
+		    continue;
+		}
+		await page.evaluate(() => aetherTest.step(1));
+		const image = await page.evaluate(() => aetherTest.capture());
+		const near = (x, y, expected, tolerance, reason) => {
+		    const actual = pixel(image, x, y);
+		    assert.ok(expected.every((channel, i) => Math.abs(actual[i] - channel) <= tolerance), `${reason}: ${actual} vs ${expected}`);
+		};
+		if (name.startsWith('lighting-shadow-')) {
+		    await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath),name+'-on.png')});
+		    await page.evaluate(() => aetherTest.stop());
+		    await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
+		    const offScene=lightingScenes[name].replace(/On$/,'Off');
+		    await page.goto(`http://127.0.0.1:${server.address().port}/?reference=1&scene=${offScene}&automation=1&test=1`);
+		    await page.waitForFunction(scene=>aetherRuntime.scene===scene || aetherRuntime.status==='failed',offScene);
+		    assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
+		    await page.locator('#start').click();
+		    await page.locator('#canvas').focus();
+		    await page.waitForFunction(()=>aetherRuntime.frames>2);
+		    await page.evaluate(()=>aetherTest.step(1));
+		    const unshadowed=await page.evaluate(()=>aetherTest.capture());
+		    let shadowPixels=0,peakDifference=0;
+		    for(let y=20;y<44;y++) for(let x=4;x<29;x++) {
+		        const difference=pixel(unshadowed,x,y)[0]-pixel(image,x,y)[0];
+		        peakDifference=Math.max(peakDifference,difference);
+		        if(difference>20) shadowPixels++;
+		    }
+		    assert.ok(shadowPixels>=6,`Actual ${name} caster darkens at least six receiver pixels outside its camera silhouette: ${shadowPixels}, peak ${peakDifference}`);
+		    if(['lighting-shadow-mask','lighting-shadow-point','lighting-shadow-spot'].includes(name)) {
+		        await writeFile(path.join(path.dirname(reportPath),name+'-readback.json'),JSON.stringify({on:image,off:unshadowed}));
+		        // A unit caster covers y[-.5,.5]. SunY=0 preserves this vertical range;
+		        // local lights at z0 project it twice as tall onto the receiver at z-4.
+		        // Both place y[+.1875,-.1875] well inside the two artwork half regions.
+		        const top=pixel(unshadowed,20,30)[0]-pixel(image,20,30)[0];
+		        const bottom=pixel(unshadowed,20,33)[0]-pixel(image,20,33)[0];
+		        assert.ok(top>bottom+15,`Alpha-cutout shadow preserves upper opaque/lower transparent artwork: ${top}, ${bottom}`);
+		    }
+		    item.shadow={shadowPixels,peakDifference,comparison:'Same camera, lights, receiver and fixed-pose caster; only receiver.receiveShadows differs'};
+		    await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath),name+'-off.png')});
+		} else if (name === 'lighting-solid') {
+		    for (const [x,y] of [[0,0],[32,32],[63,63]]) near(x,y,[51,102,153,255],1,'Camera solid display color remains WYSIWYG through HDR');
+		} else if (name === 'lighting-gradient') {
+		    for (const y of [4,32,59]) near(32,y,[Math.round(255*(1-(y+.5)/64)),0,Math.round(255*(y+.5)/64),255],1,'Camera gradient samples exact authored display-space stops');
+		} else if (name === 'lighting-hdr') {
+		    const half = neutralAces(.5), bright = neutralAces(8);
+		    near(16,32,[half,half,half,255],4,'Half radiance uses native Hill ACES plus gamma');
+		    near(48,32,[bright,bright,bright,255],2,'Eight radiance survives RGBA16F until native tonemap');
+		    assert.ok(pixel(image,48,32)[0] - pixel(image,16,32)[0] > 50, 'HDR values remain distinct');
+		} else if (name === 'lighting-sky') {
+		    const top=pixel(image,32,8),bottom=pixel(image,32,55);
+		    assert.ok(top[2]>top[1] && top[1]>top[0], `Authored blue atmosphere: ${top}`);
+		    assert.ok(Math.abs(top[2]-bottom[2])>30, `Sky and ground differ across the horizon: ${top}, ${bottom}`);
+		} else if (name === 'lighting-pbr-maps') {
+		    const base=pixel(image,16,16),normal=pixel(image,48,16),ao=pixel(image,16,48),metal=pixel(image,48,48);
+		    assert.ok(base[0]-normal[0]>10, `Tangent normal turns the surface away from the sun: ${base}, ${normal}`);
+		    assert.ok(base[0]-ao[0]>5, `Occlusion map reduces ambient contribution: ${base}, ${ao}`);
+		    assert.ok(metal.slice(0,3).some((v,i)=>Math.abs(v-base[i])>15), `Metal/roughness maps change the BRDF: ${base}, ${metal}`);
+		} else if (name === 'lighting-2d-alpha') {
+		    const blocked=pixel(image,52,20),open=pixel(image,52,44);
+		    assert.ok(open[0]-blocked[0]>25, `Tile artwork's transparent lower half passes light while opaque upper half casts: ${blocked}, ${open}`);
+		    assert.ok(open[0]>neutralAces(.02)+20,'Open ray includes radial light above authored ambient');
+		} else {
+		    const center=pixel(image,32,32), edge=pixel(image,53,32);
+		    assert.ok(center[0]>100 && center[0]<240, `Rough dielectric receives finite direct lighting through ACES: ${center}`);
+		    if (name === 'lighting-point') assert.ok(center[0]-edge[0]>20, `Inverse-square point falloff: ${center}, ${edge}`);
+		    if (name === 'lighting-spot') assert.ok(center[0]-edge[0]>60, `Spot cone rejects off-axis surface: ${center}, ${edge}`);
+		}
+		item.probes={center:pixel(image,32,32),left:pixel(image,16,32),right:pixel(image,48,32)};
+		await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath),name+'.png')});
+		assert.deepEqual(await page.evaluate(() => aetherRuntime.diagnostics), []);
+		await page.evaluate(() => aetherTest.stop());
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
+		item.scope='Fixed camera, native exposure1/Hill ACES, one explicit simulation tick, actual GPU readback and clean retirement';
+		item.status='passed';
+		continue;
+	    }
 	    if (name === 'capture-backpressure') {
 		await page.waitForFunction(() => aetherRuntime.frames > 2 || aetherRuntime.status === 'failed');
 		await page.evaluate(() => { aetherTestInternal.rejectCaptureOnce = true; });
@@ -679,6 +792,7 @@ try {
 		if (item.status === 'passed') {
 		    assert.equal(item.pageErrors.length, 0, item.pageErrors.join(';'));
 		    const expectedFailure = [
+			'lighting-nonfinite', 'lighting-budget',
 			'mesh-invalid-frame', 'unavailable', 'limits', 'device-loss', 'assets-missing', 'assets-corrupt', 'assets-version', 'assets-target',
 			'platform-storage-denied', 'platform-storage-quota'
 		    ].includes(name) || name.startsWith('invalid-');

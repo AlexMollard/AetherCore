@@ -1,0 +1,18 @@
+# Fixed camera/radiance qualification; effects disabled.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[[entities]]
+name = 'Fixed camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'gradient'
+gradient_angle = 0.0
+gradient_stops = [{colour = [1.0, 0.0, 0.0], position = 0.0}, {colour = [0.0, 0.0, 1.0], position = 1.0}]

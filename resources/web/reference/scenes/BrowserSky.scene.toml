@@ -1,0 +1,23 @@
+# Fixed camera/radiance qualification; effects disabled.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.0, 0.0, 0.0]
+sun_intensity = 0.0
+sky_horizon = [0.25, 0.5, 1.0]
+sky_zenith = [0.05, 0.1, 0.25]
+sky_void = [0.01, 0.02, 0.04]
+
+[[entities]]
+name = 'Fixed camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'sky_gradient'

@@ -71,6 +71,8 @@ try
         if ($report.browser.status -ne 'passed') { throw 'Browser runtime verification failed' }
         $required = @('sprite-input-resize-shutdown', 'unavailable', 'limits', 'device-loss', 'stop-during-init', 'stop-in-flight', 'layers', 'batch-capacity', 'responsive', 'drop-owner-init', 'stop-after-upload', 'assets-ready', 'assets-missing', 'assets-corrupt', 'assets-version', 'assets-target', 'assets-cancel', 'platform-save-reload', 'platform-storage-denied', 'platform-storage-quota', 'platform-audio-resume', 'reference-gameplay', 'browser-features', 'browser-gamepad', 'browser-focus-resume', 'invalid-font', 'invalid-scene-version', 'invalid-atlas-version', 'invalid-audio-component', 'browser-key-latch', 'browser-ui-order')
         $required += 'mesh-depth-resize', 'mesh-invalid-frame', 'authored-models', 'authored-skin', 'authored-materials', 'authored-dependencies', 'capture-backpressure'
+        $required += 'lighting-solid', 'lighting-gradient', 'lighting-sky', 'lighting-hdr', 'lighting-sun', 'lighting-point', 'lighting-spot', 'lighting-pbr-maps', 'lighting-2d-alpha', 'lighting-nonfinite', 'lighting-budget'
+        $required += 'lighting-shadow-sun', 'lighting-shadow-point', 'lighting-shadow-spot', 'lighting-shadow-mask', 'lighting-shadow-skin'
         foreach ($case in $required)
         {
             $matches = @($report.browser.cases | Where-Object { $_.name -eq $case -and $_.status -eq 'passed' })

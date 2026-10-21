@@ -1,4 +1,7 @@
 export const legacyCaseNames = [
+    'lighting-solid', 'lighting-gradient', 'lighting-sky', 'lighting-hdr', 'lighting-sun',
+    'lighting-point', 'lighting-spot', 'lighting-pbr-maps', 'lighting-2d-alpha', 'lighting-nonfinite', 'lighting-budget',
+    'lighting-shadow-sun', 'lighting-shadow-point', 'lighting-shadow-spot', 'lighting-shadow-mask', 'lighting-shadow-skin',
     'authored-models',
     'authored-skin',
     'authored-materials',

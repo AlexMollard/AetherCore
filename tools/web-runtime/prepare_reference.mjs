@@ -75,6 +75,9 @@ await materialPng('browser-material-gray.png', 1, 1, () => [128, 128, 128, 255])
 await cp(path.join(directory, 'assets/textures/browser-material-gray.png'), path.join(directory, 'assets/materials/browser-gray/albedo.png'));
 await materialPng('browser-material-alpha.png', 1, 1, () => [255, 255, 255, 128]);
 await materialPng('browser-material-mask.png', 2, 2, (x, y) => [255, 255, 255, (x + y) % 2 ? 255 : 0]);
+await materialPng('browser-shadow-art.png', 4, 4, (x, y) => [255, 255, 255, y < 2 ? 255 : 0]);
+await materialPng('browser-normal-right.png', 1, 1, () => [255, 128, 128, 255]);
+await materialPng('browser-orm.png', 1, 1, () => [64, 128, 255, 255]);
 // One white column per eight texels: level 3 is encoded gray 32. Base-only
 // sampling aliases to black at these fixture pixel centers.
 await materialPng('browser-material-mips.png', 64, 64, x => {
@@ -123,5 +126,14 @@ await writeFile(path.join(directory, 'assets/browser/test.tilemap'), Buffer.conc
     i32(0),
     u32(compressed.length),
     compressed
+]));
+const shadowCells = Buffer.alloc(32 * 32 * 4);
+shadowCells.writeUInt32LE(1, 0);
+const shadowCompressed = zstdCompressSync(shadowCells);
+await writeFile(path.join(directory, 'assets/browser/shadow.tilemap'), Buffer.concat([
+    Buffer.from('ATLM'), u32(1), str('project://assets/browser/shadow.tileset.toml'), f32(2),
+    u32(1), u64(100), u32(1), str('Shadow artwork'), Buffer.from([1, 1]),
+    f32(1), f32(1), f32(1), f32(1), f32(1), i32(0), i32(0), u32(1), i32(0), i32(0),
+    u32(shadowCompressed.length), shadowCompressed
 ]));
 console.log(`Prepared browser reference fixture in ${directory}`);

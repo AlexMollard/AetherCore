@@ -18,8 +18,21 @@ DESCRIPTIONS = {
     'BrowserSkin': 'Skinned models and animation playback.',
     'BrowserDependencies': 'Scene includes and prefab additions, removals and overrides.',
     'BrowserIncluded': 'The scene fragment used by the dependency example.',
+    'BrowserSolid': 'Camera solid colour preserved through the HDR compositor.',
+    'BrowserGradient': 'Camera colour stops blended in display space.',
+    'BrowserSky': 'Native procedural sky gradient, horizon and ground colours.',
+    'BrowserHdr': 'Half and eight units of scene radiance through native ACES tonemapping.',
+    'BrowserSun': 'Directional sunlight on a rough dielectric surface.',
+    'BrowserPoint': 'Point lighting with native inverse-square attenuation.',
+    'BrowserSpot': 'Spotlight cone falloff on an authored 3D surface.',
+    'BrowserPbrMaps': 'Tangent normals, occlusion and metallic/roughness texture maps.',
+    'BrowserLight2D': 'A 2D lamp casts shadows through a tile artwork silhouette.',
+    'BrowserBadLight': 'An invalid NaN light must fail before GPU frame submission.',
     'default': 'The reference project’s default scene.',
 }
+for kind, label in [('Sun', 'Directional'), ('Point', 'Point'), ('Spot', 'Spot'), ('Mask', 'Alpha-cutout'), ('Skin', 'Skinned-model')]:
+    for suffix, state in [('On', 'enabled'), ('Off', 'disabled')]:
+        DESCRIPTIONS[f'BrowserShadow{kind}{suffix}'] = f'{label} shadow comparison, with receiver shadows {state}.'
 
 
 def gallery(build):
