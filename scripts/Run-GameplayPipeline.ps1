@@ -6,6 +6,7 @@ param(
     [ValidateSet('create', 'inspect', 'build', 'run', 'relaunch', 'test', 'publish', 'status', 'cancel')][string]$Operation = 'inspect',
     [string]$Scene,
     [string]$LaunchConfig,
+    [string]$Cases,
     [string]$ReportPath,
     [switch]$Async,
     [string]$JobId,
@@ -18,6 +19,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Cases -and ($Operation -ne 'test' -or $Target -ne 'desktop')) { throw 'Pog Champ, -Cases requires -Operation test -Target desktop.' }
 if ($Target -eq 'web' -and !$PSBoundParameters.ContainsKey('TimeoutMs')) { $TimeoutMs = 600000 }
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $python = if ($env:AETHER_PYTHON) { $env:AETHER_PYTHON } else { 'python' }
@@ -51,6 +53,11 @@ else {
         $config = Get-Content -LiteralPath $LaunchConfig -Raw | ConvertFrom-Json -AsHashtable
         if ($config -isnot [System.Collections.IDictionary]) { throw 'Pog Champ, -LaunchConfig must contain a JSON object.' }
         $request.launchConfig = $config
+    }
+    if ($Cases) {
+        $suite = Get-Content -LiteralPath $Cases -Raw | ConvertFrom-Json -AsHashtable -NoEnumerate
+        if ($suite -isnot [array] -or $suite.Count -lt 1 -or $suite.Count -gt 32) { throw 'Pog Champ, -Cases must contain a JSON array with 1..32 named test cases.' }
+        $request.cases = $suite
     }
     $requestDirectory = Join-Path $repoRoot 'logs/gameplay-requests'
     New-Item -ItemType Directory -Force -Path $requestDirectory | Out-Null

@@ -12,6 +12,15 @@ SPEC.loader.exec_module(mcp)
 
 
 class GameplayJobTransportTests(unittest.TestCase):
+    def test_test_suite_schema_reuses_the_existing_launch_contract(self):
+        properties = mcp.GAMEPLAY_JOB_START['inputSchema']['properties']
+        self.assertIn('cases', properties)
+        cases = properties['cases']
+        self.assertEqual(cases['maxItems'], 32)
+        self.assertEqual(cases['minItems'], 1)
+        self.assertEqual(cases['items']['required'], ['name'])
+        self.assertEqual(cases['items']['properties']['launchConfig'], properties['launchConfig'])
+
     def test_published_job_schema_can_describe_the_reference_verification(self):
         fixture = Path(__file__).resolve().parents[2] / 'projects/AgentPipelineCSharp/reference-test.json'
         launch = json.loads(fixture.read_text(encoding='utf-8'))
@@ -29,7 +38,8 @@ class GameplayJobTransportTests(unittest.TestCase):
 
     def test_start_preserves_request_and_structured_queued_content(self):
         request = dict(project='世界 & project', operation='test', timeoutMs=1000,
-                       launchConfig=dict(readSaves=False, input=[dict(tick=1, key='Space', down=True)]))
+                       launchConfig=dict(readSaves=False, input=[dict(tick=1, key='Space', down=True)]),
+                       cases=[dict(name='branch & caf\u00e9', ticks=10)])
         result = dict(jobId='uuid', report=dict(status='queued', exitCode=None))
         with mock.patch.object(mcp.gameplay_jobs, 'start_job', return_value=result) as start, \
                 mock.patch.object(mcp, '_engine_tools', side_effect=AssertionError('editor must not be queried')):

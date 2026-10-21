@@ -9,7 +9,7 @@ namespace aether::app::scripting
 	{
 		const auto invalid = [](std::string message) { return std::unexpected(AetherError::Engine(std::move(message))); };
 		if (!request.is_object()) { return invalid("Gameplay request must be an object"); }
-		const std::set<std::string> fields{"jobId", "project", "operation", "target", "scene", "ticks", "step", "timeoutMs", "launchConfig", "name", "language", "template"};
+		const std::set<std::string> fields{"jobId", "project", "operation", "target", "scene", "ticks", "step", "timeoutMs", "launchConfig", "name", "language", "template", "cases"};
 		for (const auto& [name, value]: request.items())
 		{
 			if (!fields.contains(name)) { return invalid("Unknown gameplay request field: " + name); }
@@ -45,6 +45,44 @@ namespace aether::app::scripting
 		if (!normalized.contains("timeoutMs")) { normalized["timeoutMs"] = target == "web" ? 600000 : 180000; }
 		if (!normalized.contains("step")) { normalized["step"] = 1.0 / 60.0; }
 		if (!normalized.contains("launchConfig")) { normalized["launchConfig"] = nlohmann::json::object(); }
+		if (request.contains("cases"))
+		{
+			const auto& cases = request["cases"];
+			if (request["operation"] != "test" || target != "desktop" || !cases.is_array() || cases.empty() || cases.size() > 32)
+			{
+				return invalid("cases requires a desktop test with 1..32 cases");
+			}
+			std::set<std::string> names;
+			normalized["cases"] = nlohmann::json::array();
+			for (const auto& item: cases)
+			{
+				if (!item.is_object() || !item.contains("name") || !item["name"].is_string())
+				{
+					return invalid("Each test case requires a name");
+				}
+				const auto name = item["name"].get<std::string>();
+				if (name.size() > 128 || name.find_first_not_of(" \t\r\n") == std::string::npos || name.find('\0') != std::string::npos || !names.insert(name).second)
+				{
+					return invalid("Test case names must be unique, nonblank, at most 128 bytes and without NUL");
+				}
+				auto candidate = normalized;
+				candidate.erase("cases");
+				for (const auto& [field, value]: item.items())
+				{
+					if (field != "name" && field != "scene" && field != "ticks" && field != "step" && field != "launchConfig")
+					{
+						return invalid("Unknown test case field: " + field);
+					}
+					candidate[field] = value;
+				}
+				const auto parsed = ValidateGameplayPipelineRequest(candidate);
+				if (!parsed)
+				{
+					return invalid("Invalid test case " + name + ": " + parsed.error().message);
+				}
+				normalized["cases"].push_back({{"name", name}, {"scene", parsed->value("scene", "")}, {"ticks", parsed->at("ticks")}, {"step", parsed->at("step")}, {"launchConfig", parsed->at("launchConfig")}});
+			}
+		}
 		return normalized;
 	}
 }

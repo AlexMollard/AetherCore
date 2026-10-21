@@ -191,6 +191,42 @@ namespace aether::project_tool
 			report.artifacts.push_back({Utf8(descriptor->projectFile)});
 			return terminal();
 		}
+		if (operation == "run" || operation == "relaunch" || operation == "test")
+		{
+			if (request.value("scene", "").empty())
+			{
+				request["scene"] = app::ReadProjectStartupScene(descriptor->projectFile);
+			}
+			auto cases = request.contains("cases") ? request["cases"] : Json::array({request});
+			for (auto& item: cases)
+			{
+				if (item.value("scene", "").empty())
+				{
+					item["scene"] = request["scene"];
+				}
+				try
+				{
+					app::scripting::ValidateGameplayRunConfig({.ticks = item.at("ticks").get<std::uint32_t>(), .step = item.at("step").get<float>(), .launchConfig = item.at("launchConfig")});
+					if (operation == "test" && item.at("launchConfig").value("assertions", Json::array()).empty())
+					{
+						return fail("GAMEPLAY_ASSERTIONS_REQUIRED", "Test requires explicit state assertions: " + item.value("name", "single run"));
+					}
+					std::string error;
+					if (!app::ValidateProjectStartupScene(descriptor->scenesDir, item.at("scene").get<std::string>(), error))
+					{
+						return fail("GAMEPLAY_SCENE", item.value("name", "single run") + ": " + error);
+					}
+				}
+				catch (const std::exception& error)
+				{
+					return fail("GAMEPLAY_CONFIG", item.value("name", "single run") + ": " + error.what());
+				}
+			}
+			if (request.contains("cases"))
+			{
+				request["cases"] = std::move(cases);
+			}
+		}
 		request["jobId"] = report.jobId;
 		if (operation != "publish")
 		{
@@ -238,6 +274,145 @@ namespace aether::project_tool
 			}
 		}
 		if (operation == "build") { report.status = Status::Passed; return terminal(); }
+		if (request.contains("cases"))
+		{
+			report.profile = "native-test-suite-v1";
+			const auto firstCheck = report.requiredChecks.size();
+			for (const auto& item: request["cases"])
+			{
+				report.requiredChecks.push_back({"case:" + item.at("name").get<std::string>(), Status::Skipped});
+			}
+			Json summary = {{"schemaVersion", 1}, {"operation", "test-suite"}, {"cases", Json::array()}};
+			for (const auto& item: request["cases"])
+			{
+				summary["cases"].push_back({{"name", item["name"]}, {"status", "skipped"}, {"report", nullptr}});
+			}
+			Status outcome = Status::Passed;
+			for (std::size_t index = 0; index < request["cases"].size(); ++index)
+			{
+				if (stop.stop_requested() || remaining() <= 0)
+				{
+					outcome = stop.stop_requested() ? Status::Cancelled : Status::Failed;
+					report.diagnostics.push_back(
+					        {stop.stop_requested() ? "GAMEPLAY_CANCELLED" : "GAMEPLAY_TIMEOUT", stop.stop_requested() ? scripting::AgentDiagnosticSeverity::Info : scripting::AgentDiagnosticSeverity::Error, "Test suite stopped before the next case"});
+					break;
+				}
+				const auto& item = request["cases"][index];
+				const auto name = item.at("name").get<std::string>();
+				report.phase = "test:" + name;
+				report.requiredChecks[firstCheck + index].status = Status::Running;
+				progress(Serialize(report));
+				const auto caseDir = directory / "cases" / std::to_string(index);
+				std::filesystem::create_directories(caseDir);
+				auto childRequest = request;
+				childRequest.erase("cases");
+				for (const auto& [field, value]: item.items())
+				{
+					childRequest[field] = value;
+				}
+				childRequest["jobId"] = report.jobId + ":" + std::to_string(index);
+				childRequest["statePath"] = Utf8(caseDir / "state.json");
+				const auto requestFile = caseDir / "request.json";
+				const auto reportFile = caseDir / "report.json";
+				const auto logFile = caseDir / "runtime.log";
+				if (!io::file_util::WriteText(requestFile, childRequest.dump(2)))
+				{
+					return fail("GAMEPLAY_IO", "Cannot write test case request");
+				}
+				auto executable = io::PlatformPaths::GetExecutableDir() / io::PlatformPaths::GetExecutableName();
+#ifdef _WIN32
+				executable += ".exe";
+#endif
+				const auto caseStarted = std::chrono::steady_clock::now();
+				const int exited = run(executable, {"--run-child", "--request", Utf8(requestFile), "--report", Utf8(reportFile)}, RuntimeWorkingDirectory(), logFile);
+				const auto text = io::file_util::ReadText(reportFile);
+				Json child = text ? Json::parse(*text, nullptr, false) : Json();
+				const bool interrupted = stop.stop_requested() || exited == io::kProcessCancelled || exited == io::kProcessTimedOut;
+				if (interrupted || !child.is_object() || !child.contains("diagnostics") || !child["diagnostics"].is_array() || !child.contains("artifacts") || !child["artifacts"].is_array() || (exited != 0 && child.value("status", "") == "passed"))
+				{
+					scripting::AgentReport failed{.jobId = childRequest["jobId"],
+					        .status = interrupted && exited != io::kProcessTimedOut ? Status::Cancelled : Status::Failed,
+					        .phase = "run",
+					        .target = "desktop",
+					        .language = report.language,
+					        .profile = item.at("launchConfig").value("profile", "native-headless-2d-v1")};
+					failed.diagnostics.push_back({interrupted ? (exited == io::kProcessTimedOut ? "GAMEPLAY_TIMEOUT" : "GAMEPLAY_CANCELLED") : "GAMEPLAY_CHILD_EXIT",
+					        failed.status == Status::Cancelled ? scripting::AgentDiagnosticSeverity::Info : scripting::AgentDiagnosticSeverity::Error,
+					        "Test case child did not complete successfully; inspect runtime.log"});
+					child = Serialize(failed);
+				}
+				child["jobId"] = childRequest["jobId"];
+				child["durationMs"] = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - caseStarted).count();
+				if (std::filesystem::is_regular_file(logFile))
+				{
+					child["artifacts"].push_back({{"path", Utf8(logFile)}, {"bytes", std::filesystem::file_size(logFile)}});
+				}
+				if (!io::file_util::WriteText(reportFile, child.dump(2)))
+				{
+					return fail("GAMEPLAY_IO", "Cannot write test case report");
+				}
+				const bool passed = exited == 0 && child.value("status", "") == "passed";
+				report.requiredChecks[firstCheck + index].status = passed ? Status::Passed : child.value("status", "") == "cancelled" ? Status::Cancelled : Status::Failed;
+				summary["cases"][index].update({{"status", passed ? "passed" : child.value("status", "failed")}, {"report", Utf8(reportFile)}, {"durationMs", child["durationMs"]}});
+				report.artifacts.push_back({Utf8(reportFile), std::filesystem::file_size(reportFile)});
+				for (const auto& artifact: child["artifacts"])
+				{
+					report.artifacts.push_back({artifact.at("path").get<std::string>(), artifact.contains("bytes") ? std::optional<std::uint64_t>(artifact["bytes"].get<std::uint64_t>()) : std::nullopt});
+				}
+				for (const auto& diagnostic: child["diagnostics"])
+				{
+					auto message = diagnostic.at("message").get<std::string>();
+					const auto code = diagnostic.at("code").get<std::string>();
+					auto detail = Json::parse(message, nullptr, false);
+					if (code.starts_with("GAMEPLAY_ASSERTION_") && detail.is_object())
+					{
+						detail["case"] = name;
+						message = detail.dump();
+					}
+					else
+					{
+						message = "Case " + Json(name).dump() + ": " + message;
+					}
+					scripting::AgentDiagnostic copied{.code = code,
+					        .severity = diagnostic["severity"] == "error"     ? scripting::AgentDiagnosticSeverity::Error
+					                    : diagnostic["severity"] == "warning" ? scripting::AgentDiagnosticSeverity::Warning
+					                                                          : scripting::AgentDiagnosticSeverity::Info,
+					        .message = std::move(message)};
+					if (diagnostic.contains("source"))
+					{
+						const auto& source = diagnostic["source"];
+						copied.source = scripting::AgentSourceLocation{.file = source.at("file").get<std::string>()};
+						if (source.contains("line"))
+						{
+							copied.source->line = source["line"].get<std::uint32_t>();
+						}
+						if (source.contains("column"))
+						{
+							copied.source->column = source["column"].get<std::uint32_t>();
+						}
+					}
+					report.diagnostics.push_back(std::move(copied));
+				}
+				if (!passed)
+				{
+					outcome = child.value("status", "") == "cancelled" ? Status::Cancelled : Status::Failed;
+				}
+				if (interrupted)
+				{
+					break;
+				}
+			}
+			report.status = outcome;
+			report.phase = "test-suite";
+			summary["status"] = outcome == Status::Passed ? "passed" : outcome == Status::Cancelled ? "cancelled" : "failed";
+			const auto summaryFile = directory / "suite-summary.json";
+			if (!io::file_util::WriteText(summaryFile, summary.dump(2)))
+			{
+				return fail("GAMEPLAY_IO", "Cannot write test suite summary");
+			}
+			report.artifacts.push_back({Utf8(summaryFile), std::filesystem::file_size(summaryFile)});
+			return terminal();
+		}
 		if (stop.stop_requested()) { return fail("GAMEPLAY_CANCELLED", "Cancelled before launch"); }
 		if (request.value("scene", "").empty()) { request["scene"] = app::ReadProjectStartupScene(descriptor->projectFile); }
 		if (operation == "test" && request.at("launchConfig").value("assertions", Json::array()).empty()) { return fail("GAMEPLAY_ASSERTIONS_REQUIRED", "Test requires explicit state assertions in launchConfig"); }

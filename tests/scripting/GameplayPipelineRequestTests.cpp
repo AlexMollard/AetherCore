@@ -39,3 +39,42 @@ TEST_CASE("Gameplay Web publishing preserves the explicit target and bounds oper
     CHECK(web->at("target") == "web");
     CHECK_FALSE(ValidateGameplayPipelineRequest({{"project", "p"}, {"operation", "run"}, {"target", "web"}}));
 }
+
+TEST_CASE("Gameplay test suites normalize bounded named cases without changing single requests")
+{
+	using Json = nlohmann::json;
+	const Json config{{"assertions", Json::array({{{"entity", "Player"}, {"type", "$engine"}, {"property", "exists"}, {"equals", true}}})}};
+	const Json request{{"project", "p"}, {"operation", "test"}, {"scene", "Start"}, {"ticks", 90}, {"launchConfig", config}, {"cases", {{{"name", "first"}}, {{"name", "caf\xc3\xa9 & branch"}, {"ticks", 10}}}}};
+	const auto parsed = ValidateGameplayPipelineRequest(request);
+	REQUIRE(parsed);
+	CHECK(parsed->at("cases")[0]["scene"] == "Start");
+	CHECK(parsed->at("cases")[0]["ticks"] == 90);
+	CHECK(parsed->at("cases")[1]["ticks"] == 10);
+	CHECK(parsed->at("cases")[1]["launchConfig"] == config);
+	CHECK(ValidateGameplayPipelineRequest(*parsed));
+	for (const auto& cases: std::vector<Json>{Json::array(),
+	             Json::object(),
+	             Json::array({{{"name", "same"}}, {{"name", "same"}}}),
+	             Json::array({{{"name", " "}}}),
+	             Json::array({{{"name", std::string(129, 'x')}}}),
+	             Json::array({{{"name", "x"}, {"module", "untrusted"}}}),
+	             Json::array({{{"name", "x"}, {"ticks", 0}}})})
+	{
+		auto invalid = request;
+		invalid["cases"] = cases;
+		CHECK_FALSE(ValidateGameplayPipelineRequest(invalid));
+	}
+	for (const auto* operation: {"build", "run", "publish", "inspect"})
+	{
+		auto invalid = request;
+		invalid["operation"] = operation;
+		CHECK_FALSE(ValidateGameplayPipelineRequest(invalid));
+	}
+	auto oversized = request;
+	oversized["cases"] = Json::array();
+	for (int index = 0; index < 33; ++index)
+	{
+		oversized["cases"].push_back({{"name", std::to_string(index)}});
+	}
+	CHECK_FALSE(ValidateGameplayPipelineRequest(oversized));
+}

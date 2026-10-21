@@ -413,6 +413,18 @@ GAMEPLAY_JOB_START = {
     },
 }
 
+GAMEPLAY_JOB_START['inputSchema']['properties']['cases'] = {
+    'type': 'array', 'minItems': 1, 'maxItems': 32,
+    'description': 'Desktop test only. Build once, then run each named case in a fresh process. Omitted scene/ticks/step/launchConfig inherit the top-level values; launchConfig replaces the whole object. Saves remain project-scoped.',
+    'items': {'type': 'object', 'additionalProperties': False, 'required': ['name'], 'properties': {
+        'name': {'type': 'string', 'minLength': 1, 'maxLength': 128, 'description': 'Unique nonblank name, at most 128 UTF-8 bytes, no NUL.'},
+        'scene': {'type': 'string'},
+        'ticks': {'type': 'integer', 'minimum': 1, 'maximum': 1000000},
+        'step': {'type': 'number', 'exclusiveMinimum': 0, 'maximum': 1},
+        'launchConfig': GAMEPLAY_JOB_START['inputSchema']['properties']['launchConfig']
+    }}
+}
+
 GAMEPLAY_JOB_TOOLS = [GAMEPLAY_JOB_START] + [
     {'name': 'gameplay_job_' + action,
      'description': description + ' Works across MCP restarts and needs no editor endpoint.',
