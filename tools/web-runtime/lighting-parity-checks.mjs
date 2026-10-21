@@ -1,0 +1,103 @@
+import assert from 'node:assert/strict';
+import {readFile, writeFile, realpath, stat} from 'node:fs/promises';
+import {createServer} from 'node:http';
+import {createRequire} from 'node:module';
+import path from 'node:path';
+import {crc32, deflateSync} from 'node:zlib';
+import {isHardwareAdapter} from '../experiments/rust-webgpu/browser-checks.mjs';
+
+const options = Object.fromEntries(process.argv.slice(2).map(arg => {
+    const split = arg.indexOf('=');
+    if (split < 3) throw Error('Expected --name=value');
+    return [arg.slice(2, split), arg.slice(split + 1)];
+}));
+const reportPath = path.resolve(options.report);
+const report = {schemaVersion:1, status:'failed', captures:[], diagnostics:[], cleanup:{browser:false,server:false}};
+let browser, server, timer, active;
+
+function png(width, height, pixels) {
+    const chunk = (name, data) => {
+        const type = Buffer.from(name), size = Buffer.alloc(4), checksum = Buffer.alloc(4);
+        size.writeUInt32BE(data.length); checksum.writeUInt32BE(crc32(Buffer.concat([type,data])));
+        return Buffer.concat([size,type,data,checksum]);
+    };
+    const header = Buffer.alloc(13);
+    header.writeUInt32BE(width); header.writeUInt32BE(height,4); header[8]=8; header[9]=6;
+    const rows = Buffer.alloc(height*(width*4+1));
+    for(let y=0;y<height;y++) pixels.copy(rows,y*(width*4+1)+1,y*width*4,(y+1)*width*4);
+    return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',header),chunk('IDAT',deflateSync(rows)),chunk('IEND',Buffer.alloc(0))]);
+}
+try {
+    const request = JSON.parse(await readFile(options.request,'utf8'));
+    const root = await realpath(request.root);
+    const pins = JSON.parse(await readFile(new URL('../experiments/rust-webgpu/toolchain.json',import.meta.url),'utf8'));
+    const require = createRequire(import.meta.url), module = request.playwright || process.env.AETHER_PLAYWRIGHT_MODULE || 'playwright';
+    const {chromium} = require(module);
+    assert.equal(require(path.join(module,'package.json')).version,pins.playwright);
+    report.playwrightVersion=pins.playwright;
+    server = createServer(async(req,res)=>{
+        try {
+            const url = new URL(req.url,'http://localhost');
+            if(url.pathname==='/favicon.ico'){res.writeHead(204).end();return;}
+            if(url.pathname==='/project.js'){
+                const config = {schemaVersion:1,id:'private-lighting-parity',name:'Lighting parity',language:'rust',
+                    startupScene:active.scene,scenes:request.captures.map(c=>c.scene),graphics:request.graphics,
+                    paths:{assets:'assets',scenes:'scenes',prefabs:'assets/prefabs',scripts:'scripts'}};
+                res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'}).end('globalThis.aetherProject='+JSON.stringify(config)+';');
+                return;
+            }
+            const candidate=path.resolve(root,'.'+decodeURIComponent(url.pathname));
+            const target=await realpath((await stat(candidate)).isDirectory()?path.join(candidate,'index.html'):candidate);
+            const relative=path.relative(root,target);
+            if(relative.startsWith('..') || path.isAbsolute(relative)){res.writeHead(403).end();return;}
+            const mime={'.js':'text/javascript','.mjs':'text/javascript','.html':'text/html','.wasm':'application/wasm'}[path.extname(target)] || 'application/octet-stream';
+            res.writeHead(200,{'Content-Type':mime,'Cache-Control':'no-store'}).end(await readFile(target));
+        }catch{res.writeHead(404).end();}
+    });
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    browser=await chromium.launch({channel:'chrome',headless:true,timeout:15000,args:['--enable-gpu']});
+    report.browserVersion=browser.version();
+    timer=setTimeout(()=>{report.diagnostics.push('Browser helper exceeded 180 seconds');void browser.close();},180000);
+    for(const capture of request.captures){
+        active=capture;
+        assert.ok(Number.isInteger(capture.width) && capture.width>0 && capture.width<=4096);
+        assert.ok(Number.isInteger(capture.height) && capture.height>0 && capture.height<=4096);
+        const item={scene:capture.scene,status:'failed',console:[],pageErrors:[]};report.captures.push(item);
+        const context=await browser.newContext();
+        try {
+            const page=await context.newPage();page.setDefaultTimeout(20000);
+            page.on('console',message=>{if(message.type()==='error')item.console.push(message.text());});
+            page.on('pageerror',error=>item.pageErrors.push(String(error)));
+            await page.goto(`http://127.0.0.1:${server.address().port}/?reference=1&scene=${encodeURIComponent(capture.scene)}&automation=1&test=1`);
+            await page.waitForFunction(()=>aetherRuntime.scene && aetherRuntime.rendererReady || aetherRuntime.status==='failed');
+            assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
+            assert.equal(await page.evaluate(()=>aetherTest.version),1);
+            item.adapter=await page.evaluate(()=>aetherRuntime.adapter);assert.ok(isHardwareAdapter(item.adapter),'Hardware WebGPU required');
+            await page.evaluate(({width,height})=>Module._aether_web_resize(width,height),capture);
+            await page.locator('#start').click();await page.locator('#canvas').focus();
+            await page.waitForFunction(()=>aetherTest.readiness().ready || aetherRuntime.status==='failed');
+            assert.equal(await page.evaluate(()=>aetherRuntime.ticks || 0),0,'Manual mode must prevent uncontrolled simulation');
+            const stepped=await page.evaluate(()=>aetherTest.step(10));assert.equal(stepped.ticks,10);
+            const image=await page.evaluate(()=>aetherTest.capture());
+            assert.equal(image.width,capture.width);assert.equal(image.height,capture.height);
+            const pixels=Buffer.from(image.pixels);assert.equal(pixels.length,capture.width*capture.height*4);
+            const stem=path.join(path.dirname(reportPath),capture.scene+'-web');
+            await writeFile(stem+'.rgba',pixels);await writeFile(stem+'.png',png(capture.width,capture.height,pixels));
+            item.state=await page.evaluate(()=>aetherTest.snapshot());
+            assert.deepEqual(item.state.diagnostics,[]);assert.deepEqual(item.console,[]);assert.deepEqual(item.pageErrors,[]);
+            await page.evaluate(()=>aetherTest.stop());
+            await page.waitForFunction(()=>aetherRuntime.state==='stopped' && aetherRuntime.inFlight===0);
+            item.retired=await page.evaluate(()=>({state:aetherRuntime.state,inFlight:aetherRuntime.inFlight}));
+            item.rgba=stem+'.rgba';item.png=stem+'.png';item.status='passed';
+        }finally{await context.close();}
+    }
+    report.status='passed';
+} catch(error){report.diagnostics.push(String(error.stack || error));}
+finally{
+    clearTimeout(timer);
+    if(browser){try{await browser.close();report.cleanup.browser=true;}catch(error){report.diagnostics.push(String(error));}}
+    if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));report.cleanup.server=true;}
+    if(!report.cleanup.browser || !report.cleanup.server)report.status='failed';
+    await writeFile(reportPath,JSON.stringify(report,null,2)+'\n');
+}
+process.exitCode=report.status==='passed'?0:1;
