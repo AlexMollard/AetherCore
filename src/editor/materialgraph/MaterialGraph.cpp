@@ -1,9 +1,11 @@
 #include "materialgraph/MaterialGraph.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <iterator>
 #include <optional>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -62,8 +64,7 @@ namespace aether::editor
 		        {"Vertex colour", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF3, "The mesh's per-vertex colour."},
 		        {"View direction", MaterialNodeCategory::Input, 0, {"", "", ""}, {kAny, kAny, kAny}, kF3, "Unit vector from the surface towards the camera."},
 		};
-		static_assert(std::size(kSpecs) == static_cast<std::size_t>(MaterialNodeType::ViewDirection) + 1,
-		        "Every MaterialNodeType needs a spec; the table is indexed by the enum.");
+		static_assert(std::size(kSpecs) == static_cast<std::size_t>(MaterialNodeType::ViewDirection) + 1, "Every MaterialNodeType needs a spec; the table is indexed by the enum.");
 
 		const NodeSpec& SpecOf(MaterialNodeType type)
 		{
@@ -358,8 +359,7 @@ namespace aether::editor
 		}
 		// The only refused case is a narrow vector driving a wider input. There is no one
 		// right way to invent the missing components, so the graph does not guess.
-		return std::format("A {} cannot fill a {} input - there is no obvious value for the missing components. A single float would broadcast.",
-		        MaterialValueTypeName(from), MaterialValueTypeName(to));
+		return std::format("A {} cannot fill a {} input - there is no obvious value for the missing components. A single float would broadcast.", MaterialValueTypeName(from), MaterialValueTypeName(to));
 	}
 
 	const MaterialNode* MaterialGraph::Find(int nodeId) const
@@ -476,7 +476,10 @@ namespace aether::editor
 				        }
 			        }
 
-			        const auto asInt = [&](int fallback) { return static_cast<int>(text::ParseFloat(entry.value).value_or(static_cast<float>(fallback))); };
+			        const auto asInt = [&](int fallback)
+			        {
+				        return static_cast<int>(text::ParseFloat(entry.value).value_or(static_cast<float>(fallback)));
+			        };
 			        if (entry.fullKey == "graph.next_id")
 			        {
 				        graph.nextId = asInt(1);
@@ -484,7 +487,10 @@ namespace aether::editor
 			        }
 			        else if (inNode)
 			        {
-				        if (entry.key == "id") { node.id = asInt(0); }
+				        if (entry.key == "id")
+				        {
+					        node.id = asInt(0);
+				        }
 				        else if (entry.key == "type")
 				        {
 					        const int type = asInt(0);
@@ -497,10 +503,22 @@ namespace aether::editor
 						        node.type = static_cast<MaterialNodeType>(type);
 					        }
 				        }
-				        else if (entry.key == "x") { node.x = text::ParseFloat(entry.value).value_or(0.0f); }
-				        else if (entry.key == "y") { node.y = text::ParseFloat(entry.value).value_or(0.0f); }
-				        else if (entry.key == "slot") { node.slot = static_cast<MaterialTextureSlot>(std::clamp(asInt(0), 0, static_cast<int>(MaterialTextureSlot::Emissive))); }
-				        else if (entry.key == "channel") { node.channel = std::clamp(asInt(0), 0, 3); }
+				        else if (entry.key == "x")
+				        {
+					        node.x = text::ParseFloat(entry.value).value_or(0.0f);
+				        }
+				        else if (entry.key == "y")
+				        {
+					        node.y = text::ParseFloat(entry.value).value_or(0.0f);
+				        }
+				        else if (entry.key == "slot")
+				        {
+					        node.slot = static_cast<MaterialTextureSlot>(std::clamp(asInt(0), 0, static_cast<int>(MaterialTextureSlot::Emissive)));
+				        }
+				        else if (entry.key == "channel")
+				        {
+					        node.channel = std::clamp(asInt(0), 0, 3);
+				        }
 				        else if (entry.key == "value")
 				        {
 					        if (const auto parsed = text::ParseFloatArray<4>(entry.value))
@@ -514,11 +532,26 @@ namespace aether::editor
 			        }
 			        else if (inLink)
 			        {
-				        if (entry.key == "id") { link.id = asInt(0); }
-				        else if (entry.key == "from_node") { link.fromNode = asInt(0); }
-				        else if (entry.key == "from_pin") { link.fromPin = asInt(0); }
-				        else if (entry.key == "to_node") { link.toNode = asInt(0); }
-				        else if (entry.key == "to_pin") { link.toPin = asInt(0); }
+				        if (entry.key == "id")
+				        {
+					        link.id = asInt(0);
+				        }
+				        else if (entry.key == "from_node")
+				        {
+					        link.fromNode = asInt(0);
+				        }
+				        else if (entry.key == "from_pin")
+				        {
+					        link.fromPin = asInt(0);
+				        }
+				        else if (entry.key == "to_node")
+				        {
+					        link.toNode = asInt(0);
+				        }
+				        else if (entry.key == "to_pin")
+				        {
+					        link.toPin = asInt(0);
+				        }
 			        }
 		        });
 		flush();
@@ -528,11 +561,11 @@ namespace aether::editor
 		}
 		// The file's next_id is advisory: re-derive it from what actually parsed so a
 		// missing or stale value can never mint a duplicate node or link id.
-		for (const MaterialNode& parsedNode : graph.nodes)
+		for (const MaterialNode& parsedNode: graph.nodes)
 		{
 			graph.nextId = std::max(graph.nextId, parsedNode.id + 1);
 		}
-		for (const MaterialLink& parsedLink : graph.links)
+		for (const MaterialLink& parsedLink: graph.links)
 		{
 			graph.nextId = std::max(graph.nextId, parsedLink.id + 1);
 		}
@@ -551,6 +584,7 @@ namespace aether::editor
 			std::unordered_map<int, std::string> done;
 			std::unordered_set<int> onStack;
 			std::string error;
+			bool portable = false;
 
 			// The value feeding `pin`, already converted to `want`.
 			std::string Input(int nodeId, int pin, MaterialValueType want, float fallback)
@@ -599,19 +633,20 @@ namespace aether::editor
 						expr = "input.uv";
 						break;
 					case MaterialNodeType::Time:
-						expr = "fc->elapsedTime";
+						expr = portable ? "frame.time.x" : "fc->elapsedTime";
 						break;
 					case MaterialNodeType::Fresnel:
 						// Schlick with a fixed power: the rim term everyone reaches for first.
-						expr = "pow(1.0f - saturate(dot(normalize(input.worldNormal), normalize(fc->cameraWorldPos.xyz - input.worldPos))), 5.0f)";
+						expr = portable ? "pow(1.0f - saturate(dot(normalize(input.worldNormal), normalize(frame.camera.xyz - input.worldPos))), 5.0f)"
+						                : "pow(1.0f - saturate(dot(normalize(input.worldNormal), normalize(fc->cameraWorldPos.xyz - input.worldPos))), 5.0f)";
 						break;
 					case MaterialNodeType::TextureSample:
 					{
 						// Sampling at the node's own UV rather than the interpolated one is
 						// the whole point of having a Panner or any other UV maths upstream.
 						const std::string uv = Input(nodeId, 0, kF2, 0.0f);
-						expr = std::format("(({} != kNoTexture) ? g_textures[{}].Sample(g_linearSampler, {}) : float4(1, 1, 1, 1))",
-						        SlotExpression(node->slot), SlotExpression(node->slot), uv);
+						expr = portable ? std::format("GraphSampleTexture({}u, {})", static_cast<unsigned>(node->slot), uv)
+						                : std::format("(({} != kNoTexture) ? g_textures[{}].Sample(g_linearSampler, {}) : float4(1, 1, 1, 1))", SlotExpression(node->slot), SlotExpression(node->slot), uv);
 						break;
 					}
 					case MaterialNodeType::NormalMap:
@@ -619,13 +654,15 @@ namespace aether::editor
 						// Unpacked from [0,1] and rotated into world space by the same TBN the
 						// standard shader builds, so a normal map reads identically in both.
 						const std::string uv = Input(nodeId, 0, kF2, 0.0f);
-						expr = std::format(
-						        "(({} != kNoTexture) ? normalize(mul(g_textures[{}].Sample(g_linearSampler, {}).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal)",
-						        SlotExpression(node->slot), SlotExpression(node->slot), uv);
+						expr = portable ? std::format("(GraphTexturePresent(input.textureMask, {}u) ? normalize(mul(GraphSampleTexture({}u, {}).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal)",
+						                          static_cast<unsigned>(node->slot),
+						                          static_cast<unsigned>(node->slot),
+						                          uv)
+						                : std::format("(({} != kNoTexture) ? normalize(mul(g_textures[{}].Sample(g_linearSampler, {}).xyz * 2.0f - 1.0f, graphTBN)) : graphGeometricNormal)", SlotExpression(node->slot), SlotExpression(node->slot), uv);
 						break;
 					}
 					case MaterialNodeType::Panner:
-						expr = std::format("({} + fc->elapsedTime * float2({}, {}))", Input(nodeId, 0, kF2, 0.0f), node->value[0], node->value[1]);
+						expr = std::format("({} + {} * float2({}, {}))", Input(nodeId, 0, kF2, 0.0f), portable ? "frame.time.x" : "fc->elapsedTime", node->value[0], node->value[1]);
 						break;
 					case MaterialNodeType::Noise:
 						expr = std::format("GraphValueNoise({} * {})", Input(nodeId, 0, kF2, 0.0f), node->value[0]);
@@ -646,8 +683,7 @@ namespace aether::editor
 						expr = std::format("GraphSafeDivide({}, {})", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 1.0f));
 						break;
 					case MaterialNodeType::Lerp:
-						expr = std::format("lerp({}, {}, saturate({}))", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 1.0f),
-						        Input(nodeId, 2, kF1, 0.5f));
+						expr = std::format("lerp({}, {}, saturate({}))", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 1.0f), Input(nodeId, 2, kF1, 0.5f));
 						break;
 					case MaterialNodeType::OneMinus:
 						expr = std::format("(1.0f - {})", Input(nodeId, 0, outType, 0.0f));
@@ -664,15 +700,13 @@ namespace aether::editor
 						expr = std::format("dot({}, {})", Input(nodeId, 0, kF3, 0.0f), Input(nodeId, 1, kF3, 0.0f));
 						break;
 					case MaterialNodeType::Smoothstep:
-						expr = std::format("smoothstep({}, {}, {})", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 1.0f),
-						        Input(nodeId, 2, outType, 0.5f));
+						expr = std::format("smoothstep({}, {}, {})", Input(nodeId, 0, outType, 0.0f), Input(nodeId, 1, outType, 1.0f), Input(nodeId, 2, outType, 0.5f));
 						break;
 					case MaterialNodeType::Sine:
 						expr = std::format("sin({} * {})", Input(nodeId, 0, outType, 0.0f), node->value[0]);
 						break;
 					case MaterialNodeType::Remap:
-						expr = std::format("GraphRemap({}, {}, {}, {}, {})", Input(nodeId, 0, outType, 0.0f), node->value[0], node->value[1],
-						        node->value[2], node->value[3]);
+						expr = std::format("GraphRemap({}, {}, {}, {}, {})", Input(nodeId, 0, outType, 0.0f), node->value[0], node->value[1], node->value[2], node->value[3]);
 						break;
 					case MaterialNodeType::Channel:
 					{
@@ -697,7 +731,7 @@ namespace aether::editor
 						expr = "input.vertexColor";
 						break;
 					case MaterialNodeType::ViewDirection:
-						expr = "normalize(fc->cameraWorldPos.xyz - input.worldPos)";
+						expr = portable ? "normalize(frame.camera.xyz - input.worldPos)" : "normalize(fc->cameraWorldPos.xyz - input.worldPos)";
 						break;
 					case MaterialNodeType::Output:
 					default:
@@ -740,6 +774,174 @@ namespace aether::editor
 			at = eol + 1;
 		}
 		return out;
+	}
+
+	namespace
+	{
+		constexpr std::string_view kGraphMathSource = R"GRAPH(// Value noise: a hashed lattice with a smoothstep between cells. Cheap, deterministic and
+// tileable enough for a material, and it needs no texture to be shipped alongside.
+float GraphHash21(float2 p)
+{
+    return frac(sin(dot(p, float2(127.1f, 311.7f))) * 43758.5453123f);
+}
+
+float GraphValueNoise(float2 p)
+{
+    const float2 cell = floor(p);
+    const float2 f = p - cell;
+    const float2 w = f * f * (3.0f - 2.0f * f);
+    const float a = GraphHash21(cell);
+    const float b = GraphHash21(cell + float2(1.0f, 0.0f));
+    const float c = GraphHash21(cell + float2(0.0f, 1.0f));
+    const float d = GraphHash21(cell + float2(1.0f, 1.0f));
+    return lerp(lerp(a, b, w.x), lerp(c, d, w.x), w.y);
+}
+
+// Dividing by zero produces an inf that spreads through everything downstream, so the
+// divisor is pushed off zero while keeping its sign. sign() returns 0 exactly at zero, which
+// is why the 1 is added back in there. One overload per width, because the graph now emits
+// values of the width the nodes actually carry.
+float  GraphSafeDivide(float  a, float  b) { const float  s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }
+float2 GraphSafeDivide(float2 a, float2 b) { const float2 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }
+float3 GraphSafeDivide(float3 a, float3 b) { const float3 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }
+float4 GraphSafeDivide(float4 a, float4 b) { const float4 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }
+
+float  GraphRemap(float  x, float inMin, float inMax, float outMin, float outMax) { const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }
+float2 GraphRemap(float2 x, float inMin, float inMax, float outMin, float outMax) { const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }
+float3 GraphRemap(float3 x, float inMin, float inMax, float outMin, float outMax) { const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }
+float4 GraphRemap(float4 x, float inMin, float inMax, float outMin, float outMax) { const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }
+
+)GRAPH";
+	}
+
+	std::string CompileWebMaterialSurface(const std::string& materialToml, std::string& error)
+	{
+		error.clear();
+		text::ParseToml(materialToml,
+		        [&](const text::IniEntry& entry)
+		        {
+			        const bool node = entry.section.starts_with("graph.node.");
+			        const bool link = entry.section.starts_with("graph.link.");
+			        if (!node && !link && entry.fullKey != "graph.next_id")
+			        {
+				        return;
+			        }
+			        if ((node && (entry.key == "type" || entry.key == "slot" || entry.key == "channel" || entry.key == "id"))
+			                || (link && (entry.key == "id" || entry.key == "from_node" || entry.key == "from_pin" || entry.key == "to_node" || entry.key == "to_pin")) || entry.fullKey == "graph.next_id")
+			        {
+				        const auto value = text::ParseFloat(entry.value);
+				        const float maximum = entry.key == "type" ? static_cast<float>(MaterialNodeType::ViewDirection) : entry.key == "slot" ? 4.0f : entry.key == "channel" ? 3.0f : 1000000.0f;
+				        if (!value || !std::isfinite(*value) || std::floor(*value) != *value || *value < (entry.key == "id" ? 1.0f : 0.0f) || *value > maximum)
+				        {
+					        error = "WEB_SHADER_GRAPH_NODE: invalid " + entry.fullKey + "; browser cooking cannot repair unsupported graph values";
+				        }
+			        }
+			        if (node && entry.key == "value")
+			        {
+				        const auto values = text::ParseFloatArray<4>(entry.value);
+				        if (!values || std::ranges::any_of(*values, [](float value) { return !std::isfinite(value); }))
+				        {
+					        error = "WEB_SHADER_GRAPH_NODE: expected four finite values at " + entry.fullKey;
+				        }
+			        }
+		        });
+		if (!error.empty())
+		{
+			return {};
+		}
+		const auto graph = ParseMaterialGraph(materialToml);
+		if (!graph)
+		{
+			error = "WEB_SHADER_GRAPH_MISSING: material has no usable graph; raw shaders require an explicit portable surface adapter";
+			return {};
+		}
+		return GenerateWebMaterialSurface(*graph, error);
+	}
+
+	std::string GenerateWebMaterialSurface(const MaterialGraph& graph, std::string& error)
+	{
+		error.clear();
+		if (graph.nodes.size() > 256 || graph.links.size() > 1024)
+		{
+			error = "WEB_SHADER_GRAPH_BUDGET: graph budget exceeds 256 nodes or 1024 links";
+			return {};
+		}
+		std::unordered_set<int> ids;
+		for (const auto& node: graph.nodes)
+		{
+			if (node.id <= 0 || !ids.insert(node.id).second || static_cast<unsigned>(node.type) > static_cast<unsigned>(MaterialNodeType::ViewDirection) || static_cast<unsigned>(node.slot) > 4 || node.channel < 0 || node.channel > 3)
+			{
+				error = "WEB_SHADER_GRAPH_NODE: invalid or duplicate graph node";
+				return {};
+			}
+			for (const float value: node.value)
+			{
+				if (!std::isfinite(value))
+				{
+					error = "WEB_SHADER_GRAPH_FINITE: graph constants must be finite";
+					return {};
+				}
+			}
+		}
+		std::unordered_set<std::string> destinations;
+		for (const auto& link: graph.links)
+		{
+			const auto* destination = graph.Find(link.toNode);
+			if (!ids.contains(link.fromNode) || !destination || link.fromPin != 0 || link.toPin < 0 || link.toPin >= MaterialNodeInputCount(destination->type) || !destinations.insert(std::format("{}:{}", link.toNode, link.toPin)).second)
+			{
+				error = "WEB_SHADER_GRAPH_LINK: invalid or duplicate graph input link";
+				return {};
+			}
+		}
+		const auto output = std::ranges::find(graph.nodes, MaterialNodeType::Output, &MaterialNode::type);
+		if (output == graph.nodes.end())
+		{
+			error = "WEB_SHADER_GRAPH_OUTPUT: this graph has no Output node";
+			return {};
+		}
+		std::string body;
+		Emitter emitter{.graph = graph, .body = body, .portable = true};
+		const auto base = emitter.Input(output->id, 0, kF3, .6f);
+		const auto metallic = emitter.Input(output->id, 1, kF1, 0);
+		const auto roughness = emitter.Input(output->id, 2, kF1, .5f);
+		const auto emissive = emitter.Input(output->id, 3, kF3, 0);
+		const auto normal = graph.LinkInto(output->id, 4) ? emitter.Input(output->id, 4, kF3, 0) : std::string("graphGeometricNormal");
+		if (!emitter.error.empty())
+		{
+			error = emitter.error;
+			return {};
+		}
+		return std::format(R"WEB(// Generated Web material surface ABI 1. Native graph node equations.
+#include "material-graph-contract.slangh"
+{}
+GraphSurface EvaluateGraphSurface(GraphInput input)
+{{
+    const float3 graphGeometricNormal = normalize(input.worldNormal);
+    float3 graphT = input.worldTangent;
+    if (dot(graphT, graphT) < 1e-8f)
+    {{
+        graphT = abs(graphGeometricNormal.y) < .99f ? cross(float3(0,1,0), graphGeometricNormal) : cross(float3(1,0,0), graphGeometricNormal);
+    }}
+    graphT = normalize(graphT - graphGeometricNormal * dot(graphGeometricNormal, graphT));
+    const float3 graphB = cross(graphGeometricNormal, graphT) * input.tangentSign;
+    const float3x3 graphTBN = float3x3(graphT, graphB, graphGeometricNormal);
+{}
+    GraphSurface result;
+    result.baseColor = {};
+    result.metallic = saturate({});
+    result.roughness = clamp({}, .04f, 1.0f);
+    result.emissive = {};
+    result.normal = normalize({});
+    return result;
+}}
+)WEB",
+		        kGraphMathSource,
+		        body,
+		        base,
+		        metallic,
+		        roughness,
+		        emissive,
+		        normal);
 	}
 
 	std::string GenerateMaterialShader(const MaterialGraph& graph, std::string& error)
@@ -794,38 +996,7 @@ namespace aether::editor
 
 [[vk::push_constant]] DrawPushConstants pc;
 
-// Value noise: a hashed lattice with a smoothstep between cells. Cheap, deterministic and
-// tileable enough for a material, and it needs no texture to be shipped alongside.
-float GraphHash21(float2 p)
-{{
-    return frac(sin(dot(p, float2(127.1f, 311.7f))) * 43758.5453123f);
-}}
-
-float GraphValueNoise(float2 p)
-{{
-    const float2 cell = floor(p);
-    const float2 f = p - cell;
-    const float2 w = f * f * (3.0f - 2.0f * f);
-    const float a = GraphHash21(cell);
-    const float b = GraphHash21(cell + float2(1.0f, 0.0f));
-    const float c = GraphHash21(cell + float2(0.0f, 1.0f));
-    const float d = GraphHash21(cell + float2(1.0f, 1.0f));
-    return lerp(lerp(a, b, w.x), lerp(c, d, w.x), w.y);
-}}
-
-// Dividing by zero produces an inf that spreads through everything downstream, so the
-// divisor is pushed off zero while keeping its sign. sign() returns 0 exactly at zero, which
-// is why the 1 is added back in there. One overload per width, because the graph now emits
-// values of the width the nodes actually carry.
-float  GraphSafeDivide(float  a, float  b) {{ const float  s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }}
-float2 GraphSafeDivide(float2 a, float2 b) {{ const float2 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }}
-float3 GraphSafeDivide(float3 a, float3 b) {{ const float3 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }}
-float4 GraphSafeDivide(float4 a, float4 b) {{ const float4 s = sign(b); return a / ((s + (1.0f - abs(s))) * max(abs(b), 1e-5f)); }}
-
-float  GraphRemap(float  x, float inMin, float inMax, float outMin, float outMax) {{ const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }}
-float2 GraphRemap(float2 x, float inMin, float inMax, float outMin, float outMax) {{ const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }}
-float3 GraphRemap(float3 x, float inMin, float inMax, float outMin, float outMax) {{ const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }}
-float4 GraphRemap(float4 x, float inMin, float inMax, float outMin, float outMax) {{ const float span = (abs(inMax - inMin) < 1e-6f) ? 1e-6f : (inMax - inMin); return outMin + (x - inMin) * ((outMax - outMin) / span); }}
+{}
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
@@ -971,6 +1142,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     return float4(finalColor, 1.0f);
 }}
 )SHADER",
-		        body, baseColor, metallic, roughness, emissive, normal);
+		        kGraphMathSource,
+		        body,
+		        baseColor,
+		        metallic,
+		        roughness,
+		        emissive,
+		        normal);
 	}
 } // namespace aether::editor

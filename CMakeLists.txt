@@ -80,6 +80,7 @@ add_subdirectory(tools/rendezvous)
 add_subdirectory(src/engine)
 add_subdirectory(src/app)
 add_subdirectory(tools/project)
+add_subdirectory(tools/shaders)
 
 option(AETHERCORE_BUILD_TESTS "Build the engine unit test target" ON)
 if(AETHERCORE_BUILD_TESTS)

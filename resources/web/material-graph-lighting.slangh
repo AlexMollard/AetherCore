@@ -1,0 +1,116 @@
+// Resource adapter for the native MaterialGraph shader. Keep its lighting behavior
+// distinct from gltf_mesh: generated graphs have their own established contract.
+float GraphSunVisibility(VertexOutput input, float3 geometricNormal, float3 L)
+{
+    if (frame.counts.y == 0) return 1;
+    const float depth = dot(frame.viewDepth, float4(input.world, 1));
+    const uint layer = depth <= frame.cascadeSplits.x ? 0 : depth <= frame.cascadeSplits.y ? 1 : 2;
+    float visibility = ShadowVisibility(layer, input.world, geometricNormal, L, input.position.xy);
+    if (layer < 2)
+    {
+        const float farSplit = frame.cascadeSplits[layer];
+        const float nearSplit = layer == 0 ? 0 : frame.cascadeSplits[layer - 1];
+        const float t = smoothstep(farSplit - max((farSplit - nearSplit) * .15f, 2), farSplit, depth);
+        if (t > 0) visibility = lerp(visibility, ShadowVisibility(layer + 1, input.world, geometricNormal, L, input.position.xy), t);
+    }
+    return lerp(visibility, 1, smoothstep(frame.cascadeSplits.z * .85f, frame.cascadeSplits.z, depth));
+}
+
+GraphInput MakeGraphInput(VertexOutput input)
+{
+    const MeshData mesh = meshes[input.instance];
+    GraphInput graphInput;
+    graphInput.uv = input.rawUv;
+    graphInput.worldPos = input.world;
+    graphInput.worldNormal = input.normal;
+    graphInput.worldTangent = input.tangent.xyz;
+    // DefaultVertex's graph contract carries the source tangent handedness.
+    graphInput.tangentSign = input.tangent.w * ((mesh.metadata.w & 0x80000000u) != 0 ? -1 : 1);
+    graphInput.vertexColor = input.rawvertexColor;
+    graphInput.textureMask = uint(mesh.factors.w);
+    return graphInput;
+}
+
+float4 ShadeGraphMaterial(VertexOutput input, bool front)
+{
+    const MeshData mesh = meshes[input.instance];
+    const GraphInput graphInput = MakeGraphInput(input);
+    const GraphSurface surface = EvaluateGraphSurface(graphInput);
+    const float3 geometricNormal = normalize(input.normal);
+    const float3 N = surface.normal;
+    const float3 dNdx = ddx(N), dNdy = ddy(N);
+    const float variance = .15915494f * (dot(dNdx, dNdx) + dot(dNdy, dNdy));
+    const float roughness = sqrt(saturate(surface.roughness * surface.roughness + min(2 * variance, .18f)));
+    const float3 V = normalize(frame.camera.xyz - input.world);
+    const float3 L = normalize(frame.sunDirectionIntensity.xyz);
+    const float3 H = normalize(V + L);
+    const float nl = saturate(dot(N, L));
+    const float nv = saturate(dot(N, V)) + 1e-5f;
+    const float3 F0 = lerp(float3(.04f), surface.baseColor, surface.metallic);
+    const float3 F = F_Schlick(saturate(dot(H, V)), F0);
+    const float D = D_GGX(saturate(dot(N, H)), roughness);
+    const float G = G_SmithSchlick(nv, nl, roughness);
+    const float3 specular = (D * G) * F / max(4 * nv * nl, 1e-4f);
+    const float3 kd = (float3(1) - F) * (1 - surface.metallic);
+    const float3 diffuse = kd * surface.baseColor / 3.14159265f;
+    float3 direct = (diffuse + specular) * frame.sunColor.rgb * frame.sunDirectionIntensity.w * nl * GraphSunVisibility(input, geometricNormal, L);
+    const float3 localNormal = normalize(lerp(geometricNormal, N, .35f));
+    for (uint index = 0; index < frame.counts.x; ++index)
+    {
+        const LightData light = lights[index];
+        const float3 delta = light.positionRadius.xyz - input.world;
+        const float dist2 = dot(delta, delta);
+        const float3 lightDir = delta / max(sqrt(max(dist2, 1e-8f)), 1e-4f);
+        const float radius2 = light.positionRadius.w * light.positionRadius.w;
+        float window = saturate(1 - dist2 * dist2 / max(radius2 * radius2, 1e-6f));
+        float attenuation = window * window / max(dist2, .01f);
+        if (attenuation <= 1e-5f || dot(localNormal, lightDir) <= 1e-5f) continue;
+        if (light.directionType.w > .5f)
+        {
+            const float spot = saturate((dot(normalize(light.directionType.xyz), -lightDir) - light.coneShadow.y) / max(light.coneShadow.x - light.coneShadow.y, 1e-5f));
+            if (spot <= 1e-5f) continue;
+            attenuation *= spot;
+        }
+        if ((mesh.metadata.w & 16u) == 0 && light.coneShadow.z >= 0)
+        {
+            const uint layer = uint(light.coneShadow.z) + (light.directionType.w < .5f ? PointFace(-delta) : 0);
+            attenuation *= ShadowVisibility(layer, input.world, localNormal, lightDir, input.position.xy);
+        }
+        direct += Brdf(localNormal, V, lightDir, surface.baseColor, surface.metallic, roughness, .28f) * light.colorIntensity.rgb * light.colorIntensity.w * attenuation;
+    }
+    const float3 skyDiffuse = SkyGradient(N, L, frame.sunColor.rgb, frame.sunDirectionIntensity.w,
+        frame.horizon.rgb, frame.zenith.rgb, frame.ground.rgb, frame.skyParams, frame.shadingParams.y, 1);
+    const float3 reflected = normalize(lerp(reflect(-V, N), N, roughness * roughness));
+    const float3 skySpecular = SkyGradient(reflected, L, frame.sunColor.rgb, frame.sunDirectionIntensity.w,
+        frame.horizon.rgb, frame.zenith.rgb, frame.ground.rgb, frame.skyParams, frame.shadingParams.y, roughness);
+    const float3 ambientDiffuse = (frame.ambient.rgb + skyDiffuse) * surface.baseColor * kd;
+    const float3 ambientSpecular = skySpecular * EnvSpecularWeight(F0, EnvBrdfApprox(roughness, nv));
+    uint width, height;
+    sceneDepth.GetDimensions(width, height);
+    const float gtao = saturate(ambientOcclusion.SampleLevel(sceneSampler, saturate(input.position.xy / float2(max(width, 1u), max(height, 1u))), 0).r);
+    const float materialAo = GraphTexturePresent(graphInput.textureMask, 3) ? lerp(1, occlusion.Sample(materialSampler, input.rawUv).r, mesh.factors.y) : 1;
+    const float ao = saturate(materialAo * gtao);
+    float3 color = direct + ambientDiffuse * MultiBounceAo(ao, surface.baseColor) + ambientSpecular * SpecularOcclusion(ao, nv, roughness) + surface.emissive;
+    const float fog = frame.skyParams.z > 0 ? 0 : HeightFogAmount(frame.camera.xyz, input.world, frame.fogParams.x, frame.fogParams.y, frame.fogParams.w);
+    if (fog > 0)
+    {
+        const float3 fogColor = HeightFogColor(normalize(input.world - frame.camera.xyz), L, frame.sunColor.rgb, frame.sunDirectionIntensity.w,
+            frame.horizon.rgb, frame.zenith.rgb, frame.ground.rgb, frame.fogParams.z, frame.skyParams, frame.shadingParams.y);
+        color = lerp(color, fogColor, fog);
+    }
+    color *= 1 - SharedDarknessVolumeAmount(frame.volumeCounts.z, frame.darkness, frame.camera.xyz, input.world);
+    return float4(color, 1);
+}
+
+AuxiliaryOutput ShadeGraphAuxiliary(VertexOutput input, bool front)
+{
+    const GraphSurface graph = EvaluateGraphSurface(MakeGraphInput(input));
+    const float3 N = graph.normal;
+    const float3 dx = ddx(N), dy = ddy(N);
+    const float roughness = sqrt(saturate(graph.roughness * graph.roughness + min(2 * .15915494f * (dot(dx, dx) + dot(dy, dy)), .18f)));
+    AuxiliaryOutput output;
+    output.depth = input.position.z;
+    output.surface = float4(EncodeOctNormal(N), saturate(roughness), saturate(graph.metallic));
+    output.baseColor = float4(saturate(graph.baseColor), 1);
+    return output;
+}

@@ -1,0 +1,30 @@
+#ifndef AETHER_WEB_MATERIAL_GRAPH_CONTRACT
+#define AETHER_WEB_MATERIAL_GRAPH_CONTRACT
+// Portable material surface ABI 1. The five material textures retain native slot order.
+struct GraphInput
+{
+    float2 uv;
+    float3 worldPos, worldNormal, worldTangent, vertexColor;
+    float tangentSign;
+    uint textureMask;
+};
+struct GraphSurface
+{
+    float3 baseColor;
+    float metallic, roughness;
+    float3 emissive, normal;
+};
+bool GraphTexturePresent(uint mask, uint slot) { return (mask & (1u << slot)) != 0; }
+float4 GraphSampleTexture(uint slot, float2 uv)
+{
+    switch (slot)
+    {
+        case 0u: return albedo.Sample(materialSampler, uv);
+        case 1u: return normalMap.Sample(materialSampler, uv);
+        case 2u: return metallicRoughness.Sample(materialSampler, uv);
+        case 3u: return occlusion.Sample(materialSampler, uv);
+        case 4u: return emissive.Sample(materialSampler, uv);
+        default: return float4(1);
+    }
+}
+#endif
