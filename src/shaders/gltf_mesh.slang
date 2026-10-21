@@ -959,7 +959,8 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
             roughness,
             fc,
             input.svPosition.xy,
-            LoLocal);
+            LoLocal,
+            receivesShadows);
         Lo += LoLocal;
 
         // Image-based ambient from the same procedural sky the skybox draws, rather than

@@ -454,13 +454,11 @@ namespace aether
 		auto* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
+			// Casters use the same material scroll and foliage time as the forward pass.
+			// Mapped buffer memory does not construct FrameConstants or its defaults.
+			lightFc[i] = fc;
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
 			lightFc[i].cameraWorldPos = m_perLightShadows[i].lightPosRange;
-			// The caster's alpha test looks its material up through this pointer. These constants
-			// are built from scratch per light rather than copied from the frame's, so a field the
-			// shadow shader needs has to be carried across explicitly - left at zero it is a null
-			// dereference on the GPU, not a missing texture.
-			lightFc[i].materialBufferAddr = fc.materialBufferAddr;
 			lightFc[i].RefreshDerived();
 		}
 		gpu::ResourceRegistry::FlushMappedBuffer(m_lightConstantsBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(FrameConstants));

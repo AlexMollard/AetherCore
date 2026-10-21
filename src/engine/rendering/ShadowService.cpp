@@ -376,6 +376,7 @@ namespace aether
 			shadowFc.proj = glm::ortho(-orthoHalf, orthoHalf, -orthoHalf, orthoHalf, nearPlane, farPlane);
 			shadowFc.viewProj = shadowFc.proj * shadowFc.view;
 			shadowFc.cameraWorldPos = glm::vec4(lightEye, 1.0f);
+			shadowFc.elapsedTime = packet.elapsedTime;
 			shadowFc.materialBufferAddr = packet.materialBufferAddr;
 			shadowFc.effectParamBufferAddr = packet.effectParamBufferAddr;
 			shadowFc.sunDirectionIntensity = packet.sunDirectionIntensity;

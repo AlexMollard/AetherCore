@@ -558,15 +558,22 @@ namespace aether::gpu
 		return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	}
 
-	VkClearValue ToVk(const ClearValue& value) noexcept
+	VkClearValue ToVk(const ClearValue& value, const bool depthStencil) noexcept
 	{
 		VkClearValue v{};
-		v.color.float32[0] = value.color[0];
-		v.color.float32[1] = value.color[1];
-		v.color.float32[2] = value.color[2];
-		v.color.float32[3] = value.color[3];
-		v.depthStencil.depth = value.depth;
-		v.depthStencil.stencil = value.stencil;
+		// VkClearValue is a union: writing depth after color overwrites red and green.
+		if (depthStencil)
+		{
+			v.depthStencil.depth = value.depth;
+			v.depthStencil.stencil = value.stencil;
+		}
+		else
+		{
+			v.color.float32[0] = value.color[0];
+			v.color.float32[1] = value.color[1];
+			v.color.float32[2] = value.color[2];
+			v.color.float32[3] = value.color[3];
+		}
 		return v;
 	}
 
@@ -660,7 +667,7 @@ namespace aether::gpu
 		        .imageLayout = ToVk(info.imageLayout),
 		        .loadOp = ToVk(info.loadOp),
 		        .storeOp = ToVk(info.storeOp),
-		        .clearValue = ToVk(info.clearValue),
+		        .clearValue = ToVk(info.clearValue, info.imageLayout == ImageLayout::DepthAttachment),
 		};
 	}
 

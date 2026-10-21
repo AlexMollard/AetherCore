@@ -60,7 +60,8 @@ void AccumulateLocalLight(
     in float roughness,
     in FrameConstantsData* fc,
     in float2 pixelCoord,
-    inout float3 sum)
+    inout float3 sum,
+    in bool receivesShadows = true)
 {
     float3 toLight = light.position - worldPos;
     float dist2 = dot(toLight, toLight);
@@ -128,7 +129,7 @@ void AccumulateLocalLight(
     const float localSpecularWeight = 0.28;
     float shadowVis = 1.0;
 
-    if (light.shadowIndex >= 0.0)
+    if (receivesShadows && light.shadowIndex >= 0.0)
     {
         ResourceEntry atlasEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_LocalShadowAtlas);
         uint shadowSlot = uint(atlasEntry.address);
@@ -162,7 +163,8 @@ void AccumulateTiledLocalLights(
     in float roughness,
     in FrameConstantsData* fc,
     in float2 pixelCoord,
-    inout float3 sum)
+    inout float3 sum,
+    in bool receivesShadows = true)
 {
     const uint tilePx = fc->tiledLightGridInfo.x;
     const uint tilesX = fc->tiledLightGridInfo.y;
@@ -191,7 +193,7 @@ void AccumulateTiledLocalLights(
     {
         const uint lightIndex = tileLightIndices.Load(start + i);
         const LocalLight light = LoadLocalLight(lightData, lightIndex);
-        AccumulateLocalLight(light, worldPos, N, V, F0, baseColor, metallic, roughness, fc, pixelCoord, sum);
+        AccumulateLocalLight(light, worldPos, N, V, F0, baseColor, metallic, roughness, fc, pixelCoord, sum, receivesShadows);
     }
 }
 

@@ -251,13 +251,14 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 		}
 		for (uint i = 0; i < frame.counts.x; ++i)
 		{
+			float3 Nlocal = SafeNormal(lerp(Ngeom, N, 0.35), Ngeom);
 			LightData light = lights[i];
 			float3 delta = light.positionRadius.xyz - input.world;
 			float dist2 = dot(delta, delta), radius2 = light.positionRadius.w * light.positionRadius.w;
 			float3 direction = delta / max(sqrt(max(dist2, 1e-8)), 1e-4);
 			float window = saturate(1 - dist2 * dist2 / max(radius2 * radius2, 1e-6));
 			float attenuation = window * window / max(dist2, 0.01);
-			if (attenuation <= 1e-5 || dot(N, direction) <= 1e-5) { continue; }
+			if (attenuation <= 1e-5 || dot(Nlocal, direction) <= 1e-5) { continue; }
 			if (light.directionType.w > 0)
 			{
 				float spot = saturate((dot(light.directionType.xyz, -direction) - light.coneShadow.y) / max(light.coneShadow.x - light.coneShadow.y, 1e-5));
@@ -267,9 +268,9 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 			if (receives && light.coneShadow.z >= 0)
 			{
 				uint layer = uint(light.coneShadow.z) + (light.directionType.w == 0 ? PointFace(-delta) : 0);
-				attenuation *= ShadowVisibility(layer, input.world, N, direction, input.position.xy);
+				attenuation *= ShadowVisibility(layer, input.world, Nlocal, direction, input.position.xy);
 			}
-			lit += Brdf(N, V, direction, surface.rgb, metallic, roughness, 0.28) * light.colorIntensity.rgb * light.colorIntensity.w * attenuation;
+			lit += Brdf(Nlocal, V, direction, surface.rgb, metallic, roughness, 0.28) * light.colorIntensity.rgb * light.colorIntensity.w * attenuation;
 		}
 		float nv = max(saturate(dot(N, V)), 1e-4);
 		float3 F0 = lerp(float3(0.04), surface.rgb, metallic);

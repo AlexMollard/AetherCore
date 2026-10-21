@@ -839,6 +839,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     mat.metallicRoughnessSlot = kNoTexture;
     mat.occlusionSlot = kNoTexture;
     mat.emissiveSlot = kNoTexture;
+    mat.flags = 0u;
     if (input.materialIndex != kNoTexture)
     {{
         mat = materials[input.materialIndex];
@@ -912,7 +913,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // standard shader does, so local lights stay visibly radial on a normal-mapped surface.
     const float3 graphLocalNormal = normalize(lerp(graphGeometricNormal, N, 0.35f));
     AccumulateTiledLocalLights(pc.tileHeaders, pc.tileLightIndices, pc.lightData, input.worldPos, graphLocalNormal,
-                               V, F0, albedo, metallic, roughness, fc, input.svPosition.xy, direct);
+                               V, F0, albedo, metallic, roughness, fc, input.svPosition.xy, direct, (mat.flags & kFlagNoReceiveShadows) == 0u);
 
     // Ambient, matching gltf_mesh: a sky-coloured diffuse probe along the normal AND a
     // specular probe along the reflection. Without the specular half a metal has nothing to

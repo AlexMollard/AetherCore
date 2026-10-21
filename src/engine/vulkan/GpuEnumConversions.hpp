@@ -40,7 +40,7 @@ namespace aether::gpu
 	[[nodiscard]] VkSamplerMipmapMode ToVk(SamplerMipmapMode mode) noexcept;
 	[[nodiscard]] VkSamplerAddressMode ToVk(SamplerAddressMode mode) noexcept;
 
-	[[nodiscard]] VkClearValue ToVk(const ClearValue& value) noexcept;
+	[[nodiscard]] VkClearValue ToVk(const ClearValue& value, bool depthStencil) noexcept;
 
 	[[nodiscard]] VkPrimitiveTopology ToVk(PrimitiveTopology topology) noexcept;
 	[[nodiscard]] VkPolygonMode ToVk(PolygonMode mode) noexcept;
