@@ -24,6 +24,20 @@ class WebPreflightTests(unittest.TestCase):
   (self.root/'scripts/AetherGame.csproj').write_text('<Project Sdk="Microsoft.NET.Sdk"/>',encoding='utf-8')
   result=self.api.preflight(self.root)
   self.assertEqual(result['language'],'csharp');self.assertEqual(result['managed_project'].name,'AetherGame.csproj')
+ def test_project_root_scripts_ignore_generated_native_build_caches(self):
+  for language,extension,generated,bad,code in [('rust','rs','use std::net::TcpStream;','use std::net::TcpStream;','WEB_NETWORK_UNSUPPORTED'),('csharp','cs','[DllImport("generated")]','NativeLibrary.Load("real");','WEB_NATIVE_API_UNSUPPORTED')]:
+   with self.subTest(language=language):
+    (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust',language)+'[paths]\nscripts="."\n',encoding='utf-8')
+    if language=='rust':
+     (self.root/'Cargo.toml').write_bytes((self.root/'scripts/Cargo.toml').read_bytes())
+    else:
+     (self.root/'AetherGame.csproj').write_text('<Project/>',encoding='utf-8')
+    cache=self.root/'Builds/Intermediate/generated'
+    cache.mkdir(parents=True,exist_ok=True)
+    (cache/('generated.'+extension)).write_text(generated,encoding='utf-8')
+    self.assertEqual(self.api.preflight(self.root)['language'],language)
+    source=self.root/('real.'+extension)
+    source.write_text(bad,encoding='utf-8');self.expect(code);source.unlink()
  def test_csharp_requires_project_and_rejects_native_imports(self):
   (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust','csharp'),encoding='utf-8');self.expect('WEB_MANAGED_PROJECT')
   (self.root/'scripts/AetherGame.csproj').write_text('<Project/>',encoding='utf-8')

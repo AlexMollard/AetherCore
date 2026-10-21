@@ -84,6 +84,7 @@ namespace aether::app::scripting
 		if (driver.empty()) { return fail("RUST_BUILD_DRIVER_MISSING", "The engine Rust CMake build driver is missing; repair the engine SDK installation."); }
 		const auto artifacts = std::filesystem::absolute(request.artifactsDir);
 		const auto output = std::filesystem::absolute(request.outputDir);
+		const auto cargoTarget = request.cargoTargetDir.empty() ? artifacts / "cargo" : std::filesystem::absolute(request.cargoTargetDir);
 		const auto manifest = std::filesystem::absolute(request.manifest);
 		const auto configureLog = artifacts / "logs" / "configure.log";
 		const auto buildLog = artifacts / "logs" / "build.log";
@@ -112,7 +113,9 @@ namespace aether::app::scripting
 		if (cargoVersion.empty()) { return fail("RUST_TOOLCHAIN_IDENTITY_INVALID", "cargo --version did not report its version; inspect " + Utf8(cargoLog)); }
 		result.report.toolchains.push_back({.name = "cargo", .version = cargoVersion, .target = rustHost});
 		result.report.phase = "configure";
-		const std::vector<std::string> configure{"-S", Utf8(driver), "-B", Utf8(build), "-DAETHER_GAMEPLAY_MANIFEST=" + Utf8(manifest), "-DAETHER_CARGO_EXECUTABLE=" + Utf8(prerequisites.cargo), "-DAETHER_RUSTC_EXECUTABLE=" + Utf8(prerequisites.rustc), "-DAETHER_RUST_TARGET_DIR=" + Utf8(artifacts / "cargo"), "-DAETHER_RUST_OUTPUT_DIR=" + Utf8(output), std::string("-DAETHER_RUST_PROFILE=") + (request.release ? "release" : "debug")};
+		const std::vector<std::string> configure{"-S", Utf8(driver), "-B", Utf8(build), "-DAETHER_GAMEPLAY_MANIFEST=" + Utf8(manifest),
+		        "-DAETHER_CARGO_EXECUTABLE=" + Utf8(prerequisites.cargo), "-DAETHER_RUSTC_EXECUTABLE=" + Utf8(prerequisites.rustc),
+		        "-DAETHER_RUST_TARGET_DIR=" + Utf8(cargoTarget), "-DAETHER_RUST_OUTPUT_DIR=" + Utf8(output), std::string("-DAETHER_RUST_PROFILE=") + (request.release ? "release" : "debug")};
 		const int configured = io::RunProcessArguments(prerequisites.cmake, configure, manifest.parent_path(), configureLog, remaining(), request.stopToken);
 		if (configured != 0) { return fail(configured == io::kProcessTimedOut ? "RUST_BUILD_TIMEOUT" : "RUST_CONFIGURE_FAILED", "Rust CMake configuration failed; inspect " + Utf8(configureLog)); }
 		result.report.phase = "build";

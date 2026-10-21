@@ -315,4 +315,6 @@ Audio is tracked as the top of the roadmap rather than an oversight.
 
 ## Browser games and autonomous distribution
 
+[Agent iteration](agent-iteration.md) describes the native compiler caches, measured rebuild/run improvements and the repeatable CLI benchmark.
+
 For Rust project creation, safe gameplay APIs and agent build/test operations, see [Rust gameplay](rust-gameplay.md). [Web exports](web-export.md) describes the supported 2D profile and publishing commands. [Distribution qualification](distribution-qualification.md) runs a fresh project through compiler repair, native tests, measured browser export and regression gates without a human editor session. C# stays the default for existing projects. [C# browser support](csharp-web.md) describes its qualified interpreter profile and SDK limitations.

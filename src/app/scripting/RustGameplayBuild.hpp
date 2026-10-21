@@ -11,6 +11,8 @@ namespace aether::app::scripting
 		std::filesystem::path manifest;
 		std::filesystem::path artifactsDir;
 		std::filesystem::path outputDir;
+		// Optional shared compiler cache; CMake locks compilation through job-private staging.
+		std::filesystem::path cargoTargetDir;
 		bool release = false;
 		int timeoutMs = 180000;
 		std::stop_token stopToken;

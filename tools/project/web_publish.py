@@ -55,8 +55,10 @@ def preflight(project, startup_override=None):
             reject('WEB_MANAGED_PROJECT', 'C# Web publishing requires exactly one gameplay .csproj in the scripts directory')
         managed_project = projects[0]
     extension = '*.rs' if language == 'rust' else '*.cs'
+    native_cache = (project / 'Builds/Intermediate').resolve()
     source = '\n'.join(path.read_text(encoding='utf-8-sig') for path in scripts.rglob(extension)
-                       if not any(part in ('obj', 'bin', 'artifacts') for part in path.relative_to(scripts).parts))
+                       if not path.resolve().is_relative_to(native_cache)
+                       and not any(part in ('obj', 'bin', 'artifacts') for part in path.relative_to(scripts).parts))
     if language == 'csharp' and re.search(r'\b(?:DllImport|LibraryImport|NativeLibrary)\b', source):
         reject('WEB_NATIVE_API_UNSUPPORTED', 'External native imports are not supported in C# Web games')
     if language == 'csharp' and re.search(r'\b(?:Net\s*\.|System\s*\.\s*Net\b|NetRpc|IEditorWindow|EditorGui)\b', source):

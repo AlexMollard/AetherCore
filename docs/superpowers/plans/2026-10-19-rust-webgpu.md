@@ -285,8 +285,10 @@ This is a roadmap boundary, not permission to expand the initial release.
 
 - [ ] Define a separate WebGPU 3D profile with mesh/material/depth/PBR, skeletal animation and supported lighting requirements before adding passes. Test resource limits and desktop/browser differences explicitly.
 - [ ] Define Rust networking parity independently: shared replication/property semantics and native transport first; browser WebSocket/WebRTC transport and host interoperability require a separate design. Existing ENet behavior is not browser transport support.
-- [ ] Measure whether Rust rebuild/relaunch materially limits agent throughput. Design safe state migration/native hot reload only if those measurements justify its additional lifetime complexity.
+- [x] Measure whether Rust rebuild/relaunch materially limits agent throughput. Design safe state migration/native hot reload only if those measurements justify its additional lifetime complexity.
 - [ ] Revisit default gameplay language only after equivalent agent tasks and shipped scenarios establish a clear benefit. Keep C# project compatibility independent of that choice.
+
+**Agent workflow follow-on (2026-10-21):** The user selected throughput work. Repeated native jobs discarded their compiler intermediates. Project-scoped Cargo/MSBuild caches now retain compilation work while each runnable module stays job-private, with process locking through staging and current-invocation artifact validation. Three-sample median build time improved from 3.48 to 1.83 seconds for Rust and 5.33 to 2.81 seconds for C#; test/relaunch improved 29–33%. Semantic edits, intentional compile failure and repair passed for both. These results support incremental compiler reuse; they do not justify arbitrary-state migration or native hot reload. No default language, WebGPU 3D or networking decision is implied. See [agent iteration](../../agent-iteration.md) and the [scoped follow-on plan](2026-10-21-agent-iteration.md).
 
 ## Verification and execution notes
 

@@ -18,10 +18,7 @@ function(aether_add_rust_gameplay name)
     if(NOT RUST_PROFILE)
         set(RUST_PROFILE debug)
     endif()
-    set(profile_args)
-    if(RUST_PROFILE STREQUAL "release")
-        list(APPEND profile_args --release)
-    elseif(NOT RUST_PROFILE STREQUAL "debug")
+    if(NOT RUST_PROFILE STREQUAL "release" AND NOT RUST_PROFILE STREQUAL "debug")
         message(FATAL_ERROR "Rust gameplay profile must be debug or release")
     endif()
     if(WIN32)
@@ -33,10 +30,10 @@ function(aether_add_rust_gameplay name)
     endif()
     # A successful Cargo command must precede staging; a failed build never stages an old DLL.
     add_custom_target(${name}
-        COMMAND "${CMAKE_COMMAND}" -E env "RUSTC=${AETHER_RUSTC_EXECUTABLE}" "${AETHER_CARGO_EXECUTABLE}" build --lib --offline --manifest-path "${RUST_MANIFEST}"
-            --target-dir "${RUST_TARGET_DIR}" --message-format=json ${profile_args}
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${RUST_OUTPUT_DIR}"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${RUST_TARGET_DIR}/${RUST_PROFILE}/${module}" "${RUST_OUTPUT_DIR}/${module}"
+        COMMAND "${CMAKE_COMMAND}" "-DAETHER_CARGO_EXECUTABLE=${AETHER_CARGO_EXECUTABLE}"
+            "-DAETHER_RUSTC_EXECUTABLE=${AETHER_RUSTC_EXECUTABLE}" "-DAETHER_GAMEPLAY_MANIFEST=${RUST_MANIFEST}"
+            "-DAETHER_RUST_TARGET_DIR=${RUST_TARGET_DIR}" "-DAETHER_RUST_OUTPUT_DIR=${RUST_OUTPUT_DIR}"
+            "-DAETHER_RUST_PROFILE=${RUST_PROFILE}" "-DAETHER_RUST_MODULE=${module}"
+            -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/BuildRustGameplay.cmake"
         VERBATIM USES_TERMINAL)
 endfunction()

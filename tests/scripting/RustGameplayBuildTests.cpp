@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <algorithm>
+#include <sstream>
 
 TEST_CASE("Rust build rejects missing manifests before touching a previous artifact")
 {
@@ -30,6 +31,8 @@ TEST_CASE("Rust CMake pipeline preserves previous artifacts on a failed compile"
 	const std::string dependency(sdk.begin(), sdk.end());
 	REQUIRE(aether::io::file_util::WriteText(root / "Cargo.toml", "[package]\nname='aether_test_game'\nversion='0.1.0'\nedition='2024'\n[lib]\nname='aether_gameplay'\ncrate-type=['cdylib']\n[dependencies]\naethercore={path='" + dependency + "'}\n"));
 	REQUIRE(aether::io::file_util::WriteText(root / "src/lib.rs", "use aethercore::{gameplay_script, Script};\ngameplay_script! { pub struct Player { pub speed: f32 = 3.0 } }\nimpl Script for Player {}\naethercore::export_gameplay!(Player);\n"));
+	const auto goodSource = aether::io::file_util::ReadText(root / "src/lib.rs");
+	REQUIRE(goodSource);
 	const aether::app::scripting::RustBuildRequest request{.manifest = root / "Cargo.toml", .artifactsDir = root / "intermediate", .outputDir = root / "out", .timeoutMs = 60000};
 	const auto success = aether::app::scripting::BuildRustGameplay(request);
 	for (const auto& diagnostic: success.report.diagnostics) { INFO(diagnostic.message); }
@@ -51,6 +54,29 @@ TEST_CASE("Rust CMake pipeline preserves previous artifacts on a failed compile"
 	CHECK(rustcIdentity->find("host: " + rustc->target) != std::string::npos);
 	CHECK(cargoIdentity->find("cargo " + cargo->version) != std::string::npos);
 	CHECK(aether::scripting::SerializeAgentReport(success.report));
+	auto warmRequest = request;
+	warmRequest.artifactsDir = root / "second-job";
+	warmRequest.outputDir = root / "second-module";
+	warmRequest.cargoTargetDir = request.artifactsDir / "cargo";
+	const auto warm = aether::app::scripting::BuildRustGameplay(warmRequest);
+	REQUIRE(warm.Succeeded());
+	CHECK(warm.module != success.module);
+	const auto warmLog = aether::io::file_util::ReadText(warmRequest.artifactsDir / "logs" / "build.log");
+	REQUIRE(warmLog);
+	std::istringstream lines(*warmLog);
+	std::string line;
+	bool freshModule = false;
+	while (std::getline(lines, line))
+	{
+		const auto start = line.find('{');
+		if (start == std::string::npos) { continue; }
+		const auto record = nlohmann::json::parse(line.substr(start), nullptr, false);
+		if (!record.is_discarded() && record.value("reason", "") == "compiler-artifact" && record.at("target").value("name", "") == "aether_gameplay")
+		{
+			freshModule = record.value("fresh", false);
+		}
+	}
+	CHECK(freshModule);
 	const auto previousSize = std::filesystem::file_size(success.module);
 	REQUIRE(aether::io::file_util::WriteText(root / "src/lib.rs", "fn bad() { no_such_function(); }\n"));
 	const auto failed = aether::app::scripting::BuildRustGameplay(request);
@@ -60,5 +86,21 @@ TEST_CASE("Rust CMake pipeline preserves previous artifacts on a failed compile"
 	CHECK(std::filesystem::file_size(success.module) == previousSize);
 	CHECK(std::any_of(failed.report.diagnostics.begin(), failed.report.diagnostics.end(), [](const auto& d) { return d.code == "RUST_COMPILER_ERROR" && d.source.has_value(); }));
 	CHECK(aether::scripting::SerializeAgentReport(failed.report));
+	REQUIRE(aether::io::file_util::WriteText(root / "src/lib.rs", *goodSource));
+	auto renamedManifest = aether::io::file_util::ReadText(root / "Cargo.toml").value();
+	const auto libraryName = renamedManifest.find("name='aether_gameplay'");
+	REQUIRE(libraryName != std::string::npos);
+	renamedManifest.replace(libraryName, std::string("name='aether_gameplay'").size(), "name='different_library'");
+	REQUIRE(aether::io::file_util::WriteText(root / "Cargo.toml", renamedManifest));
+	auto renamedRequest = warmRequest;
+	renamedRequest.outputDir = root / "renamed-module";
+	const auto renamed = aether::app::scripting::BuildRustGameplay(renamedRequest);
+	CHECK_FALSE(renamed.Succeeded());
+	CHECK(renamed.module.empty());
+	CHECK_FALSE(std::filesystem::exists(renamedRequest.outputDir / success.module.filename()));
+	const auto renamedLog = aether::io::file_util::ReadText(renamedRequest.artifactsDir / "logs" / "build.log");
+	REQUIRE(renamedLog);
+	CHECK(renamedLog->find("Cargo did not report the expected gameplay module") != std::string::npos);
+	CHECK(std::filesystem::file_size(success.module) == previousSize);
 	std::filesystem::remove_all(root);
 }

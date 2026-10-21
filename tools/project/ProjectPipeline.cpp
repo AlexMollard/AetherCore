@@ -198,7 +198,8 @@ namespace aether::project_tool
 			progress(Serialize(report));
 			if (descriptor->language == app::GameplayLanguage::Rust)
 			{
-				const auto built = app::scripting::BuildRustGameplay({.manifest = descriptor->scriptsDir / "Cargo.toml", .artifactsDir = directory / "build/rust", .outputDir = directory / "module", .timeoutMs = remaining(), .stopToken = stop});
+				const auto built = app::scripting::BuildRustGameplay({.manifest = descriptor->scriptsDir / "Cargo.toml", .artifactsDir = directory / "build/rust",
+				        .outputDir = directory / "module", .cargoTargetDir = root / "Builds/Intermediate/rust-agent/cargo", .timeoutMs = remaining(), .stopToken = stop});
 				report.toolchains = built.report.toolchains;
 				report.diagnostics = built.report.diagnostics;
 				report.requiredChecks = built.report.requiredChecks;
@@ -225,7 +226,8 @@ namespace aether::project_tool
 				auto driver = io::PlatformPaths::GetExecutableDir() / "data/sdk/managed-build";
 				if (!std::filesystem::exists(driver)) { driver = AETHER_MANAGED_BUILD_PROJECT; }
 				const auto cmakeBuild = directory / "build/managed";
-				const std::vector<std::string> configure{"-S", Utf8(driver), "-B", Utf8(cmakeBuild), "-DAETHER_GAMEPLAY_PROJECT=" + Utf8(descriptor->scriptsDir / "AetherGame.csproj"), "-DAETHER_DOTNET_EXECUTABLE=" + Utf8(dotnet), "-DAETHER_MANAGED_ARTIFACTS=" + Utf8(directory / "build/dotnet"), "-DAETHER_MANAGED_OUTPUT=" + Utf8(managed)};
+				const std::vector<std::string> configure{"-S", Utf8(driver), "-B", Utf8(cmakeBuild), "-DAETHER_GAMEPLAY_PROJECT=" + Utf8(descriptor->scriptsDir / "AetherGame.csproj"),
+				        "-DAETHER_DOTNET_EXECUTABLE=" + Utf8(dotnet), "-DAETHER_MANAGED_ARTIFACTS=" + Utf8(root / "Builds/Intermediate/csharp-agent/dotnet"), "-DAETHER_MANAGED_OUTPUT=" + Utf8(managed)};
 				if (run(cmake, configure, root, directory / "configure.log") != 0) { return fail("CSHARP_CONFIGURE", "C# CMake configuration failed; inspect configure.log"); }
 				const int built = run(cmake, {"--build", Utf8(cmakeBuild), "--config", "Release", "--target", "AetherManagedGameplay"}, root, directory / "build.log");
 				ManagedDiagnostics(directory / "build.log", report);

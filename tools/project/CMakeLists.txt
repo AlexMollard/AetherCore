@@ -27,9 +27,6 @@ if(MSVC)
     target_compile_options(aether-project PRIVATE /bigobj)
 endif()
 add_dependencies(aether-project StageAppBundle GameRuntime AssetPacker)
-add_custom_command(TARGET aether-project POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/CMake/ManagedGameplayDriver"
-        "$<TARGET_FILE_DIR:aether-project>/data/sdk/managed-build")
 if(TARGET Editor)
     add_dependencies(Editor aether-project)
 endif()
