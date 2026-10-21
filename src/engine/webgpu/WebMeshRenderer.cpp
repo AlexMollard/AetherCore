@@ -808,7 +808,7 @@ namespace aether::webgpu
 			for (unsigned i = 0; i < packet.render3D.meshes.size(); ++i)
 			{
 				const auto& instance = packet.render3D.meshes[i];
-				if (instance.material.alphaBlend)
+				if (!instance.castShadows || instance.material.alphaBlend)
 				{
 					continue;
 				}

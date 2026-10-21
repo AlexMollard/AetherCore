@@ -213,6 +213,7 @@ namespace aether::app::web
 			MeshRenderInstance draw;
 			draw.world = world.Get<TransformComponent>(entity).localToWorld;
 			draw.mesh = binding.slot;
+			draw.castShadows = renderer->castShadows;
 			draw.material = world.Get<MaterialInstanceComponent>(entity).asset;
 			const std::array<TextureHandle, 5> handles{draw.material.albedoTex, draw.material.normalTex, draw.material.metallicRoughnessTex, draw.material.occlusionTex, draw.material.emissiveTex};
 			for (unsigned i = 0; i < handles.size(); ++i)

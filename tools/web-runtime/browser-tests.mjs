@@ -74,6 +74,7 @@ const lightingScenes = {
     'lighting-nonfinite':'BrowserBadLight', 'lighting-budget':'BrowserLight2D'
 };
 for (const kind of ['Sun','Point','Spot','Mask','Skin']) lightingScenes['lighting-shadow-'+kind.toLowerCase()]='BrowserShadow'+kind+'On';
+lightingScenes['lighting-shadow-no-cast']='BrowserShadowMaskOn';
 // Independent CPU evaluation of the native Hill ACES fit and display gamma, for neutral HDR probes.
 function neutralAces(value) {
     const fit = value => (value * (value + 0.0245786) - 0.000090537) / Math.max(value * (0.983729 * value + 0.432951) + 0.238081, 1e-6);
@@ -252,7 +253,7 @@ try {
 		    await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath),name+'-on.png')});
 		    await page.evaluate(() => aetherTest.stop());
 		    await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0);
-		    const offScene=lightingScenes[name].replace(/On$/,'Off');
+		    const offScene=name==='lighting-shadow-no-cast' ? 'BrowserShadowNoCast' : lightingScenes[name].replace(/On$/,'Off');
 		    await page.goto(`http://127.0.0.1:${server.address().port}/?reference=1&scene=${offScene}&automation=1&test=1`);
 		    await page.waitForFunction(scene=>aetherRuntime.scene===scene || aetherRuntime.status==='failed',offScene);
 		    assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
@@ -268,6 +269,11 @@ try {
 		        if(difference>20) shadowPixels++;
 		    }
 		    assert.ok(shadowPixels>=6,`Actual ${name} caster darkens at least six receiver pixels outside its camera silhouette: ${shadowPixels}, peak ${peakDifference}`);
+		    if(name==='lighting-shadow-no-cast') {
+		        const caster=pixel(unshadowed,32,30), receiver=pixel(unshadowed,20,30), background=pixel(unshadowed,48,30);
+		        assert.ok(receiver[0]>100,`castShadows=false leaves the receiver lit: ${receiver}`);
+		        assert.ok(background[0]-caster[0]>30,`Disabled shadow caster remains visible as an opaque upper-half mesh: ${caster}, ${background}`);
+		    }
 		    if(['lighting-shadow-mask','lighting-shadow-point','lighting-shadow-spot'].includes(name)) {
 		        await writeFile(path.join(path.dirname(reportPath),name+'-readback.json'),JSON.stringify({on:image,off:unshadowed}));
 		        // A unit caster covers y[-.5,.5]. SunY=0 preserves this vertical range;
@@ -277,7 +283,7 @@ try {
 		        const bottom=pixel(unshadowed,20,33)[0]-pixel(image,20,33)[0];
 		        assert.ok(top>bottom+15,`Alpha-cutout shadow preserves upper opaque/lower transparent artwork: ${top}, ${bottom}`);
 		    }
-		    item.shadow={shadowPixels,peakDifference,comparison:'Same camera, lights, receiver and fixed-pose caster; only receiver.receiveShadows differs'};
+		    item.shadow={shadowPixels,peakDifference,comparison:name==='lighting-shadow-no-cast' ? 'Same camera, lights, receiver and visible alpha caster; only meshRenderer.castShadows differs' : 'Same camera, lights, receiver and fixed-pose caster; only receiver.receiveShadows differs'};
 		    await page.locator('#canvas').screenshot({path:path.join(path.dirname(reportPath),name+'-off.png')});
 		} else if (name === 'lighting-default') {
 		    const surface=pixel(image,32,32), sky=pixel(image,32,4);

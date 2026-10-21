@@ -28,6 +28,7 @@ DESCRIPTIONS = {
     'BrowserPbrMaps': 'Tangent normals, occlusion and metallic/roughness texture maps.',
     'BrowserLight2D': 'A 2D lamp casts shadows through a tile artwork silhouette.',
     'BrowserBadLight': 'An invalid NaN light must fail before GPU frame submission.',
+    'BrowserShadowNoCast': 'The alpha-cutout mesh stays visible while its shadow-casting flag is disabled.',
     'default': 'The reference project’s default scene.',
 }
 for kind, label in [('Sun', 'Directional'), ('Point', 'Point'), ('Spot', 'Spot'), ('Mask', 'Alpha-cutout'), ('Skin', 'Skinned-model')]:

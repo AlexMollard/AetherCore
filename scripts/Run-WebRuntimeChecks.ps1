@@ -73,6 +73,7 @@ try
         $required += 'mesh-depth-resize', 'mesh-invalid-frame', 'authored-models', 'authored-skin', 'authored-materials', 'authored-dependencies', 'capture-backpressure'
         $required += 'lighting-solid', 'lighting-gradient', 'lighting-sky', 'lighting-hdr', 'lighting-sun', 'lighting-point', 'lighting-spot', 'lighting-pbr-maps', 'lighting-2d-alpha', 'lighting-nonfinite', 'lighting-budget'
         $required += 'lighting-shadow-sun', 'lighting-shadow-point', 'lighting-shadow-spot', 'lighting-shadow-mask', 'lighting-shadow-skin'
+        $required += 'lighting-shadow-no-cast'
         foreach ($case in $required)
         {
             $matches = @($report.browser.cases | Where-Object { $_.name -eq $case -and $_.status -eq 'passed' })

@@ -1,5 +1,6 @@
 {
   "legacyCaseNames": [
+    "lighting-shadow-no-cast",
     "lighting-default",
     "lighting-solid",
     "lighting-gradient",

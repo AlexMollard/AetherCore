@@ -27,7 +27,7 @@ SHADOWS = ('Sun', 'Point', 'Spot', 'Mask', 'Skin')
 SHADOW_RECEIVER_PROBE = (32, 44)
 SCENES = ('BrowserDefaultLighting', 'BrowserSolid', 'BrowserGradient', 'BrowserSky', 'BrowserHdr', 'BrowserSun',
           'BrowserPoint', 'BrowserSpot', 'BrowserPbrMaps', 'BrowserLight2D') + tuple(
-              'BrowserShadow'+kind+state for kind in SHADOWS for state in ('On', 'Off'))
+              'BrowserShadow'+kind+state for kind in SHADOWS for state in ('On', 'Off')) + ('BrowserShadowNoCast',)
 GRAPHICS = dict(renderScale=1.0, fxaa=False, gtao=False, reflections=False, volumetrics=False,
                 bloomStrength=0.0, autoExposure=False, exposure=1.0, tonemap='ACES Filmic',
                 gradeContrast=1.0, gradeSaturation=1.0, gradeTemperature=0.0, gradeTint=0.0,
@@ -224,6 +224,10 @@ def feature_checks(scene, image, width, height):
             checks['falloffOrCone'] = probes['center'][0]-probes['edge'][0] > (60 if scene == 'BrowserSpot' else 20)
     elif scene.startswith('BrowserShadow') and scene in SCENES:
         checks['receiverRendered'] = max(probes['left']+probes['right']) > 70
+        if scene == 'BrowserShadowNoCast':
+            probes.update(caster=p(32, 30), clearReceiver=p(20, 30), outsideCaster=p(48, 30))
+            checks['disabledCasterVisible'] = probes['outsideCaster'][0]-probes['caster'][0] > 30
+            checks['disabledCasterLeavesReceiverLit'] = probes['clearReceiver'][0] > 100
     else:
         raise ValueError('No maintained semantic oracle for scene: ' + scene)
     return dict(passed=all(checks.values()), checks=checks, probes=probes, centerProbeSquarePixels=list(center))
@@ -380,6 +384,20 @@ def main():
                                        (directory/(off_name+'-web.rgba')).read_bytes(), width, height)
             report['shadowPairs'].append(dict(feature=kind, native=native_pair, web=web_pair,
                                               status='passed' if native_pair['passed'] and web_pair['passed'] else 'failed'))
+        if all(scene in scenes for scene in ('BrowserShadowMaskOn', 'BrowserShadowMaskOff', 'BrowserShadowNoCast')):
+            captures_by_scene = {capture['scene']: capture for capture in captures}
+            native_images = {scene: png(Path(captures_by_scene[scene]['native'])) for scene in ('BrowserShadowMaskOn', 'BrowserShadowMaskOff', 'BrowserShadowNoCast')}
+            width, height, _ = native_images['BrowserShadowNoCast']
+            no_cast_results = {}
+            for backend in ('native', 'web'):
+                images = {scene: native_images[scene][2] if backend == 'native' else (directory/(scene+'-web.rgba')).read_bytes() for scene in native_images}
+                on, disabled, off = images['BrowserShadowMaskOn'], images['BrowserShadowNoCast'], images['BrowserShadowMaskOff']
+                delta = patch(disabled, width, height, 20, 30)[0]-patch(on, width, height, 20, 30)[0]
+                unchanged_receiver = max(abs(a-b) for a, b in zip(patch(disabled, width, height, 20, 30), patch(off, width, height, 20, 30)))
+                checks = dict(castingFlagRemovesShadow=delta > 25, disabledCasterMatchesUnshadowedReceiver=unchanged_receiver < 12)
+                no_cast_results[backend] = dict(passed=all(checks.values()), checks=checks, removedShadowDifference=delta, unshadowedReceiverError=unchanged_receiver)
+            report['shadowPairs'].append(dict(feature='NoCast', **no_cast_results,
+                                              status='passed' if all(value['passed'] for value in no_cast_results.values()) else 'failed'))
         report['status'] = 'passed' if report['cases'] and all(c['status'] == 'passed' for c in report['cases']) else 'failed'
         if any(pair['status'] != 'passed' for pair in report['shadowPairs']):
             report['status'] = 'failed'

@@ -14,6 +14,19 @@ spec.loader.exec_module(parity)
 
 
 class LightingParityTests(unittest.TestCase):
+    def test_non_casting_mesh_stays_visible_and_leaves_receiver_lit(self):
+        clear = bytes([150, 150, 150, 255] * 64 * 64)
+        self.assertFalse(parity.feature_checks('BrowserShadowNoCast', clear, 64, 64)['passed'], 'Removing the entire caster must not pass')
+        image = bytearray(clear)
+        for y in range(28, 33):
+            for x in range(28, 37):
+                image[(y*64+x)*4:(y*64+x)*4+3] = bytes([30, 30, 30])
+        self.assertTrue(parity.feature_checks('BrowserShadowNoCast', image, 64, 64)['passed'])
+        for y in range(27, 34):
+            for x in range(17, 24):
+                image[(y*64+x)*4:(y*64+x)*4+3] = bytes([30, 30, 30])
+        self.assertFalse(parity.feature_checks('BrowserShadowNoCast', image, 64, 64)['passed'], 'A visible mesh that still casts must not pass')
+
     def test_shadow_center_samples_receiver_outside_caster_silhouette(self):
         image = bytearray([150, 150, 150, 255] * 64 * 64)
         for y in range(28, 37):

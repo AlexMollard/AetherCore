@@ -24,6 +24,7 @@ namespace aether
 		MaterialAsset material{};
 		std::array<std::uint32_t, 5> textures{UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX};
 		std::vector<glm::mat4> skinMatrices;
+		bool castShadows = true;
 	};
 
 	struct Render3DFrameData
