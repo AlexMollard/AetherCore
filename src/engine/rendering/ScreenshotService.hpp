@@ -31,7 +31,9 @@ namespace aether
 		void Init(gpu::Device device, std::uint32_t graphicsQueueFamily, gpu::Queue queue);
 		void Shutdown();
 
-		[[nodiscard]] std::future<std::string> Request(std::string absolutePath);
+		// minimumElapsedTime skips frames rendered from an older simulation time, so a
+		// capture requested at tick N cannot take the render thread's lagging frame N-1.
+		[[nodiscard]] std::future<std::string> Request(std::string absolutePath, float minimumElapsedTime = -1.0f);
 
 		[[nodiscard]] std::future<std::string> RequestImage(void* image, gpu::Extent2D extent, gpu::Format format, gpu::ImageAspect aspect, gpu::ImageLayout srcLayout, std::string absolutePath);
 
@@ -64,6 +66,7 @@ namespace aether
 			gpu::Format format = gpu::Format::Undefined;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			gpu::ImageLayout srcLayout = gpu::ImageLayout::ShaderReadOnly;
+			float minimumElapsedTime = -1.0f;
 			std::promise<std::string> promise;
 		};
 

@@ -2,11 +2,13 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 #include "scripting/AgentDiagnostics.hpp"
 
 namespace aether
 {
 	class World;
+	struct EngineSettings;
 }
 
 namespace aether::app
@@ -31,6 +33,10 @@ namespace aether::app::scripting
 	};
 
 	void ValidateGameplayRunConfig(const GameplayRunRequest& request);
+	// Assigns one launchConfig.changes[].graphics object ({key: value} over the project's
+	// [graphics] keys) and returns the "graphics.<key>" fields the caller must apply live.
+	// Throws on an unknown key or a value the setting cannot parse.
+	[[nodiscard]] std::vector<std::string> AssignScheduledGraphics(EngineSettings& settings, const nlohmann::json& graphics);
 	// Publishes copied evidence before an assertion failure unwinds the runtime.
 	void WriteGameplayState(
 	        const GameplayRunRequest& request, World& world, GameplayHost& host, ScriptComponentSystem& scripts, bool allowSaveReads, const nlohmann::json& observations = nlohmann::json::array(), aether::scripting::AgentReport* report = nullptr);

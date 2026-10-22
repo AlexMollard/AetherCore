@@ -254,7 +254,7 @@ namespace aether
 		m_device = nullptr;
 	}
 
-	std::future<std::string> ScreenshotService::Request(std::string absolutePath)
+	std::future<std::string> ScreenshotService::Request(std::string absolutePath, const float minimumElapsedTime)
 	{
 		std::promise<std::string> promise;
 		std::future<std::string> fut = promise.get_future();
@@ -263,7 +263,7 @@ namespace aether
 		{
 			m_pending->promise.set_value("");
 		}
-		m_pending = Pending{.path = std::move(absolutePath), .promise = std::move(promise)};
+		m_pending = Pending{.path = std::move(absolutePath), .minimumElapsedTime = minimumElapsedTime, .promise = std::move(promise)};
 		return fut;
 	}
 
@@ -289,7 +289,7 @@ namespace aether
 
 		{
 			const std::lock_guard<std::mutex> lock(m_mutex);
-			if (!m_pending || m_pending->image != nullptr || m_frameCapture)
+			if (!m_pending || m_pending->image != nullptr || m_frameCapture || m_frameEvidence.elapsedTime < m_pending->minimumElapsedTime)
 			{
 				return;
 			}

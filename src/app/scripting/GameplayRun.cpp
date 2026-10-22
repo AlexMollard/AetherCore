@@ -21,6 +21,7 @@
 #include "scripting/RustGameplayHost.hpp"
 #include "scripting/SceneContext.hpp"
 #include "systems/ScriptComponentSystem.hpp"
+#include "utils/EngineSettings.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether::app::scripting
@@ -46,7 +47,7 @@ namespace aether::app::scripting
 			Require(config.is_object(), "launchConfig must be an object");
 			for (const auto& [key, value]: config.items())
 			{
-				Require(key == "readSaves" || key == "input" || key == "assertions" || key == "profile" || key == "checkpoints" || key == "renderScale", "Unknown launchConfig field: " + key);
+				Require(key == "readSaves" || key == "input" || key == "assertions" || key == "profile" || key == "checkpoints" || key == "renderScale" || key == "changes", "Unknown launchConfig field: " + key);
 			}
 			Require(!config.contains("profile") || (config["profile"].is_string() && (config["profile"] == "native-headless-2d-v1" || config["profile"] == "native-desktop-2d-v1")), "Unsupported gameplay run profile");
 			Require(!config.contains("readSaves") || config["readSaves"].is_boolean(), "readSaves must be a boolean");
@@ -73,6 +74,32 @@ namespace aether::app::scripting
 					auto copied = request;
 					copied.launchConfig = {{"assertions", checkpoint["assertions"]}};
 					ValidateConfig(copied);
+				}
+			}
+			if (config.contains("changes"))
+			{
+				Require(config.value("profile", "native-headless-2d-v1") == "native-desktop-2d-v1" && config["changes"].is_array(), "Scheduled changes require the desktop profile and an array");
+				for (const auto& change: config["changes"])
+				{
+					Require(change.is_object() && change.contains("tick") && change["tick"].is_number_integer() && change["tick"].get<std::int64_t>() >= 0 && change["tick"].get<std::uint64_t>() < request.ticks,
+					        "changes.tick must be an integer inside the run");
+					Require(change.contains("graphics") || change.contains("resize"), "A scheduled change requires graphics or resize");
+					for (const auto& [key, value]: change.items())
+					{
+						Require(key == "tick" || key == "graphics" || key == "resize", "Unknown scheduled change field: " + key);
+					}
+					if (change.contains("graphics"))
+					{
+						EngineSettings probe;
+						Require(!AssignScheduledGraphics(probe, change["graphics"]).empty(), "changes.graphics must not be empty");
+					}
+					if (change.contains("resize"))
+					{
+						const auto& size = change["resize"];
+						Require(size.is_array() && size.size() == 2 && size[0].is_number_integer() && size[1].is_number_integer() && size[0].get<std::int64_t>() >= 1 && size[0].get<std::int64_t>() <= 4096 &&
+						                size[1].get<std::int64_t>() >= 1 && size[1].get<std::int64_t>() <= 4096,
+						        "changes.resize must be [width, height] in 1..4096");
+					}
 				}
 			}
 
@@ -184,6 +211,21 @@ namespace aether::app::scripting
 	void ValidateGameplayRunConfig(const GameplayRunRequest& request)
 	{
 		ValidateConfig(request);
+	}
+
+	std::vector<std::string> AssignScheduledGraphics(EngineSettings& settings, const Json& graphics)
+	{
+		Require(graphics.is_object(), "changes.graphics must be an object");
+		std::vector<std::string> fields;
+		for (const auto& [key, value]: graphics.items())
+		{
+			Require(value.is_string() || value.is_number() || value.is_boolean(), "changes.graphics." + key + " must be a string, number or boolean");
+			const std::string field = "graphics." + key;
+			const std::string text = value.is_string() ? value.get<std::string>() : value.dump();
+			Require(SetSettingValueFromString(settings, field, text), "changes.graphics." + key + " is not a setting or cannot hold '" + text + "'");
+			fields.push_back(field);
+		}
+		return fields;
 	}
 
 	void WriteGameplayState(const GameplayRunRequest& request, World& world, GameplayHost& hostRef, ScriptComponentSystem& scripts, bool allowSaveReads, const Json& observations, aether::scripting::AgentReport* report)

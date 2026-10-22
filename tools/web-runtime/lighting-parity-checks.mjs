@@ -74,13 +74,22 @@ try {
             assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
             assert.equal(await page.evaluate(()=>aetherTest.version),1);
             item.adapter=await page.evaluate(()=>aetherRuntime.adapter);assert.ok(isHardwareAdapter(item.adapter),'Hardware WebGPU required');
-            await page.evaluate(({width,height})=>Module._aether_web_resize(width,height),capture);
+            const initial=request.initialExtent ?? [capture.width,capture.height];
+            await page.evaluate(([width,height])=>Module._aether_web_resize(width,height),initial);
             await page.waitForFunction(()=>aetherRuntime.status==='failed' || document.getElementById('start')?.disabled===false);
             assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
             await page.locator('#start').click();await page.locator('#canvas').focus();
             await page.waitForFunction(()=>aetherTest.readiness().ready || aetherRuntime.status==='failed');
             assert.equal(await page.evaluate(()=>aetherRuntime.ticks || 0),0,'Manual mode must prevent uncontrolled simulation');
-            const stepped=await page.evaluate(()=>aetherTest.step(10));assert.equal(stepped.ticks,10);
+            // A change at tick N lands before update N+1, matching the native runner's input convention.
+            let ticks=0;
+            for(const change of [...(request.changes??[])].sort((a,b)=>a.tick-b.tick)){
+                if(change.tick>ticks){ticks=(await page.evaluate(n=>aetherTest.step(n),change.tick-ticks)).ticks;}
+                assert.equal(ticks,change.tick,'Scheduled change must land at its tick');
+                if(change.graphics){await page.evaluate(values=>{globalThis.aetherProject.graphics={...globalThis.aetherProject.graphics,...values};},change.graphics);}
+                if(change.resize){await page.evaluate(([width,height])=>Module._aether_web_resize(width,height),change.resize);}
+            }
+            const stepped=await page.evaluate(n=>aetherTest.step(n),10-ticks);assert.equal(stepped.ticks,10);
             const image=await page.evaluate(()=>aetherTest.capture());
             item.frameEvidence=Object.fromEntries(['frameIndex','temporalFrameIndex','simulationTick','generation','exposureUsed','width','height','renderWidth','renderHeight'].map(key=>[key,image[key]]));
             assert.ok(Number.isSafeInteger(image.frameIndex) && Number.isSafeInteger(image.temporalFrameIndex) && image.simulationTick===10,'Actual accepted-frame identity/tick10 receipt required; rebuild browser runtime');

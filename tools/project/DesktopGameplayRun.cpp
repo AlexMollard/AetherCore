@@ -155,6 +155,27 @@ namespace aether::project_tool
 						context.Get<Input>().SetSyntheticKey(Input::KeyCodeFromName(event["key"].get<std::string>()), event["down"].get<bool>(), false);
 					}
 				}
+				// Same tick convention as input: a change at tick N lands before update N+1,
+				// so the packet extracted for that update already renders with it.
+				for (const auto& change: m_request.launchConfig.value("changes", Json::array()))
+				{
+					if (change["tick"].get<std::uint32_t>() != m_tick)
+					{
+						continue;
+					}
+					if (change.contains("graphics"))
+					{
+						auto& settings = context.Get<SettingsService>();
+						for (const auto& field: app::scripting::AssignScheduledGraphics(settings.Values(), change["graphics"]))
+						{
+							settings.ApplyField(field);
+						}
+					}
+					if (change.contains("resize"))
+					{
+						context.Get<Window>().SetSize(change["resize"][0].get<int>(), change["resize"][1].get<int>());
+					}
+				}
 			}
 
 			void OnUpdate(LayerContext& context) override
@@ -191,7 +212,10 @@ namespace aether::project_tool
 				++m_tick;
 				if (m_tick == 10 && m_request.ticks >= 20)
 				{
-					m_capture = context.Get<ScreenshotService>().Request(io::PlatformPaths::PathToUtf8(m_request.output.parent_path() / "reference.png"));
+					// Half a step of slack absorbs float clock accumulation; a lagging render
+					// thread still holding tick 9 cannot satisfy the request.
+					const float minimumElapsed = static_cast<float>((m_tick - 0.5) * m_request.step);
+					m_capture = context.Get<ScreenshotService>().Request(io::PlatformPaths::PathToUtf8(m_request.output.parent_path() / "reference.png"), minimumElapsed);
 				}
 				const auto audioStats = context.Get<audio::AudioSubsystem>().GetStats();
 				const Json observations = Json::array({{{"entity", "$runtime"}, {"type", "$engine"}, {"properties", {{"scene", context.Get<SceneSubsystem>().GetCurrentScene()}, {"audioStarted", audioStats.startedTotal}}}}});
