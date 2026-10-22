@@ -7,6 +7,8 @@ import zlib
 import time
 import sys
 import tomllib
+from unittest.mock import patch
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('parity', Path(__file__).with_name('lighting-parity-checks.py'))
 parity = importlib.util.module_from_spec(spec)
@@ -14,6 +16,103 @@ spec.loader.exec_module(parity)
 
 
 class LightingParityTests(unittest.TestCase):
+    def test_post_corner_requires_actual_colored_cubes_and_receiver(self):
+        wall=bytes([120,128,142,255]*64*64)
+        self.assertFalse(parity.feature_checks('BrowserPostCorner',wall,64,64)['passed'])
+        image=bytearray(wall)
+        for cx,cy,color in ((24,36,[120,45,29]),(39,34,[0,64,166]),(32,52,[16,54,98])):
+            for y in range(cy-3,cy+4):
+                for x in range(cx-3,cx+4):
+                    image[(y*64+x)*4:(y*64+x)*4+3]=bytes(color)
+        for scene in ('BrowserPostCorner','BrowserPostVolumetric'):
+            with self.subTest(scene=scene):
+                self.assertTrue(parity.feature_checks(scene,image,64,64)['passed'])
+        for y in range(31,38):
+            for x in range(36,43):
+                image[(y*64+x)*4:(y*64+x)*4+3]=bytes([120,128,142])
+        self.assertFalse(parity.feature_checks('BrowserPostCorner',image,64,64)['passed'],'A missing blue reflection source cannot qualify')
+
+    def test_frame_receipts_require_actual_identity_fixed_clock_and_gpu_source_extent(self):
+        native=dict(frameIndex=9,elapsedTime=10/60,exposureUsed=1,width=513,height=511,renderWidth=256,renderHeight=255)
+        web=dict(frameIndex=12,temporalFrameIndex=9,simulationTick=10,exposureUsed=1,width=513,height=511,renderWidth=256,renderHeight=255)
+        self.assertTrue(parity.validate_frame_evidence(native,web,513,511,.5,True)['passed'])
+        for n,w in ((None,web),(native,None),(dict(native,elapsedTime=.12),web),
+                    (dict(native,exposureUsed=float('nan')),web),(native,dict(web,frameIndex=True)),
+                    (native,dict(web,temporalFrameIndex=8)),(native,dict(web,simulationTick=9)),
+                    (dict(native,renderWidth=257),web),(native,dict(web,renderHeight=256))):
+            with self.subTest(native=n,web=w),self.assertRaisesRegex(ValueError,'UNQUALIFIED'):
+                parity.validate_frame_evidence(n,w,513,511,.5,True)
+
+    def test_graph_oracle_rejects_black_and_default_gray_materials(self):
+        for rgb in ((0, 0, 0), (160, 160, 160)):
+            image = bytes([*rgb, 255]*64*64)
+            self.assertFalse(parity.feature_checks('BrowserGraph', image, 64, 64)['passed'])
+        image = bytearray([0, 0, 0, 255]*64*64)
+        for y in range(8, 56):
+            for x in range(8, 56):
+                image[(y*64+x)*4:(y*64+x)*4+3] = bytes([180, 90, 35])
+        self.assertTrue(parity.feature_checks('BrowserGraph', image, 64, 64)['passed'])
+        for y in range(27, 38):
+            for x in range(27, 38):
+                image[(y*64+x)*4:(y*64+x)*4+3] = bytes([165, 115, 108])
+        self.assertTrue(parity.feature_checks('BrowserGraph', image, 64, 64)['passed'], 'Center specular highlight must not substitute for red body probes')
+
+    def test_native_graph_cook_stages_editor_overlay_before_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root/'.temp/lighting-parity/private'
+            material = project/'assets/materials/browser-graph.material.toml'
+            material.parent.mkdir(parents=True)
+            material.write_text('authored graph')
+            seen = []
+            def cook(*args):
+                seen.append(args)
+                return dict(output=str(args[2]/'BrowserGraph.spv'), sha256='fixture')
+            shim = SimpleNamespace(resolve_compiler=lambda path: path, cook_native=cook)
+            with patch.object(parity, 'ROOT', root), patch.dict(sys.modules, web_materials=shim):
+                result = parity.native_graph_cook(project, root/'build/webgpu-browser', time.monotonic()+30, ['BrowserGraph'], compiler=Path('compiler'), slang=Path('slang'), cook_function=cook)
+            self.assertEqual(result['status'], 'passed')
+            self.assertEqual(seen[0][2], project.resolve()/'Builds/Intermediate/shaders')
+            self.assertEqual(result['runtimeUri'], 'shaders://BrowserGraph.spv')
+            self.assertEqual(material.read_text(), 'authored graph')
+            self.assertEqual(parity.native_graph_cook(project, root, 0, ['BrowserSun'])['status'], 'skipped')
+
+    def test_graphics_override_is_identical_typed_data_and_keeps_defaults(self):
+        original = dict(parity.GRAPHICS)
+        result = parity.graphics_settings(dict(bloomStrength=.3, gtao=True, vignetteRoundness=.7, tonemap='Linear'))
+        self.assertEqual(result['bloomStrength'], .3)
+        self.assertTrue(result['gtao'])
+        self.assertEqual(result['exposure'], 1)
+        self.assertEqual(parity.GRAPHICS, original)
+        for invalid in ([], {'unknownEffect':1}, {'fxaa':1}, {'bloomStrength':True}, {'exposure':float('nan')},
+                        {'renderScale':.125}, {'tonemap':'mystery'}, {'anisotropy':1.5}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                parity.graphics_settings(invalid)
+        self.assertEqual(parity.graphics_settings({'renderScale':.5})['renderScale'],.5)
+
+    def test_effect_controls_cannot_qualify_identical_images(self):
+        image = bytes([150, 120, 90, 255]*64*64)
+        for kind in parity.EFFECTS:
+            with self.subTest(kind=kind):
+                self.assertFalse(parity.effect_features(kind,image,image,64,64)['passed'])
+        for scene in parity.EFFECT_SCENES:
+            with self.subTest(scene=scene):
+                black = bytes([0,0,0,255]*64*64)
+                self.assertFalse(parity.feature_checks(scene,black,64,64)['passed'])
+
+    def test_effect_control_fixtures_change_exactly_one_authored_field(self):
+        for kind in parity.EFFECTS:
+            on = 'Browser'+kind+('On' if kind == 'Dof' else '')
+            off = 'Browser'+kind+'Off'
+            source = parity.ROOT/'resources/web/reference/scenes'
+            a = (source/(on+'.scene.toml')).read_text().splitlines()
+            b = (source/(off+'.scene.toml')).read_text().splitlines()
+            with self.subTest(kind=kind):
+                self.assertEqual(len(a),len(b))
+                self.assertEqual(sum(left != right for left,right in zip(a,b)),1)
+                tomllib.loads('\n'.join(a))
+                tomllib.loads('\n'.join(b))
+
     def test_non_casting_mesh_stays_visible_and_leaves_receiver_lit(self):
         clear = bytes([150, 150, 150, 255] * 64 * 64)
         self.assertFalse(parity.feature_checks('BrowserShadowNoCast', clear, 64, 64)['passed'], 'Removing the entire caster must not pass')

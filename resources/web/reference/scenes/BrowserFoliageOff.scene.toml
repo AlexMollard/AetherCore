@@ -1,0 +1,55 @@
+# Task4 material qualification. Capture tick10 at fixed dt1/60 and exposure1.
+# The independent controls change only the field stated in each fixture.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.1, 0.1, 0.1]
+sun_direction = [0.0, 1.0, 1.0]
+sun_intensity = 1.5
+sky_horizon = [0.08, 0.12, 0.2]
+sky_zenith = [0.04, 0.08, 0.16]
+sky_void = [0.02, 0.025, 0.04]
+object_ambient = [0.35, 0.35, 0.35]
+object_light0_direction = [0.0, 1.0, 0.0]
+object_light0_color = [0.5, 0.4, 0.3]
+object_light1_direction = [1.0, 0.0, 0.0]
+object_light1_color = [0.1, 0.15, 0.2]
+
+[[entities]]
+name = 'Fixed material camera'
+position = [0, 0, 0]
+euler = [0, 0, 0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 2.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]
+
+[[entities]]
+name = 'Anchored alpha-ramp foliage'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [0, 0, -4]
+euler = [0, 0, 0]
+scale = [1.4, 1.5, 1]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/material-foliage.gltf'
+index = 0
+[entities.material]
+double_sided = true
+base_color = [0.5, 0.7, 0.35, 1.0]
+roughness = 1.0
+receive_shadows = false
+alpha_mask = true
+alpha_cutoff = 0.5
+albedo = 'project://assets/textures/browser-foliage-ramp.png'
+baked_lighting = true
+foliage = false
+

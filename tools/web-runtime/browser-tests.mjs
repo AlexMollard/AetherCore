@@ -75,12 +75,20 @@ const lightingScenes = {
 };
 for (const kind of ['Sun','Point','Spot','Mask','Skin']) lightingScenes['lighting-shadow-'+kind.toLowerCase()]='BrowserShadow'+kind+'On';
 lightingScenes['lighting-shadow-no-cast']='BrowserShadowMaskOn';
+const effectScenes = {
+    'effects-object-lights':'BrowserObjectLights', 'effects-baked':'BrowserBaked',
+    'effects-gem':'BrowserGem', 'effects-sheen':'BrowserSheen', 'effects-character':'BrowserCharacter',
+    'effects-fog':'BrowserFog', 'effects-clouds':'BrowserClouds', 'effects-physical-sky':'BrowserPhysicalSky',
+    'effects-darkness':'BrowserDarkness', 'effects-dof':'BrowserDofOn',
+    'effects-particles-2d':'BrowserParticles2D', 'effects-particles-3d':'BrowserParticles3D'
+};
 // Independent CPU evaluation of the native Hill ACES fit and display gamma, for neutral HDR probes.
 function neutralAces(value) {
     const fit = value => (value * (value + 0.0245786) - 0.000090537) / Math.max(value * (0.983729 * value + 0.432951) + 0.238081, 1e-6);
     return Math.round(255 * Math.pow(Math.min(1, Math.max(0, fit(value))), 1 / 2.2));
 }
 try {
+    await mkdir(path.dirname(reportPath), {recursive : true});
     const pins = JSON.parse(await readFile(new URL('../experiments/rust-webgpu/toolchain.json', import.meta.url), 'utf8'));
     assert.equal(report.playwrightVersion, pins.playwright, 'Browser qualification requires pinned Playwright');
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -205,6 +213,8 @@ try {
 		query = '?reference=1&scene=BrowserSkin&automation=1';
 	    if (lightingScenes[name])
 		query = '?reference=1&scene=' + lightingScenes[name] + '&automation=1';
+	    if (effectScenes[name])
+		query = '?reference=1&scene=' + effectScenes[name] + '&automation=1';
 	    if (name === 'browser-features' || name === 'browser-gamepad' || name === 'browser-ui-order')
 		query = '?reference=1&scene=BrowserFeatures';
 	    if (name.startsWith('invalid-'))
@@ -212,12 +222,66 @@ try {
 			    'invalid-font' : 'BrowserBadFont',
 			    'invalid-scene-version' : 'BrowserBadVersion',
 			    'invalid-atlas-version' : 'BrowserBadAtlas',
-			    'invalid-audio-component' : 'BrowserBadAudio'
+			    'invalid-audio-component' : 'BrowserBadAudio',
+			    'invalid-particle-rate' : 'BrowserBadParticleRate',
+			    'invalid-particle-capacity' : 'BrowserBadParticleCapacity'
 			})[name];
 	    if (name !== 'responsive' && name !== 'browser-features' && name !== 'browser-gamepad' && name !== 'browser-ui-order') {
 		query += (query ? '&' : '?') + 'test=1';
 	    }
 	    await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);
+	    if (effectScenes[name]) {
+		const readEffect = async scene => {
+		    await page.waitForFunction(scene => aetherRuntime.scene === scene || aetherRuntime.status === 'failed',scene);
+		    assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
+		    await page.locator('#start').click();
+		    await page.locator('#canvas').focus();
+		    await page.waitForFunction(()=>aetherRuntime.frames>2 || aetherRuntime.status==='failed');
+		    assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
+		    await page.evaluate(()=>aetherTest.step(10));
+		    const image=await page.evaluate(()=>aetherTest.capture());
+		    assert.deepEqual(await page.evaluate(()=>aetherRuntime.diagnostics),[]);
+		    await page.evaluate(()=>aetherTest.stop());
+		    await page.waitForFunction(()=>aetherRuntime.state==='stopped' && aetherRuntime.inFlight===0);
+		    return image;
+		};
+		const on=await readEffect(effectScenes[name]);
+		await writeFile(path.join(path.dirname(reportPath),name+'-on-readback.json'),JSON.stringify(on));
+		if(name.includes('particles')) {
+		    const background=pixel(on,4,4);
+		    let active=0;
+		    for(let y=16;y<48;y++) for(let x=16;x<48;x++)
+		        if(pixel(on,x,y).slice(0,3).some((v,c)=>v-background[c]>25)) active++;
+		    assert.ok(active>=8,`Seeded tick10 particle burst must cover at least eight actual pixels: ${active}`);
+		    item.effect={activeParticlePixels:active,seed:123456,ticks:10};
+		} else {
+		    const control=effectScenes[name].replace(/On$/,'')+'Off';
+		    await page.goto(`http://127.0.0.1:${server.address().port}/?reference=1&scene=${control}&automation=1&test=1`);
+		    const off=await readEffect(control);
+		    await writeFile(path.join(path.dirname(reportPath),name+'-off-readback.json'),JSON.stringify(off));
+		    const material=['effects-object-lights','effects-baked','effects-gem','effects-sheen','effects-character'].includes(name);
+		    const sky=['effects-clouds','effects-physical-sky','effects-dof'].includes(name);
+		    const lo=material?23:sky?4:12,hi=material?41:sky?60:52;
+		    let changed=0,peak=0;
+		    for(let y=lo;y<hi;y++) for(let x=lo;x<hi;x++) {
+		        const a=pixel(on,x,y),b=pixel(off,x,y);
+		        const delta=Math.max(...a.slice(0,3).map((v,c)=>Math.abs(v-b[c])));
+		        if(delta>3) changed++;
+		        peak=Math.max(peak,delta);
+		    }
+		    assert.ok(changed>=4,`Authored effect must change at least four pixels against its single-field control: ${changed}, peak ${peak}`);
+		    if(material) assert.ok(Math.max(...pixel(on,32,32).slice(0,3))>40,'Specialized surface must remain visible');
+		    if(name==='effects-darkness') assert.ok(pixel(off,20,32)[0]-pixel(on,20,32)[0]>15,'Authored darkness volume must darken its interior');
+		    if(name==='effects-dof') {
+		        assert.ok(pixel(on,61,32)[0]-pixel(off,61,32)[0]>3,'Far defocus must spread energy beyond the square silhouette');
+		        assert.ok(Math.abs(pixel(on,15,32)[0]-pixel(off,15,32)[0])<8,'Near focus2m retains its sharp square center');
+		    }
+		    item.effect={changedPixels:changed,peakDifference:peak,control,ticks:10};
+		}
+		item.scope='Fixed authored camera, seed where applicable, ten explicit simulation ticks; actual GPU effect/control readback and clean retirement';
+		item.status='passed';
+		continue;
+	    }
 	    if (lightingScenes[name]) {
 		if (name === 'lighting-nonfinite') {
 		    await page.waitForFunction(() => aetherRuntime.status === 'failed' && (aetherRuntime.inFlight || 0) === 0);
@@ -469,6 +533,12 @@ try {
 		assert.ok(state.diagnostics.length > 0);
 		if (name === 'invalid-font')
 		    assert.ok(state.diagnostics.some(d => /font/i.test(d.message)));
+		if(name.startsWith('invalid-particle-')) {
+		    assert.equal(state.frames||0,0,'Invalid emitter must fail before GPU submission');
+		    assert.equal(state.inFlight||0,0,'Invalid emitter must own no submitted frame');
+		    assert.ok(state.diagnostics.some(d=>/particle|emitter/i.test(d.message)),JSON.stringify(state.diagnostics));
+		    item.scope='Invalid authored emitter rejected before simulation and GPU submission';
+		}
 		item.status = 'passed';
 		continue;
 	    }

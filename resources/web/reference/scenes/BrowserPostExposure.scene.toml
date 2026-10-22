@@ -1,0 +1,41 @@
+# Uniform exact HDR2 radiance gives one analytic histogram bin (140), making
+# frame3/9 adaptation independently calculable instead of comparing convergence.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.0, 0.0, 0.0]
+sun_direction = [0.0, 0.0, 1.0]
+sun_intensity = 0.0
+sky_horizon = [0.0, 0.0, 0.0]
+sky_zenith = [0.0, 0.0, 0.0]
+sky_void = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Fixed analytic meter camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Exact uniform two-radiance meter'
+mesh_renderer = true
+position = [0.0, 0.0, -4.0]
+scale = [10.0, 10.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+baked_lighting = true
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [2.0, 2.0, 2.0]

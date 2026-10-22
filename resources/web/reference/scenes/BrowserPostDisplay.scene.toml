@@ -1,0 +1,45 @@
+# Post-stage control: same seeded display particles, exact global settings supplied externally.
+# Regression: no environment, no lighting feature, no opaque geometry and no
+# world-space billboards. The display-space emitter alone must opt into the
+# HDR/depth/final-composite lifecycle and remain visible after tonemapping.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d']
+
+[[entities]]
+name = 'Fixed display-only particle camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'sky_gradient'
+
+[[entities]]
+name = 'Seeded display-only burst'
+position = [0.0, 0.0, -3.0]
+[entities.particles]
+texture = 'project://assets/textures/browser-material-gray.png'
+space = 'billboard_3d'
+display_space = true
+seed = 123456
+rate = 0.0
+burst_count = 12
+emit_on_start = true
+max_particles = 32
+lifetime_min = 2.0
+lifetime_max = 2.0
+speed_min = 1.0
+speed_max = 2.0
+gravity = [0.0, 0.0]
+velocity = [0.0, 1.0, 0.0]
+velocity_jitter = [1.0, 0.5, 0.0]
+spawn_jitter = [0.4, 0.4, 0.0]
+gravity_3d = [0.0, 0.0, 0.0]
+start_size = 0.4
+end_size = 0.4
+start_color = [1.0, 0.3, 0.1, 1.0]
+end_color = [0.1, 0.4, 1.0, 1.0]

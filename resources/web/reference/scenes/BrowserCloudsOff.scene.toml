@@ -1,0 +1,44 @@
+# Task 4 authored effect fixture. Fixed camera; comparison uses capture tick 10.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.02, 0.02, 0.02]
+sun_direction = [0.2, 0.7, 1.0]
+sun_intensity = 1.5
+sky_horizon = [0.2, 0.35, 0.6]
+sky_zenith = [0.04, 0.12, 0.3]
+sky_void = [0.01, 0.02, 0.04]
+object_ambient = [0.15, 0.2, 0.1]
+object_light0_direction = [0.0, 0.4, 1.0]
+object_light0_color = [0.8, 0.1, 0.05]
+object_light1_direction = [0.6, -0.2, 0.8]
+object_light1_color = [0.1, 0.5, 0.2]
+
+[[entities]]
+name = 'Fixed effect camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'sky_gradient'
+clear_color = [0.05, 0.06, 0.08]
+
+[[entities]]
+name = 'Authored atmosphere'
+[entities.sky]
+horizon_color = [0.2, 0.35, 0.6]
+zenith_color = [0.04, 0.12, 0.3]
+ground_color = [0.01, 0.02, 0.04]
+ambient_color = [0.03, 0.04, 0.06]
+fog_density = 0.0
+fog_height_falloff = 0.08
+fog_sun_scatter = 0.6
+fog_max_opacity = 0.9
+cloud_coverage = 0.0
+cloud_speed = 0.02

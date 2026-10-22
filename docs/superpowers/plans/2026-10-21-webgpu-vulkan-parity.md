@@ -82,7 +82,7 @@ constants/extraction and same-scene capture fixtures. Consume Tasks 1/2.
 **Files:** native effect/pass inventory, shared Slang, WebGPU render scheduling,
 material-graph compiler and shader cook/diagnostic paths. Consume Task 3.
 
-- [ ] Enumerate every native pass and material variant as a tracked parity case.
+- [x] Enumerate every native pass and material variant as a tracked parity case.
 - [ ] Port post effects, procedural/specialized shading and particles through
   shared equations; preserve ordering, history reset and blending semantics.
 - [ ] Add custom/material-graph WGSL compilation and actionable unsupported
@@ -228,3 +228,26 @@ and native jobs; the requested development gallery remains hosted at port 18989.
 The public export profile remains `webgpu-2d-v1`. Automatic exposure, grading,
 other post effects, specialized/custom materials and the remaining gameplay work
 are still Tasks 4/5; full 3D production publishing remains gated by Task 6.
+
+## Task 4 bounded qualification checkpoint
+
+Task 4 is not complete. This checkpoint qualifies the bounded cases recorded in
+[the effect parity ledger](../../architecture/webgpu-effect-parity.md), which
+tracks every native pass and material variant with its evidence. On hardware
+Chrome/NVIDIA Blackwell: 30 post controls, 19 material cases (9 pairs) and 22
+scene-effect cases (10 pairs) pass native vs WebGPU comparisons with unchanged
+image limits; 13 deliberate regressions fail their gates. The full Debug native
+gauntlet passes 1,549 cases with zero Vulkan findings, and C#/Rust production 2D
+publishing and private 3D movement pass.
+
+Qualification fixed two shared shader defects (a precision-fragile noise hash
+that diverged across compilers, and a Slang 2026.8 WGSL miscompile of negated
+vector sums, now rejected at build time by `tools/shaders/wgsl_checks.py`), a
+latent Play/Stop restore crash, and four fixture/oracle defects documented in
+the ledger. The language qualifier now refreshes the whole Rust module tree.
+
+Remaining Task 4 work, per the ledger: raw custom passes (behind/over/emissive
+2D) are unsupported, gameplay render-to-texture cameras are missing, and the
+authored `sky` mesh, UV-scroll/vertex-colour overrides, history reset and
+enable/resize transitions, parameter sweeps and effect cross-products have no
+qualified case. The export profile remains `webgpu-2d-v1`.

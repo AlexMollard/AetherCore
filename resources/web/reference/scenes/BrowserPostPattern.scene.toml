@@ -1,0 +1,231 @@
+# Task 4 post-effect fixture; native and Web use identical external graphics maps.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.12, 0.12, 0.12]
+sun_direction = [-0.4, 0.8, 0.6]
+sun_intensity = 2.0
+sky_horizon = [0.2, 0.3, 0.5]
+sky_zenith = [0.04, 0.12, 0.3]
+sky_void = [0.01, 0.02, 0.04]
+
+[[entities]]
+name = 'Post qualification camera'
+position = [0.0, 0.0, 0.0]
+euler = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+fov = 60.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Neutral full-frame radiance'
+mesh_renderer = true
+position = [0.0, 0.0, -6.0]
+euler = [0.0, 0.0, 0.0]
+scale = [8.0, 8.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [0.2, 0.2, 0.2]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'Warm grading region'
+mesh_renderer = true
+position = [-2.0, 0.0, -4.0]
+euler = [0.0, 0.0, 0.0]
+scale = [1.5, 3.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [0.8, 0.08, 0.02]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'Cool grading region'
+mesh_renderer = true
+position = [2.0, 0.0, -4.0]
+euler = [0.0, 0.0, 0.0]
+scale = [1.5, 3.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [0.02, 0.3, 0.8]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'Small HDR highlight'
+mesh_renderer = true
+position = [0.0, 2.0, -3.0]
+euler = [0.0, 0.0, 0.0]
+scale = [0.5, 0.5, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [8.0, 8.0, 8.0]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'Subpixel diagonal white edge'
+mesh_renderer = true
+position = [0.0, -2.0, -2.0]
+euler = [0.0, 0.0, 24.0]
+scale = [6.0, 0.04, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [3.0, 3.0, 3.0]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'High frequency stripe 0'
+mesh_renderer = true
+position = [-0.9, -1.0, -1.5]
+euler = [0.0, 0.0, 0.0]
+scale = [0.04, 0.7, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [1.0, 1.0, 1.0]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'High frequency stripe 1'
+mesh_renderer = true
+position = [-0.6000000000000001, -1.0, -1.5]
+euler = [0.0, 0.0, 0.0]
+scale = [0.04, 0.7, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [1.0, 1.0, 1.0]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'High frequency stripe 2'
+mesh_renderer = true
+position = [-0.30000000000000004, -1.0, -1.5]
+euler = [0.0, 0.0, 0.0]
+scale = [0.04, 0.7, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [1.0, 1.0, 1.0]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'High frequency stripe 3'
+mesh_renderer = true
+position = [-1.1102230246251565e-16, -1.0, -1.5]
+euler = [0.0, 0.0, 0.0]
+scale = [0.04, 0.7, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [1.0, 1.0, 1.0]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'High frequency stripe 4'
+mesh_renderer = true
+position = [0.29999999999999993, -1.0, -1.5]
+euler = [0.0, 0.0, 0.0]
+scale = [0.04, 0.7, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [1.0, 1.0, 1.0]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'High frequency stripe 5'
+mesh_renderer = true
+position = [0.6, -1.0, -1.5]
+euler = [0.0, 0.0, 0.0]
+scale = [0.04, 0.7, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [1.0, 1.0, 1.0]
+roughness = 0.4
+metallic = 0.0
+
+[[entities]]
+name = 'High frequency stripe 6'
+mesh_renderer = true
+position = [0.8999999999999998, -1.0, -1.5]
+euler = [0.0, 0.0, 0.0]
+scale = [0.04, 0.7, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+receive_shadows = false
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [1.0, 1.0, 1.0]
+roughness = 0.4
+metallic = 0.0

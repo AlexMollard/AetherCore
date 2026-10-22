@@ -91,7 +91,8 @@ def main():
                 text = re.sub(r'(<ProjectReference\s+Include=")[^"]+AetherCore\.csproj"', lambda match: match[1] + (ROOT / 'managed/AetherCore/AetherCore.csproj').as_posix() + '"', text)
                 csproj.write_text(text, encoding='utf-8')
             else:
-                shutil.copy2(source / 'scripts/src/lib.rs', project / 'scripts/src/lib.rs')
+                # The whole module tree: lib.rs declares sibling modules (model_probe.rs).
+                shutil.copytree(source / 'scripts/src', project / 'scripts/src', dirs_exist_ok=True)
                 manifest = project / 'scripts/Cargo.toml'
                 text = manifest.read_text(encoding='utf-8-sig')
                 text = re.sub(r'aethercore\s*=\s*\{\s*path\s*=\s*"[^"]+"\s*\}', 'aethercore = { path = "' + (ROOT / 'rust/aethercore').as_posix() + '" }', text)

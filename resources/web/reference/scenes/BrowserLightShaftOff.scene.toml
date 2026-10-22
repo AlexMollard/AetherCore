@@ -1,0 +1,52 @@
+# Task4 material qualification. Capture tick10 at fixed dt1/60 and exposure1.
+# The independent controls change only the field stated in each fixture.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.1, 0.1, 0.1]
+sun_direction = [0.0, 1.0, 1.0]
+sun_intensity = 1.5
+sky_horizon = [0.08, 0.12, 0.2]
+sky_zenith = [0.04, 0.08, 0.16]
+sky_void = [0.02, 0.025, 0.04]
+object_ambient = [0.35, 0.35, 0.35]
+object_light0_direction = [0.0, 1.0, 0.0]
+object_light0_color = [0.5, 0.4, 0.3]
+object_light1_direction = [1.0, 0.0, 0.0]
+object_light1_color = [0.1, 0.15, 0.2]
+
+[[entities]]
+name = 'Fixed material camera'
+position = [0, 0, 0]
+euler = [0, 0, 0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]
+
+[[entities]]
+name = 'UV2 sheet with native soft edges'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [0, 0, -10]
+euler = [0, 0, 0]
+scale = [6, 6, 1]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/material-card.gltf'
+index = 0
+[entities.material]
+double_sided = true
+base_color = [0.4, 0.25, 0.12, 0.8]
+receive_shadows = false
+alpha_blend = true
+additive_blend = true
+light_shaft = false
+

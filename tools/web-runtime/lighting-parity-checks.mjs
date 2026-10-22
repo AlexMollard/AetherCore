@@ -64,8 +64,9 @@ try {
         assert.ok(Number.isInteger(capture.height) && capture.height>0 && capture.height<=4096);
         const item={scene:capture.scene,status:'failed',console:[],pageErrors:[]};report.captures.push(item);
         const context=await browser.newContext();
+        let page;
         try {
-            const page=await context.newPage();page.setDefaultTimeout(20000);
+            page=await context.newPage();page.setDefaultTimeout(20000);
             page.on('console',message=>{if(message.type()==='error')item.console.push(message.text());});
             page.on('pageerror',error=>item.pageErrors.push(String(error)));
             await page.goto(`http://127.0.0.1:${server.address().port}/?reference=1&scene=${encodeURIComponent(capture.scene)}&automation=1&test=1`);
@@ -74,11 +75,28 @@ try {
             assert.equal(await page.evaluate(()=>aetherTest.version),1);
             item.adapter=await page.evaluate(()=>aetherRuntime.adapter);assert.ok(isHardwareAdapter(item.adapter),'Hardware WebGPU required');
             await page.evaluate(({width,height})=>Module._aether_web_resize(width,height),capture);
+            await page.waitForFunction(()=>aetherRuntime.status==='failed' || document.getElementById('start')?.disabled===false);
+            assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
             await page.locator('#start').click();await page.locator('#canvas').focus();
             await page.waitForFunction(()=>aetherTest.readiness().ready || aetherRuntime.status==='failed');
             assert.equal(await page.evaluate(()=>aetherRuntime.ticks || 0),0,'Manual mode must prevent uncontrolled simulation');
             const stepped=await page.evaluate(()=>aetherTest.step(10));assert.equal(stepped.ticks,10);
             const image=await page.evaluate(()=>aetherTest.capture());
+            item.frameEvidence=Object.fromEntries(['frameIndex','temporalFrameIndex','simulationTick','generation','exposureUsed','width','height','renderWidth','renderHeight'].map(key=>[key,image[key]]));
+            assert.ok(Number.isSafeInteger(image.frameIndex) && Number.isSafeInteger(image.temporalFrameIndex) && image.simulationTick===10,'Actual accepted-frame identity/tick10 receipt required; rebuild browser runtime');
+            assert.ok(Number.isFinite(image.exposureUsed) && image.exposureUsed>=0,'Finite actual GPU exposure receipt required');
+            if(capture.scene.startsWith('BrowserPost')){
+                const before=await page.evaluate(()=>aetherTest.snapshot());
+                await page.waitForTimeout(100);
+                const after=await page.evaluate(()=>aetherTest.snapshot());
+                assert.equal(after.ticks,before.ticks,'Frozen manual mode must preserve simulation tick');
+                assert.equal(after.frames,before.frames,'Frozen manual mode must not submit temporal render frames');
+                const repeated=await page.evaluate(()=>aetherTest.capture());
+                assert.equal(repeated.frameIndex,image.frameIndex,'Repeated capture must reuse the same accepted moving frame');
+                assert.equal(repeated.exposureUsed,image.exposureUsed,'Repeated capture must preserve metered exposure');
+                item.frozenEvidence={durationMs:100,ticks:after.ticks,frames:after.frames,
+                    repeatedFrameIndex:repeated.frameIndex,repeatedExposureUsed:repeated.exposureUsed};
+            }
             assert.equal(image.width,capture.width);assert.equal(image.height,capture.height);
             const pixels=Buffer.from(image.pixels);assert.equal(pixels.length,capture.width*capture.height*4);
             const stem=path.join(path.dirname(reportPath),capture.scene+'-web');
@@ -89,6 +107,13 @@ try {
             await page.waitForFunction(()=>aetherRuntime.state==='stopped' && aetherRuntime.inFlight===0);
             item.retired=await page.evaluate(()=>({state:aetherRuntime.state,inFlight:aetherRuntime.inFlight}));
             item.rgba=stem+'.rgba';item.png=stem+'.png';item.status='passed';
+        }catch(error){
+            item.error=String(error.stack || error);
+            if(page){
+                try{item.runtime=await page.evaluate(()=>typeof aetherRuntime==='undefined'?null:globalThis.aetherTest?.snapshot?.() || aetherRuntime);}
+                catch(snapshotError){item.snapshotError=String(snapshotError);}
+            }
+            throw error;
         }finally{await context.close();}
     }
     report.status='passed';

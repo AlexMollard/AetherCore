@@ -1,0 +1,54 @@
+# Custom auxiliary culling regression: the back-facing graph must not hide the receiver.
+# Fixed camera/radiance qualification; effects disabled.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.0, 0.0, 0.0]
+sun_direction = [0.0, 0.0, 1.0]
+sun_intensity = 1.0
+sky_horizon = [0.0, 0.0, 0.0]
+sky_zenith = [0.0, 0.0, 0.0]
+sky_void = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Fixed camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Receiver behind culled graph'
+mesh_renderer = true
+position = [0.0, 0.0, -4.0]
+scale = [6.0, 6.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.6, 0.6, 0.6, 1.0]
+roughness = 1.0
+receive_shadows = false
+
+[[entities]]
+name = 'Single-sided graph seen from behind'
+mesh_renderer = true
+mesh_renderer_visible = false
+position = [0.0, 0.0, -2.0]
+euler = [0.0, 180.0, 0.0]
+scale = [3.0, 3.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+asset = 'project://assets/materials/browser-graph.material.toml'
+double_sided = false

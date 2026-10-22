@@ -1,0 +1,179 @@
+{
+  "scenes": [
+    "BrowserWater",
+    "BrowserWaterOff",
+    "BrowserWaterDeep",
+    "BrowserFoliage",
+    "BrowserFoliageOff",
+    "BrowserLightShaft",
+    "BrowserLightShaftOff",
+    "BrowserPlasma",
+    "BrowserPlasmaOff",
+    "BrowserMolten",
+    "BrowserMoltenOff",
+    "BrowserContact",
+    "BrowserContactOff",
+    "BrowserBlob",
+    "BrowserBlobOff",
+    "BrowserParticlesDisplayOnly",
+    "BrowserGraph",
+    "BrowserGraphBackface",
+    "BrowserGraphBackfaceOff"
+  ],
+  "graphics": {
+    "contactShadows": true,
+    "foliageSkyLook": 1
+  },
+  "capture": {
+    "width": 64,
+    "height": 64,
+    "ticks": 10,
+    "dt": 0.016666666666666666,
+    "exposure": 1
+  },
+  "pairs": [
+    {
+      "name": "water shading",
+      "on": "BrowserWater",
+      "off": "BrowserWaterOff",
+      "region": [
+        0.32,
+        0.38,
+        0.68,
+        0.62
+      ],
+      "minDifference": 4
+    },
+    {
+      "name": "water depth tint",
+      "on": "BrowserWaterDeep",
+      "off": "BrowserWater",
+      "region": [
+        0.34,
+        0.4,
+        0.66,
+        0.62
+      ],
+      "minDifference": 2
+    },
+    {
+      "name": "foliage wind and coverage",
+      "on": "BrowserFoliage",
+      "off": "BrowserFoliageOff",
+      "region": [
+        0.43,
+        0.14,
+        0.57,
+        0.86
+      ],
+      "minDifference": 0.1
+    },
+    {
+      "name": "shaft coverage shoulders",
+      "on": "BrowserLightShaft",
+      "off": "BrowserLightShaftOff",
+      "region": [
+        0.14,
+        0.25,
+        0.19,
+        0.75
+      ],
+      "minDifference": 2,
+      "direction": "darker"
+    },
+    {
+      "name": "plasma intensity",
+      "on": "BrowserPlasma",
+      "off": "BrowserPlasmaOff",
+      "region": [
+        0.34,
+        0.34,
+        0.66,
+        0.66
+      ],
+      "minDifference": 2,
+      "direction": "brighter"
+    },
+    {
+      "name": "molten intensity",
+      "on": "BrowserMolten",
+      "off": "BrowserMoltenOff",
+      "region": [
+        0.34,
+        0.34,
+        0.66,
+        0.66
+      ],
+      "minDifference": 2,
+      "direction": "brighter"
+    },
+    {
+      "name": "contact shadow receiver",
+      "on": "BrowserContact",
+      "off": "BrowserContactOff",
+      "region": [
+        0.40625,
+        0.4375,
+        0.421875,
+        0.5625
+      ],
+      "minDifference": 2,
+      "direction": "darker"
+    },
+    {
+      "name": "actor blob receiver",
+      "on": "BrowserBlob",
+      "off": "BrowserBlobOff",
+      "region": [
+        0.546875,
+        0.5,
+        0.578125,
+        0.53125
+      ],
+      "minDifference": 1,
+      "direction": "darker"
+    },
+    {
+      "name": "custom graph backface preserves receiver",
+      "on": "BrowserGraphBackface",
+      "off": "BrowserGraphBackfaceOff",
+      "region": [
+        0.35,
+        0.35,
+        0.65,
+        0.65
+      ],
+      "minDifference": 0,
+      "maxDifference": 1,
+      "direction": "unchanged"
+    }
+  ],
+  "limits": {
+    "localLights": 128,
+    "shadowMaps": 16,
+    "shadowAtlas": [
+      4096,
+      7168
+    ],
+    "directionalResolutions": [
+      4096,
+      2048,
+      2048
+    ],
+    "pointFaceResolution": 384,
+    "spotResolution": 512,
+    "shadowAtlasColorAndDepthBytes": 234881024,
+    "blobActors": 64,
+    "darknessVolumes": 16,
+    "customShaderSlots": 128,
+    "customShaderSourceBytes": 1048576,
+    "billboardParticles": 262144,
+    "notes": [
+      "One persistent shadow atlas is shared by queued frames; per-frame uniform and bind-group ownership lasts through retirement.",
+      "Scene geometry uploads are bounded to 64 MiB; custom shaders are immutable slots with explicit size/slot validation.",
+      "Post-effect targets add resolution-dependent allocations; limits here do not claim unrestricted GPU memory or native unbounded scene parity.",
+      "These fixtures do not qualify arbitrary author-written Slang shaders, more than16 shadow maps, XR, or browser/device implementations not actually tested."
+    ],
+    "billboardDrawBatches": 8192
+  }
+}
