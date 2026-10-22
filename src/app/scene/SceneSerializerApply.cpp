@@ -984,6 +984,16 @@ namespace aether::app::scene
 				doomed.push_back(e);
 			}
 		}
+		// World::Destroy takes the subtree with it, so a snapshot entity parented under a
+		// runtime-spawned one during Play would die with it. Detach first; the reset below
+		// detaches anyway and the snapshot re-parents.
+		for (const Entity e: targets)
+		{
+			if (reg.valid(World::ToEntt(e)))
+			{
+				ecs::DetachFromParent(world, e);
+			}
+		}
 		for (const Entity e: doomed)
 		{
 			if (reg.valid(World::ToEntt(e)))
