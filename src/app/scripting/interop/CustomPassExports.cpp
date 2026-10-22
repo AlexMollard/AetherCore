@@ -14,9 +14,6 @@ using namespace aether::app::scripting::interop;
 // entirely in the project's shader + scripts. See rendering/CustomPassRegistry.hpp.
 namespace
 {
-	// Caps the per-pass buffer so a runaway script can't blow up the fullscreen shader's work.
-	constexpr int kMaxVec4 = 4096;
-
 	aether::CustomPassRegistry* Registry() noexcept
 	{
 		auto* services = ActiveContext().services;
@@ -33,7 +30,7 @@ AE_SCRIPT_API void aether_custompass_register(const char* name, const char* shad
 	{
 		return;
 	}
-	reg->registered[name] = {shader != nullptr ? shader : "", static_cast<aether::CustomPassStage>(stage)};
+	reg->Register(name, shader != nullptr ? shader : "", static_cast<aether::CustomPassStage>(stage));
 	});
 }
 
@@ -43,7 +40,7 @@ AE_SCRIPT_API void aether_custompass_unregister(const char* name)
 	{
 	if (auto* reg = Registry(); reg != nullptr && name != nullptr)
 	{
-		reg->registered.erase(name);
+		reg->Unregister(name);
 	}
 	});
 }
@@ -57,28 +54,8 @@ AE_SCRIPT_API void aether_custompass_submit(const char* name, const Vec4* data, 
 	{
 		return;
 	}
-	const auto it = reg->registered.find(name);
-	if (it == reg->registered.end())
-	{
-		return; // submitting to an unregistered pass is a no-op
-	}
-
-	aether::CustomPassDraw draw;
-	draw.shader = it->second.shader;
-	draw.stage = it->second.stage;
-	draw.params = ToGlm(params);
-	draw.color0 = ToGlm(color0);
-	draw.color1 = ToGlm(color1);
-
-	const int n = count < 0 ? 0 : (count > kMaxVec4 ? kMaxVec4 : count);
-	if (n > 0 && data != nullptr)
-	{
-		draw.data.resize(static_cast<std::size_t>(n));
-		for (int i = 0; i < n; ++i)
-		{
-			draw.data[static_cast<std::size_t>(i)] = ToGlm(data[i]);
-		}
-	}
-	reg->frame.passes.push_back(std::move(draw));
+	const std::size_t n = data != nullptr && count > 0 ? static_cast<std::size_t>(count) : 0;
+	// Submitting to an unregistered pass is a no-op.
+	reg->SubmitIndexed(name, n, [&](std::size_t i) { return ToGlm(data[i]); }, ToGlm(params), ToGlm(color0), ToGlm(color1));
 	});
 }

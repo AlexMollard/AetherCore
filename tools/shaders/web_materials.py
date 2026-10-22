@@ -122,6 +122,17 @@ def run(command, log, deadline):
             worker.close()
 
 
+def check_slang_version(slang, scratch, deadline):
+    """Run the pinned-version check shared by every Slang cook; returns the reported version."""
+    version_log = scratch/'slang-version.log'
+    run([slang, '-version'], version_log, deadline)
+    pin = json.loads((ROOT/'tools/experiments/rust-webgpu/toolchain.json').read_text())['slang']
+    version = version_log.read_text(encoding='utf-8', errors='replace').strip()
+    if pin not in version:
+        raise ValueError('WEB_SHADER_TOOLCHAIN: expected Slang '+pin+'; got '+version)
+    return version
+
+
 def cook(project, material, output_dir, compiler, slang, timeout=120):
     project, material, output_dir = project.resolve(), material.resolve(), output_dir.resolve()
     if not material.is_relative_to(project) or not material.is_file() or material.stat().st_size > 256*1024:
@@ -138,12 +149,7 @@ def cook(project, material, output_dir, compiler, slang, timeout=120):
     deadline = time.monotonic()+timeout
     with tempfile.TemporaryDirectory(prefix='.web-shader-', dir=output.parent) as directory:
         scratch = Path(directory)
-        version_log = scratch/'slang-version.log'
-        run([slang, '-version'], version_log, deadline)
-        pin = json.loads((ROOT/'tools/experiments/rust-webgpu/toolchain.json').read_text())['slang']
-        version = version_log.read_text(encoding='utf-8', errors='replace').strip()
-        if pin not in version:
-            raise ValueError('WEB_SHADER_TOOLCHAIN: expected Slang '+pin+'; got '+version)
+        version = check_slang_version(slang, scratch, deadline)
         header = scratch/'aether-web-material.slangh'
         dependencies = [material]
         if 'graph' in source:
@@ -192,6 +198,100 @@ def cook(project, material, output_dir, compiler, slang, timeout=120):
         staged.write_bytes(encoded)
         # Commit only a complete successfully compiled container. The previous one
         # remains intact on graph/compiler/Slang failures.
+        os.replace(staged, output)
+        output.with_suffix(output.suffix+'.json').write_text(json.dumps(metadata, indent=2)+'\n', encoding='utf-8')
+        return dict(**metadata, output=str(output))
+
+
+CUSTOM_PASS_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*[<"](?:include/)?CustomPass\.slangh[>"]', re.M)
+LOCAL_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*"([^"\n]+)"', re.M)
+MAX_CUSTOM_PASS_SOURCE_BYTES = 256*1024
+
+
+def strip_comments(source):
+    return re.sub(r'/\*.*?\*/|//[^\n]*', '', source, flags=re.S)
+
+
+def includes_custom_pass_contract(source):
+    """True when the source includes include/CustomPass.slangh outside comments."""
+    return CUSTOM_PASS_INCLUDE.search(strip_comments(source)) is not None
+
+
+def custom_pass_stem(project, source):
+    """Shader stem: source path relative to assets/shaders without the .slang suffix."""
+    return source.relative_to(project/'assets/shaders').with_suffix('').as_posix()
+
+
+def validate_custom_pass_bindings(wgsl, name='shader'):
+    """A portable custom pass owns exactly group 0 binding 0 (uniform) and binding 1 (read-only storage)."""
+    allowed = {(0, 0): 'var<uniform>', (0, 1): 'var<storage, read>'}
+    for declaration in re.findall(r'(?:@(?:binding|group)\(\d+\)\s*){2}var\s*(?:<[^>]*>)?[^;]*;|var\s*<\s*push_constant\s*>[^;]*;', wgsl):
+        group, binding = re.search(r'@group\((\d+)\)', declaration), re.search(r'@binding\((\d+)\)', declaration)
+        kind = re.match(r'(?:@(?:binding|group)\(\d+\)\s*){2}(var\s*(?:<[^>]*>)?)', declaration)
+        kind = re.sub(r'\s+', ' ', kind.group(1)).replace('var <', 'var<') if kind else 'var<push_constant>'
+        if not group or not binding or allowed.get((int(group.group(1)), int(binding.group(1)))) != kind:
+            raise ValueError('WEB_CUSTOM_PASS_BINDINGS: '+name+' declares a resource outside the portable custom-pass ABI ('+
+                             declaration.strip()[:120]+'); only group 0 binding 0 (uniform frame record) and binding 1 (read-only float4 data) '
+                             'exist - read inputs through the CustomPass* accessors and remove push constants, DevicePtr, textures and samplers')
+
+
+def local_includes(source, text, project, seen=None):
+    """Project-local files reached through quoted includes, recursively and bounded."""
+    seen = set() if seen is None else seen
+    for name in LOCAL_INCLUDE.findall(strip_comments(text)):
+        path = (source.parent/name).resolve()
+        if path.is_file() and path.is_relative_to(project) and path not in seen and len(seen) < 64 and path.stat().st_size <= MAX_CUSTOM_PASS_SOURCE_BYTES:
+            seen.add(path)
+            local_includes(path, path.read_text(encoding='utf-8-sig'), project, seen)
+    return seen
+
+
+def cook_custom_pass(project, source, output_dir, slang, timeout=120):
+    """Cook one portable project custom-pass shader (assets/shaders/<stem>.slang) to <stem>.wshader."""
+    project, source, output_dir = project.resolve(), source.resolve(), output_dir.resolve()
+    shaders = project/'assets/shaders'
+    if not source.is_relative_to(shaders) or source.suffix != '.slang' or not source.is_file() or source.stat().st_size > MAX_CUSTOM_PASS_SOURCE_BYTES:
+        raise ValueError('WEB_CUSTOM_PASS_SOURCE: custom-pass shader must be a .slang file under assets/shaders of the selected project, at most 256 KiB')
+    if not slang.is_file():
+        raise ValueError('WEB_SHADER_TOOLCHAIN: install the pinned Slang compiler explicitly')
+    if not 1 <= timeout <= 600:
+        raise ValueError('WEB_SHADER_TIMEOUT: timeout must be 1..600 seconds')
+    text = source.read_text(encoding='utf-8-sig')
+    stem = custom_pass_stem(project, source)
+    relative = source.relative_to(project).as_posix()
+    if not includes_custom_pass_contract(text):
+        raise ValueError('WEB_CUSTOM_PASS_PORTABILITY: '+relative+' does not include the portable custom-pass contract and stays native-only until ported; '
+                         'add #include "include/CustomPass.slangh" and read engine inputs through CustomPassViewProj/InvViewProj/ElapsedTime/ViewportSize/'
+                         'Params/Color0/Color1/DataCount/Data(i) - raw [[vk::push_constant]] blocks and DevicePtr are native-only')
+    output = output_dir/(stem+'.wshader')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic()+timeout
+    with tempfile.TemporaryDirectory(prefix='.web-shader-', dir=output.parent) as directory:
+        scratch = Path(directory)
+        version = check_slang_version(slang, scratch, deadline)
+        dependencies = [source, *sorted(local_includes(source, text, project)), *sorted((ROOT/'src/shaders/include').rglob('*.slangh'))]
+        input_hash = hashlib.sha256()
+        hashes = []
+        for path in sorted(set(dependencies)):
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            name = path.relative_to(project).as_posix() if path.is_relative_to(project) else 'engine/'+path.relative_to(ROOT).as_posix()
+            input_hash.update(name.encode('utf-8')+b'\0'+bytes.fromhex(digest))
+            hashes.append(dict(path=name, sha256=digest))
+        input_hash.update(version.encode('utf-8'))
+        wgsl = scratch/'custom-pass.wgsl'
+        run([slang, source, '-target', 'wgsl', '-D', 'AE_WEB_CUSTOM_PASS=1', '-entry', 'vertexMain', '-entry', 'fragmentMain',
+             '-I', ROOT/'src/shaders', '-o', wgsl], scratch/'slang.log', deadline)
+        text_wgsl = wgsl.read_text(encoding='utf-8')
+        validate_custom_pass_bindings(text_wgsl, relative)
+        validate_negated_vector_sums(text_wgsl, relative)
+        encoded = encode_shader(wgsl.read_bytes(), input_hash.digest())
+        metadata = dict(schemaVersion=1, abi=1, status='passed', kind='custom-pass', shader=stem, source=relative,
+                        sourceSha256=input_hash.hexdigest(), wgslSha256=hashlib.sha256(wgsl.read_bytes()).hexdigest(),
+                        containerSha256=hashlib.sha256(encoded).hexdigest(), bytes=len(encoded), slang=version, dependencies=hashes,
+                        qualification='Compile-only custom-pass cook; GPU execution and native visual parity are separate required checks')
+        staged = scratch/'shader.wshader'
+        staged.write_bytes(encoded)
+        # Commit only a complete container; the previous artifact survives any failure above.
         os.replace(staged, output)
         output.with_suffix(output.suffix+'.json').write_text(json.dumps(metadata, indent=2)+'\n', encoding='utf-8')
         return dict(**metadata, output=str(output))

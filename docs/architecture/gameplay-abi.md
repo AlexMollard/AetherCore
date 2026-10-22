@@ -77,7 +77,7 @@ The gameplay library must be named `aether_gameplay` with crate-type `cdylib`, a
 
 Safe code receives copied values and opaque generation-bearing handles, not ECS pointers or mutable references. A callback-scoped Context cannot escape into Script state or another thread. The host rejects expired sessions, wrong worlds/threads, stale IDs and reentrant access. These checks protect safe SDK use; arbitrary unsafe native modules are not sandboxed.
 
-The base v1 ABI layout remains unchanged. Optional `GameplayServices.h` is negotiated separately by `aether_gameplay_bind_services`. It supplies input, sprite color, Box2D velocity, find/create/deferred-destroy entity, deferred scene requests, prefab instantiation, audio playback, UI text and saves. Missing services return `UNSUPPORTED`. Save keys are restricted filenames under the user configuration directory's `rust-saves/project-<hex UTF-8 namespace>` folder; the namespace uses the source project's folder name or the packaged executable folder name. Renaming that folder selects a different save namespace. Network/editor-tool API parity is not advertised.
+The base v1 ABI layout remains unchanged. Optional `GameplayServices.h` is negotiated separately by `aether_gameplay_bind_services`. It supplies input, sprite color, Box2D velocity, find/create/deferred-destroy entity, deferred scene requests, prefab instantiation, audio playback, UI text, saves and project custom render passes (see Custom pass services below). Missing services return `UNSUPPORTED`. Save keys are restricted filenames under the user configuration directory's `rust-saves/project-<hex UTF-8 namespace>` folder; the namespace uses the source project's folder name or the packaged executable folder name. Renaming that folder selects a different save namespace. Network/editor-tool API parity is not advertised.
 
 `RustGameplayHost` checks the module table and owns all native instances. Failed callbacks disable that instance while siblings continue. Unwind panics are caught inside Rust; abort panics/faults terminate the process and are verified in bounded child probes. Destruction and callbacks complete before the library unloads. Application teardown unloads Rust before removing scene/physics systems, including partial startup failures.
 
@@ -86,6 +86,24 @@ The base v1 ABI layout remains unchanged. Optional `GameplayServices.h` is negot
 `project.gameplay_status` / `gameplay_status` reports module availability and the schema-v1 build/load/runtime diagnostics. Missing tools, compilation errors, failed staging and invalid ABI are explicit failures. Different Rust source projects open in separate Editor processes through the Launcher. Publishing validates registration and packages only the native module plus normal engine assets/runtime dependencies; Cargo, SDK source and managed assemblies are excluded from Rust game content. A relocated package loads from its executable directory without Cargo/rustc or CoreCLR initialization.
 
 Task 5 evidence is under `logs/task5/`: Windows live movement/input/sprite/Box2D/UI/save/property restoration, failing-build recovery, native provider errors/panics, Rust publishing and relocated execution; C# lifecycle/RPC/ownership/hot reload/publishing were repeated. Linux is unqualified on this host because no Linux Rust/C++ development toolchain is installed. This task does not implement browser export.
+
+### Custom pass services
+
+Operations 14-16 expose project custom render passes (C# `CustomPass`, Rust `Context::register_custom_pass` / `unregister_custom_pass` / `submit_custom_pass`) through the services table. Both the native Rust host and the browser host execute them with `aether::scripting::ExecuteCustomPassOperation` (`GameplayCustomPass.hpp`) against the game-thread `CustomPassRegistry`, so a pass behaves identically on every backend.
+
+| Op | Name | `text` | `text2` | `integer` |
+|---|---|---|---|---|
+| 14 | `REGISTER_CUSTOM_PASS` | pass name | project shader stem | stage: 0 BehindScene, 1 OverScene, 2 EmissiveOverLight |
+| 15 | `UNREGISTER_CUSTOM_PASS` | pass name | unused | unused |
+| 16 | `SUBMIT_CUSTOM_PASS` | pass name | raw payload (below) | unused |
+
+- Registering an existing name replaces it; unregistering an unknown name is `OK`. A pass must be re-submitted every frame it should draw.
+- The submit payload is little-endian `float32`: three header float4 (`params`, `color0`, `color1`) followed by N data float4, so the byte length is `16 * (3 + N)`. A length that is not a multiple of 16 or holds fewer than three float4 is `INVALID_ARGUMENT`. At most 4096 data float4 are used and the rest are dropped, matching C#. Submitting to an unregistered name is a successful no-op. A header-only payload (N = 0) still draws.
+- `text2` of op 16 is binary, not UTF-8. Hosts skip the UTF-8 check of `text2` for op 16 only; `text` is always validated, and `text2` of op 14 is validated as UTF-8. The Rust SDK sends a zero-capacity result buffer for submit.
+- Capabilities for the three bits are advertised only when the host has the registry (native: the `CustomPassRegistry` service; browser: always, advertised by `WebApplication`).
+- Native: the registered stem resolves to `shaders://<stem>.spv`. No shader-existence check happens at registration; the renderer logs a missing shader, as for C#.
+- Browser: the stem resolves to `project://assets/shaders/<stem>.wshader`, the WGSL artifact the project cook writes from the `.slang` source (compiled with `AE_WEB_CUSTOM_PASS=1`, so the shader must include `include/CustomPass.slangh` to be portable). Registration loads and uploads it, and a missing or invalid shader fails the register call with a `WEB_CUSTOM_PASS_SHADER` diagnostic. The production publisher profile `webgpu-2d-v1` rejects every project `.slang` asset (`WEB_SHADER_UNSUPPORTED`), so registration fails in such packages.
+- Browser budgets, enforced before GPU submission with an explicit diagnostic and no partial submission: at most 4096 float4 per submission, 64 submissions per frame, 65536 data float4 per frame; params, colors and data must be finite, and the stage must be 0..2. The browser host keeps only the submissions of the last fixed tick of a render frame. The Rust SDK does not reject non-finite values; native shaders see them verbatim.
 
 ## Declaration generation and compatibility checks
 

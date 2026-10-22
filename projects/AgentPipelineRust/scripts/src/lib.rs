@@ -101,8 +101,10 @@ impl Script for Player {
 }
 mod model_probe;
 pub use model_probe::ModelProbe;
+mod custom_pass;
+pub use custom_pass::CustomPassProbe;
 #[cfg(not(feature = "wrong-abi"))]
-aethercore::export_gameplay!(Player, Probe, ReferencePlayer, ReferenceResult, ModelProbe);
+aethercore::export_gameplay!(Player, Probe, ReferencePlayer, ReferenceResult, ModelProbe, CustomPassProbe);
 #[cfg(feature = "wrong-abi")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn aether_gameplay_query(

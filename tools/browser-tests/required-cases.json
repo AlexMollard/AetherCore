@@ -2,6 +2,8 @@
   "legacyCaseNames": [
     "invalid-particle-rate",
     "invalid-particle-capacity",
+    "invalid-custom-pass-shader",
+    "invalid-custom-pass-budget",
     "effects-object-lights",
     "effects-baked",
     "effects-gem",

@@ -224,7 +224,9 @@ try {
 			    'invalid-atlas-version' : 'BrowserBadAtlas',
 			    'invalid-audio-component' : 'BrowserBadAudio',
 			    'invalid-particle-rate' : 'BrowserBadParticleRate',
-			    'invalid-particle-capacity' : 'BrowserBadParticleCapacity'
+			    'invalid-particle-capacity' : 'BrowserBadParticleCapacity',
+			    'invalid-custom-pass-shader' : 'BrowserBadCustomPassShader',
+			    'invalid-custom-pass-budget' : 'BrowserBadCustomPassBudget'
 			})[name];
 	    if (name !== 'responsive' && name !== 'browser-features' && name !== 'browser-gamepad' && name !== 'browser-ui-order') {
 		query += (query ? '&' : '?') + 'test=1';
@@ -526,6 +528,19 @@ try {
 		item.status = 'passed';
 		continue;
 	    }
+	    if (name === 'invalid-custom-pass-budget') {
+		// Scripts only submit after a fixed tick, so earlier frames may legitimately render with no custom draws.
+		await page.waitForFunction(() => aetherRuntime.scene === 'BrowserBadCustomPassBudget');
+		await page.locator('#start').click();
+		await page.locator('#canvas').focus();
+		await page.waitForFunction(() => aetherRuntime.status === 'failed' && (aetherRuntime.inFlight || 0) === 0);
+		const state = await page.evaluate(() => aetherRuntime);
+		assert.equal(state.customPassDraws || 0, 0, 'Over-budget custom passes never reach GPU submission');
+		assert.ok(state.diagnostics.some(d => /WEB_CUSTOM_PASS_BUDGET/.test(d.message)), JSON.stringify(state.diagnostics));
+		item.scope = 'Seventeen full-size custom-pass submissions exceed the per-frame float4 budget and fail with an explicit diagnostic before GPU submission';
+		item.status = 'passed';
+		continue;
+	    }
 	    if (name.startsWith('invalid-')) {
 		await page.waitForFunction(() => aetherRuntime.status === 'failed' && aetherRuntime.gameplayStopped === true);
 		const state = await page.evaluate(() => aetherRuntime);
@@ -533,6 +548,11 @@ try {
 		assert.ok(state.diagnostics.length > 0);
 		if (name === 'invalid-font')
 		    assert.ok(state.diagnostics.some(d => /font/i.test(d.message)));
+		if (name === 'invalid-custom-pass-shader') {
+		    assert.equal(state.frames || 0, 0, 'A missing custom-pass shader must fail before GPU submission');
+		    assert.ok(state.diagnostics.some(d => /WEB_CUSTOM_PASS_SHADER/.test(d.message) && /missing_custom_pass_shader/.test(d.message)), JSON.stringify(state.diagnostics));
+		    item.scope = 'Registering an uncooked custom-pass shader fails explicitly before simulation and GPU submission';
+		}
 		if(name.startsWith('invalid-particle-')) {
 		    assert.equal(state.frames||0,0,'Invalid emitter must fail before GPU submission');
 		    assert.equal(state.inFlight||0,0,'Invalid emitter must own no submitted frame');

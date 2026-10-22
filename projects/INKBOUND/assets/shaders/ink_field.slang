@@ -4,11 +4,11 @@
 // pixel-snapped to match the game's pixel-art, with a subtle animated wetness. Unanchored ("ghost")
 // ink shades red.
 //
-// Uses the engine's generic CustomPass push contract: `data` is a raw float4 buffer this shader
-// reinterprets as InkSegments (2 float4 each), `count` is the float4 element count, color0/color1
-// are the ink body/rim. The engine knows nothing about "ink"; the packing lives in AetherInk.cs.
-#include "include/DevicePointer.slangh"
-#include "include/FrameConstants.slangh"
+// Uses the engine's portable CustomPass contract (include/CustomPass.slangh): the raw float4 data
+// buffer is read here as InkSegments (2 float4 each), CustomPassDataCount() is the float4 element
+// count, color0/color1 are the ink body/rim. The engine knows nothing about "ink"; the packing lives
+// in AetherInk.cs.
+#include "include/CustomPass.slangh"
 
 struct InkSegment
 {
@@ -20,19 +20,20 @@ struct InkSegment
     float  ghost;
 };
 
-struct CustomPassPush
+// Segment i is data[2*i] = (a.xy, b.xy) and data[2*i+1] = (width, alpha, glow, ghost).
+InkSegment LoadSegment(uint i)
 {
-    DevicePtr<FrameConstantsData> frameConstants;
-    DevicePtr<InkSegment> data; // the float4 buffer, read as 32-byte InkSegments (2 float4 each)
-    uint   count;               // number of float4 elements (segmentCount = count / 2)
-    uint   pad;
-    float2 viewportSize;
-    float4 params;
-    float4 color0;              // ink body
-    float4 color1;              // ink rim
-};
-
-[[vk::push_constant]] CustomPassPush pc;
+    const float4 p = CustomPassData(2u * i);
+    const float4 q = CustomPassData(2u * i + 1u);
+    InkSegment s;
+    s.a = p.xy;
+    s.b = p.zw;
+    s.width = q.x;
+    s.alpha = q.y;
+    s.glow = q.z;
+    s.ghost = q.w;
+    return s;
+}
 
 struct VSOutput
 {
@@ -52,9 +53,9 @@ VSOutput vertexMain(uint vertexId : SV_VertexID)
     // Bound the quad to the ink's world-space AABB (params = world min.xy, max.xy) so the fullscreen
     // SDF loop only runs over pixels near actual ink, not the whole screen. Degenerate (collapsed)
     // when there is no ink, so nothing is rasterised.
-    FrameConstantsData* frame = pc.frameConstants.Ptr();
-    const float2 mn = pc.params.xy;
-    const float2 mx = pc.params.zw;
+    const float4 params = CustomPassParams();
+    const float2 mn = params.xy;
+    const float2 mx = params.zw;
     VSOutput o;
     if (mx.x <= mn.x || mx.y <= mn.y)
     {
@@ -63,7 +64,7 @@ VSOutput vertexMain(uint vertexId : SV_VertexID)
         return o;
     }
     const float2 world = lerp(mn, mx, c);
-    o.position = mul(frame->viewProj, float4(world, 0.0, 1.0));
+    o.position = mul(CustomPassViewProj(), float4(world, 0.0, 1.0));
     o.uv = c;
     return o;
 }
@@ -108,12 +109,12 @@ float sdSegment(float2 p, float2 a, float2 b)
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
-    FrameConstantsData* frame = pc.frameConstants.Ptr();
+    const float2 viewportSize = CustomPassViewportSize();
 
     // Reconstruct the world-space point under this fragment (2D ortho: world.xy depends only on
     // the screen ndc, not on the reconstruction depth).
-    const float2 ndc = input.position.xy / max(pc.viewportSize, float2(1.0, 1.0)) * 2.0 - 1.0;
-    const float4 wp = mul(frame->invViewProj, float4(ndc, 0.0, 1.0));
+    const float2 ndc = input.position.xy / max(viewportSize, float2(1.0, 1.0)) * 2.0 - 1.0;
+    const float4 wp = mul(CustomPassInvViewProj(), float4(ndc, 0.0, 1.0));
     const float2 world = wp.xy / wp.w;
 
     // Pixel-art: snap the sample to the game's ART grid (16 px/unit, same as the sprites/tiles) and
@@ -123,13 +124,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float P = 1.0 / 16.0;
     const float2 wq = (floor(world / P) + 0.5) * P;
 
-    InkSegment* segs = pc.data.Ptr();
-    const uint segmentCount = pc.count / 2u; // 2 float4 per InkSegment
+    const uint segmentCount = CustomPassDataCount() / 2u; // 2 float4 per InkSegment
     float best = 1e9;
     float bAlpha = 0.0, bGlow = 0.0, bGhost = 0.0;
     for (uint i = 0u; i < segmentCount; ++i)
     {
-        const InkSegment s = segs[i];
+        const InkSegment s = LoadSegment(i);
         const float d = sdSegment(wq, s.a, s.b) - s.width;
         if (d < best)
         {
@@ -153,7 +153,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         discard;
     }
 
-    const float time = frame->elapsedTime;
+    const float time = CustomPassElapsedTime();
 
     // Hard pixel coverage: fully opaque inside, nothing past the surface (crisp blocks, no AA).
     const float inkMask = best < 0.0 ? 1.0 : 0.0;
@@ -166,8 +166,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // the anchor guide: the cursor's verdict and the gap it has to close. Guide marks are thin, fully
     // emissive line work - they are UI wearing the ink's clothes, so they read as the game telling you
     // something rather than as more substance in the world.
-    float3 body = pc.color0.rgb;
-    float3 rim = pc.color1.rgb;
+    float3 body = CustomPassColor0().rgb;
+    float3 rim = CustomPassColor1().rgb;
     if (kind == 1)
     {
         body = float3(0.30, 0.04, 0.05);

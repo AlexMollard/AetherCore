@@ -85,6 +85,7 @@ add_custom_command(OUTPUT "${_rust_library}"
         "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/Cargo.lock" "${CMAKE_SOURCE_DIR}/tools/web-runtime/gameplay/src/lib.rs"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/reference.rs"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/model_probe.rs"
+        "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/custom_pass.rs"
         "${CMAKE_SOURCE_DIR}/projects/EmberRun/scripts/src/game.rs"
     VERBATIM)
 endif()

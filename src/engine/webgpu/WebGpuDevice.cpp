@@ -4,6 +4,7 @@
 #include "WebLight2DRenderer.hpp"
 #include "WebPostRenderer.hpp"
 #include "WebBillboardRenderer.hpp"
+#include "WebCustomPassRenderer.hpp"
 
 #include <array>
 #include <cstring>
@@ -66,6 +67,7 @@ namespace aether::webgpu
 		WebLight2DRenderer lights2D;
 		WebPostRenderer post;
 		WebBillboardRenderer billboards;
+		WebCustomPassRenderer customPasses;
 		unsigned width = 0, height = 0;
 		bool released = false;
 		unsigned callbacks = 0;
@@ -92,6 +94,7 @@ namespace aether::webgpu
 				lights2D.Shutdown();
 				post.Shutdown();
 				billboards.Shutdown();
+				customPasses.Shutdown();
 				for (auto texture: textures)
 				{
 					if (texture)
@@ -230,6 +233,10 @@ namespace aether::webgpu
 			{
 				Fail("WEBGPU_BILLBOARD_SHADER", Text(billboards.error.c_str()));
 			}
+			if (!customPasses.Initialize(device))
+			{
+				Fail("WEBGPU_CUSTOM_PASS_SHADER", Text(customPasses.error.c_str()));
+			}
 			WGPUSamplerDescriptor sample = WGPU_SAMPLER_DESCRIPTOR_INIT;
 			sample.magFilter = WGPUFilterMode_Linear;
 			sample.minFilter = WGPUFilterMode_Linear;
@@ -285,6 +292,7 @@ namespace aether::webgpu
 			std::unique_ptr<WebLight2DFrame> lights2D;
 			std::unique_ptr<WebPostFrame> post;
 			std::unique_ptr<WebBillboardFrame> billboards;
+			std::unique_ptr<WebCustomPassFrame> customPasses;
 			unsigned width, height, row;
 			unsigned renderWidth = 0, renderHeight = 0;
 			std::uint64_t frameIndex = 0, temporalFrameIndex = 0, simulationTick = 0, generation = 0;
@@ -295,6 +303,7 @@ namespace aether::webgpu
 			{
 				post.reset();
 				billboards.reset();
+				customPasses.reset();
 				meshes.reset();
 				lights2D.reset();
 				hdr.reset();
@@ -465,6 +474,11 @@ namespace aether::webgpu
 		return m_impl->meshes.error;
 	}
 
+	const std::string& WebGpuDevice::CustomPassError() const
+	{
+		return m_impl->customPasses.error;
+	}
+
 	bool WebGpuDevice::UploadShader(std::uint32_t slot, std::string_view wgsl)
 	{
 		if (State() != gpu::RenderState::Ready)
@@ -473,6 +487,16 @@ namespace aether::webgpu
 			return false;
 		}
 		return m_impl->meshes.UploadShader(m_impl->device, slot, wgsl);
+	}
+
+	bool WebGpuDevice::UploadCustomPassShader(std::string_view stem, std::string_view wgsl)
+	{
+		if (State() != gpu::RenderState::Ready)
+		{
+			m_impl->customPasses.error = "WEB_CUSTOM_PASS_SHADER: custom pass shader upload requires a ready WebGPU device";
+			return false;
+		}
+		return m_impl->customPasses.UploadShader(m_impl->device, stem, wgsl);
 	}
 
 	bool WebGpuDevice::UploadTexture(unsigned slot, unsigned width, unsigned height, std::span<const std::uint8_t> rgba, bool srgb, bool mipmapped)
@@ -606,6 +630,12 @@ namespace aether::webgpu
 			self.Fail("WEBGPU_BILLBOARDS", Text(billboardPlan.error().c_str()));
 			return false;
 		}
+		const auto customPlan = self.customPasses.Prepare(packet);
+		if (!customPlan)
+		{
+			self.Fail("WEBGPU_CUSTOM_PASS", Text(customPlan.error().c_str()));
+			return false;
+		}
 		std::optional<gpu::HdrPlan> hdrPlan;
 		std::optional<gpu::PostEffectsPlan> postPlan;
 		unsigned sceneWidth = self.width, sceneHeight = self.height;
@@ -663,6 +693,7 @@ namespace aether::webgpu
 		        plan->batches.size(),
 		        plan->instances.size(),
 		        packet.render3D.meshes.size());
+		EM_ASM({ aetherRuntime.customPassDraws = $0; }, packet.renderCustom.passes.size());
 		auto* frame = new Impl::Frame{.owner = &self, .width = self.width, .height = self.height, .row = ((self.width * 4 + 255) / 256) * 256};
 		frame->frameIndex = packet.frameIndex;
 		frame->temporalFrameIndex = packet.temporalFrameIndex == UINT64_MAX ? packet.frameIndex : packet.temporalFrameIndex;
@@ -783,16 +814,31 @@ namespace aether::webgpu
 			wgpuRenderPassEncoderDraw(pass, 6, batch.count, 0, batch.first);
 		}
 		};
+		const bool customBehind = std::any_of(packet.renderCustom.passes.begin(),
+		        packet.renderCustom.passes.end(),
+		        [](const CustomPassDraw& draw) { return draw.stage == CustomPassStage::BehindScene2D; });
+		const bool customClears = customBehind && !hdrPlan && packet.render3D.meshes.empty();
+		self.customPasses.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, CustomPassStage::BehindScene2D, hdrPlan.has_value(), customClears, frame->customPasses);
+		if (customClears)
+		{
+			color.loadOp = WGPULoadOp_Load;
+		}
 		auto pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
 		drawSprites(pass, false);
 		wgpuRenderPassEncoderEnd(pass);
 		wgpuRenderPassEncoderRelease(pass);
+		self.customPasses.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, CustomPassStage::OverScene2D, hdrPlan.has_value(), false, frame->customPasses);
+		if (!frame->hdr)
+		{
+			self.customPasses.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, CustomPassStage::EmissiveOverLight2D, false, false, frame->customPasses);
+		}
 		if (frame->hdr)
 		{
 			if (light2DActive)
 			{
 				self.lights2D.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, self.textures, frame->lights2D);
 			}
+			self.customPasses.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, CustomPassStage::EmissiveOverLight2D, true, false, frame->customPasses);
 			self.post.EncodeDisplay(self.device, self.queue, encoder, sceneView, view, self.width, self.height, packet, *frame->post,
 			        frame->meshes ? frame->meshes->directional : WebShadowInputs{},
 			        [&](WGPUTextureView displayTarget, unsigned displayWidth, unsigned displayHeight)

@@ -1,6 +1,8 @@
 #include "BrowserManaged.hpp"
 
+#include <algorithm>
 #include <cstring>
+#include <vector>
 #include <emscripten.h>
 #include "WebApplication.hpp"
 #include "scripting/CSharpGameplayHost.hpp"
@@ -239,6 +241,42 @@ extern "C"
 		{
 			s_world->Emplace<aether::CollisionEvents2DComponent>(aether::Entity{id});
 		}
+	}
+	struct Vec4 { float x, y, z, w; };
+	void aether_custompass_register(const char* name, const char* shader, int stage)
+	{
+		if (name == nullptr)
+		{
+			return;
+		}
+		AetherGameplayPropertyValue value{};
+		Require(Invoke({.operation = AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, .integer = stage, .text = View(name), .text2 = View(shader)}, value));
+	}
+	void aether_custompass_unregister(const char* name)
+	{
+		if (name == nullptr)
+		{
+			return;
+		}
+		AetherGameplayPropertyValue value{};
+		Require(Invoke({.operation = AE_GAMEPLAY_SERVICE_UNREGISTER_CUSTOM_PASS, .text = View(name)}, value));
+	}
+	void aether_custompass_submit(const char* name, const Vec4* data, int count, Vec4 params, Vec4 color0, Vec4 color1)
+	{
+		if (name == nullptr)
+		{
+			return;
+		}
+		// Same clamp as the native export: no data pointer or a non-positive count submits only the header.
+		const std::size_t elements = data != nullptr && count > 0 ? std::min<std::size_t>(static_cast<std::size_t>(count), AE_GAMEPLAY_CUSTOM_PASS_MAX_VEC4) : 0;
+		std::vector<Vec4> payload;
+		payload.reserve(AE_GAMEPLAY_CUSTOM_PASS_HEADER_VEC4 + elements);
+		payload.push_back(params);
+		payload.push_back(color0);
+		payload.push_back(color1);
+		payload.insert(payload.end(), data, data + elements);
+		AetherGameplayPropertyValue value{};
+		Require(Invoke({.operation = AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, .text = View(name), .text2 = {reinterpret_cast<const char*>(payload.data()), static_cast<std::uint32_t>(payload.size() * sizeof(Vec4))}}, value));
 	}
 	int aether_physics2d_event_count(std::uint32_t id, int kind)
 	{

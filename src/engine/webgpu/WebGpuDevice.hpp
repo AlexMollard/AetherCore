@@ -30,6 +30,8 @@ namespace aether::webgpu
 		[[nodiscard]] bool UploadMesh(std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices);
 		[[nodiscard]] bool UploadShader(std::uint32_t slot, std::string_view wgsl);
 		[[nodiscard]] const std::string& MeshUploadError() const;
+		[[nodiscard]] bool UploadCustomPassShader(std::string_view stem, std::string_view wgsl);
+		[[nodiscard]] const std::string& CustomPassError() const;
 		void Resize(std::uint32_t width, std::uint32_t height);
 		void Stop();
 #if AE_WEB_TEST_BRIDGE

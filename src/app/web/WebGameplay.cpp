@@ -5,6 +5,8 @@
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include "scripting/GameplayAbiValidation.hpp"
+#include "scripting/GameplayCustomPass.hpp"
+#include "gpu/WebMaterialShader.hpp"
 #include "physics2d/Physics2DSystem.hpp"
 #include "io/FileSystem.hpp"
 #include "ui/UiComponents.hpp"
@@ -24,6 +26,40 @@ namespace aether::app::web
 		std::string Text(AetherGameplayUtf8 value)
 		{
 			return value.length ? std::string(value.data, value.length) : std::string{};
+		}
+
+		void ReportCustomPassFailure(const std::string& message)
+		{
+			EM_ASM(
+			        {
+				        aetherRuntime.status = 'failed';
+				        aetherRuntime.diagnostics.push({code : 'WEB_CUSTOM_PASS_SHADER', message : UTF8ToString($0)});
+			        },
+			        message.c_str());
+		}
+
+		// Same relative-path rules as WebModels::ResolveShader, applied to a bare shader stem.
+		bool ValidCustomPassStem(std::string_view stem)
+		{
+			if (stem.empty() || stem.size() > 128 || stem.find('\\') != std::string_view::npos || stem.find(':') != std::string_view::npos || stem.find('\0') != std::string_view::npos)
+			{
+				return false;
+			}
+			for (std::size_t start = 0; start <= stem.size();)
+			{
+				const auto end = stem.find('/', start);
+				const auto segment = stem.substr(start, end == std::string_view::npos ? end : end - start);
+				if (segment.empty() || segment == "." || segment == "..")
+				{
+					return false;
+				}
+				if (end == std::string_view::npos)
+				{
+					break;
+				}
+				start = end + 1;
+			}
+			return true;
 		}
 	} // namespace
 
@@ -80,6 +116,8 @@ namespace aether::app::web
 		}
 		m_host.Clear(++m_generation);
 		m_instances.clear();
+		m_custom_passes.registered.clear();
+		m_custom_passes.frame.passes.clear();
 		AE_TRY(records, m_scene->Load(name));
 		m_manual_warm_frames = 0;
 #if defined(AE_WEB_MANAGED)
@@ -189,6 +227,8 @@ namespace aether::app::web
 					aether_browser_test_panic();
 				}
 #endif
+				// Submissions always reflect the last tick: re-submitted every tick, never accumulated.
+				m_custom_passes.frame.passes.clear();
 				for (const auto& instance: m_instances)
 				{
 					if (m_world.Has<DisabledComponent>(instance.entity) || ecs::HasDisabledAncestor(m_world, instance.entity))
@@ -288,6 +328,7 @@ namespace aether::app::web
 		}
 #endif
 		AE_TRY_VOID(m_scene->Extract(packet, width, height, m_ticks / 60.0f));
+		packet.renderCustom = m_custom_passes.frame;
 		const bool readbackRequested = capture;
 		const bool accepted = m_graphics.Draw(packet, capture);
 		if (accepted)
@@ -349,7 +390,9 @@ namespace aether::app::web
 
 	AetherGameplayStatus WebGameplay::Invoke(const AetherGameplayServiceRequest& request, AetherGameplayPropertyValue& value, AetherGameplayUtf8Buffer buffer)
 	{
-		if (!aether::scripting::IsGameplayUtf8(request.text) || !aether::scripting::IsGameplayUtf8(request.text2))
+		const bool customSubmit = request.operation == AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS;
+		// Submit payloads are raw float32 bytes, not text.
+		if (!aether::scripting::IsGameplayUtf8(request.text) || (!customSubmit && !aether::scripting::IsGameplayUtf8(request.text2)))
 		{
 			return AE_GAMEPLAY_INVALID_ARGUMENT;
 		}
@@ -373,6 +416,41 @@ namespace aether::app::web
 			{
 				return status;
 			}
+		}
+		if (aether::scripting::IsCustomPassOperation(request.operation))
+		{
+			if (request.operation == AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS && request.text2.data && request.text2.length)
+			{
+				const std::string stem(request.text2.data, request.text2.length);
+				if (!m_custom_shaders.contains(stem))
+				{
+					if (!ValidCustomPassStem(stem))
+					{
+						ReportCustomPassFailure("WEB_CUSTOM_PASS_SHADER: invalid shader stem: " + stem);
+						return AE_GAMEPLAY_INVALID_ARGUMENT;
+					}
+					const std::string cooked = "project://assets/shaders/" + stem + ".wshader";
+					const auto bytes = io::FileSystem::ReadFile(cooked);
+					if (!bytes)
+					{
+						ReportCustomPassFailure("WEB_CUSTOM_PASS_SHADER: cannot read " + cooked + ": " + bytes.error().message);
+						return AE_GAMEPLAY_INVALID_ARGUMENT;
+					}
+					const auto source = gpu::DecodeWebMaterialShader(*bytes);
+					if (!source)
+					{
+						ReportCustomPassFailure("WEB_CUSTOM_PASS_SHADER: " + source.error() + ": " + cooked);
+						return AE_GAMEPLAY_INVALID_ARGUMENT;
+					}
+					if (!m_graphics.UploadCustomPassShader(stem, *source))
+					{
+						ReportCustomPassFailure("WEB_CUSTOM_PASS_SHADER: " + stem + ": " + m_graphics.CustomPassError());
+						return AE_GAMEPLAY_INVALID_ARGUMENT;
+					}
+					m_custom_shaders.insert(stem);
+				}
+			}
+			return aether::scripting::ExecuteCustomPassOperation(m_custom_passes, request);
 		}
 		const auto text = Text(request.text);
 		switch (request.operation)

@@ -21,6 +21,22 @@ extern "C"
 #define AE_GAMEPLAY_SERVICE_WRITE_SAVE 11u
 #define AE_GAMEPLAY_SERVICE_CREATE_ENTITY 12u
 #define AE_GAMEPLAY_SERVICE_DESTROY_ENTITY 13u
+// Project custom render passes (CustomPass in the C# SDK). Each frame a script re-submits every
+// pass it wants drawn; a pass that is not submitted that frame does not draw.
+//   REGISTER_CUSTOM_PASS:   text = pass name, text2 = project shader stem, integer = stage
+//                           (0 BehindScene, 1 OverScene, 2 EmissiveOverLight). Re-registering replaces.
+//   UNREGISTER_CUSTOM_PASS: text = pass name. Unknown names are a no-op.
+//   SUBMIT_CUSTOM_PASS:     text = pass name, text2 = raw little-endian float32 payload that is
+//                           NOT UTF-8: three header float4 (params, color0, color1) followed by the
+//                           pass's data float4 elements, so the byte length is 16 * (3 + count) and
+//                           at most AE_GAMEPLAY_CUSTOM_PASS_MAX_VEC4 data elements are used (extra
+//                           elements are dropped, matching the C# clamp). Submitting to an
+//                           unregistered name is a successful no-op.
+#define AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS 14u
+#define AE_GAMEPLAY_SERVICE_UNREGISTER_CUSTOM_PASS 15u
+#define AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS 16u
+#define AE_GAMEPLAY_CUSTOM_PASS_MAX_VEC4 4096u
+#define AE_GAMEPLAY_CUSTOM_PASS_HEADER_VEC4 3u
 #define AE_GAMEPLAY_SERVICE_CAP(operation) (UINT64_C(1) << (operation))
 
 	typedef struct AetherGameplayServiceRequest

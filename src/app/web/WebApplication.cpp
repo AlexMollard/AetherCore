@@ -215,7 +215,7 @@ namespace
 			AetherGameplayServicesApi services{sizeof(services),
 			        1,
 			        engine.context,
-			        reference ? ((UINT64_C(1) << 14) - 2) : AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN),
+			        reference ? ((UINT64_C(1) << 17) - 2) : AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN), // ops 1-16 (custom pass = 14-16)
 			        [](std::uint64_t context, const AetherGameplayServiceRequest* request, AetherGameplayPropertyValue* result, AetherGameplayUtf8Buffer buffer) -> AetherGameplayStatus
 			        {
 				        auto& app = Get();

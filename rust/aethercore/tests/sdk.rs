@@ -329,3 +329,181 @@ fn detach_runs_cleanup_after_owner_destroyed_but_ecs_access_stays_checked() {
         r.shutdown().unwrap();
     }
 }
+
+#[derive(Default)]
+struct ServiceCall {
+    op: u32,
+    integer: i64,
+    text: String,
+    text2: Vec<u8>,
+    buffer_data_null: bool,
+    buffer_capacity: u32,
+}
+thread_local! {
+    static CALLS: std::cell::RefCell<Vec<ServiceCall>> = const { std::cell::RefCell::new(Vec::new()) };
+    static REPLY: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
+}
+unsafe extern "C" fn record_service(
+    _: u64,
+    request: *const abi::services::AetherGameplayServiceRequest,
+    _: *mut abi::AetherGameplayPropertyValue,
+    buffer: abi::AetherGameplayUtf8Buffer,
+) -> i32 {
+    let request = unsafe { &*request };
+    let view = |text: abi::AetherGameplayUtf8| -> Vec<u8> {
+        if text.length == 0 {
+            Vec::new()
+        } else {
+            unsafe { std::slice::from_raw_parts(text.data.cast::<u8>(), text.length as usize) }
+                .to_vec()
+        }
+    };
+    CALLS.with(|calls| {
+        calls.borrow_mut().push(ServiceCall {
+            op: request.operation,
+            integer: request.integer,
+            text: String::from_utf8(view(request.text)).unwrap(),
+            text2: view(request.text2),
+            buffer_data_null: buffer.data.is_null(),
+            buffer_capacity: buffer.capacity,
+        })
+    });
+    REPLY.with(|reply| reply.get())
+}
+fn services_with(capabilities: u64) -> abi::services::AetherGameplayServicesApi {
+    CALLS.with(|calls| calls.borrow_mut().clear());
+    REPLY.with(|reply| reply.set(0));
+    abi::services::AetherGameplayServicesApi {
+        structSize: size_of::<abi::services::AetherGameplayServicesApi>() as u32,
+        abiMajor: abi::services::AE_GAMEPLAY_SERVICES_MAJOR,
+        context: 0,
+        capabilities,
+        invoke: Some(record_service),
+    }
+}
+const CUSTOM_PASS_OPS: u64 = (1 << 14) | (1 << 15) | (1 << 16);
+fn lanes(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(4)
+        .map(|lane| f32::from_le_bytes(lane.try_into().unwrap()))
+        .collect()
+}
+
+#[test]
+fn custom_pass_register_and_unregister_use_expected_operations() {
+    let engine = engine();
+    let services = services_with(CUSTOM_PASS_OPS);
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    ctx.register_custom_pass("ink", "ink_field", CustomPassStage::OverScene)
+        .unwrap();
+    ctx.register_custom_pass("glow", "fx/glow", CustomPassStage::EmissiveOverLight)
+        .unwrap();
+    ctx.unregister_custom_pass("ink").unwrap();
+    CALLS.with(|calls| {
+        let calls = calls.borrow();
+        assert_eq!(calls.len(), 3);
+        assert_eq!(
+            (calls[0].op, calls[0].integer, calls[0].text.as_str()),
+            (14, 1, "ink")
+        );
+        assert_eq!(calls[0].text2, b"ink_field");
+        assert_eq!((calls[1].op, calls[1].integer), (14, 2));
+        assert_eq!(calls[1].text2, b"fx/glow");
+        assert_eq!((calls[2].op, calls[2].text.as_str()), (15, "ink"));
+        assert!(calls[2].text2.is_empty());
+    });
+    assert_eq!(CustomPassStage::BehindScene as i64, 0);
+    REPLY.with(|reply| reply.set(1));
+    assert_eq!(
+        ctx.register_custom_pass("ink", "missing", CustomPassStage::BehindScene)
+            .unwrap_err()
+            .0,
+        1
+    );
+}
+
+#[test]
+fn custom_pass_submit_packs_header_then_data_without_a_result_buffer() {
+    let engine = engine();
+    let services = services_with(CUSTOM_PASS_OPS);
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    ctx.submit_custom_pass(
+        "ink",
+        &[[10., 11., 12., 13.], [14., 15., 16., 17.]],
+        [1., 2., 3., 4.],
+        [5., 6., 7., 8.],
+        [9., 10., 11., 12.],
+    )
+    .unwrap();
+    ctx.submit_custom_pass("ink", &[], [0.; 4], [0.; 4], [0.; 4])
+        .unwrap();
+    CALLS.with(|calls| {
+        let calls = calls.borrow();
+        assert_eq!(calls.len(), 2);
+        assert_eq!((calls[0].op, calls[0].text.as_str()), (16, "ink"));
+        assert!(calls[0].buffer_data_null && calls[0].buffer_capacity == 0);
+        assert_eq!(calls[0].text2.len(), 16 * 5);
+        let expected: Vec<f32> = [
+            1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 10., 11., 12., 13., 14., 15., 16.,
+            17.,
+        ]
+        .to_vec();
+        assert_eq!(lanes(&calls[0].text2), expected);
+        assert_eq!(calls[1].text2.len(), 16 * 3);
+    });
+}
+
+#[test]
+fn custom_pass_submit_clamps_to_4096_records_and_passes_non_finite_values_through() {
+    let engine = engine();
+    let services = services_with(CUSTOM_PASS_OPS);
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    let data: Vec<[f32; 4]> = (0..5000).map(|i| [i as f32, 0., 0., 0.]).collect();
+    ctx.submit_custom_pass("ink", &data, [f32::NAN, 0., 0., 0.], [0.; 4], [0.; 4])
+        .unwrap();
+    CALLS.with(|calls| {
+        let calls = calls.borrow();
+        let payload = lanes(&calls[0].text2);
+        assert_eq!(payload.len(), (3 + 4096) * 4);
+        assert!(payload[0].is_nan());
+        assert_eq!(payload[(3 + 4095) * 4], 4095.);
+    });
+}
+
+#[test]
+fn custom_pass_methods_error_without_capability_or_on_host_failure() {
+    let engine = engine();
+    let none = unsafe { Context::from_raw(&engine, None, Entity::NONE) }
+        .submit_custom_pass("ink", &[], [0.; 4], [0.; 4], [0.; 4]);
+    assert_eq!(none.unwrap_err().0, 4);
+
+    let services = services_with((1 << 14) | (1 << 15));
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    assert_eq!(
+        ctx.submit_custom_pass("ink", &[], [0.; 4], [0.; 4], [0.; 4])
+            .unwrap_err()
+            .0,
+        4
+    );
+    ctx.register_custom_pass("ink", "ink_field", CustomPassStage::BehindScene)
+        .unwrap();
+    CALLS.with(|calls| assert_eq!(calls.borrow().len(), 1));
+
+    let services = services_with(1 << 16);
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    assert_eq!(
+        ctx.register_custom_pass("ink", "ink_field", CustomPassStage::BehindScene)
+            .unwrap_err()
+            .0,
+        4
+    );
+    assert_eq!(ctx.unregister_custom_pass("ink").unwrap_err().0, 4);
+    CALLS.with(|calls| assert!(calls.borrow().is_empty()));
+    REPLY.with(|reply| reply.set(2));
+    assert_eq!(
+        ctx.submit_custom_pass("ink", &[], [0.; 4], [0.; 4], [0.; 4])
+            .unwrap_err()
+            .0,
+        2
+    );
+}

@@ -19,9 +19,12 @@
 #include "platform/Input.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
+#include "rendering/CustomPassRegistry.hpp"
 #include "scripting/GameplayAccess.hpp"
+#include "scripting/GameplayCustomPass.hpp"
 #include "scripting/GameplaySaveStore.hpp"
 #include "scripting/GameplayAbiValidation.hpp"
+#include "utils/ServiceContainer.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
 
@@ -63,7 +66,7 @@ namespace aether::app::scripting
 	AetherGameplayServicesApi RustGameplayServices::EngineApi() const noexcept
 	{
 		uint64_t capabilities = 0;
-		for (uint32_t operation = 1; operation <= AE_GAMEPLAY_SERVICE_DESTROY_ENTITY; ++operation)
+		for (uint32_t operation = 1; operation <= AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS; ++operation)
 		{
 			capabilities |= AE_GAMEPLAY_SERVICE_CAP(operation);
 		}
@@ -82,6 +85,10 @@ namespace aether::app::scripting
 		if (m_context.services == nullptr || m_context.engineRuntime == nullptr)
 		{
 			capabilities &= ~AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_INSTANTIATE_PREFAB);
+		}
+		if (m_context.services == nullptr || m_context.services->TryGet<CustomPassRegistry>() == nullptr)
+		{
+			capabilities &= ~(AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_UNREGISTER_CUSTOM_PASS) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS));
 		}
 		if (m_save_directory.empty())
 		{
@@ -114,7 +121,9 @@ namespace aether::app::scripting
 				return AE_GAMEPLAY_INVALID_ARGUMENT;
 			}
 			*outValue = {.structSize = sizeof(*outValue)};
-			if (!aether::scripting::IsGameplayUtf8(request->text) || !aether::scripting::IsGameplayUtf8(request->text2))
+			// SUBMIT_CUSTOM_PASS carries a raw float payload in text2, which is not UTF-8.
+			const bool rawText2 = request->operation == AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS;
+			if (!aether::scripting::IsGameplayUtf8(request->text) || (!rawText2 && !aether::scripting::IsGameplayUtf8(request->text2)))
 			{
 				return AE_GAMEPLAY_INVALID_ARGUMENT;
 			}
@@ -324,6 +333,17 @@ namespace aether::app::scripting
 					m_context.pendingDestroys.push_back(entity);
 				}
 				return AE_GAMEPLAY_OK;
+			case AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS:
+			case AE_GAMEPLAY_SERVICE_UNREGISTER_CUSTOM_PASS:
+			case AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS:
+			{
+				auto* registry = m_context.services != nullptr ? m_context.services->TryGet<CustomPassRegistry>() : nullptr;
+				if (registry == nullptr)
+				{
+					return AE_GAMEPLAY_UNSUPPORTED;
+				}
+				return aether::scripting::ExecuteCustomPassOperation(*registry, request);
+			}
 			default:
 				return AE_GAMEPLAY_UNSUPPORTED;
 		}

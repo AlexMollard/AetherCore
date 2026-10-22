@@ -19,7 +19,10 @@ use ember::EmberRun;
 #[path = "../../../../projects/AgentPipelineRust/scripts/src/model_probe.rs"]
 mod model_probe;
 use model_probe::ModelProbe;
-export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult, EmberRun, ModelProbe);
+#[path = "../../../../projects/AgentPipelineRust/scripts/src/custom_pass.rs"]
+mod custom_pass;
+use custom_pass::CustomPassProbe;
+export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult, EmberRun, ModelProbe, CustomPassProbe);
 
 #[cfg(feature = "automation")]
 #[unsafe(no_mangle)]

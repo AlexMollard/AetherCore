@@ -49,3 +49,34 @@ project's shader overlay. Generated SPIR-V and WGSL containers are not maintaine
 source assets. Compiled shaders alone do not establish rendering parity; actual
 browser execution and a native image comparison remain separate checks. The
 production 3D export qualification gate remains unchanged.
+
+## Project custom-pass shaders
+
+A project custom pass (`CustomPass.Register` in C#, `register_custom_pass` in Rust) is one
+fullscreen six-vertex draw whose shader the project owns. It is portable when the shader includes
+`#include "include/CustomPass.slangh"` and reads every engine input through the accessors
+`CustomPassViewProj()`, `CustomPassInvViewProj()`, `CustomPassElapsedTime()`,
+`CustomPassCameraWorldPos()`, `CustomPassViewportSize()`, `CustomPassParams()`,
+`CustomPassColor0()`, `CustomPassColor1()`, `CustomPassDataCount()` and `CustomPassData(i)`, and
+exposes `vertexMain` and `fragmentMain`. Native Vulkan compiles the accessors to the unchanged
+80-byte push-constant/device-address contract; the Web cook defines `AE_WEB_CUSTOM_PASS` and compiles
+them to WGSL with exactly two bindings: group 0 binding 0 (uniform frame record) and group 0
+binding 1 (read-only `array<vec4<f32>>` of the submission's data). Raw push constants, `DevicePtr`,
+textures and samplers are native-only.
+
+The development/reference cook discovers them. `cook_project_materials.py --project <staged>
+--slangc <slangc> --report <json>` treats every `assets/shaders/**/*.slang` that is not a custom
+material's native source (`shaders://X.spv` claims `X.slang`) and not inside a build or hidden
+directory as a custom pass, and writes `<stem>.wshader` (stem = path below `assets/shaders` without
+`.slang`, the string passed to `Register`) plus a `.wshader.json` sidecar; the report gains a
+`customPasses` list. The cook checks the pinned Slang version, a 256 KiB source bound, the
+deadline, the negated-vector-sum miscompile and the binding set, hashes the source, local includes,
+`src/shaders/include/*.slangh` and the Slang version, and keeps the previous artifact on any failure.
+It is compile-only; browser execution and native visual parity are separate checks.
+
+Diagnostics: `WEB_CUSTOM_PASS_PORTABILITY` (shader does not include `CustomPass.slangh`; it stays
+native-only until ported), `WEB_CUSTOM_PASS_BINDINGS` (compiled output declares a resource outside
+the two-binding ABI), `WEB_CUSTOM_PASS_DUPLICATE` (two sources share a stem),
+`WEB_CUSTOM_PASS_SOURCE`, plus the shared `WEB_SHADER_TOOLCHAIN`, `WEB_SHADER_TIMEOUT` and
+`WEB_SHADER_COMPILE`. The production publisher is unchanged: profile `webgpu-2d-v1` still rejects
+every `.slang` asset with `WEB_SHADER_UNSUPPORTED`, including portable custom passes.

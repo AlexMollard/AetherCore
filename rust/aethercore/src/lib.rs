@@ -20,6 +20,19 @@ pub mod provider;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Error(pub i32, pub String);
 pub type Result<T = ()> = std::result::Result<T, Error>;
+/// Where a custom render pass draws, matching the C# `CustomPassStage`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CustomPassStage {
+    /// Before sprites and tiles; the project's own sprites draw on top.
+    BehindScene = 0,
+    /// After sprites and tiles but before the 2D light map, so the pass is lit and shadowed.
+    OverScene = 1,
+    /// After the 2D light map; the pass keeps its own brightness instead of being darkened by
+    /// lighting, for things that emit light.
+    EmissiveOverLight = 2,
+}
+const CUSTOM_PASS_MAX_VEC4: usize = 4096;
+const CUSTOM_PASS_HEADER_VEC4: usize = 3;
 pub fn status(code: i32) -> Result {
     if code == AE_GAMEPLAY_OK {
         Ok(())
@@ -388,6 +401,89 @@ impl<'a> Context<'a> {
     pub fn destroy_entity(&mut self, e: Entity) -> Result {
         self.service(13, e, [0.; 4], 0, "", "")?;
         Ok(())
+    }
+    /// Registers (or replaces) the project custom render pass `name`, drawn with the project
+    /// shader `shader` at `stage`. `shader` is the bare project shader stem (for example
+    /// `"ink_field"`, the path under `assets/shaders` without `.slang`). On the Web the shader
+    /// must be portable, that is include `include/CustomPass.slangh`, so the cook can emit WGSL;
+    /// registration fails with an error when the shader is missing or the profile does not
+    /// support project shaders. Re-submit the pass every frame with [`Self::submit_custom_pass`];
+    /// a registered pass that is not submitted in a frame does not draw.
+    pub fn register_custom_pass(
+        &mut self,
+        name: &str,
+        shader: &str,
+        stage: CustomPassStage,
+    ) -> Result {
+        self.service(14, Entity::NONE, [0.; 4], stage as i64, name, shader)?;
+        Ok(())
+    }
+    /// Removes the custom render pass `name`; unknown names are a successful no-op.
+    pub fn unregister_custom_pass(&mut self, name: &str) -> Result {
+        self.service(15, Entity::NONE, [0.; 4], 0, name, "")?;
+        Ok(())
+    }
+    /// Submits the pass `name` for this frame: `params`, `color0`, `color1` and the `data`
+    /// float4 records are bound to the pass shader, whose layout is the project's own. Call it
+    /// every frame the pass should draw. At most 4096 records are used and extra elements are
+    /// dropped, exactly like the C# `CustomPass.Submit`; submitting to an unregistered name is
+    /// `Ok` and draws nothing. Values are not checked here: native shaders see them verbatim,
+    /// while the Web renderer rejects non-finite params, colors or data and over-budget
+    /// submissions with an explicit diagnostic.
+    pub fn submit_custom_pass(
+        &mut self,
+        name: &str,
+        data: &[[f32; 4]],
+        params: [f32; 4],
+        color0: [f32; 4],
+        color1: [f32; 4],
+    ) -> Result {
+        let data = &data[..data.len().min(CUSTOM_PASS_MAX_VEC4)];
+        let mut payload = Vec::with_capacity((CUSTOM_PASS_HEADER_VEC4 + data.len()) * 16);
+        for vec4 in [&params, &color0, &color1].into_iter().chain(data) {
+            for lane in vec4 {
+                payload.extend_from_slice(&lane.to_le_bytes());
+            }
+        }
+        self.service_bytes(16, name, &payload)
+    }
+    /// Like `service` for operations whose `text2` is a raw binary payload and that return no
+    /// value, so no result buffer is allocated.
+    fn service_bytes(&mut self, op: u32, text: &str, text2: &[u8]) -> Result {
+        let api = self
+            .services
+            .ok_or(Error(4, "services extension unavailable".into()))?;
+        if api.capabilities & (1u64 << op) == 0 {
+            return Err(Error(4, format!("service {op} unsupported")));
+        }
+        let req = AetherGameplayServiceRequest {
+            structSize: size_of::<AetherGameplayServiceRequest>() as u32,
+            operation: op,
+            entity: Entity::NONE.raw(),
+            vector: [0.; 4],
+            integer: 0,
+            text: provider::utf8(text),
+            text2: AetherGameplayUtf8 {
+                data: text2.as_ptr().cast(),
+                length: text2.len() as u32,
+            },
+        };
+        let mut out = provider::empty_value();
+        let mut required = 0;
+        let code = unsafe {
+            api.invoke
+                .ok_or(Error(4, "services invoke unavailable".into()))?(
+                api.context,
+                &req,
+                &mut out,
+                AetherGameplayUtf8Buffer {
+                    data: std::ptr::null_mut(),
+                    capacity: 0,
+                    required: &mut required,
+                },
+            )
+        };
+        status(code)
     }
     fn entity_service(&mut self, op: u32, text: &str) -> Result<Entity> {
         let (v, _) = self.service(op, Entity::NONE, [0.; 4], 0, text, "")?;

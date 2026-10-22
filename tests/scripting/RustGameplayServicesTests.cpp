@@ -4,9 +4,15 @@
 #include <cstddef>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
+#include <string>
 #include <thread>
+#include <vector>
 
+#include "rendering/CustomPassRegistry.hpp"
+#include "utils/ServiceContainer.hpp"
 #include "scene/World.hpp"
+#include "scripting/GameplayAbiValidation.hpp"
 #include "io/PlatformPaths.hpp"
 #include "scripting/GameplayAccess.hpp"
 #include "scripting/RustGameplayServices.hpp"
@@ -217,4 +223,156 @@ TEST_CASE("Rust save services persist exact UTF8 lengths and never truncate outp
 	std::error_code error;
 	std::filesystem::remove(io::PlatformPaths::GetUserConfigDir() / "rust-saves" / nameSpace / (key + ".txt"), error);
 	CHECK_FALSE(error);
+}
+
+namespace
+{
+	AetherGameplayUtf8 Utf8(const std::string& text)
+	{
+		return {text.data(), static_cast<uint32_t>(text.size())};
+	}
+
+	// Three header float4 (params, color0, color1) followed by `count` data float4 with distinct lanes.
+	std::vector<float> CustomPassPayload(size_t count)
+	{
+		std::vector<float> payload;
+		for (size_t i = 0; i < 3 + count; ++i)
+		{
+			for (size_t lane = 0; lane < 4; ++lane)
+			{
+				payload.push_back(static_cast<float>(i * 4 + lane));
+			}
+		}
+		return payload;
+	}
+
+	AetherGameplayStatus InvokeCustomPass(const AetherGameplayServicesApi& api, uint32_t operation, const std::string& name, AetherGameplayUtf8 text2 = {}, int64_t integer = 0)
+	{
+		AetherGameplayServiceRequest request{.structSize = sizeof(request), .operation = operation, .integer = integer, .text = Utf8(name), .text2 = text2};
+		AetherGameplayPropertyValue value{.structSize = sizeof(value)};
+		return api.invoke(api.context, &request, &value, {});
+	}
+
+	AetherGameplayUtf8 Bytes(const std::vector<float>& payload)
+	{
+		return {reinterpret_cast<const char*>(payload.data()), static_cast<uint32_t>(payload.size() * sizeof(float))};
+	}
+} // namespace
+
+TEST_CASE("Rust custom pass services register, submit with the 4096 clamp, and no-op for unknown passes")
+{
+	World world;
+	aether::scripting::GameplayAccess access(world);
+	ServiceContainer services;
+	CustomPassRegistry registry;
+	services.Register(registry);
+	SceneContext context{.world = &world, .services = &services};
+	RustGameplayServices host(context, access);
+	const auto api = host.EngineApi();
+	for (const auto operation: {AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, AE_GAMEPLAY_SERVICE_UNREGISTER_CUSTOM_PASS, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS})
+	{
+		CHECK((api.capabilities & AE_GAMEPLAY_SERVICE_CAP(operation)) != 0);
+	}
+
+	const auto payload = CustomPassPayload(2);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", Bytes(payload)) == AE_GAMEPLAY_OK);
+	CHECK(registry.frame.passes.empty());
+
+	const std::string shader = "ink_field";
+	REQUIRE(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, "ink", Utf8(shader), 1) == AE_GAMEPLAY_OK);
+	REQUIRE(registry.registered.contains("ink"));
+	CHECK(registry.registered["ink"].shader == "ink_field");
+	CHECK(registry.registered["ink"].stage == CustomPassStage::OverScene2D);
+
+	REQUIRE(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", Bytes(payload)) == AE_GAMEPLAY_OK);
+	REQUIRE(registry.frame.passes.size() == 1);
+	const auto& draw = registry.frame.passes[0];
+	CHECK(draw.shader == "ink_field");
+	CHECK(draw.params == glm::vec4(0, 1, 2, 3));
+	CHECK(draw.color0 == glm::vec4(4, 5, 6, 7));
+	CHECK(draw.color1 == glm::vec4(8, 9, 10, 11));
+	REQUIRE(draw.data.size() == 2);
+	CHECK(draw.data[0] == glm::vec4(12, 13, 14, 15));
+	CHECK(draw.data[1] == glm::vec4(16, 17, 18, 19));
+
+	// A header-only payload is a zero-element submission that still draws.
+	registry.frame.passes.clear();
+	const auto headerOnly = CustomPassPayload(0);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", Bytes(headerOnly)) == AE_GAMEPLAY_OK);
+	REQUIRE(registry.frame.passes.size() == 1);
+	CHECK(registry.frame.passes[0].data.empty());
+
+	// Elements past the shared cap are dropped, not rejected.
+	registry.frame.passes.clear();
+	const auto oversized = CustomPassPayload(AE_GAMEPLAY_CUSTOM_PASS_MAX_VEC4 + 10);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", Bytes(oversized)) == AE_GAMEPLAY_OK);
+	REQUIRE(registry.frame.passes.size() == 1);
+	CHECK(registry.frame.passes[0].data.size() == AE_GAMEPLAY_CUSTOM_PASS_MAX_VEC4);
+	CHECK(registry.frame.passes[0].data.back() == glm::vec4(oversized[(3 + 4095) * 4], oversized[(3 + 4095) * 4 + 1], oversized[(3 + 4095) * 4 + 2], oversized[(3 + 4095) * 4 + 3]));
+
+	registry.frame.passes.clear();
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_UNREGISTER_CUSTOM_PASS, "ink") == AE_GAMEPLAY_OK);
+	CHECK_FALSE(registry.registered.contains("ink"));
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", Bytes(payload)) == AE_GAMEPLAY_OK);
+	CHECK(registry.frame.passes.empty());
+}
+
+TEST_CASE("Rust custom pass services validate stage, payload shape, and text encodings")
+{
+	World world;
+	aether::scripting::GameplayAccess access(world);
+	ServiceContainer services;
+	CustomPassRegistry registry;
+	services.Register(registry);
+	SceneContext context{.world = &world, .services = &services};
+	RustGameplayServices host(context, access);
+	const auto api = host.EngineApi();
+	const std::string shader = "ink_field";
+
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, "ink", Utf8(shader), 3) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, "ink", Utf8(shader), -1) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, "", Utf8(shader), 0) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, "ink", {}, 0) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	const char badUtf8[] = {char(0xc0), char(0x80)};
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, "ink", {badUtf8, 2}, 0) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, std::string(badUtf8, 2), Utf8(shader), 0) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(registry.registered.empty());
+	REQUIRE(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, "ink", Utf8(shader), 2) == AE_GAMEPLAY_OK);
+	CHECK(registry.registered["ink"].stage == CustomPassStage::EmissiveOverLight2D);
+
+	// Fewer than three header float4 and byte lengths that are not a whole float4 are malformed.
+	const auto payload = CustomPassPayload(1);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", {}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", {Bytes(payload).data, 2 * 16}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", {Bytes(payload).data, 4 * 16 - 4}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "", Bytes(payload)) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(registry.frame.passes.empty());
+
+	// The submit payload is raw floats: bytes that are invalid UTF-8 are accepted, while the name is still validated.
+	std::vector<float> invalidUtf8Payload = CustomPassPayload(1);
+	const uint32_t bad = 0xc0c0c0c0u;
+	std::memcpy(&invalidUtf8Payload[0], &bad, sizeof(bad));
+	REQUIRE_FALSE(aether::scripting::IsGameplayUtf8(Bytes(invalidUtf8Payload)));
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", Bytes(invalidUtf8Payload)) == AE_GAMEPLAY_OK);
+	CHECK(registry.frame.passes.size() == 1);
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, std::string(badUtf8, 2), Bytes(payload)) == AE_GAMEPLAY_INVALID_ARGUMENT);
+}
+
+TEST_CASE("Rust custom pass capabilities are absent without the registry service")
+{
+	World world;
+	aether::scripting::GameplayAccess access(world);
+	ServiceContainer services;
+	SceneContext context{.world = &world, .services = &services};
+	RustGameplayServices host(context, access);
+	auto api = host.EngineApi();
+	for (const auto operation: {AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS, AE_GAMEPLAY_SERVICE_UNREGISTER_CUSTOM_PASS, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS})
+	{
+		CHECK((api.capabilities & AE_GAMEPLAY_SERVICE_CAP(operation)) == 0);
+	}
+	CHECK(InvokeCustomPass(api, AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS, "ink", Bytes(CustomPassPayload(1))) == AE_GAMEPLAY_UNSUPPORTED);
+	context.services = nullptr;
+	api = host.EngineApi();
+	CHECK((api.capabilities & AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS)) == 0);
+	CHECK((api.capabilities & AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS)) == 0);
 }

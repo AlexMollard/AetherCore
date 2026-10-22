@@ -1,11 +1,14 @@
 #pragma once
 
 #include <array>
+#include <string>
+#include <unordered_set>
 #include "platform/Input.hpp"
 #include "web/WebScene.hpp"
 #include "scripting/GameplayHost.hpp"
 #include "scripting/GameplayAccess.hpp"
 #include "scripting/GameplayServices.h"
+#include "rendering/CustomPassRegistry.hpp"
 
 namespace aether::app::web
 {
@@ -43,6 +46,8 @@ namespace aether::app::web
 		Input m_input;
 		std::unique_ptr<WebScene> m_scene;
 		std::vector<Instance> m_instances;
+		aether::CustomPassRegistry m_custom_passes;
+		std::unordered_set<std::string> m_custom_shaders;
 		std::vector<Entity> m_pending_destroys;
 		std::string m_pending_scene;
 		std::uint32_t m_generation = 0, m_ticks = 0, m_frames = 0;

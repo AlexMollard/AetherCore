@@ -1,0 +1,100 @@
+#ifndef AETHER_CUSTOM_PASS_SLANGH
+#define AETHER_CUSTOM_PASS_SLANGH
+
+// Portable project custom-pass contract (CustomPass.Register / Submit in C#, Context::*_custom_pass in
+// Rust). A custom pass is one fullscreen draw of six vertices (two triangles, triangle list) that
+// alpha-blends into the scene HDR colour; the project shader supplies vertexMain/fragmentMain and the
+// engine supplies exactly the inputs below on every backend:
+//
+//   CustomPassViewProj()        world -> clip, for vertexMain's SV_Position (same orientation on every backend)
+//   CustomPassInvViewProj()     framebuffer NDC (x = frag.x / viewport.x * 2 - 1, y = frag.y / viewport.y * 2 - 1,
+//                               y growing downwards, i.e. computed from the fragment's SV_Position) -> world
+//   CustomPassElapsedTime()     seconds since the scene started
+//   CustomPassCameraWorldPos()  camera world position
+//   CustomPassViewportSize()    scene colour target size in pixels
+//   CustomPassParams/Color0/Color1()  the three float4 values passed to Submit
+//   CustomPassDataCount()       number of float4 elements submitted (already clamped to 4096)
+//   CustomPassData(i)           raw submitted float4 number i; the shader defines the record layout
+//
+// Native Vulkan compiles this to the engine's 80-byte push-constant contract plus buffer device
+// addresses (rendering/CustomPassRenderer.cpp; the layout below MUST stay in lockstep with it). The
+// WebGPU cook defines AE_WEB_CUSTOM_PASS and compiles the same accessors to explicit bindings
+// (group 0: binding 0 uniform frame record, binding 1 read-only float4 storage) that
+// webgpu/WebCustomPassRenderer.cpp supplies. A project shader that does not include this file stays
+// native-only: the Web cook rejects it. Do not declare your own push constants or resource bindings
+// in a portable pass shader, and do not use device addresses: the Web cook rejects added bindings.
+
+#if defined(AE_WEB_CUSTOM_PASS)
+
+// Rows of the row-vector matrices uploaded by the host (row i of M is viewProjI), so the
+// accessors below rebuild the same float4x4 the native frame constants hold, independent of the
+// backend's matrix memory layout.
+struct CustomPassWebFrame
+{
+    float4 viewProj0, viewProj1, viewProj2, viewProj3;
+    float4 invViewProj0, invViewProj1, invViewProj2, invViewProj3;
+    float4 cameraWorldPos;
+    float4 params;
+    float4 color0;
+    float4 color1;
+    float4 viewportTime; // xy = viewport size in pixels, z = elapsed seconds, w = unused
+    uint4  dataInfo;     // x = float4 element count, yzw = unused
+};
+[[vk::binding(0, 0)]] ConstantBuffer<CustomPassWebFrame> g_customPassFrame;
+[[vk::binding(1, 0)]] StructuredBuffer<float4> g_customPassData;
+
+float4x4 CustomPassViewProj()
+{
+    // Render packets use Vulkan clip Y (down); WebGPU NDC has +Y up. Flip here so a shader's
+    // `mul(CustomPassViewProj(), p)` lands on the same pixel as on the native backend.
+    return float4x4(g_customPassFrame.viewProj0, -g_customPassFrame.viewProj1, g_customPassFrame.viewProj2, g_customPassFrame.viewProj3);
+}
+float4x4 CustomPassInvViewProj()
+{
+    // Inverse of the Vulkan-convention matrix, matching the fragment SV_Position convention
+    // (y down) that both backends share.
+    return float4x4(g_customPassFrame.invViewProj0, g_customPassFrame.invViewProj1, g_customPassFrame.invViewProj2, g_customPassFrame.invViewProj3);
+}
+float  CustomPassElapsedTime()    { return g_customPassFrame.viewportTime.z; }
+float3 CustomPassCameraWorldPos() { return g_customPassFrame.cameraWorldPos.xyz; }
+float2 CustomPassViewportSize()   { return g_customPassFrame.viewportTime.xy; }
+float4 CustomPassParams()         { return g_customPassFrame.params; }
+float4 CustomPassColor0()         { return g_customPassFrame.color0; }
+float4 CustomPassColor1()         { return g_customPassFrame.color1; }
+uint   CustomPassDataCount()      { return g_customPassFrame.dataInfo.x; }
+float4 CustomPassData(uint index) { return g_customPassData[index]; }
+
+#else
+
+#include "DevicePointer.slangh"
+#include "FrameConstants.slangh"
+
+// MUST match CustomPassPush in rendering/CustomPassRenderer.cpp (80 bytes, scalar layout).
+struct CustomPassPush
+{
+    DevicePtr<FrameConstantsData> frameConstants;
+    DevicePtr<float4> data; // raw float4 buffer, already offset to this submission's first element
+    uint   count;           // number of float4 elements
+    uint   pad;
+    float2 viewportSize;
+    float4 params;
+    float4 color0;
+    float4 color1;
+};
+
+[[vk::push_constant]] CustomPassPush g_customPassPush;
+
+float4x4 CustomPassViewProj()        { return g_customPassPush.frameConstants.Ptr()->viewProj; }
+float4x4 CustomPassInvViewProj()     { return g_customPassPush.frameConstants.Ptr()->invViewProj; }
+float    CustomPassElapsedTime()     { return g_customPassPush.frameConstants.Ptr()->elapsedTime; }
+float3   CustomPassCameraWorldPos()  { return g_customPassPush.frameConstants.Ptr()->cameraWorldPos.xyz; }
+float2   CustomPassViewportSize()    { return g_customPassPush.viewportSize; }
+float4   CustomPassParams()          { return g_customPassPush.params; }
+float4   CustomPassColor0()          { return g_customPassPush.color0; }
+float4   CustomPassColor1()          { return g_customPassPush.color1; }
+uint     CustomPassDataCount()       { return g_customPassPush.count; }
+float4   CustomPassData(uint index)  { return g_customPassPush.data.Load(index); }
+
+#endif
+
+#endif

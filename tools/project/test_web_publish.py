@@ -69,6 +69,10 @@ class WebPreflightTests(unittest.TestCase):
   gameplay_jobs.validate_report(result,result['jobId'],1)
  def test_shader_additional_asset_fails(self):
   (self.root/'assets/test.slang').write_text('shader',encoding='utf-8');(self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\nadditional_assets=["project://assets/test.slang"]\n',encoding='utf-8');self.expect('WEB_SHADER_UNSUPPORTED')
+ def test_custom_pass_shader_including_portable_contract_still_fails(self):
+  (self.root/'assets/shaders').mkdir()
+  (self.root/'assets/shaders/ink.slang').write_text('#include "include/CustomPass.slangh"\n[shader("vertex")] float4 vertexMain(uint i : SV_VertexID) : SV_Position { return CustomPassParams(); }',encoding='utf-8')
+  (self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\nadditional_assets=["project://assets/shaders/ink.slang"]\n',encoding='utf-8');self.expect('WEB_SHADER_UNSUPPORTED')
  def test_tilemap_dependency_is_length_prefixed(self):
   import struct
   uri=b'project://assets/test.tileset.toml'

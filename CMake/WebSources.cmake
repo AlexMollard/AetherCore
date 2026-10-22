@@ -37,6 +37,7 @@ set(AETHER_WEB_ENGINE_SOURCES
 	webgpu/WebLight2DRenderer.cpp
 	webgpu/WebPostRenderer.cpp
 	webgpu/WebBillboardRenderer.cpp
+	webgpu/WebCustomPassRenderer.cpp
 	webgpu/WebExposureRenderer.cpp
 	gpu/PostEffectsPass.cpp
     mesh/PrimitiveMeshData.cpp

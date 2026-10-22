@@ -1,0 +1,56 @@
+# Negative fixture (Web): see custom_pass.rs. Derived from BrowserCustomPass. 64-lattice: x = 32 + 8*worldX, y = 32 - 8*worldY.
+# Lamp (-1.5, 0) radius 4, ambient 0.02. White sprite (-3..-1, 1..3). The script submits (custom_pass_fixture.slang):
+#   Behind  (-2..0.5, 1.5..2.5)       partly under the sprite: covered part hidden, free part lit
+#   Over    (-3..-1, -3..-1)          mirror of the sprite about y = 0: must equal the lit sprite pixel by pixel
+#   Emissive (2.5..3.75, -3.25..-2.25) outside the lamp radius and (-2.125..-0.875, -0.5..0.5) on the lamp:
+#           both unlit by the light map, so they must render identically
+[scene]
+version = 16
+kind = '2d'
+features = ['sprites']
+
+[[entities]]
+name = 'Fixed camera'
+position = [0.0, 0.0, 10.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Cover sprite'
+position = [-2.0, 2.0, -3.0]
+[entities.sprite]
+tint = [1.0, 1.0, 1.0, 1.0]
+pixel_size = [200.0, 200.0]
+pixels_per_unit = 100.0
+
+[[entities]]
+name = 'Authored ambient'
+[entities.light_2d_settings]
+ambient_color = [0.02, 0.02, 0.02]
+ambientIntensity = 1.0
+shadowStrength = 0.94
+shadowSoftness = 0.0
+
+[[entities]]
+name = 'Lamp'
+position = [-1.5, 0.0, 0.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 4.0
+shadow = false
+
+[[entities]]
+name = 'Custom pass driver'
+[[entities.scripts]]
+type = 'CustomPassProbe'
+
+[entities.scripts.properties.flood]
+t = 'int'
+v = 17

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import shutil
 import tomllib
-from web_materials import cook, resolve_compiler
+from web_materials import cook, cook_custom_pass, custom_pass_stem, resolve_compiler, shader_output_name
 
 
 BUILT_INS = {'', 'shaders://gltf_mesh.spv', 'shaders://plasma.spv', 'shaders://molten.spv'}
@@ -36,6 +36,35 @@ def custom_materials(project):
     return result
 
 
+EXCLUDED_DIRECTORIES = {'build', 'builds', 'obj', 'bin', 'out', 'intermediate', 'intermediates', 'cache'}
+
+
+def custom_pass_sources(project, materials):
+    """Find assets/shaders/**/*.slang that no custom material claims as its native source.
+
+    Every one must be a portable custom pass: a source without the CustomPass.slangh include is
+    reported by cook_custom_pass as WEB_CUSTOM_PASS_PORTABILITY instead of silently skipped."""
+    shaders = project/'assets/shaders'
+    if not shaders.is_dir():
+        return []
+    claimed = set()
+    for material in materials:
+        document = tomllib.loads(material.read_text(encoding='utf-8-sig'))
+        uri = document.get('material', document).get('shader', '')
+        claimed.add((shaders/(shader_output_name(uri)[:-len('.wshader')]+'.slang')).resolve())
+    result, stems = [], {}
+    for source in sorted(shaders.rglob('*.slang')):
+        parts = source.relative_to(shaders).parts[:-1]
+        if any(part.startswith('.') or part.lower() in EXCLUDED_DIRECTORIES for part in parts) or source.resolve() in claimed:
+            continue
+        key = custom_pass_stem(project, source).lower()
+        if key in stems:
+            raise ValueError('WEB_CUSTOM_PASS_DUPLICATE: '+str(source)+' and '+str(stems[key])+' cook to the same shader stem')
+        stems[key] = source
+        result.append(source)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', required=True, type=Path)
@@ -44,19 +73,22 @@ def main():
     parser.add_argument('--timeout', type=int, default=120, help='Deadline in seconds per material')
     parser.add_argument('--report', required=True, type=Path)
     args = parser.parse_args()
-    results = []
+    results, custom_passes = [], []
     try:
         project = args.project.resolve()
         if not (project/'assets').is_dir():
             raise ValueError('WEB_SHADER_PROJECT: staged project has no assets directory')
         materials = custom_materials(project)
+        passes = custom_pass_sources(project, materials)
         compiler = resolve_compiler(args.compiler) if materials else None
         for material in materials:
             results.append(cook(project, material, project/'assets/shaders', compiler, args.slangc, args.timeout))
-        report = dict(schemaVersion=1, status='passed', project=str(project), materials=results,
+        for source in passes:
+            custom_passes.append(cook_custom_pass(project, source, project/'assets/shaders', args.slangc, args.timeout))
+        report = dict(schemaVersion=1, status='passed', project=str(project), materials=results, customPasses=custom_passes,
                       qualification='Cook compilation only; browser execution and native visual parity are separate checks')
     except Exception as error:
-        report = dict(schemaVersion=1, status='failed', project=str(args.project), materials=results,
+        report = dict(schemaVersion=1, status='failed', project=str(args.project), materials=results, customPasses=custom_passes,
                       diagnostics=[dict(code='WEB_MATERIAL_PROJECT_COOK', message=str(error))])
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2)+'\n', encoding='utf-8')
