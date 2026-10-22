@@ -11,6 +11,8 @@ pub const AE_GAMEPLAY_WRONG_WORLD: i32 = 6;
 pub const AE_GAMEPLAY_WRONG_THREAD: i32 = 7;
 pub const AE_GAMEPLAY_REENTRANT: i32 = 8;
 pub const AE_GAMEPLAY_SCRIPT_ERROR: i32 = 9;
+pub const AE_GAMEPLAY_NOT_READY: i32 = 10;
+pub const AE_GAMEPLAY_NO_AUTHORITY: i32 = 11;
 pub const AE_GAMEPLAY_CAP_PHYSICS: u64 = 1;
 pub const AE_GAMEPLAY_CAP_OWNERSHIP: u64 = 2;
 pub const AE_GAMEPLAY_CAP_NETWORK: u64 = 4;
@@ -29,6 +31,7 @@ pub const AE_GAMEPLAY_DIAGNOSTIC_ERROR: u32 = 2;
 pub const AE_GAMEPLAY_EVENT_PHYSICS: u32 = 1;
 pub const AE_GAMEPLAY_EVENT_OWNERSHIP: u32 = 2;
 pub const AE_GAMEPLAY_EVENT_NETWORK: u32 = 3;
+pub const AE_GAMEPLAY_PHYSICS_FLAG_3D: u32 = 1;
 pub type AetherGameplayStatus = i32;
 pub type AetherGameplayInstance = u64;
 #[repr(C)]

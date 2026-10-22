@@ -10,17 +10,20 @@
 #include <unordered_map>
 #include <vector>
 
-#include "BinaryFormats.hpp"
-#include "IEngineRuntime.hpp"
-#include "animation/AnimationCompiler.hpp"
+#include "scripting/Gameplay3D.hpp"
+#if !defined(AETHERCORE_WEB_RUNTIME)
+#	include "BinaryFormats.hpp"
+#	include "IEngineRuntime.hpp"
+#	include "animation/AnimationCompiler.hpp"
+#	include "animation/AnimationDatabase.hpp"
+#	include "io/FileSystem.hpp"
+#	include "rendering/RagdollSkinDrive.hpp"
+#	include "utils/BinaryReader.hpp"
+#endif
 #include "animation/AnimationSystem.hpp"
-#include "animation/AnimationDatabase.hpp"
 #include "assets/GltfAsset.hpp"
-#include "io/FileSystem.hpp"
-#include "rendering/RagdollSkinDrive.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
-#include "utils/BinaryReader.hpp"
 #include "utils/Logger.hpp"
 
 using namespace aether::app::scripting;
@@ -28,38 +31,10 @@ using namespace aether::app::scripting::interop;
 
 namespace
 {
-	aether::SkinnedMeshComponent* FindSmcOrSpawned(aether::World& w, std::uint32_t id)
-	{
-		const aether::Entity e{id};
-		if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(e))
-		{
-			return smc;
-		}
-		const auto* hier = w.TryGet<aether::HierarchyComponent>(e);
-		if (hier != nullptr && !hier->children.empty())
-		{
-			return w.TryGet<aether::SkinnedMeshComponent>(hier->children.front());
-		}
-		return nullptr;
-	}
+	using aether::scripting::gameplay3d::FindSmcOrSpawned;
+	using aether::scripting::gameplay3d::ForEachSpawnedSmc;
 
-	template<typename Fn>
-	void ForEachSpawnedSmc(aether::World& w, std::uint32_t id, Fn&& f)
-	{
-		const auto* hier = w.TryGet<aether::HierarchyComponent>(aether::Entity{id});
-		if (hier == nullptr)
-		{
-			return;
-		}
-		for (const aether::Entity child: hier->children)
-		{
-			if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(child))
-			{
-				f(*smc);
-			}
-		}
-	}
-
+#if !defined(AETHERCORE_WEB_RUNTIME)
 	std::string StripBonePrefix(std::string name)
 	{
 		static constexpr const char* kPrefixes[] = {"mixamorig:", "mixamorig_", "Armature_"};
@@ -276,6 +251,15 @@ namespace
 		const std::uint32_t internalClipCount = smc->animDb != nullptr ? smc->animDb->GetClipCount() : 0;
 		return static_cast<std::int32_t>(internalClipCount + pendingIdx);
 	}
+#else
+	// The browser has no AnimationDatabase: external animation files cannot be compiled into
+	// one, so loading them is an explicit unsupported operation rather than a silent no-op.
+	std::int32_t AddAnimationImpl(aether::World&, std::uint32_t id, const char* animPath, bool)
+	{
+		AE_ERROR(aether::LogCategory::Animation, "WEB_FEATURE_UNSUPPORTED: Animation.Add/LoadExternal('{}') on entity {}: external animation files need the native animation database", animPath != nullptr ? animPath : "", id);
+		return -1;
+	}
+#endif
 } // namespace
 
 AE_SCRIPT_API std::int32_t aether_anim_add(std::uint32_t id, const char* animPath, std::int32_t lockRoot)
@@ -296,6 +280,10 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 		return;
 	}
 
+#if defined(AETHERCORE_WEB_RUNTIME)
+	(void) ctx;
+	AE_ERROR(aether::LogCategory::Animation, "WEB_FEATURE_UNSUPPORTED: Animation.Compile on entity {}: external animation files need the native animation database", id);
+#else
 	// AppendAnimations reallocates GPU animation buffers the render thread reads.
 	if (ctx.engineRuntime != nullptr)
 	{
@@ -305,6 +293,7 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 	{
 		aether::CompileAnimations(world, id);
 	}
+#endif
 	});
 }
 
@@ -333,17 +322,7 @@ AE_SCRIPT_API void aether_anim_set_clip(std::uint32_t id, std::int32_t clipIndex
 	{
 		return;
 	}
-	auto& w = ActiveWorld();
-	const auto uIdx = static_cast<std::uint32_t>(clipIndex);
-	const auto setClip = [uIdx](aether::SkinnedMeshComponent& smc)
-	{
-		aether::CrossFadeTo(smc, uIdx, 0.0f);
-	};
-	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
-	{
-		setClip(*smc);
-	}
-	ForEachSpawnedSmc(w, id, setClip);
+	aether::scripting::gameplay3d::CrossFade(ActiveWorld(), id, static_cast<std::uint32_t>(clipIndex), 0.0f);
 	});
 }
 
@@ -360,12 +339,7 @@ AE_SCRIPT_API void aether_anim_set_playback_speed(std::uint32_t id, float speed)
 {
 	SafeExport([&] -> void
 	{
-	auto& w = ActiveWorld();
-	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
-	{
-		smc->playbackSpeed = speed;
-	}
-	ForEachSpawnedSmc(w, id, [speed](aether::SkinnedMeshComponent& smc) { smc.playbackSpeed = speed; });
+	aether::scripting::gameplay3d::ForEachAnimator(ActiveWorld(), id, [speed](aether::SkinnedMeshComponent& smc) { smc.playbackSpeed = speed; });
 	});
 }
 
@@ -404,13 +378,8 @@ AE_SCRIPT_API std::int32_t aether_anim_get_count(std::uint32_t id)
 {
 	return SafeExport([&] -> std::int32_t
 	{
-	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
-	if (smc == nullptr)
-	{
-		return 0;
-	}
-	const auto dbCount = smc->animDb != nullptr ? smc->animDb->GetClipCount() : 0;
-	return static_cast<std::int32_t>(dbCount + smc->pendingExternalAnims.size());
+	const auto animator = aether::scripting::gameplay3d::FindAnimator(ActiveWorld(), id);
+	return animator.smc != nullptr ? static_cast<std::int32_t>(aether::scripting::gameplay3d::ClipCount(animator, ActiveContext().clips)) : 0;
 	});
 }
 
@@ -422,24 +391,13 @@ AE_SCRIPT_API std::int32_t aether_anim_get_name(std::uint32_t id, std::int32_t i
 	{
 		return 0;
 	}
-	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
-	if (smc == nullptr)
+	const auto animator = aether::scripting::gameplay3d::FindAnimator(ActiveWorld(), id);
+	if (animator.smc == nullptr)
 	{
 		return 0;
 	}
-	const auto uIdx = static_cast<std::uint32_t>(index);
-	const auto dbCount = smc->animDb != nullptr ? smc->animDb->GetClipCount() : 0;
-
-	std::string_view name;
-	if (uIdx < dbCount)
-	{
-		name = smc->animDb->GetClipName(uIdx);
-	}
-	else if (const auto pendingIdx = uIdx - dbCount; pendingIdx < smc->pendingExternalAnims.size())
-	{
-		name = smc->pendingExternalAnims[pendingIdx].name;
-	}
-	else
+	const std::string_view name = aether::scripting::gameplay3d::ClipName(animator, static_cast<std::uint32_t>(index), ActiveContext().clips);
+	if (name.empty())
 	{
 		return 0;
 	}
@@ -456,30 +414,8 @@ AE_SCRIPT_API float aether_anim_get_duration(std::uint32_t id)
 {
 	return SafeExport([&] -> float
 	{
-	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
-	if (smc == nullptr)
-	{
-		return 0.0f;
-	}
-	const auto clipIdx = smc->clipIndex;
-	const auto dbCount = smc->animDb != nullptr ? smc->animDb->GetClipCount() : 0;
-	if (clipIdx < dbCount)
-	{
-		return smc->animDb->GetClipDuration(clipIdx);
-	}
-	if (const auto pendingIdx = clipIdx - dbCount; pendingIdx < smc->pendingExternalAnims.size())
-	{
-		float dur = 0.0f;
-		for (const auto& ch: smc->pendingExternalAnims[pendingIdx].channels)
-		{
-			if (!ch.times.empty())
-			{
-				dur = std::max(dur, ch.times.back());
-			}
-		}
-		return dur;
-	}
-	return 0.0f;
+	const auto animator = aether::scripting::gameplay3d::FindAnimator(ActiveWorld(), id);
+	return animator.smc != nullptr ? aether::scripting::gameplay3d::ClipDuration(animator, animator.smc->clipIndex, ActiveContext().clips) : 0.0f;
 	});
 }
 
@@ -487,27 +423,12 @@ AE_SCRIPT_API std::int32_t aether_anim_find(std::uint32_t id, const char* name)
 {
 	return SafeExport([&] -> std::int32_t
 	{
-	const auto* smc = FindSmcOrSpawned(ActiveWorld(), id);
-	if (smc == nullptr || name == nullptr)
+	const auto animator = aether::scripting::gameplay3d::FindAnimator(ActiveWorld(), id);
+	if (animator.smc == nullptr || name == nullptr)
 	{
 		return -1;
 	}
-	const auto dbCount = smc->animDb != nullptr ? smc->animDb->GetClipCount() : 0;
-	for (std::uint32_t i = 0; i < dbCount; ++i)
-	{
-		if (smc->animDb->GetClipName(i) == name)
-		{
-			return static_cast<std::int32_t>(i);
-		}
-	}
-	for (std::uint32_t i = 0; i < smc->pendingExternalAnims.size(); ++i)
-	{
-		if (smc->pendingExternalAnims[i].name == name)
-		{
-			return static_cast<std::int32_t>(dbCount + i);
-		}
-	}
-	return -1;
+	return aether::scripting::gameplay3d::FindClip(animator, name, ActiveContext().clips);
 	});
 }
 
@@ -540,14 +461,7 @@ AE_SCRIPT_API void aether_anim_crossfade(std::uint32_t id, std::int32_t clipInde
 	{
 		return;
 	}
-	auto& w = ActiveWorld();
-	const auto uIdx = static_cast<std::uint32_t>(clipIndex);
-	const auto fade = [uIdx, seconds](aether::SkinnedMeshComponent& smc) { aether::CrossFadeTo(smc, uIdx, seconds); };
-	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
-	{
-		fade(*smc);
-	}
-	ForEachSpawnedSmc(w, id, fade);
+	aether::scripting::gameplay3d::CrossFade(ActiveWorld(), id, static_cast<std::uint32_t>(clipIndex), seconds);
 	});
 }
 
@@ -588,6 +502,11 @@ AE_SCRIPT_API void aether_anim_set_joint_offset(std::uint32_t id, const char* jo
 	{
 		return;
 	}
+#if defined(AETHERCORE_WEB_RUNTIME)
+	// Joint offsets address skeleton nodes through the native animation database.
+	AE_ERROR(aether::LogCategory::Animation, "WEB_FEATURE_UNSUPPORTED: Animation.SetJointOffset('{}') on entity {}: joint offsets need the native animation database", jointName, id);
+	return;
+#else
 	auto& w = ActiveWorld();
 	// Interop Vec4 is xyzw; glm::quat's constructor takes w first.
 	const glm::quat q = glm::normalize(glm::quat(rotation.w, rotation.x, rotation.y, rotation.z));
@@ -626,6 +545,7 @@ AE_SCRIPT_API void aether_anim_set_joint_offset(std::uint32_t id, const char* jo
 		apply(*smc);
 	}
 	ForEachSpawnedSmc(w, id, apply);
+#endif
 	});
 }
 

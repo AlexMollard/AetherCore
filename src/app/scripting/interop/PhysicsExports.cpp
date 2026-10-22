@@ -1,11 +1,13 @@
 #include "scripting/interop/InteropCommon.hpp"
 
-#include "net/NetworkContext.hpp"
 #include "physics/PhysicsComponents.hpp"
-#include "physics/PhysicsDebugRenderer.hpp"
+#if !defined(__EMSCRIPTEN__)
+#	include "physics/PhysicsDebugRenderer.hpp"
+#endif
+#include "scripting/Gameplay3D.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "scene/World.hpp"
-#include "utils/ServiceContainer.hpp"
+#include "scripting/interop/WriteAuthority.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -29,54 +31,15 @@ namespace
 		return ActiveWorld().TryGet<aether::RigidBodyComponent>(aether::Entity{id});
 	}
 
-	aether::net::NetworkContext* Context()
-	{
-		const auto& ctx = ActiveContext();
-		if (ctx.services == nullptr)
-		{
-			return nullptr;
-		}
-		return ctx.services->TryGet<aether::net::NetworkContext>();
-	}
+	// CanControl lives in WriteAuthority.hpp (shared with CharacterExports.cpp):
+	// velocity/force/impulse/activation writes on an existing body must not be drivable
+	// by a peer that does not own the entity. The browser has no networking, so there
+	// every entity is locally owned.
 
-	// Same reasoning and shape as CharacterExports.cpp's CanControl: velocity/force/
-	// impulse/activation writes on an existing body must not be drivable by a peer
-	// that does not own the entity - SyncSimulationAuthority already forces a
-	// non-owned RigidBody Kinematic, but that stops the SOLVER from acting on it, not
-	// a script from writing to it, and this is the export layer's own guard rather
-	// than trusting every caller (a grab controller, an RPC handler, ...) to check
-	// ownership itself first. Verified against the physics gun's own script: it
-	// splits claim (Net.RequestOwnership) from drive (Physics.SetLinearVelocity/
-	// AddImpulseAtPoint) and only starts driving once Net.IsOwner is confirmed - so
-	// this never rejects a write the existing grab flow makes, only a write nobody's
-	// authority flow made in the first place.
-	bool CanControl(std::uint32_t id)
-	{
-		const aether::net::NetworkContext* context = Context();
-		return context == nullptr || context->HasAuthority(ActiveWorld(), aether::Entity{id});
-	}
-
-	// A no-op that must not pass silently: `what` landed on an entity whose Jolt body has
-	// not been created yet (queued this frame by AddBoxBody/AddSphereBody/AddCapsuleBody,
-	// baked next frame by PhysicsSystem::FlushPendingBodies) and had nothing to act on -
-	// unlike a velocity, a force/torque/impulse has no persisted "initial" state to seed.
-	// Warns exactly once per RigidBodyComponent instance (see
-	// RigidBodyComponent::deferredCallWarned) so a script calling this every OnUpdate
-	// before the body bakes warns once, not every frame; a warning that keeps recurring
-	// means the body never baked at all (see FlushPendingBodies' own warning for why).
+	// The one-time "no effect yet" warning is shared with the Rust/browser services.
 	void WarnDeferredNoOp(aether::RigidBodyComponent& rb, std::uint32_t id, const char* what)
 	{
-		if (rb.deferredCallWarned)
-		{
-			return;
-		}
-		rb.deferredCallWarned = true;
-		AE_WARN(aether::LogCategory::Engine,
-		        "Physics.{} on entity {} had no effect: its body has not been created yet "
-		        "(queued this frame, baked next). If this keeps recurring for the same "
-		        "entity, the body failed to create - look for FlushPendingBodies' own "
-		        "warning naming it.",
-		        what, id);
+		aether::scripting::gameplay3d::WarnDeferredBodyCall(rb, id, what);
 	}
 } // namespace
 
@@ -152,23 +115,11 @@ AE_SCRIPT_API void aether_physics_set_linear_velocity(std::uint32_t id, Vec3 vel
 {
 	SafeExport([&] -> void
 	{
-	auto* phys = ActiveContext().physics;
-	auto* rb = RigidBodyOf(id);
-	if (phys == nullptr || rb == nullptr || !CanControl(id))
+	if (RigidBodyOf(id) == nullptr || !CanControl(id))
 	{
 		return;
 	}
-	if (rb->body.IsValid())
-	{
-		phys->SetLinearVelocity(rb->body, ToGlm(velocity));
-	}
-	else
-	{
-		// Body not baked yet (queued this frame by AddBoxBody/... , created next frame
-		// by FlushPendingBodies) - seed the value creation itself applies, so "add a
-		// body, then set its velocity" works the same whether or not the body exists.
-		rb->initialVelocity = ToGlm(velocity);
-	}
+	(void) aether::scripting::gameplay3d::SetLinearVelocity(ActiveWorld(), ActiveContext().physics, aether::Entity{id}, ToGlm(velocity));
 	});
 }
 
@@ -176,19 +127,9 @@ AE_SCRIPT_API Vec3 aether_physics_get_linear_velocity(std::uint32_t id)
 {
 	return SafeExport([&] -> Vec3
 	{
-	auto* phys = ActiveContext().physics;
-	const auto* rb = RigidBodyOf(id);
-	if (rb == nullptr)
-	{
-		return {};
-	}
-	if (rb->body.IsValid() && phys != nullptr)
-	{
-		return FromGlm(phys->GetLinearVelocity(rb->body));
-	}
-	// Mirrors the setter: before the body exists, its velocity IS whatever was seeded,
-	// so a script that sets then immediately reads back sees its own write.
-	return FromGlm(rb->initialVelocity);
+	glm::vec3 velocity{};
+	(void) aether::scripting::gameplay3d::GetLinearVelocity(ActiveWorld(), ActiveContext().physics, aether::Entity{id}, velocity);
+	return FromGlm(velocity);
 	});
 }
 
@@ -211,10 +152,29 @@ AE_SCRIPT_API Vec3 aether_physics_get_scale(std::uint32_t id)
 }
 
 AE_SCRIPT_API void aether_physics_set_debug_enabled(std::int32_t enabled)
-{ SafeExport([&] -> void { aether::SetPhysicsDebugShapesEnabled(enabled != 0); }); }
+{
+	SafeExport([&] -> void
+	{
+#if defined(__EMSCRIPTEN__)
+	// The Vulkan debug-shape overlay does not exist in the browser: turning it on is an explicit error, off is already the state.
+	if (enabled != 0)
+	{
+		AE_ERROR(aether::LogCategory::App, "WEB_FEATURE_UNSUPPORTED: Physics.DebugEnabled: the physics debug overlay is not available in the browser");
+	}
+#else
+	aether::SetPhysicsDebugShapesEnabled(enabled != 0);
+#endif
+	});
+}
 
 AE_SCRIPT_API std::int32_t aether_physics_is_debug_enabled()
-{ return SafeExport([&] -> std::int32_t { return aether::IsPhysicsDebugShapesEnabled() ? 1 : 0; }); }
+{
+#if defined(__EMSCRIPTEN__)
+	return 0;
+#else
+	return SafeExport([&] -> std::int32_t { return aether::IsPhysicsDebugShapesEnabled() ? 1 : 0; });
+#endif
+}
 
 AE_SCRIPT_API void aether_physics_set_angular_velocity(std::uint32_t id, Vec3 velocity)
 {
@@ -259,23 +219,11 @@ AE_SCRIPT_API void aether_physics_add_force(std::uint32_t id, Vec3 force)
 {
 	SafeExport([&] -> void
 	{
-	auto* phys = ActiveContext().physics;
-	auto* rb = RigidBodyOf(id);
-	if (phys == nullptr || rb == nullptr || !CanControl(id))
+	if (RigidBodyOf(id) == nullptr || !CanControl(id))
 	{
 		return;
 	}
-	if (rb->body.IsValid())
-	{
-		phys->AddForce(rb->body, ToGlm(force));
-	}
-	else
-	{
-		// A continuous per-step force has no persisted "initial" state to seed - Jolt
-		// itself only ever applies AddForce for the step it was called in, so there is
-		// nothing here for FlushPendingBodies to apply later even in principle.
-		WarnDeferredNoOp(*rb, id, "AddForce");
-	}
+	(void) aether::scripting::gameplay3d::AddForce(ActiveWorld(), ActiveContext().physics, aether::Entity{id}, ToGlm(force));
 	});
 }
 
@@ -283,24 +231,11 @@ AE_SCRIPT_API void aether_physics_add_impulse(std::uint32_t id, Vec3 impulse)
 {
 	SafeExport([&] -> void
 	{
-	auto* phys = ActiveContext().physics;
-	auto* rb = RigidBodyOf(id);
-	if (phys == nullptr || rb == nullptr || !CanControl(id))
+	if (RigidBodyOf(id) == nullptr || !CanControl(id))
 	{
 		return;
 	}
-	if (rb->body.IsValid())
-	{
-		phys->AddImpulse(rb->body, ToGlm(impulse));
-	}
-	else
-	{
-		// An impulse divides by mass, which is not resolved until the body is created
-		// (shape + density decide it unless RigidBodyComponent.mass overrides) - there is
-		// no correct velocity to seed without duplicating that computation, so this is
-		// genuinely lost rather than deferred. Say so instead of silently discarding it.
-		WarnDeferredNoOp(*rb, id, "AddImpulse");
-	}
+	(void) aether::scripting::gameplay3d::AddImpulse(ActiveWorld(), ActiveContext().physics, aether::Entity{id}, ToGlm(impulse));
 	});
 }
 

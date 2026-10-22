@@ -10,6 +10,7 @@
 #include "scripting/GameplayServices.h"
 #include "scene/World.hpp"
 #include "physics2d/Physics2DComponents.hpp"
+#include "scripting/SceneContext.hpp"
 
 namespace
 {
@@ -19,6 +20,7 @@ namespace
 	AetherGameplayEngineApi s_engine{};
 	AetherGameplayServicesApi s_services{};
 	aether::World* s_world = nullptr;
+	aether::app::scripting::SceneContext s_context;
 	aether::scripting::GameplayAccess* s_access = nullptr;
 
 	void Error(const char* text)
@@ -74,11 +76,22 @@ namespace aether::app::web
 	{
 		s_world = world;
 		s_access = access;
+		// The shared interop exports reach the world through the active context, which the browser
+		// publishes for the whole session (there is one world and no other thread).
+		s_context = {};
+		s_context.world = world;
+		aether::app::scripting::g_activeContext = world ? &s_context : nullptr;
 		if (!world)
 		{
 			s_engine = {};
 			s_services = {};
 		}
+	}
+
+	void BindManagedBrowserSimulation(PhysicsSystem* physics, const aether::scripting::gameplay3d::ClipCatalog* clips)
+	{
+		s_context.physics = physics;
+		s_context.clips = clips;
 	}
 }
 
@@ -300,4 +313,11 @@ extern "C"
 		const auto& events = *s_world->TryGet<aether::CollisionEvents2DComponent>(aether::Entity{id});
 		return (kind == 0 ? events.collisionEnter : kind == 1 ? events.collisionExit : kind == 2 ? events.triggerEnter : events.triggerExit)[index].id;
 	}
+#if AE_WEB_TEST_BRIDGE
+	// Automation-only: the managed counterpart of the Rust panic fixture is a managed failure report.
+	void aether_browser_test_panic()
+	{
+		Error("Browser automation panic fixture");
+	}
+#endif
 }

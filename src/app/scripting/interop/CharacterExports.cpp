@@ -1,42 +1,15 @@
 #include "scripting/interop/InteropCommon.hpp"
 
-#include "net/NetworkContext.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/World.hpp"
-#include "utils/ServiceContainer.hpp"
+#include "scripting/Gameplay3D.hpp"
+#include "scripting/interop/WriteAuthority.hpp"
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;
 
-namespace
-{
-	aether::net::NetworkContext* Context()
-	{
-		const auto& ctx = ActiveContext();
-		if (ctx.services == nullptr)
-		{
-			return nullptr;
-		}
-		return ctx.services->TryGet<aether::net::NetworkContext>();
-	}
-
-	// Character.Move/SetVelocity/Jump write CharacterControllerComponent's script-input
-	// fields, which StepCharacters later turns into actual motion (see
-	// CharacterControllerComponent::locallySimulated). Nothing gated this before: a
-	// script could call Move on ANY entity, not just ones it owns - the same gap
-	// RigidBodyComponent still has, found here first because this file had no
-	// ownership check at all rather than a wrong one. locallySimulated already stops a
-	// non-owner's StepCharacters from integrating the result, but relying on that
-	// alone leaves the field itself writable by anyone; a caller must not be able to
-	// drive another peer's character even in the window before that peer's own
-	// authority sync runs. HasAuthority is offline-safe (returns true with no
-	// NetworkContext registered) so single-player pays nothing for this check.
-	bool CanControl(std::uint32_t id)
-	{
-		const aether::net::NetworkContext* context = Context();
-		return context == nullptr || context->HasAuthority(ActiveWorld(), aether::Entity{id});
-	}
-} // namespace
+// CanControl (ownership gate for script writes) lives in WriteAuthority.hpp, shared with
+// PhysicsExports.cpp; it is offline-safe, so single-player pays nothing for it.
 
 AE_SCRIPT_API void aether_character_add(std::uint32_t id, float radius, float halfHeight)
 {
@@ -58,13 +31,11 @@ AE_SCRIPT_API void aether_character_move(std::uint32_t id, Vec3 direction, float
 {
 	SafeExport([&] -> void
 	{
-	auto* cc = ActiveWorld().TryGet<aether::CharacterControllerComponent>(aether::Entity{id});
-	if (cc == nullptr || !CanControl(id))
+	if (!ActiveWorld().Has<aether::CharacterControllerComponent>(aether::Entity{id}) || !CanControl(id))
 	{
 		return;
 	}
-	cc->desiredVelocity = ToGlm(direction) * speed;
-	cc->velocityOverride = false;
+	(void) aether::scripting::gameplay3d::CharacterMove(ActiveWorld(), aether::Entity{id}, ToGlm(direction), speed);
 	});
 }
 
@@ -100,12 +71,11 @@ AE_SCRIPT_API void aether_character_jump(std::uint32_t id, float speed)
 {
 	SafeExport([&] -> void
 	{
-	auto* cc = ActiveWorld().TryGet<aether::CharacterControllerComponent>(aether::Entity{id});
-	if (cc == nullptr || !CanControl(id))
+	if (!ActiveWorld().Has<aether::CharacterControllerComponent>(aether::Entity{id}) || !CanControl(id))
 	{
 		return;
 	}
-	cc->pendingJumpSpeed = speed;
+	(void) aether::scripting::gameplay3d::CharacterJump(ActiveWorld(), aether::Entity{id}, speed);
 	});
 }
 
@@ -113,8 +83,9 @@ AE_SCRIPT_API std::int32_t aether_character_is_grounded(std::uint32_t id)
 {
 	return SafeExport([&] -> std::int32_t
 	{
-	const auto* cc = ActiveWorld().TryGet<aether::CharacterControllerComponent>(aether::Entity{id});
-	return (cc != nullptr && cc->isGrounded) ? 1 : 0;
+	bool grounded = false;
+	(void) aether::scripting::gameplay3d::CharacterIsGrounded(ActiveWorld(), aether::Entity{id}, grounded);
+	return grounded ? 1 : 0;
 	});
 }
 

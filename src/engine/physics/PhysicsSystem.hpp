@@ -2,8 +2,18 @@
 
 #include <atomic>
 #include <memory>
-#include <semaphore>
-#include <thread>
+
+// The browser runtime is single threaded (no pthreads, no shared memory): the fixed step runs
+// inline at the point native kicks it to the dedicated physics thread. Everything observable -
+// when results are synced, when queries see them - is unchanged, because native already waits
+// for the step before any ECS-visible read.
+#if !defined(__EMSCRIPTEN__)
+#	define AE_PHYSICS_THREADED 1
+#	include <semaphore>
+#	include <thread>
+#else
+#	define AE_PHYSICS_THREADED 0
+#endif
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -202,11 +212,13 @@ namespace aether
 
 		float m_accumulator = 0.0f;
 
+#if AE_PHYSICS_THREADED
 		// Dedicated physics thread - runs m_physics->Update() off the game thread.
 		std::thread m_physicsThread;
 		std::binary_semaphore m_stepKick{0};
 		std::binary_semaphore m_stepDone{0};
 		std::atomic<bool> m_physicsThreadRunning{false};
+#endif
 
 		// Game-thread-only flag: true between Kick and Wait.  Not atomic - only
 		bool m_stepInFlight = false;

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
+#include "scene/Entity.hpp"
 #include "scene/System.hpp"
 
 namespace aether
@@ -16,6 +18,11 @@ namespace aether
 	// Advances the playing clip's clock and any fade by dt. The durations wrap looping clips.
 	void AdvanceAnimation(SkinnedMeshComponent& smc, float dt, float clipDuration, float fadeClipDuration);
 
+	// Supplies the playing and fading clip durations of one skinned entity when it has no GPU
+	// animation database (the browser samples cooked glTF data on the CPU instead). Returns false
+	// when the entity has no clips, which skips it exactly like a native entity with an empty database.
+	using ClipDurationSource = std::function<bool(World&, Entity, const SkinnedMeshComponent&, float& clipDuration, float& fadeClipDuration)>;
+
 	class AnimationSystem : public System
 	{
 	public:
@@ -24,6 +31,14 @@ namespace aether
 			return "AnimationSystem";
 		}
 
+		void SetClipDurationSource(ClipDurationSource source)
+		{
+			m_durationSource = std::move(source);
+		}
+
 		void Update(World& world, float dt) override;
+
+	private:
+		ClipDurationSource m_durationSource;
 	};
 } // namespace aether

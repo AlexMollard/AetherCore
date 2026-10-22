@@ -60,9 +60,9 @@ namespace aether::app::scripting
 		return id == 0 ? AetherGameplayEntity{} : (m_access != nullptr ? m_access->Handle(Entity{id}) : AetherGameplayEntity{0, id, 0});
 	}
 
-	Expected<void> GameplayHost::DispatchPhysics(std::uint64_t handle, std::uint32_t other, std::uint32_t kind) const
+	Expected<void> GameplayHost::DispatchPhysics(std::uint64_t handle, std::uint32_t other, std::uint32_t kind, std::uint32_t flags) const
 	{
-		AetherGameplayEvent event{.structSize = sizeof(event), .kind = AE_GAMEPLAY_EVENT_PHYSICS, .other = EntityHandle(other), .code = kind};
+		AetherGameplayEvent event{.structSize = sizeof(event), .kind = AE_GAMEPLAY_EVENT_PHYSICS, .other = EntityHandle(other), .code = kind, .flags = flags};
 		return Result(ValidInstance(handle) ? Call([&] { return aether::scripting::DispatchGameplayEvent(m_module, ProviderHandle(handle), event); }) : AE_GAMEPLAY_UNSUPPORTED, "physics event");
 	}
 

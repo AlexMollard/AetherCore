@@ -35,7 +35,8 @@ namespace aether::app::scripting
 		}
 
 		[[nodiscard]] AetherGameplayEntity EntityHandle(std::uint32_t id) const;
-		Expected<void> DispatchPhysics(std::uint64_t handle, std::uint32_t other, std::uint32_t kind) const;
+		// `flags` is AE_GAMEPLAY_PHYSICS_FLAG_3D for Jolt events, 0 for Box2D events.
+		Expected<void> DispatchPhysics(std::uint64_t handle, std::uint32_t other, std::uint32_t kind, std::uint32_t flags = 0) const;
 		using ErrorHandler = std::function<void(const std::string&)>;
 		Expected<void> Reset(const AetherGameplayModuleApi& module, std::string language, std::uint32_t generation);
 		void Clear(std::uint32_t generation);

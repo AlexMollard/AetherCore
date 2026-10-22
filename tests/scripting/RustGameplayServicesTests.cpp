@@ -9,6 +9,19 @@
 #include <thread>
 #include <vector>
 
+#include <array>
+#include <filesystem>
+#include <memory>
+#include <string_view>
+#include <tuple>
+
+#include "assets/GltfAsset.hpp"
+#include "io/FileSystem.hpp"
+#include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsSystem.hpp"
+#include "scene/Components.hpp"
+#include "scene/TransformUtils.hpp"
+#include "scripting/Gameplay3D.hpp"
 #include "rendering/CustomPassRegistry.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "scene/World.hpp"
@@ -375,4 +388,414 @@ TEST_CASE("Rust custom pass capabilities are absent without the registry service
 	api = host.EngineApi();
 	CHECK((api.capabilities & AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS)) == 0);
 	CHECK((api.capabilities & AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS)) == 0);
+}
+
+namespace
+{
+	// A real Jolt PhysicsSystem behind the Rust services, stepped at the engine's fixed timestep.
+	struct Physics3DHarness
+	{
+		World world;
+		PhysicsSystem* physics = nullptr;
+		aether::scripting::GameplayAccess access{world};
+		SceneContext context{};
+		std::unique_ptr<RustGameplayServices> host;
+		AetherGameplayServicesApi api{};
+		AetherGameplayPropertyValue value{.structSize = sizeof(AetherGameplayPropertyValue)};
+		char bytes[64]{};
+		uint32_t required = 0;
+
+		explicit Physics3DHarness(bool withPhysics = true)
+		{
+			world.SetSceneKind(SceneKind::Scene3D);
+			world.SetSceneFeatures(DefaultSceneFeatures(SceneKind::Scene3D));
+			context.world = &world;
+			if (withPhysics)
+			{
+				auto system = std::make_unique<PhysicsSystem>();
+				physics = system.get();
+				world.RegisterSystem(std::move(system));
+				context.physics = physics;
+			}
+			host = std::make_unique<RustGameplayServices>(context, access);
+			api = host->EngineApi();
+		}
+
+		Entity MakeBody(glm::vec3 position, PhysicsMotionType motion, glm::vec3 halfExtents, float gravityFactor = 1.0f)
+		{
+			const Entity entity = world.Create();
+			world.Emplace<TransformComponent>(entity, TransformComponent{.localToWorld = ComposeTransform(position, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f})});
+			RigidBodyComponent body;
+			body.motionType = motion;
+			body.gravityFactor = gravityFactor;
+			world.Emplace<RigidBodyComponent>(entity, body);
+			ColliderComponent collider;
+			collider.shape = PhysicsShapeType::Box;
+			collider.halfExtents = halfExtents;
+			world.Emplace<ColliderComponent>(entity, collider);
+			return entity;
+		}
+
+		void Step(float seconds)
+		{
+			const int frames = static_cast<int>(seconds / PhysicsSystem::kFixedTimestep + 0.5f);
+			for (int i = 0; i < frames; ++i)
+			{
+				physics->Update(world, PhysicsSystem::kFixedTimestep);
+			}
+		}
+
+		AetherGameplayStatus Call(uint32_t operation, Entity entity = {}, std::array<float, 4> vector = {}, int64_t integer = 0, const std::string& text = {}, AetherGameplayUtf8 text2 = {}, uint32_t capacity = 64)
+		{
+			AetherGameplayServiceRequest request{.structSize = sizeof(request), .operation = operation, .integer = integer, .text = {text.data(), static_cast<uint32_t>(text.size())}, .text2 = text2};
+			request.entity = entity.IsValid() ? access.Handle(entity) : AetherGameplayEntity{};
+			std::copy(vector.begin(), vector.end(), request.vector);
+			value = {.structSize = sizeof(value)};
+			required = 0;
+			return api.invoke(api.context, &request, &value, {bytes, capacity, &required});
+		}
+
+		[[nodiscard]] glm::vec3 Vector() const
+		{
+			return {value.vector[0], value.vector[1], value.vector[2]};
+		}
+
+		[[nodiscard]] glm::vec3 PositionOf(Entity entity)
+		{
+			return world.Get<PhysicsStateComponent>(entity).currPosition;
+		}
+	};
+
+	std::vector<float> RayPayload(glm::vec3 origin, glm::vec3 direction, float maxDistance)
+	{
+		return {origin.x, origin.y, origin.z, direction.x, direction.y, direction.z, maxDistance};
+	}
+} // namespace
+
+TEST_CASE("Rust 3D velocity seeds an unbaked body, then drives the Jolt body")
+{
+	Physics3DHarness h;
+	for (uint32_t operation = AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D; operation <= AE_GAMEPLAY_SERVICE_GET_CURRENT_CLIP; ++operation)
+	{
+		CHECK((h.api.capabilities & AE_GAMEPLAY_SERVICE_CAP(operation)) != 0);
+	}
+	const Entity body = h.MakeBody({0.0f, 10.0f, 0.0f}, PhysicsMotionType::Dynamic, {0.5f, 0.5f, 0.5f}, 0.0f);
+
+	// Before the body is baked a velocity write seeds creation, so set-then-get reads it back,
+	// while a force or impulse has nothing to act on and says so instead of vanishing.
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_SET_VELOCITY_3D, body, {3.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_OK);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, body) == AE_GAMEPLAY_OK);
+	CHECK(h.value.type == AE_GAMEPLAY_PROPERTY_VECTOR3);
+	CHECK(h.Vector() == glm::vec3(3.0f, 0.0f, 0.0f));
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_ADD_FORCE_3D, body, {1.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_NOT_READY);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_ADD_IMPULSE_3D, body, {1.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_NOT_READY);
+
+	// One second later the seeded velocity has actually carried the body (no gravity here).
+	h.Step(1.0f);
+	REQUIRE(h.world.Get<RigidBodyComponent>(body).body.IsValid());
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, body) == AE_GAMEPLAY_OK);
+	CHECK(h.Vector().x > 2.5f);
+	CHECK(h.Vector().x < 3.05f);
+	CHECK(h.PositionOf(body).x > 2.5f);
+	CHECK(h.PositionOf(body).x < 3.1f);
+
+	// Writing a velocity to the baked body replaces it.
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_SET_VELOCITY_3D, body, {0.0f, 0.0f, -4.0f, 0.0f}) == AE_GAMEPLAY_OK);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, body) == AE_GAMEPLAY_OK);
+	CHECK(h.Vector().x == doctest::Approx(0.0f).epsilon(0.001));
+	CHECK(h.Vector().z == doctest::Approx(-4.0f));
+
+	// An impulse changes velocity by impulse / mass: large enough to dominate any mass.
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_SET_VELOCITY_3D, body, {0.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_OK);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_ADD_IMPULSE_3D, body, {100000.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_OK);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, body) == AE_GAMEPLAY_OK);
+	CHECK(h.Vector().x > 0.5f);
+	CHECK(h.Vector().y == doctest::Approx(0.0f).epsilon(0.001));
+}
+
+TEST_CASE("Rust 3D force accelerates only the body it is applied to")
+{
+	Physics3DHarness h;
+	const Entity pushed = h.MakeBody({0.0f, 10.0f, 0.0f}, PhysicsMotionType::Dynamic, {0.5f, 0.5f, 0.5f}, 0.0f);
+	const Entity control = h.MakeBody({5.0f, 10.0f, 0.0f}, PhysicsMotionType::Dynamic, {0.5f, 0.5f, 0.5f}, 0.0f);
+	h.Step(0.1f);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_ADD_FORCE_3D, pushed, {1000000.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_OK);
+	h.Step(PhysicsSystem::kFixedTimestep);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, pushed) == AE_GAMEPLAY_OK);
+	CHECK(h.Vector().x > 0.1f);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, control) == AE_GAMEPLAY_OK);
+	CHECK(h.Vector().x == doctest::Approx(0.0f).epsilon(0.001));
+}
+
+TEST_CASE("Rust 3D physics operations reject missing components, stale entities, non-finite input and a missing system")
+{
+	Physics3DHarness h;
+	const Entity plain = h.world.Create();
+	for (const auto operation: {AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, AE_GAMEPLAY_SERVICE_SET_VELOCITY_3D, AE_GAMEPLAY_SERVICE_ADD_FORCE_3D, AE_GAMEPLAY_SERVICE_ADD_IMPULSE_3D, AE_GAMEPLAY_SERVICE_CHARACTER_MOVE, AE_GAMEPLAY_SERVICE_CHARACTER_JUMP,
+	             AE_GAMEPLAY_SERVICE_CHARACTER_IS_GROUNDED, AE_GAMEPLAY_SERVICE_SET_ANIMATION_SPEED, AE_GAMEPLAY_SERVICE_GET_ANIMATION_TIME, AE_GAMEPLAY_SERVICE_GET_CURRENT_CLIP})
+	{
+		CAPTURE(operation);
+		CHECK(h.Call(operation, plain) == AE_GAMEPLAY_UNSUPPORTED);
+	}
+
+	const Entity body = h.MakeBody({0.0f, 5.0f, 0.0f}, PhysicsMotionType::Dynamic, {0.5f, 0.5f, 0.5f});
+	const float inf = std::numeric_limits<float>::infinity();
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_SET_VELOCITY_3D, body, {inf, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_ADD_IMPULSE_3D, body, {0.0f, std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, body) == AE_GAMEPLAY_OK);
+	CHECK(h.Vector() == glm::vec3(0.0f));
+
+	AetherGameplayServiceRequest request{.structSize = sizeof(request), .operation = AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, .entity = h.access.Handle(body)};
+	h.world.Destroy(body);
+	AetherGameplayPropertyValue value{.structSize = sizeof(value)};
+	CHECK(h.api.invoke(h.api.context, &request, &value, {}) == AE_GAMEPLAY_INVALID_HANDLE);
+
+	// Without a PhysicsSystem the physics bits are not advertised and a call is refused.
+	Physics3DHarness none(false);
+	for (uint32_t operation = AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D; operation <= AE_GAMEPLAY_SERVICE_SPAWN_RAGDOLL; ++operation)
+	{
+		CAPTURE(operation);
+		CHECK((none.api.capabilities & AE_GAMEPLAY_SERVICE_CAP(operation)) == 0);
+	}
+	for (uint32_t operation = AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP; operation <= AE_GAMEPLAY_SERVICE_GET_CURRENT_CLIP; ++operation)
+	{
+		CHECK((none.api.capabilities & AE_GAMEPLAY_SERVICE_CAP(operation)) != 0);
+	}
+	const Entity unsimulated = none.world.Create();
+	none.world.Emplace<RigidBodyComponent>(unsimulated);
+	CHECK(none.Call(AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D, unsimulated) == AE_GAMEPLAY_UNSUPPORTED);
+}
+
+TEST_CASE("Rust 3D raycast reports hit entity, distance, point and normal, and validates its payload")
+{
+	Physics3DHarness h;
+	const Entity floor = h.MakeBody({0.0f, -0.5f, 0.0f}, PhysicsMotionType::Static, {10.0f, 0.5f, 10.0f});
+	h.Step(0.1f);
+	const auto cast = [&](glm::vec3 origin, glm::vec3 direction, float maxDistance)
+	{
+		const auto payload = RayPayload(origin, direction, maxDistance);
+		return h.Call(AE_GAMEPLAY_SERVICE_RAYCAST_3D, {}, {}, 0, {}, Bytes(payload));
+	};
+
+	REQUIRE(cast({1.0f, 5.0f, 2.0f}, {0.0f, -1.0f, 0.0f}, 20.0f) == AE_GAMEPLAY_OK);
+	CHECK(h.value.integer == 1);
+	CHECK(h.value.vector[0] == doctest::Approx(1.0f).epsilon(0.001));
+	CHECK(h.value.vector[1] == doctest::Approx(0.0f).epsilon(0.001));
+	CHECK(h.value.vector[2] == doctest::Approx(2.0f).epsilon(0.001));
+	CHECK(h.value.vector[3] == doctest::Approx(5.0f).epsilon(0.001));
+	CHECK(h.value.entity.id == floor.id);
+	CHECK(h.value.entity.world == h.access.Handle(floor).world);
+	REQUIRE(h.required == 13);
+	float normal[3];
+	std::memcpy(normal, h.bytes, sizeof(normal));
+	CHECK(normal[0] == doctest::Approx(0.0f).epsilon(0.001));
+	CHECK(normal[1] == doctest::Approx(1.0f));
+	CHECK(normal[2] == doctest::Approx(0.0f).epsilon(0.001));
+
+	// The direction is normalized: a longer vector does not change the distance.
+	REQUIRE(cast({0.0f, 5.0f, 0.0f}, {0.0f, -3.0f, 0.0f}, 20.0f) == AE_GAMEPLAY_OK);
+	CHECK(h.value.integer == 1);
+	CHECK(h.value.vector[3] == doctest::Approx(5.0f).epsilon(0.001));
+
+	// A miss is a successful, empty result: out of range, pointing away, or beside the floor.
+	struct MissCase
+	{
+		glm::vec3 origin;
+		glm::vec3 direction;
+		float range;
+	};
+	for (const auto& [origin, direction, range]: {MissCase{{0.0f, 5.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 2.0f}, MissCase{{0.0f, 5.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 20.0f}, MissCase{{50.0f, 5.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 20.0f}})
+	{
+		REQUIRE(cast(origin, direction, range) == AE_GAMEPLAY_OK);
+		CHECK(h.value.integer == 0);
+		CHECK(h.value.entity.id == 0);
+		CHECK(h.required == 13);
+	}
+
+	// Malformed requests are refused rather than answered as a miss.
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	CHECK(cast({0.0f, 5.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 20.0f) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(cast({0.0f, 5.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 0.0f) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(cast({0.0f, 5.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, -1.0f) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(cast({nan, 5.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 20.0f) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(cast({0.0f, 5.0f, 0.0f}, {0.0f, -1.0f, nan}, 20.0f) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(cast({0.0f, 5.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, std::numeric_limits<float>::infinity()) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	const auto payload = RayPayload({0.0f, 5.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 20.0f);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_RAYCAST_3D, {}, {}, 0, {}, {Bytes(payload).data, AE_GAMEPLAY_RAYCAST_PAYLOAD_BYTES - 4}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_RAYCAST_3D, {}, {}, 0, {}, {}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	// The 12-byte normal needs a 13-byte result buffer; a short one is reported, not truncated.
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_RAYCAST_3D, {}, {}, 0, {}, Bytes(payload), 4) == AE_GAMEPLAY_BUFFER_TOO_SMALL);
+	CHECK(h.required == 13);
+}
+
+TEST_CASE("Rust 3D character controller moves, jumps and reports ground state")
+{
+	Physics3DHarness h;
+	h.MakeBody({0.0f, -0.5f, 0.0f}, PhysicsMotionType::Static, {20.0f, 0.5f, 20.0f});
+	const Entity character = h.world.Create();
+	h.world.Emplace<TransformComponent>(character, TransformComponent{.localToWorld = ComposeTransform({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f})});
+	h.world.Emplace<CharacterControllerComponent>(character, CharacterControllerComponent{.radius = 0.3f, .halfHeight = 0.6f});
+
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_CHARACTER_IS_GROUNDED, character) == AE_GAMEPLAY_OK);
+	CHECK(h.value.type == AE_GAMEPLAY_PROPERTY_BOOL);
+	CHECK(h.value.integer == 0);
+	h.Step(1.0f);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_CHARACTER_IS_GROUNDED, character) == AE_GAMEPLAY_OK);
+	CHECK(h.value.integer == 1);
+
+	const float startX = h.PositionOf(character).x;
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_CHARACTER_MOVE, character, {1.0f, 0.0f, 0.0f, 2.0f}) == AE_GAMEPLAY_OK);
+	h.Step(1.0f);
+	CHECK(h.PositionOf(character).x - startX > 1.0f);
+	CHECK(h.PositionOf(character).x - startX < 2.1f);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_CHARACTER_IS_GROUNDED, character) == AE_GAMEPLAY_OK);
+	CHECK(h.value.integer == 1);
+
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_CHARACTER_JUMP, character, {-1.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_CHARACTER_JUMP, character, {5.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_OK);
+	h.Step(0.2f);
+	CHECK(h.PositionOf(character).y > 0.3f);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_CHARACTER_IS_GROUNDED, character) == AE_GAMEPLAY_OK);
+	CHECK(h.value.integer == 0);
+}
+
+TEST_CASE("Rust 3D ragdoll spawn refuses stale entities and unloadable skeletons without changing the entity")
+{
+	// GltfAsset::LoadFromVfsPath asserts when the VFS was never initialized, so mount a real empty
+	// project directory: the failure under test is a genuinely missing file.
+	if (io::FileSystem::IsInitialized())
+	{
+		io::FileSystem::Shutdown();
+	}
+	const std::filesystem::path root = std::filesystem::temp_directory_path() / "aethercore_rust_ragdoll_missing_skeleton";
+	std::error_code ec;
+	std::filesystem::remove_all(root, ec);
+	std::filesystem::create_directories(root, ec);
+	io::FileSystem::Initialize();
+	io::FileSystem::Mount("project", root);
+	{
+		Physics3DHarness h;
+		const Entity source = h.world.Create();
+		h.world.Emplace<TransformComponent>(source, TransformComponent{.localToWorld = ComposeTransform({0.0f, 2.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f})});
+		CHECK(h.Call(AE_GAMEPLAY_SERVICE_SPAWN_RAGDOLL, source, {}, 0, "project://assets/models/Missing.glb") == AE_GAMEPLAY_INVALID_ARGUMENT);
+		CHECK(h.Call(AE_GAMEPLAY_SERVICE_SPAWN_RAGDOLL, source, {}, 0, "") == AE_GAMEPLAY_INVALID_ARGUMENT);
+		CHECK_FALSE(h.world.Has<RagdollComponent>(source));
+		CHECK_FALSE(h.world.Has<RagdollBoneComponent>(source));
+		CHECK(h.world.Has<TransformComponent>(source));
+	}
+	io::FileSystem::Shutdown();
+	std::filesystem::remove_all(root, ec);
+}
+
+TEST_CASE("Rust 3D animation operations resolve clips by name or index, cross-fade, and reach spawned child meshes")
+{
+	Physics3DHarness h(false);
+	const auto makeAnimator = [&h]
+	{
+		const Entity entity = h.world.Create();
+		SkinnedMeshComponent smc;
+		for (const char* name: {"Idle", "Run", "Jump"})
+		{
+			assets::GltfAnimation clip;
+			clip.name = name;
+			smc.pendingExternalAnims.push_back(clip);
+		}
+		h.world.Emplace<SkinnedMeshComponent>(entity, std::move(smc));
+		return entity;
+	};
+	const Entity actor = makeAnimator();
+	auto& smc = h.world.Get<SkinnedMeshComponent>(actor);
+
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_FIND_ANIMATION_CLIP, actor, {}, 0, "Run") == AE_GAMEPLAY_OK);
+	CHECK(h.value.type == AE_GAMEPLAY_PROPERTY_INT);
+	CHECK(h.value.integer == 1);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_FIND_ANIMATION_CLIP, actor, {}, 0, "Nope") == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_FIND_ANIMATION_CLIP, actor, {}, 0, "") == AE_GAMEPLAY_INVALID_ARGUMENT);
+
+	// Cross-fade by name: the previous clip keeps fading out for the requested time.
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, actor, {0.25f, 0.0f, 0.0f, 0.0f}, 0, "Run") == AE_GAMEPLAY_OK);
+	CHECK(smc.clipIndex == 1);
+	CHECK(smc.fadeClipIndex == 0);
+	CHECK(smc.fadeWeight == 1.0f);
+	CHECK(smc.fadeRate == doctest::Approx(4.0f));
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_CURRENT_CLIP, actor) == AE_GAMEPLAY_OK);
+	CHECK(h.value.integer == 1);
+
+	// By index with no fade switches outright.
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, actor, {0.0f, 0.0f, 0.0f, 0.0f}, 2) == AE_GAMEPLAY_OK);
+	CHECK(smc.clipIndex == 2);
+	CHECK(smc.fadeWeight == 0.0f);
+
+	// Unknown clips and bad fades change nothing.
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, actor, {0.0f, 0.0f, 0.0f, 0.0f}, 3) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, actor, {0.0f, 0.0f, 0.0f, 0.0f}, -1) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, actor, {0.0f, 0.0f, 0.0f, 0.0f}, 0, "Nope") == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, actor, {-0.5f, 0.0f, 0.0f, 0.0f}, 0) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(smc.clipIndex == 2);
+
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_SPEED, actor, {2.0f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_OK);
+	CHECK(smc.playbackSpeed == 2.0f);
+	smc.animTime = 1.25f;
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_GET_ANIMATION_TIME, actor) == AE_GAMEPLAY_OK);
+	CHECK(h.value.type == AE_GAMEPLAY_PROPERTY_FLOAT);
+	CHECK(h.value.vector[0] == 1.25f);
+
+	// A spawned model: the controller entity has no mesh itself, its child does.
+	const Entity parent = h.world.Create();
+	const Entity child = makeAnimator();
+	h.world.Emplace<HierarchyComponent>(parent, HierarchyComponent{.children = {child}});
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, parent, {0.0f, 0.0f, 0.0f, 0.0f}, 0, "Jump") == AE_GAMEPLAY_OK);
+	CHECK(h.world.Get<SkinnedMeshComponent>(child).clipIndex == 2);
+	REQUIRE(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_SPEED, parent, {0.5f, 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_OK);
+	CHECK(h.world.Get<SkinnedMeshComponent>(child).playbackSpeed == 0.5f);
+
+	// An entity with no mesh anywhere is refused, as is a non-finite speed.
+	const Entity bare = h.world.Create();
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, bare, {0.0f, 0.0f, 0.0f, 0.0f}, 0) == AE_GAMEPLAY_UNSUPPORTED);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_FIND_ANIMATION_CLIP, bare, {}, 0, "Run") == AE_GAMEPLAY_UNSUPPORTED);
+	CHECK(h.Call(AE_GAMEPLAY_SERVICE_SET_ANIMATION_SPEED, actor, {std::numeric_limits<float>::infinity(), 0.0f, 0.0f, 0.0f}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(smc.playbackSpeed == 2.0f);
+}
+
+TEST_CASE("Rust 3D clip catalog supplies clip names where the component has no animation database")
+{
+	struct Catalog final : aether::scripting::gameplay3d::ClipCatalog
+	{
+		std::uint32_t ClipCount(Entity) const override
+		{
+			return 2;
+		}
+
+		std::string_view ClipName(Entity, std::uint32_t index) const override
+		{
+			return index == 0 ? "Walk" : "Sprint";
+		}
+
+		float ClipDuration(Entity, std::uint32_t) const override
+		{
+			return 0.0f;
+		}
+	} catalog;
+	World world;
+	const Entity actor = world.Create();
+	SkinnedMeshComponent smc;
+	assets::GltfAnimation own;
+	own.name = "Wave";
+	smc.pendingExternalAnims.push_back(own);
+	world.Emplace<SkinnedMeshComponent>(actor, std::move(smc));
+	AetherGameplayPropertyValue value{.structSize = sizeof(value)};
+	const auto run = [&](uint32_t operation, const std::string& name, int64_t index)
+	{
+		AetherGameplayServiceRequest request{.structSize = sizeof(request), .operation = operation, .entity = {0, actor.id, 0}, .integer = index, .text = {name.data(), static_cast<uint32_t>(name.size())}};
+		value = {.structSize = sizeof(value)};
+		return aether::scripting::gameplay3d::ExecuteGameplay3DOperation(world, nullptr, request, value, {}, &catalog).status;
+	};
+	REQUIRE(run(AE_GAMEPLAY_SERVICE_FIND_ANIMATION_CLIP, "Sprint", 0) == AE_GAMEPLAY_OK);
+	CHECK(value.integer == 1);
+	REQUIRE(run(AE_GAMEPLAY_SERVICE_FIND_ANIMATION_CLIP, "Wave", 0) == AE_GAMEPLAY_OK);
+	CHECK(value.integer == 2);
+	REQUIRE(run(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, "Sprint", 0) == AE_GAMEPLAY_OK);
+	CHECK(world.Get<SkinnedMeshComponent>(actor).clipIndex == 1);
+	CHECK(run(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, "", 3) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(run(AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP, "", 2) == AE_GAMEPLAY_OK);
 }

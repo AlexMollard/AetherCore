@@ -32,6 +32,27 @@ if(AETHERCORE_WEB_RUNTIME)
     if(NOT TARGET zstd::libzstd_static)
         add_library(zstd::libzstd_static ALIAS libzstd_static)
     endif()
+    # Same Jolt revision and determinism policy as native (Dependencies.cmake). The browser
+    # is single threaded: no pthread flags are added by Jolt under Emscripten, WASM SIMD stays
+    # OFF so the scalar deterministic path runs, and nothing here enables fast-math.
+    CPMAddPackage(
+        NAME JoltPhysics
+        GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+        GIT_TAG        v5.5.0
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  Build
+        OPTIONS
+            "CROSS_PLATFORM_DETERMINISTIC ON"
+            "OVERRIDE_CXX_FLAGS OFF"
+            "ENABLE_ALL_WARNINGS OFF"
+            "INTERPROCEDURAL_OPTIMIZATION OFF"
+            "ENABLE_INSTALL OFF"
+            "GENERATE_DEBUG_SYMBOLS OFF"
+            "USE_WASM_SIMD OFF"
+            "JPH_USE_WASM64 OFF"
+            "DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF"
+            "PROFILER_IN_DEBUG_AND_RELEASE OFF"
+    )
 endif()
 
 CPMAddPackage(

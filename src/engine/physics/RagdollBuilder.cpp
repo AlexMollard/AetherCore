@@ -396,6 +396,12 @@ namespace aether
 			const glm::mat4 skinNodeOffset = glm::inverse(bodyBindWorld) * nodeBindWorld;
 
 			const Entity bone = def.parentRole.empty() ? source : world.Create();
+			if (bone != source)
+			{
+				// Named by role so script/tool observers (and the native-vs-browser parity harness, which only records
+				// named entities) can find each bone; the root keeps the name its host entity already has.
+				world.EmplaceOrReplace<NameComponent>(bone, NameComponent{.name = std::string(def.role)});
+			}
 			world.EmplaceOrReplace<TransformComponent>(bone, TransformComponent{.localToWorld = glm::translate(glm::mat4(1.0f), worldPos) * glm::mat4_cast(worldRot) * glm::scale(glm::mat4(1.0f), visualScale)});
 			world.EmplaceOrReplace<RigidBodyComponent>(bone, RigidBodyComponent{.motionType = PhysicsMotionType::Dynamic, .initialVelocity = def.parentRole.empty() ? seedVelocity : glm::vec3(0.0f)});
 			world.EmplaceOrReplace<ColliderComponent>(bone, ColliderComponent{.shape = shape, .radius = radius, .halfHeight = halfHeight});

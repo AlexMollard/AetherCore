@@ -264,6 +264,15 @@ namespace aether::app::scripting
 			if (const auto* transform = world.TryGet<TransformComponent>(entity))
 			{
 				values["position"] = Json::array({transform->localToWorld[3].x, transform->localToWorld[3].y, transform->localToWorld[3].z});
+				Json matrix = Json::array();
+				for (int column = 0; column < 4; ++column)
+				{
+					for (int row = 0; row < 4; ++row)
+					{
+						matrix.push_back(transform->localToWorld[column][row]);
+					}
+				}
+				values["localToWorld"] = std::move(matrix);
 			}
 			if (const auto* text = world.TryGet<ui::UIText>(entity))
 			{

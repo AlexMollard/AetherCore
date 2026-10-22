@@ -333,6 +333,8 @@ fn detach_runs_cleanup_after_owner_destroyed_but_ecs_access_stays_checked() {
 #[derive(Default)]
 struct ServiceCall {
     op: u32,
+    entity_id: u32,
+    vector: [f32; 4],
     integer: i64,
     text: String,
     text2: Vec<u8>,
@@ -342,11 +344,14 @@ struct ServiceCall {
 thread_local! {
     static CALLS: std::cell::RefCell<Vec<ServiceCall>> = const { std::cell::RefCell::new(Vec::new()) };
     static REPLY: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
+    // Value and result bytes the fake host writes back, when set.
+    static REPLY_VALUE: std::cell::RefCell<Option<abi::AetherGameplayPropertyValue>> = const { std::cell::RefCell::new(None) };
+    static REPLY_BYTES: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 unsafe extern "C" fn record_service(
     _: u64,
     request: *const abi::services::AetherGameplayServiceRequest,
-    _: *mut abi::AetherGameplayPropertyValue,
+    out: *mut abi::AetherGameplayPropertyValue,
     buffer: abi::AetherGameplayUtf8Buffer,
 ) -> i32 {
     let request = unsafe { &*request };
@@ -361,6 +366,8 @@ unsafe extern "C" fn record_service(
     CALLS.with(|calls| {
         calls.borrow_mut().push(ServiceCall {
             op: request.operation,
+            entity_id: request.entity.id,
+            vector: request.vector,
             integer: request.integer,
             text: String::from_utf8(view(request.text)).unwrap(),
             text2: view(request.text2),
@@ -368,10 +375,32 @@ unsafe extern "C" fn record_service(
             buffer_capacity: buffer.capacity,
         })
     });
-    REPLY.with(|reply| reply.get())
+    let code = REPLY.with(|reply| reply.get());
+    if code != 0 {
+        return code;
+    }
+    if let Some(value) = REPLY_VALUE.with(|v| *v.borrow()) {
+        unsafe { *out = value };
+        let bytes = REPLY_BYTES.with(|b| b.borrow().clone());
+        if !bytes.is_empty() {
+            assert!(bytes.len() < buffer.capacity as usize);
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    bytes.as_ptr(),
+                    buffer.data.cast::<u8>(),
+                    bytes.len(),
+                );
+                *buffer.data.add(bytes.len()) = 0;
+                *buffer.required = bytes.len() as u32 + 1;
+            }
+        }
+    }
+    0
 }
 fn services_with(capabilities: u64) -> abi::services::AetherGameplayServicesApi {
     CALLS.with(|calls| calls.borrow_mut().clear());
+    REPLY_VALUE.with(|v| *v.borrow_mut() = None);
+    REPLY_BYTES.with(|b| b.borrow_mut().clear());
     REPLY.with(|reply| reply.set(0));
     abi::services::AetherGameplayServicesApi {
         structSize: size_of::<abi::services::AetherGameplayServicesApi>() as u32,
@@ -473,8 +502,13 @@ fn custom_pass_submit_clamps_to_4096_records_and_passes_non_finite_values_throug
 #[test]
 fn custom_pass_methods_error_without_capability_or_on_host_failure() {
     let engine = engine();
-    let none = unsafe { Context::from_raw(&engine, None, Entity::NONE) }
-        .submit_custom_pass("ink", &[], [0.; 4], [0.; 4], [0.; 4]);
+    let none = unsafe { Context::from_raw(&engine, None, Entity::NONE) }.submit_custom_pass(
+        "ink",
+        &[],
+        [0.; 4],
+        [0.; 4],
+        [0.; 4],
+    );
     assert_eq!(none.unwrap_err().0, 4);
 
     let services = services_with((1 << 14) | (1 << 15));
@@ -506,4 +540,316 @@ fn custom_pass_methods_error_without_capability_or_on_host_failure() {
             .0,
         2
     );
+}
+
+const OPS_3D: u64 = ((1u64 << 14) - 1) << 17;
+fn scene_entity() -> Entity {
+    unsafe {
+        Entity::from_raw(abi::AetherGameplayEntity {
+            world: 5,
+            id: 8,
+            reserved: 0,
+        })
+    }
+}
+fn reply_value(
+    kind: u32,
+    vector: [f32; 4],
+    integer: i64,
+    entity: abi::AetherGameplayEntity,
+) -> abi::AetherGameplayPropertyValue {
+    abi::AetherGameplayPropertyValue {
+        structSize: size_of::<abi::AetherGameplayPropertyValue>() as u32,
+        r#type: kind,
+        vector,
+        integer,
+        entity,
+    }
+}
+fn float_bytes(values: &[f32]) -> Vec<u8> {
+    values.iter().flat_map(|v| v.to_le_bytes()).collect()
+}
+
+#[test]
+fn velocity_3d_round_trips_vector_through_entity_validated_operations() {
+    let engine = engine();
+    let services = services_with(OPS_3D);
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    let e = scene_entity();
+    ctx.set_velocity_3d(
+        e,
+        Vec3 {
+            x: 1.,
+            y: -2.,
+            z: 3.5,
+        },
+    )
+    .unwrap();
+    REPLY_VALUE
+        .with(|v| *v.borrow_mut() = Some(reply_value(4, [4., 5., 6., 0.], 0, Entity::NONE.raw())));
+    assert_eq!(
+        ctx.velocity_3d(e).unwrap(),
+        Vec3 {
+            x: 4.,
+            y: 5.,
+            z: 6.
+        }
+    );
+    ctx.add_force_3d(
+        e,
+        Vec3 {
+            x: 0.,
+            y: 9.,
+            z: 0.,
+        },
+    )
+    .unwrap();
+    ctx.add_impulse_3d(
+        e,
+        Vec3 {
+            x: 7.,
+            y: 0.,
+            z: 0.,
+        },
+    )
+    .unwrap();
+    CALLS.with(|calls| {
+        let calls = calls.borrow();
+        let shape: Vec<(u32, [f32; 4], u32)> = calls
+            .iter()
+            .map(|c| (c.op, c.vector, c.entity_id))
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                (18, [1., -2., 3.5, 0.], 8),
+                (17, [0.; 4], 8),
+                (19, [0., 9., 0., 0.], 8),
+                (20, [7., 0., 0., 0.], 8),
+            ]
+        );
+        assert!(calls.iter().all(|c| c.buffer_data_null));
+    });
+}
+
+#[test]
+fn physics_3d_calls_reject_stale_entities_and_surface_host_statuses() {
+    let engine = engine();
+    let services = services_with(OPS_3D);
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    let stale = unsafe {
+        Entity::from_raw(abi::AetherGameplayEntity {
+            world: 5,
+            id: 9,
+            reserved: 0,
+        })
+    };
+    assert_eq!(ctx.velocity_3d(stale).unwrap_err().0, 5);
+    assert_eq!(ctx.character_jump(stale, 4.).unwrap_err().0, 5);
+    CALLS.with(|calls| assert!(calls.borrow().is_empty()));
+    for (code, name) in [(10, "not ready"), (11, "no authority"), (4, "unsupported")] {
+        REPLY.with(|reply| reply.set(code));
+        let err = ctx
+            .add_impulse_3d(scene_entity(), Vec3::default())
+            .unwrap_err();
+        assert_eq!(err.0, code);
+        assert!(err.1.contains(name), "{}", err.1);
+    }
+    // Without the capability bit the host is never called.
+    let services = services_with(OPS_3D & !(1 << 20));
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    assert_eq!(
+        ctx.add_impulse_3d(scene_entity(), Vec3::default())
+            .unwrap_err()
+            .0,
+        4
+    );
+    CALLS.with(|calls| assert!(calls.borrow().is_empty()));
+}
+
+#[test]
+fn raycast_3d_sends_the_28_byte_payload_and_decodes_hit_miss_and_normal() {
+    let engine = engine();
+    let services = services_with(OPS_3D);
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    let hit_entity = abi::AetherGameplayEntity {
+        world: 5,
+        id: 8,
+        reserved: 0,
+    };
+    REPLY_VALUE.with(|v| *v.borrow_mut() = Some(reply_value(4, [1., 2., 3., 4.5], 1, hit_entity)));
+    REPLY_BYTES.with(|b| *b.borrow_mut() = float_bytes(&[0., 1., 0.]));
+    let hit = ctx
+        .raycast_3d(
+            Vec3 {
+                x: 1.,
+                y: 2.,
+                z: 3.,
+            },
+            Vec3 {
+                x: 0.,
+                y: -1.,
+                z: 0.,
+            },
+            10.,
+        )
+        .unwrap()
+        .expect("hit");
+    assert_eq!(hit.entity, scene_entity());
+    assert_eq!(hit.distance, 4.5);
+    assert_eq!(
+        hit.point,
+        Vec3 {
+            x: 1.,
+            y: 2.,
+            z: 3.
+        }
+    );
+    assert_eq!(
+        hit.normal,
+        Vec3 {
+            x: 0.,
+            y: 1.,
+            z: 0.
+        }
+    );
+    REPLY_VALUE.with(|v| *v.borrow_mut() = Some(reply_value(4, [0.; 4], 0, Entity::NONE.raw())));
+    assert_eq!(
+        ctx.raycast_3d(
+            Vec3::default(),
+            Vec3 {
+                x: 1.,
+                y: 0.,
+                z: 0.
+            },
+            1.
+        )
+        .unwrap(),
+        None
+    );
+    CALLS.with(|calls| {
+        let calls = calls.borrow();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].op, 21);
+        assert_eq!(calls[0].entity_id, 0);
+        assert_eq!(calls[0].buffer_capacity, 16);
+        assert_eq!(lanes(&calls[0].text2), vec![1., 2., 3., 0., -1., 0., 10.]);
+    });
+    // A malformed normal from the host is an error, never a fabricated zero vector.
+    REPLY_VALUE.with(|v| *v.borrow_mut() = Some(reply_value(4, [0.; 4], 1, hit_entity)));
+    REPLY_BYTES.with(|b| *b.borrow_mut() = vec![1, 2, 3]);
+    assert_eq!(
+        ctx.raycast_3d(
+            Vec3::default(),
+            Vec3 {
+                x: 1.,
+                y: 0.,
+                z: 0.
+            },
+            1.
+        )
+        .unwrap_err()
+        .0,
+        1
+    );
+}
+
+#[test]
+fn character_ragdoll_and_animation_calls_use_their_operations_and_arguments() {
+    let engine = engine();
+    let services = services_with(OPS_3D);
+    let mut ctx = unsafe { Context::from_raw(&engine, Some(&services), Entity::NONE) };
+    let e = scene_entity();
+    ctx.character_move(
+        e,
+        Vec3 {
+            x: 0.,
+            y: 0.,
+            z: 1.,
+        },
+        3.5,
+    )
+    .unwrap();
+    ctx.character_jump(e, 6.).unwrap();
+    REPLY_VALUE.with(|v| *v.borrow_mut() = Some(reply_value(3, [0.; 4], 1, Entity::NONE.raw())));
+    assert!(ctx.character_is_grounded(e).unwrap());
+    REPLY_VALUE.with(|v| *v.borrow_mut() = Some(reply_value(7, [0.; 4], 11, e.raw())));
+    assert_eq!(ctx.spawn_ragdoll(e, "project://assets/rig.glb").unwrap(), e);
+    ctx.set_animation_clip(e, ClipRef::Name("Run"), 0.25)
+        .unwrap();
+    ctx.set_animation_clip(e, ClipRef::Index(2), 0.).unwrap();
+    assert_eq!(
+        ctx.set_animation_clip(e, ClipRef::Name(""), 0.)
+            .unwrap_err()
+            .0,
+        1
+    );
+    ctx.set_animation_speed(e, 1.5).unwrap();
+    REPLY_VALUE.with(|v| {
+        *v.borrow_mut() = Some(reply_value(1, [0.75, 0., 0., 0.], 0, Entity::NONE.raw()))
+    });
+    assert_eq!(ctx.animation_time(e).unwrap(), 0.75);
+    REPLY_VALUE.with(|v| *v.borrow_mut() = Some(reply_value(2, [0.; 4], 3, Entity::NONE.raw())));
+    assert_eq!(ctx.find_animation_clip(e, "Run").unwrap(), 3);
+    assert_eq!(ctx.current_animation_clip(e).unwrap(), 3);
+    REPLY_VALUE.with(|v| *v.borrow_mut() = Some(reply_value(2, [0.; 4], -1, Entity::NONE.raw())));
+    assert_eq!(ctx.current_animation_clip(e).unwrap_err().0, 1);
+    CALLS.with(|calls| {
+        let calls = calls.borrow();
+        let shape: Vec<(u32, [f32; 4], i64, &str)> = calls
+            .iter()
+            .map(|c| (c.op, c.vector, c.integer, c.text.as_str()))
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                (22, [0., 0., 1., 3.5], 0, ""),
+                (23, [6., 0., 0., 0.], 0, ""),
+                (24, [0.; 4], 0, ""),
+                (25, [0.; 4], 0, "project://assets/rig.glb"),
+                (26, [0.25, 0., 0., 0.], 0, "Run"),
+                (26, [0., 0., 0., 0.], 2, ""),
+                (27, [1.5, 0., 0., 0.], 0, ""),
+                (28, [0.; 4], 0, ""),
+                (29, [0.; 4], 0, "Run"),
+                (30, [0.; 4], 0, ""),
+                (30, [0.; 4], 0, ""),
+            ]
+        );
+    });
+}
+
+#[test]
+fn physics_events_report_kind_and_dimension() {
+    let event = |code, flags| Event {
+        kind: abi::AE_GAMEPLAY_EVENT_PHYSICS,
+        other: Entity::NONE,
+        code,
+        flags,
+        payload: String::new(),
+    };
+    assert_eq!(
+        event(0, 1).physics_kind(),
+        Some(PhysicsEventKind::CollisionEnter)
+    );
+    assert_eq!(
+        event(3, 0).physics_kind(),
+        Some(PhysicsEventKind::TriggerExit)
+    );
+    assert_eq!(
+        event(4, 1).physics_kind(),
+        Some(PhysicsEventKind::Overlapping)
+    );
+    assert_eq!(event(5, 1).physics_kind(), None);
+    assert!(event(0, abi::AE_GAMEPLAY_PHYSICS_FLAG_3D).is_3d());
+    assert!(!event(0, 0).is_3d());
+    let ownership = Event {
+        kind: abi::AE_GAMEPLAY_EVENT_OWNERSHIP,
+        other: Entity::NONE,
+        code: 0,
+        flags: 1,
+        payload: String::new(),
+    };
+    assert_eq!(ownership.physics_kind(), None);
+    assert!(!ownership.is_3d());
 }

@@ -1,9 +1,12 @@
 #pragma once
 
 #include <array>
+#include <functional>
 
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
+#include "animation/AnimationSystem.hpp"
+#include "physics/PhysicsSystem.hpp"
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "material/TextureRegistry.hpp"
@@ -45,6 +48,33 @@ namespace aether::app::web
 		scene::ScriptRecord record;
 	};
 
+	struct WebInstantiated
+	{
+		Entity root;
+		std::vector<WebScriptRecord> scripts;
+	};
+
+	// Runs the gameplay (script) tick at ScriptComponentSystem's native position in the world
+	// system order: after Animation/Physics/Physics2D, before Particles.
+	class WebScriptSystem final : public System
+	{
+	public:
+		[[nodiscard]] const char* GetName() const override
+		{
+			return "WebScriptSystem";
+		}
+
+		void Update(World&, float dt) override
+		{
+			if (tick)
+			{
+				tick(dt);
+			}
+		}
+
+		std::function<void(float)> tick;
+	};
+
 	class WebScene
 	{
 	public:
@@ -52,7 +82,27 @@ namespace aether::app::web
 		WebScene(World& world, webgpu::WebGpuDevice& graphics);
 		~WebScene();
 		Expected<std::vector<WebScriptRecord>> Load(std::string_view name);
-		Expected<Entity> Instantiate(std::string_view name);
+		// Same instances the registered systems are; valid for the lifetime of the scene.
+		[[nodiscard]] PhysicsSystem& Physics()
+		{
+			return *m_physics;
+		}
+
+		[[nodiscard]] AnimationSystem& Animation()
+		{
+			return *m_animation;
+		}
+
+		[[nodiscard]] const ::aether::scripting::gameplay3d::ClipCatalog* Clips() const
+		{
+			return m_models.Clips();
+		}
+
+		void SetScriptTick(std::function<void(float)> tick)
+		{
+			m_script_system->tick = std::move(tick);
+		}
+		Expected<WebInstantiated> Instantiate(std::string_view name, glm::vec3 position);
 		void Tick(float dt);
 		Expected<void> ValidateEffects();
 		std::vector<Entity> TakeRetiredParticles();
@@ -61,6 +111,11 @@ namespace aether::app::web
 
 	private:
 		Expected<std::vector<Entity>> Apply(const scene::SceneDescription& description);
+		Expected<std::vector<WebScriptRecord>> ResolveScripts(const scene::SceneDescription& description, const std::vector<Entity>& created);
+		Expected<void> ApplyPhysics3D(const scene::SceneDescription& description, const std::vector<Entity>& created);
+		PhysicsSystem* m_physics = nullptr;
+		AnimationSystem* m_animation = nullptr;
+		WebScriptSystem* m_script_system = nullptr;
 		WebTextureSink m_sink;
 		TextureRegistry m_textures;
 		TextureRegistry m_model_textures;

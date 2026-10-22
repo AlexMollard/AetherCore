@@ -34,7 +34,7 @@ def engine_arguments(sdk, compat):
         '-p:EmscriptenUpstreamEmscriptenPath=' + (sdk / 'upstream/emscripten').as_posix() + '/',
         '-p:EmscriptenUpstreamBinPath=' + (sdk / 'upstream/bin').as_posix() + '/',
         '-p:WasmCachePath=' + (sdk / 'upstream/emscripten/cache').as_posix(),
-        '-p:EmccExtraLDFlags=-sDEFAULT_TO_CXX=1 -fexceptions -g0 --use-port=emdawnwebgpu -sFETCH=1 -sASSERTIONS=2 --pre-js "' + compat.as_posix() + '" -DAETHER_COMPAT_' + stamp,
+        '-p:EmccExtraLDFlags=-sDEFAULT_TO_CXX=1 -fexceptions -g0 --use-port=emdawnwebgpu -sFETCH=1 -sASSERTIONS=2 -sSTACK_SIZE=1048576 --pre-js "' + compat.as_posix() + '" -DAETHER_COMPAT_' + stamp,
         '-p:WasmEnableExceptionHandling=false', '-p:WasmNativeStrip=false']
 
 

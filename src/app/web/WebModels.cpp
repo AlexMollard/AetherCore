@@ -168,7 +168,19 @@ namespace aether::app::web
 			{
 				AE_TRY(data, assets::GltfAsset::LoadFromVfsPath(path));
 				AE_TRY(pose, assets::EvaluateModelPose(*data));
-				Model model{std::move(*data), {}};
+				Model model{std::move(*data), {}, {}};
+				for (const auto& animation: model.data.animations)
+				{
+					float duration = 0.0f;
+					for (const auto& channel: animation.channels)
+					{
+						if (!channel.times.empty())
+						{
+							duration = std::max(duration, channel.times.back());
+						}
+					}
+					model.clipDurations.push_back(duration);
+				}
 				for (const auto& primitive: model.data.primitives)
 				{
 					if (!m_graphics.UploadMesh(m_next_slot, primitive.vertices, primitive.indices))
@@ -324,16 +336,22 @@ namespace aether::app::web
 				std::optional<std::uint32_t> clip;
 				float time = 0;
 				bool loop = true;
+				assets::PoseFade fade;
 				if (const auto* skin = world.TryGet<SkinnedMeshComponent>(entity))
 				{
 					if (!binding.model->data.animations.empty())
 					{
 						clip = skin->clipIndex;
+						// Native: the outgoing clip is sampled only while its index is a real clip.
+						if (skin->fadeWeight > 0.0f && skin->fadeClipIndex < binding.model->data.animations.size())
+						{
+							fade = {skin->fadeClipIndex, skin->fadeTime, skin->fadeLooping, skin->fadeWeight};
+						}
 					}
 					time = skin->animTime;
 					loop = skin->looping;
 				}
-				AE_TRY(pose, assets::EvaluateModelPose(binding.model->data, clip, time, loop));
+				AE_TRY(pose, assets::EvaluateModelPose(binding.model->data, clip, time, loop, &fade));
 				draw.skinMatrices = pose->skins[binding.skin];
 			}
 			packet.render3D.meshes.push_back(std::move(draw));
@@ -341,6 +359,57 @@ namespace aether::app::web
 		packet.hasSceneDraws = packet.hasSceneDraws || !packet.render3D.meshes.empty();
 		packet.blobCharacterCount = static_cast<std::uint32_t>(ExtractBlobShadows(blobs, glm::vec3(packet.cameraWorldPos), 64, packet.blobShadows));
 		return {};
+	}
+
+	const WebModels::Model* WebModels::FindModel(Entity entity) const
+	{
+		for (const auto& binding: m_bindings)
+		{
+			if (binding.entity.id == entity.id)
+			{
+				return binding.model;
+			}
+		}
+		return nullptr;
+	}
+
+	std::uint32_t WebModels::Catalog::ClipCount(Entity animator) const
+	{
+		const auto* model = m_owner.FindModel(animator);
+		return model ? static_cast<std::uint32_t>(model->data.animations.size()) : 0u;
+	}
+
+	std::string_view WebModels::Catalog::ClipName(Entity animator, std::uint32_t index) const
+	{
+		const auto* model = m_owner.FindModel(animator);
+		return model && index < model->data.animations.size() ? std::string_view(model->data.animations[index].name) : std::string_view{};
+	}
+
+	float WebModels::Catalog::ClipDuration(Entity animator, std::uint32_t index) const
+	{
+		const auto* model = m_owner.FindModel(animator);
+		return model && index < model->clipDurations.size() ? model->clipDurations[index] : 0.0f;
+	}
+
+	bool WebModels::ClipDurations(World& world, Entity entity, const SkinnedMeshComponent& skin, float& clip, float& fade) const
+	{
+		for (const auto& binding: m_bindings)
+		{
+			if (binding.entity.id != entity.id)
+			{
+				continue;
+			}
+			if (!binding.model || binding.model->clipDurations.empty())
+			{
+				return false;
+			}
+			const auto& durations = binding.model->clipDurations;
+			clip = skin.clipIndex < durations.size() ? durations[skin.clipIndex] : 0.0f;
+			fade = skin.fadeClipIndex < durations.size() ? durations[skin.fadeClipIndex] : 0.0f;
+			return true;
+		}
+		(void) world;
+		return false;
 	}
 
 	void WebModels::ClearEntities()

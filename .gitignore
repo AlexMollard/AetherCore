@@ -158,3 +158,6 @@ imgui.ini
 
 # CPM_SOURCE_CACHE, when pointed at the tree the way CI does.
 .cpm-cache/
+
+# Cargo build output from the Rust SDK workspace.
+/rust/target/

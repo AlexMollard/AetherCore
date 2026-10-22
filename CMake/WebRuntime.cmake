@@ -55,8 +55,10 @@ set(AETHER_WEB_STAGED_PROJECT "" CACHE PATH "Preflight-validated selected projec
 set(AETHER_WEB_GAMEPLAY_MANIFEST "" CACHE FILEPATH "Selected Cargo manifest")
 set(AETHER_WEB_GAMEPLAY_NAME "" CACHE STRING "Selected Rust library name")
 set(AETHER_WEB_MANAGED_PROJECT "" CACHE FILEPATH "Selected C# gameplay project")
-if(AETHERCORE_WEB_MANAGED AND (AETHERCORE_WEB_TEST_BRIDGE OR NOT EXISTS "${AETHER_WEB_MANAGED_PROJECT}"))
-    message(FATAL_ERROR "Managed Web exports require a selected C# project and automation OFF")
+# Published (staged-project) exports never carry the automation bridge; a reference/qualification
+# build of the C# runtime (no staged project) may, so native-vs-browser parity can read its state.
+if(AETHERCORE_WEB_MANAGED AND (NOT EXISTS "${AETHER_WEB_MANAGED_PROJECT}" OR (AETHERCORE_WEB_TEST_BRIDGE AND AETHER_WEB_STAGED_PROJECT)))
+    message(FATAL_ERROR "Managed Web exports require a selected C# project; published exports require automation OFF")
 endif()
 if(AETHER_WEB_PROJECT AND NOT AETHERCORE_WEB_MANAGED)
     if(AETHERCORE_WEB_TEST_BRIDGE OR NOT AETHER_WEB_GAMEPLAY_MANIFEST OR NOT AETHER_WEB_STAGED_PROJECT OR NOT AETHER_WEB_GAMEPLAY_NAME MATCHES "^[A-Za-z0-9_]+$")
@@ -86,6 +88,7 @@ add_custom_command(OUTPUT "${_rust_library}"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/reference.rs"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/model_probe.rs"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scripts/src/custom_pass.rs"
+        "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/fixtures3d/gameplay3d.rs"
         "${CMAKE_SOURCE_DIR}/projects/EmberRun/scripts/src/game.rs"
     VERBATIM)
 endif()
@@ -98,7 +101,7 @@ if(NOT AETHERCORE_WEB_MANAGED)
     add_dependencies(GameRuntime WebGameplay)
     target_link_libraries(GameRuntime PRIVATE "${_rust_library}")
 endif()
-if(AETHERCORE_WEB_TEST_BRIDGE)
+if(AETHERCORE_WEB_TEST_BRIDGE AND NOT AETHERCORE_WEB_MANAGED)
     target_link_options(GameRuntime PRIVATE --emit-symbol-map)
 endif()
 target_compile_definitions(Engine PUBLIC AE_WEB_TEST_BRIDGE=$<BOOL:${AETHERCORE_WEB_TEST_BRIDGE}>)

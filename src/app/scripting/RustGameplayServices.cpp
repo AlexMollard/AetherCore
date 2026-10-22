@@ -22,6 +22,8 @@
 #include "rendering/CustomPassRegistry.hpp"
 #include "scripting/GameplayAccess.hpp"
 #include "scripting/GameplayCustomPass.hpp"
+#include "scripting/Gameplay3D.hpp"
+#include "net/NetworkContext.hpp"
 #include "scripting/GameplaySaveStore.hpp"
 #include "scripting/GameplayAbiValidation.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -47,6 +49,12 @@ namespace aether::app::scripting
 			return !name.empty() && name.size() <= 128 && std::all_of(name.begin(), name.end(), [](unsigned char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-'; });
 		}
 
+		// Operations that write physics or character state of an existing entity.
+		bool WritesBody(uint32_t operation)
+		{
+			return operation == AE_GAMEPLAY_SERVICE_SET_VELOCITY_3D || operation == AE_GAMEPLAY_SERVICE_ADD_FORCE_3D || operation == AE_GAMEPLAY_SERVICE_ADD_IMPULSE_3D || operation == AE_GAMEPLAY_SERVICE_CHARACTER_MOVE
+			       || operation == AE_GAMEPLAY_SERVICE_CHARACTER_JUMP;
+		}
 
 	} // namespace
 
@@ -66,7 +74,7 @@ namespace aether::app::scripting
 	AetherGameplayServicesApi RustGameplayServices::EngineApi() const noexcept
 	{
 		uint64_t capabilities = 0;
-		for (uint32_t operation = 1; operation <= AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS; ++operation)
+		for (uint32_t operation = 1; operation <= AE_GAMEPLAY_SERVICE_GET_CURRENT_CLIP; ++operation)
 		{
 			capabilities |= AE_GAMEPLAY_SERVICE_CAP(operation);
 		}
@@ -89,6 +97,14 @@ namespace aether::app::scripting
 		if (m_context.services == nullptr || m_context.services->TryGet<CustomPassRegistry>() == nullptr)
 		{
 			capabilities &= ~(AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_REGISTER_CUSTOM_PASS) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_UNREGISTER_CUSTOM_PASS) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS));
+		}
+		if (m_context.physics == nullptr)
+		{
+			// Everything before the animation operations needs the Jolt PhysicsSystem.
+			for (uint32_t operation = AE_GAMEPLAY_SERVICE_GET_VELOCITY_3D; operation < AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP; ++operation)
+			{
+				capabilities &= ~AE_GAMEPLAY_SERVICE_CAP(operation);
+			}
 		}
 		if (m_save_directory.empty())
 		{
@@ -121,8 +137,8 @@ namespace aether::app::scripting
 				return AE_GAMEPLAY_INVALID_ARGUMENT;
 			}
 			*outValue = {.structSize = sizeof(*outValue)};
-			// SUBMIT_CUSTOM_PASS carries a raw float payload in text2, which is not UTF-8.
-			const bool rawText2 = request->operation == AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS;
+			// SUBMIT_CUSTOM_PASS and RAYCAST_3D carry a raw float payload in text2, which is not UTF-8.
+			const bool rawText2 = aether::scripting::gameplay3d::HasRawText2(request->operation);
 			if (!aether::scripting::IsGameplayUtf8(request->text) || (!rawText2 && !aether::scripting::IsGameplayUtf8(request->text2)))
 			{
 				return AE_GAMEPLAY_INVALID_ARGUMENT;
@@ -178,7 +194,7 @@ namespace aether::app::scripting
 			return AE_GAMEPLAY_WRONG_WORLD;
 		}
 		const bool entityOperation = request.operation == AE_GAMEPLAY_SERVICE_SET_SPRITE_COLOR || request.operation == AE_GAMEPLAY_SERVICE_GET_VELOCITY_2D || request.operation == AE_GAMEPLAY_SERVICE_SET_VELOCITY_2D
-		                             || request.operation == AE_GAMEPLAY_SERVICE_SET_UI_TEXT || request.operation == AE_GAMEPLAY_SERVICE_DESTROY_ENTITY;
+		                             || request.operation == AE_GAMEPLAY_SERVICE_SET_UI_TEXT || request.operation == AE_GAMEPLAY_SERVICE_DESTROY_ENTITY || aether::scripting::gameplay3d::IsGameplay3DEntityOperation(request.operation);
 		if (entityOperation)
 		{
 			const auto status = access.entityValid(access.context, request.entity, &valid);
@@ -345,7 +361,31 @@ namespace aether::app::scripting
 				return aether::scripting::ExecuteCustomPassOperation(*registry, request);
 			}
 			default:
-				return AE_GAMEPLAY_UNSUPPORTED;
+			{
+				if (!aether::scripting::gameplay3d::IsGameplay3DOperation(request.operation))
+				{
+					return AE_GAMEPLAY_UNSUPPORTED;
+				}
+				if (m_context.physics == nullptr && request.operation < AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP)
+				{
+					return AE_GAMEPLAY_UNSUPPORTED;
+				}
+				// Same guard as the C# exports: a peer may not drive an entity it does not own.
+				if (WritesBody(request.operation) && m_context.services != nullptr)
+				{
+					const auto* network = m_context.services->TryGet<aether::net::NetworkContext>();
+					if (network != nullptr && !network->HasAuthority(world, entity))
+					{
+						return AE_GAMEPLAY_NO_AUTHORITY;
+					}
+				}
+				const auto result = aether::scripting::gameplay3d::ExecuteGameplay3DOperation(world, m_context.physics, request, value, stringBuffer);
+				if (result.status == AE_GAMEPLAY_OK && result.hasEntity)
+				{
+					value.entity = m_access.Handle(result.entity);
+				}
+				return result.status;
+			}
 		}
 	}
 } // namespace aether::app::scripting

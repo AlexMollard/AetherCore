@@ -69,13 +69,13 @@ namespace aether::assets
 		}
 	} // namespace
 
-	Expected<ModelPose> EvaluateModelPose(const GltfAsset& asset, std::optional<std::uint32_t> clip, float time, bool looping)
+	Expected<ModelPose> EvaluateModelPose(const GltfAsset& asset, std::optional<std::uint32_t> clip, float time, bool looping, const PoseFade* fade)
 	{
 		if (!std::isfinite(time) || asset.nodes.size() > std::numeric_limits<std::uint32_t>::max() || asset.skins.size() > std::numeric_limits<std::uint32_t>::max())
 		{
 			AE_UNEXPECTED(AetherError::Asset("Model pose has a non-finite time or unsupported node/skin count"));
 		}
-		if (clip && *clip >= asset.animations.size())
+		if ((clip && *clip >= asset.animations.size()) || (fade && fade->weight > 0.0f && (!clip || fade->clip >= asset.animations.size() || !std::isfinite(fade->time))))
 		{
 			AE_UNEXPECTED(AetherError::Asset("Model pose animation clip index is out of range"));
 		}
@@ -112,9 +112,13 @@ namespace aether::assets
 			locals.push_back(node.matrix);
 		}
 
-		if (clip)
+		// Samples every channel of one clip over the pose. weight >= 1 overwrites; below 1 the
+		// sample is blended over what is already there (animation_sample.slang SampleClip: lerp
+		// for translation/scale, nlerp for rotation), so a crossfade's outgoing clip eases out
+		// over the incoming one and nodes it does not animate keep the other clip's value.
+		const auto sampleClip = [&](std::uint32_t clipIndex, float clipTime, bool clipLooping, float weight) -> Expected<void>
 		{
-			const auto& animation = asset.animations[*clip];
+			const auto& animation = asset.animations[clipIndex];
 			float duration = 0.0f;
 			for (const auto& channel: animation.channels)
 			{
@@ -147,15 +151,16 @@ namespace aether::assets
 				}
 				duration = std::max(duration, channel.times.back());
 			}
-			float sampleTime = std::clamp(time, 0.0f, duration);
-			if (looping && duration > 0.0f)
+			float sampleTime = std::clamp(clipTime, 0.0f, duration);
+			if (clipLooping && duration > 0.0f)
 			{
-				sampleTime = std::fmod(time, duration);
+				sampleTime = std::fmod(clipTime, duration);
 				if (sampleTime < 0.0f)
 				{
 					sampleTime += duration;
 				}
 			}
+			const bool overwrite = weight >= 1.0f;
 			for (const auto& channel: animation.channels)
 			{
 				const auto node = channel.nodeIndex;
@@ -174,17 +179,40 @@ namespace aether::assets
 				switch (channel.path)
 				{
 					case GltfAnimationPath::Translation:
-						translations[node] = glm::vec3(sample);
+						translations[node] = overwrite ? glm::vec3(sample) : glm::mix(translations[node], glm::vec3(sample), weight);
 						break;
 					case GltfAnimationPath::Rotation:
-						rotations[node] = NormalizeRotation(sample);
+					{
+						if (overwrite)
+						{
+							rotations[node] = NormalizeRotation(sample);
+						}
+						else
+						{
+							glm::vec4 incoming = NormalizeRotation(sample);
+							if (glm::dot(rotations[node], incoming) < 0.0f)
+							{
+								incoming = -incoming;
+							}
+							rotations[node] = NormalizeRotation(glm::mix(rotations[node], incoming, weight));
+						}
 						break;
+					}
 					case GltfAnimationPath::Scale:
-						scales[node] = glm::vec3(sample);
+						scales[node] = overwrite ? glm::vec3(sample) : glm::mix(scales[node], glm::vec3(sample), weight);
 						break;
 					default:
 						break;
 				}
+			}
+			return {};
+		};
+		if (clip)
+		{
+			AE_TRY_VOID(sampleClip(*clip, time, looping, 1.0f));
+			if (fade && fade->weight > 0.0f)
+			{
+				AE_TRY_VOID(sampleClip(fade->clip, fade->time, fade->looping, fade->weight));
 			}
 		}
 

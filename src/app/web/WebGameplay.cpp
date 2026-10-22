@@ -1,10 +1,14 @@
 #include "WebGameplay.hpp"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include "scripting/GameplayAbiValidation.hpp"
+#include "scripting/Gameplay3D.hpp"
+#include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsSystem.hpp"
 #include "scripting/GameplayCustomPass.hpp"
 #include "gpu/WebMaterialShader.hpp"
 #include "physics2d/Physics2DSystem.hpp"
@@ -14,6 +18,9 @@
 #include "ui/UiNavigationSystem.hpp"
 #include "ui/UiWidgetSystem.hpp"
 #include "scene/Hierarchy.hpp"
+#if defined(AE_WEB_MANAGED)
+#	include "BrowserManaged.hpp"
+#endif
 
 #if AE_WEB_TEST_BRIDGE
 extern "C" void aether_browser_test_panic();
@@ -63,6 +70,172 @@ namespace aether::app::web
 		}
 	} // namespace
 
+#if AE_WEB_TEST_BRIDGE
+	namespace
+	{
+		void AppendNumber(std::string& out, double value)
+		{
+			if (!std::isfinite(value))
+			{
+				out += "null";
+				return;
+			}
+			char buffer[40];
+			std::snprintf(buffer, sizeof(buffer), "%.17g", value);
+			out += buffer;
+		}
+
+		void AppendString(std::string& out, const std::string& value)
+		{
+			out += '"';
+			for (const unsigned char c: value)
+			{
+				if (c == '"' || c == '\\')
+				{
+					out += '\\';
+					out += static_cast<char>(c);
+				}
+				else if (c < 0x20)
+				{
+					char buffer[8];
+					std::snprintf(buffer, sizeof(buffer), "\\u%04x", c);
+					out += buffer;
+				}
+				else
+				{
+					out += static_cast<char>(c);
+				}
+			}
+			out += '"';
+		}
+
+		std::string EntityLabel(World& world, Entity entity)
+		{
+			const auto* name = world.TryGet<NameComponent>(entity);
+			return name ? name->name : std::to_string(entity.id);
+		}
+
+		void AppendProperty(std::string& out, World& world, const ScriptPropertyValue& property)
+		{
+			switch (property.type)
+			{
+				case ScriptPropertyValue::Type::Float:
+					AppendNumber(out, property.f4[0]);
+					break;
+				case ScriptPropertyValue::Type::Vector3:
+					out += '[';
+					for (int axis = 0; axis < 3; ++axis)
+					{
+						if (axis)
+						{
+							out += ',';
+						}
+						AppendNumber(out, property.f4[axis]);
+					}
+					out += ']';
+					break;
+				case ScriptPropertyValue::Type::Bool:
+					out += property.i64 != 0 ? "true" : "false";
+					break;
+				case ScriptPropertyValue::Type::String:
+					AppendString(out, property.str);
+					break;
+				case ScriptPropertyValue::Type::Entity:
+				case ScriptPropertyValue::Type::Component:
+				{
+					const Entity target{static_cast<std::uint32_t>(property.i64)};
+					if (world.GetRegistry().valid(World::ToEntt(target)) && world.TryGet<NameComponent>(target))
+					{
+						AppendString(out, world.TryGet<NameComponent>(target)->name);
+					}
+					else
+					{
+						out += "null";
+					}
+					break;
+				}
+				default:
+					out += std::to_string(property.i64);
+					break;
+			}
+		}
+	} // namespace
+
+	// Mirrors the native WriteGameplayState entity records (script properties and $engine
+	// exists/position/localToWorld/uiText) so a harness can diff the two backends tick by tick.
+	void WebGameplay::PublishTestState()
+	{
+		std::string out = "[";
+		bool first = true;
+		for (const auto& instance: m_instances)
+		{
+			if (!m_world.GetRegistry().valid(World::ToEntt(instance.entity)))
+			{
+				continue;
+			}
+			out += first ? "" : ",";
+			first = false;
+			out += "{\"entity\":";
+			AppendString(out, EntityLabel(m_world, instance.entity));
+			out += ",\"type\":";
+			AppendString(out, instance.type);
+			out += ",\"properties\":{";
+			const auto properties = m_host.GetScriptProperties(instance.type);
+			bool firstProperty = true;
+			for (std::size_t index = 0; index < properties.size(); ++index)
+			{
+				ScriptPropertyValue value;
+				if (!m_host.GetPropertyValue(instance.handle, static_cast<int>(index), value))
+				{
+					continue;
+				}
+				out += firstProperty ? "" : ",";
+				firstProperty = false;
+				AppendString(out, properties[index].name);
+				out += ':';
+				AppendProperty(out, m_world, value);
+			}
+			out += "}}";
+		}
+		for (auto&& [handle, name]: m_world.View<NameComponent>().each())
+		{
+			const Entity entity = World::FromEntt(handle);
+			out += first ? "" : ",";
+			first = false;
+			out += "{\"entity\":";
+			AppendString(out, name.name);
+			out += ",\"type\":\"$engine\",\"properties\":{\"exists\":true";
+			if (const auto* transform = m_world.TryGet<TransformComponent>(entity))
+			{
+				out += ",\"position\":[";
+				for (int axis = 0; axis < 3; ++axis)
+				{
+					out += axis ? "," : "";
+					AppendNumber(out, transform->localToWorld[3][axis]);
+				}
+				out += "],\"localToWorld\":[";
+				for (int column = 0; column < 4; ++column)
+				{
+					for (int row = 0; row < 4; ++row)
+					{
+						out += (column || row) ? "," : "";
+						AppendNumber(out, transform->localToWorld[column][row]);
+					}
+				}
+				out += ']';
+			}
+			if (const auto* text = m_world.TryGet<ui::UIText>(entity))
+			{
+				out += ",\"uiText\":";
+				AppendString(out, text->text);
+			}
+			out += "}}";
+		}
+		out += ']';
+		EM_ASM({ aetherTestInternal.entityJson = UTF8ToString($0); aetherTestInternal.entityTick = $1; }, out.c_str(), m_ticks);
+	}
+#endif
+
 	WebGameplay::WebGameplay(World& world, aether::scripting::GameplayAccess& access, webgpu::WebGpuDevice& graphics, std::array<bool, 512>& keys, std::array<bool, 512>& pressedKeys, const AetherGameplayModuleApi& module)
 	      : m_world(world), m_access(access), m_graphics(graphics), m_keys(keys), m_pressed_keys(pressedKeys), m_module(module)
 	{
@@ -89,11 +262,23 @@ namespace aether::app::web
 		m_host.Clear(++m_generation);
 		m_instances.clear();
 		m_scene.reset();
+#if defined(AE_WEB_MANAGED)
+		BindManagedBrowserSimulation(nullptr, nullptr);
+#endif
 	}
 
 	Expected<void> WebGameplay::Initialize()
 	{
 		m_scene = std::make_unique<WebScene>(m_world, m_graphics);
+		m_scene->SetScriptTick(
+		        [this](float dt)
+		        {
+			        // One failure ends the tick's script phase; Frame reports it once the world update returns.
+			        if (m_script_status)
+			        {
+				        m_script_status = RunScripts(dt);
+			        }
+		        });
 		const int length =
 		        EM_ASM_INT({ return lengthBytesUTF8(new URLSearchParams(location.search).get('scene') || (globalThis.aetherProject ?.startupScene || (new URLSearchParams(location.search).has('resume') ? 'ReferenceResult' : 'ReferenceStart'))); });
 		if (length < 1 || length > 128)
@@ -108,7 +293,7 @@ namespace aether::app::web
 		return Load(name);
 	}
 
-	Expected<void> WebGameplay::Load(const std::string& name)
+	Expected<void> WebGameplay::Load(const std::string& name, bool deferScripts)
 	{
 		if (!EM_ASM_INT({ return !globalThis.aetherProject || aetherProject.scenes.includes(UTF8ToString($0)); }, name.c_str()))
 		{
@@ -116,27 +301,162 @@ namespace aether::app::web
 		}
 		m_host.Clear(++m_generation);
 		m_instances.clear();
+		m_spawned_scripts.clear();
 		m_custom_passes.registered.clear();
 		m_custom_passes.frame.passes.clear();
 		AE_TRY(records, m_scene->Load(name));
+#if defined(AE_WEB_MANAGED)
+		// The shared C# interop exports act on this scene's physics and clip catalog.
+		BindManagedBrowserSimulation(static_cast<PhysicsSystem*>(m_world.FindSystem("PhysicsSystem")), m_scene->Clips());
+#endif
 		m_manual_warm_frames = 0;
 #if defined(AE_WEB_MANAGED)
 		AE_TRY_VOID(m_host.Reset(m_module, "csharp", m_generation));
 #else
 		AE_TRY_VOID(m_host.Reset(m_module, "rust", m_generation));
 #endif
-		for (const auto& record: *records)
+		if (deferScripts)
 		{
-			AE_TRY(handle, m_host.CreateInstance(record.record.type, record.entity.id));
-			m_instances.push_back({record.entity, *handle});
-			AE_TRY_VOID(m_host.TryApplyProperties(*handle, record.record.type, record.record.properties));
+			// Native creates and attaches a freshly loaded scene's scripts on the NEXT
+			// ScriptComponentSystem update, never inside the update that requested the load.
+			m_spawned_scripts = std::move(*records);
 		}
-		for (const auto& instance: m_instances)
+		else
 		{
-			AE_TRY_VOID(m_host.Attach(instance.handle));
+			for (const auto& record: *records)
+			{
+				AE_TRY(handle, m_host.CreateInstance(record.record.type, record.entity.id));
+				EnablePhysicsEvents(record.entity);
+				m_instances.push_back({record.entity, *handle, record.record.type});
+				AE_TRY_VOID(m_host.TryApplyProperties(*handle, record.record.type, record.record.properties));
+			}
+			for (const auto& instance: m_instances)
+			{
+				AE_TRY_VOID(m_host.Attach(instance.handle));
+			}
 		}
 		EM_ASM({ aetherRuntime.scene = UTF8ToString($0); }, name.c_str());
 		m_previous = m_accumulator = 0;
+		return {};
+	}
+
+	// Native ScriptComponentSystem gives a Rust instance's entity the 3D contact lists when a
+	// PhysicsSystem exists: Jolt fills them only for entities that carry the component.
+	void WebGameplay::EnablePhysicsEvents(Entity entity)
+	{
+#if !defined(AE_WEB_MANAGED)
+		if ((m_module.capabilities & AE_GAMEPLAY_CAP_PHYSICS) != 0 && m_world.FindSystem("PhysicsSystem") != nullptr && !m_world.Has<CollisionEventsComponent>(entity))
+		{
+			m_world.Emplace<CollisionEventsComponent>(entity);
+		}
+#else
+		(void) entity;
+#endif
+	}
+
+	// ScriptComponentSystem::Update: every attached script, in creation order, gets the physics
+	// events produced by this tick's step and then its Update. Instances created while this runs
+	// (scripted prefab instantiation) start with the next tick, like a native script added mid-update.
+	Expected<void> WebGameplay::RunScripts(float dt)
+	{
+		AE_TRY_VOID(StartSpawnedScripts());
+		const auto count = m_instances.size();
+		for (std::size_t index = 0; index < count && index < m_instances.size(); ++index)
+		{
+			const auto instance = m_instances[index];
+			if (!m_world.GetRegistry().valid(World::ToEntt(instance.entity)) || m_world.Has<DisabledComponent>(instance.entity) || ecs::HasDisabledAncestor(m_world, instance.entity))
+			{
+				continue;
+			}
+			if ((m_module.capabilities & AE_GAMEPLAY_CAP_PHYSICS) != 0)
+			{
+				// Snapshot first: callbacks may add components and invalidate ECS storage.
+				const auto dispatch = [&](const auto& snapshot, std::uint32_t flags) -> Expected<void>
+				{
+					const std::vector<Entity>* lists[] = {&snapshot.collisionEnter, &snapshot.collisionExit, &snapshot.triggerEnter, &snapshot.triggerExit, &snapshot.overlapping};
+					for (std::uint32_t kind = 0; kind < 5; ++kind)
+					{
+						for (const auto other: *lists[kind])
+						{
+							AE_TRY_VOID(m_host.DispatchPhysics(instance.handle, other.id, kind, flags));
+						}
+					}
+					return {};
+				};
+				if (const auto* events = m_world.TryGet<CollisionEvents2DComponent>(instance.entity))
+				{
+					AE_TRY_VOID(dispatch(CollisionEvents2DComponent(*events), 0));
+				}
+				if (const auto* events = m_world.TryGet<CollisionEventsComponent>(instance.entity))
+				{
+					AE_TRY_VOID(dispatch(CollisionEventsComponent(*events), AE_GAMEPLAY_PHYSICS_FLAG_3D));
+				}
+			}
+			AE_TRY_VOID(m_host.Update(instance.handle, dt));
+		}
+		AE_TRY_VOID(m_scene->ValidateEffects());
+		// Entity.Destroy from script is deferred to here, ahead of the particle system, so no
+		// callback frees storage the loop above iterates (native: end of ScriptComponentSystem::Update).
+		AE_TRY_VOID(ProcessPendingDestroys());
+		// Native applies a script-requested scene load here, once the frame's scripts have finished
+		// (ScriptComponentSystem::Update), so the new scene's particles and the checkpoint of this
+		// very tick already see it. Frame timing is preserved across the switch.
+		if (!m_pending_scene.empty())
+		{
+			const auto scene = std::exchange(m_pending_scene, {});
+			const auto previous = m_previous;
+			const auto accumulator = m_accumulator;
+			AE_TRY_VOID(Load(scene, true));
+			m_previous = previous;
+			m_accumulator = accumulator;
+		}
+		return {};
+	}
+
+	// Scripts on entities spawned during the previous tick: create, configure and attach, as the
+	// native ScriptComponentSystem does the first time it sees them.
+	Expected<void> WebGameplay::StartSpawnedScripts()
+	{
+		const auto pending = std::exchange(m_spawned_scripts, {});
+		const auto first = m_instances.size();
+		for (const auto& record: pending)
+		{
+			if (!m_world.GetRegistry().valid(World::ToEntt(record.entity)))
+			{
+				continue;
+			}
+			AE_TRY(handle, m_host.CreateInstance(record.record.type, record.entity.id));
+			EnablePhysicsEvents(record.entity);
+			m_instances.push_back({record.entity, *handle, record.record.type});
+			AE_TRY_VOID(m_host.TryApplyProperties(*handle, record.record.type, record.record.properties));
+		}
+		for (auto index = first; index < m_instances.size(); ++index)
+		{
+			AE_TRY_VOID(m_host.Attach(m_instances[index].handle));
+		}
+		return {};
+	}
+
+	Expected<void> WebGameplay::ProcessPendingDestroys()
+	{
+		const auto pending = std::exchange(m_pending_destroys, {});
+		for (const auto entity: pending)
+		{
+			for (auto instance = m_instances.begin(); instance != m_instances.end();)
+			{
+				if (ecs::IsAncestor(m_world, instance->entity, entity))
+				{
+					AE_TRY_VOID(m_host.Detach(instance->handle));
+					AE_TRY_VOID(m_host.Destroy(instance->handle));
+					instance = m_instances.erase(instance);
+				}
+				else
+				{
+					++instance;
+				}
+			}
+			m_world.Destroy(entity);
+		}
 		return {};
 	}
 
@@ -229,65 +549,19 @@ namespace aether::app::web
 #endif
 				// Submissions always reflect the last tick: re-submitted every tick, never accumulated.
 				m_custom_passes.frame.passes.clear();
-				for (const auto& instance: m_instances)
-				{
-					if (m_world.Has<DisabledComponent>(instance.entity) || ecs::HasDisabledAncestor(m_world, instance.entity))
-					{
-						continue;
-					}
-					AE_TRY_VOID(m_host.Update(instance.handle, 1.0f / 60.0f));
-				}
-				AE_TRY_VOID(m_scene->ValidateEffects());
+				// Native order (Application.cpp): Animation, SpriteAnimation, Physics, Physics2D,
+				// ScriptComponentSystem, Particle. WebScene registers WebScriptSystem at the script
+				// slot, so every script receives this tick's physics events and its Update after the
+				// physics step and before particles - a velocity a script sets is first integrated
+				// on the following tick, and a burst it queues emits the same tick, as on desktop.
 				m_world.UpdateSystems(1.0f / 60.0f);
+				AE_TRY_VOID(std::exchange(m_script_status, {}));
 				for (const auto entity: m_scene->TakeRetiredParticles())
 				{
 					m_pending_destroys.push_back(entity);
 				}
 				m_scene->Tick(1.0f / 60.0f);
-				for (const auto& instance: m_instances)
-				{
-					if ((m_module.capabilities & AE_GAMEPLAY_CAP_PHYSICS) == 0)
-					{
-						continue;
-					}
-					if (const auto* events = m_world.TryGet<CollisionEvents2DComponent>(instance.entity))
-					{
-						for (auto other: events->collisionEnter)
-						{
-							AE_TRY_VOID(m_host.DispatchPhysics(instance.handle, other.id, 0));
-						}
-						for (auto other: events->collisionExit)
-						{
-							AE_TRY_VOID(m_host.DispatchPhysics(instance.handle, other.id, 1));
-						}
-						for (auto other: events->triggerEnter)
-						{
-							AE_TRY_VOID(m_host.DispatchPhysics(instance.handle, other.id, 2));
-						}
-						for (auto other: events->triggerExit)
-						{
-							AE_TRY_VOID(m_host.DispatchPhysics(instance.handle, other.id, 3));
-						}
-					}
-				}
-				for (auto entity: m_pending_destroys)
-				{
-					for (auto instance = m_instances.begin(); instance != m_instances.end();)
-					{
-						if (ecs::IsAncestor(m_world, instance->entity, entity))
-						{
-							AE_TRY_VOID(m_host.Detach(instance->handle));
-							AE_TRY_VOID(m_host.Destroy(instance->handle));
-							instance = m_instances.erase(instance);
-						}
-						else
-						{
-							++instance;
-						}
-					}
-					m_world.Destroy(entity);
-				}
-				m_pending_destroys.clear();
+				AE_TRY_VOID(ProcessPendingDestroys());
 				// A render frame may not run a fixed tick. Retain short presses until gameplay consumes them.
 				m_pressed_keys.fill(false);
 				++m_ticks;
@@ -295,6 +569,10 @@ namespace aether::app::web
 				if (testStep)
 				{
 					EM_ASM({ aetherTestInternal.afterTick(); });
+				}
+				if (testStep)
+				{
+					PublishTestState();
 				}
 #endif
 				m_accumulator -= 1.0 / 60.0;
@@ -390,9 +668,8 @@ namespace aether::app::web
 
 	AetherGameplayStatus WebGameplay::Invoke(const AetherGameplayServiceRequest& request, AetherGameplayPropertyValue& value, AetherGameplayUtf8Buffer buffer)
 	{
-		const bool customSubmit = request.operation == AE_GAMEPLAY_SERVICE_SUBMIT_CUSTOM_PASS;
-		// Submit payloads are raw float32 bytes, not text.
-		if (!aether::scripting::IsGameplayUtf8(request.text) || (!customSubmit && !aether::scripting::IsGameplayUtf8(request.text2)))
+		// SUBMIT_CUSTOM_PASS and RAYCAST_3D carry raw float32 bytes in text2, not text.
+		if (!aether::scripting::IsGameplayUtf8(request.text) || (!aether::scripting::gameplay3d::HasRawText2(request.operation) && !aether::scripting::IsGameplayUtf8(request.text2)))
 		{
 			return AE_GAMEPLAY_INVALID_ARGUMENT;
 		}
@@ -407,7 +684,7 @@ namespace aether::app::web
 		value.structSize = sizeof(value);
 		const auto engine = m_access.EngineApi();
 		const Entity entity{request.entity.id};
-		const bool entityOperation = request.operation == 2 || request.operation == 3 || request.operation == 4 || request.operation == 9 || request.operation == 13;
+		const bool entityOperation = request.operation == 2 || request.operation == 3 || request.operation == 4 || request.operation == 9 || request.operation == 13 || aether::scripting::gameplay3d::IsGameplay3DEntityOperation(request.operation);
 		if (entityOperation)
 		{
 			std::uint32_t valid = 0;
@@ -516,13 +793,14 @@ namespace aether::app::web
 				{
 					return AE_GAMEPLAY_UNSUPPORTED;
 				}
-				auto created = m_scene->Instantiate(text);
+				auto created = m_scene->Instantiate(text, {request.vector[0], request.vector[1], request.vector[2]});
 				if (!created)
 				{
 					return AE_GAMEPLAY_INVALID_ARGUMENT;
 				}
+				m_spawned_scripts.insert(m_spawned_scripts.end(), std::make_move_iterator(created->scripts.begin()), std::make_move_iterator(created->scripts.end()));
 				value.type = AE_GAMEPLAY_PROPERTY_ENTITY;
-				value.entity = m_access.Handle(*created);
+				value.entity = m_access.Handle(created->root);
 				return AE_GAMEPLAY_OK;
 			}
 			case AE_GAMEPLAY_SERVICE_PLAY_AUDIO:
@@ -596,7 +874,24 @@ namespace aether::app::web
 				m_pending_destroys.push_back(entity);
 				return AE_GAMEPLAY_OK;
 			default:
-				return AE_GAMEPLAY_UNSUPPORTED;
+			{
+				if (!aether::scripting::gameplay3d::IsGameplay3DOperation(request.operation))
+				{
+					return AE_GAMEPLAY_UNSUPPORTED;
+				}
+				// Same resolution as the native host: Jolt where a PhysicsSystem exists, none otherwise.
+				auto* physics = static_cast<PhysicsSystem*>(m_world.FindSystem("PhysicsSystem"));
+				if (physics == nullptr && request.operation < AE_GAMEPLAY_SERVICE_SET_ANIMATION_CLIP)
+				{
+					return AE_GAMEPLAY_UNSUPPORTED;
+				}
+				const auto result = aether::scripting::gameplay3d::ExecuteGameplay3DOperation(m_world, physics, request, value, buffer, m_scene ? m_scene->Clips() : nullptr);
+				if (result.status == AE_GAMEPLAY_OK && result.hasEntity)
+				{
+					value.entity = m_access.Handle(result.entity);
+				}
+				return result.status;
+			}
 		}
 	}
 } // namespace aether::app::web

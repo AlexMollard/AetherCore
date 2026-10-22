@@ -5,11 +5,14 @@
 #include <string>
 #include <vector>
 
-#include "gpu/GpuTypes.hpp"
 #include "scene/Entity.hpp"
-#include "scene/LoadedModel.hpp"
-#include "material/EffectManager.hpp"
-#include "material/MaterialAsset.hpp"
+#if !defined(AETHERCORE_WEB_RUNTIME)
+// GPU-backed model/material state; the browser runtime has none of it.
+#	include "gpu/GpuTypes.hpp"
+#	include "scene/LoadedModel.hpp"
+#	include "material/EffectManager.hpp"
+#	include "material/MaterialAsset.hpp"
+#endif
 
 namespace aether
 {
@@ -32,6 +35,16 @@ namespace aether
 	struct DebugVertex;
 } // namespace aether
 
+namespace aether::effects
+{
+	class EffectManager;
+}
+
+namespace aether::scripting::gameplay3d
+{
+	class ClipCatalog;
+}
+
 namespace aether::app
 {
 	class DayNightSystem;
@@ -52,12 +65,17 @@ namespace aether::app::scripting
 		aether::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
 		aether::Physics2DSystem* physics2D = nullptr;
+		// Clip names/durations for animators without an AnimationDatabase (the browser's cooked glTF
+		// clips); null on native, where every skinned mesh has one.
+		const aether::scripting::gameplay3d::ClipCatalog* clips = nullptr;
 		// Null on a UiShell profile or when audio failed to init; every export
 		// treats that as "stay silent".
 		aether::audio::AudioSubsystem* audio = nullptr;
 		// Used to quiesce the render thread around script-triggered GPU work
 		aether::IEngineRuntime* engineRuntime = nullptr;
+#if !defined(AETHERCORE_WEB_RUNTIME)
 		gpu::CommandPool uploadPool = nullptr;
+#endif
 		float deltaTime = 0.0f;
 		float elapsedTime = 0.0f;
 		std::uint64_t frameCount = 0;
@@ -78,6 +96,7 @@ namespace aether::app::scripting
 		// storage the script runner is iterating.
 		std::vector<aether::Entity> pendingDestroys;
 
+#if !defined(AETHERCORE_WEB_RUNTIME)
 		// Loaded model data.  Must outlive the mesh entities that reference it.
 		std::deque<aether::LoadedModel> loadedModels;
 		std::unordered_map<std::string, size_t> loadedModelMap;
@@ -97,6 +116,7 @@ namespace aether::app::scripting
 		std::vector<CachedMesh> meshCache;
 		aether::MaterialAsset defaultMaterial{};
 		bool defaultMaterialInitialized = false;
+#endif
 	};
 
 	extern thread_local SceneContext* g_activeContext;

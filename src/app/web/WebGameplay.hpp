@@ -33,9 +33,20 @@ namespace aether::app::web
 		{
 			Entity entity;
 			std::uint64_t handle;
+			std::string type;
 		};
 
-		Expected<void> Load(const std::string& name);
+		Expected<void> Load(const std::string& name, bool deferScripts = false);
+		Expected<void> RunScripts(float dt);
+		Expected<void> ProcessPendingDestroys();
+		Expected<void> StartSpawnedScripts();
+		void EnablePhysicsEvents(Entity entity);
+		std::vector<WebScriptRecord> m_spawned_scripts;
+		Expected<void> m_script_status;
+#if AE_WEB_TEST_BRIDGE
+		// Read-only observable state (transforms, script properties) for native-vs-browser parity.
+		void PublishTestState();
+#endif
 		World& m_world;
 		aether::scripting::GameplayAccess& m_access;
 		webgpu::WebGpuDevice& m_graphics;

@@ -7,6 +7,7 @@
 #include "net/NetworkContext.hpp"
 #include "net/NetworkSystems.hpp"
 #include "scene/Components.hpp"
+#include "physics/PhysicsComponents.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -220,6 +221,11 @@ namespace aether::app
 			{
 				ctx.world->Emplace<CollisionEvents2DComponent>(entity);
 			}
+			if (native && ctx.physics != nullptr && (host.Capabilities() & AE_GAMEPLAY_CAP_PHYSICS) != 0 && !ctx.world->Has<CollisionEventsComponent>(entity))
+			{
+				// 3D contact/trigger lists are only filled for entities that carry this component.
+				ctx.world->Emplace<CollisionEventsComponent>(entity);
+			}
 			const auto created = host.CreateInstance(typeName, entity.id);
 			if (!created || *created == 0)
 			{
@@ -279,19 +285,33 @@ namespace aether::app
 		// and invalidate ECS storage. Managed scripts retain their own event polling.
 		if ((host.Capabilities() & AE_GAMEPLAY_CAP_PHYSICS) != 0)
 		{
-			if (const auto* events = ctx.world->TryGet<CollisionEvents2DComponent>(entity))
+			const auto dispatch = [&](const auto& snapshot, std::uint32_t flags)
 			{
-				const auto snapshot = *events;
 				const std::vector<Entity>* lists[] = {&snapshot.collisionEnter, &snapshot.collisionExit, &snapshot.triggerEnter, &snapshot.triggerExit, &snapshot.overlapping};
 				for (std::uint32_t kind = 0; kind < 5; ++kind)
 				{
 					for (const auto other: *lists[kind])
 					{
-						if (!host.DispatchPhysics(handle, other.id, kind) && native)
+						if (!host.DispatchPhysics(handle, other.id, kind, flags) && native)
 						{
-							return fail(handle);
+							return false;
 						}
 					}
+				}
+				return true;
+			};
+			if (const auto* events = ctx.world->TryGet<CollisionEvents2DComponent>(entity))
+			{
+				if (!dispatch(CollisionEvents2DComponent(*events), 0))
+				{
+					return fail(handle);
+				}
+			}
+			if (const auto* events = ctx.world->TryGet<CollisionEventsComponent>(entity))
+			{
+				if (!dispatch(CollisionEventsComponent(*events), AE_GAMEPLAY_PHYSICS_FLAG_3D))
+				{
+					return fail(handle);
 				}
 			}
 		}

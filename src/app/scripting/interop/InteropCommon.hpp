@@ -119,6 +119,7 @@ namespace aether::app::scripting::interop
 	template<typename Fn>
 	auto SafeExport(Fn&& fn) noexcept -> decltype(fn())
 	{
+#if defined(__cpp_exceptions)
 		try
 		{
 			return fn();
@@ -136,5 +137,9 @@ namespace aether::app::scripting::interop
 		{
 			return Result{};
 		}
+#else
+		// Built without exceptions (the browser runtime): nothing can unwind into managed frames.
+		return fn();
+#endif
 	}
 } // namespace aether::app::scripting::interop

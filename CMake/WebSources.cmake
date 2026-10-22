@@ -5,6 +5,11 @@ set(AETHER_WEB_ENGINE_SOURCES
     io/MemoryPak.cpp
     physics2d/Physics2DSystem.cpp
     physics2d/PhysicsDomainGate.cpp
+    physics/PhysicsSystem.cpp
+    physics/RagdollBuilder.cpp
+    physics/ColliderMeshSource.cpp
+    animation/AnimationSystem.cpp
+    scripting/Gameplay3D.cpp
     physics2d/TileMapCollision.cpp
     assets/TileAssetStore.cpp
     assets/TileSetAsset.cpp

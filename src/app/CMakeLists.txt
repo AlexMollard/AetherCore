@@ -12,6 +12,8 @@ if(AETHERCORE_WEB_RUNTIME)
         scene/reflection/CoreComponents.reflect.cpp
         scene/reflection/Reflection.cpp
         scene/reflection/Physics2D.reflect.cpp
+        scene/reflection/Physics.reflect.cpp
+        scene/reflection/CharacterController.reflect.cpp
         scene/reflection/MoreComponents.reflect.cpp)
     if(NOT AETHERCORE_WEB_MANAGED)
     add_executable(GameRuntime web/WebMain.cpp web/WebApplication.cpp)
@@ -20,7 +22,7 @@ if(AETHERCORE_WEB_RUNTIME)
     target_include_directories(GameRuntime PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
     target_link_libraries(GameRuntime PRIVATE Engine)
     target_compile_options(GameRuntime PRIVATE -fno-exceptions --use-port=emdawnwebgpu)
-    target_link_options(GameRuntime PRIVATE -fno-exceptions --use-port=emdawnwebgpu -sASSERTIONS=2 -sALLOW_MEMORY_GROWTH=1
+    target_link_options(GameRuntime PRIVATE -fno-exceptions --use-port=emdawnwebgpu -sASSERTIONS=2 -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576
         -sEXIT_RUNTIME=0 -sENVIRONMENT=web,node -sFETCH=1)
     set_target_properties(GameRuntime PROPERTIES OUTPUT_NAME AetherGame SUFFIX ".js"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/web")
@@ -35,7 +37,12 @@ if(AETHERCORE_WEB_RUNTIME)
         target_link_libraries(WebManagedRegistrations PRIVATE Engine)
         target_compile_options(WebManagedRegistrations PRIVATE -fno-exceptions --use-port=emdawnwebgpu)
         add_library(WebManagedRuntime STATIC web/BrowserManaged.cpp web/WebApplication.cpp
-            scripting/CSharpGameplayHost.cpp ${_managed_sources})
+            scripting/CSharpGameplayHost.cpp
+            # The same 3D exports native C# uses (Gameplay3D logic, SceneContext-addressed world).
+            scripting/SceneContext.cpp
+            scripting/interop/PhysicsExports.cpp scripting/interop/CharacterExports.cpp
+            scripting/interop/RagdollExports.cpp scripting/interop/AnimationExports.cpp
+            ${_managed_sources})
         add_dependencies(WebManagedRuntime WebManagedRegistrations)
         target_include_directories(WebManagedRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/src/include")
         target_link_libraries(WebManagedRuntime PRIVATE Engine)
@@ -45,7 +52,7 @@ if(AETHERCORE_WEB_RUNTIME)
         set_source_files_properties(scripting/CSharpGameplayHost.cpp PROPERTIES COMPILE_OPTIONS -fexceptions)
         set_target_properties(WebManagedRuntime PROPERTIES OUTPUT_NAME AetherHost PREFIX "")
         file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/web-managed-libraries.txt"
-            CONTENT "$<TARGET_FILE:WebManagedRuntime>\n$<TARGET_FILE:Engine>\n$<TARGET_FILE:box2d>\n$<TARGET_FILE:libzstd_static>\n$<JOIN:$<TARGET_OBJECTS:WebManagedRegistrations>,\n>\n")
+            CONTENT "$<TARGET_FILE:WebManagedRuntime>\n$<TARGET_FILE:Engine>\n$<TARGET_FILE:box2d>\n$<TARGET_FILE:libzstd_static>\n$<TARGET_FILE:Jolt>\n$<JOIN:$<TARGET_OBJECTS:WebManagedRegistrations>,\n>\n")
         add_custom_target(GameRuntime
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/project/dotnet_wasm.py"
                 --project "${AETHER_WEB_MANAGED_PROJECT}" --build "${CMAKE_BINARY_DIR}"

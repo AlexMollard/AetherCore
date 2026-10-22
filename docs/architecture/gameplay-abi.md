@@ -77,7 +77,7 @@ The gameplay library must be named `aether_gameplay` with crate-type `cdylib`, a
 
 Safe code receives copied values and opaque generation-bearing handles, not ECS pointers or mutable references. A callback-scoped Context cannot escape into Script state or another thread. The host rejects expired sessions, wrong worlds/threads, stale IDs and reentrant access. These checks protect safe SDK use; arbitrary unsafe native modules are not sandboxed.
 
-The base v1 ABI layout remains unchanged. Optional `GameplayServices.h` is negotiated separately by `aether_gameplay_bind_services`. It supplies input, sprite color, Box2D velocity, find/create/deferred-destroy entity, deferred scene requests, prefab instantiation, audio playback, UI text, saves and project custom render passes (see Custom pass services below). Missing services return `UNSUPPORTED`. Save keys are restricted filenames under the user configuration directory's `rust-saves/project-<hex UTF-8 namespace>` folder; the namespace uses the source project's folder name or the packaged executable folder name. Renaming that folder selects a different save namespace. Network/editor-tool API parity is not advertised.
+The base v1 ABI layout remains unchanged. Optional `GameplayServices.h` is negotiated separately by `aether_gameplay_bind_services`. It supplies input, sprite color, Box2D velocity, find/create/deferred-destroy entity, deferred scene requests, prefab instantiation, audio playback, UI text, saves, project custom render passes (see Custom pass services below) and the 3D physics/character/ragdoll/animation surface (see 3D gameplay services below). Missing services return `UNSUPPORTED`. Save keys are restricted filenames under the user configuration directory's `rust-saves/project-<hex UTF-8 namespace>` folder; the namespace uses the source project's folder name or the packaged executable folder name. Renaming that folder selects a different save namespace. Network/editor-tool API parity is not advertised.
 
 `RustGameplayHost` checks the module table and owns all native instances. Failed callbacks disable that instance while siblings continue. Unwind panics are caught inside Rust; abort panics/faults terminate the process and are verified in bounded child probes. Destruction and callbacks complete before the library unloads. Application teardown unloads Rust before removing scene/physics systems, including partial startup failures.
 
@@ -104,6 +104,39 @@ Operations 14-16 expose project custom render passes (C# `CustomPass`, Rust `Con
 - Native: the registered stem resolves to `shaders://<stem>.spv`. No shader-existence check happens at registration; the renderer logs a missing shader, as for C#.
 - Browser: the stem resolves to `project://assets/shaders/<stem>.wshader`, the WGSL artifact the project cook writes from the `.slang` source (compiled with `AE_WEB_CUSTOM_PASS=1`, so the shader must include `include/CustomPass.slangh` to be portable). Registration loads and uploads it, and a missing or invalid shader fails the register call with a `WEB_CUSTOM_PASS_SHADER` diagnostic. The production publisher profile `webgpu-2d-v1` rejects every project `.slang` asset (`WEB_SHADER_UNSUPPORTED`), so registration fails in such packages.
 - Browser budgets, enforced before GPU submission with an explicit diagnostic and no partial submission: at most 4096 float4 per submission, 64 submissions per frame, 65536 data float4 per frame; params, colors and data must be finite, and the stage must be 0..2. The browser host keeps only the submissions of the last fixed tick of a render frame. The Rust SDK does not reject non-finite values; native shaders see them verbatim.
+
+### 3D gameplay services
+
+Operations 17-30 expose the Jolt 3D surface the C# SDK already has: rigid body velocity/force/impulse, raycast, the character controller, ragdolls and skinned animation. The behaviour lives once in `src/engine/scripting/Gameplay3D.{hpp,cpp}` (`aether::scripting::gameplay3d`). The C# interop exports (`PhysicsExports`, `CharacterExports`, `RagdollExports`, `AnimationExports`) call the same functions, as do the native Rust host (`RustGameplayServices`) and the browser host (`WebGameplay::Invoke`, via `ExecuteGameplay3DOperation`), so a body, character, ragdoll or animator behaves identically from every language and backend. Rust reaches them through `Context::{velocity_3d, set_velocity_3d, add_force_3d, add_impulse_3d, raycast_3d, character_move, character_jump, character_is_grounded, spawn_ragdoll, set_animation_clip, set_animation_speed, animation_time, find_animation_clip, current_animation_clip}`.
+
+| Op | Name | Input | Result |
+|---|---|---|---|
+| 17 | `GET_VELOCITY_3D` | entity | VECTOR3 linear velocity (m/s) |
+| 18 | `SET_VELOCITY_3D` | entity, `vector[0..2]` | none |
+| 19 | `ADD_FORCE_3D` | entity, `vector[0..2]` (N, next step) | none |
+| 20 | `ADD_IMPULSE_3D` | entity, `vector[0..2]` (N*s, centre of mass) | none |
+| 21 | `RAYCAST_3D` | `text2` = 7 little-endian float32: origin xyz, direction xyz, max distance (28 bytes) | VECTOR3: `integer` 1 hit / 0 miss, `vector[0..2]` point, `vector[3]` distance, `entity` hit entity; result buffer = normal as 3 little-endian float32 (12 bytes + NUL) |
+| 22 | `CHARACTER_MOVE` | entity, `vector[0..2]` direction, `vector[3]` speed | none |
+| 23 | `CHARACTER_JUMP` | entity, `vector[0]` speed (not negative) | none |
+| 24 | `CHARACTER_IS_GROUNDED` | entity | BOOL |
+| 25 | `SPAWN_RAGDOLL` | entity, `text` = skeleton VFS path | ENTITY root (the same entity), `integer` = bone count |
+| 26 | `SET_ANIMATION_CLIP` | entity, `text` = clip name, or `integer` = index when the name is empty, `vector[0]` = cross-fade seconds | none |
+| 27 | `SET_ANIMATION_SPEED` | entity, `vector[0]` | none |
+| 28 | `GET_ANIMATION_TIME` | entity | FLOAT seconds into the playing clip |
+| 29 | `FIND_ANIMATION_CLIP` | entity, `text` = clip name | INT index |
+| 30 | `GET_CURRENT_CLIP` | entity | INT index |
+
+- Every operation except 21 takes a live target entity, which the host validates first (`INVALID_HANDLE` for a stale one). Non-finite `vector` lanes are `INVALID_ARGUMENT` for every operation; the raycast payload is validated the same way (finite origin/direction/distance, non-zero direction, distance greater than zero, exactly 28 bytes).
+- Status mapping: a missing component or system (no `RigidBody`, `CharacterController`, `SkinnedMesh`, or no PhysicsSystem) is `UNSUPPORTED`; a malformed argument or unknown clip is `INVALID_ARGUMENT`; a skeleton that cannot be loaded, is not recognisable, or an entity that is already a ragdoll bone is `INVALID_ARGUMENT`. Two statuses were added for this surface: `NOT_READY` (10) and `NO_AUTHORITY` (11).
+- Velocity before the body exists seeds the body's initial velocity (set-then-get reads the written value). Force and impulse have nothing to seed, so before the Jolt body is created they return `NOT_READY` (and warn once per body), exactly the case the C# exports silently ignore with a warning.
+- `NO_AUTHORITY`: the native host refuses velocity, force, impulse and character writes on an entity the local peer does not own when a `NetworkContext` is registered (the guard the C# exports apply). The browser has no networking.
+- Animation operations apply to the entity's own skinned mesh and to its spawned child meshes, like the C# SDK. `SET_ANIMATION_CLIP` with a fade starts a cross-fade from the playing clip. There is no 3D clip event: native has none, so none is invented. In the browser, clip names come from the model loader through `gameplay3d::ClipCatalog`; the native engine reads them from the `AnimationDatabase`.
+- Raycast uses `text2` as a raw binary payload and result buffer as raw bytes, so hosts skip UTF-8 validation of `text2` for operation 21 (as for 16) and the Rust SDK allocates a 16-byte result buffer for it.
+- Capabilities: the native host advertises 17-25 only when it has a `PhysicsSystem`; 26-30 are always advertised. The browser reference path advertises 1-30.
+
+3D collision and trigger events are not operations. They are delivered through the existing physics event path as `AE_GAMEPLAY_EVENT_PHYSICS` with `flags & AE_GAMEPLAY_PHYSICS_FLAG_3D` set (2D events leave it clear); `code` is 0 collision enter, 1 collision exit, 2 trigger enter, 3 trigger exit, 4 overlapping. `ScriptComponentSystem` (native) and `WebGameplay::RunScripts` (browser) give every Rust instance's entity a `CollisionEventsComponent` when a PhysicsSystem exists and dispatch its lists before the instance's `update`, just as they do for Box2D. In Rust, `Event::physics_kind()` returns a `PhysicsEventKind` and `Event::is_3d()` tells the two worlds apart.
+
+Verification: `tests/scripting/RustGameplayServicesTests.cpp` runs a real Jolt world behind the services (velocity seed/bake, force, raycast hit/miss/malformed/short buffer, character move/jump/ground, ragdoll refusals, animation by name/index/fade/child mesh, catalog). `rust/aethercore/tests/sdk.rs` covers the SDK encoding. `logs/task5/rust3d/` records a native Rust run of a 3D scene (`Spatial3D` script: velocity, raycast, character, 3D collision events, ragdoll from `Human.gltf`, animation cross-fade) through `aether-project` on the desktop profile.
 
 ## Declaration generation and compatibility checks
 

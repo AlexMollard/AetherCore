@@ -8,9 +8,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include "io/FileSystem.hpp"
 #include "physics2d/Physics2DSystem.hpp"
+#include "physics/PhysicsComponents.hpp"
 #include "animation/SpriteAnimationSystem.hpp"
+#include "animation/AnimationSystem.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
+#include "scene/TransformEdit.hpp"
+#include <functional>
 #include "scene/SceneSerializerDetail.hpp"
 #include "scene/TransformUtils.hpp"
 #include "ui/UiComponents.hpp"
@@ -41,6 +45,32 @@ namespace aether::app::web
 		bool ValidName(std::string_view name)
 		{
 			return !name.empty() && name.size() <= 128 && name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == std::string_view::npos;
+		}
+
+		// Same per-entity physics-domain rule as native SceneSerializerApply: one entity never
+		// simulates 2D and 3D physics at once; the scene kind breaks the tie.
+		struct PhysicsDomain
+		{
+			bool apply2D = false;
+			bool apply3D = false;
+		};
+
+		PhysicsDomain ResolvePhysicsDomain(const scene::EntityRecord& record, SceneKind kind)
+		{
+			PhysicsDomain domain{record.joint2D.has_value(), record.physics.has_value() || record.joint.has_value()};
+			for (const auto& generic: record.reflected)
+			{
+				const auto* type = reflect::FindComponentType(generic.type);
+				if (type != nullptr && (static_cast<std::uint32_t>(type->requiredFeatures) & static_cast<std::uint32_t>(SceneFeatureFlags::Physics2D)) != 0)
+				{
+					domain.apply2D = true;
+				}
+			}
+			if (domain.apply2D && domain.apply3D)
+			{
+				(kind == SceneKind::Scene2D ? domain.apply3D : domain.apply2D) = false;
+			}
+			return domain;
 		}
 
 		Expected<void> ExtractPostSettings(RenderFramePacket& packet)
@@ -142,20 +172,37 @@ namespace aether::app::web
 		m_model_textures.InitializeWhite(TextureResource(1));
 		m_sprite_system.Initialize(m_textures, m_sprites);
 		m_tile_system.Initialize(m_textures, m_sprites, m_tiles);
+		// Native Application order: Animation, SpriteAnimation, Physics, Physics2D, (scripts),
+		// Particles. Scripts run after every world simulation system and before particles so a
+		// burst a script queues emits the same tick, and collision events produced by this tick's
+		// physics step are visible to the same tick's scripts.
+		auto animation = std::make_unique<AnimationSystem>();
+		m_animation = animation.get();
+		m_animation->SetClipDurationSource([this](World& source, Entity entity, const SkinnedMeshComponent& skin, float& clip, float& fade) { return m_models.ClipDurations(source, entity, skin, clip, fade); });
+		world.RegisterSystem(std::move(animation));
+		world.RegisterSystem(std::make_unique<SpriteAnimationSystem>(m_sprites));
+		auto physics3D = std::make_unique<PhysicsSystem>();
+		m_physics = physics3D.get();
+		world.RegisterSystem(std::move(physics3D));
 		auto physics = std::make_unique<Physics2DSystem>();
 		physics->SetTileAssets(&m_tiles);
 		world.RegisterSystem(std::move(physics));
+		auto script = std::make_unique<WebScriptSystem>();
+		m_script_system = script.get();
+		world.RegisterSystem(std::move(script));
 		auto particles = std::make_unique<ParticleSystem>(m_textures);
 		particles->SetRetireCallback([this](Entity entity) { m_retired_particles.push_back(entity); });
 		world.RegisterSystem(std::move(particles));
-		world.RegisterSystem(std::make_unique<SpriteAnimationSystem>(m_sprites));
 	}
 
 	WebScene::~WebScene()
 	{
-		world.UnregisterSystem("SpriteAnimationSystem");
 		world.UnregisterSystem("ParticleSystem");
+		world.UnregisterSystem("WebScriptSystem");
 		world.UnregisterSystem("Physics2DSystem");
+		world.UnregisterSystem("PhysicsSystem");
+		world.UnregisterSystem("SpriteAnimationSystem");
+		world.UnregisterSystem("AnimationSystem");
 		m_tile_system.Shutdown();
 		m_sprite_system.Shutdown();
 		m_textures.ReleaseAll();
@@ -171,17 +218,13 @@ namespace aether::app::web
 		}
 		for (const auto& record: description.entities)
 		{
-			if (record.physics || record.joint || !record.scriptJoints.empty())
-			{
-				AE_UNEXPECTED(AetherError::Asset("Unsupported 3D entity in browser scene: " + record.name));
-			}
 			if (record.effect && record.effect->name != "plasma" && record.effect->name != "molten")
 			{
 				AE_UNEXPECTED(AetherError::Asset("Unsupported browser entity effect: " + record.effect->name));
 			}
 			for (const auto& generic: record.reflected)
 			{
-				if (generic.type != "Rigid Body 2D" && generic.type != "Collider 2D" && generic.type != "Tile Map"
+				if (generic.type != "Rigid Body 2D" && generic.type != "Collider 2D" && generic.type != "Tile Map" && generic.type != "Character Controller"
 				        && generic.type != "Particle Emitter"
 				        && generic.type != "Darkness Volume"
 				        && generic.type != "Point Light" && generic.type != "Spot Light" && generic.type != "Sky" && generic.type != "Light 2D Settings"
@@ -290,12 +333,22 @@ namespace aether::app::web
 					world.Emplace<MainCameraComponent>(entity);
 				}
 			}
+			const auto domain = ResolvePhysicsDomain(record, description.kind);
 			for (const auto& generic: record.reflected)
 			{
 				const auto* type = reflect::FindComponentType(generic.type);
 				if (!type || !type->emplaceDefault)
 				{
 					AE_UNEXPECTED(AetherError::Asset("Unknown browser component: " + generic.type));
+				}
+				// The entity's 2D physics lost the 2D/3D tie-break: never emplace both domains.
+				if (!domain.apply2D && (static_cast<std::uint32_t>(type->requiredFeatures) & static_cast<std::uint32_t>(SceneFeatureFlags::Physics2D)) != 0)
+				{
+					continue;
+				}
+				if (generic.type == "Character Controller")
+				{
+					world.SetSceneFeatures(world.GetSceneFeatures() | SceneFeatureFlags::Physics3D);
 				}
 				auto* component = type->emplaceDefault(world, entity);
 				for (const auto& [name, value]: generic.fields)
@@ -344,7 +397,7 @@ namespace aether::app::web
 				}
 				ecs::SetParent(world, created[i], created[record.parentIndex]);
 			}
-			if (record.joint2D)
+			if (record.joint2D && ResolvePhysicsDomain(record, description.kind).apply2D)
 			{
 				auto joint = *record.joint2D;
 				if (record.joint2DTargetIndex >= 0 && static_cast<size_t>(record.joint2DTargetIndex) < created.size())
@@ -354,6 +407,7 @@ namespace aether::app::web
 				world.Emplace<Joint2DComponent>(created[i], joint);
 			}
 		}
+		AE_TRY_VOID(ApplyPhysics3D(description, created));
 		for (const auto& light: description.lights)
 		{
 			if (light.isSpot)
@@ -375,6 +429,94 @@ namespace aether::app::web
 			}
 		}
 		return created;
+	}
+
+	// The same component values native's PhysicsSerde.cpp applies (Collider+RigidBody from one
+	// PhysicsRecord, Joint, Script Joints), in entity order so body creation order, and with it
+	// Jolt body ids and solver order, matches a native load. Runs after every entity exists
+	// because joints name their targets by scene index.
+	Expected<void> WebScene::ApplyPhysics3D(const scene::SceneDescription& description, const std::vector<Entity>& created)
+	{
+		for (std::size_t i = 0; i < created.size(); ++i)
+		{
+			const auto& record = description.entities[i];
+			if (!ResolvePhysicsDomain(record, description.kind).apply3D)
+			{
+				continue;
+			}
+			const Entity entity = created[i];
+			if (record.physics)
+			{
+				const auto& phys = *record.physics;
+				world.Emplace<ColliderComponent>(entity,
+				        ColliderComponent{
+				                .shape = phys.shapeType,
+				                .halfExtents = phys.halfExtents,
+				                .radius = phys.radius,
+				                .halfHeight = phys.halfHeight,
+				                .center = phys.center,
+				                .friction = phys.friction,
+				                .restitution = phys.restitution,
+				                .isSensor = phys.isSensor,
+				                .layer = phys.isSensor ? PhysicsLayer::Sensor : PhysicsLayer::Moving,
+				                .meshSource = phys.meshSource,
+				        });
+				world.Emplace<RigidBodyComponent>(entity,
+				        RigidBodyComponent{
+				                .motionType = phys.motionType,
+				                .mass = phys.mass,
+				                .linearDamping = phys.linearDamping,
+				                .angularDamping = phys.angularDamping,
+				                .gravityFactor = phys.gravityFactor,
+				                .maxLinearVelocity = phys.maxLinearVelocity,
+				                .maxAngularVelocity = phys.maxAngularVelocity,
+				                .continuousCollision = phys.continuousCollision,
+				                .allowSleeping = phys.allowSleeping,
+				                .lockPosition = phys.lockPosition,
+				                .lockRotation = phys.lockRotation,
+				                .startActive = phys.startActive,
+				        });
+			}
+			if (record.joint)
+			{
+				const auto& jr = *record.joint;
+				Entity target{};
+				if (jr.targetIndex >= 0 && jr.targetIndex < static_cast<int>(created.size()))
+				{
+					target = created[static_cast<std::size_t>(jr.targetIndex)];
+				}
+				world.Emplace<JointComponent>(entity,
+				        JointComponent{
+				                .type = jr.type,
+				                .target = target,
+				                .anchor = jr.anchor,
+				                .axis = jr.axis,
+				                .minLimit = jr.minLimit,
+				                .maxLimit = jr.maxLimit,
+				                .distance = jr.distance,
+				                .collideConnected = jr.collideConnected,
+				        });
+			}
+			for (const auto& sjr: record.scriptJoints)
+			{
+				JointEntry entry;
+				if (sjr.targetIndex >= 0 && sjr.targetIndex < static_cast<int>(created.size()))
+				{
+					entry.target = created[static_cast<std::size_t>(sjr.targetIndex)];
+				}
+				entry.type = sjr.type;
+				entry.anchor = sjr.anchor;
+				entry.axis = sjr.axis;
+				entry.minLimit = sjr.minLimit;
+				entry.maxLimit = sjr.maxLimit;
+				entry.distance = sjr.distance;
+				entry.swingLimit = sjr.swingLimit;
+				entry.collideConnected = sjr.collideConnected;
+				m_physics->AddScriptJoint(world, entity, entry);
+			}
+			world.SetSceneFeatures(world.GetSceneFeatures() | SceneFeatureFlags::Physics3D);
+		}
+		return {};
 	}
 
 	Expected<std::vector<WebScriptRecord>> WebScene::Load(std::string_view name)
@@ -404,11 +546,25 @@ namespace aether::app::web
 		        });
 		if (!expanded) { AE_UNEXPECTED(AetherError::Asset(expanded.error())); }
 		*description = *expanded;
-		const auto roots = world.Roots();
 		++m_scene_generation;
-		for (const auto root: roots)
+		// Native ReplaceScene destroys every live entity in registry storage order, not root by root. Destroy order
+		// decides which freed Jolt body ids the next scene's bodies recycle, and body id order changes contact
+		// solving, so the browser must free them in the same order for scene transitions to stay bit-identical.
+		auto& registry = world.GetRegistry();
+		std::vector<Entity> doomed;
+		for (const auto handle: registry.storage<entt::entity>())
 		{
-			world.Destroy(root);
+			if (registry.valid(handle))
+			{
+				doomed.push_back(World::FromEntt(handle));
+			}
+		}
+		for (const auto entity: doomed)
+		{
+			if (registry.valid(World::ToEntt(entity)))
+			{
+				world.Destroy(entity);
+			}
 		}
 		world.SetSceneKind(description->kind);
 		world.SetSceneFeatures(description->features);
@@ -419,30 +575,38 @@ namespace aether::app::web
 		m_default_lighting = defaultLighting;
 		m_light_time = 0.0f;
 		AE_TRY(created, Apply(*description));
+		AE_TRY(scripts, ResolveScripts(*description, *created));
+		static_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem"))->FlushPendingOnly(world);
+		m_physics->FlushPendingOnly(world);
+		return std::move(*scripts);
+	}
+
+	// Resolves each script's entity / authored-node references to live entities, as a scene load does.
+	Expected<std::vector<WebScriptRecord>> WebScene::ResolveScripts(const scene::SceneDescription& description, const std::vector<Entity>& created)
+	{
 		std::vector<WebScriptRecord> scripts;
-		for (size_t i = 0; i < created->size(); ++i)
+		for (size_t i = 0; i < created.size(); ++i)
 		{
-			for (const auto& script: description->entities[i].scripts)
+			for (const auto& script: description.entities[i].scripts)
 			{
 				auto resolved = script;
-				resolved.properties = scene::detail::ScriptPropsFromSceneRefs(script.properties, *created);
+				resolved.properties = scene::detail::ScriptPropsFromSceneRefs(script.properties, created);
 				for (const auto& [property, node]: script.nodeRefs)
 				{
-					const auto found = std::find_if(description->entities.begin(), description->entities.end(), [node](const auto& record) { return record.nodeId == node; });
-					if (found == description->entities.end())
+					const auto found = std::find_if(description.entities.begin(), description.entities.end(), [node](const auto& record) { return record.nodeId == node; });
+					if (found == description.entities.end())
 					{
 						AE_UNEXPECTED(AetherError::Asset("Unresolved browser script node reference"));
 					}
-					resolved.properties[property].i64 = (*created)[std::distance(description->entities.begin(), found)].id;
+					resolved.properties[property].i64 = created[std::distance(description.entities.begin(), found)].id;
 				}
-				scripts.push_back({(*created)[i], std::move(resolved)});
+				scripts.push_back({created[i], std::move(resolved)});
 			}
 		}
-		static_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem"))->FlushPendingOnly(world);
 		return scripts;
 	}
 
-	Expected<Entity> WebScene::Instantiate(std::string_view name)
+	Expected<WebInstantiated> WebScene::Instantiate(std::string_view name, glm::vec3 position)
 	{
 		if (!ValidName(name))
 		{
@@ -475,13 +639,6 @@ namespace aether::app::web
 			AE_UNEXPECTED(AetherError::Asset(expanded.error()));
 		}
 		*description = *expanded;
-		for (const auto& record: description->entities)
-		{
-			if (!record.scripts.empty())
-			{
-				AE_UNEXPECTED(AetherError::Asset("Scripted browser prefabs are not supported yet"));
-			}
-		}
 		const auto root = std::find_if(description->entities.begin(), description->entities.end(), [](const auto& record) { return record.parentIndex < 0; });
 		if (root == description->entities.end())
 		{
@@ -494,7 +651,35 @@ namespace aether::app::web
 			AE_UNEXPECTED(AetherError::Asset("Empty browser prefab"));
 		}
 		world.SetSceneFeatures(world.GetSceneFeatures() | description->features);
-		return (*created)[rootIndex];
+		// Native InstantiatePrefab: the authored root is re-placed at the requested translation
+		// (identity rotation/scale), the whole subtree moving with it. A prefab never redefines the
+		// scene kind - Apply does not touch it.
+		const Entity rootEntity = (*created)[rootIndex];
+		ecs::SetWorldTransform(world, rootEntity, glm::translate(glm::mat4(1.0f), position));
+		// 2D bodies built while the subtree still sat at the prefab's base pose are rebuilt from the
+		// final pose (SceneSerializerApply's RebuildSubtreeBodies2D); 3D bodies are created by the
+		// next PhysicsSystem flush, which already sees the final pose.
+		if (auto* physics2D = static_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem")))
+		{
+			const std::function<void(Entity)> rebuild = [&](Entity entity)
+			{
+				if (world.Has<RigidBody2DComponent>(entity))
+				{
+					physics2D->RebuildBody(world, entity);
+				}
+				if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity))
+				{
+					const auto children = hierarchy->children;
+					for (const Entity child: children)
+					{
+						rebuild(child);
+					}
+				}
+			};
+			rebuild(rootEntity);
+		}
+		AE_TRY(scripts, ResolveScripts(*description, *created));
+		return WebInstantiated{rootEntity, std::move(*scripts)};
 	}
 
 	std::vector<Entity> WebScene::TakeRetiredParticles()
@@ -543,16 +728,8 @@ namespace aether::app::web
 
 	void WebScene::Tick(float dt)
 	{
+		// Skin clocks advance in the shared AnimationSystem, not here.
 		m_light_time += dt;
-		for (const auto raw: world.View<SkinnedMeshComponent>())
-		{
-			const auto entity = World::FromEntt(raw);
-			if (!world.Has<DisabledComponent>(entity) && !ecs::HasDisabledAncestor(world, entity))
-			{
-				auto& skin = world.Get<SkinnedMeshComponent>(entity);
-				skin.animTime += dt * skin.playbackSpeed;
-			}
-		}
 	}
 
 	Expected<void> WebScene::ExtractLighting(RenderFramePacket& packet)

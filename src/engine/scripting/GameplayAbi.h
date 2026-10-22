@@ -18,6 +18,11 @@ extern "C"
 #define AE_GAMEPLAY_WRONG_THREAD 7
 #define AE_GAMEPLAY_REENTRANT 8
 #define AE_GAMEPLAY_SCRIPT_ERROR 9
+// The target exists but the engine object the call acts on is not created yet (a physics body
+// queued this frame); retry on a later tick.
+#define AE_GAMEPLAY_NOT_READY 10
+// The call would write an entity another peer owns.
+#define AE_GAMEPLAY_NO_AUTHORITY 11
 #define AE_GAMEPLAY_CAP_PHYSICS UINT64_C(1)
 #define AE_GAMEPLAY_CAP_OWNERSHIP UINT64_C(2)
 #define AE_GAMEPLAY_CAP_NETWORK UINT64_C(4)
@@ -36,6 +41,10 @@ extern "C"
 #define AE_GAMEPLAY_EVENT_PHYSICS 1u
 #define AE_GAMEPLAY_EVENT_OWNERSHIP 2u
 #define AE_GAMEPLAY_EVENT_NETWORK 3u
+// AetherGameplayEvent::flags of an AE_GAMEPLAY_EVENT_PHYSICS event: set when it comes from 3D
+// (Jolt) physics, clear for 2D (Box2D). `code` is 0 collision enter, 1 collision exit, 2 trigger
+// enter, 3 trigger exit, 4 overlapping, for both.
+#define AE_GAMEPLAY_PHYSICS_FLAG_3D 1u
 
 	typedef int32_t AetherGameplayStatus;
 	typedef uint64_t AetherGameplayInstance;

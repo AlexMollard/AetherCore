@@ -4,7 +4,11 @@
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Core/TempAllocator.h>
-#include <Jolt/Core/JobSystemThreadPool.h>
+#if !defined(__EMSCRIPTEN__)
+#	include <Jolt/Core/JobSystemThreadPool.h>
+#else
+#	include <Jolt/Core/JobSystemSingleThreaded.h>
+#endif
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
@@ -56,7 +60,7 @@
 // Platform thread configuration (name / priority for the physics thread).
 #if defined(_WIN32)
 #	include <windows.h>
-#elif defined(__linux__)
+#elif defined(__linux__) && !defined(__EMSCRIPTEN__)
 #	include <pthread.h>
 #endif
 
@@ -358,7 +362,11 @@ namespace aether
 		std::unique_ptr<ObjVsBPLayerFilter> objVsBPFilter;
 		std::unique_ptr<ObjVsObjLayerFilter> objVsObjFilter;
 		std::unique_ptr<JPH::TempAllocatorImpl> tempAllocator;
+#if AE_PHYSICS_THREADED
 		std::unique_ptr<JPH::JobSystemThreadPool> jobSystem;
+#else
+		std::unique_ptr<JPH::JobSystemSingleThreaded> jobSystem;
+#endif
 		std::unique_ptr<JPH::PhysicsSystem> physics;
 		std::unique_ptr<ContactCollector> contactCollector;
 		// Cached built shapes (including remembered failures - nullptr) plus the
@@ -434,12 +442,15 @@ namespace aether
 
 	void PhysicsSystem::StartPhysicsThread()
 	{
+#if AE_PHYSICS_THREADED
 		m_physicsThreadRunning.store(true, std::memory_order_release);
 		m_physicsThread = std::thread([this] { PhysicsThreadLoop(); });
+#endif
 	}
 
 	void PhysicsSystem::StopPhysicsThread()
 	{
+#if AE_PHYSICS_THREADED
 		WaitForStep();
 		m_physicsThreadRunning.store(false, std::memory_order_release);
 		m_stepKick.release(); // wake the thread if it's blocked on the semaphore
@@ -448,18 +459,20 @@ namespace aether
 		{
 			m_physicsThread.join();
 		}
+#endif
 	}
 
 	void PhysicsSystem::PhysicsThreadLoop()
 	{
+#if AE_PHYSICS_THREADED
 		AE_PROFILE_THREAD("PhysicsThread");
 
-#if defined(_WIN32)
+#	if defined(_WIN32)
 		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 		SetThreadDescription(GetCurrentThread(), L"AetherCore PhysicsThread");
-#elif defined(__linux__)
+#	elif defined(__linux__)
 		pthread_setname_np(pthread_self(), "Aether-Physics");
-#endif
+#	endif
 
 		while (m_physicsThreadRunning.load(std::memory_order_acquire))
 		{
@@ -476,16 +489,22 @@ namespace aether
 			StepPhysics();
 			m_stepDone.release();
 		}
+#endif
 	}
 
 	void PhysicsSystem::WaitForStep()
 	{
+#if AE_PHYSICS_THREADED
 		if (m_stepInFlight)
 		{
 			AE_PROFILE_ZONE_N("Phys.WaitForStep");
 			m_stepDone.acquire();
 			m_stepInFlight = false;
 		}
+#else
+		// The step already ran to completion inside the kick.
+		m_stepInFlight = false;
+#endif
 	}
 
 	void PhysicsSystem::SavePrevState(World& world)
@@ -534,19 +553,35 @@ namespace aether
 
 		m_impl->tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(10u * 1024u * 1024u);
 
+#if AE_PHYSICS_THREADED
 		// One worker thread per logical CPU minus the calling thread and the
 		const int workerThreads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) - 2);
 		m_impl->jobSystem = std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, workerThreads);
+#else
+		// Browser: no worker threads. Jolt's single-threaded job system runs every job inline on
+		// the caller; CROSS_PLATFORM_DETERMINISTIC makes the result independent of job scheduling.
+		m_impl->jobSystem = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
+#endif
 
 		m_impl->bpLayerInterface = std::make_unique<BPLayerInterface>();
 		m_impl->objVsBPFilter = std::make_unique<ObjVsBPLayerFilter>();
 		m_impl->objVsObjFilter = std::make_unique<ObjVsObjLayerFilter>();
 
 		m_impl->physics = std::make_unique<JPH::PhysicsSystem>();
+#if AE_PHYSICS_THREADED
+		constexpr JPH::uint kMaxBodies = 64'536;
+		constexpr JPH::uint kMaxBodyPairs = 64'536;
+#else
+		// Explicit browser budget: Jolt sizes its body table and broadphase for these maxima up
+		// front, and 64k bodies cost hundreds of MB of wasm heap. Results below the cap are
+		// identical; exceeding it fails body creation with Jolt's own diagnostic.
+		constexpr JPH::uint kMaxBodies = 8'192;
+		constexpr JPH::uint kMaxBodyPairs = 16'384;
+#endif
 		m_impl->physics->Init(
-		        /*maxBodies*/ 64'536,
+		        kMaxBodies,
 		        /*numBodyMutexes*/ 0,
-		        /*maxBodyPairs*/ 64'536,
+		        kMaxBodyPairs,
 		        /*maxContactConstraints*/ 10'240,
 		        *m_impl->bpLayerInterface,
 		        *m_impl->objVsBPFilter,
@@ -564,7 +599,11 @@ namespace aether
 		m_scriptJointsDestroyConn = world.GetRegistry().on_destroy<ScriptJointsComponent>().connect<&PhysicsSystem::OnScriptJointsDestroyed>(this);
 		m_characterDestroyConn = world.GetRegistry().on_destroy<CharacterControllerComponent>().connect<&PhysicsSystem::OnCharacterControllerDestroyed>(this);
 
+#if AE_PHYSICS_THREADED
 		AE_INFO(LogCategory::Engine, "PhysicsSystem initialised (Jolt, {} worker threads, fixed dt = {:.4f} s, dedicated physics thread)", workerThreads, kFixedTimestep);
+#else
+		AE_INFO(LogCategory::Engine, "PhysicsSystem initialised (Jolt, single-threaded, fixed dt = {:.4f} s)", kFixedTimestep);
+#endif
 
 		StartPhysicsThread();
 	}
@@ -635,8 +674,16 @@ namespace aether
 			m_accumulator -= kFixedTimestep;
 
 			// Kick the step to the physics thread.  The last step in the loop
+#if AE_PHYSICS_THREADED
 			m_stepKick.release();
 			m_stepInFlight = true;
+#else
+			// No physics thread: the kick IS the step, completed before returning. In-flight is
+			// still set so catch-up iterations and the next Update() run the same
+			// ReadCurrentState/Sync sequence native does after waiting for its thread.
+			StepPhysics();
+			m_stepInFlight = true;
+#endif
 			++stepsThisFrame;
 		}
 

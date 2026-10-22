@@ -33,6 +33,15 @@
 	    };
 	},
 	logs : () => structuredClone(aetherRuntime.diagnostics),
+	// Read-only copy of the last stepped tick's observable entity records (same schema as native state.json).
+	entities : () => {
+	    const internal = globalThis.aetherTestInternal;
+	    return structuredClone({
+		tick : internal.entityTick ?? 0,
+		scene : aetherRuntime.scene ?? null,
+		entities : internal.entityJson ? JSON.parse(internal.entityJson) : []
+	    });
+	},
 	input(command) {
 	    if (!command || Object.keys(command).some(key => !['key', 'down'].includes(key)))
 		throw TypeError('Unknown input field');

@@ -22,6 +22,14 @@ class CrossBuildBoundaryTests(unittest.TestCase):
                 audit_sources([world, dict(file=source)])
         with self.assertRaises(ValueError):
             audit_sources([])
+
+    def test_jolt_and_physics_are_allowed_but_still_single_threaded(self):
+        world = dict(file="src/engine/scene/World.cpp", command="em++ -c")
+        jolt = dict(file="build/_deps/joltphysics-src/Jolt/Physics/PhysicsSystem.cpp", command="em++ -c")
+        physics = dict(file="src/engine/physics/PhysicsSystem.cpp", command="em++ -c")
+        self.assertEqual(len(audit_sources([world, jolt, physics])), 3)
+        with self.assertRaises(ValueError):
+            audit_sources([world, dict(file=jolt["file"], command="em++ -pthread -c")])
     def test_wasm_cannot_be_disguised_as_host_executable(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "AssetPacker.exe"

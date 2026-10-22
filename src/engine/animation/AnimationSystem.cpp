@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
-#include "animation/AnimationDatabase.hpp"
+#if !defined(AETHERCORE_WEB_RUNTIME)
+#	include "animation/AnimationDatabase.hpp"
+#endif
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
@@ -68,19 +70,28 @@ namespace aether
 			{
 				continue;
 			}
-			if (!smc.animDb || !smc.animDb->IsValid())
+
+			float clipDuration = 0.f;
+			float fadeDuration = 0.f;
+			bool resolved = false;
+#if !defined(AETHERCORE_WEB_RUNTIME)
+			if (smc.animDb && smc.animDb->IsValid())
+			{
+				const std::uint32_t clipCount = smc.animDb->GetClipCount();
+				clipDuration = smc.animDb->GetClipDuration(smc.clipIndex);
+				fadeDuration = smc.fadeClipIndex < clipCount ? smc.animDb->GetClipDuration(smc.fadeClipIndex) : 0.f;
+				resolved = true;
+			}
+#endif
+			if (!resolved && m_durationSource)
+			{
+				resolved = m_durationSource(world, World::FromEntt(entity), smc, clipDuration, fadeDuration);
+			}
+			if (!resolved)
 			{
 				continue;
 			}
 
-			const std::uint32_t clipCount = smc.animDb->GetClipCount();
-			if (clipCount == 0)
-			{
-				continue;
-			}
-
-			const float clipDuration = smc.animDb->GetClipDuration(smc.clipIndex);
-			const float fadeDuration = smc.fadeClipIndex < clipCount ? smc.animDb->GetClipDuration(smc.fadeClipIndex) : 0.f;
 			AdvanceAnimation(smc, dt, clipDuration, fadeDuration);
 		}
 	}

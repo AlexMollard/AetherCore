@@ -218,7 +218,7 @@ namespace aether::project_tool
 					m_capture = context.Get<ScreenshotService>().Request(io::PlatformPaths::PathToUtf8(m_request.output.parent_path() / "reference.png"), minimumElapsed);
 				}
 				const auto audioStats = context.Get<audio::AudioSubsystem>().GetStats();
-				const Json observations = Json::array({{{"entity", "$runtime"}, {"type", "$engine"}, {"properties", {{"scene", context.Get<SceneSubsystem>().GetCurrentScene()}, {"audioStarted", audioStats.startedTotal}}}}});
+				const Json observations = Json::array({{{"entity", "$runtime"}, {"type", "$engine"}, {"properties", {{"scene", context.Get<SceneSubsystem>().GetCurrentScene()}, {"audioStarted", audioStats.startedTotal}, {"simulatedTicks", context.Get<PlayState>().PlayFrameCount()}}}}});
 				for (const auto& checkpoint: m_request.launchConfig.value("checkpoints", Json::array()))
 				{
 					if (checkpoint["tick"].get<std::uint32_t>() != m_tick)

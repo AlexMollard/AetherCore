@@ -99,7 +99,7 @@ def audit_sources(commands):
     for entry in commands:
         source = entry["file"].replace("\\", "/")
         lower = source.lower()
-        forbidden = ("/vulkan/", "/editor/", "/net/", "/jolt", "/enet", "/libplum", "iothread.cpp", "assetmanager.cpp", "/renderthread.cpp", "/logger.cpp", "dotnethost.cpp", "physics/physicssystem.cpp", "audio/audiosubsystem.cpp")
+        forbidden = ("/vulkan/", "/editor/", "/net/", "/enet", "/libplum", "iothread.cpp", "assetmanager.cpp", "/renderthread.cpp", "/logger.cpp", "dotnethost.cpp", "audio/audiosubsystem.cpp")
         command = entry.get("command", "") + " " + " ".join(entry.get("arguments", []))
         if any(token in lower for token in forbidden) or "-pthread" in command:
             raise ValueError("Forbidden browser source/worker: " + source)

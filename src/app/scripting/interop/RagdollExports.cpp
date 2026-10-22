@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "scripting/Gameplay3D.hpp"
 #include "assets/GltfAsset.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics/RagdollBuilder.hpp"
@@ -47,26 +48,15 @@ AE_SCRIPT_API std::int32_t aether_ragdoll_spawn(std::uint32_t id, const char* sk
 	{
 		return 0;
 	}
-	const std::string skeletonPath = skeletonPathC != nullptr ? skeletonPathC : "";
-	auto skeleton = aether::assets::GltfAsset::LoadFromVfsPath(skeletonPath);
-	if (!skeleton.has_value())
-	{
-		AE_WARN(aether::LogCategory::App, "Ragdoll.Spawn: could not load skeleton '{}': {}", skeletonPath, skeleton.error());
-		return 0;
-	}
-	aether::World& world = ActiveWorld();
-	const aether::Entity source{id};
-	if (!aether::SpawnRagdoll(world, source, *skeleton))
+	std::vector<aether::Entity> bones;
+	if (aether::scripting::gameplay3d::SpawnRagdoll(ActiveWorld(), aether::Entity{id}, skeletonPathC != nullptr ? skeletonPathC : "", bones) != AE_GAMEPLAY_OK)
 	{
 		return 0;
 	}
-	if (const auto* ragdoll = world.TryGet<aether::RagdollComponent>(source))
+	g_ragdollBonesCache.reserve(bones.size());
+	for (const aether::Entity bone: bones)
 	{
-		g_ragdollBonesCache.reserve(ragdoll->bones.size());
-		for (const aether::Entity bone: ragdoll->bones)
-		{
-			g_ragdollBonesCache.push_back(bone.id);
-		}
+		g_ragdollBonesCache.push_back(bone.id);
 	}
 	return static_cast<std::int32_t>(g_ragdollBonesCache.size());
 	});
