@@ -64,6 +64,16 @@ class PostParityTests(unittest.TestCase):
         self.assertFalse(post.temporal_checks('auto-exposure',on,off,64,64,wrong_frame,control,'native')['passed'])
         self.assertFalse(post.temporal_checks('auto-exposure',on,off,64,64,{},control,'native')['passed'])
 
+    def test_transition_schedules_validate_at_every_supported_extent(self):
+        for extent in ('512x512','513x511'):
+            final=tuple(int(value) for value in extent.split('x'))
+            for name,(_,_,changes,initial,_,_) in post.TRANSITIONS.items():
+                with self.subTest(extent=extent,transition=name):
+                    start=tuple(int(value) for value in (initial or extent).split('x'))
+                    resolved=post.resolve_transition(changes,extent)
+                    self.assertEqual(post.parity.scheduled_changes(resolved,final,start),resolved)
+                    self.assertNotIn('final',[change.get('resize') for change in resolved])
+
     def test_fixture_maps_are_native_keys_and_motion_uses_existing_rust_provider(self):
         for scene,overrides in post.FEATURES.values():
             self.assertEqual(post.parity.graphics_settings(overrides)|overrides,post.parity.graphics_settings(overrides))

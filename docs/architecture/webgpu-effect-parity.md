@@ -73,7 +73,9 @@ SSR enabled at tick 9, motion blur enabled at tick 8 and bloom/motion blur resiz
 from 384x320 at tick 5 equal the steady-state capture exactly (MAE 0.0) on both
 backends. Enabling metering at tick 4 or resizing at tick 5 restarts exposure from
 manual 1 identically on both backends (0.92451 against steady 0.85691), and
-disabling it at tick 6 returns manual exposure 1 and the neutral image.
+disabling it at tick 6 returns manual exposure 1 and the neutral image. Resize
+targets follow `--extent`; the three resize transitions also pass at the odd
+513x511 extent (`logs/task4/rerun/transitions-odd.json`).
 
 Remaining unqualified coverage: specular filter, minified anisotropy/LOD behavior,
 camera/scene-change history and adversarial content combinations. Implementation

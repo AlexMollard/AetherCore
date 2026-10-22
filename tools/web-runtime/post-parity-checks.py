@@ -81,13 +81,20 @@ SPATIAL = tuple(name for name in FEATURES if name not in TEMPORAL)
 TRANSITIONS = {
     'gtao-enable': ('BrowserPostCorner', {}, [dict(tick=9, graphics={'gtao': True})], None, 'gtao', 'steady'),
     'ssr-enable': ('BrowserPostCorner', {}, [dict(tick=9, graphics={'reflections': True})], None, 'ssr', 'steady'),
-    'bloom-resize': ('BrowserPostPattern', {'bloomStrength': 1.0}, [dict(tick=5, resize=[512, 512])], '384x320', 'bloom', 'steady'),
+    'bloom-resize': ('BrowserPostPattern', {'bloomStrength': 1.0}, [dict(tick=5, resize='final')], '384x320', 'bloom', 'steady'),
     'motion-blur-enable': ('BrowserPostMotion', {'motionBlurMaxRadius': 32.0}, [dict(tick=8, graphics={'motionBlur': 1.0})], None, 'motion-blur', 'steady'),
-    'motion-blur-resize': ('BrowserPostMotion', {'motionBlur': 1.0, 'motionBlurMaxRadius': 32.0}, [dict(tick=5, resize=[512, 512])], '384x320', 'motion-blur', 'steady'),
+    'motion-blur-resize': ('BrowserPostMotion', {'motionBlur': 1.0, 'motionBlurMaxRadius': 32.0}, [dict(tick=5, resize='final')], '384x320', 'motion-blur', 'steady'),
     'auto-exposure-enable': ('BrowserPostExposure', {}, [dict(tick=4, graphics={'autoExposure': True})], None, 'auto-exposure', 'adapts'),
     'auto-exposure-disable': ('BrowserPostExposure', {'autoExposure': True}, [dict(tick=6, graphics={'autoExposure': False})], None, None, 'manual'),
-    'auto-exposure-resize': ('BrowserPostExposure', {'autoExposure': True}, [dict(tick=5, resize=[512, 512])], '384x320', 'auto-exposure', 'adapts'),
+    'auto-exposure-resize': ('BrowserPostExposure', {'autoExposure': True}, [dict(tick=5, resize='final')], '384x320', 'auto-exposure', 'adapts'),
 }
+
+
+def resolve_transition(changes, extent):
+    """Replace resize='final' with the requested output extent ('WIDTHxHEIGHT')."""
+    final=[int(value) for value in extent.split('x')]
+    return [dict(change,resize=final) if change.get('resize')=='final' else dict(change) for change in changes]
+
 
 
 def transition_checks(expect, image, reference, control, evidence, reference_evidence):
@@ -335,6 +342,7 @@ def main():
         for feature in features:
             if feature in TRANSITIONS:
                 scene,start,changes,initial,reference_feature,expect=TRANSITIONS[feature]
+                changes=resolve_transition(changes,args.extent)
                 item=dict(feature=feature,scene=scene,status='failed',extent=args.extent,initialExtent=initial,changes=changes,
                           startGraphics=parity.graphics_settings(start),expect=expect,reference=reference_feature)
                 report['cases'].append(item)
