@@ -47,8 +47,69 @@ FEATURES = {
     'motion-blur': ('BrowserPostMotion', {'motionBlur': 1.0, 'motionBlurMaxRadius': 32.0}),
 }
 FEATURES.update({feature:(tonemap_post_oracles.SCENE,{'tonemap':mode}) for feature,mode in tonemap_post_oracles.PROFILES.items()})
-TEMPORAL = ('auto-exposure', 'motion-blur')
+# Parameter sweeps compare a non-default value against the same enabled effect at
+# its native default, so the oracle isolates the parameter rather than the effect.
+SWEEPS = {
+    'vignette-roundness': ('BrowserPostPattern', {'vignetteIntensity': .9, 'vignetteRoundness': 0.0}, {'vignetteIntensity': .9}),
+    'bloom-radius': ('BrowserPostPattern', {'bloomStrength': 1.0, 'bloomRadius': 3.0}, {'bloomStrength': 1.0}),
+    'gtao-radius': ('BrowserPostCorner', {'gtao': True, 'gtaoRadius': 1.5}, {'gtao': True}),
+    'gtao-strength': ('BrowserPostCorner', {'gtao': True, 'gtaoStrength': 2.0}, {'gtao': True}),
+    'reflection-intensity': ('BrowserPostCorner', {'reflections': True, 'reflectionIntensity': .3}, {'reflections': True}),
+    'reflection-roughness': ('BrowserPostCorner', {'reflections': True, 'reflectionMaxRoughness': .06}, {'reflections': True}),
+}
+FEATURES.update({name:(scene,on) for name,(scene,on,_) in SWEEPS.items()})
+CONTROLS = {name:off for name,(_,_,off) in SWEEPS.items()}
+# Cross-products enable several effects at once against the neutral control; the
+# whole-image native/Web limits are the parity gate, the oracle proves they ran.
+FEATURES.update({
+    'grade-lens-stack': ('BrowserPostPattern', {'gradeContrast': 1.3, 'gradeSaturation': .6, 'vignetteIntensity': .6,
+                                                 'chromaticAberration': 4.0, 'filmGrain': .5, 'bloomStrength': .8, 'fxaa': True, 'sharpness': .5}),
+    'scene-stack': ('BrowserPostCorner', {'gtao': True, 'reflections': True, 'volumetrics': True, 'bloomStrength': .8}),
+    'auto-exposure-key': ('BrowserPostExposure', {'autoExposure': True, 'exposureKey': .36}),
+    'auto-exposure-speed': ('BrowserPostExposure', {'autoExposure': True, 'exposureSpeed': 6.0}),
+})
+# Roundness only differs from the aspect-following falloff on a non-square frame.
+EXTENTS = {'vignette-roundness': '640x384'}
+TEMPORAL = ('auto-exposure', 'auto-exposure-key', 'auto-exposure-speed', 'motion-blur')
 SPATIAL = tuple(name for name in FEATURES if name not in TEMPORAL)
+# Transitions start from `start`, apply `changes` (lighting-parity --changes-json; a change at tick N
+# lands before update N+1) and are judged against the steady-state capture of `reference`, the same
+# settings held from tick 0 at the final extent. `expect` names the transition contract:
+# steady - stateless or history-carrying effects equal the steady state after enable/resize;
+# adapts - exposure history restarts from manual 1 when metering is enabled late;
+# manual - disabling metering returns to manual exposure 1 and the neutral image.
+TRANSITIONS = {
+    'gtao-enable': ('BrowserPostCorner', {}, [dict(tick=9, graphics={'gtao': True})], None, 'gtao', 'steady'),
+    'ssr-enable': ('BrowserPostCorner', {}, [dict(tick=9, graphics={'reflections': True})], None, 'ssr', 'steady'),
+    'bloom-resize': ('BrowserPostPattern', {'bloomStrength': 1.0}, [dict(tick=5, resize=[512, 512])], '384x320', 'bloom', 'steady'),
+    'motion-blur-enable': ('BrowserPostMotion', {'motionBlurMaxRadius': 32.0}, [dict(tick=8, graphics={'motionBlur': 1.0})], None, 'motion-blur', 'steady'),
+    'motion-blur-resize': ('BrowserPostMotion', {'motionBlur': 1.0, 'motionBlurMaxRadius': 32.0}, [dict(tick=5, resize=[512, 512])], '384x320', 'motion-blur', 'steady'),
+    'auto-exposure-enable': ('BrowserPostExposure', {}, [dict(tick=4, graphics={'autoExposure': True})], None, 'auto-exposure', 'adapts'),
+    'auto-exposure-disable': ('BrowserPostExposure', {'autoExposure': True}, [dict(tick=6, graphics={'autoExposure': False})], None, None, 'manual'),
+    'auto-exposure-resize': ('BrowserPostExposure', {'autoExposure': True}, [dict(tick=5, resize=[512, 512])], '384x320', 'auto-exposure', 'adapts'),
+}
+
+
+def transition_checks(expect, image, reference, control, evidence, reference_evidence):
+    """Judge one backend's transition capture against its steady-state reference and neutral control."""
+    def mae(a, b):
+        return sum(abs(x-y) for x, y in zip(a, b))/max(1, len(a))
+    exposure, steady_exposure = evidence.get('exposureUsed'), (reference_evidence or {}).get('exposureUsed')
+    checks = {}
+    if expect == 'steady':
+        checks['matchesSteadyState'] = mae(image, reference) < 1.0
+        checks['effectVisible'] = mae(image, control) > mae(image, reference)
+    elif expect == 'adapts':
+        checks['meteringRan'] = type(exposure) in (int, float) and abs(exposure-1) > 1e-3
+        # Late enable restarts from manual 1, so it adapts no further than the steady run.
+        checks['noFurtherThanSteadyState'] = type(steady_exposure) in (int, float) and abs(math.log2(exposure)) <= abs(math.log2(steady_exposure))+1e-4
+    elif expect == 'manual':
+        checks['manualExposureRestored'] = type(exposure) in (int, float) and abs(exposure-1) < 1e-6
+        checks['matchesNeutralControl'] = mae(image, control) < 1.0
+    else:
+        raise ValueError('Unknown transition contract: '+expect)
+    return dict(passed=all(checks.values()), checks=checks, exposureUsed=exposure, steadyExposureUsed=steady_exposure,
+                steadyMae=mae(image, reference) if reference is not None else None, controlMae=mae(image, control))
 
 
 def effect_checks(feature, on, off, width, height):
@@ -125,6 +186,35 @@ def effect_checks(feature, on, off, width, height):
         gained=sum(sum(p(on,x,y))-sum(p(off,x,y))>3 for y in range(8,56) for x in range(8,56))
         checks['participatingAirAddsScatteredSunlight'] = gained>=4
         metrics['scatteringProbePixels']=gained
+    elif feature == 'vignette-roundness':
+        # Wide frame: roundness 1 stretches x by the aspect (darker left/right edges);
+        # 0 follows the frame. The vertical axis is untouched either way. The authored
+        # content spans only the middle of a wide frame, so probe its edges, not black.
+        side=min(sum(p(on,x,32))-sum(p(off,x,32)) for x in (16,48))
+        top=sum(p(on,32,2))-sum(p(off,32,2))
+        checks['aspectFollowingFalloffBrightensSides'] = side>5
+        checks['verticalFalloffUnchanged'] = abs(top)<4
+        metrics.update(sideGain=side,topChange=top)
+    elif feature == 'bloom-radius':
+        # A wider upsample filter carries the highlight farther from the marker.
+        far=sum(p(on,40,16))-sum(p(off,40,16))
+        checks['widerFilterSpreadsFarther'] = far>2
+        metrics['farSpreadGain']=far
+    elif feature == 'gtao-strength':
+        darkened=sum(sum(p(off,x,y))-sum(p(on,x,y))>6 for y in range(20,57) for x in range(8,57))
+        checks['largerOcclusionDarkensMore'] = darkened>=4
+        metrics['darkenedProbePixels']=darkened
+    elif feature == 'gtao-radius':
+        # A wider horizon search only reaches the thin contact bands the default radius
+        # misses, so the probe grid undersamples it: count every pixel instead.
+        delta=[sum(off[i:i+3])-sum(on[i:i+3]) for i in range(0,width*height*4,4)]
+        darkened,lightened=sum(d>6 for d in delta),sum(d<-6 for d in delta)
+        checks['widerSearchOnlyDarkens'] = darkened>=32 and lightened==0
+        metrics.update(darkenedPixels=darkened,lightenedPixels=lightened)
+    elif feature in ('reflection-intensity','reflection-roughness'):
+        lost=sum(sum(p(off,x,y))-sum(p(on,x,y))>6 for y in range(35,60) for x in range(6,59))
+        checks['weakerReflectionRemovesFloorRadiance'] = lost>=4
+        metrics['reflectionLossProbePixels']=lost
     return dict(passed=all(checks.values()),checks=checks,**metrics)
 
 
@@ -139,7 +229,7 @@ def expected_exposure(frame_index, radiance=2.0, key=.18, speed=2.0):
     return value
 
 
-def temporal_checks(feature,on,off,width,height,on_case,off_case,backend,static=None):
+def temporal_checks(feature,on,off,width,height,on_case,off_case,backend,static=None,graphics=None):
     evidence_key='nativeFrameEvidence' if backend=='native' else 'webFrameEvidence'
     enabled,control=on_case.get(evidence_key),off_case.get(evidence_key)
     if not isinstance(enabled,dict) or not isinstance(control,dict):
@@ -149,8 +239,9 @@ def temporal_checks(feature,on,off,width,height,on_case,off_case,backend,static=
     other_frame=other.get('temporalFrameIndex') if backend=='native' else other.get('frameIndex')
     checks=dict(acceptedFramesMatch=type(frame) is int and frame==other_frame,
                 capturedFinalTick=enabled.get('simulationTick')==10 if backend=='web' else abs(enabled.get('elapsedTime',-1)-10/60)<1e-4)
-    if feature=='auto-exposure':
-        expected=expected_exposure(frame) if type(frame) is int and 0<=frame<=600 else None
+    if feature.startswith('auto-exposure'):
+        key,speed=(graphics or {}).get('exposureKey',.18),(graphics or {}).get('exposureSpeed',2.0)
+        expected=expected_exposure(frame,key=key,speed=speed) if type(frame) is int and 0<=frame<=600 else None
         actual=enabled.get('exposureUsed')
         checks['gpuExposureEvidenceFinite']=type(actual) in (int,float) and math.isfinite(actual)
         checks['matchesAnalyticHistogramAndThreeSlotCadence']=expected is not None and checks['gpuExposureEvidenceFinite'] and abs(actual-expected)<2e-4
@@ -170,7 +261,7 @@ def temporal_checks(feature,on,off,width,height,on_case,off_case,backend,static=
                 edgeChangedProbePixels=filtered['edgeChangedProbePixels'])
 
 
-def run_capture(scene, overrides, label, args, directory, deadline, worker_factory):
+def run_capture(scene, overrides, label, args, directory, deadline, worker_factory, extent=None, changes=None, initial_extent=None):
     graphics=parity.graphics_settings(overrides)
     settings=directory/(label+'-graphics.json')
     settings.write_text(json.dumps(graphics,indent=2)+'\n',encoding='utf-8')
@@ -181,7 +272,13 @@ def run_capture(scene, overrides, label, args, directory, deadline, worker_facto
     command=[sys.executable,str(Path(__file__).with_name('lighting-parity-checks.py')),
              '--build',str(args.build),'--report',str(destination),'--scenes',scene,
              '--graphics-json',str(settings),'--timeout',str(min(remaining,1200))]
-    command+=['--extent',getattr(args,'extent','512x512')]
+    command+=['--extent',extent or getattr(args,'extent','512x512')]
+    if changes:
+        schedule=directory/(label+'-changes.json')
+        schedule.write_text(json.dumps(changes,indent=2)+'\n',encoding='utf-8')
+        command+=['--changes-json',str(schedule)]
+    if initial_extent:
+        command+=['--initial-extent',initial_extent]
     command+=['--isolate-render-scale']
     if args.playwright:
         command+=['--playwright',args.playwright]
@@ -204,7 +301,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build',type=Path,default=ROOT/'build/webgpu-browser')
     parser.add_argument('--report',type=Path,required=True)
-    parser.add_argument('--features',default=','.join(FEATURES),help='Explicit maintained spatial/temporal feature names')
+    parser.add_argument('--features',default=','.join([*FEATURES,*TRANSITIONS]),help='Explicit maintained spatial/temporal/transition feature names')
     parser.add_argument('--timeout',type=int,default=1200,help='Shared deadline30..3600seconds')
     parser.add_argument('--playwright')
     parser.add_argument('--extent',default='512x512',help='Exact shared output WIDTHxHEIGHT; use513x511 for odd half-resolution resources')
@@ -216,7 +313,7 @@ def main():
     args.report.parent.mkdir(parents=True,exist_ok=True)
     try:
         features=args.features.split(',')
-        if not features or len(set(features))!=len(features) or any(name not in FEATURES for name in features):
+        if not features or len(set(features))!=len(features) or any(name not in FEATURES and name not in TRANSITIONS for name in features):
             raise ValueError('--features must contain unique maintained feature names')
         if not 30<=args.timeout<=3600:
             raise ValueError('--timeout must be30..3600')
@@ -226,14 +323,51 @@ def main():
         sys.path.insert(0,str(ROOT/'tools/project'))
         from gameplay_jobs import _OwnedProcess
         controls={}
+        def cached(scene,overrides,label,extent):
+            key=(scene,json.dumps(overrides,sort_keys=True),extent)
+            if key not in controls:
+                controls[key]=run_capture(scene,overrides,label,args,directory,started+args.timeout,_OwnedProcess,extent)
+            return controls[key]
+        def backend_image(result,scene,backend):
+            artifacts=Path(result['report']['artifacts'])
+            width,height,image=parity.png(artifacts/(scene+'-native.png'))
+            return width,height,(artifacts/(scene+'-web.rgba')).read_bytes() if backend=='web' else image
         for feature in features:
+            if feature in TRANSITIONS:
+                scene,start,changes,initial,reference_feature,expect=TRANSITIONS[feature]
+                item=dict(feature=feature,scene=scene,status='failed',extent=args.extent,initialExtent=initial,changes=changes,
+                          startGraphics=parity.graphics_settings(start),expect=expect,reference=reference_feature)
+                report['cases'].append(item)
+                control=cached(scene,{},scene+'-off',args.extent)
+                reference=cached(scene,FEATURES[reference_feature][1],reference_feature+'-steady',args.extent) if reference_feature else None
+                transition=run_capture(scene,start,feature+'-transition',args,directory,started+args.timeout,_OwnedProcess,args.extent,changes,initial)
+                runs=[control,transition]+([reference] if reference else [])
+                item.update(controlReport=control['reportPath'],transitionReport=transition['reportPath'],referenceReport=reference['reportPath'] if reference else None)
+                if any(run['returnCode']!=0 or run['report']['status']!='passed' for run in runs):
+                    item['diagnostic']='Maintained backend image/probe qualification failed; inspect child reports'
+                    continue
+                outputs={}
+                for backend in ('native','web'):
+                    key='nativeFrameEvidence' if backend=='native' else 'webFrameEvidence'
+                    images=[backend_image(run,scene,backend) for run in runs]
+                    if len({image[:2] for image in images})!=1:
+                        raise ValueError('Transition/control/reference output extents differ: '+feature)
+                    outputs[backend]=transition_checks(expect,images[1][2],images[2][2] if reference else None,images[0][2],
+                        transition['report']['cases'][0].get(key) or {},reference['report']['cases'][0].get(key) if reference else None)
+                item.update(backends=outputs,status='passed' if all(value['passed'] for value in outputs.values()) else 'failed')
+                continue
             scene,overrides=FEATURES[feature]
-            item=dict(feature=feature,scene=scene,status='failed',onGraphics=parity.graphics_settings(overrides),offGraphics=parity.graphics_settings({}))
+            off_overrides=CONTROLS.get(feature,{})
+            extent=EXTENTS.get(feature,args.extent)
+            item=dict(feature=feature,scene=scene,status='failed',extent=extent,
+                      onGraphics=parity.graphics_settings(overrides),offGraphics=parity.graphics_settings(off_overrides))
             report['cases'].append(item)
-            if scene not in controls:
-                controls[scene]=run_capture(scene,{},scene+'-off',args,directory,started+args.timeout,_OwnedProcess)
-            control=controls[scene]
-            enabled=run_capture(scene,overrides,feature+'-on',args,directory,started+args.timeout,_OwnedProcess)
+            control_key=(scene,json.dumps(off_overrides,sort_keys=True),extent)
+            if control_key not in controls:
+                label=scene+'-off' if not off_overrides and extent==args.extent else feature+'-control'
+                controls[control_key]=run_capture(scene,off_overrides,label,args,directory,started+args.timeout,_OwnedProcess,extent)
+            control=controls[control_key]
+            enabled=run_capture(scene,overrides,feature+'-on',args,directory,started+args.timeout,_OwnedProcess,extent)
             item.update(controlReport=control['reportPath'],enabledReport=enabled['reportPath'])
             if control['returnCode']!=0 or enabled['returnCode']!=0 or control['report']['status']!='passed' or enabled['report']['status']!='passed':
                 item['diagnostic']='Maintained backend image/probe qualification failed; inspect child reports'
@@ -241,9 +375,10 @@ def main():
             outputs={}
             static_control=None
             if feature=='motion-blur':
-                if 'BrowserPostPattern' not in controls:
-                    controls['BrowserPostPattern']=run_capture('BrowserPostPattern',{},'BrowserPostPattern-off',args,directory,started+args.timeout,_OwnedProcess)
-                static_control=controls['BrowserPostPattern']
+                static_key=('BrowserPostPattern','{}',args.extent)
+                if static_key not in controls:
+                    controls[static_key]=run_capture('BrowserPostPattern',{},'BrowserPostPattern-off',args,directory,started+args.timeout,_OwnedProcess)
+                static_control=controls[static_key]
                 if static_control['report']['status']!='passed':
                     item['diagnostic']='Stationary camera comparison failed'
                     continue
@@ -267,7 +402,7 @@ def main():
                         if backend=='web':
                             static=(artifacts/'BrowserPostPattern-web.rgba').read_bytes()
                     outputs[backend]=temporal_checks(feature,images[0][2],images[1][2],*images[0][:2],
-                        enabled['report']['cases'][0],control['report']['cases'][0],backend,static)
+                        enabled['report']['cases'][0],control['report']['cases'][0],backend,static,item['onGraphics'])
                 else:
                     outputs[backend]=effect_checks(feature,images[0][2],images[1][2],*images[0][:2])
             item.update(backends=outputs,status='passed' if all(value['passed'] for value in outputs.values()) else 'failed')

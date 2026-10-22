@@ -1,0 +1,42 @@
+# Task 4 authored effect fixture. Fixed camera; comparison uses capture tick 10.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.05, 0.05, 0.05]
+sun_direction = [0.0, 0.0, 1.0]
+sun_intensity = 3.0
+sky_horizon = [0.2, 0.35, 0.6]
+sky_zenith = [0.04, 0.12, 0.3]
+sky_void = [0.01, 0.02, 0.04]
+
+[[entities]]
+name = 'Fixed effect camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.05, 0.06, 0.08]
+
+[[entities]]
+name = 'Vertex coloured card'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [0.0, 0.0, -4.0]
+scale = [4.0, 4.0, 1.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/material-vertex-card.gltf'
+index = 0
+[entities.material]
+double_sided = true
+roughness = 1.0
+receive_shadows = false
+base_color = [1.0, 1.0, 1.0, 1.0]
+vertex_color = false

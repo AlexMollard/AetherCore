@@ -90,6 +90,22 @@ class LightingParityTests(unittest.TestCase):
                 parity.graphics_settings(invalid)
         self.assertEqual(parity.graphics_settings({'renderScale':.5})['renderScale'],.5)
 
+    def test_scheduled_changes_land_before_capture_and_end_at_requested_extent(self):
+        final, start = (512, 512), (384, 320)
+        valid = [dict(tick=4, graphics={'autoExposure': True}), dict(tick=9, resize=[512, 512])]
+        self.assertEqual(parity.scheduled_changes(valid, final, start), valid)
+        self.assertEqual(parity.scheduled_changes([dict(tick=0, graphics={'gtao': True})], final, final)[0]['tick'], 0)
+        for changes, initial in (([dict(tick=10, graphics={'gtao': True})], final),
+                                 ([dict(tick=3)], final),
+                                 ([dict(tick=3, graphics={})], final),
+                                 ([dict(tick=3, graphics={'unknownEffect': 1})], final),
+                                 ([dict(tick=3, graphics={'gtao': True}, extra=1)], final),
+                                 ([dict(tick=3, resize=[640, 480])], start),
+                                 ([dict(tick=3, resize=[512, 512])], final),
+                                 ([dict(tick=3, graphics={'gtao': True})], start)):
+            with self.subTest(changes=changes, initial=initial), self.assertRaises(ValueError):
+                parity.scheduled_changes(changes, final, initial)
+
     def test_effect_controls_cannot_qualify_identical_images(self):
         image = bytes([150, 120, 90, 255]*64*64)
         for kind in parity.EFFECTS:
@@ -221,6 +237,100 @@ class LightingParityTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertTrue(parity.shadow_features(kind, on, off, 64, 64)['passed'])
                 self.assertFalse(parity.shadow_features(kind, inverted, off, 64, 64)['passed'])
+
+    CUSTOM_PASS_SIZE = 512
+
+    @classmethod
+    def custom_pass_pair(cls, *, behind_over_sprite=False, unlit_over=False, lit_emissive_dimmed=False, flip_borders=False):
+        # Ideal BrowserCustomPass capture at 512 px (8 px per 64-lattice unit): sprite and Over rectangle lit by
+        # a lamp at lattice (20,32); Behind and Emissive rectangles as authored in custom_pass.rs.
+        size, k = cls.CUSTOM_PASS_SIZE, cls.CUSTOM_PASS_SIZE//64
+        lit = lambda x, y: max(0, round(230-5*((x-20)**2+(y-32)**2)**.5))
+        def paint(image, x0, y0, x1, y1, color, skip=lambda x, y: False):
+            for py in range(y0*k, y1*k):
+                for px in range(x0*k, x1*k):
+                    x, y = (px+.5)/k, (py+.5)/k
+                    if not skip(x, y):
+                        image[(py*size+px)*4:(py*size+px)*4+3] = bytes(int(v) for v in color(x, y))
+        off = bytearray([0, 0, 0, 255]*size*size)
+        paint(off, 8, 8, 24, 24, lambda x, y: (lit(x, y),)*3)
+        on = bytearray(off)
+        def rect(x0, y0, x1, y1, fill, border, skip=lambda x, y: False):
+            # Border: the 2 units at the min-x (left) and min-y (bottom, i.e. largest lattice y) edges.
+            def color(x, y):
+                edge = (x < x0+2) or (y >= y1-2)
+                if flip_borders:
+                    edge = (x >= x1-2) or (y < y0+2)
+                return border(x, y) if edge else fill(x, y)
+            paint(on, x0, y0, x1, y1, color, skip)
+        # The Behind pass draws before the sprite, so the sprite hides the overlap.
+        sprite = lambda x, y: 8 <= x < 24 and 8 <= y < 24
+        rect(16, 12, 36, 20, lambda x, y: (30, 150, 50), lambda x, y: (200, 40, 160), (lambda x, y: False) if behind_over_sprite else sprite)
+        white = (lambda x, y: (255, 255, 255)) if unlit_over else (lambda x, y: (lit(x, y),)*3)
+        rect(8, 40, 24, 56, white, lambda x, y: (white(x, y)[0], white(x, y)[0]*.5, white(x, y)[0]*.1))
+        rect(52, 50, 62, 58, lambda x, y: (50, 140, 250), lambda x, y: (250, 230, 60))
+        rect(15, 28, 25, 36, lambda x, y: (50, 140, 250), lambda x, y: (250, 230, 60))
+        if lit_emissive_dimmed:
+            paint(on, 52, 50, 62, 58, lambda x, y: (10, 30, 60))
+        return bytes(on), bytes(off)
+
+    def test_custom_pass_is_a_maintained_effect_pair(self):
+        self.assertIn('CustomPass', parity.EFFECTS)
+        for scene in ('BrowserCustomPass', 'BrowserCustomPassOff'):
+            self.assertIn(scene, parity.EFFECT_SCENES)
+            self.assertIn(scene, parity.MAINTAINED_SCENES)
+
+    def test_custom_pass_stage_ordering_oracles_accept_the_ideal_pair(self):
+        on, off = self.custom_pass_pair()
+        result = parity.effect_features('CustomPass', on, off, self.CUSTOM_PASS_SIZE, self.CUSTOM_PASS_SIZE)
+        self.assertTrue(result['passed'], result['checks'])
+        self.assertTrue(parity.feature_checks('BrowserCustomPass', on, self.CUSTOM_PASS_SIZE, self.CUSTOM_PASS_SIZE)['passed'])
+        self.assertTrue(parity.feature_checks('BrowserCustomPassOff', off, self.CUSTOM_PASS_SIZE, self.CUSTOM_PASS_SIZE)['passed'])
+
+    def test_custom_pass_stage_ordering_oracles_reject_each_ordering_regression(self):
+        cases = dict(
+            behind_over_sprite=('behindHiddenBySprite',),
+            unlit_over=('overMatchesLitSprite',),
+            lit_emissive_dimmed=('emissiveIgnoresLightMap', 'emissiveFullyBrightOnDarkBackground'),
+            flip_borders=('behindBorderOnBottomOnly', 'overBorderOnLeftAndBottomOnly', 'emissiveBorderOnLeftAndBottomOnly'))
+        for option, failing in cases.items():
+            with self.subTest(option=option):
+                on, off = self.custom_pass_pair(**{option: True})
+                result = parity.effect_features('CustomPass', on, off, self.CUSTOM_PASS_SIZE, self.CUSTOM_PASS_SIZE)
+                self.assertFalse(result['passed'])
+                for name in failing:
+                    self.assertFalse(result['checks'][name], name)
+        on, off = self.custom_pass_pair()
+        self.assertFalse(parity.effect_features('CustomPass', off, off, self.CUSTOM_PASS_SIZE, self.CUSTOM_PASS_SIZE)['passed'])
+
+    def test_native_custom_pass_cook_compiles_portable_shaders_into_overlay(self):
+        parent = parity.ROOT/'.temp/lighting-parity'
+        parent.mkdir(parents=True, exist_ok=True)
+        pin = __import__('json').loads((parity.ROOT/'tools/experiments/rust-webgpu/toolchain.json').read_text(encoding='utf-8'))['slang']
+        commands = []
+        def fake_run(command, log, deadline):
+            commands.append([str(part) for part in command])
+            if '-version' in command:
+                log.write_text(pin)
+            else:
+                Path(command[command.index('-o')+1]).write_bytes(bytes.fromhex('03022307')+bytes(32))
+        with tempfile.TemporaryDirectory(dir=parent) as directory:
+            project = Path(directory)/'project'
+            shaders = project/'assets/shaders/nested'
+            shaders.mkdir(parents=True)
+            (shaders/'pass.slang').write_text('#include "include/CustomPass.slangh"\n')
+            (project/'assets/shaders/native_only.slang').write_text('// not a portable pass\n')
+            shim = SimpleNamespace(run=fake_run)
+            with patch.dict(sys.modules, web_materials=shim):
+                result = parity.native_custom_pass_cook(project, Path(directory), time.monotonic()+30, ['BrowserCustomPass'], slang=Path('slangc'), run_function=fake_run)
+                self.assertEqual(parity.native_custom_pass_cook(project, Path(directory), 0, ['BrowserSun'])['status'], 'skipped')
+            self.assertEqual(result['status'], 'passed')
+            self.assertEqual([item['runtimeUri'] for item in result['compiledShaders']], ['shaders://nested/pass.spv'])
+            self.assertTrue((project/'Builds/Intermediate/shaders/nested/pass.spv').is_file())
+            compile_command = commands[-1]
+            self.assertIn('-fvk-use-scalar-layout', compile_command)
+            self.assertEqual(compile_command[compile_command.index('-I')+1], str(parity.ROOT/'src/shaders'))
+            self.assertNotIn('AE_WEB_CUSTOM_PASS', ' '.join(compile_command))
 
 
 if __name__ == '__main__':

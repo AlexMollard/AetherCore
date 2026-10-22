@@ -55,16 +55,35 @@ limit 3 remains unchanged. The shared FXAA contrast-side sign and grain integer
 hash corrections are covered by actual corrected captures. FXAA changed 43
 probes (31 in its edge region) per backend; display FXAA changed 13 edge probes.
 
-Remaining unqualified coverage includes parameter sweeps (vignette roundness,
-bloom radius, exposure key/speed, GTAO radius/strength, reflection roughness and
-intensity, specular filter), mixed-effect cross-products, odd extents, resize and
-history/enable transitions, minified anisotropy/LOD behavior and adversarial
-content combinations. Implementation range checks do not qualify those ranges.
+Parameter sweeps compare a non-default value against the same effect at its native
+default (`logs/task4/rerun/sweeps.json`; GTAO radius `sweeps-2.json`, vignette
+roundness `sweeps-4.json`): vignette
+roundness 0 on a 640x384 frame brightens the sides and leaves the vertical falloff
+alone; bloom radius 3 spreads farther; GTAO radius 1.5 darkens only (60/65 contact
+pixels native/Web, none lighter) and strength 2 darkens the probes; reflection
+intensity .3 and max roughness .06 remove floor radiance; exposure key .36 and
+speed 6 match the analytic meter. Cross-products `grade-lens-stack` (contrast,
+saturation, vignette, chromatic, grain, bloom, FXAA, sharpen) and `scene-stack`
+(GTAO, SSR, volumetrics, bloom) pass the unchanged whole-image limits.
+
+Transitions (`logs/task4/rerun/transitions.json`) apply settings or a window/canvas
+resize at a fixed tick on both backends (`lighting-parity-checks.py --changes-json`,
+native `launchConfig.changes`; a change at tick N lands before update N+1). GTAO and
+SSR enabled at tick 9, motion blur enabled at tick 8 and bloom/motion blur resized
+from 384x320 at tick 5 equal the steady-state capture exactly (MAE 0.0) on both
+backends. Enabling metering at tick 4 or resizing at tick 5 restarts exposure from
+manual 1 identically on both backends (0.92451 against steady 0.85691), and
+disabling it at tick 6 returns manual exposure 1 and the neutral image.
+
+Remaining unqualified coverage: specular filter, minified anisotropy/LOD behavior,
+camera/scene-change history and adversarial content combinations. Implementation
+range checks do not qualify those ranges.
 The Web effect planner rejects non-finite settings, invalid scale/radius/exposure
 values, source/output extents above 4096 and estimated transient effects above
-512 MiB before allocation. Raw custom pass submissions and arbitrary authored
-Slang shader capability remain unsupported; supported material-graph lowering is
-a separate bounded adapter, not a general shader compiler guarantee.
+512 MiB before allocation. Project custom passes are supported only through the
+portable `CustomPass.slangh` contract below; arbitrary authored Slang shader
+capability remains unsupported, and supported material-graph lowering is a separate
+bounded adapter, not a general shader compiler guarantee.
 
 The production `webgpu-2d-v1` export boundary and Task 6 publishing gate remain.
 
@@ -129,26 +148,26 @@ The authoritative runtime ordering is
 | `$DirectionalShadow_Cn`, `$ShadowDepthTransition` | `ShadowService.cpp`, `shadow_depth.slang` | Qualified bounded three-cascade path | Existing Sun/Mask/Skin/NoCast fixtures; cascade boundaries and far fade still need explicit transition fixtures |
 | `$LocalShadowAtlasRender` | `LocalShadowService.cpp`, `local_shadow_depth.slang` | Qualified bounded point/spot shadows | Existing asymmetric Point/Spot and receive-shadow checks; atlas capacity rejection |
 | `$Lighting` tiled light list compute | `LightingManager.cpp`, `tiled_light_cull.slang` | Infrastructure: bounded explicit light loop | Same point/spot contribution for perspective and orthographic views, including off-axis tiles |
-| `$GTAO_Main`, `$GTAO_Denoise` | `GTAOPass.cpp`; `gtao_main`, `gtao_denoise` | Qualified bounded ambient-corner on/off case; material texture AO is separate | Ambient-only corners, radius scaling, denoise edge preservation, resize and empty-3D reset |
+| `$GTAO_Main`, `$GTAO_Denoise` | `GTAOPass.cpp`; `gtao_main`, `gtao_denoise` | Qualified bounded ambient-corner on/off case, radius 1.5 and strength 2 sweeps, tick-9 enable transition; material texture AO is separate | Ambient-only corners, denoise edge preservation and empty-3D reset |
 | `$Skybox` | `skybox.slang`, `Sky.slangh` | Qualified Task 3 gradient; physical sky and cloud on/off pairs qualified by the Task 4 scene-effect suite | Turbidity/sun-elevation sweeps, solar disk/stars and cloud speed over time remain unqualified |
 | `$EngineForward` | `gltf_mesh.slang`, shared includes | Qualified Task 3 standard PBR subset; specialized variants, contact shadows, height fog and darkness volumes qualified by bounded Task 4 pairs below | Cross-products of specialized variants and the unqualified rows below |
-| `$SSR`, `$SSRComposite` | `ssr.slang`, `ssr_composite.slang` | Qualified coloured-object reflective-floor on/off case | Roughness fade, missing hit fallback, depth discontinuity and camera movement remain unqualified |
+| `$SSR`, `$SSRComposite` | `ssr.slang`, `ssr_composite.slang` | Qualified coloured-object reflective-floor on/off case, intensity .3 and max-roughness .06 sweeps, tick-9 enable transition | Missing hit fallback, depth discontinuity and camera movement remain unqualified |
 | `$VolumetricFog`, `$VolumetricComposite` | `volumetric_fog.slang`, `volumetric_composite.slang` | Qualified bounded participating-air on/off case | Sun-blocked beam, extinction and half-resolution bilateral edge upsample sweeps remain unqualified |
 | `$DepthOfField` | `dof.slang`; camera lens extraction in `AetherCore.cpp` | Qualified bounded DofOn/DofOff same-scene pair | Focus plane stays sharp, near/far CoC sign and size, aperture/focal-length response, orthographic disable; preserve native insertion/composition ordering |
 | `$BillboardParticles` | `BillboardParticleRenderer.cpp`, `particle_billboard.slang` | Qualified fixed-seed 2D/3D bursts and display-only burst | UV/rotation/lifetime key sweeps, alpha/additive mixes, read-only depth, lit smoke, fog and HDR ordering remain unqualified |
-| `$CustomPassBehind2D` | `CustomPassRenderer.cpp` | Unsupported raw custom pass submission | Project pass behind sprites with exact primitive/vertex/index semantics |
+| `$CustomPassBehind2D` | `CustomPassRenderer.cpp`, `WebCustomPassRenderer.cpp`, `include/CustomPass.slangh` | Implemented on both backends through the portable `CustomPass.slangh` contract (see below); qualified by `BrowserCustomPass`/`BrowserCustomPassOff` (logs/task4/custompass/report.json: native/Web image MAE 0.07, all ordering checks true on both backends): Behind rectangle hidden by the sprite it overlaps, uncovered part drawn, min-x/min-y border orientation | Time/animation-driven passes, 3D scenes, non-HDR legacy path; the production `webgpu-2d-v1` publisher still rejects project `.slang` shaders |
 | `$Renderer2D` sprite/tile pass | `Renderer2D.cpp`, `sprite2d.slang` | Qualified sprite/tile subset | Particle Plane2D extraction and ordering; mixed HDR/display-space composition |
-| `$CustomPassOver2D` | `CustomPassRenderer.cpp` | Unsupported raw custom pass submission | Pass after sprites, before light map; must be affected by 2D lighting |
+| `$CustomPassOver2D` | `CustomPassRenderer.cpp`, `WebCustomPassRenderer.cpp`, `include/CustomPass.slangh` | Qualified by `BrowserCustomPass`/`BrowserCustomPassOff` on both backends: Over rectangle equals the lit white sprite at the lamp-mirrored position, darkens away from the lamp, border orientation | Same as `$CustomPassBehind2D` |
 | `$Light2DOccluders`, `$Light2DComposite` | `Light2DCompositor.cpp`; `occluder2d`, `light2d` | Qualified tile-art alpha, shared native light equations | Transient capsule submissions, shadow softness and 2D medium shafts/noise; current reconstruction is bounded to orthographic cameras |
-| `$CustomPassEmissive2D` | `CustomPassRenderer.cpp` | Unsupported raw custom pass submission | Pass after the light map; emissive intensity survives scene darkening |
-| `$BloomDownN`, `$BloomUpN` | `PostProcessStack.cpp`, `bloom.slang` | Qualified bounded HDR highlight/spread control | Per-level dimensions, radius sweeps, odd extents and zero-strength identity |
-| `$HistogramClear`, `$Histogram` and exposure adaptation | `PostProcessStack.cpp`, `luminance_histogram.slang` | Qualified analytic HDR 2 adaptation and frozen capture | Dark adaptation, key/speed sweeps, zero pixels and viewport-size reset; native retains history across camera/scene/enable changes |
+| `$CustomPassEmissive2D` | `CustomPassRenderer.cpp`, `WebCustomPassRenderer.cpp`, `include/CustomPass.slangh` | Qualified by `BrowserCustomPass`/`BrowserCustomPassOff` on both backends: emissive rectangles render identically on the lamp and outside its radius (light map never touches them), full brightness on a 0.02 ambient, border orientation | Same as `$CustomPassBehind2D`; absolute emissive colours are compared relationally, not against a tonemap model |
+| `$BloomDownN`, `$BloomUpN` | `PostProcessStack.cpp`, `bloom.slang` | Qualified bounded HDR highlight/spread control, radius 3 sweep and 384x320-to-512x512 resize transition | Per-level dimensions, odd extents and zero-strength identity |
+| `$HistogramClear`, `$Histogram` and exposure adaptation | `PostProcessStack.cpp`, `luminance_histogram.slang` | Qualified analytic HDR 2 adaptation, frozen capture, key .36/speed 6 sweeps, and enable/disable/resize transitions (late enable and resize restart from manual 1 on both backends) | Dark adaptation, zero pixels and camera/scene-change history |
 | `$PostProcess` | `tonemap.slang` | Qualified 11 operators and bounded grade/lens/grain/motion controls; see settings scope below | All operators, bloom/DOF blend, grade, lens effects, grain, motion blur and sharpening; see post-settings table |
 | `$BillboardParticlesDisplay` | after-tonemap callback in `RenderingSubsystem.cpp` | Implemented before final resolve; qualified display-particle FXAA/sharpen/render-scale controls | Gamma/display-space alpha/additive, depth and mixed ordering combinations remain unqualified |
 | `$FXAA` / final resolve | `PostProcessStack.cpp`, `fxaa.slang` | Qualified diagonal/display-particle controls and bounded scaled output | Odd extents, resize and mixed UI ordering coverage remain separate gates |
 | `$Debug` physics/debug geometry | `PhysicsDebugRenderer`, `DebugLayer` | Missing exported debug overlay; not a game-effect substitute | Diagnostic-only visibility and shutdown; normal game images unchanged when disabled |
 | `$UiOverlay` shape draw building, shapes and text | `UIRenderer`; `ui_build_draws`, `ui_shapes`, text shader includes | Qualified bounded browser UI subset; separate browser extraction | Post-tonemap display colour, text/atlas bounds, clipping/ordering and input regressions |
-| `$CameraRT_<id>` and its cull | `RenderTargetService.cpp` | Missing gameplay render-to-texture | Multiple target extents, camera state, texture feedback prohibition, resize and target retirement |
+| `$CameraRT_<id>` and its cull | `RenderTargetService.cpp` | Not reachable from exported games: `CreateCameraRenderTarget` has no caller and no C#, Rust, interop, scene or reflected field creates a target, so no game can request one on either backend | Port together with whatever first exposes it to gameplay: multiple target extents, camera state, texture feedback prohibition, resize and target retirement |
 | Camera/model/material-thumbnail preview passes and ready transitions | `CameraPreviewService.cpp`, `ModelPreviewService.cpp`, `MaterialThumbnailBaker` | Native tooling | Keep native smoke checks; not required to ship an editor inside the browser |
 | `$TexturePreview`, `$TexturePreviewReady` | `texture_preview.slang` | Native tooling | Native diagnostics unchanged |
 | `$UiShellClear`, viewport clear/ready, ImGui overlay | `RenderingSubsystem.cpp`, application overlay | Native tooling / infrastructure | Full and UiShell initialization/shutdown and native validation smokes |
@@ -165,12 +184,12 @@ its intended opaque/cutout/blended, static/skinned and shadow interactions.
 | Standard metallic/roughness PBR; albedo/normal/MR/AO/emission maps | Qualified bounded fixtures | Preserve Task 3 map, colour-space and direct-light probes |
 | `doubleSided`, mirrored transform and tangent handedness | Qualified bounded fixtures | Preserve front/back and mirrored culling probes with normal maps |
 | `alphaMask`, `alphaBlend`, `additiveBlend` | Qualified bounded fixtures | Preserve alpha cutout/shadow, back-to-front blend and HDR additive checks |
-| `modulateVertexColor`, UV scroll | Qualified bounded fixtures / retained data | Native-vs-browser animated scroll and vertex-colour overrides still need dedicated Task 4 cases |
+| `modulateVertexColor`, UV scroll | Qualified VertexColor/VertexColorOff (per-corner hues on, ignored off) and UvScroll/UvScrollOff (one-band shift at tick 10) pairs | Non-uniform scroll speeds and vertex-colour on baked/specialized variants |
 | `receiveShadows`, MeshRenderer visible/cast-shadows | Qualified bounded fixtures | Keep independent visible/no-cast and receive-shadow oracles |
 | `foliage` wind and caster offset | Qualified Foliage/FoliageOff pair at tick 10 (see threshold note) | Same world-space wind in forward/prepass/shadows at a fixed elapsed time |
 | `bakedLighting` | Qualified Baked/BakedOff pair | Prelit vertex colour keeps bake, cascade shadows only darken to native shade floor; no accidental PBR/AO |
 | Foliage+baked+masked soft edge copy | Qualified through the foliage fixture (baked, alpha-masked, foliage) | Opaque depth/cutout core plus blended fringe; fringe does not cast or repeat skin draws |
-| `sky` mesh | Implemented sky ordering/depth adapter; no maintained fixture, unqualified | Layered authored skydome renders first, primitive ordering, clip z=w, no depth write |
+| `sky` mesh | Qualified SkyMesh/SkyMeshOff: a dome nearer than an opaque cube is pinned behind it as sky and occludes it otherwise | Multi-layer domes and primitive ordering between sky layers |
 | `lightShaft` blended cards | Qualified LightShaft/LightShaftOff pair | Fixed-time shimmer, soft alpha, depth intersection and authored blend mode |
 | `objectLit` | Qualified ObjectLights/ObjectLightsOff pair | Ambient plus two native object light records without substituted PBR lights |
 | `gem` | Qualified Gem/GemOff pair | Facet normal, fresnel rim, interior fake refraction, sparkle and emissive overrides |
@@ -209,6 +228,36 @@ gameplay physics remain Task 5. No particle GPU adapter may access the ECS.
 `render2D.billboards` must contain copied data, and queued resources must retire
 only after GPU work completes. Display-space particle flags differ from regular
 UI sprite flags and must not be conflated.
+
+## Portable custom passes
+
+A project custom pass (`CustomPass.Register`/`Submit` in C#, `register_custom_pass`/`submit_custom_pass` in
+Rust, gameplay-service ops 14-16) is one six-vertex fullscreen draw alpha-blended into the scene HDR colour at
+`BehindScene`, `OverScene` or `EmissiveOverLight`. A shader is portable when it includes
+`src/shaders/include/CustomPass.slangh` and reads only its accessors (view-projection, inverse
+view-projection, elapsed time, camera position, viewport size, params, `color0`, `color1`, data count and
+`CustomPassData(i)`). Natively the header compiles to the 80-byte push-constant contract; the Web cook defines
+`AE_WEB_CUSTOM_PASS` and the same accessors become a 224-byte uniform record plus a read-only `vec4` storage
+buffer (`WebCustomPassRenderer`). Native resolves the stem as `shaders://<stem>.spv`; the Web runtime loads the
+cooked `project://assets/shaders/<stem>.wshader`. A missing or invalid shader fails registration with
+`WEB_CUSTOM_PASS_SHADER`. Budgets enforced before GPU submission: 4096 float4 per submission (extra data is
+dropped like C#), 64 submissions and 65536 float4 per frame, finite params/colors/data.
+
+`BrowserCustomPass`/`BrowserCustomPassOff` (script `CustomPassProbe`, shader `custom_pass_fixture.slang`, 0.02
+ambient, one lamp, one white sprite) differ only in the script's `active` flag and are judged by ordering
+against the engine's own sprite and light pipeline rather than absolute colours: Behind is hidden by the
+overlapping sprite, Over equals the lit sprite at the lamp-mirrored position, and the two Emissive rectangles
+(on the lamp and outside its radius) render identically. Every rectangle carries a border on its min-x/min-y
+edges so mirrored or flipped output fails. The production `webgpu-2d-v1` publisher still rejects `.slang`
+assets (`WEB_SHADER_UNSUPPORTED`); the reference pipeline cooks the fixture to `.wshader` and the packer
+skips `.slang` sources. Unqualified: elapsed-time/animated passes, 3D scenes, the non-HDR legacy path,
+projects other than the reference fixture, and C# browser custom passes (the fixture script is Rust; C# reaches
+the same `ExecuteCustomPassOperation` but no browser case drives it).
+
+Negative Web fixtures `BrowserBadCustomPassShader` (unknown shader stem) and `BrowserBadCustomPassBudget` (17
+full-size submissions, 69632 float4 against the 65536 frame budget) run as the `invalid-custom-pass-shader` and
+`invalid-custom-pass-budget` browser cases and must fail with `WEB_CUSTOM_PASS_SHADER` / `WEB_CUSTOM_PASS_BUDGET`
+diagnostics before any custom-pass GPU submission.
 
 ## Qualification rules
 

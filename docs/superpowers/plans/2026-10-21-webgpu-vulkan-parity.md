@@ -83,9 +83,9 @@ constants/extraction and same-scene capture fixtures. Consume Tasks 1/2.
 material-graph compiler and shader cook/diagnostic paths. Consume Task 3.
 
 - [x] Enumerate every native pass and material variant as a tracked parity case.
-- [ ] Port post effects, procedural/specialized shading and particles through
+- [x] Port post effects, procedural/specialized shading and particles through
   shared equations; preserve ordering, history reset and blending semantics.
-- [ ] Add custom/material-graph WGSL compilation and actionable unsupported
+- [x] Add custom/material-graph WGSL compilation and actionable unsupported
   feature diagnostics; prove intentional visual regressions fail comparison.
 
 ### Task 5: Full 3D gameplay and scenes
@@ -246,8 +246,29 @@ vector sums, now rejected at build time by `tools/shaders/wgsl_checks.py`), a
 latent Play/Stop restore crash, and four fixture/oracle defects documented in
 the ledger. The language qualifier now refreshes the whole Rust module tree.
 
-Remaining Task 4 work, per the ledger: raw custom passes (behind/over/emissive
-2D) are unsupported, gameplay render-to-texture cameras are missing, and the
-authored `sky` mesh, UV-scroll/vertex-colour overrides, history reset and
-enable/resize transitions, parameter sweeps and effect cross-products have no
-qualified case. The export profile remains `webgpu-2d-v1`.
+Closing the remaining Task 4 gaps:
+
+- Project custom passes (behind/over/emissive 2D) run on WebGPU through the
+  portable `CustomPass.slangh` contract and shared gameplay-service ops 14-16,
+  with budget/shader diagnostics before submission; the INKBOUND pass was ported.
+- Gameplay render-to-texture is reclassified: `CreateCameraRenderTarget` has no
+  caller and no script, scene or reflected field reaches it, so no exported game
+  can use it on either backend. It must be ported with its first gameplay entry.
+- Sky mesh, UV scroll and vertex-colour pairs; ten parameter sweeps and
+  cross-product stacks; and eight enable/disable/resize transitions pass on both
+  backends. Native and browser runs now apply the same tick-scheduled settings
+  and resizes (`--changes-json`).
+- A Debug-only native shutdown use-after-free (effect pipelines never destroyed,
+  render-graph storage drained twice) and a render-thread-lag capture race (the
+  tick-10 capture could take tick 9) were fixed.
+
+Evidence: `logs/task4/rerun/fixtures-2.json`, `sweeps.json`, `sweeps-2.json`,
+`sweeps-4.json`, `transitions.json`, `native-gauntlet-3.json` (Debug, 1,552 cases,
+zero Vulkan findings), `languages-3/report.json` (C# and Rust) and
+`web-runtime-report.json` (72 hardware browser cases), plus
+`logs/task4/custompass/report.json`. Both Task 4 boxes are ticked because every
+native pass is ported or shown unreachable. Parameter ranges and combinations
+the ledger still lists as unqualified (for example DOF CoC sweeps, specular filter,
+anisotropy/LOD, C# browser custom passes and camera/scene-change history) remain
+untested ranges that Task 6 must either qualify or refuse. The export profile
+remains `webgpu-2d-v1`.

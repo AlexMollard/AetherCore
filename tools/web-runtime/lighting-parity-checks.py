@@ -40,7 +40,8 @@ GRAPHICS = dict(renderScale=1.0, fxaa=False, gtao=False, reflections=False, volu
 
 # Keep the qualified Task 3 default scope stable. Task 4 features are explicit
 # opt-in until the independent native/Web captures and semantic controls qualify.
-EFFECTS = ('ObjectLights', 'Baked', 'Gem', 'Sheen', 'Character', 'Fog', 'Clouds', 'PhysicalSky', 'Darkness', 'Dof')
+EFFECTS = ('ObjectLights', 'Baked', 'Gem', 'Sheen', 'Character', 'Fog', 'Clouds', 'PhysicalSky', 'Darkness', 'Dof',
+           'UvScroll', 'VertexColor', 'SkyMesh', 'CustomPass')
 EFFECT_SCENES = tuple('Browser'+name+state for name in EFFECTS for state in ('', 'Off') if name != 'Dof') + ('BrowserDofOn', 'BrowserDofOff', 'BrowserParticles2D', 'BrowserParticles3D')
 POST_SCENES = ('BrowserPostPattern', 'BrowserPostCorner', 'BrowserPostVolumetric', 'BrowserPostMotion', 'BrowserPostExposure', 'BrowserPostDisplay', 'BrowserPostTonemap')
 MAINTAINED_SCENES = tuple(dict.fromkeys(SCENES + EFFECT_SCENES + ('BrowserGraph',) + POST_SCENES + MATERIAL_SCENES))
@@ -70,6 +71,36 @@ def graphics_settings(overrides):
         if key == 'anisotropy' and (type(value) is not int or value not in (1, 2, 4, 8, 16)):
             raise ValueError('Invalid graphics setting: anisotropy')
     return dict(GRAPHICS, **overrides)
+
+
+def scheduled_changes(changes, final_extent, initial_extent):
+    """Validate launchConfig.changes: graphics/resize steps both backends apply at the same tick.
+
+    A change at tick N lands before simulation update N+1 (the input convention), so it must
+    precede the tick-10 capture. Every resize must end at the requested output extent."""
+    if not isinstance(changes, list):
+        raise ValueError('--changes-json requires a JSON array')
+    resized = False
+    for change in changes:
+        if not isinstance(change, dict) or not set(change) <= {'tick', 'graphics', 'resize'} or not {'graphics', 'resize'} & set(change):
+            raise ValueError('A scheduled change is {tick, graphics?, resize?} with graphics or resize')
+        if type(change.get('tick')) is not int or not 0 <= change['tick'] <= 9:
+            raise ValueError('Scheduled change tick must be 0..9, before the tick-10 capture')
+        if 'graphics' in change:
+            if not isinstance(change['graphics'], dict) or not change['graphics']:
+                raise ValueError('Scheduled graphics must be a non-empty object')
+            graphics_settings(change['graphics'])
+        if 'resize' in change:
+            size = change['resize']
+            if not isinstance(size, list) or len(size) != 2 or any(type(v) is not int or not 1 <= v <= 2048 for v in size):
+                raise ValueError('Scheduled resize must be [width, height] in 1..2048')
+            resized = True
+    resizes = [change['resize'] for change in sorted(changes, key=lambda c: c['tick']) if 'resize' in change]
+    if resized and resizes[-1] != list(final_extent):
+        raise ValueError('The last scheduled resize must reach the requested --extent')
+    if resized != (initial_extent != final_extent):
+        raise ValueError('--initial-extent must differ from --extent exactly when resizes are scheduled')
+    return changes
 
 
 def native_user_settings_path():
@@ -183,13 +214,7 @@ def native_graph_cook(project, build, deadline, scenes, *, compiler=None, slang=
     sys.path.insert(0, str(ROOT/'tools/shaders'))
     from web_materials import cook_native, resolve_compiler
     compiler = resolve_compiler(compiler)
-    if slang is None:
-        cache = build/'CMakeCache.txt'
-        if cache.is_file():
-            for line in cache.read_text(encoding='utf-8', errors='replace').splitlines():
-                if line.startswith('AETHER_WEB_SLANGC:FILEPATH='):
-                    slang = Path(line.split('=', 1)[1])
-        slang = slang or Path(shutil.which('slangc') or 'slangc')
+    slang = resolve_slang(build, slang)
     remaining = min(600, int(deadline-time.monotonic()))
     if remaining < 1:
         raise TimeoutError('Shared qualification deadline expired before native graph cooking')
@@ -201,6 +226,62 @@ def native_graph_cook(project, build, deadline, scenes, *, compiler=None, slang=
     return dict(status='passed', authoredSourceUnchanged=True, compiledShader=artifact,
                 runtimeUri='shaders://BrowserGraph.spv', overlay='Builds/Intermediate/shaders/',
                 qualification='Actual native graph SPIR-V staged; semantic pixel oracle must independently establish execution')
+
+
+def resolve_slang(build, slang=None):
+    if slang is None:
+        cache = build/'CMakeCache.txt'
+        if cache.is_file():
+            for line in cache.read_text(encoding='utf-8', errors='replace').splitlines():
+                if line.startswith('AETHER_WEB_SLANGC:FILEPATH='):
+                    slang = Path(line.split('=', 1)[1])
+        slang = slang or Path(shutil.which('slangc') or 'slangc')
+    return slang
+
+
+def native_custom_pass_cook(project, build, deadline, scenes, *, slang=None, run_function=None):
+    # The native renderer loads a registered pass as shaders://<stem>.spv from the project's compiled
+    # shader overlay (Builds/Intermediate/shaders, which the Editor's ShaderCompiler normally fills).
+    # Compile the fixture's portable custom-pass sources exactly like CMake/SlangShaders.cmake does.
+    if not any(scene.startswith('BrowserCustomPass') for scene in scenes):
+        return dict(status='skipped', reason='No custom pass scene selected')
+    project = project.resolve()
+    if not project.is_relative_to((ROOT/'.temp/lighting-parity').resolve()):
+        raise ValueError('Native custom pass cooking is restricted to the private qualification project')
+    sys.path.insert(0, str(ROOT/'tools/shaders'))
+    from web_materials import run
+    run = run_function or run
+    slang = resolve_slang(build, slang)
+    source_root = project/'assets/shaders'
+    sources = sorted(path for path in source_root.rglob('*.slang') if '#include "include/CustomPass.slangh"' in path.read_text(encoding='utf-8'))
+    if not sources:
+        raise RuntimeError('Custom pass scene selected but the staged project has no portable custom pass shader')
+    output_root = project/'Builds/Intermediate/shaders'
+    scratch = project/'Builds/Intermediate/custom-pass-logs'
+    scratch.mkdir(parents=True, exist_ok=True)
+    version_log = scratch/'slang-version.log'
+    run([slang, '-version'], version_log, deadline)
+    version = version_log.read_text(encoding='utf-8', errors='replace').strip()
+    pin = json.loads((ROOT/'tools/experiments/rust-webgpu/toolchain.json').read_text(encoding='utf-8'))['slang']
+    if pin not in version:
+        raise ValueError('NATIVE_CUSTOM_PASS_TOOLCHAIN: expected pinned Slang '+pin+'; got '+version)
+    compiled = []
+    for source in sources:
+        stem = source.relative_to(source_root).with_suffix('').as_posix()
+        binary = output_root/(stem+'.spv')
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        before = hashlib.sha256(source.read_bytes()).hexdigest()
+        # Exact default AETHERCORE_SLANG_SHADER_ARGS from CMake/SlangShaders.cmake.
+        run([slang, source, '-target', 'spirv', '-emit-spirv-directly', '-fvk-use-scalar-layout',
+             '-matrix-layout-column-major', '-I', ROOT/'src/shaders', '-o', binary], scratch/(stem.replace('/', '_')+'.log'), deadline)
+        data = binary.read_bytes()
+        if len(data) < 20 or data[:4] != bytes.fromhex('03022307'):
+            raise ValueError('NATIVE_CUSTOM_PASS_SPIRV: compiler did not produce a SPIR-V module for '+stem)
+        if hashlib.sha256(source.read_bytes()).hexdigest() != before:
+            raise RuntimeError('Native custom pass cooking changed the authored shader: '+stem)
+        compiled.append(dict(stem=stem, runtimeUri='shaders://'+stem+'.spv', output=str(binary), sha256=hashlib.sha256(data).hexdigest(), sourceSha256=before))
+    return dict(status='passed', slang=version, overlay='Builds/Intermediate/shaders/', compiledShaders=compiled,
+                qualification='Actual native SPIR-V staged from the portable fixture; ordering oracles independently establish execution')
 
 
 def png(path):
@@ -323,7 +404,8 @@ def feature_checks(scene, image, width, height):
     elif scene in MATERIAL_SCENES:
         return material_scene_features(scene, image, width, height, p)
     elif scene in POST_SCENES:
-        probes.update(corner=p(4,4,False), detail=p(48,24,False))
+        # Detail is a world feature: keep its world X on non-square frames.
+        probes.update(corner=p(4,4,False), detail=p(48,24))
         checks['authoredPostSceneVisible'] = max(probes['center']+probes['left']+probes['right']) > 40
         if scene in ('BrowserPostCorner','BrowserPostVolumetric'):
             # Perspective camera y1.5/pitch-8 projects the actual cubes BELOW
@@ -349,6 +431,9 @@ def feature_checks(scene, image, width, height):
         elif 'Dof' in scene:
             probes.update(nearSquare=p(15, 32, False), farSquare=p(49, 32, False))
             checks['bothDepthLayersVisible'] = min(probes['nearSquare']+probes['farSquare']) > 160
+        elif 'CustomPass' in scene:
+            probes.update({name: p(*point) for name, point in CUSTOM_PASS_PROBES.items()})
+            checks['coverSpriteVisible'] = max(probes['spriteNear']) > 60
         elif any(name in scene for name in ('Clouds', 'PhysicalSky')):
             probes.update(top=p(32, 8, False), bottom=p(32, 55, False))
             checks['atmosphereVisible'] = max(probes['top']) > 30 and max(abs(a-b) for a,b in zip(probes['top'],probes['bottom'])) > 10
@@ -370,6 +455,47 @@ def feature_checks(scene, image, width, height):
     return dict(passed=all(checks.values()), checks=checks, probes=probes, centerProbeSquarePixels=list(center))
 
 
+# Maintained 64-lattice probes (x = 32 + 8*worldX, y = 32 - 8*worldY) of BrowserCustomPass. Rectangles (lattice units):
+# sprite x8..24 y8..24, behind x16..36 y12..20, over x8..24 y40..56 (mirror of the sprite about the lamp's y = 32),
+# emissive dark x52..62 y50..58 and emissive lit x15..25 y28..36. Every rectangle owns a border on its min-x/min-y
+# edges only (2 units wide), which is the left and bottom edge on screen.
+CUSTOM_PASS_PROBES = dict(
+    spriteNear=(20, 22), spriteFar=(12, 13), overNear=(20, 42), overFar=(12, 51),
+    overLeft=(9, 46), overBottom=(16, 55), overTop=(16, 41),
+    behindCovered=(21, 15), behindFree=(30, 16), behindBottom=(30, 19), behindTop=(30, 13),
+    darkFill=(58, 54), darkLeft=(53, 54), darkBottom=(58, 57), darkTop=(58, 51), darkRight=(61, 54),
+    litFill=(21, 32), litLeft=(16, 32), litBottom=(21, 35), litTop=(21, 29), litRight=(24, 32))
+
+
+def custom_pass_features(on, off, width, height):
+    # The three stages are qualified by ordering against the engine's own sprite/light-map pipeline, not by
+    # absolute colours (those depend on the tonemap): Behind is hidden by the sprite it overlaps, Over equals
+    # the lit sprite mirrored about the lamp (same distance, so same light factor), Emissive renders identically
+    # on the lamp and outside its radius because the light map never touches it.
+    at = lambda image, name: patch(image, width, height, *CUSTOM_PASS_PROBES[name])
+    diff = lambda a, b: max(abs(x-y) for x, y in zip(a, b))
+    probes = {name: at(on, name) for name in CUSTOM_PASS_PROBES}
+    control = {name: at(off, name) for name in CUSTOM_PASS_PROBES}
+    green = lambda c: c[1]-max(c[0], c[2])
+    tint = lambda c: c[0]-c[2]
+    checks = dict(
+        behindHiddenBySprite=diff(probes['behindCovered'], control['behindCovered']) <= 4 and max(control['behindCovered']) > 60,
+        behindUncoveredPartDrawn=diff(probes['behindFree'], control['behindFree']) > 40 and green(probes['behindFree']) > 15,
+        # The light map brightens the covered rows unevenly, so compare hue (green fill vs magenta border), not absolute colour.
+        behindBorderOnBottomOnly=probes['behindBottom'][0]-probes['behindBottom'][1] > 20 and green(probes['behindTop']) > 15 and green(probes['behindFree']) > 15 and diff(probes['behindBottom'], control['behindBottom']) > 40,
+        overMatchesLitSprite=all(diff(probes[o], control[s]) <= 8 and diff(probes[o], control[o]) > 20
+                                 for o, s in (('overNear', 'spriteNear'), ('overFar', 'spriteFar'))),
+        overDarkensAwayFromLamp=probes['overNear'][0]-probes['overFar'][0] > 15,
+        overBorderOnLeftAndBottomOnly=tint(probes['overLeft']) > 20 and tint(probes['overBottom']) > 20 and tint(probes['overTop']) < 10,
+        emissiveIgnoresLightMap=diff(probes['darkFill'], probes['litFill']) <= 6 and diff(probes['darkLeft'], probes['litLeft']) <= 6
+                                and diff(probes['darkBottom'], probes['litBottom']) <= 6,
+        emissiveFullyBrightOnDarkBackground=max(probes['darkFill'])-max(control['darkFill']) > 100,
+        emissiveBorderOnLeftAndBottomOnly=all(diff(probes[k+'Left'], probes[k+'Fill']) > 40 and diff(probes[k+'Bottom'], probes[k+'Fill']) > 40
+                                              and diff(probes[k+'Top'], probes[k+'Fill']) <= 8 and diff(probes[k+'Right'], probes[k+'Fill']) <= 8
+                                              for k in ('dark', 'lit')))
+    return checks, probes
+
+
 def effect_features(kind, on, off, width, height):
     # Sample authored effect footprint on the maintained 64-square camera lattice.
     # Every pair changes one reflected flag/setting; unchanged images must fail.
@@ -388,8 +514,31 @@ def effect_features(kind, on, off, width, height):
         spread = patch(on,width,height,61,32,False)[0]-patch(off,width,height,61,32,False)[0]
         checks['farLayerSpreadsBeyondSilhouette'] = spread > 3
         checks['focusCenterPreserved'] = abs(patch(on,width,height,15,32,False)[0]-patch(off,width,height,15,32,False)[0]) < 8
+    if kind == 'UvScroll':
+        # 1.5 UV/s for 1/6 s shifts the 4-band stripe exactly one band: each scrolled
+        # band shows the static image's next band, while static neighbours differ.
+        bands = [(20, 28), (28, 36), (36, 44)]
+        shifted = [max(abs(a-b) for a,b in zip(patch(on,width,height,x0,32),patch(off,width,height,x1,32))) for x0,x1 in bands]
+        distinct = [max(abs(a-b) for a,b in zip(patch(off,width,height,x0,32),patch(off,width,height,x1,32))) for x0,x1 in bands]
+        checks['scrolledByOneBand'] = max(shifted) < 12 and min(distinct) > 40
+    if kind == 'VertexColor':
+        # Corners carry red (bottom-left), green (bottom-right) and blue (top-right).
+        hue = lambda image, x, y, channel: (lambda c: c[channel]-max(c[i] for i in range(3) if i != channel))(patch(image,width,height,x,y))
+        corners = [(19, 45, 0), (45, 45, 1), (45, 19, 2)]
+        checks['cornersTakeVertexHues'] = all(hue(on, x, y, c) > 30 for x, y, c in corners)
+        checks['controlIgnoresVertexHues'] = all(hue(off, x, y, c) < 15 for x, y, c in corners)
+    if kind == 'SkyMesh':
+        # The dome sits nearer than the red cube; as sky it is pinned behind it.
+        on_center, off_center = patch(on,width,height,32,32), patch(off,width,height,32,32)
+        checks['skyDrawsBehindOpaque'] = on_center[0]-on_center[2] > 40
+        checks['controlDomeOccludes'] = off_center[2]-off_center[0] > 40
+    extra = {}
+    if kind == 'CustomPass':
+        custom_checks, custom_probes = custom_pass_features(on, off, width, height)
+        checks.update(custom_checks)
+        extra['customPassProbes'] = custom_probes
     return dict(passed=all(checks.values()), checks=checks, changedProbePixels=changed,
-                thresholdExclusive=3, minimumChangedProbePixels=4, maximumProbeDifference=max(differences))
+                thresholdExclusive=3, minimumChangedProbePixels=4, maximumProbeDifference=max(differences), **extra)
 
 
 def shadow_features(kind, on, off, width, height):
@@ -419,6 +568,8 @@ def main():
     parser.add_argument('--scenes', default=','.join(SCENES), help='Comma-separated maintained scene names; selected scope is recorded')
     parser.add_argument('--graphics-json', type=Path, help='JSON object file merged over neutral graphics, identically for both backends')
     parser.add_argument('--extent', default='512x512', help='Requested output WIDTHxHEIGHT, both1..2048; actual native extent must match')
+    parser.add_argument('--initial-extent', help='Starting WIDTHxHEIGHT when --changes-json resizes to --extent; defaults to --extent')
+    parser.add_argument('--changes-json', type=Path, help='JSON array of {tick, graphics?, resize?} applied identically before update tick+1 on both backends')
     parser.add_argument('--isolate-render-scale',action='store_true',help='Apply validated native desktop per-run scale override with persistence disabled; requires GPU source-extent evidence')
     parser.add_argument('--timeout', type=int, default=600, help='Shared deadline in seconds, 30..1200')
     parser.add_argument('--playwright', default=os.environ.get('AETHER_PLAYWRIGHT_MODULE'),
@@ -436,11 +587,18 @@ def main():
         if not 30 <= args.timeout <= 1200:
             raise ValueError('--timeout must be 30..1200')
         effective_graphics = graphics_settings(json.loads(args.graphics_json.read_text(encoding='utf-8-sig')) if args.graphics_json else {})
-        extent=args.extent.split('x')
-        if len(extent)!=2 or any(not value.isdigit() or not 1<=int(value)<=2048 for value in extent):
-            raise ValueError('--extent must be bounded WIDTHxHEIGHT, both1..2048')
-        output_width,output_height=map(int,extent)
+        def parse_extent(text, name):
+            parts = text.split('x')
+            if len(parts) != 2 or any(not value.isdigit() or not 1 <= int(value) <= 2048 for value in parts):
+                raise ValueError(name+' must be bounded WIDTHxHEIGHT, both1..2048')
+            return tuple(map(int, parts))
+        output_width, output_height = parse_extent(args.extent, '--extent')
+        initial_width, initial_height = parse_extent(args.initial_extent or args.extent, '--initial-extent')
+        changes = scheduled_changes(json.loads(args.changes_json.read_text(encoding='utf-8-sig')) if args.changes_json else [],
+                                    (output_width, output_height), (initial_width, initial_height))
         report['requestedOutputExtent']=[output_width,output_height]
+        report['initialExtent'] = [initial_width, initial_height]
+        report['scheduledChanges'] = changes
         scenes = args.scenes.split(',')
         if not scenes or len(set(scenes)) != len(scenes) or any(s not in MAINTAINED_SCENES for s in scenes):
             raise ValueError('--scenes must contain unique maintained scene names')
@@ -475,7 +633,7 @@ def main():
         manifest.write_text(manifest.read_text(encoding='utf-8').replace('../../../rust/aethercore', (ROOT/'rust/aethercore').as_posix()), encoding='utf-8')
         settings = project/'ProjectSettings.toml'
         original = settings.read_text(encoding='utf-8')
-        graphics = f'\n[window]\nwidth = {output_width}\nheight = {output_height}\nmode = "windowed"\n[graphics]\n'+'\n'.join(key+' = '+json.dumps(value) for key, value in effective_graphics.items())+'\n'
+        graphics = f'\n[window]\nwidth = {initial_width}\nheight = {initial_height}\nmode = "windowed"\n[graphics]\n'+'\n'.join(key+' = '+json.dumps(value) for key, value in effective_graphics.items())+'\n'
         settings.write_text(original+graphics, encoding='utf-8')
         report.update(project=str(project), artifacts=str(directory), graphics=effective_graphics)
         report['sceneSha256'] = {s: hashlib.sha256((project/'scenes'/f'{s}.scene.toml').read_bytes()).hexdigest() for s in scenes}
@@ -496,8 +654,9 @@ def main():
         report['nativeBakeLog'] = str(directory/'native-bake.log')
         report['nativeBake'] = bake_native(project, directory, deadline)
         report['nativeGraphCook'] = native_graph_cook(project, args.build.resolve(), deadline, scenes)
+        report['nativeCustomPassCook'] = native_custom_pass_cook(project, args.build.resolve(), deadline, scenes)
         launch = lambda scene: dict(profile='native-desktop-2d-v1', assertions=[dict(entity='$runtime', type='$engine', property='scene', equals=scene)],
-            **({'renderScale':effective_graphics['renderScale']} if args.isolate_render_scale else {}))
+            **({'renderScale':effective_graphics['renderScale']} if args.isolate_render_scale else {}), **({'changes': changes} if changes else {}))
         request = dict(project=str(project), operation='test', target='desktop', ticks=60, step=1/60, scene=scenes[0], timeoutMs=min(600000,args.timeout*1000),
                        launchConfig=launch(scenes[0]), cases=[dict(name=s, scene=s, launchConfig=launch(s)) for s in scenes])
         job = start_job(request, repo=ROOT)
@@ -518,6 +677,8 @@ def main():
                 raise RuntimeError('Native model load failed despite completed gameplay assertions; inspect '+str(runtime_log))
             if scene == 'BrowserGraph' and any(marker in runtime_text.lower() for marker in ('pipeline build failed', 'failed to load shader', 'failed to read shader')):
                 raise RuntimeError('Native custom graph shader failed; inspect '+str(runtime_log))
+            if scene.startswith('BrowserCustomPass') and any(marker in runtime_text.lower() for marker in ('failed to create pipeline for', 'failed to load shader', 'failed to read shader')):
+                raise RuntimeError('Native custom pass shader failed; inspect '+str(runtime_log))
             source = native_dir/'cases'/str(index)/'reference.png'
             width, height, pixels = png(source)
             if (width,height)!=(output_width,output_height):
@@ -532,6 +693,7 @@ def main():
             captures.append(dict(scene=scene, width=width, height=height, native=str(destination),nativeFrameEvidence=evidence))
         capture_request = directory/'browser-request.json'
         capture_request.write_text(json.dumps(dict(root=str(args.build.resolve()/'web'), graphics=effective_graphics, captures=captures,
+                                                  changes=changes, initialExtent=[initial_width, initial_height],
                                                   playwright=args.playwright)), encoding='utf-8')
         browser_report = directory/'browser.json'
         with (directory/'browser.log').open('wb') as stream:
