@@ -619,6 +619,12 @@ namespace aether
 			}
 			m_preDepthPipeline.Destroy();
 			m_skyboxPipeline.Destroy();
+			m_prepassPipeline.Destroy();
+			m_ssrPipeline.Destroy();
+			m_ssrCompositePipeline.Destroy();
+			m_dofPipeline.Destroy();
+			m_volumetricPipeline.Destroy();
+			m_volumetricCompositePipeline.Destroy();
 			m_cullPass.Shutdown();
 			m_cameraPreview.Shutdown();
 			m_modelPreview.Shutdown(nullptr);

@@ -190,6 +190,8 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_fxaaPipeline.Destroy();
 		m_tonemapPipeline.Destroy();
+		m_bloomDownsamplePipeline.Destroy();
+		m_bloomUpsamplePipeline.Destroy();
 		// The HDR and LDR slots are the graph's to release: RenderGraph::Clear() drops every
 		// slot right after this returns, and Shutdown() does the same on the teardown path.
 		m_ldrColor = RGImage{};

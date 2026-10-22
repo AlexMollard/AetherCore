@@ -63,6 +63,12 @@ namespace aether
 	void RenderGraphStorage::Shutdown()
 	{
 		AE_PROFILE_ZONE();
+		// The destructor calls this again after AetherCore has shut the device and the
+		// resource registry down; a second pass would drain a freed registry.
+		if (m_device == VK_NULL_HANDLE)
+		{
+			return;
+		}
 		ShutdownComputeResources();
 
 		for (auto& entry: m_transientImages)
