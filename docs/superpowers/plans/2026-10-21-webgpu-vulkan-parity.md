@@ -93,10 +93,10 @@ material-graph compiler and shader cook/diagnostic paths. Consume Task 3.
 **Files:** physics/animation browser closure, Web scene application and services,
 native/browser Rust/C# gameplay fixtures. Consume Tasks 2â€“4.
 
-- [ ] Build 3D physics/query/joint/animation tests using the native semantics.
-- [ ] Implement portable browser execution with explicit budgets and controlled
+- [x] Build 3D physics/query/joint/animation tests using the native semantics.
+- [x] Implement portable browser execution with explicit budgets and controlled
   simulation; qualify prefab/include/scene transitions, ragdolls and callbacks.
-- [ ] Verify both languages against matching native observable outcomes.
+- [x] Verify both languages against matching native observable outcomes.
 
 ### Task 6: Production export parity qualification
 
@@ -272,3 +272,49 @@ the ledger still lists as unqualified (for example DOF CoC sweeps, specular filt
 anisotropy/LOD, C# browser custom passes and camera/scene-change history) remain
 untested ranges that Task 6 must either qualify or refuse. The export profile
 remains `webgpu-2d-v1`.
+
+## Task 5 qualification checkpoint
+
+Browser gameplay now runs the native 3D engine code: deterministic Jolt
+(`CROSS_PLATFORM_DETERMINISTIC`, single-threaded `JobSystemSingleThreaded`, no
+threads, 1 MiB stack, 8192-body web budget), `PhysicsSystem`, ragdoll building,
+character controllers and the shared `AnimationSystem`. `WebScene` registers
+systems in native order (Animation, SpriteAnimation, Physics, Physics2D,
+scripts, Particles), so scripts see this tick's physics events as on desktop.
+Scripted prefab placement, script start timing, in-tick scene loads and
+scene-teardown destroy order (which decides Jolt body-id reuse and therefore
+contact solving) now match native.
+
+3D gameplay logic is implemented once in `scripting/Gameplay3D.{hpp,cpp}`:
+the C# interop exports, the native Rust host and the browser host all call it.
+Rust gained gameplay-service ops 17-30 (velocity, force, impulse, raycast,
+character move/jump/grounded, ragdoll spawn, skinned clip/speed/time/find) and
+3D collision/trigger events; C# links the same Physics/Character/Ragdoll/
+Animation exports into the browser managed runtime, with its browser guards
+removed. Native-database-only animation authoring (`Animation.Add`,
+`LoadExternal`, `Compile`, `SetJointOffset`) and physics debug drawing report
+`WEB_FEATURE_UNSUPPORTED` in the browser. Native has no skinned-clip events,
+so none were invented; sprite animation events already match.
+
+`tools/web-runtime/gameplay-parity-checks.py` compares every named entity's
+world transform and script-published properties between native and browser at
+checkpoint ticks with tolerance 1e-5, and proves itself on each case by
+detecting an injected 1e-3 drift. Nine 3D scenes (bodies and joints, raycasts,
+contacts/triggers, character controller under input, ragdoll bones, skinned
+clips, scripted 3D prefabs, 3D scene transition, and `BrowserPhysics3D`) plus
+the 2D gameplay reference pass at ticks 1/10/30/60/120/150 in Rust
+(`logs/task5/rust-parity-final.json`) and C#
+(`logs/task5/csharp/parity-all.json`).
+
+Qualification found and fixed: browser scripts ran before physics, prefab
+roots ignored the spawn position, scene loads landed a frame late, and scene
+teardown destroyed entities in a different order, which diverged contacts after
+a transition. Ragdoll bones are now named by role so they can be found and
+compared (a native behaviour change).
+
+Gates: Debug native gauntlet 1,561 cases with zero editor/runtime Vulkan
+findings (`logs/task5/native-gauntlet.json`); 72 hardware browser cases
+(`logs/task5/web-runtime-report.json`); C#/Rust production 2D publishing and
+private 3D movement (`logs/task5/languages/report.json`); Rust SDK and Python
+suites pass. Only the dev/reference builds carry 3D gameplay; the export
+profile remains `webgpu-2d-v1` until Task 6.

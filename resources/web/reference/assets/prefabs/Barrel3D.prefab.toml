@@ -1,0 +1,20 @@
+# A dynamic sphere prefab spawned by Spawner3DProbe.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Barrel3D'
+guid = 2101
+mesh_renderer = true
+position = [0, 0, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'sphere'
+[entities.physics]
+shape = 'sphere'
+motion = 'dynamic'
+radius = 0.5
+mass = 5.0
+restitution = 0.3

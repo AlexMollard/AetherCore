@@ -1,0 +1,43 @@
+# Task5 3D gameplay parity: Skin3DProbe switches the Human's skinned clips outright, cross-fades
+# and changes playback speed, publishing the clip index and clip time each tick.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Human'
+position = [0, 0, 0]
+[[entities.scripts]]
+type = 'Skin3DProbe'
+
+[[entities]]
+name = 'Human mesh'
+parent = 0
+position = [0, 0, 0]
+scale = [0.01, 0.01, 0.01]
+[entities.material]
+base_color = [0.837, 0.302, 0.264, 1.0]
+roughness = 0.8
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/Human/Human.gltf'
+index = 0
+[entities.skinned]
+clip = 0
+looping = true
+speed = 1.0
+time = 0.0
+
+[[entities]]
+name = 'Camera'
+position = [0, 1, 4]
+euler = [-5, 0, 0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 60.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]

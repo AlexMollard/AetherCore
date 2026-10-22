@@ -1,0 +1,116 @@
+# Task5 3D gameplay parity: dynamic bodies driven by script velocity, force and impulse, a hinge
+# pendulum and a fixed-joint pair. The Bodies3DProbe script publishes the velocities it reads back.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Floor'
+mesh_renderer = true
+position = [0, -0.5, 0]
+scale = [30, 1, 30]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'static'
+half_extents = [15, 0.5, 15]
+friction = 0.6
+
+[[entities]]
+name = 'Slider'
+mesh_renderer = true
+position = [-6, 0.5, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 10.0
+friction = 0.3
+
+[[entities]]
+name = 'Pusher'
+mesh_renderer = true
+position = [-3, 0.5, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 10.0
+friction = 0.3
+
+[[entities]]
+name = 'Pendulum'
+mesh_renderer = true
+position = [4, 3, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 10.0
+[entities.joint]
+type = 'hinge'
+target = 0
+anchor = [3, 3, 0]
+axis = [0, 0, 1]
+
+[[entities]]
+name = 'Anchor box'
+mesh_renderer = true
+position = [0, 3, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 10.0
+restitution = 0.2
+
+[[entities]]
+name = 'Welded box'
+mesh_renderer = true
+position = [0, 5, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 10.0
+[entities.joint]
+type = 'fixed'
+target = 4
+anchor = [0, 4, 0]
+
+[[entities]]
+name = 'Controller'
+position = [0, 0, 0]
+[[entities.scripts]]
+type = 'Bodies3DProbe'
+
+[[entities]]
+name = 'Camera'
+position = [0, 4, 14]
+euler = [-10, 0, 0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 60.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]

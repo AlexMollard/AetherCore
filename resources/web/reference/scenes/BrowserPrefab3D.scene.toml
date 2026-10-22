@@ -1,0 +1,38 @@
+# Task5 3D gameplay parity: Spawner3DProbe instantiates 3D physics prefabs from script, places
+# them, destroys one and instantiates another. Names are unique at every checkpoint.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Floor'
+mesh_renderer = true
+position = [0, -0.5, 0]
+scale = [30, 1, 30]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'static'
+half_extents = [15, 0.5, 15]
+
+[[entities]]
+name = 'Spawner'
+position = [0, 0, 0]
+[[entities.scripts]]
+type = 'Spawner3DProbe'
+
+[[entities]]
+name = 'Camera'
+position = [0, 4, 14]
+euler = [-10, 0, 0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 60.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]

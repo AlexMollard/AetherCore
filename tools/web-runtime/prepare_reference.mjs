@@ -21,6 +21,11 @@ await cp(path.join(repo, 'projects/EmberRun/assets/ember'), path.join(directory,
 await cp(path.join(repo, 'projects/EmberRun/scenes/EmberRun.scene.toml'), path.join(directory, 'scenes/EmberRun.scene.toml'));
 const fixture = path.join(repo, 'resources/web/reference');
 await cp(fixture, directory, {recursive : true});
+// The Human skeleton/skinned model (two clips) feeds the 3D ragdoll and animation parity fixtures; it is
+// copied from its source project so the 10 MB buffer is not duplicated in the repository again.
+await mkdir(path.join(directory, 'assets/models/Human'), {recursive : true});
+for (const file of ['Human.gltf', 'buffer.bin', 'walk.bin'])
+    await cp(path.join(repo, 'projects/HumanDemo/assets/models/Human', file), path.join(directory, 'assets/models/Human', file));
 const u32 = value => {
     const bytes = Buffer.alloc(4);
     bytes.writeUInt32LE(value);

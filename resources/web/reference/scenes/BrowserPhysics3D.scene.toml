@@ -1,0 +1,79 @@
+# Task5 3D physics parity: a dynamic box falls onto a static floor, a pendulum hangs from a
+# hinge to the floor and a second box is welded to the first by a fixed joint.
+# Native/browser positions are compared at the same fixed 1/60 tick.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Floor'
+mesh_renderer = true
+position = [0, -0.5, 0]
+scale = [20, 1, 20]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'static'
+half_extents = [0.5, 0.5, 0.5]
+
+[[entities]]
+name = 'Falling box'
+mesh_renderer = true
+position = [0, 3, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+restitution = 0.2
+
+[[entities]]
+name = 'Pendulum'
+mesh_renderer = true
+position = [4, 3, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+[entities.joint]
+type = 'hinge'
+target = 0
+anchor = [3, 3, 0]
+axis = [0, 0, 1]
+
+[[entities]]
+name = 'Welded box'
+mesh_renderer = true
+position = [0, 5, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+[entities.joint]
+type = 'fixed'
+target = 1
+anchor = [0, 4, 0]
+
+[[entities]]
+name = 'Camera'
+position = [0, 4, 12]
+euler = [-10, 0, 0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 60.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]

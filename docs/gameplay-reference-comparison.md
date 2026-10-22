@@ -77,8 +77,28 @@ of the process tree. Settings persistence is disabled for these test runs.
 `launchConfig.checkpoints` contains `{tick, assertions}` objects, using completed
 update counts starting at 1. Input event ticks start at 0. Duplicate checkpoint
 ticks fail validation. Script properties use their script type name. Native
-assertions use `type: "$engine"` and expose `exists`, `position` and `uiText`.
-The reserved `$runtime` entity exposes `scene` and `audioStarted`.
+assertions use `type: "$engine"` and expose `exists`, `position`, `localToWorld`
+(16 column-major floats) and `uiText`. The reserved `$runtime` entity exposes
+`scene`, `audioStarted` and `simulatedTicks` (completed simulation steps).
+
+`tools/web-runtime/gameplay-parity-checks.py` diffs these snapshots against the browser
+test bridge's `aetherTest.entities()` (same schema, dev/test builds only) at checkpoint
+ticks: every named entity's world position/rotation/scale plus script properties, with a
+recorded absolute tolerance (default 1e-5) and a built-in perturbation control.
+
+The maintained 3D fixtures are `BrowserBodies3D`, `BrowserRaycast3D`, `BrowserContacts3D`,
+`BrowserCharacter3D`, `BrowserRagdoll3D`, `BrowserSkinClips3D`, `BrowserPrefab3D` and
+`BrowserTransition3D` (+ `BrowserTransition3DResult`), authored in
+`resources/web/reference/scenes` and driven by the same probe script types in Rust
+(`projects/AgentPipelineRust/fixtures3d/gameplay3d.rs`) and C#
+(`projects/AgentPipelineCSharp/fixtures3d/Gameplay3D.cs`). The probes live outside each
+project's `scripts/` directory because the 2D production publisher scans everything under
+it; the harness injects them into its private staged project (`--stage-project` stages
+one without running). Run them with `--scenes <names> --checkpoints 1,10,30,60,120,150`;
+C# needs `--web-root` pointing at a managed export (`tools/web-runtime/managed-parity-build.py`).
+The Human model they use is copied from `projects/HumanDemo` by `prepare_reference.mjs`.
+Collider `half_extents` are world-space sizes, never multiplied by the entity scale.
+Ragdoll bones are named by role so their world transforms are compared like any entity.
 
 The default profile remains `native-headless-2d-v1`, which creates no GPU/window or
 audio device. It rejects desktop checkpoints and unsupported scene content rather

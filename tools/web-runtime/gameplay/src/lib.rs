@@ -22,7 +22,15 @@ use model_probe::ModelProbe;
 #[path = "../../../../projects/AgentPipelineRust/scripts/src/custom_pass.rs"]
 mod custom_pass;
 use custom_pass::CustomPassProbe;
-export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult, EmberRun, ModelProbe, CustomPassProbe);
+#[path = "../../../../projects/AgentPipelineRust/fixtures3d/gameplay3d.rs"]
+mod gameplay3d;
+use gameplay3d::{
+    Bodies3DProbe, Contacts3DProbe, Ragdoll3DProbe, Raycast3DProbe, Skin3DProbe, Spawner3DProbe,
+    Transition3DProbe, TransitionResult3DProbe, Walker3DProbe,
+};
+export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult, EmberRun, ModelProbe, CustomPassProbe,
+    Bodies3DProbe, Raycast3DProbe, Contacts3DProbe, Walker3DProbe, Ragdoll3DProbe, Skin3DProbe, Spawner3DProbe,
+    Transition3DProbe, TransitionResult3DProbe);
 
 #[cfg(feature = "automation")]
 #[unsafe(no_mangle)]

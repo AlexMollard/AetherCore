@@ -1,0 +1,78 @@
+# Task5 3D gameplay parity: a bouncing box produces repeated collision enter/exit events, and a
+# box dropped through a static sensor volume produces one trigger enter and exit. Every body
+# carries Contacts3DProbe, which publishes its own event counts.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Floor'
+mesh_renderer = true
+position = [0, -0.5, 0]
+scale = [30, 1, 30]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'static'
+half_extents = [15, 0.5, 15]
+[[entities.scripts]]
+type = 'Contacts3DProbe'
+
+[[entities]]
+name = 'Bouncer'
+mesh_renderer = true
+position = [-3, 4, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 10.0
+restitution = 0.6
+[[entities.scripts]]
+type = 'Contacts3DProbe'
+
+[[entities]]
+name = 'Zone'
+position = [3, 2, 0]
+scale = [3, 3, 3]
+[entities.physics]
+shape = 'box'
+motion = 'static'
+half_extents = [1.5, 1.5, 1.5]
+sensor = true
+[[entities.scripts]]
+type = 'Contacts3DProbe'
+
+[[entities]]
+name = 'Passer'
+mesh_renderer = true
+position = [3, 6, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 10.0
+[[entities.scripts]]
+type = 'Contacts3DProbe'
+
+[[entities]]
+name = 'Camera'
+position = [0, 4, 14]
+euler = [-10, 0, 0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 60.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]

@@ -1,0 +1,75 @@
+# Task5 3D gameplay parity: a character controller driven by scripted arrow keys and space. It
+# walks onto a low step, jumps and shoves a dynamic crate. Walker3DProbe publishes grounded state.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Floor'
+mesh_renderer = true
+position = [0, -0.5, 0]
+scale = [30, 1, 30]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'static'
+half_extents = [15, 0.5, 15]
+friction = 0.6
+
+[[entities]]
+name = 'Step'
+mesh_renderer = true
+position = [3.5, 0.125, 0]
+scale = [2, 0.25, 2]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'static'
+half_extents = [1, 0.125, 1]
+
+[[entities]]
+name = 'Crate'
+mesh_renderer = true
+position = [6.5, 0.5, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 20.0
+friction = 0.4
+
+[[entities]]
+name = 'Walker'
+position = [0, 0, 0]
+[entities.character_controller]
+gravity_scale = 2.0
+ground_snap_distance = 0.3
+half_height = 0.6
+mass = 80.0
+max_push_force = 600.0
+max_slope_angle = 0.7853982
+radius = 0.3
+step_height = 0.3
+[[entities.scripts]]
+type = 'Walker3DProbe'
+
+[[entities]]
+name = 'Camera'
+position = [3, 4, 12]
+euler = [-12, 0, 0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 60.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]

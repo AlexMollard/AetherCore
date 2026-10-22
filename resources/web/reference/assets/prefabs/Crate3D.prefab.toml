@@ -1,0 +1,31 @@
+# A dynamic box with a purely visual child; Spawner3DProbe places it after instantiation.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Crate3D'
+guid = 2001
+mesh_renderer = true
+position = [0, 0, 0]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.physics]
+shape = 'box'
+motion = 'dynamic'
+half_extents = [0.5, 0.5, 0.5]
+mass = 10.0
+restitution = 0.1
+
+[[entities]]
+name = 'Crate3D lid'
+guid = 2002
+parent = 0
+mesh_renderer = true
+position = [0, 0.6, 0]
+scale = [0.5, 0.2, 0.5]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'

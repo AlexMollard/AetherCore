@@ -672,6 +672,9 @@ try {
 		await page.keyboard.down('Space');
 		await page.waitForFunction(() => aetherRuntime.scene === 'ReferenceResult' || aetherRuntime.status === 'failed');
 		await page.keyboard.up('Space');
+		// The scene switch lands inside the tick that requests it, as on desktop; the two saves from that
+		// tick commit asynchronously while simulation is paused, so wait for them rather than racing.
+		await page.waitForFunction(() => aetherPlatform.report.committedWrites === 2 || aetherRuntime.status === 'failed');
 		const state = await page.evaluate(() => ({
 						      runtime : aetherRuntime,
 						      score : aetherPlatform.read('reference_score'),
