@@ -4,54 +4,131 @@ import argparse
 from functools import partial
 from html import escape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import json
 from pathlib import Path
-from urllib.parse import urlencode, urlsplit
+import subprocess
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 REPO = Path(__file__).resolve().parents[2]
-DESCRIPTIONS = {
-    'EmberRun': 'A playable 2D platformer. Select Play, then use the keyboard.',
-    'ReferenceStart': 'Rust gameplay, sprites, audio, persistence and scene transitions.',
-    'ReferenceResult': 'The companion result scene for the gameplay reference.',
-    'BrowserFeatures': 'Tilemaps, sprite animation, text and UI rendering.',
-    'BrowserModels': 'Authored 3D models, linked materials and depth testing.',
-    'BrowserMaterials': 'Material textures, mipmaps, transparency and face culling.',
-    'BrowserSkin': 'Skinned models and animation playback.',
-    'BrowserDependencies': 'Scene includes and prefab additions, removals and overrides.',
-    'BrowserIncluded': 'The scene fragment used by the dependency example.',
-    'BrowserSolid': 'Camera solid colour preserved through the HDR compositor.',
-    'BrowserGradient': 'Camera colour stops blended in display space.',
-    'BrowserSky': 'Native procedural sky gradient, horizon and ground colours.',
-    'BrowserHdr': 'Half and eight units of scene radiance through native ACES tonemapping.',
-    'BrowserSun': 'Directional sunlight on a rough dielectric surface.',
-    'BrowserPoint': 'Point lighting with native inverse-square attenuation.',
-    'BrowserSpot': 'Spotlight cone falloff on an authored 3D surface.',
-    'BrowserPbrMaps': 'Tangent normals, occlusion and metallic/roughness texture maps.',
-    'BrowserLight2D': 'A 2D lamp casts shadows through a tile artwork silhouette.',
-    'BrowserBadLight': 'An invalid NaN light must fail before GPU frame submission.',
-    'BrowserShadowNoCast': 'The alpha-cutout mesh stays visible while its shadow-casting flag is disabled.',
-    'default': 'The reference project’s default scene.',
-}
-for kind, label in [('Sun', 'Directional'), ('Point', 'Point'), ('Spot', 'Spot'), ('Mask', 'Alpha-cutout'), ('Skin', 'Skinned-model')]:
-    for suffix, state in [('On', 'enabled'), ('Off', 'disabled')]:
-        DESCRIPTIONS[f'BrowserShadow{kind}{suffix}'] = f'{label} shadow comparison, with receiver shadows {state}.'
+CATALOG = REPO / 'resources/web/gallery-catalog.json'
+MAINTAINED = REPO / 'resources/web/reference/scenes'
+
+
+def load_catalog():
+    return json.loads(CATALOG.read_text(encoding='utf-8'))
+
+
+def changed_scenes():
+    """Maintained scenes with uncommitted edits: the examples currently being worked on."""
+    try:
+        result = subprocess.run(['git', 'status', '--porcelain', '--', str(MAINTAINED)], cwd=REPO,
+                                capture_output=True, text=True, timeout=5, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    return {Path(line[3:].strip().strip('"')).name.removesuffix('.scene.toml') for line in result.stdout.splitlines()
+            if line[3:].strip().endswith('.scene.toml')}
+
+
+def scene_link(name):
+    return '/?' + urlencode({'reference': '1', 'scene': name})
+
+
+def card(name, entry, catalog, changed, updated):
+    statuses = catalog['statuses']
+    status = entry.get('status', 'fixture')
+    area = entry.get('area', 'unsorted')
+    control = entry.get('control')
+    badges = [f'<span class="badge {escape(status)}">{escape(statuses.get(status, status))}</span>']
+    if name in changed or (control and control in changed):
+        badges.append('<span class="badge changed">Uncommitted changes</span>')
+    if entry.get('missing'):
+        badges.append('<span class="badge missing">Needs description</span>')
+    links = [f'<a class="open" href="{escape(entry.get("url") or scene_link(name))}">Open example &rarr;</a>']
+    if control:
+        links.append(f'<a class="control" href="{escape(scene_link(control))}" title="{escape(control)}">Open control (feature off)</a>')
+    look = f'<p class="look"><b>What to look for:</b> {escape(entry["lookFor"])}</p>' if entry.get('lookFor') else ''
+    names = name + (' ' + control if control else '')
+    search = ' '.join([names, entry.get('title', ''), entry.get('summary', ''), entry.get('lookFor', ''), statuses.get(status, status)]).lower()
+    return (f'<article class="card" data-area="{escape(area)}" data-status="{escape(status)}" data-updated="{updated}" data-search="{escape(search)}">'
+            f'<div class="badges">{"".join(badges)}</div><h3>{escape(entry.get("title", name))}</h3>'
+            f'<code>{escape(names)}</code><p>{escape(entry.get("summary", ""))}</p>{look}<div class="links">{"".join(links)}</div></article>')
 
 
 def gallery(build):
-    groups = {'Play and explore': [], 'Rendering and scene fixtures': [], 'Expected failures': []}
-    for scene in sorted((build / 'reference-project/scenes').glob('*.scene.toml')):
-        name = scene.name.removesuffix('.scene.toml')
-        group = ('Expected failures' if name.startswith('BrowserBad') else
-                 'Rendering and scene fixtures' if name.startswith('Browser') else 'Play and explore')
-        description = DESCRIPTIONS.get(name, 'An intentionally invalid asset or scene. Opening this example should display a diagnostic.'
-                                       if group == 'Expected failures' else 'An authored browser scene.')
-        url = '/?' + urlencode({'reference': '1', 'scene': name})
-        groups[group].append(f'<a class="card" href="{escape(url)}"><h3>{escape(name)}</h3><p>{escape(description)}</p><span>Open example &rarr;</span></a>')
-    groups['Rendering and scene fixtures'].append(
-        '<a class="card" href="/?scene=mesh3d"><h3>Mesh foundation</h3><p>Procedural 3D geometry, depth testing and the sprite overlay.</p><span>Open example &rarr;</span></a>')
-    sections = ''.join(f'<section><h2>{heading}</h2><div class="grid">{"".join(cards)}</div></section>'
-                       for heading, cards in groups.items() if cards)
+    catalog = load_catalog()
+    scenes = {path.name.removesuffix('.scene.toml'): path for path in sorted((build / 'reference-project/scenes').glob('*.scene.toml'))}
+    controls = {entry['control'] for entry in catalog['scenes'].values() if entry.get('control')}
+    changed = changed_scenes()
+    entries = {}
+    for name, path in scenes.items():
+        if name in controls:
+            continue
+        entry = catalog['scenes'].get(name)
+        if entry is None:
+            # A new scene without a catalogue entry still shows up, flagged, rather than hiding.
+            entry = dict(area='failures' if name.startswith('BrowserBad') else 'unsorted', status='in-progress', title=name,
+                         summary='No catalogue entry yet in resources/web/gallery-catalog.json.', missing=True)
+        source = MAINTAINED / path.name
+        updated = int(max(path.stat().st_mtime, source.stat().st_mtime if source.is_file() else 0))
+        entries[name] = (entry, updated)
+    entries['mesh3d'] = (dict(area='models', status='qualified', title='Mesh foundation', url='/?scene=mesh3d',
+                              summary='Procedural 3D geometry, depth testing and the sprite overlay from the first WebGPU milestone.',
+                              lookFor='Procedural primitives sort by depth and keep their shape under non-uniform scale; the 2D overlay stays on top.'), 0)
+    working = sorted((name for name, (entry, _) in entries.items()
+                      if entry.get('status') == 'in-progress' or name in changed or entry.get('control') in changed),
+                     key=lambda name: -entries[name][1])
+    render = lambda name: card(name, entries[name][0], catalog, changed, entries[name][1])
+    areas = [*catalog['areas'], ['unsorted', 'Unsorted', 'Scenes that have no catalogue entry yet.']]
+    sections = []
+    if working:
+        sections.append('<section class="working" data-section="working"><h2>Being worked on</h2>'
+                        '<p class="hint">In-progress examples and scenes with uncommitted edits, most recently changed first.</p>'
+                        f'<div class="grid">{"".join(render(name) for name in working)}</div></section>')
+    for key, heading, blurb in areas:
+        names = sorted((name for name, (entry, _) in entries.items() if entry.get('area') == key), key=lambda name: entries[name][0].get('title', name))
+        if names:
+            sections.append(f'<section data-section="{escape(key)}"><h2>{escape(heading)} <small>{len(names)}</small></h2>'
+                            f'<p class="hint">{escape(blurb)}</p><div class="grid">{"".join(render(name) for name in names)}</div></section>')
+    chips = ''.join(f'<button type="button" data-filter="{escape(key)}">{escape(heading)}</button>' for key, heading, _ in areas
+                    if any(entry.get('area') == key for entry, _ in entries.values()))
     template = (REPO / 'resources/web/gallery.html').read_text(encoding='utf-8')
-    return template.replace('<!-- EXAMPLES -->', sections).encode('utf-8')
+    total = f'{len(entries)} examples, {len(working)} being worked on'
+    return (template.replace('<!-- FILTERS -->', chips).replace('<!-- COUNT -->', escape(total))
+            .replace('<!-- EXAMPLES -->', ''.join(sections)).encode('utf-8'))
+
+
+def example_details(name):
+    """Catalogue entry for one preview scene, resolving a control scene to its feature card."""
+    catalog = load_catalog()
+    scenes = catalog['scenes']
+    feature = next((key for key, entry in scenes.items() if entry.get('control') == name), None)
+    if name == 'mesh3d':
+        entry = dict(area='models', status='qualified', title='Mesh foundation',
+                     summary='Procedural 3D geometry, depth testing and the sprite overlay from the first WebGPU milestone.',
+                     lookFor='Procedural primitives sort by depth and keep their shape under non-uniform scale; the 2D overlay stays on top.')
+    else:
+        entry = scenes.get(feature or name)
+    if entry is None:
+        return dict(scene=name, title=name, summary='No catalogue entry yet in resources/web/gallery-catalog.json.')
+    areas = {key: heading for key, heading, _ in catalog['areas']}
+    details = dict(scene=name, title=entry['title'], summary=entry['summary'], lookFor=entry.get('lookFor', ''),
+                   area=areas.get(entry['area'], entry['area']), areaKey=entry['area'],
+                   status=catalog['statuses'].get(entry['status'], entry['status']), statusKey=entry['status'])
+    on = feature or name
+    off = scenes.get(on, {}).get('control')
+    if off:
+        details.update(isControl=feature is not None, feature=on, control=off, featureUrl=scene_link(on), controlUrl=scene_link(off))
+    return details
+
+
+def example_page(build, name):
+    # The source shell, so shell edits show without a Web rebuild; the bridge mirrors the build's CMake substitution.
+    bridge = '<script src="test-bridge.js"></script>' if (build / 'web/test-bridge.js').is_file() else ''
+    page = (REPO / 'resources/web/index.html').read_text(encoding='utf-8').replace('@AETHER_WEB_BRIDGE_SCRIPT@', bridge)
+    data = json.dumps(dict(example_details(name), galleryUrl='/')).replace('</', '<\\/')
+    # Development previews only: exported packages never pass through this server.
+    return page.replace('<script src="project.js"></script>',
+                        f'<script>globalThis.aetherExample={data};</script><script src="project.js"></script>', 1).encode('utf-8')
 
 
 class Preview(SimpleHTTPRequestHandler):
@@ -65,15 +142,27 @@ class Preview(SimpleHTTPRequestHandler):
 
     def send_head(self):
         target = urlsplit(self.path)
-        if target.path == '/' and not target.query:
-            from io import BytesIO
-            content = gallery(self.build)
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.send_header('Content-Length', str(len(content)))
-            self.end_headers()
-            return BytesIO(content)
+        query = parse_qs(target.query)
+        # The gallery owns '/' and its own ?area= filter links; any other query opens the runtime.
+        if target.path == '/' and set(query) <= {'area'}:
+            return self.html(gallery(self.build))
+        if target.path in ('/', '/index.html') and 'scene' in query:
+            return self.html(example_page(self.build, query['scene'][0]))
+        if target.path == '/platform.js':
+            # The shell comes from source, so its platform script must too.
+            return self.respond((REPO / 'resources/web/platform.js').read_bytes(), 'text/javascript; charset=utf-8')
         return super().send_head()
+
+    def html(self, content):
+        return self.respond(content, 'text/html; charset=utf-8')
+
+    def respond(self, content, content_type):
+        from io import BytesIO
+        self.send_response(200)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(len(content)))
+        self.end_headers()
+        return BytesIO(content)
 
 
 if __name__ == '__main__':

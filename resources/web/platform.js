@@ -297,12 +297,14 @@ document.getElementById('start').onclick = () => {
 };
 
 if (aetherPlatform && !globalThis.aetherProject) {
-    document.getElementById('instructions').textContent =
-	new URLSearchParams(location.search).get('scene') === 'EmberRun'
-        ? 'WASD / arrows: move · Space: dash · R: retry. Collect amber embers and dodge red hazards.'
-        : new URLSearchParams(location.search).get('scene') === 'BrowserFeatures'
-	    ? 'Start audio, then click the canvas toggle and slider. The sprite animates above the tile map.'
-	    : 'Hold Space to score. Your run saves automatically.';
+    const scene = new URLSearchParams(location.search).get('scene');
+    const instructions = {
+	EmberRun: 'WASD / arrows: move · Space: dash · R: retry. Collect amber embers and dodge red hazards.',
+	BrowserFeatures: 'Start audio, then click the canvas toggle and slider. The sprite animates above the tile map.',
+	ReferenceStart: 'Hold Space to score. Your run saves automatically.',
+    }[scene];
+    if (instructions)
+	document.getElementById('instructions').textContent = instructions;
 } else if (!aetherPlatform) {
     document.getElementById('start').hidden = true;
 }

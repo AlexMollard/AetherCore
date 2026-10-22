@@ -8,23 +8,73 @@
 <title>Examples · AetherCore</title>
 <style>
 :root{font-family:Inter,"Segoe UI",system-ui,sans-serif;color:#ede9e3;background:#0f0d0b;font-synthesis:none}
-*{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:auto;padding:32px 32px 64px}
+*{box-sizing:border-box}body{margin:0}main{max-width:1180px;margin:auto;padding:32px 32px 64px}
 header{display:flex;align-items:center;gap:12px;font-weight:650}header img{width:32px;height:32px}
-.label{margin-left:auto;color:#968d80;font-size:12px;font-weight:400}h1{font-size:clamp(32px,5vw,48px);letter-spacing:-1.5px;margin:48px 0 12px}
-.intro{color:#968d80;max-width:680px;line-height:1.7;margin:0 0 36px}h2{font-size:17px;margin:32px 0 16px;font-weight:600}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
-.card{display:flex;flex-direction:column;padding:22px;background:#191613;border:1px solid #322c26;border-radius:5px;color:inherit;text-decoration:none;min-height:184px}
-.card:hover{background:#201c18;border-color:#ff9429}.card:focus-visible{outline:2px solid #ffb352;outline-offset:4px}
-h3{font-size:16px;margin:0 0 10px}.card p{font-size:13px;line-height:1.7;color:#968d80;margin:0 0 22px}.card span{color:#ff9429;font-size:12px;margin-top:auto}
+.label{margin-left:auto;color:#968d80;font-size:12px;font-weight:400}h1{font-size:clamp(32px,5vw,48px);letter-spacing:-1.5px;margin:40px 0 12px}
+.intro{color:#968d80;max-width:720px;line-height:1.7;margin:0 0 24px}
+.tools{position:sticky;top:0;z-index:2;background:#0f0d0bf2;padding:12px 0 14px;border-bottom:1px solid #322c26;margin-bottom:8px}
+.search{display:flex;gap:12px;align-items:center}
+.search input{flex:1;font:inherit;font-size:15px;color:inherit;background:#191613;border:1px solid #322c26;border-radius:5px;padding:10px 14px}
+.search input:focus{outline:2px solid #ffb352;outline-offset:1px}.count{color:#968d80;font-size:12px;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chips button{font:inherit;font-size:12px;color:#c9c1b6;background:#191613;border:1px solid #322c26;border-radius:999px;padding:5px 12px;cursor:pointer}
+.chips button[aria-pressed=true]{color:#0f0d0b;background:#ff9429;border-color:#ff9429}
+h2{font-size:18px;margin:32px 0 4px;font-weight:600;scroll-margin-top:130px}h2 small{color:#968d80;font-weight:400;font-size:13px;margin-left:6px}
+.hint{color:#968d80;font-size:13px;margin:0 0 14px}
+.working h2{color:#ffb352}.working .card{border-color:#6b4a24}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card{display:flex;flex-direction:column;padding:20px;background:#191613;border:1px solid #322c26;border-radius:5px;min-height:200px}
+.card:hover{background:#201c18;border-color:#ff9429}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.badge{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid #322c26;color:#c9c1b6}
+.badge.qualified{color:#9fdc9a;border-color:#2f5a2c}.badge.in-progress{color:#ffb352;border-color:#6b4a24}
+.badge.playable{color:#8cc8ff;border-color:#24496b}.badge.expected-failure{color:#ff8a7a;border-color:#6b2f24}
+.badge.changed{color:#f0d070;border-color:#5f5224}.badge.missing{color:#ff8a7a;border-color:#6b2f24}
+h3{font-size:16px;margin:0 0 4px}code{font-size:11px;color:#7d756a;margin-bottom:10px;word-break:break-all}
+.card p{font-size:13px;line-height:1.65;color:#a89f92;margin:0 0 10px}.card p.look{color:#c9c1b6}.card p.look b{color:#ede9e3;font-weight:600}
+.links{display:flex;flex-wrap:wrap;gap:16px;margin-top:auto;padding-top:6px}
+.links a{color:#ff9429;font-size:12px;text-decoration:none}.links a.control{color:#968d80}.links a:hover{text-decoration:underline}
+.links a:focus-visible{outline:2px solid #ffb352;outline-offset:3px}
+.empty{color:#968d80;display:none;margin:32px 0}
 footer{color:#968d80;font-size:12px;line-height:1.7;margin-top:36px;border-top:1px solid #322c26;padding-top:20px}
-@media(max-width:560px){main{padding:24px 16px 40px}.label{display:none}h1{margin-top:36px}}
+@media(max-width:560px){main{padding:24px 16px 40px}.label{display:none}h1{margin-top:28px}.search{flex-direction:column;align-items:stretch}}
 </style>
 </head>
 <body><main>
 <header><img src="/aethercore-icon.png" alt="">AetherCore<span class="label">Local development gallery</span></header>
 <h1>Explore the examples.</h1>
-<p class="intro">Playable scenes and focused rendering examples from the current browser build. Open an example, select Play and click the game to use the keyboard. Refresh after a rebuild to see the latest changes.</p>
+<p class="intro">Every scene in the current browser build. Examples marked <b>Matches native</b> are checked against the Vulkan renderer at the same tick. Paired cards also link a <b>control</b> scene with the feature switched off, for comparison. Open an example, select Play, then click the game to use the keyboard. Refresh after a rebuild.</p>
+<div class="tools">
+<div class="search"><input id="q" type="search" placeholder="Search by name, feature or what to look for (press / to focus)" aria-label="Search examples" autocomplete="off"><span class="count" id="count"><!-- COUNT --></span></div>
+<div class="chips" role="group" aria-label="Filter by area"><button type="button" data-filter="" aria-pressed="true">All</button><button type="button" data-filter="working">Being worked on</button><!-- FILTERS --></div>
+</div>
 <!-- EXAMPLES -->
-<footer>Development previews use WebGPU. These fixtures demonstrate individual features; full Vulkan rendering parity is still in progress. Expected failure examples deliberately exercise error reporting.</footer>
-</main></body>
+<p class="empty" id="empty">No examples match. Clear the search or pick another area.</p>
+<footer>Development previews use WebGPU. Expected-failure examples deliberately trigger error reporting. The production export profile is still 2D only; 3D and effects here are development and qualification builds.</footer>
+</main>
+<script>
+const q=document.getElementById('q'),chips=[...document.querySelectorAll('.chips button')],sections=[...document.querySelectorAll('section')];
+const total=document.querySelectorAll('section:not(.working) .card').length,count=document.getElementById('count'),initial=count.textContent;
+let area=new URLSearchParams(location.search).get('area')||'';
+function apply(){
+  const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);let shown=0;
+  for(const section of sections){
+    const key=section.dataset.section;const sectionOn=!area||area===key;let visible=0;
+    for(const card of section.querySelectorAll('.card')){
+      const on=sectionOn&&terms.every(term=>card.dataset.search.includes(term));
+      card.hidden=!on;if(on){visible++;if(key!=='working')shown++;}
+    }
+    section.hidden=visible===0;
+  }
+  if(area==='working')shown=document.querySelectorAll('.working .card:not([hidden])').length;
+  count.textContent=terms.length||area?`${shown} of ${total} shown`:initial;
+  document.getElementById('empty').style.display=sections.every(s=>s.hidden)?'block':'none';
+  for(const chip of chips)chip.setAttribute('aria-pressed',String(chip.dataset.filter===area));
+}
+for(const chip of chips)chip.addEventListener('click',()=>{area=chip.dataset.filter;history.replaceState(null,'',area?`?area=${area}`:location.pathname);apply();});
+q.addEventListener('input',apply);
+addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==q){e.preventDefault();q.focus();}if(e.key==='Escape'&&document.activeElement===q){q.value='';apply();}});
+apply();
+</script>
+</body>
 </html>
