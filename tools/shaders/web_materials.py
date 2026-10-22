@@ -17,6 +17,9 @@ import tempfile
 import time
 import tomllib
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wgsl_checks import validate_negated_vector_sums
+
 ROOT = Path(__file__).resolve().parents[2]
 MAX_SHADER_BYTES = 1024 * 1024
 
@@ -178,6 +181,7 @@ def cook(project, material, output_dir, compiler, slang, timeout=120):
         run([slang, wrapper, '-target', 'wgsl', '-entry', 'vertexMain', '-entry', 'fragmentMain', '-entry', 'shadowMain', '-entry', 'auxiliaryMain',
              '-I', scratch, '-I', ROOT/'resources/web', '-reflection-json', reflection, '-o', wgsl], scratch/'slang.log', deadline)
         validate_bindings(wgsl.read_text(encoding='utf-8'))
+        validate_negated_vector_sums(wgsl.read_text(encoding='utf-8'), str(material))
         encoded = encode_shader(wgsl.read_bytes(), input_hash.digest())
         metadata = dict(schemaVersion=1, abi=1, status='passed', material=material.relative_to(project).as_posix(),
                         shader=uri, sourceSha256=input_hash.hexdigest(), wgslSha256=hashlib.sha256(wgsl.read_bytes()).hexdigest(),

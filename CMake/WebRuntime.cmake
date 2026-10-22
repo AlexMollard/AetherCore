@@ -137,8 +137,11 @@ foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard)
 	endif()
     add_custom_command(OUTPUT "${_assets}/${_shader}.wgsl"
         COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang"
-            -target wgsl ${_shader_entries} -o "${_assets}/${_shader}.wgsl"
+            -target wgsl ${_shader_entries} -o "${_assets}/${_shader}.wgsl.tmp"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py" "${_assets}/${_shader}.wgsl.tmp"
+        COMMAND "${CMAKE_COMMAND}" -E rename "${_assets}/${_shader}.wgsl.tmp" "${_assets}/${_shader}.wgsl"
         DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang" ${_shared_shader_includes}
+            "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py"
         VERBATIM)
 endforeach()
 set(_post_effects bloom fxaa tonemap gtao_main gtao_denoise ssr ssr_composite dof volumetric_fog volumetric_composite)
@@ -150,8 +153,11 @@ foreach(_effect IN LISTS _post_effects)
     endif()
     add_custom_command(OUTPUT "${_assets}/post-${_effect}.wgsl"
         COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/src/shaders/${_effect}.slang"
-            -D AE_WEB_POST=1 -target wgsl -matrix-layout-column-major ${_entries} -o "${_assets}/post-${_effect}.wgsl"
+            -D AE_WEB_POST=1 -target wgsl -matrix-layout-column-major ${_entries} -o "${_assets}/post-${_effect}.wgsl.tmp"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py" "${_assets}/post-${_effect}.wgsl.tmp"
+        COMMAND "${CMAKE_COMMAND}" -E rename "${_assets}/post-${_effect}.wgsl.tmp" "${_assets}/post-${_effect}.wgsl"
         DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/src/shaders/${_effect}.slang" ${_shared_shader_includes}
+            "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py"
         VERBATIM)
     list(APPEND _post_outputs "${_assets}/post-${_effect}.wgsl")
 endforeach()

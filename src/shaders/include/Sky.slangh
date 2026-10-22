@@ -133,8 +133,11 @@ float3 PhysicalSky(
 	const float3 betaR = kRayleighBeta * 8000.0f;
 	const float3 betaM = float3(kMieBeta, kMieBeta, kMieBeta) * 1200.0f * max(turbidity, 1.0f);
 
-	const float3 opticalDepth = betaR * viewMass + betaM * viewMass;
-	const float3 sunTransmit = exp(-(betaR * sunMass + betaM * sunMass));
+	// Factored as one product: Slang 2026.8's WGSL backend emits a negated vector sum
+	// as `vec3(0) - a + b`, flipping the Mie term. tools/shaders/wgsl_checks.py guards it.
+	const float3 extinctionBeta = betaR + betaM;
+	const float3 opticalDepth = extinctionBeta * viewMass;
+	const float3 sunTransmit = exp(-extinctionBeta * sunMass);
 	const float3 extinction = 1.0f - exp(-opticalDepth);
 
 	const float3 scatter = (betaR * rayleighPhase + betaM * miePhase) / max(betaR + betaM, 1e-8f);

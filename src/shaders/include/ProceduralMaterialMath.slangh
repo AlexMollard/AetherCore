@@ -94,11 +94,17 @@ float4 SharedPlasmaShade(float3 worldNormal, float3 worldTangent, float tangentS
     return float4(finalColor, fx.tint.a);
 }
 
+// Integer PCG3D over the integral lattice corner. A float frac() hash of a ~250k
+// product keeps only 1/64 precision, so fused or reordered multiplies (SPIR-V vs
+// WGSL, or another driver) wrapped whole lattice cells; wrapping integer math is
+// bit-identical on every backend.
 float ProceduralHash31(float3 p)
 {
-    p = frac(p * 0.3183099 + float3(0.1, 0.2, 0.3));
-    p *= 17.0;
-    return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
+    uint3 v = uint3(int3(p)) * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return float(v.x >> 8u) * (1.0 / 16777216.0);
 }
 
 float ProceduralValueNoise(float3 x)
