@@ -564,6 +564,7 @@ def shadow_features(kind, on, off, width, height):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', type=Path, default=ROOT/'build/webgpu-browser')
+    parser.add_argument('--language', choices=('rust', 'csharp'), default='rust')
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--scenes', default=','.join(SCENES), help='Comma-separated maintained scene names; selected scope is recorded')
     parser.add_argument('--graphics-json', type=Path, help='JSON object file merged over neutral graphics, identically for both backends')
@@ -625,12 +626,17 @@ def main():
         directory = args.report.parent/('lighting-parity-'+uuid.uuid4().hex)
         directory.mkdir()
         project = ROOT/'.temp/lighting-parity'/uuid.uuid4().hex
-        shutil.copytree(ROOT/'projects/AgentPipelineRust', project, ignore=shutil.ignore_patterns('Builds', 'target', 'obj', 'bin', 'artifacts', '*.scene.bin', '*.prefab.bin'))
+        shutil.copytree(ROOT/('projects/AgentPipelineRust' if args.language == 'rust' else 'projects/AgentPipelineCSharp'), project, ignore=shutil.ignore_patterns('Builds', 'target', 'obj', 'bin', 'artifacts', '*.scene.bin', '*.prefab.bin'))
         staged = args.build.resolve()/'reference-project'
         for name in ('assets', 'scenes'):
             shutil.copytree(staged/name, project/name, dirs_exist_ok=True)
-        manifest = project/'scripts/Cargo.toml'
-        manifest.write_text(manifest.read_text(encoding='utf-8').replace('../../../rust/aethercore', (ROOT/'rust/aethercore').as_posix()), encoding='utf-8')
+        if args.language == 'rust':
+            manifest = project/'scripts/Cargo.toml'
+            manifest.write_text(manifest.read_text(encoding='utf-8').replace('../../../rust/aethercore', (ROOT/'rust/aethercore').as_posix()), encoding='utf-8')
+        else:
+            import re
+            csproj = project/'scripts/AetherGame.csproj'
+            csproj.write_text(re.sub(r'(<ProjectReference\s+Include=")[^"]+AetherCore\.csproj"', lambda m: m[1]+(ROOT/'managed/AetherCore/AetherCore.csproj').as_posix()+'"', csproj.read_text(encoding='utf-8-sig')), encoding='utf-8')
         settings = project/'ProjectSettings.toml'
         original = settings.read_text(encoding='utf-8')
         graphics = f'\n[window]\nwidth = {initial_width}\nheight = {initial_height}\nmode = "windowed"\n[graphics]\n'+'\n'.join(key+' = '+json.dumps(value) for key, value in effective_graphics.items())+'\n'
@@ -692,7 +698,7 @@ def main():
             Path(str(destination)+'.json').write_text(json.dumps(evidence,indent=2)+'\n',encoding='utf-8')
             captures.append(dict(scene=scene, width=width, height=height, native=str(destination),nativeFrameEvidence=evidence))
         capture_request = directory/'browser-request.json'
-        capture_request.write_text(json.dumps(dict(root=str(args.build.resolve()/'web'), graphics=effective_graphics, captures=captures,
+        capture_request.write_text(json.dumps(dict(root=str(args.build.resolve()/'web'), language=args.language, graphics=effective_graphics, captures=captures,
                                                   changes=changes, initialExtent=[initial_width, initial_height],
                                                   playwright=args.playwright)), encoding='utf-8')
         browser_report = directory/'browser.json'

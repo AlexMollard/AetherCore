@@ -178,10 +178,10 @@ namespace aether::project_tool
 		if (request.value("target", "desktop") == "web")
 		{
 			report.target = "web";
-			report.profile = "webgpu-2d-v1";
+			const auto plan = editor::MakePublishPlan(*descriptor, editor::CurrentPublishEnvironment(), editor::PublishTarget::Web);
+			report.profile = plan.profile;
 			report.phase = "web-publish";
 			progress(Serialize(report));
-			const auto plan = editor::MakePublishPlan(*descriptor, editor::CurrentPublishEnvironment(), editor::PublishTarget::Web);
 			request["jobId"] = report.jobId;
 			return editor::RunWebPublish(plan, request, directory, stop);
 		}

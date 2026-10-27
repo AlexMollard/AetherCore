@@ -8,3 +8,9 @@ test('budget checks reject missing, nonfinite and oversized required metrics',()
  for(const key of Object.keys(budgets)){for(const value of [undefined,NaN,-1,budgets[key]+1]){assert.equal(checkBudgets({...budgets,[key]:value},budgets).status,'failed');}}
  assert.equal(checkBudgets(budgets,{}).status,'failed');
 });
+test('3D fixture budgets do not claim an unmeasured edited-publish budget',()=>{
+ const budgets={profile:'webgpu-3d-v1',zipBytes:10,coldInteractiveMs:20,warmInteractiveMs:15,wasmLinearMemoryBytes:100,frameIntervalP95Ms:30};
+ const metrics={...budgets};
+ assert.equal(checkBudgets(metrics,budgets).status,'passed');
+ assert.equal(checkBudgets({...metrics,zipBytes:11},budgets).status,'failed');
+});

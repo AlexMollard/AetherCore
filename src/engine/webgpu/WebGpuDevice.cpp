@@ -1,4 +1,5 @@
 #include "WebGpuDevice.hpp"
+#include "WebGpuRequirements.hpp"
 #include "WebMeshRenderer.hpp"
 #include "WebHdrRenderer.hpp"
 #include "WebLight2DRenderer.hpp"
@@ -398,6 +399,46 @@ namespace aether::webgpu
 			AdapterReport(info.vendor.data, info.vendor.length, info.architecture.data, info.architecture.length, info.description.data, info.description.length, info.adapterType);
 			wgpuAdapterInfoFreeMembers(info);
 			WGPUDeviceDescriptor descriptor = WGPU_DEVICE_DESCRIPTOR_INIT;
+			WGPULimits required = WGPU_LIMITS_INIT;
+			const bool profile3D = EM_ASM_INT({
+				return !globalThis.aetherProject || globalThis.aetherProject.profile === 'webgpu-3d-v1';
+			});
+			if (profile3D)
+			{
+				WGPULimits supported = WGPU_LIMITS_INIT;
+				if (wgpuAdapterGetLimits(adapter, &supported) != WGPUStatus_Success)
+				{
+					self.Fail("WEBGPU_LIMITS", Text("Could not read adapter limits"));
+					return;
+				}
+				if (AE_WEB_TEST_BRIDGE && EM_ASM_INT({ return new URLSearchParams(location.search).has('forceAdapterLimit'); }))
+				{
+					supported.maxTextureDimension2D = 1;
+				}
+				const auto unmet = UnmetAdapter3DLimits([&](std::string_view name) -> std::uint64_t {
+#define AE_WEBGPU_LIMIT(field, value) if (name == #field) { return supported.field; }
+#define AE_WEBGPU_FEATURE(name)
+#define AE_WEBGPU_FORMAT(name)
+#include "WebGpuRequirements.inc"
+#undef AE_WEBGPU_LIMIT
+#undef AE_WEBGPU_FEATURE
+#undef AE_WEBGPU_FORMAT
+					return 0;
+				});
+				if (!unmet.empty())
+				{
+					self.Fail("WEBGPU_LIMITS", {unmet.data(), unmet.size()});
+					return;
+				}
+#define AE_WEBGPU_LIMIT(field, value) required.field = value;
+#define AE_WEBGPU_FEATURE(name)
+#define AE_WEBGPU_FORMAT(name)
+#include "WebGpuRequirements.inc"
+#undef AE_WEBGPU_LIMIT
+#undef AE_WEBGPU_FEATURE
+#undef AE_WEBGPU_FORMAT
+				descriptor.requiredLimits = &required;
+			}
 			descriptor.uncapturedErrorCallbackInfo.userdata1 = &self;
 			descriptor.uncapturedErrorCallbackInfo.callback = [](const WGPUDevice*, WGPUErrorType, WGPUStringView message, void* data, void*)
 			{

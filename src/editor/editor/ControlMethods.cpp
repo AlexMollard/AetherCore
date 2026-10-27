@@ -3091,7 +3091,7 @@ namespace aether::editor
 		// same shape the Build panel uses, which is where the work actually happens.
 		methods.push_back({"project.publish",
 		        "publish_project",
-		        "Publish the open project to a standalone package (Builds/<platform>/<product>). Runs asynchronously; poll publish_status for progress and the result. Desktop uses the editor build configuration; Web builds Release with webgpu-2d-v1 "
+		        "Publish the open project to a standalone package (Builds/<platform>/<product>). Runs asynchronously; poll publish_status for progress and the result. Desktop uses the editor build configuration; Web builds Release with the project's selected profile "
 		        "preflight and browser verification.",
 		        true,
 		        Obj({{"target", {{"type", "string"}, {"enum", json::array({"desktop", "web"})}, {"default", "desktop"}}}}, {}),

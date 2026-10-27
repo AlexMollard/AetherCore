@@ -40,7 +40,7 @@ try {
             const url = new URL(req.url,'http://localhost');
             if(url.pathname==='/favicon.ico'){res.writeHead(204).end();return;}
             if(url.pathname==='/project.js'){
-                const config = {schemaVersion:1,id:'private-lighting-parity',name:'Lighting parity',language:'rust',
+                const config = {schemaVersion:1,id:'private-lighting-parity',name:'Lighting parity',language:request.language || 'rust',
                     startupScene:active.scene,scenes:request.captures.map(c=>c.scene),graphics:request.graphics,
                     paths:{assets:'assets',scenes:'scenes',prefabs:'assets/prefabs',scripts:'scripts'}};
                 res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'}).end('globalThis.aetherProject='+JSON.stringify(config)+';');

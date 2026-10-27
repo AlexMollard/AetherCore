@@ -49,7 +49,7 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 				return std::nullopt;
 			}
 			args.target = argv[argOffset + 1];
-			if (args.target != "desktop" && args.target != "webgpu-2d-v1")
+			if (args.target != "desktop" && args.target != "webgpu-2d-v1" && args.target != "webgpu-3d-v1")
 			{
 				std::cerr << "Unknown asset target\n";
 				return std::nullopt;
@@ -118,7 +118,7 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 
 	if (argc != argOffset + 2)
 	{
-		std::cerr << "Usage: AssetPacker [--project] [--import-materials] [--compress-level N] [--target desktop|webgpu-2d-v1] <source-dir> <output.pak>\n";
+		std::cerr << "Usage: AssetPacker [--project] [--import-materials] [--compress-level N] [--target desktop|webgpu-2d-v1|webgpu-3d-v1] <source-dir> <output.pak>\n";
 		std::cerr << "       AssetPacker import-materials <source-dir>\n";
 		std::cerr << "       AssetPacker bake-font <ttf> <outDir>\n";
 		std::cerr << "       AssetPacker bake <gltf-or-glb-path> <project-root>\n";

@@ -19,7 +19,7 @@ This is a development fixture with a fixed Rust module and project identity. Reb
 
 ## Package and VFS contract
 
-The host AssetPacker accepts `--target desktop|webgpu-2d-v1`; desktop remains the default. Web textures use a versioned AER8 header followed by RGBA8 unorm pixels. Desktop BC/DDS and web RGBA8 artifacts have separate incremental-cache identities. Unsupported image formats and invalid dimensions fail during cooking. UTF-8 names retain their bytes on Windows.
+The host AssetPacker accepts `--target desktop|webgpu-2d-v1|webgpu-3d-v1`; desktop remains the default. Web textures use a versioned AER8 header followed by RGBA8 unorm pixels. Desktop BC/DDS and web RGBA8 artifacts have separate incremental-cache identities. Unsupported image formats and invalid dimensions fail during cooking. UTF-8 names retain their bytes on Windows.
 
 Project and engine packages download asynchronously. MemoryPak validates the existing PAK version, endian marker, index and content hashes, bounds, UTF-8 paths, zstd output sizes and the embedded target manifest before mounting immutable bytes. Missing, corrupt, future-version and desktop-target packages fail explicitly. Stop cancels outstanding fetches. The browser VFS exposes shared read/text/stream operations without IOThread; writes and glob enumeration are unsupported. Saves use IndexedDB rather than pretending the read-only asset mount is writable.
 
@@ -33,7 +33,7 @@ Keyboard codes map to the shared engine key space. Pointer coordinates account f
 
 Basic UI uses native layout/widget behavior and deterministic canvas sort bias plus parent-before-child draw ordering. Images and flat button/toggle/slider/progress shapes are emitted into the sprite packet. Packaged Roboto loads through FontFace and Canvas2D into a static Latin-1 glyph atlas, then renders through WebGPU. Font names, text limits and unsupported glyphs fail explicitly. This initial text path supports Latin-1 and newlines, at most 4096 UTF-8 bytes per label, and sizes from 1 to 192 pixels. Platform font rasterization can differ from native output.
 
-Advanced analytic text/shape effects, rounded widget rendering, text boxes, masks, 3D content, scene includes/linked prefab instances and scripted prefabs are outside this profile. Authored AudioSource components are explicitly rejected; the supported Rust audio service plays packaged WAV clips. Orthographic cameras and plain reference prefabs are supported. This is not complete native scene feature parity.
+The default 2D profile excludes 3D content, scene includes/linked prefab instances and scripted prefabs. The `webgpu-3d-v1` profile stages these features, bakes models and cooks material graphs and portable custom passes. Its coverage report distinguishes bounded parity evidence from unqualified ranges; see [Web exports](../web-export.md) and the [effect ledger](webgpu-effect-parity.md). Advanced analytic text/shape effects, rounded widget rendering, text boxes and masks are not complete native scene feature parity.
 
 ## Audio and durable saves
 

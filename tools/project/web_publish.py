@@ -39,8 +39,10 @@ def preflight(project, startup_override=None):
     if language not in ('rust', 'csharp'):
         reject('WEB_LANGUAGE_UNSUPPORTED', 'Web gameplay requires Rust or C#')
     web = settings.get('publish', {}).get('web', {})
-    if web.get('profile', PROFILE) != PROFILE:
-        reject('WEB_PROFILE_UNSUPPORTED', 'Only webgpu-2d-v1 is supported')
+    profile = web.get('profile', PROFILE)
+    if profile not in (PROFILE, 'webgpu-3d-v1'):
+        reject('WEB_PROFILE_UNSUPPORTED', 'Choose webgpu-2d-v1 or webgpu-3d-v1')
+    is_3d = profile == 'webgpu-3d-v1'
     paths = settings.get('paths', {})
     def local(value):
         path = (project / value).resolve()
@@ -61,12 +63,16 @@ def preflight(project, startup_override=None):
                        and not any(part in ('obj', 'bin', 'artifacts') for part in path.relative_to(scripts).parts))
     if language == 'csharp' and re.search(r'\b(?:DllImport|LibraryImport|NativeLibrary)\b', source):
         reject('WEB_NATIVE_API_UNSUPPORTED', 'External native imports are not supported in C# Web games')
+    if is_3d and language == 'csharp' and re.search(r'\b(?:Animation\s*\.\s*(?:Add|LoadExternal|Compile|SetJointOffset)|Physics\s*\.\s*DebugEnabled)\b', source):
+        reject('WEB_FEATURE_UNSUPPORTED', 'Desktop-only Animation or Physics API is not available in browser gameplay')
     if language == 'csharp' and re.search(r'\b(?:Net\s*\.|System\s*\.\s*Net\b|NetRpc|IEditorWindow|EditorGui)\b', source):
-        reject('WEB_CAPABILITY_UNSUPPORTED', 'Networking and editor tooling are outside the C# browser 2D profile')
+        reject('WEB_CAPABILITY_UNSUPPORTED', 'Networking and editor tooling are outside the C# browser profile' if is_3d else 'Networking and editor tooling are outside the C# browser 2D profile')
     if re.search(r'\b(?:std\s*::\s*net|TcpStream|UdpSocket|network_\w*|net_connect|enet)\b', source):
-        reject('WEB_NETWORK_UNSUPPORTED', 'Rust networking is outside webgpu-2d-v1')
+        reject('WEB_NETWORK_UNSUPPORTED', 'Rust networking is outside ' + profile)
     requested = web.get('capabilities', [])
     supported = {'sprites', 'animation', 'tilemaps', 'physics_2d', 'ui', 'audio', 'input', 'saves', 'scenes', 'prefabs'}
+    if is_3d:
+        supported |= {'meshes_3d', 'lighting_3d', 'physics_3d', 'materials', 'effects'}
     if not isinstance(requested, list) or any(item not in supported for item in requested):
         reject('WEB_CAPABILITY_UNSUPPORTED', 'Unsupported declared module capability')
     declared = web.get('scenes', [])
@@ -85,6 +91,21 @@ def preflight(project, startup_override=None):
     files = set()
     allowed_entity_tables = {'sprite', 'sprite_animator', 'rigid_body_2d', 'collider_2d', 'joint_2d', 'camera', 'scripts',
         'ui_canvas', 'ui_rect', 'ui_text', 'ui_image', 'ui_selectable', 'ui_button', 'ui_slider', 'ui_toggle', 'ui_progress_bar', 'tile_map'}
+    if is_3d:
+        # SceneSerializerToml::ComponentTomlKey lowercases display names and replaces
+        # spaces with underscores; Particle Emitter has its explicit legacy key.
+        reflected = ('Rigid Body 2D', 'Collider 2D', 'Tile Map', 'Character Controller',
+            'Darkness Volume', 'Point Light', 'Spot Light', 'Sky', 'Light 2D Settings',
+            'UI Canvas', 'UI Rect', 'UI Text', 'UI Image', 'UI Selectable', 'UI Slider',
+            'UI Toggle', 'UI Button', 'UI Progress Bar')
+        allowed_entity_tables = {name.lower().replace(' ', '_') for name in reflected}
+        # EntityRecord's explicitly serialized tables, including the legacy particle override.
+        allowed_entity_tables |= {'sprite', 'sprite_animator', 'mesh', 'material', 'skinned',
+            'physics', 'joint', 'joint_2d', 'ui_image', 'effect', 'camera', 'scripts',
+            'script_joints', 'particles'}
+    features_used = set()
+    if is_3d and settings.get('graphics'):
+        features_used.add('effects')
     def strings(value):
         if isinstance(value, str):
             yield value
@@ -98,7 +119,10 @@ def preflight(project, startup_override=None):
         if not isinstance(uri, str) or not uri.startswith('project://'):
             reject('WEB_ASSET_PATH', 'Additional assets require a project:// path')
         path = local(uri.removeprefix('project://'))
-        if path.suffix.lower() in {'.slang', '.spv', '.material', '.glb', '.gltf', '.dds', '.ktx', '.fontcurves'}:
+        unsupported = {'.spv', '.dds', '.ktx', '.fontcurves'}
+        if not is_3d:
+            unsupported |= {'.slang', '.material', '.glb', '.gltf'}
+        if path.suffix.lower() in unsupported:
             reject('WEB_SHADER_UNSUPPORTED' if path.suffix.lower() in {'.slang', '.spv', '.material'} else 'WEB_FEATURE_UNSUPPORTED', 'Unsupported browser asset: ' + uri)
         visit(path)
     def visit(path):
@@ -110,30 +134,69 @@ def preflight(project, startup_override=None):
         if not path.is_file():
             reject('WEB_ASSET_MISSING', 'Missing reachable asset: ' + str(path))
         files.add(path)
+        if is_3d and path.suffix.lower() == '.slang':
+            features_used.add('custom_pass')
+            sys.path.insert(0, str(REPO / 'tools/shaders'))
+            try:
+                from web_materials import includes_custom_pass_contract
+            finally:
+                sys.path.pop(0)
+            if not includes_custom_pass_contract(path.read_text(encoding='utf-8-sig')):
+                reject('WEB_CUSTOM_PASS_PORTABILITY', 'Custom pass must include include/CustomPass.slangh: ' + str(path))
+        if is_3d and path.suffix.lower() in ('.slang', '.slangh'):
+            for include in re.findall(r'^\s*#\s*include\s*"([^"]+)"', path.read_text(encoding='utf-8-sig'), re.MULTILINE):
+                if include not in ('include/CustomPass.slangh', 'CustomPass.slangh'):
+                    visit(path.parent / include)
+        if is_3d and path.suffix.lower() == '.gltf':
+            model = json.loads(path.read_text(encoding='utf-8-sig'))
+            for entry in model.get('buffers', []) + model.get('images', []):
+                uri = entry.get('uri', '')
+                if uri and not uri.startswith('data:'):
+                    visit(path.parent / uri)
         if path.name.endswith(('.scene.toml', '.prefab.toml')):
             document = tomllib.loads(path.read_text(encoding='utf-8-sig'))
             default_kind = '3d' if path.name.endswith('.scene.toml') else '2d'
-            if document.get('scene', {}).get('version', 0) > 16 or document.get('scene', {}).get('kind', default_kind) != '2d':
+            if document.get('scene', {}).get('version', 0) > 16 or (not is_3d and document.get('scene', {}).get('kind', default_kind) != '2d'):
                 reject('WEB_FEATURE_UNSUPPORTED', 'Unsupported scene format or 3D scene: ' + path.name)
-            if any(key in document for key in ('includes', 'prefab_instances', 'lights', 'environment')):
+            if not is_3d and any(key in document for key in ('includes', 'prefab_instances', 'lights', 'environment')):
                 reject('WEB_FEATURE_UNSUPPORTED', 'Linked scenes/3D environment are not supported: ' + path.name)
+            if is_3d:
+                for include in document.get('includes', []):
+                    visit(local(paths.get('scenes', 'scenes')) / (include['scene'] + '.scene.toml'))
+                for instance in document.get('prefab_instances', []):
+                    visit(local(paths.get('prefabs', 'assets/prefabs')) / (instance['prefab'] + '.prefab.toml'))
+                features_used.update(document.get('scene', {}).get('features', []))
+                if document.get('lights') or document.get('environment'):
+                    features_used.add('lighting_3d')
             for entity in document.get('entities', []):
+                if is_3d:
+                    features_used.update(key for key in entity if key in ('skinned', 'material', 'effect'))
+                    if 'material' in entity:
+                        features_used.add('materials')
+                    if 'effect' in entity:
+                        features_used.add('effects')
                 for key, value in entity.items():
                     if isinstance(value, (dict, list)) and (isinstance(value, dict) or value and isinstance(value[0], dict)) and key not in allowed_entity_tables:
                         reject('WEB_SHADER_UNSUPPORTED' if key in ('material','effect','ui_effect') else 'WEB_FEATURE_UNSUPPORTED', 'Unsupported component ' + key + ' in ' + path.name)
-                if 'camera' in entity and entity['camera'].get('projection', 'perspective') != 'orthographic':
+                if is_3d and 'effect' in entity and entity['effect'].get('name', '') not in ('plasma', 'molten'):
+                    reject('WEB_FEATURE_UNSUPPORTED', 'Unsupported browser entity effect in ' + path.name)
+                if not is_3d and 'camera' in entity and entity['camera'].get('projection', 'perspective') != 'orthographic':
                     reject('WEB_FEATURE_UNSUPPORTED', 'Only orthographic cameras are supported')
                 for widget in ('ui_text', 'ui_button'):
                     value=entity.get(widget,{})
                     if value.get('font','Roboto') != 'Roboto' or any(ord(char)>255 for char in value.get('text',value.get('label',''))):
                         reject('WEB_FONT_UNSUPPORTED','Browser UI requires packaged Roboto and Latin-1 glyphs')
-                if path.name.endswith('.prefab.toml') and entity.get('scripts'):
+                if not is_3d and path.name.endswith('.prefab.toml') and entity.get('scripts'):
                     reject('WEB_FEATURE_UNSUPPORTED', 'Scripted browser prefabs are not implemented')
         elif path.suffix == '.toml':
             document = tomllib.loads(path.read_text(encoding='utf-8-sig'))
         else:
             document = None
         if document is not None:
+            if is_3d and path.name.endswith('.material.toml'):
+                shader = document.get('material', {}).get('shader', '')
+                if shader.startswith('shaders://') and shader not in ('shaders://gltf_mesh.spv', 'shaders://plasma.spv', 'shaders://molten.spv') and 'graph' not in document:
+                    visit(project / 'assets/shaders' / (Path(shader.removeprefix('shaders://')).stem + '.web.slangh'))
             for value in strings(document):
                 if value.startswith('project://'):
                     asset(value)
@@ -159,6 +222,17 @@ def preflight(project, startup_override=None):
         visit(prefabs / (name + '.prefab.toml'))
     for uri in re.findall(r'"(project://[^"\\]+)"', source):
         asset(uri)
+    if is_3d:
+        # Custom-pass APIs name shaders by stem rather than project URI.
+        shader_dir = project / 'assets/shaders'
+        for stem in set(re.findall(r'["\']([A-Za-z0-9_/-]+)["\']', source)):
+            shader = (shader_dir / (stem + '.slang')).resolve()
+            if shader.is_relative_to(shader_dir.resolve()) and shader.is_file():
+                visit(shader)
+        registration = (r'\.register_custom_pass\s*\(\s*"[^"]+"\s*,\s*"([^"]+)"' if language == 'rust'
+                        else r'\bCustomPass\s*\.\s*Register\s*\(\s*[^,]+,\s*"([^"]+)"')
+        for stem in re.findall(registration, source):
+            visit(shader_dir / (stem + '.slang'))
     additional = web.get('additional_assets', [])
     if not isinstance(additional, list):
         reject('WEB_ASSET_PATH', 'additional_assets must be a list')
@@ -169,7 +243,7 @@ def preflight(project, startup_override=None):
     for uri in additional:
         asset(uri)
     return dict(project=project, settings=settings, scripts=scripts, language=language, managed_project=managed_project,
-                profile=PROFILE, scenes=sorted(scenes), startup=startup, files=files)
+                profile=profile, scenes=sorted(scenes), startup=startup, files=files, features_used=sorted(features_used))
 
 
 def publish(request, directory, output=None):
@@ -203,6 +277,16 @@ def publish(request, directory, output=None):
     try:
         data = preflight(request['project'], request.get('scene'))
         report['language'] = data['language']
+        report['profile'] = data['profile']
+        if data['profile'] == 'webgpu-3d-v1':
+            ledger = json.loads((REPO / 'tools/project/web_feature_coverage.json').read_text(encoding='utf-8'))
+            graphics = data['settings'].get('graphics', {})
+            report['coverage'] = dict(featuresUsed=data['features_used'],
+                authoredGraphicsSettings=graphics,
+                unqualified=[dict(feature=name, **ledger[name]) for name in data['features_used'] if name in ledger],
+                unqualifiedSettings=[dict(setting='graphics.' + name, value=value,
+                    ledger=ledger['effects']['ledger'], qualification='Not individually range-qualified by this export')
+                    for name, value in sorted(graphics.items())])
         report['requiredChecks'].append(dict(name='web-preflight', status='passed'))
         pins = json.loads((REPO / 'tools/experiments/rust-webgpu/toolchain.json').read_text(encoding='utf-8'))
         sdk = Path(os.environ.get('EMSDK', REPO / '.temp/toolchains/emsdk-main')).resolve()
@@ -241,6 +325,8 @@ def publish(request, directory, output=None):
         stage = Path(tempfile.mkdtemp(prefix='.web-stage-', dir=parent))
         inputs = directory / 'web-inputs'
         inputs.mkdir(exist_ok=True)
+        if data['profile'] == 'webgpu-3d-v1':
+            (inputs / 'assets').mkdir(exist_ok=True)
         shutil.copy2(project / 'ProjectSettings.toml', inputs / 'ProjectSettings.toml')
         for path in data['files']:
             target = inputs / path.relative_to(project)
@@ -251,7 +337,8 @@ def publish(request, directory, output=None):
         # Reuse only project-qualified build products. Configure always enforces bridge OFF.
         configure = ['cmake', '--preset', 'webgpu-browser', '-B', build,
             '-DAETHERCORE_WEB_TEST_BRIDGE=OFF', '-DAETHER_WEB_PROJECT=' + str(project),
-            '-DAETHER_WEB_STAGED_PROJECT=' + str(inputs), '-DAETHER_WEB_ASSETPACKER=' + str(packer), '-DAETHER_WEB_SLANGC=' + slang]
+            '-DAETHER_WEB_STAGED_PROJECT=' + str(inputs), '-DAETHER_WEB_ASSETPACKER=' + str(packer), '-DAETHER_WEB_SLANGC=' + slang,
+            '-DAETHER_WEB_PROFILE=' + data['profile']]
         if data['language'] == 'rust':
             manifest_path = data['scripts'] / 'Cargo.toml'
             cargo = tomllib.loads(manifest_path.read_text(encoding='utf-8'))
@@ -278,13 +365,29 @@ def publish(request, directory, output=None):
         for name in names:
             shutil.copy2(build / 'web' / name, stage / name)
         identifier = data['settings'].get('publish', {}).get('web', {}).get('id', product)
-        config = dict(schemaVersion=1, id=identifier, name=product, language=data['language'], startupScene=data['startup'], scenes=data['scenes'], profile=PROFILE,
+        config = dict(schemaVersion=1, id=identifier, name=product, language=data['language'], startupScene=data['startup'], scenes=data['scenes'], profile=data['profile'],
             paths=data['settings'].get('paths', {}), graphics=data['settings'].get('graphics', {}), instructions=data['settings'].get('publish', {}).get('web', {}).get('instructions', 'Select Play to use the keyboard.'))
         (stage / 'project.js').write_text('globalThis.aetherProject=' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
         revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
         files = [dict(path=path.relative_to(stage).as_posix(), sizeBytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in sorted(stage.rglob('*')) if path.is_file()]
-        manifest = dict(schemaVersion=1, target='web', profile=PROFILE, language=data['language'], engineRevision=revision,
+        manifest = dict(schemaVersion=1, target='web', profile=data['profile'], language=data['language'], engineRevision=revision,
             project=dict(id=identifier, name=product, startupScene=data['startup'], scenes=data['scenes']), toolchains=pins, files=files)
+        if data['profile'] == 'webgpu-3d-v1':
+            requirements = (REPO / 'src/engine/webgpu/WebGpuRequirements.inc').read_text(encoding='utf-8')
+            manifest['adapterRequirements'] = dict(
+                limits={name: int(value) for name, value in re.findall(r'AE_WEBGPU_LIMIT\((\w+),\s*(\d+)\)', requirements)},
+                features=re.findall(r'AE_WEBGPU_FEATURE\(([\w-]+)\)', requirements),
+                textureFormats=re.findall(r'AE_WEBGPU_FORMAT\(([\w-]+)\)', requirements))
+            scene_file = inputs / data['settings'].get('paths', {}).get('scenes', 'scenes') / (data['startup'] + '.scene.toml')
+            manifest['project']['startupSceneKind'] = tomllib.loads(scene_file.read_text(encoding='utf-8-sig')).get('scene', {}).get('kind', '3d')
+            manifest['cookedAssets'] = {
+                'meshes': sorted(path.relative_to(inputs).as_posix() for path in inputs.rglob('*.mesh')),
+                'shaders': sorted(path.relative_to(inputs).as_posix() for path in inputs.rglob('*.wshader'))}
+            manifest['gameplayInputs'] = {
+                path.relative_to(data['scripts']).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in sorted(data['scripts'].rglob('*'))
+                if path.is_file() and path.suffix.lower() in ('.rs', '.cs', '.toml', '.csproj')
+                and not any(part in ('obj', 'bin', 'artifacts') for part in path.relative_to(data['scripts']).parts)}
         (stage / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
         package = stage / (product + '.zip')
         with zipfile.ZipFile(package, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
@@ -296,7 +399,10 @@ def publish(request, directory, output=None):
         with zipfile.ZipFile(package) as archive:
             archive.extractall(relocated)
         verification = directory / 'web-verification.json'
-        run('verify', ['node', REPO / 'tools/browser-tests/verify-export.mjs', '--root=' + str(relocated), '--report=' + str(verification)])
+        verify_command = ['node', REPO / 'tools/browser-tests/verify-export.mjs', '--root=' + str(relocated), '--report=' + str(verification)]
+        if data['profile'] == 'webgpu-3d-v1':
+            verify_command.append('--zipBytes=' + str(package.stat().st_size))
+        run('verify', verify_command)
         evidence = json.loads(verification.read_text(encoding='utf-8'))
         if evidence.get('status') != 'passed':
             reject('WEB_VERIFICATION', 'Relocated Web export did not pass browser/iframe verification')

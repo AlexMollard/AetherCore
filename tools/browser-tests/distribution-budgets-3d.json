@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "profile": "webgpu-3d-v1",
+  "scenario": "staged-browser-3d-fixtures",
+  "zipBytes": 9500000,
+  "coldInteractiveMs": 4600,
+  "warmInteractiveMs": 4600,
+  "wasmLinearMemoryBytes": 720000000,
+  "frameIntervalP95Ms": 34,
+  "baseline": {
+    "date": "2026-10-27",
+    "browser": "Chrome 156.0.8078.48",
+    "os": "Windows 10.0.26200",
+    "gpu": "NVIDIA Blackwell",
+    "rust": {"zipBytes": 3663981, "coldInteractiveMs": 2274.1, "warmInteractiveMs": 2053.3, "wasmLinearMemoryBytes": 338427904, "frameIntervalP95Ms": 16.7},
+    "csharp": {"zipBytes": 4720555, "coldInteractiveMs": 2199.1, "warmInteractiveMs": 2257.3, "wasmLinearMemoryBytes": 359596032, "frameIntervalP95Ms": 16.8},
+    "note": "Fixture-only guardrails approximately twice the slower or larger measured Rust/C# sample, rounded up. A single local sample per language is not a universal gameplay or hardware budget. No edited-publish budget is asserted without an edited-publish measurement."
+  }
+}

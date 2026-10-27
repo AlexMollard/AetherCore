@@ -6,7 +6,12 @@
 #include <cstring>
 #include <span>
 
-inline constexpr const char* AE_WEB_ASSET_TARGET = "webgpu-2d-v1";
+// The runtime accepts only paks packed for the profile it was built for (CMake AETHER_WEB_PROFILE),
+// so a 2D runtime refuses a 3D package and vice versa instead of rendering it incompletely.
+#ifndef AE_WEB_PROFILE
+#	define AE_WEB_PROFILE "webgpu-2d-v1"
+#endif
+inline constexpr const char* AE_WEB_ASSET_TARGET = AE_WEB_PROFILE;
 inline constexpr std::uint32_t AE_WEB_TEXTURE_VERSION = 1;
 
 struct WebTextureHeader

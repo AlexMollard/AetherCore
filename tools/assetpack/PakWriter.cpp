@@ -89,6 +89,15 @@ namespace aether::assetpipeline
 			{
 				continue;
 			}
+			if (m_target == "webgpu-3d-v1" && (entry.path().extension() == ".gltf" || entry.path().extension() == ".glb"))
+			{
+				auto baked = entry.path();
+				baked.replace_extension(".mesh");
+				if (fs::is_regular_file(baked))
+				{
+					continue; // bake-all already wrote the mesh, skeleton, animations and materials.
+				}
+			}
 			if (!entry.is_regular_file())
 			{
 				continue;
@@ -151,7 +160,7 @@ namespace aether::assetpipeline
 		ThreadPool pool;
 		for (const auto& file: m_files)
 		{
-			futures.push_back(pool.submit([virtualPath = file.virtualPath, diskPath = file.diskPath, sourceDir = file.sourceDir, compressionLevel = m_compressionLevel, webTarget = m_target == "webgpu-2d-v1"]()
+			futures.push_back(pool.submit([virtualPath = file.virtualPath, diskPath = file.diskPath, sourceDir = file.sourceDir, compressionLevel = m_compressionLevel, webTarget = m_target == "webgpu-2d-v1" || m_target == "webgpu-3d-v1"]()
 			        { return ProcessFile(virtualPath, diskPath, sourceDir, compressionLevel, webTarget); }));
 		}
 

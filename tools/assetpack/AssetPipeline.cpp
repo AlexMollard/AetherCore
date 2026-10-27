@@ -17,7 +17,7 @@ namespace aether::assetpipeline
 
 		PackResult RunPack(const std::filesystem::path& sourceDir, const std::filesystem::path& outputPak, const PackOptions& options)
 		{
-			if (options.target != "desktop" && options.target != "webgpu-2d-v1")
+			if (options.target != "desktop" && options.target != "webgpu-2d-v1" && options.target != "webgpu-3d-v1")
 			{
 				return {.ok = false, .message = "Unknown asset target: " + options.target, .outputPath = outputPak};
 			}

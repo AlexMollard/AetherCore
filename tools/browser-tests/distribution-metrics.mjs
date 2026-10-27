@@ -7,7 +7,8 @@ export function percentile(values, fraction) {
 
 const required = ['zipBytes','coldInteractiveMs','warmInteractiveMs','wasmLinearMemoryBytes','frameIntervalP95Ms','editToReadyMs'];
 export function checkBudgets(metrics, budgets) {
-    const checks = required.map(name=>({name, actual:metrics[name], maximum:budgets[name], status:
+    const names = budgets.profile === 'webgpu-3d-v1' ? required.filter(name=>name!=='editToReadyMs') : required;
+    const checks = names.map(name=>({name, actual:metrics[name], maximum:budgets[name], status:
         Number.isFinite(metrics[name]) && metrics[name]>0 && Number.isFinite(budgets[name]) && budgets[name]>0 && metrics[name]<=budgets[name] ? 'passed':'failed'}));
     return {status:checks.every(item=>item.status==='passed')?'passed':'failed',checks};
 }

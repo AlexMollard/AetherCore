@@ -1,17 +1,16 @@
 # WebGPU effect parity inventory
 
-This is the Task 4 implementation and qualification ledger. It describes the
-native source contract and the bounded browser implementation during Task 4. A row is
-qualified only by a maintained semantic case and actual native/WebGPU captures;
-sharing source, compiling WGSL, or retaining an authored field is insufficient.
-Update the status and evidence when each case is implemented and verified.
+This ledger describes the native source contract and bounded browser implementation.
+A row is qualified only by a maintained semantic case and actual native/WebGPU
+captures; sharing source, compiling WGSL, or retaining an authored field is
+insufficient. Task 4 and earlier checkpoints remain historical evidence.
 
-The production export profile remains `webgpu-2d-v1`. Development rendering
-qualification does not unlock full 3D publishing; that remains Task 6.
+Production supports `webgpu-3d-v1` alongside the default `webgpu-2d-v1`; support
+does not qualify arbitrary 3D content, settings or combinations.
 
 ## Evidence and status
 
-- **Qualified**: the bounded configuration has the recorded Task 3 or Task 4 evidence below.
+- **Qualified**: the bounded configuration has the recorded Task 3, 4 or 6 evidence below.
 - **Shared, unqualified**: common equations exist, but the feature lacks a recorded
   native/browser semantic comparison.
 - **Implemented, unqualified**: the adapter exists, but the stated case has no final recorded comparison.
@@ -27,6 +26,56 @@ Task 3 evidence is recorded in the implementation plan and the local, untracked
 cases and 21 same-scene comparisons, including six shadow comparisons, plus the
 native and both-language regressions. These measurements do not qualify any
 Task 4 effect added after that checkpoint.
+
+## Task 6 production export qualification
+
+The Rust and C# package parity reports are
+`.temp/task6/final-parity-rust-2/report.json` and
+`.temp/task6/final-parity-csharp/report.json`. Both passed. Their sibling
+`gameplay-parity.json` reports compare named-entity world transforms and script
+properties, not pixels, for BrowserPhysics3D, BrowserBodies3D, BrowserRaycast3D,
+BrowserContacts3D, BrowserCharacter3D, BrowserRagdoll3D, BrowserSkinClips3D,
+BrowserPrefab3D and BrowserTransition3D at ticks 1, 10, 30, 60, 120 and 150.
+The inclusive absolute tolerance is 1e-5, including canonical quaternion
+rotation. Their `lighting-parity.json` reports compare 21 selected scenes in both
+languages and two additional custom-pass scenes in Rust only, at 512x512 and
+tick 10. Whole-image MAE 8, p95 18 and probe 12 limits are unchanged. These
+fixtures do not qualify all material, lighting, effect or gameplay combinations.
+
+Parity uses an instrumented bridge-enabled sibling, not the production
+executable. The reports verify byte-identical game and engine PAKs and
+publish-time gameplay input hashes; executable bytes differ by instrumentation.
+Separately, bridge-free relocated production packages passed startup, nested-path
+gameplay, local iframe gesture/gameplay, manifest and production boundary checks,
+and unavailable-WebGPU diagnostics. Evidence is in each parity directory's
+`production-verification.json` and `.temp/task6/final-publish-rust/` and
+`.temp/task6/final-publish-csharp/` `web-verification.json` files. These production
+checks are not fixed-tick native parity. `logs/task6/publish-rust.json` and
+`logs/task6/publish-csharp.json` record used features and unqualified ranges.
+
+The production measurements used Windows 10.0.26200, hardware NVIDIA Blackwell
+and Chrome 156.0.8078.48. `tools/browser-tests/distribution-budgets-3d.json`
+records the samples and fixture guardrails:
+
+| Metric | Rust | C# | Fixture maximum |
+|---|---:|---:|---:|
+| ZIP bytes | 3,663,981 | 4,720,555 | 9,500,000 |
+| Cold interactive ms | 2,274.1 | 2,199.1 | 4,600 |
+| Warm interactive ms | 2,053.3 | 2,257.3 | 4,600 |
+| Wasm linear memory bytes | 338,427,904 | 359,596,032 | 720,000,000 |
+| Frame-interval p95 ms | 16.7 | 16.8 | 34 |
+
+These are single local fixture samples, not universal performance claims;
+no edited-publish budget is asserted.
+
+Portable custom passes are qualified only for the Rust 2D fixture below;
+time-driven passes, 3D scenes, the non-HDR path, other projects and C# browser
+custom passes remain unqualified. Shadow cascade boundaries/far fade and light
+capacity, material cross-products and specular filtering, skin configurations
+outside recorded fixtures, and effect parameter ranges and combinations outside
+recorded cases remain unqualified. Arbitrary Slang, raw SPIR-V, networking and
+desktop-only APIs are unsupported and rejected rather than silently approximated.
+The default 2D profile and its existing restrictions are unchanged.
 
 ## Task 4 bounded post qualification
 
@@ -87,7 +136,7 @@ portable `CustomPass.slangh` contract below; arbitrary authored Slang shader
 capability remains unsupported, and supported material-graph lowering is a separate
 bounded adapter, not a general shader compiler guarantee.
 
-The production `webgpu-2d-v1` export boundary and Task 6 publishing gate remain.
+The Task 4 checkpoint preceded the Task 6 production 3D publishing gate above.
 
 ## Task 4 material and scene-effect qualification
 
@@ -157,7 +206,7 @@ The authoritative runtime ordering is
 | `$VolumetricFog`, `$VolumetricComposite` | `volumetric_fog.slang`, `volumetric_composite.slang` | Qualified bounded participating-air on/off case | Sun-blocked beam, extinction and half-resolution bilateral edge upsample sweeps remain unqualified |
 | `$DepthOfField` | `dof.slang`; camera lens extraction in `AetherCore.cpp` | Qualified bounded DofOn/DofOff same-scene pair | Focus plane stays sharp, near/far CoC sign and size, aperture/focal-length response, orthographic disable; preserve native insertion/composition ordering |
 | `$BillboardParticles` | `BillboardParticleRenderer.cpp`, `particle_billboard.slang` | Qualified fixed-seed 2D/3D bursts and display-only burst | UV/rotation/lifetime key sweeps, alpha/additive mixes, read-only depth, lit smoke, fog and HDR ordering remain unqualified |
-| `$CustomPassBehind2D` | `CustomPassRenderer.cpp`, `WebCustomPassRenderer.cpp`, `include/CustomPass.slangh` | Implemented on both backends through the portable `CustomPass.slangh` contract (see below); qualified by `BrowserCustomPass`/`BrowserCustomPassOff` (logs/task4/custompass/report.json: native/Web image MAE 0.07, all ordering checks true on both backends): Behind rectangle hidden by the sprite it overlaps, uncovered part drawn, min-x/min-y border orientation | Time/animation-driven passes, 3D scenes, non-HDR legacy path; the production `webgpu-2d-v1` publisher still rejects project `.slang` shaders |
+| `$CustomPassBehind2D` | `CustomPassRenderer.cpp`, `WebCustomPassRenderer.cpp`, `include/CustomPass.slangh` | Implemented on both backends through the portable `CustomPass.slangh` contract (see below); qualified by `BrowserCustomPass`/`BrowserCustomPassOff` (logs/task4/custompass/report.json: native/Web image MAE 0.07, all ordering checks true on both backends): Behind rectangle hidden by the sprite it overlaps, uncovered part drawn, min-x/min-y border orientation | Time/animation-driven passes, 3D scenes, non-HDR legacy path; the 2D publisher rejects project `.slang` shaders, while the 3D profile cooks portable custom passes |
 | `$Renderer2D` sprite/tile pass | `Renderer2D.cpp`, `sprite2d.slang` | Qualified sprite/tile subset | Particle Plane2D extraction and ordering; mixed HDR/display-space composition |
 | `$CustomPassOver2D` | `CustomPassRenderer.cpp`, `WebCustomPassRenderer.cpp`, `include/CustomPass.slangh` | Qualified by `BrowserCustomPass`/`BrowserCustomPassOff` on both backends: Over rectangle equals the lit white sprite at the lamp-mirrored position, darkens away from the lamp, border orientation | Same as `$CustomPassBehind2D` |
 | `$Light2DOccluders`, `$Light2DComposite` | `Light2DCompositor.cpp`; `occluder2d`, `light2d` | Qualified tile-art alpha, shared native light equations | Transient capsule submissions, shadow softness and 2D medium shafts/noise; current reconstruction is bounded to orthographic cameras |
@@ -250,11 +299,12 @@ ambient, one lamp, one white sprite) differ only in the script's `active` flag a
 against the engine's own sprite and light pipeline rather than absolute colours: Behind is hidden by the
 overlapping sprite, Over equals the lit sprite at the lamp-mirrored position, and the two Emissive rectangles
 (on the lamp and outside its radius) render identically. Every rectangle carries a border on its min-x/min-y
-edges so mirrored or flipped output fails. The production `webgpu-2d-v1` publisher still rejects `.slang`
-assets (`WEB_SHADER_UNSUPPORTED`); the reference pipeline cooks the fixture to `.wshader` and the packer
-skips `.slang` sources. Unqualified: elapsed-time/animated passes, 3D scenes, the non-HDR legacy path,
-projects other than the reference fixture, and C# browser custom passes (the fixture script is Rust; C# reaches
-the same `ExecuteCustomPassOperation` but no browser case drives it).
+edges so mirrored or flipped output fails. The `webgpu-2d-v1` publisher rejects
+`.slang` assets (`WEB_SHADER_UNSUPPORTED`); `webgpu-3d-v1` cooks portable custom
+passes to `.wshader` and excludes source `.slang` from the package. Unqualified:
+elapsed-time/animated passes, 3D scenes, the non-HDR legacy path, projects other
+than the reference fixture, and C# browser custom passes (the fixture script is
+Rust; C# reaches the same `ExecuteCustomPassOperation` but no browser case drives it).
 
 Negative Web fixtures `BrowserBadCustomPassShader` (unknown shader stem) and `BrowserBadCustomPassBudget` (17
 full-size submissions, 69632 float4 against the 65536 frame budget) run as the `invalid-custom-pass-shader` and

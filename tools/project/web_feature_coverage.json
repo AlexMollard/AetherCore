@@ -1,0 +1,8 @@
+{
+  "meshes_3d": {"status": "bounded", "ledger": "docs/architecture/webgpu-effect-parity.md#native-pass-inventory", "unqualified": "Cross-products and content outside recorded fixtures"},
+  "lighting_3d": {"status": "bounded", "ledger": "docs/architecture/webgpu-effect-parity.md#native-pass-inventory", "unqualified": "Shadow cascade boundaries, far fade and light capacity"},
+  "materials": {"status": "bounded", "ledger": "docs/architecture/webgpu-effect-parity.md#every-authored-material-switch-and-shader-family", "unqualified": "Material variant cross-products and specular filtering"},
+  "effects": {"status": "bounded", "ledger": "docs/architecture/webgpu-effect-parity.md#task-4-bounded-post-qualification", "unqualified": "Parameter ranges and combinations outside recorded cases"},
+  "custom_pass": {"status": "bounded", "ledger": "docs/architecture/webgpu-effect-parity.md#native-pass-inventory", "unqualified": "Time-driven passes and 3D scenes"},
+  "skinned": {"status": "bounded", "ledger": "docs/architecture/webgpu-effect-parity.md#native-pass-inventory", "unqualified": "Configurations outside recorded fixed-pose fixtures"}
+}

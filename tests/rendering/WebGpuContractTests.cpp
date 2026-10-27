@@ -5,6 +5,33 @@
 #include "gpu/MeshPass.hpp"
 #include <limits>
 #include <glm/gtc/matrix_transform.hpp>
+#include "../../src/engine/webgpu/WebGpuRequirements.hpp"
+
+TEST_CASE("WebGPU 3D adapter contract reports all insufficient limits")
+{
+	using namespace aether::webgpu;
+	const std::array<std::uint64_t, 22> webGpuDefaults{
+		4, 1000, 8, 134217728, 268435456, 12, 65536, 16, 16, 8192, 256,
+		8, 32, 8, 16, 256, 2048, 256, 256, 64, 16384, 65535
+	};
+	REQUIRE(kAdapter3DLimits.size() == webGpuDefaults.size());
+	for (std::size_t i = 0; i < webGpuDefaults.size(); ++i)
+	{
+		CHECK(kAdapter3DLimits[i].minimum <= webGpuDefaults[i]);
+	}
+	for (const auto& limit: kAdapter3DLimits)
+	{
+		CHECK_FALSE(limit.name.empty());
+	}
+	CHECK(UnmetAdapter3DLimits([](std::string_view) { return UINT64_MAX; }).empty());
+	const auto message = UnmetAdapter3DLimits([](std::string_view name) -> std::uint64_t {
+		if (name == "maxTextureDimension2D" || name == "maxBindGroups") { return 1; }
+		return UINT64_MAX;
+	});
+	CHECK(message.find("maxTextureDimension2D (adapter=1, required=7168)") != std::string::npos);
+	CHECK(message.find("maxBindGroups (adapter=1, required=3)") != std::string::npos);
+	CHECK(message.find("maxVertexAttributes") == std::string::npos);
+}
 
 TEST_CASE("WebGPU sprite bounds ordering and asynchronous retirement")
 {

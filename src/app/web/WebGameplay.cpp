@@ -22,7 +22,7 @@
 #	include "BrowserManaged.hpp"
 #endif
 
-#if AE_WEB_TEST_BRIDGE
+#if AE_WEB_TEST_BRIDGE && AE_WEB_PANIC_FIXTURE
 extern "C" void aether_browser_test_panic();
 #endif
 
@@ -544,7 +544,11 @@ namespace aether::app::web
 #if AE_WEB_TEST_BRIDGE
 				if (EM_ASM_INT({ return aetherTestInternal.takeFault(); }))
 				{
+#if AE_WEB_PANIC_FIXTURE
 					aether_browser_test_panic();
+#else
+					AE_UNEXPECTED(AetherError::Engine("Browser automation panic fixture"));
+#endif
 				}
 #endif
 				// Submissions always reflect the last tick: re-submitted every tick, never accumulated.

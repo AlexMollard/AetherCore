@@ -29,8 +29,8 @@ const report = {
     schemaVersion : 1,
     operation : 'browser-test',
     target : 'web',
-    profile : 'webgpu-2d-v1',
-    language : 'rust',
+    profile : null,
+    language : null,
     project,
     status : 'blocked',
     phase : 'preflight',
@@ -111,6 +111,14 @@ async function snapshot(page) {
 }
 try {
     await mkdir(artifactRoot, {recursive : true});
+    // Standalone production builds are not packages and have no manifest.
+    try {
+	const manifest = JSON.parse(await readFile(path.join(productionRoot, 'manifest.json'), 'utf8'));
+	report.profile = manifest.profile;
+	report.language = manifest.language;
+    } catch (error) {
+	if (error.code !== 'ENOENT') throw error;
+    }
     if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 1200000)
 	throw Error('Timeout must be 1000..1200000 ms');
     deadline = setTimeout(cancel, timeout);

@@ -16,7 +16,7 @@ namespace aether::editor
 			return std::string(text.begin(), text.end());
 		};
 		scripting::AgentReport failed{
-		        .jobId = request.value("jobId", "web-publish"), .status = scripting::AgentJobStatus::Failed, .phase = "web-publish", .target = "web", .language = std::string(app::GameplayLanguageName(plan.language)), .profile = "webgpu-2d-v1"};
+		        .jobId = request.value("jobId", "web-publish"), .status = scripting::AgentJobStatus::Failed, .phase = "web-publish", .target = "web", .language = std::string(app::GameplayLanguageName(plan.language)), .profile = plan.profile};
 		const auto fail = [&](const std::string& code, const std::string& message)
 		{
 			failed.diagnostics.push_back({code, scripting::AgentDiagnosticSeverity::Error, message});

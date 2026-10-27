@@ -1,7 +1,10 @@
 #include "editor/publish/PublishPlan.hpp"
 
+#include <toml++/toml.hpp>
+
 #include "Defines.hpp"
 #include "editor/EditorProjectContext.hpp"
+#include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
 
 namespace aether::editor
@@ -81,6 +84,18 @@ namespace aether::editor
 		{
 			plan.platformName = "Web";
 			plan.profile = "webgpu-2d-v1";
+			if (const auto text = io::file_util::ReadText(project.projectFile))
+			{
+				try
+				{
+					const auto document = toml::parse(*text);
+					plan.profile = document["publish"]["web"]["profile"].value_or(plan.profile);
+				}
+				catch (const toml::parse_error&)
+				{
+					// The publisher reports malformed project settings during preflight.
+				}
+			}
 			plan.runtimeExeName = "index.html";
 			plan.configName = "Release";
 			plan.shippableConfig = true;

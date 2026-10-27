@@ -3,10 +3,60 @@ import importlib.util
 import math
 from pathlib import Path
 import unittest
+import tempfile
 
 spec = importlib.util.spec_from_file_location('gameplay_parity', Path(__file__).with_name('gameplay-parity-checks.py'))
 parity = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(parity)
+package_spec = importlib.util.spec_from_file_location('package_parity', Path(__file__).with_name('package-parity-checks.py'))
+package_parity = importlib.util.module_from_spec(package_spec)
+package_spec.loader.exec_module(package_parity)
+
+
+class PackageIdentityTests(unittest.TestCase):
+    def test_pak_byte_difference_and_length_are_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            a, b = root/'a', root/'b'
+            a.mkdir()
+            b.mkdir()
+            for name in ('game.pak', 'engine.pak'):
+                (a/name).write_bytes(b'abc')
+                (b/name).write_bytes(b'abc')
+            self.assertIsNone(package_parity.compare_paks(a, b)['game.pak']['firstDifference'])
+            (b/'game.pak').write_bytes(b'abd')
+            (b/'engine.pak').write_bytes(b'abcx')
+            differences = package_parity.compare_paks(a, b)
+            self.assertEqual(differences['game.pak']['firstDifference'], 2)
+            self.assertEqual(differences['engine.pak']['firstDifference'], 3)
+
+    def test_gameplay_inputs_exclude_generated_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root/'scripts'
+            (scripts/'obj').mkdir(parents=True)
+            (scripts/'game.cs').write_text('game', encoding='utf-8')
+            (scripts/'obj'/'generated.cs').write_text('generated', encoding='utf-8')
+            self.assertEqual(list(package_parity.gameplay_inputs(root)), ['game.cs'])
+
+    def test_staging_copies_root_animation_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root/'projects'/'AgentPipelineRust'
+            source.mkdir(parents=True)
+            build = root/'build'
+            animations = build/'reference-project'/'animations'
+            animations.mkdir(parents=True)
+            (animations/'walk.anim').write_bytes(b'animation')
+            staging = root/'staging'
+            staging.mkdir()
+            original = parity.ROOT
+            try:
+                parity.ROOT = root
+                project = parity.stage_project('rust', [], build, staging)
+                self.assertEqual((project/'animations'/'walk.anim').read_bytes(), b'animation')
+            finally:
+                parity.ROOT = original
 
 
 def matrix(x=0.0, y=0.0, z=0.0, angle=0.0, scale=(1.0, 1.0, 1.0)):

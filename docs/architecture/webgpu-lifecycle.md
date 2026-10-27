@@ -1,12 +1,32 @@
 # Task 9 lifecycle and render boundary
 
-## Vulkan parity work in progress
+## 3D adapter contract
+
+The `webgpu-3d-v1` runtime checks adapter limits before requesting its device;
+`WEBGPU_LIMITS` lists every insufficient limit, the adapter value and the required
+minimum. The device request explicitly includes those minima. The authoritative
+table is `src/engine/webgpu/WebGpuRequirements.inc`, also read by the publisher
+for the package manifest. The existing 2D profile retains its device check.
+
+The mesh pipeline uses three bind groups, five fragment storage buffers, ten
+fragment textures, two samplers and eight vertex attributes. The post layout has
+13 bindings, and its auxiliary pass has three color attachments totalling 12
+bytes per sample. The packed shadow atlas is 4096x7168 with one array layer;
+the exposure histogram dispatch uses 256 invocations per workgroup. The 8 MiB
+storage binding accommodates the existing 65,536 sprite instances. The renderer
+uses core `depth32float`, `r32float`, `rgba16float`, RGBA8 and R8 formats;
+RGBA16Float is rendered and blended, while R32Float is sampled unfilterably, so
+the optional `float32-filterable` feature is not required. Runtime-sized assets
+and frame data remain subject to their existing validation and resource budgets.
+
+## Vulkan parity and production boundary
 
 The [parity design](../superpowers/specs/2026-10-21-webgpu-vulkan-parity-design.md)
 and [implementation plan](../superpowers/plans/2026-10-21-webgpu-vulkan-parity.md)
-track the new full-3D/effects objective. The production export profile is still
-`webgpu-2d-v1`; this work has not established full 3D game exports or Vulkan visual
-parity.
+track the full-3D/effects objective. `webgpu-3d-v1` is a production 3D export
+profile alongside the default `webgpu-2d-v1`. Its support is bounded: the
+[effect parity ledger](webgpu-effect-parity.md) records Task 6 production and
+instrumented sibling evidence separately, along with unqualified ranges.
 
 The first foundation adds packet-owned mesh instances, native/browser shared CPU
 primitive geometry, the existing native cooked-model decoder in the portable
@@ -31,9 +51,8 @@ The original procedural fixtures retain their unlit output. A primary 3D scene's
 lighting feature enables native startup lighting, even without an environment.
 Authored environments, lights and explicit camera backgrounds also opt into linear RGBA16Float scene rendering,
 standard PBR material maps, directional/local shadows, and the HDR display transform.
-Scenes, models, materials and skin palettes now load through the shared portable
-path. Physics and the remaining native effects stack are separate milestones;
-production 3D preflight rejections remain in place.
+Scenes, models, materials and skin palettes load through the shared portable
+path; the export preflight rejects features not implemented by the browser.
 
 ## Authored lighting and HDR frame scheduling
 
@@ -50,9 +69,9 @@ scene sprites, the 2D light map, tone mapping/background composition, then displ
 space UI. Scene sprites decode their legacy encoded textures for linear blending;
 UI retains its established display-space output. Camera solid/gradient colors are
 composited in display space, preserving the authored colors. All eleven native
-tone-map operator implementations and the native sky math are shared includes;
-exposure is the native manual multiplier carried in the project graphics settings.
-Automatic exposure and the rest of the post-effects stack require separate work.
+tone-map operator implementations and the native sky math are shared includes.
+The post stack also implements automatic exposure and other effects; qualification
+is limited to the recorded configurations in the effect parity ledger.
 
 The 3D pass supports 128 local lights and 16 shadow maps (three directional
 cascades, six maps per shadowed point light, one per spot). Cascades retain native
@@ -113,9 +132,9 @@ Run the existing native host build once, activate the pinned SDK through the che
     -PlaywrightModule <absolute-path-to-playwright>
 ```
 
-`-SkipHostBuild` reuses verified host tools. `-BrowserExecutable` selects an installed Chromium executable; otherwise the runner uses Chrome. All qualification browsers are headless and closed in `finally`. The report distinguishes the Node foundation result from the browser renderer/keyboard result. It never treats a Node run as browser graphics evidence. Audio, storage and complete input remain unavailable. No CI trigger changes are introduced.
+`-SkipHostBuild` reuses verified host tools. `-BrowserExecutable` selects an installed Chromium executable; otherwise the runner uses Chrome. All qualification browsers are headless and closed in `finally`. The report distinguishes the Node foundation result from the browser renderer/keyboard result. It never treats a Node run as browser graphics evidence. At the Task 9 checkpoint audio, storage and complete input were unavailable; Task 10 subsequently added their bounded browser support. No CI trigger changes are introduced.
 
-Serve `build/webgpu-browser/web/` on localhost or HTTPS and open its `index.html` to inspect the procedural M3 scene. Click the canvas and hold Left/Right. Rust's `BrowserMover` uses the existing safe SDK, services negotiation, provider and gameplay ABI; the host validates the module and manages create/attach/update/detach/destroy/shutdown. The application extracts actual World transforms and SpriteRendererComponents into the engine's RenderFramePacket. GPU code consumes that owned snapshot only. The fixture uses registered RGBA8 textures; scene loading, authored texture/atlas cooking and complete reference-game parity remain Task 10.
+Serve `build/webgpu-browser/web/` on localhost or HTTPS and open its `index.html` to inspect the procedural M3 scene. Click the canvas and hold Left/Right. Rust's `BrowserMover` uses the existing safe SDK, services negotiation, provider and gameplay ABI; the host validates the module and manages create/attach/update/detach/destroy/shutdown. The application extracts actual World transforms and SpriteRendererComponents into the engine's RenderFramePacket. GPU code consumes that owned snapshot only. The original fixture used registered RGBA8 textures; Task 10 subsequently added scene loading and authored texture/atlas cooking, without claiming complete reference-game parity.
 
 The canvas follows its CSS size, clamped by the explicit 4096-pixel extent limit. Zero extents suspend submission. Keyboard input is scoped to canvas focus; blur and visibility changes release keys and reset the fixed-step clock. A bounded update delta prevents an unbounded catch-up loop. The `test` URL parameter fixes render dimensions for deterministic pixel checks. Other test parameters select controlled unsupported-adapter/limit, teardown and scene scenarios; no browser security switches are required.
 

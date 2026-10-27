@@ -103,13 +103,13 @@ native/browser Rust/C# gameplay fixtures. Consume Tasks 2â€“4.
 **Files:** `tools/project/web_publish.py`, publish plans, asset packing, package
 schemas, browser export verification and native/browser visual reports.
 
-- [ ] Add a new profile only for implemented and qualified features; preserve
+- [x] Add a new profile only for implemented and qualified features; preserve
   existing `webgpu-2d-v1` package behavior.
-- [ ] Validate complete shader/asset reachability and adapter requirements,
+- [x] Validate complete shader/asset reachability and adapter requirements,
   refusing unsupported features instead of emitting visually incomplete games.
-- [ ] Export both language fixtures; compare actual relocated packages against
+- [x] Export both language fixtures; compare actual relocated packages against
   native captures and gameplay evidence; exercise iframe and cleanup behavior.
-- [ ] Record feature coverage, numerical/pixel tolerances, performance/memory,
+- [x] Record feature coverage, numerical/pixel tolerances, performance/memory,
   browser/device environment and remaining unsupported configurations.
 
 ## Task 2 qualification checkpoint
@@ -318,3 +318,70 @@ findings (`logs/task5/native-gauntlet.json`); 72 hardware browser cases
 private 3D movement (`logs/task5/languages/report.json`); Rust SDK and Python
 suites pass. Only the dev/reference builds carry 3D gameplay; the export
 profile remains `webgpu-2d-v1` until Task 6.
+
+## Task 6 qualification checkpoint
+
+`webgpu-3d-v1` production publishing now stages reachable scenes, includes,
+prefabs, models, materials and portable custom passes, bakes/cooks assets and
+packs target-qualified game/engine PAKs. The default `webgpu-2d-v1` behavior
+remains unchanged; its nine-entry package file set was checked during
+qualification (`.temp/task6/2d-report.json`, `.temp/task6-verify-2d.json`).
+Unsupported components, raw SPIR-V, non-portable Slang, networking and
+desktop-only gameplay APIs fail explicitly. Implemented but unqualified
+parameter ranges and combinations are reported rather than claimed qualified.
+The feature ledger remains the boundary of the evidence, not a guarantee of
+arbitrary native-game parity.
+
+`WebGpuRequirements.inc` supplies the runtime's explicit device limits and the
+3D package manifest. Before device creation, `WEBGPU_LIMITS` lists all
+insufficient adapter values alongside their required minima. The existing 2D
+device path is unchanged. Runtime packages must match the compiled profile.
+
+Final Rust and C# exports passed relocated hardware-browser checks, including
+nested URLs, iframe gestures/gameplay, production bridge exclusion, captured
+startup, stop/cleanup and unavailable-WebGPU diagnostics:
+`logs/task6/publish-rust.json`, `logs/task6/publish-csharp.json` and
+`.temp/task6/final-publish-{rust,csharp}/web-verification.json`.
+
+Production binaries contain no automation bridge. Tick-exact comparisons use
+an instrumented sibling with byte-identical `game.pak` and `engine.pak` and
+matching publish-time gameplay source hashes; executable bytes differ.
+`.temp/task6/final-parity-rust-2/report.json` and
+`.temp/task6/final-parity-csharp/report.json` record this identity and all
+successful comparisons. Both languages pass the nine 3D gameplay scenes at
+ticks 1/10/30/60/120/150 with absolute tolerance 1e-5. Both pass 21 rendering
+scenes covering PBR, sun/point shadows, water with shallow/deep/off controls,
+molten, gem, material graph, sky mesh, fog and depth of field; Rust also passes
+the custom-pass enabled/control pair. Lighting uses
+`logs/task4/rerun/scene-effects-graphics.json`; whole-image MAE 8, p95 18 and
+probe limit 12 are unchanged.
+
+Qualification fixed the native harness omitting root `animations/` while
+staging the skinned-clip fixture, and the publisher omitting implemented
+reflected component table names from its 3D allowlist. Regression checks cover
+animation staging and the maintained reference scenes' component keys.
+
+Measurements, fixture-only budgets, exact Chrome/Windows/GPU environment and
+remaining unqualified ranges are recorded in
+`tools/browser-tests/distribution-budgets-3d.json` and the
+[Task 6 effect-ledger checkpoint](../../architecture/webgpu-effect-parity.md#task-6-production-export-qualification).
+No external host, cross-browser/device matrix or edited-publish performance is
+qualified by these localhost runs.
+
+Final gates: Debug gauntlet **1,562/1,562** with zero editor/runtime Vulkan
+validation findings (`logs/task6/native-gauntlet-final.json`); **72/72**
+hardware browser cases (`logs/task6/web-runtime-report.json`); fresh Rust and
+C# authored-language regression (`logs/task6/languages/report.json`).
+Python suites: project 61 cases (6 skipped), web-runtime 91, shaders 24;
+browser verifier unit checks 5/5. Both final measured production samples pass
+the committed fixture budgets. The live adapter-limit smoke
+(`logs/task6/adapter-limit-smoke.json`) visibly reports
+`maxTextureDimension2D (adapter=1, required=7168)`.
+
+The first Debug build referenced removed .NET host pack 10.0.13; regenerating
+the preset selected installed 10.0.14. The subsequent gauntlet recorded one
+unit failure without its assertion in the condensed output
+(`logs/task6/native-gauntlet.json`). An unchanged full JUnit capture
+(`logs/task6/native-unit.xml`) and the isolated final gauntlet passed.
+The intermittent failure was not identified or classified as pre-existing.
+`cmake --preset clangd` and `graphify update .` completed.

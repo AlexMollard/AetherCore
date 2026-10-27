@@ -8,21 +8,32 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {checkBudgets, measureDistribution, qualifyAgentGame} from './distribution-metrics.mjs';
 import {isHardwareAdapter} from '../experiments/rust-webgpu/browser-checks.mjs';
-import {isExportPath} from './export-paths.mjs';
+import {isExportPath, pakPaths, validate3dAssets} from './export-paths.mjs';
 
 const options=Object.fromEntries(process.argv.slice(2).map(arg=>{const i=arg.indexOf('=');return [arg.slice(2,i),arg.slice(i+1)];}));
 const root=path.resolve(options.root), reportPath=path.resolve(options.report);
-const report={schemaVersion:1,status:'failed',target:'web',profile:'webgpu-2d-v1',environment:{os:os.platform(),release:os.release()},checks:[],console:[],pageErrors:[]};
+const report={schemaVersion:1,status:'failed',target:'web',profile:null,environment:{os:os.platform(),release:os.release()},checks:[],console:[],pageErrors:[]};
 const started=performance.now();let browser,server;
 try {
  const manifest=JSON.parse(await readFile(path.join(root,'manifest.json'),'utf8'));
- assert.equal(manifest.schemaVersion,1);assert.equal(manifest.target,'web');assert.equal(manifest.profile,'webgpu-2d-v1');
- report.language=manifest.language;
+ assert.equal(manifest.schemaVersion,1);assert.equal(manifest.target,'web');
+ assert.ok(['webgpu-2d-v1','webgpu-3d-v1'].includes(manifest.profile),'Unsupported export profile');
+ report.profile=manifest.profile;report.language=manifest.language;
+ if(manifest.profile==='webgpu-3d-v1'){
+  const requirements=manifest.adapterRequirements;
+  assert.ok(requirements && typeof requirements==='object' && !Array.isArray(requirements),'3D adapter requirements missing');
+  assert.ok(requirements.limits && typeof requirements.limits==='object' && Array.isArray(requirements.features) && Array.isArray(requirements.textureFormats),'Invalid 3D adapter requirements');
+ }
  for(const file of manifest.files){
   assert.ok(isExportPath(file.path),'Manifest file must stay inside the package');
   const bytes=await readFile(path.join(root,file.path));assert.equal(bytes.length,file.sizeBytes);
   assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256);
   if(/\.(m?js|html|wasm)$/.test(file.path))for(const marker of ['aetherTestInternal','aether_web_lose_device','aether_browser_test_panic','test-bridge.js'])assert.equal(bytes.includes(Buffer.from(marker)),false,marker+' leaked into export');
+ }
+ if(manifest.profile==='webgpu-3d-v1'){
+  validate3dAssets(manifest,pakPaths(await readFile(path.join(root,'game.pak'))));
+  assert.ok(['2d','3d'].includes(manifest.project.startupSceneKind),'Missing startup scene kind');
+  report.checks.push({name:'3d-cooked-package-contract',status:'passed'});
  }
  report.checks.push({name:'manifest-integrity-and-production-boundary',status:'passed'});
  const require=createRequire(import.meta.url), module=process.env.AETHER_PLAYWRIGHT_MODULE || 'playwright';
@@ -85,6 +96,18 @@ try {
   }
   report.directState=await page.evaluate(()=>{const{capture,...state}=aetherRuntime;return state;});
   assert.equal(report.directState.status,'running');assert.equal(report.directState.diagnostics.length,0);
+  if(manifest.profile==='webgpu-3d-v1'){
+   // This bridge-free observation is not tick-exact parity with native.
+   await page.waitForTimeout(Number(options.captureSeconds || 2)*1000);
+   const state=await page.evaluate(()=>aetherRuntime);
+   assert.equal(state.status,'running');assert.equal(state.scene,manifest.project.startupScene);
+   assert.equal(state.diagnostics.length,0);assert.ok(state.frames>0);
+   const canvasScreenshot=path.join(path.dirname(reportPath),'web-export-canvas.png');
+   await page.locator('#canvas').screenshot({path:canvasScreenshot});
+   report.productionCanvas={path:canvasScreenshot,seconds:Number(options.captureSeconds || 2),frames:state.frames,
+    scope:'Bridge-free relocated startup readiness and canvas capture; not native tick-exact parity'};
+   report.checks.push({name:'production-startup-canvas',status:'passed'});
+  }
   report.checks.push({name:'relocated-nested-path-gameplay',status:'passed'});
   const screenshot=path.join(path.dirname(reportPath),'web-export.png');await page.screenshot({path:screenshot});report.screenshot=screenshot;
   await page.evaluate(()=>Module._aether_web_stop());
@@ -116,7 +139,7 @@ try {
    assert.ok(report.unavailableState.diagnostics.some(item=>item.code==='WEBGPU_UNAVAILABLE'));
   }finally{await unavailable.close();}
   report.checks.push({name:'actionable-webgpu-unavailable',status:'passed'});
-  if(options.measure){report.measurements=await measureDistribution(page,context,base+'/nested/game/');report.checks.push({name:'measured-hardware-gameplay',status:'passed'});if(options.budgets){const budgets=JSON.parse(await readFile(options.budgets,'utf8'));report.budgetChecks=checkBudgets({...report.measurements,zipBytes:Number(options.zipBytes),editToReadyMs:Number(options.editToReadyMs)},budgets);assert.equal(report.budgetChecks.status,'passed',JSON.stringify(report.budgetChecks));}}
+  if(options.measure || manifest.profile==='webgpu-3d-v1'){report.measurements=await measureDistribution(page,context,base+'/nested/game/');report.measurements.packageBytes=manifest.files.reduce((sum,file)=>sum+file.sizeBytes,0);report.measurements.zipBytes=options.zipBytes ? Number(options.zipBytes) : null;report.checks.push({name:'measured-hardware-gameplay',status:'passed'});if(options.budgets){const budgets=JSON.parse(await readFile(options.budgets,'utf8'));assert.equal(budgets.profile,manifest.profile,'Budget profile must match package');report.budgetChecks=checkBudgets({...report.measurements,zipBytes:Number(options.zipBytes),editToReadyMs:Number(options.editToReadyMs)},budgets);assert.equal(report.budgetChecks.status,'passed',JSON.stringify(report.budgetChecks));}else if(manifest.profile==='webgpu-3d-v1'){report.measurements.budgetStatus='unqualified: no measurement-derived 3D budgets supplied';}}
  }catch(error){report.failureStates=await Promise.all(context.pages().map(page=>page.evaluate(()=>globalThis.aetherRuntime).catch(()=>null)));throw error;}finally{await context.close();}
  report.status='passed';
 }catch(error){report.error=error.stack;}

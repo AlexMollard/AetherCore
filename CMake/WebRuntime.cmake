@@ -3,6 +3,7 @@ if(NOT EMSCRIPTEN)
     message(FATAL_ERROR "AETHERCORE_WEB_RUNTIME requires the pinned Emscripten toolchain")
 endif()
 option(AETHERCORE_WEB_TEST_BRIDGE "Include development-only browser automation" OFF)
+option(AETHERCORE_WEB_QUALIFY_STAGED_PROJECT "Allow the test bridge in an internal staged-project qualification build" OFF)
 option(AETHERCORE_WEB_MANAGED "Build the experimental managed-owned browser runtime archive" OFF)
 enable_language(C)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -52,16 +53,17 @@ if(NOT AETHER_WEB_PROJECT)
     set(AETHER_WEB_MATERIAL_COMPILER "${_material_compiler}")
 endif()
 set(AETHER_WEB_STAGED_PROJECT "" CACHE PATH "Preflight-validated selected project assets")
+set(AETHER_WEB_PROFILE "webgpu-2d-v1" CACHE STRING "Selected browser export profile")
 set(AETHER_WEB_GAMEPLAY_MANIFEST "" CACHE FILEPATH "Selected Cargo manifest")
 set(AETHER_WEB_GAMEPLAY_NAME "" CACHE STRING "Selected Rust library name")
 set(AETHER_WEB_MANAGED_PROJECT "" CACHE FILEPATH "Selected C# gameplay project")
 # Published (staged-project) exports never carry the automation bridge; a reference/qualification
 # build of the C# runtime (no staged project) may, so native-vs-browser parity can read its state.
-if(AETHERCORE_WEB_MANAGED AND (NOT EXISTS "${AETHER_WEB_MANAGED_PROJECT}" OR (AETHERCORE_WEB_TEST_BRIDGE AND AETHER_WEB_STAGED_PROJECT)))
+if(AETHERCORE_WEB_MANAGED AND (NOT EXISTS "${AETHER_WEB_MANAGED_PROJECT}" OR (AETHERCORE_WEB_TEST_BRIDGE AND AETHER_WEB_STAGED_PROJECT AND NOT AETHERCORE_WEB_QUALIFY_STAGED_PROJECT)))
     message(FATAL_ERROR "Managed Web exports require a selected C# project; published exports require automation OFF")
 endif()
 if(AETHER_WEB_PROJECT AND NOT AETHERCORE_WEB_MANAGED)
-    if(AETHERCORE_WEB_TEST_BRIDGE OR NOT AETHER_WEB_GAMEPLAY_MANIFEST OR NOT AETHER_WEB_STAGED_PROJECT OR NOT AETHER_WEB_GAMEPLAY_NAME MATCHES "^[A-Za-z0-9_]+$")
+    if((AETHERCORE_WEB_TEST_BRIDGE AND NOT AETHERCORE_WEB_QUALIFY_STAGED_PROJECT) OR NOT AETHER_WEB_GAMEPLAY_MANIFEST OR NOT AETHER_WEB_STAGED_PROJECT OR NOT AETHER_WEB_GAMEPLAY_NAME MATCHES "^[A-Za-z0-9_]+$")
         message(FATAL_ERROR "Project Web exports require validated inputs and automation OFF")
     endif()
     set(_rust_library "${CMAKE_BINARY_DIR}/rust/wasm32-unknown-emscripten/release/lib${AETHER_WEB_GAMEPLAY_NAME}.a")
@@ -105,6 +107,14 @@ if(AETHERCORE_WEB_TEST_BRIDGE AND NOT AETHERCORE_WEB_MANAGED)
     target_link_options(GameRuntime PRIVATE --emit-symbol-map)
 endif()
 target_compile_definitions(Engine PUBLIC AE_WEB_TEST_BRIDGE=$<BOOL:${AETHERCORE_WEB_TEST_BRIDGE}>)
+# The automation panic fixture is exported by the reference Rust crate and by the C# bridge; a staged
+# project's own Rust crate has none, so its qualification builds report the injected fault in C++.
+if(AETHER_WEB_PROJECT AND NOT AETHERCORE_WEB_MANAGED)
+    target_compile_definitions(Engine PUBLIC AE_WEB_PANIC_FIXTURE=0)
+else()
+    target_compile_definitions(Engine PUBLIC AE_WEB_PANIC_FIXTURE=1)
+endif()
+target_compile_definitions(Engine PUBLIC AE_WEB_PROFILE=\"${AETHER_WEB_PROFILE}\")
 set(AETHER_WEB_BRIDGE_SCRIPT "")
 if(AETHERCORE_WEB_TEST_BRIDGE)
     configure_file("${CMAKE_SOURCE_DIR}/resources/web/test-bridge.js" "${CMAKE_BINARY_DIR}/web/test-bridge.js" COPYONLY)
@@ -174,10 +184,26 @@ add_dependencies(GameRuntime WebAssets)
 
 if(AETHER_WEB_PROJECT)
     file(GLOB_RECURSE _game_sources CONFIGURE_DEPENDS "${AETHER_WEB_STAGED_PROJECT}/*")
-    add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
-        COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target webgpu-2d-v1 "${AETHER_WEB_STAGED_PROJECT}" "${CMAKE_BINARY_DIR}/web/game.pak"
-        DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_game_sources}
-        VERBATIM)
+    if(AETHER_WEB_PROFILE STREQUAL "webgpu-3d-v1")
+        set(_material_compiler_args)
+        if(AETHER_WEB_MATERIAL_COMPILER)
+            list(APPEND _material_compiler_args --compiler "${AETHER_WEB_MATERIAL_COMPILER}")
+        endif()
+        add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
+            COMMAND "${AETHER_WEB_ASSETPACKER}" bake-all "${AETHER_WEB_STAGED_PROJECT}"
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py"
+                --project "${AETHER_WEB_STAGED_PROJECT}" ${_material_compiler_args}
+                --slangc "${AETHER_WEB_SLANGC}" --report "${CMAKE_BINARY_DIR}/web/material-cook.json"
+            COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target "${AETHER_WEB_PROFILE}" "${AETHER_WEB_STAGED_PROJECT}" "${CMAKE_BINARY_DIR}/web/game.pak"
+            DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_game_sources}
+                "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py" "${CMAKE_SOURCE_DIR}/tools/shaders/web_materials.py"
+            VERBATIM)
+    else()
+        add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
+            COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target "${AETHER_WEB_PROFILE}" "${AETHER_WEB_STAGED_PROJECT}" "${CMAKE_BINARY_DIR}/web/game.pak"
+            DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_game_sources}
+            VERBATIM)
+    endif()
 else()
 file(GLOB_RECURSE _game_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/*" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scenes/*" "${CMAKE_SOURCE_DIR}/resources/web/reference/*" "${CMAKE_SOURCE_DIR}/projects/EmberRun/assets/ember/*" "${CMAKE_SOURCE_DIR}/projects/EmberRun/scenes/EmberRun.scene.toml")
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
@@ -185,7 +211,7 @@ add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py"
         --project "${CMAKE_BINARY_DIR}/reference-project" --compiler "${AETHER_WEB_MATERIAL_COMPILER}" --slangc "${AETHER_WEB_SLANGC}"
         --report "${CMAKE_BINARY_DIR}/web/material-cook.json"
-    COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target webgpu-2d-v1 "${CMAKE_BINARY_DIR}/reference-project"
+    COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target "${AETHER_WEB_PROFILE}" "${CMAKE_BINARY_DIR}/reference-project"
         "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets"
         "${CMAKE_BINARY_DIR}/test-fixtures/desktop-reference.pak"
@@ -203,7 +229,7 @@ add_dependencies(GameRuntime WebGameAssets)
 
 file(GLOB _font_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/resources/fonts/*")
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/engine.pak"
-    COMMAND "${AETHER_WEB_ASSETPACKER}" --target webgpu-2d-v1
+    COMMAND "${AETHER_WEB_ASSETPACKER}" --target "${AETHER_WEB_PROFILE}"
         "${CMAKE_SOURCE_DIR}/resources/fonts" "${CMAKE_BINARY_DIR}/web/engine.pak"
     DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_font_sources}
     VERBATIM)

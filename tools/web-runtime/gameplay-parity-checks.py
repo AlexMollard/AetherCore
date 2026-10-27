@@ -240,7 +240,7 @@ def stage_project(language, scenes, build, directory_root, fixtures_3d=False):
     shutil.copytree(ROOT/'projects'/LANGUAGES[language], project,
                     ignore=shutil.ignore_patterns('Builds', 'target', 'obj', 'bin', 'artifacts', '*.scene.bin', '*.prefab.bin', '.aether'))
     staged = build/'reference-project'
-    for name in ('assets', 'scenes'):
+    for name in ('assets', 'scenes', 'animations'):
         if (staged/name).is_dir():
             shutil.copytree(staged/name, project/name, dirs_exist_ok=True)
     manifest = project/'scripts/Cargo.toml'
