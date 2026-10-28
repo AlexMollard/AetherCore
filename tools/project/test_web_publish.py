@@ -67,6 +67,31 @@ class WebPreflightTests(unittest.TestCase):
   result=self.api.publish(dict(project=str(self.root),language='csharp',jobId='web-rejected'),self.root/'report')
   self.assertEqual(result['status'],'failed');self.assertEqual(result['target'],'web');self.assertEqual(result['language'],'csharp')
   gameplay_jobs.validate_report(result,result['jobId'],1)
+ def test_web_coverage_report_schema(self):
+  import copy
+  import gameplay_jobs
+  report=gameplay_jobs._report(dict(jobId='web-coverage',target='web',language='rust'),'passed','commit')
+  report['coverage']={
+   'featuresUsed':['effects','lighting_3d'],
+   'authoredGraphicsSettings':{'bloomstrength':0.035,'contactshadows':True,'renderscale':1},
+   'unqualified':[{'feature':'effects','status':'bounded','ledger':'docs/ledger#effects','unqualified':'Outside recorded cases'}],
+   'unqualifiedSettings':[{'setting':'graphics.bloomstrength','value':0.035,'ledger':'docs/ledger#effects','qualification':'Not individually qualified'},
+                          {'setting':'graphics.contactshadows','value':True,'ledger':'docs/ledger#effects','qualification':'Not individually qualified'}]}
+  gameplay_jobs.validate_report(report,'web-coverage',0)
+  for mutate in (
+   lambda c:c.update(extra=True),
+   lambda c:c['featuresUsed'].append(1),
+   lambda c:c['authoredGraphicsSettings'].update(bloomstrength=[]),
+   lambda c:c['authoredGraphicsSettings'].update(bloomstrength=float('nan')),
+   lambda c:c['unqualified'][0].update(extra=True),
+   lambda c:c['unqualified'][0].pop('ledger'),
+   lambda c:c['unqualifiedSettings'][0].update(value=None),
+   lambda c:c['unqualifiedSettings'][0].update(value=float('inf')),
+   lambda c:c['unqualifiedSettings'][0].update(extra=True),
+  ):
+   invalid=copy.deepcopy(report);mutate(invalid['coverage'])
+   with self.subTest(coverage=invalid['coverage']):
+    with self.assertRaises(ValueError):gameplay_jobs.validate_report(invalid,'web-coverage',0)
  def test_shader_additional_asset_fails(self):
   (self.root/'assets/test.slang').write_text('shader',encoding='utf-8');(self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\nadditional_assets=["project://assets/test.slang"]\n',encoding='utf-8');self.expect('WEB_SHADER_UNSUPPORTED')
  def test_custom_pass_shader_including_portable_contract_still_fails(self):

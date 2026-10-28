@@ -4,6 +4,7 @@
 import argparse
 from contextlib import contextmanager
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -104,9 +105,12 @@ def _validate(value, schema, root):
         raise ValueError('forbidden report value')
     types = schema.get('type', [])
     types = [types] if isinstance(types, str) else types
-    kinds = {'object': dict, 'array': list, 'string': str, 'integer': int, 'null': type(None)}
-    if types and not any(type(value) is kinds[kind] for kind in types):
+    kinds = {'object': (dict,), 'array': (list,), 'string': (str,), 'integer': (int,),
+             'number': (int, float), 'boolean': (bool,), 'null': (type(None),)}
+    if types and not any(type(value) in kinds[kind] for kind in types):
         raise ValueError('invalid report value type')
+    if type(value) is float and not math.isfinite(value):
+        raise ValueError('invalid report number')
     if 'const' in schema and (type(value) is not type(schema['const']) or value != schema['const']):
         raise ValueError('invalid report constant')
     if 'enum' in schema and not any(type(value) is type(item) and value == item for item in schema['enum']):
@@ -120,6 +124,8 @@ def _validate(value, schema, root):
         for key, item in value.items():
             if key in properties:
                 _validate(item, properties[key], root)
+            elif isinstance(schema.get('additionalProperties'), dict):
+                _validate(item, schema['additionalProperties'], root)
         for key, required in schema.get('dependentRequired', {}).items():
             if key in value and not set(required).issubset(value):
                 raise ValueError('missing dependent report fields')
@@ -134,8 +140,8 @@ def _validate(value, schema, root):
     if isinstance(value, str):
         if len(value) < schema.get('minLength', 0) or ('pattern' in schema and not re.search(schema['pattern'], value)):
             raise ValueError('empty report text')
-    if type(value) is int and not schema.get('minimum', value) <= value <= schema.get('maximum', value):
-        raise ValueError('report integer outside range')
+    if type(value) in (int, float) and not schema.get('minimum', value) <= value <= schema.get('maximum', value):
+        raise ValueError('report number outside range')
 
 
 def _schema_matches(value, schema, root):

@@ -19,7 +19,8 @@
     "diagnostics": {"type": "array", "items": {"$ref": "#/$defs/diagnostic"}},
     "toolchains": {"type": "array", "items": {"$ref": "#/$defs/toolchain"}},
     "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
-    "requiredChecks": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/check"}}
+    "requiredChecks": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/check"}},
+    "coverage": {"$ref": "#/$defs/coverage"}
   },
   "allOf": [
     {
@@ -57,6 +58,40 @@
   "$defs": {
     "text": {"type": "string", "minLength": 1, "pattern": "[^ \t\r\n]"},
     "status": {"enum": ["queued", "running", "passed", "failed", "cancelled", "skipped"]},
+    "graphicsValue": {"type": ["number", "boolean", "string"]},
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["featuresUsed", "authoredGraphicsSettings", "unqualified", "unqualifiedSettings"],
+      "properties": {
+        "featuresUsed": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "authoredGraphicsSettings": {"type": "object", "additionalProperties": {"$ref": "#/$defs/graphicsValue"}},
+        "unqualified": {"type": "array", "items": {"$ref": "#/$defs/coverageLedger"}},
+        "unqualifiedSettings": {"type": "array", "items": {"$ref": "#/$defs/coverageSetting"}}
+      }
+    },
+    "coverageLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature", "status", "ledger", "unqualified"],
+      "properties": {
+        "feature": {"$ref": "#/$defs/text"},
+        "status": {"$ref": "#/$defs/text"},
+        "ledger": {"$ref": "#/$defs/text"},
+        "unqualified": {"$ref": "#/$defs/text"}
+      }
+    },
+    "coverageSetting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["setting", "value", "ledger", "qualification"],
+      "properties": {
+        "setting": {"$ref": "#/$defs/text"},
+        "value": {"$ref": "#/$defs/graphicsValue"},
+        "ledger": {"$ref": "#/$defs/text"},
+        "qualification": {"$ref": "#/$defs/text"}
+      }
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,
