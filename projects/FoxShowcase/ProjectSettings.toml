@@ -1,0 +1,55 @@
+# AetherCore project file.
+
+[app]
+startupscene = 'FoxShowcase'
+
+[graphics]
+bloomstrength = 0.035
+chromaticaberration = 0.25
+contactshadows = true
+exposure = 0.85
+exposurekey = 0.06
+exposurespeed = 0.8
+filmgrain = 0.015
+gradecontrast = 1.04
+gradesaturation = 1.06
+gradetemperature = 0.06
+gradetint = 0.01
+gtaostrength = 0.65
+motionblur = 0.12
+motionblurmaxradius = 8.0
+reflectionintensity = 0.7
+renderscale = 1
+sharpness = 0.15
+vignetteintensity = 0.12
+
+[paths]
+assets = 'assets'
+prefabs = 'assets/prefabs'
+scenes = 'scenes'
+scripts = 'scripts'
+
+[project]
+kind = '3d'
+name = 'FoxShowcase'
+template = 'blank_3d'
+version = 2
+
+[publish]
+platformname = 'Windows'
+productname = 'FoxShowcase'
+web.additional_assets = [
+    'project://assets/credits.txt',
+    'project://assets/licenses/kenney-nature.txt',
+    'project://assets/licenses/kenney-castle.txt',
+    'project://assets/models/sanctuary/Textures/colormap.png',
+    'project://assets/licenses/quaternius-animals.txt',
+    'project://assets/prefabs/RuinStone.prefab.toml',
+    'project://assets/prefabs/FieldJournal.prefab.toml',
+    'project://assets/audio/ruin-chime.wav'
+]
+web.instructions = 'WASD walks; Shift moves briskly; Space jumps. Left-drag orbits the third-person camera; wheel zooms; R respawns. Follow the dirt trails to discover the pond, ruins, forest shrine and coastal lookout. E reads nearby field notes and opens the interactive journal; Escape closes it. At the ruins, F launches the relic experiment and G resets it.'
+web.profile = 'webgpu-3d-v1'
+
+[scripting]
+language = 'rust'

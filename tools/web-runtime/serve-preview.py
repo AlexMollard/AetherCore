@@ -7,7 +7,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import subprocess
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlsplit
 
 REPO = Path(__file__).resolve().parents[2]
 CATALOG = REPO / 'resources/web/gallery-catalog.json'
@@ -54,6 +54,21 @@ def card(name, entry, catalog, changed, updated):
             f'<code>{escape(names)}</code><p>{escape(entry.get("summary", ""))}</p>{look}<div class="links">{"".join(links)}</div></article>')
 
 
+def project_asset(name, relative='index.html'):
+    entry = load_catalog().get('projects', {}).get(name)
+    if entry is None:
+        return None
+    root = (REPO / entry['directory']).resolve()
+    if not root.is_relative_to((REPO / 'projects').resolve()):
+        return None
+    target = (root / relative).resolve()
+    if not target.is_relative_to(root):
+        return None
+    if target.is_dir():
+        target = (target / 'index.html').resolve()
+    return target if target.is_relative_to(root) and target.is_file() else None
+
+
 def gallery(build):
     catalog = load_catalog()
     scenes = {path.name.removesuffix('.scene.toml'): path for path in sorted((build / 'reference-project/scenes').glob('*.scene.toml'))}
@@ -74,6 +89,10 @@ def gallery(build):
     entries['mesh3d'] = (dict(area='models', status='qualified', title='Mesh foundation', url='/?scene=mesh3d',
                               summary='Procedural 3D geometry, depth testing and the sprite overlay from the first WebGPU milestone.',
                               lookFor='Procedural primitives sort by depth and keep their shape under non-uniform scale; the 2D overlay stays on top.'), 0)
+    for name, entry in catalog.get('projects', {}).items():
+        index = project_asset(name)
+        if index:
+            entries[name] = (dict(entry, url='/projects/' + quote(name, safe='') + '/'), int(index.stat().st_mtime))
     working = sorted((name for name, (entry, _) in entries.items()
                       if entry.get('status') == 'in-progress' or name in changed or entry.get('control') in changed),
                      key=lambda name: -entries[name][1])
@@ -143,6 +162,23 @@ class Preview(SimpleHTTPRequestHandler):
     def send_head(self):
         target = urlsplit(self.path)
         query = parse_qs(target.query)
+        if target.path.startswith('/projects/'):
+            parts = unquote(target.path).split('/', 3)
+            if len(parts) < 4:
+                self.send_response(301)
+                self.send_header('Location', target.path + '/')
+                self.end_headers()
+                return None
+            asset = project_asset(parts[2], parts[3] or 'index.html')
+            if asset is None:
+                self.send_error(404, 'Unknown project or package asset')
+                return None
+            stream = asset.open('rb')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/wasm' if asset.suffix == '.wasm' else self.guess_type(str(asset)))
+            self.send_header('Content-Length', str(asset.stat().st_size))
+            self.end_headers()
+            return stream
         # The gallery owns '/' and its own ?area= filter links; any other query opens the runtime.
         if target.path == '/' and set(query) <= {'area'}:
             return self.html(gallery(self.build))

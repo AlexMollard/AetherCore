@@ -1,0 +1,36 @@
+{
+  "profile": "native-desktop-2d-v1",
+  "renderScale": 1.0,
+  "input": [
+    {"tick": 0, "key": "a", "down": true},
+    {"tick": 66, "key": "a", "down": false},
+    {"tick": 66, "key": "w", "down": true},
+    {"tick": 472, "key": "w", "down": false},
+    {"tick": 480, "key": "e", "down": true},
+    {"tick": 481, "key": "e", "down": false},
+    {"tick": 483, "key": "f", "down": true},
+    {"tick": 484, "key": "f", "down": false},
+    {"tick": 491, "key": "g", "down": true},
+    {"tick": 492, "key": "g", "down": false},
+    {"tick": 495, "key": "escape", "down": true},
+    {"tick": 496, "key": "escape", "down": false}
+  ],
+  "checkpoints": [
+    {"tick": 60, "assertions": [
+      {"entity": "Explorer", "type": "ExplorerController", "property": "moving", "equals": true},
+      {"entity": "Explorer", "type": "ExplorerController", "property": "grounded", "equals": true}
+    ]},
+    {"tick": 482, "assertions": [
+      {"entity": "Ruin controller", "type": "RuinExperiment", "property": "modal_site", "equals": 2},
+      {"entity": "Journal body", "type": "$engine", "property": "exists", "equals": true}
+    ]}
+  ],
+  "assertions": [
+    {"entity": "Explorer", "type": "$engine", "property": "position", "equals": [-5.3, 0.0, -15.8], "tolerance": 1.0},
+    {"entity": "Explorer", "type": "ExplorerController", "property": "grounded", "equals": true},
+    {"entity": "Explorer", "type": "ExplorerController", "property": "moving", "equals": false},
+    {"entity": "Ruin controller", "type": "RuinExperiment", "property": "visited", "equals": 4},
+    {"entity": "Journal body", "type": "$engine", "property": "exists", "equals": false},
+    {"entity": "$runtime", "type": "$engine", "property": "audioStarted", "equals": 2}
+  ]
+}

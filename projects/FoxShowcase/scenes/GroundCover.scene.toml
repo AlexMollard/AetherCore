@@ -1,0 +1,35 @@
+[scene]
+version = 16
+kind = "3d"
+features = ["meshes_3d", "lighting_3d"]
+
+[[entities]]
+name = "Sanctuary meadow grass"
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+[entities.grass]
+enabled = true
+surface_mesh = "project://assets/models/sanctuary-terrain.gltf"
+exclusion_mesh = "project://assets/models/sanctuary-grass-exclusions.gltf"
+region_min = [-45.0, -80.0]
+region_max = [80.0, 80.0]
+spacing = 0.14
+chunk_size = 4.0
+height_range = [0.38, 0.86]
+blade_width = 0.038
+lod_distances = [10.0, 26.0]
+draw_distance = 44.0
+wind_strength = 1.0
+surface_mask = true
+seed = 5291
+base_color = [0.12, 0.24, 0.045]
+tip_color = [0.43, 0.57, 0.14]
+[entities.material]
+base_color = [1.0, 1.0, 1.0, 1.0]
+double_sided = true
+vertex_color = true
+foliage = true
+baked_lighting = false
+receive_shadows = true
+roughness = 1.0
+distance_fade = [33.0, 44.0]

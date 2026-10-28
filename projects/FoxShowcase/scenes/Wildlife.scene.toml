@@ -1,0 +1,570 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[[entities]]
+name = 'Meadow deer walking'
+position = [-22.0, 0.04084239, 16.0]
+[[entities.scripts]]
+type = 'WildlifeWalker'
+[entities.scripts.properties.center_x]
+t = 'float'
+v = -30.0
+[entities.scripts.properties.center_z]
+t = 'float'
+v = 16.0
+[entities.scripts.properties.radius_x]
+t = 'float'
+v = 8.0
+[entities.scripts.properties.radius_z]
+t = 'float'
+v = 12.0
+[entities.scripts.properties.phase]
+t = 'float'
+v = 0.0
+[entities.scripts.properties.speed]
+t = 'float'
+v = 1.35
+
+[[entities]]
+name = 'Meadow deer walking part 0'
+parent = 0
+mesh_renderer = true
+position = [-22.0, 0.04084239, 16.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 0
+[entities.material]
+base_color = [0.296138, 0.124772, 0.057805, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 12
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer walking part 1'
+parent = 0
+mesh_renderer = true
+position = [-22.0, 0.04084239, 16.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 1
+[entities.material]
+base_color = [0.073231, 0.052918, 0.049831, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 12
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer walking part 2'
+parent = 0
+mesh_renderer = true
+position = [-22.0, 0.04084239, 16.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 2
+[entities.material]
+base_color = [0.476985, 0.399059, 0.291240, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 12
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer walking part 3'
+parent = 0
+mesh_renderer = true
+position = [-22.0, 0.04084239, 16.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 3
+[entities.material]
+base_color = [0.173352, 0.074850, 0.035740, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 12
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer walking part 4'
+parent = 0
+mesh_renderer = true
+position = [-22.0, 0.04084239, 16.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 4
+[entities.material]
+base_color = [0.429221, 0.178299, 0.081144, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 12
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer walking part 5'
+parent = 0
+mesh_renderer = true
+position = [-22.0, 0.04084239, 16.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 5
+[entities.material]
+base_color = [0.009018, 0.009018, 0.009018, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 12
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer walking part 6'
+parent = 0
+mesh_renderer = true
+position = [-22.0, 0.04084239, 16.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 6
+[entities.material]
+base_color = [0.723037, 0.723037, 0.723037, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 12
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer resting'
+position = [-27.0, 0.01082039, 30.0]
+
+[[entities]]
+name = 'Meadow deer resting part 0'
+parent = 8
+mesh_renderer = true
+position = [-27.0, 0.01082039, 30.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 0
+[entities.material]
+base_color = [0.296138, 0.124772, 0.057805, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 3
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer resting part 1'
+parent = 8
+mesh_renderer = true
+position = [-27.0, 0.01082039, 30.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 1
+[entities.material]
+base_color = [0.073231, 0.052918, 0.049831, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 3
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer resting part 2'
+parent = 8
+mesh_renderer = true
+position = [-27.0, 0.01082039, 30.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 2
+[entities.material]
+base_color = [0.476985, 0.399059, 0.291240, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 3
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer resting part 3'
+parent = 8
+mesh_renderer = true
+position = [-27.0, 0.01082039, 30.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 3
+[entities.material]
+base_color = [0.173352, 0.074850, 0.035740, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 3
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer resting part 4'
+parent = 8
+mesh_renderer = true
+position = [-27.0, 0.01082039, 30.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 4
+[entities.material]
+base_color = [0.429221, 0.178299, 0.081144, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 3
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer resting part 5'
+parent = 8
+mesh_renderer = true
+position = [-27.0, 0.01082039, 30.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 5
+[entities.material]
+base_color = [0.009018, 0.009018, 0.009018, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 3
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Meadow deer resting part 6'
+parent = 8
+mesh_renderer = true
+position = [-27.0, 0.01082039, 30.0]
+scale = [0.38, 0.38, 0.38]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Deer.gltf'
+index = 6
+[entities.material]
+base_color = [0.723037, 0.723037, 0.723037, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 3
+looping = true
+speed = 0.8
+time = 0.0
+
+[[entities]]
+name = 'Woodland wolf walking'
+position = [52.0, 0.02863393, 5.0]
+[[entities.scripts]]
+type = 'WildlifeWalker'
+[entities.scripts.properties.center_x]
+t = 'float'
+v = 42.0
+[entities.scripts.properties.center_z]
+t = 'float'
+v = 5.0
+[entities.scripts.properties.radius_x]
+t = 'float'
+v = 10.0
+[entities.scripts.properties.radius_z]
+t = 'float'
+v = 14.0
+[entities.scripts.properties.phase]
+t = 'float'
+v = 0.0
+[entities.scripts.properties.speed]
+t = 'float'
+v = 1.55
+[entities.scripts.properties.species]
+t = 'int'
+v = 1
+
+[[entities]]
+name = 'Woodland wolf walking part 0'
+parent = 16
+mesh_renderer = true
+position = [52.0, 0.02863393, 5.0]
+scale = [0.36, 0.36, 0.36]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Wolf.gltf'
+index = 0
+[entities.material]
+base_color = [0.184249, 0.190175, 0.168465, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 11
+looping = true
+speed = 0.75
+time = 0.0
+
+[[entities]]
+name = 'Woodland wolf walking part 1'
+parent = 16
+mesh_renderer = true
+position = [52.0, 0.02863393, 5.0]
+scale = [0.36, 0.36, 0.36]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Wolf.gltf'
+index = 1
+[entities.material]
+base_color = [0.027209, 0.027209, 0.027209, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 11
+looping = true
+speed = 0.75
+time = 0.0
+
+[[entities]]
+name = 'Woodland wolf walking part 2'
+parent = 16
+mesh_renderer = true
+position = [52.0, 0.02863393, 5.0]
+scale = [0.36, 0.36, 0.36]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Wolf.gltf'
+index = 2
+[entities.material]
+base_color = [0.364384, 0.375746, 0.331513, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 11
+looping = true
+speed = 0.75
+time = 0.0
+
+[[entities]]
+name = 'Woodland wolf walking part 3'
+parent = 16
+mesh_renderer = true
+position = [52.0, 0.02863393, 5.0]
+scale = [0.36, 0.36, 0.36]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Wolf.gltf'
+index = 3
+[entities.material]
+base_color = [0.009018, 0.009018, 0.009018, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 11
+looping = true
+speed = 0.75
+time = 0.0
+
+[[entities]]
+name = 'Woodland wolf resting'
+position = [51.0, 0.01366642, -10.0]
+
+[[entities]]
+name = 'Woodland wolf resting part 0'
+parent = 21
+mesh_renderer = true
+position = [51.0, 0.01366642, -10.0]
+scale = [0.36, 0.36, 0.36]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Wolf.gltf'
+index = 0
+[entities.material]
+base_color = [0.184249, 0.190175, 0.168465, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 5
+looping = true
+speed = 0.85
+time = 0.0
+
+[[entities]]
+name = 'Woodland wolf resting part 1'
+parent = 21
+mesh_renderer = true
+position = [51.0, 0.01366642, -10.0]
+scale = [0.36, 0.36, 0.36]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Wolf.gltf'
+index = 1
+[entities.material]
+base_color = [0.027209, 0.027209, 0.027209, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 5
+looping = true
+speed = 0.85
+time = 0.0
+
+[[entities]]
+name = 'Woodland wolf resting part 2'
+parent = 21
+mesh_renderer = true
+position = [51.0, 0.01366642, -10.0]
+scale = [0.36, 0.36, 0.36]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Wolf.gltf'
+index = 2
+[entities.material]
+base_color = [0.364384, 0.375746, 0.331513, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 5
+looping = true
+speed = 0.85
+time = 0.0
+
+[[entities]]
+name = 'Woodland wolf resting part 3'
+parent = 21
+mesh_renderer = true
+position = [51.0, 0.01366642, -10.0]
+scale = [0.36, 0.36, 0.36]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/wildlife/Wolf.gltf'
+index = 3
+[entities.material]
+base_color = [0.009018, 0.009018, 0.009018, 1.000000]
+metallic = 0.0
+roughness = 0.65
+receive_shadows = true
+[entities.skinned]
+clip = 5
+looping = true
+speed = 0.85
+time = 0.0
+
+[[entities]]
+name = 'Fox'
+position = [-2.0, 0.06103365, 24.0]
+[[entities.scripts]]
+type = 'WildlifeWalker'
+[entities.scripts.properties.center_x]
+t = 'float'
+v = -12.0
+[entities.scripts.properties.center_z]
+t = 'float'
+v = 24.0
+[entities.scripts.properties.radius_x]
+t = 'float'
+v = 10.0
+[entities.scripts.properties.radius_z]
+t = 'float'
+v = 6.0
+[entities.scripts.properties.speed]
+t = 'float'
+v = 1.2
+[entities.scripts.properties.species]
+t = 'int'
+v = 2
+
+[[entities]]
+name = 'Fox part 0'
+parent = 26
+mesh_renderer = true
+position = [-2.0, 0.06103365, 24.0]
+scale = [0.008, 0.008, 0.008]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/Fox/Fox.gltf'
+index = 0
+[entities.material]
+albedo = 'project://assets/models/Fox/Texture.png'
+base_color = [1.0, 1.0, 1.0, 1.0]
+roughness = 0.58
+receive_shadows = true
+[entities.skinned]
+clip = 1
+looping = true
+speed = 1.0
+time = 0.0

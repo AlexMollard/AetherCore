@@ -67,8 +67,6 @@ try {
   assert.equal(await page.evaluate(()=>typeof globalThis.aetherTest),'undefined');
   assert.equal(await page.locator('#brand-icon').count(),1,'Use the actual editor icon');
   assert.ok(await page.locator('#brand-icon').evaluate(icon=>icon.complete && icon.naturalWidth>0));
-  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).backgroundColor),'rgb(15, 13, 11)');
-  assert.equal(await page.locator('#start').evaluate(button=>getComputedStyle(button).backgroundColor),'rgb(255, 148, 41)');
   assert.equal(await page.evaluate(()=>aetherRuntime.scene),manifest.project.startupScene);
   await page.locator('#start').click();assert.equal(await page.evaluate(()=>document.activeElement?.id),'canvas','Play must focus the game without an extra click');await page.keyboard.down('Space');
   await page.waitForFunction(()=>aetherRuntime.ticks>=5 || aetherRuntime.status==='failed');

@@ -1,0 +1,5267 @@
+[scene]
+version = 16
+kind = "3d"
+features = ["meshes_3d", "lighting_3d"]
+
+[[entities]]
+name = "Eastern woodland tree 001 part 1"
+mesh_renderer = true
+position = [31.8611, 0.1359, -6.2605]
+euler = [0.0, 291.53, 0.0]
+scale = [6.009, 6.783, 5.915]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.232, 0.339, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 001 part 2"
+mesh_renderer = true
+position = [31.8611, 0.1359, -6.2605]
+euler = [0.0, 291.53, 0.0]
+scale = [6.009, 6.783, 5.915]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 001 part 3"
+mesh_renderer = true
+position = [31.8611, 0.1359, -6.2605]
+euler = [0.0, 291.53, 0.0]
+scale = [6.009, 6.783, 5.915]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.232, 0.339, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 002 part 1"
+mesh_renderer = true
+position = [15.3239, 0.3632, -19.3706]
+euler = [0.0, 196.01, 0.0]
+scale = [6.044, 8.264, 6.327]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.252, 0.368, 0.174, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 002 part 2"
+mesh_renderer = true
+position = [15.3239, 0.3632, -19.3706]
+euler = [0.0, 196.01, 0.0]
+scale = [6.044, 8.264, 6.327]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 002 part 3"
+mesh_renderer = true
+position = [15.3239, 0.3632, -19.3706]
+euler = [0.0, 196.01, 0.0]
+scale = [6.044, 8.264, 6.327]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.252, 0.368, 0.174, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 003 part 1"
+mesh_renderer = true
+position = [32.0888, 0.3817, -21.228]
+euler = [0.0, 221.3, 0.0]
+scale = [5.416, 6.586, 5.425]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.295, 0.431, 0.204, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 003 part 2"
+mesh_renderer = true
+position = [32.0888, 0.3817, -21.228]
+euler = [0.0, 221.3, 0.0]
+scale = [5.416, 6.586, 5.425]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 003 part 3"
+mesh_renderer = true
+position = [32.0888, 0.3817, -21.228]
+euler = [0.0, 221.3, 0.0]
+scale = [5.416, 6.586, 5.425]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.295, 0.431, 0.204, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 004 part 1"
+mesh_renderer = true
+position = [39.3194, 0.2405, -14.5651]
+euler = [0.0, 357.04, 0.0]
+scale = [4.864, 6.495, 4.725]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.221, 0.323, 0.153, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 004 part 2"
+mesh_renderer = true
+position = [39.3194, 0.2405, -14.5651]
+euler = [0.0, 357.04, 0.0]
+scale = [4.864, 6.495, 4.725]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 004 part 3"
+mesh_renderer = true
+position = [39.3194, 0.2405, -14.5651]
+euler = [0.0, 357.04, 0.0]
+scale = [4.864, 6.495, 4.725]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.221, 0.323, 0.153, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 005 part 1"
+mesh_renderer = true
+position = [37.0852, 0.4928, -23.4733]
+euler = [0.0, 329.19, 0.0]
+scale = [5.506, 6.795, 5.584]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.276, 0.403, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 005 part 2"
+mesh_renderer = true
+position = [37.0852, 0.4928, -23.4733]
+euler = [0.0, 329.19, 0.0]
+scale = [5.506, 6.795, 5.584]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 005 part 3"
+mesh_renderer = true
+position = [37.0852, 0.4928, -23.4733]
+euler = [0.0, 329.19, 0.0]
+scale = [5.506, 6.795, 5.584]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.276, 0.403, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 006 part 1"
+mesh_renderer = true
+position = [29.9719, 0.3572, -25.5377]
+euler = [0.0, 133.59, 0.0]
+scale = [5.544, 5.955, 5.544]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.28, 0.41, 0.194, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 006 part 2"
+mesh_renderer = true
+position = [29.9719, 0.3572, -25.5377]
+euler = [0.0, 133.59, 0.0]
+scale = [5.544, 5.955, 5.544]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 006 part 3"
+mesh_renderer = true
+position = [29.9719, 0.3572, -25.5377]
+euler = [0.0, 133.59, 0.0]
+scale = [5.544, 5.955, 5.544]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.28, 0.41, 0.194, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 007 part 1"
+mesh_renderer = true
+position = [20.2473, 0.2842, -22.9077]
+euler = [0.0, 301.47, 0.0]
+scale = [5.714, 7.435, 5.827]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.266, 0.389, 0.184, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 007 part 2"
+mesh_renderer = true
+position = [20.2473, 0.2842, -22.9077]
+euler = [0.0, 301.47, 0.0]
+scale = [5.714, 7.435, 5.827]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 007 part 3"
+mesh_renderer = true
+position = [20.2473, 0.2842, -22.9077]
+euler = [0.0, 301.47, 0.0]
+scale = [5.714, 7.435, 5.827]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.266, 0.389, 0.184, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 008 part 1"
+mesh_renderer = true
+position = [30.8245, 0.2314, -16.9736]
+euler = [0.0, 317.88, 0.0]
+scale = [4.667, 5.228, 4.808]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.299, 0.437, 0.207, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 008 part 2"
+mesh_renderer = true
+position = [30.8245, 0.2314, -16.9736]
+euler = [0.0, 317.88, 0.0]
+scale = [4.667, 5.228, 4.808]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 008 part 3"
+mesh_renderer = true
+position = [30.8245, 0.2314, -16.9736]
+euler = [0.0, 317.88, 0.0]
+scale = [4.667, 5.228, 4.808]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.299, 0.437, 0.207, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 009 part 1"
+mesh_renderer = true
+position = [37.8837, 0.5062, -18.4495]
+euler = [0.0, 292.69, 0.0]
+scale = [7.715, 9.522, 7.529]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.221, 0.323, 0.153, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 009 part 2"
+mesh_renderer = true
+position = [37.8837, 0.5062, -18.4495]
+euler = [0.0, 292.69, 0.0]
+scale = [7.715, 9.522, 7.529]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 009 part 3"
+mesh_renderer = true
+position = [37.8837, 0.5062, -18.4495]
+euler = [0.0, 292.69, 0.0]
+scale = [7.715, 9.522, 7.529]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.221, 0.323, 0.153, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 010 part 1"
+mesh_renderer = true
+position = [38.2944, 0.5032, -29.2336]
+euler = [0.0, 58.83, 0.0]
+scale = [4.54, 5.247, 4.671]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.257, 0.376, 0.178, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 010 part 2"
+mesh_renderer = true
+position = [38.2944, 0.5032, -29.2336]
+euler = [0.0, 58.83, 0.0]
+scale = [4.54, 5.247, 4.671]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 010 part 3"
+mesh_renderer = true
+position = [38.2944, 0.5032, -29.2336]
+euler = [0.0, 58.83, 0.0]
+scale = [4.54, 5.247, 4.671]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.257, 0.376, 0.178, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 011 part 1"
+mesh_renderer = true
+position = [33.9362, 0.2278, -12.6114]
+euler = [0.0, 251.28, 0.0]
+scale = [5.861, 7.023, 5.845]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.263, 0.384, 0.182, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 011 part 2"
+mesh_renderer = true
+position = [33.9362, 0.2278, -12.6114]
+euler = [0.0, 251.28, 0.0]
+scale = [5.861, 7.023, 5.845]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 011 part 3"
+mesh_renderer = true
+position = [33.9362, 0.2278, -12.6114]
+euler = [0.0, 251.28, 0.0]
+scale = [5.861, 7.023, 5.845]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.263, 0.384, 0.182, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 012 part 1"
+mesh_renderer = true
+position = [30.8674, 0.2079, -10.2345]
+euler = [0.0, 320.61, 0.0]
+scale = [5.186, 6.822, 5.153]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.244, 0.357, 0.169, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 012 part 2"
+mesh_renderer = true
+position = [30.8674, 0.2079, -10.2345]
+euler = [0.0, 320.61, 0.0]
+scale = [5.186, 6.822, 5.153]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 012 part 3"
+mesh_renderer = true
+position = [30.8674, 0.2079, -10.2345]
+euler = [0.0, 320.61, 0.0]
+scale = [5.186, 6.822, 5.153]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.244, 0.357, 0.169, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 013 part 1"
+mesh_renderer = true
+position = [66.1891, 0.2635, -17.967]
+euler = [0.0, 147.65, 0.0]
+scale = [7.116, 7.608, 7.392]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.298, 0.435, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 013 part 2"
+mesh_renderer = true
+position = [66.1891, 0.2635, -17.967]
+euler = [0.0, 147.65, 0.0]
+scale = [7.116, 7.608, 7.392]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 013 part 3"
+mesh_renderer = true
+position = [66.1891, 0.2635, -17.967]
+euler = [0.0, 147.65, 0.0]
+scale = [7.116, 7.608, 7.392]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.298, 0.435, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 014 part 1"
+mesh_renderer = true
+position = [62.6717, 0.2757, -15.2394]
+euler = [0.0, 17.34, 0.0]
+scale = [5.355, 6.248, 5.308]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.277, 0.404, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 014 part 2"
+mesh_renderer = true
+position = [62.6717, 0.2757, -15.2394]
+euler = [0.0, 17.34, 0.0]
+scale = [5.355, 6.248, 5.308]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 014 part 3"
+mesh_renderer = true
+position = [62.6717, 0.2757, -15.2394]
+euler = [0.0, 17.34, 0.0]
+scale = [5.355, 6.248, 5.308]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.277, 0.404, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 015 part 1"
+mesh_renderer = true
+position = [58.3563, 0.351, -16.6215]
+euler = [0.0, 232.27, 0.0]
+scale = [6.946, 8.381, 6.604]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.25, 0.365, 0.173, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 015 part 2"
+mesh_renderer = true
+position = [58.3563, 0.351, -16.6215]
+euler = [0.0, 232.27, 0.0]
+scale = [6.946, 8.381, 6.604]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 015 part 3"
+mesh_renderer = true
+position = [58.3563, 0.351, -16.6215]
+euler = [0.0, 232.27, 0.0]
+scale = [6.946, 8.381, 6.604]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.25, 0.365, 0.173, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 016 part 1"
+mesh_renderer = true
+position = [64.8281, 0.1048, -24.2652]
+euler = [0.0, 20.16, 0.0]
+scale = [6.177, 7.614, 5.903]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.277, 0.405, 0.192, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 016 part 2"
+mesh_renderer = true
+position = [64.8281, 0.1048, -24.2652]
+euler = [0.0, 20.16, 0.0]
+scale = [6.177, 7.614, 5.903]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 016 part 3"
+mesh_renderer = true
+position = [64.8281, 0.1048, -24.2652]
+euler = [0.0, 20.16, 0.0]
+scale = [6.177, 7.614, 5.903]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.277, 0.405, 0.192, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 017 part 1"
+mesh_renderer = true
+position = [62.1164, 0.2138, -20.9079]
+euler = [0.0, 249.07, 0.0]
+scale = [6.376, 8.022, 6.345]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.239, 0.349, 0.165, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 017 part 2"
+mesh_renderer = true
+position = [62.1164, 0.2138, -20.9079]
+euler = [0.0, 249.07, 0.0]
+scale = [6.376, 8.022, 6.345]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 017 part 3"
+mesh_renderer = true
+position = [62.1164, 0.2138, -20.9079]
+euler = [0.0, 249.07, 0.0]
+scale = [6.376, 8.022, 6.345]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.239, 0.349, 0.165, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 018 part 1"
+mesh_renderer = true
+position = [58.5086, 0.2632, -22.0353]
+euler = [0.0, 283.33, 0.0]
+scale = [6.128, 8.65, 5.873]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.259, 0.378, 0.179, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 018 part 2"
+mesh_renderer = true
+position = [58.5086, 0.2632, -22.0353]
+euler = [0.0, 283.33, 0.0]
+scale = [6.128, 8.65, 5.873]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 018 part 3"
+mesh_renderer = true
+position = [58.5086, 0.2632, -22.0353]
+euler = [0.0, 283.33, 0.0]
+scale = [6.128, 8.65, 5.873]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.259, 0.378, 0.179, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 019 part 1"
+mesh_renderer = true
+position = [41.8891, 0.3432, -17.0278]
+euler = [0.0, 180.99, 0.0]
+scale = [6.631, 7.113, 6.718]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.252, 0.369, 0.175, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 019 part 2"
+mesh_renderer = true
+position = [41.8891, 0.3432, -17.0278]
+euler = [0.0, 180.99, 0.0]
+scale = [6.631, 7.113, 6.718]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 019 part 3"
+mesh_renderer = true
+position = [41.8891, 0.3432, -17.0278]
+euler = [0.0, 180.99, 0.0]
+scale = [6.631, 7.113, 6.718]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.252, 0.369, 0.175, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 020 part 1"
+mesh_renderer = true
+position = [58.1127, 0.4663, -11.4389]
+euler = [0.0, 86.36, 0.0]
+scale = [7.242, 8.743, 7.324]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.285, 0.416, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 020 part 2"
+mesh_renderer = true
+position = [58.1127, 0.4663, -11.4389]
+euler = [0.0, 86.36, 0.0]
+scale = [7.242, 8.743, 7.324]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 020 part 3"
+mesh_renderer = true
+position = [58.1127, 0.4663, -11.4389]
+euler = [0.0, 86.36, 0.0]
+scale = [7.242, 8.743, 7.324]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.285, 0.416, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 021 part 1"
+mesh_renderer = true
+position = [53.5751, 0.3417, -15.197]
+euler = [0.0, 209.23, 0.0]
+scale = [6.071, 7.789, 5.798]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.237, 0.346, 0.164, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 021 part 2"
+mesh_renderer = true
+position = [53.5751, 0.3417, -15.197]
+euler = [0.0, 209.23, 0.0]
+scale = [6.071, 7.789, 5.798]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 021 part 3"
+mesh_renderer = true
+position = [53.5751, 0.3417, -15.197]
+euler = [0.0, 209.23, 0.0]
+scale = [6.071, 7.789, 5.798]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.237, 0.346, 0.164, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 022 part 1"
+mesh_renderer = true
+position = [66.3471, 0.5005, -11.938]
+euler = [0.0, 164.43, 0.0]
+scale = [7.355, 8.815, 7.309]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.256, 0.374, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 022 part 2"
+mesh_renderer = true
+position = [66.3471, 0.5005, -11.938]
+euler = [0.0, 164.43, 0.0]
+scale = [7.355, 8.815, 7.309]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 022 part 3"
+mesh_renderer = true
+position = [66.3471, 0.5005, -11.938]
+euler = [0.0, 164.43, 0.0]
+scale = [7.355, 8.815, 7.309]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.256, 0.374, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 023 part 1"
+mesh_renderer = true
+position = [52.0155, 0.3032, 33.3465]
+euler = [0.0, 112.95, 0.0]
+scale = [6.098, 6.822, 6.307]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.266, 0.389, 0.184, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 023 part 2"
+mesh_renderer = true
+position = [52.0155, 0.3032, 33.3465]
+euler = [0.0, 112.95, 0.0]
+scale = [6.098, 6.822, 6.307]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 023 part 3"
+mesh_renderer = true
+position = [52.0155, 0.3032, 33.3465]
+euler = [0.0, 112.95, 0.0]
+scale = [6.098, 6.822, 6.307]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.266, 0.389, 0.184, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 024 part 1"
+mesh_renderer = true
+position = [23.7077, 0.2691, 24.2314]
+euler = [0.0, 60.77, 0.0]
+scale = [6.031, 6.941, 5.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.277, 0.405, 0.192, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 024 part 2"
+mesh_renderer = true
+position = [23.7077, 0.2691, 24.2314]
+euler = [0.0, 60.77, 0.0]
+scale = [6.031, 6.941, 5.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 024 part 3"
+mesh_renderer = true
+position = [23.7077, 0.2691, 24.2314]
+euler = [0.0, 60.77, 0.0]
+scale = [6.031, 6.941, 5.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.277, 0.405, 0.192, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 025 part 1"
+mesh_renderer = true
+position = [33.753, 0.4751, 19.9064]
+euler = [0.0, 88.58, 0.0]
+scale = [6.114, 8.574, 5.847]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.268, 0.392, 0.186, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 025 part 2"
+mesh_renderer = true
+position = [33.753, 0.4751, 19.9064]
+euler = [0.0, 88.58, 0.0]
+scale = [6.114, 8.574, 5.847]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 025 part 3"
+mesh_renderer = true
+position = [33.753, 0.4751, 19.9064]
+euler = [0.0, 88.58, 0.0]
+scale = [6.114, 8.574, 5.847]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.268, 0.392, 0.186, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 026 part 1"
+mesh_renderer = true
+position = [24.542, 0.3031, 36.0252]
+euler = [0.0, 206.11, 0.0]
+scale = [6.748, 8.112, 6.71]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.292, 0.426, 0.202, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 026 part 2"
+mesh_renderer = true
+position = [24.542, 0.3031, 36.0252]
+euler = [0.0, 206.11, 0.0]
+scale = [6.748, 8.112, 6.71]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 026 part 3"
+mesh_renderer = true
+position = [24.542, 0.3031, 36.0252]
+euler = [0.0, 206.11, 0.0]
+scale = [6.748, 8.112, 6.71]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.292, 0.426, 0.202, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 027 part 1"
+mesh_renderer = true
+position = [21.2809, 0.1918, 43.7623]
+euler = [0.0, 182.08, 0.0]
+scale = [5.292, 5.933, 5.434]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.284, 0.415, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 027 part 2"
+mesh_renderer = true
+position = [21.2809, 0.1918, 43.7623]
+euler = [0.0, 182.08, 0.0]
+scale = [5.292, 5.933, 5.434]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 027 part 3"
+mesh_renderer = true
+position = [21.2809, 0.1918, 43.7623]
+euler = [0.0, 182.08, 0.0]
+scale = [5.292, 5.933, 5.434]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.284, 0.415, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 028 part 1"
+mesh_renderer = true
+position = [14.7177, 0.3527, 21.3713]
+euler = [0.0, 81.15, 0.0]
+scale = [7.714, 8.487, 7.392]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.232, 0.339, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 028 part 2"
+mesh_renderer = true
+position = [14.7177, 0.3527, 21.3713]
+euler = [0.0, 81.15, 0.0]
+scale = [7.714, 8.487, 7.392]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 028 part 3"
+mesh_renderer = true
+position = [14.7177, 0.3527, 21.3713]
+euler = [0.0, 81.15, 0.0]
+scale = [7.714, 8.487, 7.392]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.232, 0.339, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 029 part 1"
+mesh_renderer = true
+position = [30.7495, 0.4356, 33.0533]
+euler = [0.0, 154.44, 0.0]
+scale = [4.714, 6.626, 4.9]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.249, 0.364, 0.173, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 029 part 2"
+mesh_renderer = true
+position = [30.7495, 0.4356, 33.0533]
+euler = [0.0, 154.44, 0.0]
+scale = [4.714, 6.626, 4.9]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 029 part 3"
+mesh_renderer = true
+position = [30.7495, 0.4356, 33.0533]
+euler = [0.0, 154.44, 0.0]
+scale = [4.714, 6.626, 4.9]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.249, 0.364, 0.173, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 030 part 1"
+mesh_renderer = true
+position = [24.4002, 0.2089, 28.0284]
+euler = [0.0, 241.31, 0.0]
+scale = [4.617, 6.14, 4.751]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.276, 0.403, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 030 part 2"
+mesh_renderer = true
+position = [24.4002, 0.2089, 28.0284]
+euler = [0.0, 241.31, 0.0]
+scale = [4.617, 6.14, 4.751]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 030 part 3"
+mesh_renderer = true
+position = [24.4002, 0.2089, 28.0284]
+euler = [0.0, 241.31, 0.0]
+scale = [4.617, 6.14, 4.751]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.276, 0.403, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 031 part 1"
+mesh_renderer = true
+position = [49.0689, 0.446, 24.6173]
+euler = [0.0, 338.44, 0.0]
+scale = [6.737, 8.125, 7.05]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.278, 0.406, 0.192, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 031 part 2"
+mesh_renderer = true
+position = [49.0689, 0.446, 24.6173]
+euler = [0.0, 338.44, 0.0]
+scale = [6.737, 8.125, 7.05]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 031 part 3"
+mesh_renderer = true
+position = [49.0689, 0.446, 24.6173]
+euler = [0.0, 338.44, 0.0]
+scale = [6.737, 8.125, 7.05]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.278, 0.406, 0.192, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 032 part 1"
+mesh_renderer = true
+position = [27.8285, 0.3887, 42.3719]
+euler = [0.0, 60.1, 0.0]
+scale = [7.508, 8.235, 7.84]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.257, 0.376, 0.178, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 032 part 2"
+mesh_renderer = true
+position = [27.8285, 0.3887, 42.3719]
+euler = [0.0, 60.1, 0.0]
+scale = [7.508, 8.235, 7.84]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 032 part 3"
+mesh_renderer = true
+position = [27.8285, 0.3887, 42.3719]
+euler = [0.0, 60.1, 0.0]
+scale = [7.508, 8.235, 7.84]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.257, 0.376, 0.178, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 033 part 1"
+mesh_renderer = true
+position = [52.7227, 0.3494, 37.2525]
+euler = [0.0, 44.91, 0.0]
+scale = [6.35, 8.206, 6.358]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.257, 0.376, 0.178, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 033 part 2"
+mesh_renderer = true
+position = [52.7227, 0.3494, 37.2525]
+euler = [0.0, 44.91, 0.0]
+scale = [6.35, 8.206, 6.358]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 033 part 3"
+mesh_renderer = true
+position = [52.7227, 0.3494, 37.2525]
+euler = [0.0, 44.91, 0.0]
+scale = [6.35, 8.206, 6.358]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.257, 0.376, 0.178, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 034 part 1"
+mesh_renderer = true
+position = [43.7645, 0.4762, 37.9359]
+euler = [0.0, 239.84, 0.0]
+scale = [5.338, 6.433, 5.214]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.254, 0.371, 0.176, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 034 part 2"
+mesh_renderer = true
+position = [43.7645, 0.4762, 37.9359]
+euler = [0.0, 239.84, 0.0]
+scale = [5.338, 6.433, 5.214]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 034 part 3"
+mesh_renderer = true
+position = [43.7645, 0.4762, 37.9359]
+euler = [0.0, 239.84, 0.0]
+scale = [5.338, 6.433, 5.214]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.254, 0.371, 0.176, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 035 part 1"
+mesh_renderer = true
+position = [42.5972, 0.3645, 46.0735]
+euler = [0.0, 203.09, 0.0]
+scale = [5.62, 7.711, 5.675]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.298, 0.435, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 035 part 2"
+mesh_renderer = true
+position = [42.5972, 0.3645, 46.0735]
+euler = [0.0, 203.09, 0.0]
+scale = [5.62, 7.711, 5.675]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 035 part 3"
+mesh_renderer = true
+position = [42.5972, 0.3645, 46.0735]
+euler = [0.0, 203.09, 0.0]
+scale = [5.62, 7.711, 5.675]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.298, 0.435, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 036 part 1"
+mesh_renderer = true
+position = [47.9643, 0.4717, 45.5189]
+euler = [0.0, 49.7, 0.0]
+scale = [7.121, 9.952, 7.147]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.298, 0.435, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 036 part 2"
+mesh_renderer = true
+position = [47.9643, 0.4717, 45.5189]
+euler = [0.0, 49.7, 0.0]
+scale = [7.121, 9.952, 7.147]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 036 part 3"
+mesh_renderer = true
+position = [47.9643, 0.4717, 45.5189]
+euler = [0.0, 49.7, 0.0]
+scale = [7.121, 9.952, 7.147]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.298, 0.435, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 037 part 1"
+mesh_renderer = true
+position = [48.2055, 0.3941, 29.417]
+euler = [0.0, 316.05, 0.0]
+scale = [4.579, 6.07, 4.483]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.236, 0.345, 0.163, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 037 part 2"
+mesh_renderer = true
+position = [48.2055, 0.3941, 29.417]
+euler = [0.0, 316.05, 0.0]
+scale = [4.579, 6.07, 4.483]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 037 part 3"
+mesh_renderer = true
+position = [48.2055, 0.3941, 29.417]
+euler = [0.0, 316.05, 0.0]
+scale = [4.579, 6.07, 4.483]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.236, 0.345, 0.163, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 038 part 1"
+mesh_renderer = true
+position = [57.1758, 0.1965, 42.0349]
+euler = [0.0, 1.94, 0.0]
+scale = [4.653, 6.526, 4.49]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.273, 0.399, 0.189, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 038 part 2"
+mesh_renderer = true
+position = [57.1758, 0.1965, 42.0349]
+euler = [0.0, 1.94, 0.0]
+scale = [4.653, 6.526, 4.49]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 038 part 3"
+mesh_renderer = true
+position = [57.1758, 0.1965, 42.0349]
+euler = [0.0, 1.94, 0.0]
+scale = [4.653, 6.526, 4.49]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.273, 0.399, 0.189, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 039 part 1"
+mesh_renderer = true
+position = [58.398, 0.1611, 27.9543]
+euler = [0.0, 125.61, 0.0]
+scale = [6.162, 7.962, 6.393]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.26, 0.379, 0.18, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 039 part 2"
+mesh_renderer = true
+position = [58.398, 0.1611, 27.9543]
+euler = [0.0, 125.61, 0.0]
+scale = [6.162, 7.962, 6.393]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 039 part 3"
+mesh_renderer = true
+position = [58.398, 0.1611, 27.9543]
+euler = [0.0, 125.61, 0.0]
+scale = [6.162, 7.962, 6.393]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.26, 0.379, 0.18, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 040 part 1"
+mesh_renderer = true
+position = [39.2863, 0.6011, 41.4028]
+euler = [0.0, 339.83, 0.0]
+scale = [7.007, 9.773, 6.702]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.223, 0.326, 0.154, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 040 part 2"
+mesh_renderer = true
+position = [39.2863, 0.6011, 41.4028]
+euler = [0.0, 339.83, 0.0]
+scale = [7.007, 9.773, 6.702]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 040 part 3"
+mesh_renderer = true
+position = [39.2863, 0.6011, 41.4028]
+euler = [0.0, 339.83, 0.0]
+scale = [7.007, 9.773, 6.702]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.223, 0.326, 0.154, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 041 part 1"
+mesh_renderer = true
+position = [43.2656, 0.5503, 34.3798]
+euler = [0.0, 0.01, 0.0]
+scale = [6.0, 6.916, 5.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.233, 0.34, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 041 part 2"
+mesh_renderer = true
+position = [43.2656, 0.5503, 34.3798]
+euler = [0.0, 0.01, 0.0]
+scale = [6.0, 6.916, 5.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 041 part 3"
+mesh_renderer = true
+position = [43.2656, 0.5503, 34.3798]
+euler = [0.0, 0.01, 0.0]
+scale = [6.0, 6.916, 5.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.233, 0.34, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 042 part 1"
+mesh_renderer = true
+position = [64.7893, 0.1491, 41.6145]
+euler = [0.0, 53.1, 0.0]
+scale = [5.917, 7.112, 6.076]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.239, 0.35, 0.166, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 042 part 2"
+mesh_renderer = true
+position = [64.7893, 0.1491, 41.6145]
+euler = [0.0, 53.1, 0.0]
+scale = [5.917, 7.112, 6.076]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 042 part 3"
+mesh_renderer = true
+position = [64.7893, 0.1491, 41.6145]
+euler = [0.0, 53.1, 0.0]
+scale = [5.917, 7.112, 6.076]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.239, 0.35, 0.166, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 043 part 1"
+mesh_renderer = true
+position = [56.7578, 0.1014, 23.2277]
+euler = [0.0, 196.58, 0.0]
+scale = [4.822, 5.093, 4.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.285, 0.417, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 043 part 2"
+mesh_renderer = true
+position = [56.7578, 0.1014, 23.2277]
+euler = [0.0, 196.58, 0.0]
+scale = [4.822, 5.093, 4.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 043 part 3"
+mesh_renderer = true
+position = [56.7578, 0.1014, 23.2277]
+euler = [0.0, 196.58, 0.0]
+scale = [4.822, 5.093, 4.737]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.285, 0.417, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 044 part 1"
+mesh_renderer = true
+position = [43.51, 0.6334, 30.0909]
+euler = [0.0, 55.15, 0.0]
+scale = [6.065, 8.475, 5.835]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.24, 0.351, 0.166, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 044 part 2"
+mesh_renderer = true
+position = [43.51, 0.6334, 30.0909]
+euler = [0.0, 55.15, 0.0]
+scale = [6.065, 8.475, 5.835]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 044 part 3"
+mesh_renderer = true
+position = [43.51, 0.6334, 30.0909]
+euler = [0.0, 55.15, 0.0]
+scale = [6.065, 8.475, 5.835]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.24, 0.351, 0.166, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 045 part 1"
+mesh_renderer = true
+position = [37.0985, 0.7186, 27.245]
+euler = [0.0, 171.29, 0.0]
+scale = [7.28, 10.072, 6.951]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.256, 0.375, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 045 part 2"
+mesh_renderer = true
+position = [37.0985, 0.7186, 27.245]
+euler = [0.0, 171.29, 0.0]
+scale = [7.28, 10.072, 6.951]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 045 part 3"
+mesh_renderer = true
+position = [37.0985, 0.7186, 27.245]
+euler = [0.0, 171.29, 0.0]
+scale = [7.28, 10.072, 6.951]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.256, 0.375, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 046 part 1"
+mesh_renderer = true
+position = [58.8955, 0.0161, 35.8098]
+euler = [0.0, 186.08, 0.0]
+scale = [4.815, 5.156, 4.929]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.24, 0.351, 0.166, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 046 part 2"
+mesh_renderer = true
+position = [58.8955, 0.0161, 35.8098]
+euler = [0.0, 186.08, 0.0]
+scale = [4.815, 5.156, 4.929]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 046 part 3"
+mesh_renderer = true
+position = [58.8955, 0.0161, 35.8098]
+euler = [0.0, 186.08, 0.0]
+scale = [4.815, 5.156, 4.929]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.24, 0.351, 0.166, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 047 part 1"
+mesh_renderer = true
+position = [59.9263, 0.0254, 32.0721]
+euler = [0.0, 225.15, 0.0]
+scale = [5.361, 6.228, 5.279]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.275, 0.402, 0.19, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 047 part 2"
+mesh_renderer = true
+position = [59.9263, 0.0254, 32.0721]
+euler = [0.0, 225.15, 0.0]
+scale = [5.361, 6.228, 5.279]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 047 part 3"
+mesh_renderer = true
+position = [59.9263, 0.0254, 32.0721]
+euler = [0.0, 225.15, 0.0]
+scale = [5.361, 6.228, 5.279]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.275, 0.402, 0.19, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 048 part 1"
+mesh_renderer = true
+position = [39.261, 0.7875, 33.4493]
+euler = [0.0, 99.19, 0.0]
+scale = [7.704, 10.873, 7.847]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.255, 0.373, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 048 part 2"
+mesh_renderer = true
+position = [39.261, 0.7875, 33.4493]
+euler = [0.0, 99.19, 0.0]
+scale = [7.704, 10.873, 7.847]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 048 part 3"
+mesh_renderer = true
+position = [39.261, 0.7875, 33.4493]
+euler = [0.0, 99.19, 0.0]
+scale = [7.704, 10.873, 7.847]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.255, 0.373, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 049 part 1"
+mesh_renderer = true
+position = [69.8873, 0.2364, 42.6178]
+euler = [0.0, 11.55, 0.0]
+scale = [6.673, 7.98, 6.777]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.255, 0.372, 0.176, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 049 part 2"
+mesh_renderer = true
+position = [69.8873, 0.2364, 42.6178]
+euler = [0.0, 11.55, 0.0]
+scale = [6.673, 7.98, 6.777]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 049 part 3"
+mesh_renderer = true
+position = [69.8873, 0.2364, 42.6178]
+euler = [0.0, 11.55, 0.0]
+scale = [6.673, 7.98, 6.777]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.255, 0.372, 0.176, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 050 part 1"
+mesh_renderer = true
+position = [62.4951, 0.2888, 48.5122]
+euler = [0.0, 44.54, 0.0]
+scale = [4.888, 5.998, 5.114]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.227, 0.332, 0.157, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 050 part 2"
+mesh_renderer = true
+position = [62.4951, 0.2888, 48.5122]
+euler = [0.0, 44.54, 0.0]
+scale = [4.888, 5.998, 5.114]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 050 part 3"
+mesh_renderer = true
+position = [62.4951, 0.2888, 48.5122]
+euler = [0.0, 44.54, 0.0]
+scale = [4.888, 5.998, 5.114]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.227, 0.332, 0.157, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 051 part 1"
+mesh_renderer = true
+position = [61.2147, 0.5442, 52.2631]
+euler = [0.0, 293.66, 0.0]
+scale = [7.362, 9.308, 7.2]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.297, 0.434, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 051 part 2"
+mesh_renderer = true
+position = [61.2147, 0.5442, 52.2631]
+euler = [0.0, 293.66, 0.0]
+scale = [7.362, 9.308, 7.2]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 051 part 3"
+mesh_renderer = true
+position = [61.2147, 0.5442, 52.2631]
+euler = [0.0, 293.66, 0.0]
+scale = [7.362, 9.308, 7.2]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.297, 0.434, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 052 part 1"
+mesh_renderer = true
+position = [65.3675, 0.206, 45.9652]
+euler = [0.0, 126.12, 0.0]
+scale = [4.668, 5.813, 4.858]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.269, 0.393, 0.186, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 052 part 2"
+mesh_renderer = true
+position = [65.3675, 0.206, 45.9652]
+euler = [0.0, 126.12, 0.0]
+scale = [4.668, 5.813, 4.858]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 052 part 3"
+mesh_renderer = true
+position = [65.3675, 0.206, 45.9652]
+euler = [0.0, 126.12, 0.0]
+scale = [4.668, 5.813, 4.858]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.269, 0.393, 0.186, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 053 part 1"
+mesh_renderer = true
+position = [60.9038, 0.1573, 43.8517]
+euler = [0.0, 181.11, 0.0]
+scale = [4.55, 5.795, 4.679]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.255, 0.373, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 053 part 2"
+mesh_renderer = true
+position = [60.9038, 0.1573, 43.8517]
+euler = [0.0, 181.11, 0.0]
+scale = [4.55, 5.795, 4.679]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 053 part 3"
+mesh_renderer = true
+position = [60.9038, 0.1573, 43.8517]
+euler = [0.0, 181.11, 0.0]
+scale = [4.55, 5.795, 4.679]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.255, 0.373, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 054 part 1"
+mesh_renderer = true
+position = [70.7678, 0.3909, 49.0335]
+euler = [0.0, 309.0, 0.0]
+scale = [6.728, 7.904, 6.427]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.267, 0.39, 0.185, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 054 part 2"
+mesh_renderer = true
+position = [70.7678, 0.3909, 49.0335]
+euler = [0.0, 309.0, 0.0]
+scale = [6.728, 7.904, 6.427]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 054 part 3"
+mesh_renderer = true
+position = [70.7678, 0.3909, 49.0335]
+euler = [0.0, 309.0, 0.0]
+scale = [6.728, 7.904, 6.427]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.267, 0.39, 0.185, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 055 part 1"
+mesh_renderer = true
+position = [65.5874, 0.0089, 37.5783]
+euler = [0.0, 55.88, 0.0]
+scale = [4.699, 6.073, 4.473]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.233, 0.34, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 055 part 2"
+mesh_renderer = true
+position = [65.5874, 0.0089, 37.5783]
+euler = [0.0, 55.88, 0.0]
+scale = [4.699, 6.073, 4.473]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 055 part 3"
+mesh_renderer = true
+position = [65.5874, 0.0089, 37.5783]
+euler = [0.0, 55.88, 0.0]
+scale = [4.699, 6.073, 4.473]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.233, 0.34, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 056 part 1"
+mesh_renderer = true
+position = [72.8987, 0.1066, 38.715]
+euler = [0.0, 203.13, 0.0]
+scale = [4.969, 5.932, 4.75]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.245, 0.358, 0.169, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 056 part 2"
+mesh_renderer = true
+position = [72.8987, 0.1066, 38.715]
+euler = [0.0, 203.13, 0.0]
+scale = [4.969, 5.932, 4.75]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 056 part 3"
+mesh_renderer = true
+position = [72.8987, 0.1066, 38.715]
+euler = [0.0, 203.13, 0.0]
+scale = [4.969, 5.932, 4.75]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.245, 0.358, 0.169, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 057 part 1"
+mesh_renderer = true
+position = [46.3787, 0.362, 40.4719]
+euler = [0.0, 94.06, 0.0]
+scale = [4.957, 5.803, 5.099]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.235, 0.344, 0.163, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 057 part 2"
+mesh_renderer = true
+position = [46.3787, 0.362, 40.4719]
+euler = [0.0, 94.06, 0.0]
+scale = [4.957, 5.803, 5.099]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 057 part 3"
+mesh_renderer = true
+position = [46.3787, 0.362, 40.4719]
+euler = [0.0, 94.06, 0.0]
+scale = [4.957, 5.803, 5.099]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.235, 0.344, 0.163, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 058 part 1"
+mesh_renderer = true
+position = [73.7987, 0.5476, 57.1266]
+euler = [0.0, 89.07, 0.0]
+scale = [7.278, 9.232, 7.52]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.228, 0.333, 0.158, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 058 part 2"
+mesh_renderer = true
+position = [73.7987, 0.5476, 57.1266]
+euler = [0.0, 89.07, 0.0]
+scale = [7.278, 9.232, 7.52]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 058 part 3"
+mesh_renderer = true
+position = [73.7987, 0.5476, 57.1266]
+euler = [0.0, 89.07, 0.0]
+scale = [7.278, 9.232, 7.52]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.228, 0.333, 0.158, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 059 part 1"
+mesh_renderer = true
+position = [55.7492, 0.1785, 31.5406]
+euler = [0.0, 299.95, 0.0]
+scale = [6.43, 6.944, 6.622]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.265, 0.388, 0.184, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 059 part 2"
+mesh_renderer = true
+position = [55.7492, 0.1785, 31.5406]
+euler = [0.0, 299.95, 0.0]
+scale = [6.43, 6.944, 6.622]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 059 part 3"
+mesh_renderer = true
+position = [55.7492, 0.1785, 31.5406]
+euler = [0.0, 299.95, 0.0]
+scale = [6.43, 6.944, 6.622]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.265, 0.388, 0.184, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 060 part 1"
+mesh_renderer = true
+position = [60.7061, 0.1558, 39.6622]
+euler = [0.0, 271.5, 0.0]
+scale = [5.769, 7.548, 5.814]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.227, 0.332, 0.157, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 060 part 2"
+mesh_renderer = true
+position = [60.7061, 0.1558, 39.6622]
+euler = [0.0, 271.5, 0.0]
+scale = [5.769, 7.548, 5.814]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 060 part 3"
+mesh_renderer = true
+position = [60.7061, 0.1558, 39.6622]
+euler = [0.0, 271.5, 0.0]
+scale = [5.769, 7.548, 5.814]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.227, 0.332, 0.157, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 061 part 1"
+mesh_renderer = true
+position = [52.2092, 0.2543, 50.2624]
+euler = [0.0, 308.67, 0.0]
+scale = [5.257, 6.12, 5.352]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.229, 0.335, 0.158, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 061 part 2"
+mesh_renderer = true
+position = [52.2092, 0.2543, 50.2624]
+euler = [0.0, 308.67, 0.0]
+scale = [5.257, 6.12, 5.352]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 061 part 3"
+mesh_renderer = true
+position = [52.2092, 0.2543, 50.2624]
+euler = [0.0, 308.67, 0.0]
+scale = [5.257, 6.12, 5.352]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.229, 0.335, 0.158, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 062 part 1"
+mesh_renderer = true
+position = [51.0585, 0.4151, 40.3334]
+euler = [0.0, 124.74, 0.0]
+scale = [7.018, 8.715, 7.159]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.246, 0.36, 0.171, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 062 part 2"
+mesh_renderer = true
+position = [51.0585, 0.4151, 40.3334]
+euler = [0.0, 124.74, 0.0]
+scale = [7.018, 8.715, 7.159]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 062 part 3"
+mesh_renderer = true
+position = [51.0585, 0.4151, 40.3334]
+euler = [0.0, 124.74, 0.0]
+scale = [7.018, 8.715, 7.159]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.246, 0.36, 0.171, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 063 part 1"
+mesh_renderer = true
+position = [20.2975, 0.4148, 57.2013]
+euler = [0.0, 331.79, 0.0]
+scale = [4.622, 6.004, 4.647]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.236, 0.344, 0.163, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 063 part 2"
+mesh_renderer = true
+position = [20.2975, 0.4148, 57.2013]
+euler = [0.0, 331.79, 0.0]
+scale = [4.622, 6.004, 4.647]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 063 part 3"
+mesh_renderer = true
+position = [20.2975, 0.4148, 57.2013]
+euler = [0.0, 331.79, 0.0]
+scale = [4.622, 6.004, 4.647]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.236, 0.344, 0.163, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 064 part 1"
+mesh_renderer = true
+position = [49.1906, 0.1969, 58.1685]
+euler = [0.0, 273.38, 0.0]
+scale = [5.439, 6.927, 5.522]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.246, 0.36, 0.171, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 064 part 2"
+mesh_renderer = true
+position = [49.1906, 0.1969, 58.1685]
+euler = [0.0, 273.38, 0.0]
+scale = [5.439, 6.927, 5.522]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 064 part 3"
+mesh_renderer = true
+position = [49.1906, 0.1969, 58.1685]
+euler = [0.0, 273.38, 0.0]
+scale = [5.439, 6.927, 5.522]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.246, 0.36, 0.171, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 065 part 1"
+mesh_renderer = true
+position = [38.9225, 0.2602, 46.5931]
+euler = [0.0, 85.14, 0.0]
+scale = [5.286, 5.886, 5.162]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.299, 0.436, 0.207, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 065 part 2"
+mesh_renderer = true
+position = [38.9225, 0.2602, 46.5931]
+euler = [0.0, 85.14, 0.0]
+scale = [5.286, 5.886, 5.162]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 065 part 3"
+mesh_renderer = true
+position = [38.9225, 0.2602, 46.5931]
+euler = [0.0, 85.14, 0.0]
+scale = [5.286, 5.886, 5.162]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.299, 0.436, 0.207, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 066 part 1"
+mesh_renderer = true
+position = [57.3327, 0.339, 55.0489]
+euler = [0.0, 332.1, 0.0]
+scale = [5.06, 5.378, 4.99]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.288, 0.421, 0.199, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 066 part 2"
+mesh_renderer = true
+position = [57.3327, 0.339, 55.0489]
+euler = [0.0, 332.1, 0.0]
+scale = [5.06, 5.378, 4.99]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 066 part 3"
+mesh_renderer = true
+position = [57.3327, 0.339, 55.0489]
+euler = [0.0, 332.1, 0.0]
+scale = [5.06, 5.378, 4.99]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.288, 0.421, 0.199, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 067 part 1"
+mesh_renderer = true
+position = [26.0916, 0.3372, 51.4654]
+euler = [0.0, 303.14, 0.0]
+scale = [6.635, 7.717, 6.389]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.292, 0.427, 0.202, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 067 part 2"
+mesh_renderer = true
+position = [26.0916, 0.3372, 51.4654]
+euler = [0.0, 303.14, 0.0]
+scale = [6.635, 7.717, 6.389]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 067 part 3"
+mesh_renderer = true
+position = [26.0916, 0.3372, 51.4654]
+euler = [0.0, 303.14, 0.0]
+scale = [6.635, 7.717, 6.389]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.292, 0.427, 0.202, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 068 part 1"
+mesh_renderer = true
+position = [37.1562, 0.1756, 63.6431]
+euler = [0.0, 160.17, 0.0]
+scale = [7.287, 10.302, 6.972]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.298, 0.435, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 068 part 2"
+mesh_renderer = true
+position = [37.1562, 0.1756, 63.6431]
+euler = [0.0, 160.17, 0.0]
+scale = [7.287, 10.302, 6.972]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 068 part 3"
+mesh_renderer = true
+position = [37.1562, 0.1756, 63.6431]
+euler = [0.0, 160.17, 0.0]
+scale = [7.287, 10.302, 6.972]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.298, 0.435, 0.206, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 069 part 1"
+mesh_renderer = true
+position = [59.158, 0.4169, 69.5842]
+euler = [0.0, 292.29, 0.0]
+scale = [4.743, 5.927, 4.972]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.276, 0.403, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 069 part 2"
+mesh_renderer = true
+position = [59.158, 0.4169, 69.5842]
+euler = [0.0, 292.29, 0.0]
+scale = [4.743, 5.927, 4.972]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 069 part 3"
+mesh_renderer = true
+position = [59.158, 0.4169, 69.5842]
+euler = [0.0, 292.29, 0.0]
+scale = [4.743, 5.927, 4.972]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.276, 0.403, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 070 part 1"
+mesh_renderer = true
+position = [29.0974, 0.2565, 62.5749]
+euler = [0.0, 113.97, 0.0]
+scale = [6.145, 8.187, 6.143]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.249, 0.364, 0.172, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 070 part 2"
+mesh_renderer = true
+position = [29.0974, 0.2565, 62.5749]
+euler = [0.0, 113.97, 0.0]
+scale = [6.145, 8.187, 6.143]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 070 part 3"
+mesh_renderer = true
+position = [29.0974, 0.2565, 62.5749]
+euler = [0.0, 113.97, 0.0]
+scale = [6.145, 8.187, 6.143]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.249, 0.364, 0.172, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 071 part 1"
+mesh_renderer = true
+position = [24.8487, 0.2583, 68.9633]
+euler = [0.0, 55.59, 0.0]
+scale = [5.038, 5.385, 4.9]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.221, 0.323, 0.153, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 071 part 2"
+mesh_renderer = true
+position = [24.8487, 0.2583, 68.9633]
+euler = [0.0, 55.59, 0.0]
+scale = [5.038, 5.385, 4.9]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 071 part 3"
+mesh_renderer = true
+position = [24.8487, 0.2583, 68.9633]
+euler = [0.0, 55.59, 0.0]
+scale = [5.038, 5.385, 4.9]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.221, 0.323, 0.153, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 072 part 1"
+mesh_renderer = true
+position = [42.5218, -0.0227, 67.9688]
+euler = [0.0, 304.98, 0.0]
+scale = [4.981, 5.379, 5.213]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.256, 0.374, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 072 part 2"
+mesh_renderer = true
+position = [42.5218, -0.0227, 67.9688]
+euler = [0.0, 304.98, 0.0]
+scale = [4.981, 5.379, 5.213]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 072 part 3"
+mesh_renderer = true
+position = [42.5218, -0.0227, 67.9688]
+euler = [0.0, 304.98, 0.0]
+scale = [4.981, 5.379, 5.213]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.256, 0.374, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 073 part 1"
+mesh_renderer = true
+position = [28.2873, 0.3459, 46.8601]
+euler = [0.0, 250.24, 0.0]
+scale = [6.205, 7.878, 6.183]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.233, 0.341, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 073 part 2"
+mesh_renderer = true
+position = [28.2873, 0.3459, 46.8601]
+euler = [0.0, 250.24, 0.0]
+scale = [6.205, 7.878, 6.183]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 073 part 3"
+mesh_renderer = true
+position = [28.2873, 0.3459, 46.8601]
+euler = [0.0, 250.24, 0.0]
+scale = [6.205, 7.878, 6.183]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.233, 0.341, 0.161, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 074 part 1"
+mesh_renderer = true
+position = [61.2821, 0.6643, 59.7864]
+euler = [0.0, 329.57, 0.0]
+scale = [6.618, 9.263, 6.453]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.276, 0.403, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 074 part 2"
+mesh_renderer = true
+position = [61.2821, 0.6643, 59.7864]
+euler = [0.0, 329.57, 0.0]
+scale = [6.618, 9.263, 6.453]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 074 part 3"
+mesh_renderer = true
+position = [61.2821, 0.6643, 59.7864]
+euler = [0.0, 329.57, 0.0]
+scale = [6.618, 9.263, 6.453]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.276, 0.403, 0.191, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 075 part 1"
+mesh_renderer = true
+position = [53.1454, 0.3838, 62.9336]
+euler = [0.0, 83.04, 0.0]
+scale = [6.766, 8.112, 6.731]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.295, 0.431, 0.204, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 075 part 2"
+mesh_renderer = true
+position = [53.1454, 0.3838, 62.9336]
+euler = [0.0, 83.04, 0.0]
+scale = [6.766, 8.112, 6.731]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 075 part 3"
+mesh_renderer = true
+position = [53.1454, 0.3838, 62.9336]
+euler = [0.0, 83.04, 0.0]
+scale = [6.766, 8.112, 6.731]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.295, 0.431, 0.204, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 076 part 1"
+mesh_renderer = true
+position = [65.0355, 0.6336, 60.1063]
+euler = [0.0, 119.17, 0.0]
+scale = [6.532, 7.9, 6.591]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.228, 0.333, 0.158, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 076 part 2"
+mesh_renderer = true
+position = [65.0355, 0.6336, 60.1063]
+euler = [0.0, 119.17, 0.0]
+scale = [6.532, 7.9, 6.591]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 076 part 3"
+mesh_renderer = true
+position = [65.0355, 0.6336, 60.1063]
+euler = [0.0, 119.17, 0.0]
+scale = [6.532, 7.9, 6.591]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.228, 0.333, 0.158, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 077 part 1"
+mesh_renderer = true
+position = [63.3, 0.5958, 66.4873]
+euler = [0.0, 316.07, 0.0]
+scale = [6.487, 7.498, 6.677]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.295, 0.431, 0.204, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 077 part 2"
+mesh_renderer = true
+position = [63.3, 0.5958, 66.4873]
+euler = [0.0, 316.07, 0.0]
+scale = [6.487, 7.498, 6.677]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 077 part 3"
+mesh_renderer = true
+position = [63.3, 0.5958, 66.4873]
+euler = [0.0, 316.07, 0.0]
+scale = [6.487, 7.498, 6.677]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.295, 0.431, 0.204, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 078 part 1"
+mesh_renderer = true
+position = [69.3734, 0.4547, 53.0924]
+euler = [0.0, 151.2, 0.0]
+scale = [6.695, 7.089, 6.554]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.294, 0.429, 0.203, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 078 part 2"
+mesh_renderer = true
+position = [69.3734, 0.4547, 53.0924]
+euler = [0.0, 151.2, 0.0]
+scale = [6.695, 7.089, 6.554]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 078 part 3"
+mesh_renderer = true
+position = [69.3734, 0.4547, 53.0924]
+euler = [0.0, 151.2, 0.0]
+scale = [6.695, 7.089, 6.554]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.294, 0.429, 0.203, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 079 part 1"
+mesh_renderer = true
+position = [66.3641, 0.4607, 70.2678]
+euler = [0.0, 44.21, 0.0]
+scale = [5.341, 5.824, 5.277]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.255, 0.373, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 079 part 2"
+mesh_renderer = true
+position = [66.3641, 0.4607, 70.2678]
+euler = [0.0, 44.21, 0.0]
+scale = [5.341, 5.824, 5.277]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 079 part 3"
+mesh_renderer = true
+position = [66.3641, 0.4607, 70.2678]
+euler = [0.0, 44.21, 0.0]
+scale = [5.341, 5.824, 5.277]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.255, 0.373, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 080 part 1"
+mesh_renderer = true
+position = [58.9893, 0.4406, 64.0291]
+euler = [0.0, 298.05, 0.0]
+scale = [5.287, 5.557, 5.056]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.252, 0.369, 0.175, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 080 part 2"
+mesh_renderer = true
+position = [58.9893, 0.4406, 64.0291]
+euler = [0.0, 298.05, 0.0]
+scale = [5.287, 5.557, 5.056]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 080 part 3"
+mesh_renderer = true
+position = [58.9893, 0.4406, 64.0291]
+euler = [0.0, 298.05, 0.0]
+scale = [5.287, 5.557, 5.056]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.252, 0.369, 0.175, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 081 part 1"
+mesh_renderer = true
+position = [55.3863, 0.565, 68.7523]
+euler = [0.0, 69.15, 0.0]
+scale = [7.417, 10.532, 7.472]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.264, 0.386, 0.183, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 081 part 2"
+mesh_renderer = true
+position = [55.3863, 0.565, 68.7523]
+euler = [0.0, 69.15, 0.0]
+scale = [7.417, 10.532, 7.472]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 081 part 3"
+mesh_renderer = true
+position = [55.3863, 0.565, 68.7523]
+euler = [0.0, 69.15, 0.0]
+scale = [7.417, 10.532, 7.472]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.264, 0.386, 0.183, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 082 part 1"
+mesh_renderer = true
+position = [67.7063, 0.5636, 65.5106]
+euler = [0.0, 171.29, 0.0]
+scale = [5.099, 6.697, 5.089]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.284, 0.415, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 082 part 2"
+mesh_renderer = true
+position = [67.7063, 0.5636, 65.5106]
+euler = [0.0, 171.29, 0.0]
+scale = [5.099, 6.697, 5.089]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 082 part 3"
+mesh_renderer = true
+position = [67.7063, 0.5636, 65.5106]
+euler = [0.0, 171.29, 0.0]
+scale = [5.099, 6.697, 5.089]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.284, 0.415, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 083 part 1"
+mesh_renderer = true
+position = [54.8398, 0.3625, 57.5264]
+euler = [0.0, 38.75, 0.0]
+scale = [5.221, 6.732, 5.135]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.226, 0.33, 0.156, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 083 part 2"
+mesh_renderer = true
+position = [54.8398, 0.3625, 57.5264]
+euler = [0.0, 38.75, 0.0]
+scale = [5.221, 6.732, 5.135]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 083 part 3"
+mesh_renderer = true
+position = [54.8398, 0.3625, 57.5264]
+euler = [0.0, 38.75, 0.0]
+scale = [5.221, 6.732, 5.135]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.226, 0.33, 0.156, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 084 part 1"
+mesh_renderer = true
+position = [72.5928, 0.4471, 66.3838]
+euler = [0.0, 274.66, 0.0]
+scale = [5.139, 6.26, 5.111]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.239, 0.35, 0.166, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 084 part 2"
+mesh_renderer = true
+position = [72.5928, 0.4471, 66.3838]
+euler = [0.0, 274.66, 0.0]
+scale = [5.139, 6.26, 5.111]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 084 part 3"
+mesh_renderer = true
+position = [72.5928, 0.4471, 66.3838]
+euler = [0.0, 274.66, 0.0]
+scale = [5.139, 6.26, 5.111]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.239, 0.35, 0.166, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 085 part 1"
+mesh_renderer = true
+position = [29.9598, 0.1897, 69.9909]
+euler = [0.0, 79.46, 0.0]
+scale = [5.651, 6.778, 5.755]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.234, 0.342, 0.162, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 085 part 2"
+mesh_renderer = true
+position = [29.9598, 0.1897, 69.9909]
+euler = [0.0, 79.46, 0.0]
+scale = [5.651, 6.778, 5.755]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Eastern woodland tree 085 part 3"
+mesh_renderer = true
+position = [29.9598, 0.1897, 69.9909]
+euler = [0.0, 79.46, 0.0]
+scale = [5.651, 6.778, 5.755]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.234, 0.342, 0.162, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 086 part 1"
+mesh_renderer = true
+position = [11.5169, 0.4616, 47.3164]
+euler = [0.0, 50.62, 0.0]
+scale = [7.662, 10.118, 7.7]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.249, 0.364, 0.173, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 086 part 2"
+mesh_renderer = true
+position = [11.5169, 0.4616, 47.3164]
+euler = [0.0, 50.62, 0.0]
+scale = [7.662, 10.118, 7.7]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 086 part 3"
+mesh_renderer = true
+position = [11.5169, 0.4616, 47.3164]
+euler = [0.0, 50.62, 0.0]
+scale = [7.662, 10.118, 7.7]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.249, 0.364, 0.173, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 087 part 1"
+mesh_renderer = true
+position = [0.4516, 0.3545, 54.5536]
+euler = [0.0, 336.45, 0.0]
+scale = [7.321, 7.87, 7.221]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.273, 0.399, 0.189, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 087 part 2"
+mesh_renderer = true
+position = [0.4516, 0.3545, 54.5536]
+euler = [0.0, 336.45, 0.0]
+scale = [7.321, 7.87, 7.221]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 087 part 3"
+mesh_renderer = true
+position = [0.4516, 0.3545, 54.5536]
+euler = [0.0, 336.45, 0.0]
+scale = [7.321, 7.87, 7.221]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.273, 0.399, 0.189, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 088 part 1"
+mesh_renderer = true
+position = [7.3786, 0.6064, 68.6801]
+euler = [0.0, 328.81, 0.0]
+scale = [7.743, 9.255, 7.439]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.284, 0.415, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 088 part 2"
+mesh_renderer = true
+position = [7.3786, 0.6064, 68.6801]
+euler = [0.0, 328.81, 0.0]
+scale = [7.743, 9.255, 7.439]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 088 part 3"
+mesh_renderer = true
+position = [7.3786, 0.6064, 68.6801]
+euler = [0.0, 328.81, 0.0]
+scale = [7.743, 9.255, 7.439]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.284, 0.415, 0.197, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 089 part 1"
+mesh_renderer = true
+position = [-11.1366, 0.1117, 68.6237]
+euler = [0.0, 263.27, 0.0]
+scale = [6.87, 8.117, 6.989]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.243, 0.356, 0.168, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 089 part 2"
+mesh_renderer = true
+position = [-11.1366, 0.1117, 68.6237]
+euler = [0.0, 263.27, 0.0]
+scale = [6.87, 8.117, 6.989]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 089 part 3"
+mesh_renderer = true
+position = [-11.1366, 0.1117, 68.6237]
+euler = [0.0, 263.27, 0.0]
+scale = [6.87, 8.117, 6.989]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.243, 0.356, 0.168, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 090 part 1"
+mesh_renderer = true
+position = [3.4969, 0.2295, 42.3954]
+euler = [0.0, 20.75, 0.0]
+scale = [5.178, 6.702, 5.381]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.278, 0.407, 0.193, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 090 part 2"
+mesh_renderer = true
+position = [3.4969, 0.2295, 42.3954]
+euler = [0.0, 20.75, 0.0]
+scale = [5.178, 6.702, 5.381]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 090 part 3"
+mesh_renderer = true
+position = [3.4969, 0.2295, 42.3954]
+euler = [0.0, 20.75, 0.0]
+scale = [5.178, 6.702, 5.381]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.278, 0.407, 0.193, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 091 part 1"
+mesh_renderer = true
+position = [-4.792, 0.1977, 51.177]
+euler = [0.0, 81.54, 0.0]
+scale = [5.493, 6.241, 5.499]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.295, 0.431, 0.204, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 091 part 2"
+mesh_renderer = true
+position = [-4.792, 0.1977, 51.177]
+euler = [0.0, 81.54, 0.0]
+scale = [5.493, 6.241, 5.499]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 091 part 3"
+mesh_renderer = true
+position = [-4.792, 0.1977, 51.177]
+euler = [0.0, 81.54, 0.0]
+scale = [5.493, 6.241, 5.499]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.295, 0.431, 0.204, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 092 part 1"
+mesh_renderer = true
+position = [-17.4943, 0.0476, 56.7321]
+euler = [0.0, 9.77, 0.0]
+scale = [4.592, 6.2, 4.415]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.256, 0.375, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 092 part 2"
+mesh_renderer = true
+position = [-17.4943, 0.0476, 56.7321]
+euler = [0.0, 9.77, 0.0]
+scale = [4.592, 6.2, 4.415]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 092 part 3"
+mesh_renderer = true
+position = [-17.4943, 0.0476, 56.7321]
+euler = [0.0, 9.77, 0.0]
+scale = [4.592, 6.2, 4.415]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.256, 0.375, 0.177, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 093 part 1"
+mesh_renderer = true
+position = [-32.1685, 0.5093, 53.4793]
+euler = [0.0, 344.08, 0.0]
+scale = [7.222, 8.841, 7.452]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.222, 0.325, 0.154, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 093 part 2"
+mesh_renderer = true
+position = [-32.1685, 0.5093, 53.4793]
+euler = [0.0, 344.08, 0.0]
+scale = [7.222, 8.841, 7.452]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 093 part 3"
+mesh_renderer = true
+position = [-32.1685, 0.5093, 53.4793]
+euler = [0.0, 344.08, 0.0]
+scale = [7.222, 8.841, 7.452]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.222, 0.325, 0.154, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 094 part 1"
+mesh_renderer = true
+position = [-28.7352, 0.3883, 54.89]
+euler = [0.0, 25.22, 0.0]
+scale = [6.569, 7.497, 6.389]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.283, 0.414, 0.196, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 094 part 2"
+mesh_renderer = true
+position = [-28.7352, 0.3883, 54.89]
+euler = [0.0, 25.22, 0.0]
+scale = [6.569, 7.497, 6.389]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 094 part 3"
+mesh_renderer = true
+position = [-28.7352, 0.3883, 54.89]
+euler = [0.0, 25.22, 0.0]
+scale = [6.569, 7.497, 6.389]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.283, 0.414, 0.196, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 095 part 1"
+mesh_renderer = true
+position = [-36.7767, 0.4697, 56.6883]
+euler = [0.0, 309.63, 0.0]
+scale = [4.511, 5.708, 4.41]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.274, 0.401, 0.19, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 095 part 2"
+mesh_renderer = true
+position = [-36.7767, 0.4697, 56.6883]
+euler = [0.0, 309.63, 0.0]
+scale = [4.511, 5.708, 4.41]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 095 part 3"
+mesh_renderer = true
+position = [-36.7767, 0.4697, 56.6883]
+euler = [0.0, 309.63, 0.0]
+scale = [4.511, 5.708, 4.41]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.274, 0.401, 0.19, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 096 part 1"
+mesh_renderer = true
+position = [-24.6474, 0.3018, 50.0785]
+euler = [0.0, 48.38, 0.0]
+scale = [6.279, 7.356, 6.079]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.231, 0.338, 0.16, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 096 part 2"
+mesh_renderer = true
+position = [-24.6474, 0.3018, 50.0785]
+euler = [0.0, 48.38, 0.0]
+scale = [6.279, 7.356, 6.079]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 096 part 3"
+mesh_renderer = true
+position = [-24.6474, 0.3018, 50.0785]
+euler = [0.0, 48.38, 0.0]
+scale = [6.279, 7.356, 6.079]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.231, 0.338, 0.16, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 097 part 1"
+mesh_renderer = true
+position = [-23.2653, 0.2522, 57.3787]
+euler = [0.0, 237.4, 0.0]
+scale = [6.454, 7.802, 6.585]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.227, 0.331, 0.157, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 097 part 2"
+mesh_renderer = true
+position = [-23.2653, 0.2522, 57.3787]
+euler = [0.0, 237.4, 0.0]
+scale = [6.454, 7.802, 6.585]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 097 part 3"
+mesh_renderer = true
+position = [-23.2653, 0.2522, 57.3787]
+euler = [0.0, 237.4, 0.0]
+scale = [6.454, 7.802, 6.585]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.227, 0.331, 0.157, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 098 part 1"
+mesh_renderer = true
+position = [-40.3816, 0.3488, -16.1779]
+euler = [0.0, 206.34, 0.0]
+scale = [5.522, 7.776, 5.315]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.262, 0.383, 0.181, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 098 part 2"
+mesh_renderer = true
+position = [-40.3816, 0.3488, -16.1779]
+euler = [0.0, 206.34, 0.0]
+scale = [5.522, 7.776, 5.315]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 098 part 3"
+mesh_renderer = true
+position = [-40.3816, 0.3488, -16.1779]
+euler = [0.0, 206.34, 0.0]
+scale = [5.522, 7.776, 5.315]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.262, 0.383, 0.181, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 099 part 1"
+mesh_renderer = true
+position = [-25.5765, 0.3264, -12.1538]
+euler = [0.0, 146.63, 0.0]
+scale = [6.622, 7.613, 6.33]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.29, 0.424, 0.201, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 099 part 2"
+mesh_renderer = true
+position = [-25.5765, 0.3264, -12.1538]
+euler = [0.0, 146.63, 0.0]
+scale = [6.622, 7.613, 6.33]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 099 part 3"
+mesh_renderer = true
+position = [-25.5765, 0.3264, -12.1538]
+euler = [0.0, 146.63, 0.0]
+scale = [6.622, 7.613, 6.33]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.29, 0.424, 0.201, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 100 part 1"
+mesh_renderer = true
+position = [-35.2283, 0.379, -13.8963]
+euler = [0.0, 28.47, 0.0]
+scale = [6.443, 7.624, 6.588]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.299, 0.437, 0.207, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 100 part 2"
+mesh_renderer = true
+position = [-35.2283, 0.379, -13.8963]
+euler = [0.0, 28.47, 0.0]
+scale = [6.443, 7.624, 6.588]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 100 part 3"
+mesh_renderer = true
+position = [-35.2283, 0.379, -13.8963]
+euler = [0.0, 28.47, 0.0]
+scale = [6.443, 7.624, 6.588]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.299, 0.437, 0.207, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 101 part 1"
+mesh_renderer = true
+position = [-41.6681, 0.4765, -9.6241]
+euler = [0.0, 151.63, 0.0]
+scale = [5.323, 6.337, 5.181]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.222, 0.324, 0.154, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 101 part 2"
+mesh_renderer = true
+position = [-41.6681, 0.4765, -9.6241]
+euler = [0.0, 151.63, 0.0]
+scale = [5.323, 6.337, 5.181]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 101 part 3"
+mesh_renderer = true
+position = [-41.6681, 0.4765, -9.6241]
+euler = [0.0, 151.63, 0.0]
+scale = [5.323, 6.337, 5.181]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.222, 0.324, 0.154, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 102 part 1"
+mesh_renderer = true
+position = [-30.832, 0.3108, -17.9189]
+euler = [0.0, 242.24, 0.0]
+scale = [6.3, 7.913, 6.258]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.224, 0.327, 0.155, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 102 part 2"
+mesh_renderer = true
+position = [-30.832, 0.3108, -17.9189]
+euler = [0.0, 242.24, 0.0]
+scale = [6.3, 7.913, 6.258]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 102 part 3"
+mesh_renderer = true
+position = [-30.832, 0.3108, -17.9189]
+euler = [0.0, 242.24, 0.0]
+scale = [6.3, 7.913, 6.258]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.224, 0.327, 0.155, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 103 part 1"
+mesh_renderer = true
+position = [-35.2481, 0.5516, -8.3868]
+euler = [0.0, 87.8, 0.0]
+scale = [6.317, 8.479, 6.227]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.272, 0.398, 0.188, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 103 part 2"
+mesh_renderer = true
+position = [-35.2481, 0.5516, -8.3868]
+euler = [0.0, 87.8, 0.0]
+scale = [6.317, 8.479, 6.227]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 103 part 3"
+mesh_renderer = true
+position = [-35.2481, 0.5516, -8.3868]
+euler = [0.0, 87.8, 0.0]
+scale = [6.317, 8.479, 6.227]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.272, 0.398, 0.188, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 104 part 1"
+mesh_renderer = true
+position = [-35.7299, 0.1957, -17.4414]
+euler = [0.0, 14.1, 0.0]
+scale = [4.884, 5.857, 4.979]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 0
+[entities.material]
+base_color = [0.278, 0.406, 0.192, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 104 part 2"
+mesh_renderer = true
+position = [-35.7299, 0.1957, -17.4414]
+euler = [0.0, 14.1, 0.0]
+scale = [4.884, 5.857, 4.979]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Edge grove tree 104 part 3"
+mesh_renderer = true
+position = [-35.7299, 0.1957, -17.4414]
+euler = [0.0, 14.1, 0.0]
+scale = [4.884, 5.857, 4.979]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/tree.glb"
+index = 2
+[entities.material]
+base_color = [0.278, 0.406, 0.192, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 01 part 1"
+mesh_renderer = true
+position = [-53.0, -0.213, 16.0]
+euler = [0.0, 0.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 01 part 2"
+mesh_renderer = true
+position = [-53.0, -0.213, 16.0]
+euler = [0.0, 0.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 02 part 1"
+mesh_renderer = true
+position = [-56.0, -0.392, 34.0]
+euler = [0.0, 113.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 02 part 2"
+mesh_renderer = true
+position = [-56.0, -0.392, 34.0]
+euler = [0.0, 113.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 03 part 1"
+mesh_renderer = true
+position = [-58.0, -0.608, -20.0]
+euler = [0.0, 226.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 03 part 2"
+mesh_renderer = true
+position = [-58.0, -0.608, -20.0]
+euler = [0.0, 226.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 04 part 1"
+mesh_renderer = true
+position = [-39.0, 0.034, 55.0]
+euler = [0.0, 339.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 04 part 2"
+mesh_renderer = true
+position = [-39.0, 0.034, 55.0]
+euler = [0.0, 339.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 05 part 1"
+mesh_renderer = true
+position = [16.0, 3.497, -49.0]
+euler = [0.0, 92.0, 0.0]
+scale = [6.0, 6.0, 6.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 05 part 2"
+mesh_renderer = true
+position = [16.0, 3.497, -49.0]
+euler = [0.0, 92.0, 0.0]
+scale = [6.0, 6.0, 6.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 06 part 1"
+mesh_renderer = true
+position = [34.0, 12.469, -58.0]
+euler = [0.0, 205.0, 0.0]
+scale = [7.0, 7.0, 7.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 06 part 2"
+mesh_renderer = true
+position = [34.0, 12.469, -58.0]
+euler = [0.0, 205.0, 0.0]
+scale = [7.0, 7.0, 7.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 07 part 1"
+mesh_renderer = true
+position = [45.0, 18.62, -65.0]
+euler = [0.0, 318.0, 0.0]
+scale = [10.0, 10.0, 10.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 07 part 2"
+mesh_renderer = true
+position = [45.0, 18.62, -65.0]
+euler = [0.0, 318.0, 0.0]
+scale = [10.0, 10.0, 10.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 08 part 1"
+mesh_renderer = true
+position = [58.0, 5.808, -72.0]
+euler = [0.0, 71.0, 0.0]
+scale = [12.0, 12.0, 12.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 08 part 2"
+mesh_renderer = true
+position = [58.0, 5.808, -72.0]
+euler = [0.0, 71.0, 0.0]
+scale = [12.0, 12.0, 12.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 09 part 1"
+mesh_renderer = true
+position = [17.0, 23.414, -72.0]
+euler = [0.0, 184.0, 0.0]
+scale = [10.0, 10.0, 10.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 09 part 2"
+mesh_renderer = true
+position = [17.0, 23.414, -72.0]
+euler = [0.0, 184.0, 0.0]
+scale = [10.0, 10.0, 10.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 10 part 1"
+mesh_renderer = true
+position = [-10.0, 23.868, -70.0]
+euler = [0.0, 297.0, 0.0]
+scale = [11.0, 11.0, 11.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 10 part 2"
+mesh_renderer = true
+position = [-10.0, 23.868, -70.0]
+euler = [0.0, 297.0, 0.0]
+scale = [11.0, 11.0, 11.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 11 part 1"
+mesh_renderer = true
+position = [-30.0, 17.153, -63.0]
+euler = [0.0, 50.0, 0.0]
+scale = [9.0, 9.0, 9.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 11 part 2"
+mesh_renderer = true
+position = [-30.0, 17.153, -63.0]
+euler = [0.0, 50.0, 0.0]
+scale = [9.0, 9.0, 9.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 12 part 1"
+mesh_renderer = true
+position = [41.0, 0.109, -37.0]
+euler = [0.0, 163.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 12 part 2"
+mesh_renderer = true
+position = [41.0, 0.109, -37.0]
+euler = [0.0, 163.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 13 part 1"
+mesh_renderer = true
+position = [47.0, -0.041, -38.0]
+euler = [0.0, 276.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 13 part 2"
+mesh_renderer = true
+position = [47.0, -0.041, -38.0]
+euler = [0.0, 276.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 14 part 1"
+mesh_renderer = true
+position = [44.0, 0.126, -41.0]
+euler = [0.0, 29.0, 0.0]
+scale = [6.0, 6.0, 6.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 14 part 2"
+mesh_renderer = true
+position = [44.0, 0.126, -41.0]
+euler = [0.0, 29.0, 0.0]
+scale = [6.0, 6.0, 6.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 15 part 1"
+mesh_renderer = true
+position = [60.0, 0.3133542041795623, 2.0]
+euler = [0.0, 142.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 15 part 2"
+mesh_renderer = true
+position = [60.0, 0.3133542041795623, 2.0]
+euler = [0.0, 142.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 16 part 1"
+mesh_renderer = true
+position = [70.0, -0.434, 35.0]
+euler = [0.0, 255.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Landscape rock 16 part 2"
+mesh_renderer = true
+position = [70.0, -0.434, 35.0]
+euler = [0.0, 255.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/rock.glb"
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Coastal lookout fragment 1 part 1"
+mesh_renderer = true
+position = [-47, 0.3722727272727273, 21]
+scale = [2.8, 3.2, 2.8]
+euler = [0.0, 15, 0.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/column.glb"
+index = 0
+[entities.material]
+base_color = [0.38, 0.43, 0.42, 1.0]
+metallic = 0.0
+roughness = 0.85
+
+[[entities]]
+name = "Coastal lookout fragment 1 part 2"
+mesh_renderer = true
+position = [-47, 0.3722727272727273, 21]
+scale = [2.8, 3.2, 2.8]
+euler = [0.0, 15, 0.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/column.glb"
+index = 1
+[entities.material]
+base_color = [0.28, 0.34, 0.31, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Coastal lookout fragment 2 part 1"
+mesh_renderer = true
+position = [-45, 0.44499999999999995, 29]
+scale = [2.8, 3.2, 2.8]
+euler = [0.0, -20, 0.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/column.glb"
+index = 0
+[entities.material]
+base_color = [0.38, 0.43, 0.42, 1.0]
+metallic = 0.0
+roughness = 0.85
+
+[[entities]]
+name = "Coastal lookout fragment 2 part 2"
+mesh_renderer = true
+position = [-45, 0.44499999999999995, 29]
+scale = [2.8, 3.2, 2.8]
+euler = [0.0, -20, 0.0]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/column.glb"
+index = 1
+[entities.material]
+base_color = [0.28, 0.34, 0.31, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = "Exposed mountain scree"
+mesh_renderer = true
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary-scree.gltf"
+index = 0
+[entities.material]
+base_color = [0.9, 0.86, 0.76, 1.0]
+albedo = "project://assets/textures/sanctuary-scree.png"
+normal = "project://assets/textures/sanctuary-scree-normal.png"
+metallic = 0.0
+roughness = 0.92
+receive_shadows = true
+
+[[entities]]
+name = "Trailhead journal marker part 1"
+mesh_renderer = true
+position = [1.0, 0.0644457439097478, 30.0]
+scale = [1.5, 2.0, 1.5]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/column.glb"
+index = 0
+[entities.material]
+base_color = [0.38, 0.43, 0.42, 1.0]
+metallic = 0.0
+roughness = 0.85
+
+[[entities]]
+name = "Trailhead journal marker part 2"
+mesh_renderer = true
+position = [1.0, 0.0644457439097478, 30.0]
+scale = [1.5, 2.0, 1.5]
+[entities.mesh]
+kind = "model"
+path = "project://assets/models/sanctuary/column.glb"
+index = 1
+[entities.material]
+base_color = [0.28, 0.34, 0.31, 1.0]
+metallic = 0.0
+roughness = 0.9

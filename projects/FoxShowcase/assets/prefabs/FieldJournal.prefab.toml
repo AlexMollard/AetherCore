@@ -1,0 +1,230 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[[entities]]
+name = 'Interaction modal'
+[entities.ui_canvas]
+reference = [960.0, 540.0]
+scale_mode = 'scale_with_reference'
+sort_bias = 50
+[entities.ui_rect]
+
+[[entities]]
+name = 'Journal backdrop'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [1.0, 1.0]
+[entities.ui_image]
+color = [0.025, 0.02, 0.015, 0.52]
+
+[[entities]]
+name = 'Journal background'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-370.0, -220.0]
+offset_max = [370.0, 220.0]
+[entities.ui_image]
+texture = 'project://assets/textures/ui/journal-book.png'
+
+[[entities]]
+name = 'Journal chapter'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-304.0, -183.0]
+offset_max = [-35.0, -163.0]
+[entities.ui_text]
+text = "T R A V E L L E R ' S   J O U R N A L"
+font = 'Roboto'
+pixel_size = 10.0
+v_align = 'middle'
+color = [0.43, 0.29, 0.15, 1.0]
+
+[[entities]]
+name = 'Journal title'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-304.0, -155.0]
+offset_max = [-35.0, -120.0]
+[entities.ui_text]
+text = 'Field journal'
+font = 'Roboto'
+pixel_size = 25.0
+color = [0.23, 0.16, 0.09, 1.0]
+
+[[entities]]
+name = 'Journal progress'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-304.0, -110.0]
+offset_max = [-35.0, -88.0]
+[entities.ui_text]
+text = 'Places recorded'
+font = 'Roboto'
+pixel_size = 12.0
+color = [0.45, 0.31, 0.16, 1.0]
+
+[[entities]]
+name = 'Journal body'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-304.0, -65.0]
+offset_max = [-35.0, 85.0]
+[entities.ui_text]
+text = 'Field notes'
+font = 'Roboto'
+pixel_size = 16.0
+color = [0.26, 0.20, 0.12, 1.0]
+wrap = true
+
+[[entities]]
+name = 'Journal atlas heading'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [36.0, -183.0]
+offset_max = [310.0, -162.0]
+[entities.ui_text]
+text = 'F I E L D   A T L A S'
+font = 'Roboto'
+pixel_size = 11.0
+h_align = 'center'
+v_align = 'middle'
+color = [0.43, 0.29, 0.15, 1.0]
+
+[[entities]]
+name = 'Journal map'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [36.0, -150.0]
+offset_max = [310.0, 124.0]
+[entities.ui_image]
+texture = 'project://assets/textures/ui/journal-map.png'
+
+[[entities]]
+name = 'Journal map caption'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [36.0, 137.0]
+offset_max = [310.0, 160.0]
+[entities.ui_text]
+text = 'Five places. One forgotten route.'
+font = 'Roboto'
+pixel_size = 13.0
+h_align = 'center'
+v_align = 'middle'
+color = [0.40, 0.28, 0.15, 1.0]
+
+[[entities]]
+name = 'Journal slider label'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-304.0, 104.0]
+offset_max = [-140.0, 126.0]
+[entities.ui_text]
+text = 'SLIDER'
+font = 'Roboto'
+pixel_size = 11.0
+v_align = 'middle'
+color = [0.43, 0.29, 0.15, 1.0]
+
+[[entities]]
+name = 'Journal slider'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-304.0, 136.0]
+offset_max = [-142.0, 150.0]
+[entities.ui_slider]
+min = 0.0
+max = 1.0
+step = 0.05
+value = 0.55
+track_color = [0.30, 0.22, 0.13, 1.0]
+fill_color = [0.69, 0.38, 0.13, 1.0]
+handle_color = [0.99, 0.81, 0.43, 1.0]
+handle_radius = 9.0
+corner_radius = 7.0
+
+[[entities]]
+name = 'Journal switch label'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-102.0, 104.0]
+offset_max = [-42.0, 126.0]
+[entities.ui_text]
+text = 'TOGGLE'
+font = 'Roboto'
+pixel_size = 11.0
+h_align = 'center'
+v_align = 'middle'
+color = [0.43, 0.29, 0.15, 1.0]
+
+[[entities]]
+name = 'Journal switch'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-102.0, 132.0]
+offset_max = [-42.0, 156.0]
+[entities.ui_toggle]
+on = false
+track_color = [0.40, 0.35, 0.25, 1.0]
+on_color = [0.34, 0.46, 0.20, 1.0]
+knob_color = [0.98, 0.86, 0.60, 1.0]
+knob_radius = 10.0
+corner_radius = 12.0
+
+[[entities]]
+name = 'Journal footer'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [-304.0, 160.0]
+offset_max = [-35.0, 181.0]
+[entities.ui_text]
+text = 'Esc  Close     Tab / arrows  Adjust'
+font = 'Roboto'
+pixel_size = 12.0
+v_align = 'middle'
+color = [0.40, 0.28, 0.15, 1.0]
+
+[[entities]]
+name = 'Journal page'
+parent = 0
+[entities.ui_rect]
+anchor_min = [0.5, 0.5]
+anchor_max = [0.5, 0.5]
+offset_min = [36.0, 160.0]
+offset_max = [310.0, 181.0]
+[entities.ui_text]
+text = '01 / 05'
+font = 'Roboto'
+pixel_size = 12.0
+h_align = 'right'
+v_align = 'middle'
+color = [0.40, 0.28, 0.15, 1.0]

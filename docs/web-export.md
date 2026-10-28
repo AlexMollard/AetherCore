@@ -86,11 +86,12 @@ A continuous 160-by-160 landscape connects the fox meadow and ruined sanctuary
 to forests, rocky mountain trails and a western beach. The fox, two deer and
 two wolves travel through their habitats and alternate walking with resting
 animations. The Mixamo humanoid uses idle/walk animation, a capsule character
-controller, jumping and an orbiting camera. The low amber sun, muted horizon,
+controller, jumping and a directly controlled orbit camera without trailing
+position interpolation or automatic recenter. The low amber sun, muted horizon,
 restrained local lights and reduced exposure/bloom keep the lighting subdued.
 
-The environment includes water, molten/plasma, gem/sheen/character and
-object-lit materials, baked/vertex-colour surfaces, scrolling textures,
+The environment includes water, molten/plasma, gem/sheen and object-lit
+materials, baked/vertex-colour surfaces, scrolling textures,
 wind foliage, a material graph, light shafts and 3D particles. Directional,
 point and spot shadows combine with physical sky/clouds, height fog, darkness,
 GTAO, SSR, volumetrics, bloom, auto exposure, DOF, camera motion blur,
@@ -99,10 +100,15 @@ grading/lens effects, FXAA and sharpening.
 Click the game for keyboard focus. WASD walks, Shift moves briskly, Space jumps,
 left-drag orbits, the wheel zooms and R respawns. E opens nearby field notes;
 Escape closes them and restores movement. Discover the trailhead, pond, sanctuary,
-woodland shrine and coastal lookout to complete the saved journal. Its map,
-slider and switch are real 2D UI controls. At the sanctuary, F launches a stone
-toward the supported hinge relic; G removes the projectile and resets the resting
-stone. Gameplay continues while the journal is open, but player movement is blocked.
+woodland shrine and coastal lookout to complete the saved journal. The HUD uses
+an engraved sunset crest flush to the top-left corner, five stateful discovery
+stamps, individual keycaps and a lightweight illustrated journal hint. Field
+notes open a leather-bound journal with parchment pages and a world map whose
+exposed beach footprint is projected from the actual scene geometry; its slider
+and switch are real pointer/keyboard-operated 2D UI controls. At the sanctuary,
+F launches a stone toward the supported hinge relic; G removes the projectile
+and resets the resting stone. Gameplay continues while the journal is open,
+but player movement is blocked.
 
 Fox attribution and the Kenney/Quaternius CC0 notices are packaged in
 `assets/credits.txt` and `assets/licenses/`. Source scene includes separate

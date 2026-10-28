@@ -1,0 +1,999 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[includes]]
+scene = 'Wildlife'
+
+[[includes]]
+scene = 'Interactions'
+
+[[includes]]
+scene = 'SanctuaryLandscape'
+
+[[includes]]
+scene = 'GroundCover'
+
+[[includes]]
+scene = 'Player'
+
+[[includes]]
+scene = 'TerrainCollision'
+
+[environment]
+ambient = [0.28, 0.29, 0.23]
+sun_color = [1.0, 0.66, 0.38]
+sun_direction = [0.78, 0.12, 0.56]
+sun_intensity = 1.0
+sky_horizon = [0.42, 0.25, 0.23]
+sky_zenith = [0.09, 0.13, 0.24]
+sky_void = [0.02, 0.03, 0.05]
+object_ambient = [0.3, 0.32, 0.35]
+object_light0_direction = [0.2, 0.8, 1.0]
+object_light0_color = [0.8, 0.5, 0.3]
+object_light1_direction = [-0.6, 0.4, 0.8]
+object_light1_color = [0.2, 0.45, 0.8]
+
+[[entities]]
+name = 'Atmosphere'
+[entities.sky]
+horizon_color = [0.42, 0.25, 0.23]
+zenith_color = [0.09, 0.13, 0.24]
+ground_color = [0.02, 0.03, 0.05]
+ambient_color = [0.28, 0.29, 0.23]
+physical_sky = true
+turbidity = 4.0
+cloud_coverage = 0.5
+cloud_speed = 0.02
+fog_density = 0.004
+fog_height_falloff = 0.08
+fog_sun_scatter = 0.5
+fog_max_opacity = 0.35
+
+[[entities]]
+name = 'Rolling meadow and mountain terrain'
+mesh_renderer = true
+position = [0.0, 0.0, 0.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-terrain.gltf'
+index = 0
+[entities.material]
+base_color = [1.0, 1.0, 1.0, 1.0]
+albedo = 'project://assets/textures/sanctuary-grass.png'
+normal = 'project://assets/textures/sanctuary-grass-normal.png'
+metallic = 0.0
+roughness = 0.96
+vertex_color = false
+receive_shadows = true
+
+[[entities]]
+name = 'Winding sanctuary trails'
+mesh_renderer = true
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-trails.gltf'
+index = 0
+[entities.material]
+base_color = [0.9, 0.85, 0.76, 1.0]
+albedo = 'project://assets/textures/sanctuary-path.png'
+normal = 'project://assets/textures/sanctuary-stone-normal.png'
+metallic = 0.0
+roughness = 0.88
+receive_shadows = true
+
+[[entities]]
+name = 'Sloping sandy beach'
+mesh_renderer = true
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-beach.gltf'
+index = 0
+[entities.material]
+base_color = [0.95, 0.88, 0.74, 1.0]
+albedo = 'project://assets/textures/sanctuary-sand.png'
+normal = 'project://assets/textures/sanctuary-sand-normal.png'
+metallic = 0.0
+roughness = 0.9
+receive_shadows = true
+
+[[entities]]
+name = 'Warm shadow light'
+position = [-5.000, 4.000, -20.000]
+[entities.point_light]
+color = [1.0, 0.32, 0.14]
+intensity = 2.5
+radius = 12.0
+shadow = true
+
+[[entities]]
+name = 'Cool shadow light'
+position = [46.000, 5.166, -25.000]
+[entities.point_light]
+color = [0.30, 0.39, 0.56]
+intensity = 1.2
+radius = 11.0
+shadow = true
+
+[[entities]]
+name = 'Focused shadow spotlight'
+position = [-5.000, 6.000, -15.000]
+euler = [-75.0, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 0.88, 0.7]
+intensity = 2.0
+radius = 12.0
+shadow = true
+inner_rad = 0.45
+outer_rad = 0.8
+
+[[entities]]
+name = 'Molten'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [22.0, 10.754, -52.0]
+euler = [0, 0, 0]
+scale = [1.3, 1.8, 1.3]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-crystal.gltf'
+index = 0
+[entities.material]
+double_sided = true
+base_color = [1.0, 1.0, 1.0, 1.0]
+receive_shadows = false
+
+[entities.effect]
+name = 'molten'
+tint = [0.9, 0.35, 0.12, 1.0]
+speed = 1.3
+scale = 1.7
+intensity = 1.2
+
+[[entities]]
+name = 'Plasma'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [29.0, 12.832, -53.0]
+euler = [0, 0, 0]
+scale = [1.3, 1.8, 1.3]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-crystal.gltf'
+index = 0
+[entities.material]
+double_sided = true
+base_color = [1.0, 1.0, 1.0, 1.0]
+receive_shadows = false
+
+[entities.effect]
+name = 'plasma'
+tint = [0.9, 0.35, 0.12, 1.0]
+speed = 1.3
+scale = 1.7
+intensity = 1.2
+
+[[entities]]
+name = 'Gem'
+mesh_renderer = true
+position = [44.0, 1.34, -35.0]
+euler = [12.0, 25.0, 18.0]
+scale = [1.0, 1.8, 1.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-crystal.gltf'
+index = 0
+[entities.material]
+double_sided = true
+roughness = 0.4
+receive_shadows = false
+object_lit = true
+gem = true
+base_color = [0.1, 0.7, 0.85, 1.0]
+emissive = [0.01, 0.02, 0.04]
+
+[[entities]]
+name = 'Sheen'
+mesh_renderer = true
+position = [-43.000, 0.650, 24.000]
+euler = [8.0, 20.0, 14.0]
+scale = [1.4, 1.0, 1.2]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-crystal.gltf'
+index = 0
+[entities.material]
+double_sided = true
+roughness = 0.4
+receive_shadows = false
+object_lit = true
+sheen = true
+base_color = [0.8, 0.25, 0.05, 1.0]
+
+[[entities]]
+name = 'Object-lit'
+mesh_renderer = true
+position = [46.000, 0.416, -25.000]
+euler = [10.0, 25.0, 0.0]
+scale = [1.4, 1.1, 1.3]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-crystal.gltf'
+index = 0
+[entities.material]
+double_sided = true
+roughness = 0.4
+receive_shadows = false
+object_lit = true
+base_color = [0.4, 0.3, 0.2, 1.0]
+
+[[entities]]
+name = 'Coastal weathered marker'
+mesh_renderer = true
+position = [-49.000, 0.05, 27.000]
+euler = [0.0, 35.0, 0.0]
+scale = [1.0, 1.0, 1.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 0
+[entities.material]
+double_sided = true
+roughness = 0.4
+receive_shadows = false
+baked_lighting = true
+vertex_color = true
+base_color = [1.0, 1.0, 1.0, 1.0]
+
+[[entities]]
+name = 'Vertex-colour shrine banner'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [46.000, 1.437, -27.000]
+scale = [1.8, 1.8, 1.0]
+euler = [0, 30, 0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-vertex-rune.gltf'
+index = 0
+[entities.material]
+double_sided = true
+roughness = 1.0
+receive_shadows = false
+base_color = [1.0, 1.0, 1.0, 1.0]
+albedo = 'project://assets/textures/sanctuary-runes.png'
+vertex_color = true
+
+[[entities]]
+name = 'Scrolling runic banner'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [-6.55, 1.45, -21.84]
+scale = [0.48, 0.85, 1.0]
+euler = [0, 0, 0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/material-card.gltf'
+index = 0
+[entities.material]
+double_sided = true
+roughness = 1.0
+receive_shadows = false
+base_color = [1.0, 1.0, 1.0, 1.0]
+albedo = 'project://assets/textures/sanctuary-runes.png'
+uv_scroll = [0.08, 0.0]
+
+[[entities]]
+name = 'Light shaft'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [39.000, 4.297, 30.000]
+euler = [0, 30, 0]
+scale = [2.0, 4.0, 1.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/material-card.gltf'
+index = 0
+[entities.material]
+double_sided = true
+base_color = [0.4, 0.25, 0.12, 0.8]
+receive_shadows = false
+alpha_blend = true
+additive_blend = true
+light_shaft = true
+
+[[entities]]
+name = 'Material graph'
+mesh_renderer = true
+position = [46.000, 1.403, -24.000]
+scale = [1.3, 1.8, 1.3]
+euler = [0, 30, 0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-crystal.gltf'
+index = 0
+[entities.material]
+asset = 'project://assets/materials/browser-graph.material.toml'
+double_sided = true
+
+[[entities]]
+name = 'Reflective water'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [-69.0, -0.1, 0.0]
+euler = [-90, 0, 0]
+scale = [42.0, 160.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.25, 0.32, 0.38, 0.6]
+roughness = 0.3
+metallic = 0.0
+emissive = [0.12, 0.075, 0.055]
+alpha_blend = true
+receive_shadows = false
+water = true
+
+[[entities]]
+name = 'Water bed'
+mesh_renderer = true
+position = [-69.0, -0.5, 0.0]
+euler = [-90.0, 0.0, 0.0]
+scale = [42.0, 160.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.18, 0.32, 0.3, 1.0]
+baked_lighting = true
+
+[[entities]]
+name = 'Reflective sanctuary pond'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [-30.0, -0.045, 42.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-pond.gltf'
+index = 0
+[entities.material]
+double_sided = true
+base_color = [0.25, 0.32, 0.38, 0.6]
+roughness = 0.3
+metallic = 0.0
+emissive = [0.12, 0.075, 0.055]
+alpha_blend = true
+receive_shadows = false
+water = true
+
+[[entities]]
+name = 'Darkness pool'
+position = [42.0, 0.0, -37.0]
+scale = [1.5, 2.0, 1.5]
+[entities.darkness_volume]
+fade_depth = 1.5
+
+[[entities]]
+name = 'Floating embers'
+position = [-30.000, 0.935, 42.000]
+[entities.particles]
+texture = 'project://assets/textures/sanctuary-firefly.png'
+space = 'billboard_3d'
+seed = 123456
+rate = 6.0
+burst_count = 12
+emit_on_start = true
+max_particles = 32
+lifetime_min = 2.0
+lifetime_max = 2.5
+speed_min = 1.0
+speed_max = 2.0
+gravity = [0.0, 0.0]
+velocity = [0.0, 1.0, 0.0]
+velocity_jitter = [1.0, 0.5, 0.0]
+spawn_jitter = [0.4, 0.4, 0.0]
+gravity_3d = [0.0, 0.0, 0.0]
+start_size = 0.16
+end_size = 0.08
+start_color = [1.0, 0.65, 0.24, 0.85]
+end_color = [1.0, 0.35, 0.08, 0.0]
+
+[[entities]]
+name = 'West shrine glow'
+position = [22.0, 12.504, -52.0]
+[entities.point_light]
+color = [1.0, 0.37, 0.12]
+intensity = 10.0
+radius = 8.0
+
+[[entities]]
+name = 'East shrine glow'
+position = [44.0, 3.0, -35.0]
+[entities.point_light]
+color = [0.35, 0.42, 0.55]
+intensity = 5.0
+radius = 8.0
+
+[[entities]]
+name = 'West tree canopy'
+mesh_renderer = true
+position = [-39.000, -0.099, 32.000]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 0
+[entities.material]
+base_color = [0.17, 0.38, 0.35, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'West tree trunk'
+mesh_renderer = true
+position = [-39.000, -0.099, 32.000]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 1
+[entities.material]
+base_color = [0.29, 0.20, 0.16, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'West tree detail'
+mesh_renderer = true
+position = [-39.000, -0.099, 32.000]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 2
+[entities.material]
+base_color = [0.27, 0.38, 0.32, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'East tree canopy'
+mesh_renderer = true
+position = [28.000, 0.202, -16.000]
+euler = [0.0, 40.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 0
+[entities.material]
+base_color = [0.17, 0.38, 0.35, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'East tree trunk'
+mesh_renderer = true
+position = [28.000, 0.202, -16.000]
+euler = [0.0, 40.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 1
+[entities.material]
+base_color = [0.29, 0.20, 0.16, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'East tree detail'
+mesh_renderer = true
+position = [28.000, 0.202, -16.000]
+euler = [0.0, 40.0, 0.0]
+scale = [5.0, 5.0, 5.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 2
+[entities.material]
+base_color = [0.27, 0.38, 0.32, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'West mossy rock'
+mesh_renderer = true
+position = [-34.000, -0.007, 46.000]
+euler = [0.0, 25.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 0
+[entities.material]
+base_color = [0.29, 0.31, 0.28, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'West rock moss'
+mesh_renderer = true
+position = [-34.000, -0.007, 46.000]
+euler = [0.0, 25.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 1
+[entities.material]
+base_color = [0.20, 0.34, 0.24, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'East mossy rock'
+mesh_renderer = true
+position = [-25.000, 0.051, 39.000]
+euler = [0.0, -30.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 0
+[entities.material]
+base_color = [0.29, 0.31, 0.28, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'East rock moss'
+mesh_renderer = true
+position = [-25.000, 0.051, 39.000]
+euler = [0.0, -30.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 1
+[entities.material]
+base_color = [0.20, 0.34, 0.24, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'Western broken column'
+mesh_renderer = true
+position = [-10.000, 0.213, -22.000]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/column.glb'
+index = 0
+[entities.material]
+base_color = [0.38, 0.43, 0.42, 1.0]
+metallic = 0.0
+roughness = 0.85
+
+[[entities]]
+name = 'Western column detail'
+mesh_renderer = true
+position = [-10.000, 0.213, -22.000]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/column.glb'
+index = 1
+[entities.material]
+base_color = [0.28, 0.34, 0.31, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Eastern broken column'
+mesh_renderer = true
+position = [-1.000, 0.187, -23.000]
+euler = [0.0, 30.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/column.glb'
+index = 0
+[entities.material]
+base_color = [0.38, 0.43, 0.42, 1.0]
+metallic = 0.0
+roughness = 0.85
+
+[[entities]]
+name = 'Eastern column detail'
+mesh_renderer = true
+position = [-1.000, 0.187, -23.000]
+euler = [0.0, 30.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/column.glb'
+index = 1
+[entities.material]
+base_color = [0.28, 0.34, 0.31, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Sanctuary arch'
+mesh_renderer = true
+position = [-5.000, 0.020, -22.000]
+scale = [2.8, 4.2, 2.8]
+euler = [0.0, 90.0, 0.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/arch.glb'
+index = 0
+[entities.material]
+albedo = 'project://assets/models/sanctuary/Textures/colormap.png'
+base_color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.85
+
+[[entities]]
+name = 'Stone bridge'
+mesh_renderer = true
+position = [-30.000, 0.075, 38.000]
+euler = [0.0, 0.0, 0.0]
+scale = [6.0, 3.0, 3.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/bridge.glb'
+index = 0
+[entities.material]
+base_color = [0.38, 0.43, 0.42, 1.0]
+metallic = 0.0
+roughness = 0.85
+
+[[entities]]
+name = 'Stone bridge detail'
+mesh_renderer = true
+position = [-30.000, 0.075, 38.000]
+euler = [0.0, 0.0, 0.0]
+scale = [6.0, 3.0, 3.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/bridge.glb'
+index = 1
+[entities.material]
+base_color = [0.28, 0.34, 0.31, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Sanctuary mushrooms'
+mesh_renderer = true
+position = [-35.000, -0.030, 45.000]
+scale = [0.6, 0.6, 0.6]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/mushroom.glb'
+index = 0
+[entities.material]
+base_color = [0.65, 0.19, 0.12, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Mushroom detail'
+mesh_renderer = true
+position = [-35.000, -0.030, 45.000]
+scale = [0.6, 0.6, 0.6]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/mushroom.glb'
+index = 1
+[entities.material]
+base_color = [0.68, 0.59, 0.43, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Hanging sanctuary moss'
+mesh_renderer = true
+position = [-5.000, 2.420, -21.800]
+scale = [2.2, 2.2, 2.2]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/moss.glb'
+index = 0
+[entities.material]
+base_color = [0.20, 0.36, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.95
+double_sided = true
+
+[[entities]]
+name = 'Low sunset'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+position = [-28.0, 13.0, -60.0]
+scale = [6.0, 6.0, 6.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'sphere'
+[entities.material]
+double_sided = true
+base_color = [0.0, 0.0, 0.0, 1.0]
+emissive = [1.0, 0.46, 0.17]
+receive_shadows = false
+sky = true
+
+[[entities]]
+name = 'Rear west grove leaves'
+mesh_renderer = true
+position = [-16.000, 0.203, 47.000]
+euler = [0.0, 100.0, 0.0]
+scale = [4.5, 4.5, 4.5]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 0
+[entities.material]
+base_color = [0.23, 0.34, 0.26, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Rear west grove trunk'
+mesh_renderer = true
+position = [-16.000, 0.203, 47.000]
+euler = [0.0, 100.0, 0.0]
+scale = [4.5, 4.5, 4.5]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'Rear west grove detail'
+mesh_renderer = true
+position = [-16.000, 0.203, 47.000]
+euler = [0.0, 100.0, 0.0]
+scale = [4.5, 4.5, 4.5]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 2
+[entities.material]
+base_color = [0.30, 0.37, 0.27, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Rear east grove leaves'
+mesh_renderer = true
+position = [18.000, -0.024, 36.000]
+euler = [0.0, -55.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 0
+[entities.material]
+base_color = [0.23, 0.34, 0.26, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Rear east grove trunk'
+mesh_renderer = true
+position = [18.000, -0.024, 36.000]
+euler = [0.0, -55.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 1
+[entities.material]
+base_color = [0.32, 0.22, 0.15, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'Rear east grove detail'
+mesh_renderer = true
+position = [18.000, -0.024, 36.000]
+euler = [0.0, -55.0, 0.0]
+scale = [4.0, 4.0, 4.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/tree.glb'
+index = 2
+[entities.material]
+base_color = [0.30, 0.37, 0.27, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Molten shrine stone'
+mesh_renderer = true
+position = [22.0, 9.684, -52.0]
+euler = [0.0, 24.0, 5.0]
+scale = [2.2, 0.45, 1.8]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.material]
+base_color = [0.30, 0.29, 0.24, 1.0]
+roughness = 0.9
+
+[[entities]]
+name = 'Plasma shrine stone'
+mesh_renderer = true
+position = [29.0, 11.762, -53.0]
+euler = [0.0, -18.0, -4.0]
+scale = [2.2, 0.45, 1.8]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.material]
+base_color = [0.30, 0.29, 0.24, 1.0]
+roughness = 0.9
+
+[[entities]]
+name = 'Gem shrine stone'
+mesh_renderer = true
+position = [44.0, 0.42, -35.0]
+euler = [0.0, 35.0, 0.0]
+scale = [1.8, 0.45, 1.7]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.material]
+base_color = [0.30, 0.29, 0.24, 1.0]
+roughness = 0.9
+
+[[entities]]
+name = 'Shore stepping stone one'
+mesh_renderer = true
+position = [-25.100, 0.094, 40.300]
+euler = [0.0, 26.0, 0.0]
+scale = [1.2, 0.15, 0.8]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.material]
+base_color = [0.43, 0.40, 0.32, 1.0]
+roughness = 0.85
+
+[[entities]]
+name = 'Shore stepping stone two'
+mesh_renderer = true
+position = [-25.000, 0.092, 41.700]
+euler = [0.0, -19.0, 0.0]
+scale = [1.0, 0.15, 0.9]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.material]
+base_color = [0.43, 0.40, 0.32, 1.0]
+roughness = 0.85
+
+[[entities]]
+name = 'Shore stepping stone three'
+mesh_renderer = true
+position = [-25.400, 0.080, 43.300]
+euler = [0.0, 12.0, 0.0]
+scale = [1.1, 0.15, 0.8]
+[entities.mesh]
+kind = 'primitive'
+path = 'cube'
+[entities.material]
+base_color = [0.43, 0.40, 0.32, 1.0]
+roughness = 0.85
+
+[[entities]]
+name = 'West shore rock'
+mesh_renderer = true
+position = [-35.000, -0.108, 42.000]
+euler = [0.0, 30.0, 0.0]
+scale = [4.0, 3.5, 3.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'West shore moss'
+mesh_renderer = true
+position = [-35.000, -0.108, 42.000]
+euler = [0.0, 30.0, 0.0]
+scale = [4.0, 3.5, 3.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'East shore rock'
+mesh_renderer = true
+position = [-25.000, 0.029, 45.000]
+euler = [0.0, -20.0, 0.0]
+scale = [4.5, 3.5, 3.5]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'East shore moss'
+mesh_renderer = true
+position = [-25.000, 0.029, 45.000]
+euler = [0.0, -20.0, 0.0]
+scale = [4.5, 3.5, 3.5]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'Rear ruin rock'
+mesh_renderer = true
+position = [-12.000, 0.108, -24.000]
+euler = [0.0, 60.0, 0.0]
+scale = [3.0, 2.8, 3.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 0
+[entities.material]
+base_color = [0.35, 0.34, 0.29, 1.0]
+metallic = 0.0
+roughness = 0.9
+
+[[entities]]
+name = 'Rear ruin moss'
+mesh_renderer = true
+position = [-12.000, 0.108, -24.000]
+euler = [0.0, 60.0, 0.0]
+scale = [3.0, 2.8, 3.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 1
+[entities.material]
+base_color = [0.22, 0.32, 0.23, 1.0]
+metallic = 0.0
+roughness = 0.95
+
+[[entities]]
+name = 'Pond muddy bank'
+mesh_renderer = true
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-pond-bank.gltf'
+index = 0
+[entities.material]
+base_color = [0.65, 0.63, 0.48, 1.0]
+albedo = 'project://assets/textures/sanctuary-path.png'
+roughness = 0.98

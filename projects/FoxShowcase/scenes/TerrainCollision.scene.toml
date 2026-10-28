@@ -1,0 +1,1697 @@
+[scene]
+version = 16
+kind = "3d"
+features = ["physics_3d"]
+
+[[entities]]
+name = "Terrain collision quadrant 1"
+[entities.physics]
+shape = "mesh"
+motion = "static"
+mesh_source = "project://assets/models/sanctuary-collision-0.gltf"
+friction = 0.85
+
+[[entities]]
+name = "Terrain collision quadrant 2"
+[entities.physics]
+shape = "mesh"
+motion = "static"
+mesh_source = "project://assets/models/sanctuary-collision-1.gltf"
+friction = 0.85
+
+[[entities]]
+name = "Terrain collision quadrant 3"
+[entities.physics]
+shape = "mesh"
+motion = "static"
+mesh_source = "project://assets/models/sanctuary-collision-2.gltf"
+friction = 0.85
+
+[[entities]]
+name = "Terrain collision quadrant 4"
+[entities.physics]
+shape = "mesh"
+motion = "static"
+mesh_source = "project://assets/models/sanctuary-collision-3.gltf"
+friction = 0.85
+
+[[entities]]
+name = "West tree trunk collision"
+position = [-39.0, -0.29933135789196214, 32.0]
+euler = [0.0, 0.0, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.42500000000000004
+half_height = 1.1500000000000001
+center = [0.0, 1.1500000000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "East tree trunk collision"
+position = [28.0, 0.0015184341220571612, -16.0]
+euler = [0.0, 40.0, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.42500000000000004
+half_height = 1.1500000000000001
+center = [0.0, 1.1500000000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "West mossy rock collision"
+position = [-34.0, -0.007, 46.0]
+euler = [0.0, 25.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.6, 0.52, 2.04]
+center = [0.0, 0.32, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "East mossy rock collision"
+position = [-25.0, 0.051, 39.0]
+euler = [0.0, -30.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.6, 0.52, 2.04]
+center = [0.0, 0.32, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Western broken column collision"
+position = [-10.0, 0.213, -22.0]
+euler = [0.0, 0.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.6, 1.4, 0.6]
+center = [0.0, 1.2, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern broken column collision"
+position = [-1.0, 0.187, -23.0]
+euler = [0.0, 30.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.6, 1.4, 0.6]
+center = [0.0, 1.2, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Rear west grove trunk collision"
+position = [-16.0, 0.0034922854643747634, 47.0]
+euler = [0.0, 100.0, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.3825
+half_height = 1.0350000000000001
+center = [0.0, 1.0350000000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Rear east grove trunk collision"
+position = [18.0, -0.22366503469628826, 36.0]
+euler = [0.0, -55.0, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.34
+half_height = 0.92
+center = [0.0, 0.92, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Molten shrine stone collision"
+position = [22.0, 9.684, -52.0]
+euler = [0.0, 24.0, 5.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.1, 0.225, 0.9]
+friction = 0.8
+
+[[entities]]
+name = "Plasma shrine stone collision"
+position = [29.0, 11.762, -53.0]
+euler = [0.0, -18.0, -4.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.1, 0.225, 0.9]
+friction = 0.8
+
+[[entities]]
+name = "Gem shrine stone collision"
+position = [44.0, 0.42, -35.0]
+euler = [0.0, 35.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.9, 0.225, 0.85]
+friction = 0.8
+
+[[entities]]
+name = "Shore stepping stone one collision"
+position = [-25.1, 0.094, 40.3]
+euler = [0.0, 26.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.6, 0.075, 0.4]
+friction = 0.8
+
+[[entities]]
+name = "Shore stepping stone two collision"
+position = [-25.0, 0.092, 41.7]
+euler = [0.0, -19.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.5, 0.075, 0.45]
+friction = 0.8
+
+[[entities]]
+name = "Shore stepping stone three collision"
+position = [-25.4, 0.08, 43.3]
+euler = [0.0, 12.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.55, 0.075, 0.4]
+friction = 0.8
+
+[[entities]]
+name = "West shore rock collision"
+position = [-35.0, -0.108, 42.0]
+euler = [0.0, 30.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.6, 0.455, 1.53]
+center = [0.0, 0.28, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "East shore rock collision"
+position = [-25.0, 0.029, 45.0]
+euler = [0.0, -20.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.8, 0.455, 1.7850000000000001]
+center = [0.0, 0.28, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Rear ruin rock collision"
+position = [-12.0, 0.108, -24.0]
+euler = [0.0, 60.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.2000000000000002, 0.364, 1.53]
+center = [0.0, 0.22399999999999998, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 001 part 2 collision"
+position = [31.8611, -0.15319097100868787, -6.2605]
+euler = [0.0, 291.53, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.510765
+half_height = 1.5600900000000002
+center = [0.0, 1.5600900000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 002 part 2 collision"
+position = [15.3239, 0.0, -19.3706]
+euler = [0.0, 196.01, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.51374
+half_height = 1.90072
+center = [0.0, 1.90072, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 003 part 2 collision"
+position = [32.0888, 0.10243359410070571, -21.228]
+euler = [0.0, 221.3, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.46036000000000005
+half_height = 1.5147800000000002
+center = [0.0, 1.5147800000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 004 part 2 collision"
+position = [39.3194, -0.03421070664957515, -14.5651]
+euler = [0.0, 357.04, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.41344000000000003
+half_height = 1.4938500000000001
+center = [0.0, 1.4938500000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 005 part 2 collision"
+position = [37.0852, 0.20305950872281642, -23.4733]
+euler = [0.0, 329.19, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.46801000000000004
+half_height = 1.56285
+center = [0.0, 1.56285, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 006 part 2 collision"
+position = [29.9719, 0.1094092024383496, -25.5377]
+euler = [0.0, 133.59, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.47124
+half_height = 1.36965
+center = [0.0, 1.36965, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 007 part 2 collision"
+position = [20.2473, -0.03757509377093651, -22.9077]
+euler = [0.0, 301.47, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.48569000000000007
+half_height = 1.71005
+center = [0.0, 1.71005, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 008 part 2 collision"
+position = [30.8245, 0.02002968357611718, -16.9736]
+euler = [0.0, 317.88, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.396695
+half_height = 1.20244
+center = [0.0, 1.20244, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 009 part 2 collision"
+position = [37.8837, 0.08009858184517493, -18.4495]
+euler = [0.0, 292.69, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.655775
+half_height = 2.1900600000000003
+center = [0.0, 2.1900600000000003, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 010 part 2 collision"
+position = [38.2944, 0.29088003619616687, -29.2336]
+euler = [0.0, 58.83, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.3859
+half_height = 1.20681
+center = [0.0, 1.20681, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 011 part 2 collision"
+position = [33.9362, -0.07332465559185901, -12.6114]
+euler = [0.0, 251.28, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.498185
+half_height = 1.61529
+center = [0.0, 1.61529, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 012 part 2 collision"
+position = [30.8674, -0.08326228972902353, -10.2345]
+euler = [0.0, 320.61, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.44081000000000004
+half_height = 1.5690600000000001
+center = [0.0, 1.5690600000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 013 part 2 collision"
+position = [66.1891, -0.06693192218968338, -17.967]
+euler = [0.0, 147.65, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.6048600000000001
+half_height = 1.74984
+center = [0.0, 1.74984, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 014 part 2 collision"
+position = [62.6717, 0.013278099721434955, -15.2394]
+euler = [0.0, 17.34, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.45517500000000005
+half_height = 1.43704
+center = [0.0, 1.43704, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 015 part 2 collision"
+position = [58.3563, -0.018037203737566083, -16.6215]
+euler = [0.0, 232.27, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.59041
+half_height = 1.9276300000000002
+center = [0.0, 1.9276300000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 016 part 2 collision"
+position = [64.8281, -0.22588351903567253, -24.2652]
+euler = [0.0, 20.16, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.525045
+half_height = 1.75122
+center = [0.0, 1.75122, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 017 part 2 collision"
+position = [62.1164, -0.13729476553389913, -20.9079]
+euler = [0.0, 249.07, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5419600000000001
+half_height = 1.8450600000000001
+center = [0.0, 1.8450600000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 018 part 2 collision"
+position = [58.5086, -0.11933995935575138, -22.0353]
+euler = [0.0, 283.33, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.52088
+half_height = 1.9895000000000003
+center = [0.0, 1.9895000000000003, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 019 part 2 collision"
+position = [41.8891, 0.037546191319588494, -17.0278]
+euler = [0.0, 180.99, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5636350000000001
+half_height = 1.6359900000000003
+center = [0.0, 1.6359900000000003, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 020 part 2 collision"
+position = [58.1127, 0.07910120158918026, -11.4389]
+euler = [0.0, 86.36, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.6155700000000001
+half_height = 2.0108900000000003
+center = [0.0, 2.0108900000000003, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 021 part 2 collision"
+position = [53.5751, 0.002226479146506635, -15.197]
+euler = [0.0, 209.23, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.516035
+half_height = 1.7914700000000001
+center = [0.0, 1.7914700000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 022 part 2 collision"
+position = [66.3471, 0.10979928326973583, -11.938]
+euler = [0.0, 164.43, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.625175
+half_height = 2.02745
+center = [0.0, 2.02745, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 023 part 2 collision"
+position = [52.0155, 0.012163809777395682, 33.3465]
+euler = [0.0, 112.95, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5183300000000001
+half_height = 1.5690600000000001
+center = [0.0, 1.5690600000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 024 part 2 collision"
+position = [23.7077, -0.027937128503752115, 24.2314]
+euler = [0.0, 60.77, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5126350000000001
+half_height = 1.59643
+center = [0.0, 1.59643, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 025 part 2 collision"
+position = [33.753, 0.0964521248517479, 19.9064]
+euler = [0.0, 88.58, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.51969
+half_height = 1.97202
+center = [0.0, 1.97202, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 026 part 2 collision"
+position = [24.542, -0.0524727583762298, 36.0252]
+euler = [0.0, 206.11, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5735800000000001
+half_height = 1.86576
+center = [0.0, 1.86576, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 027 part 2 collision"
+position = [21.2809, -0.054882892507958296, 43.7623]
+euler = [0.0, 182.08, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.44982
+half_height = 1.36459
+center = [0.0, 1.36459, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 028 part 2 collision"
+position = [14.7177, -0.021653057398779613, 21.3713]
+euler = [0.0, 81.15, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.6556900000000001
+half_height = 1.95201
+center = [0.0, 1.95201, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 029 part 2 collision"
+position = [30.7495, 0.15429164427377204, 33.0533]
+euler = [0.0, 154.44, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.40069000000000005
+half_height = 1.5239800000000001
+center = [0.0, 1.5239800000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 030 part 2 collision"
+position = [24.4002, -0.04814721734011497, 28.0284]
+euler = [0.0, 241.31, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.39244500000000004
+half_height = 1.4122
+center = [0.0, 1.4122, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 031 part 2 collision"
+position = [49.0689, 0.08975706711946065, 24.6173]
+euler = [0.0, 338.44, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5726450000000001
+half_height = 1.8687500000000001
+center = [0.0, 1.8687500000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 032 part 2 collision"
+position = [27.8285, 0.026975956319367663, 42.3719]
+euler = [0.0, 60.1, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.6381800000000001
+half_height = 1.89405
+center = [0.0, 1.89405, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 033 part 2 collision"
+position = [52.7227, -0.010895851386787404, 37.2525]
+euler = [0.0, 44.91, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5397500000000001
+half_height = 1.88738
+center = [0.0, 1.88738, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 034 part 2 collision"
+position = [43.7645, 0.20461047934327403, 37.9359]
+euler = [0.0, 239.84, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.45373
+half_height = 1.47959
+center = [0.0, 1.47959, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 035 part 2 collision"
+position = [42.5972, 0.028979722618776838, 46.0735]
+euler = [0.0, 203.09, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.47770000000000007
+half_height = 1.77353
+center = [0.0, 1.77353, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 036 part 2 collision"
+position = [47.9643, 0.0241321438227442, 45.5189]
+euler = [0.0, 49.7, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.6052850000000001
+half_height = 2.28896
+center = [0.0, 2.28896, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 037 part 2 collision"
+position = [48.2055, 0.14058307891491198, 29.417]
+euler = [0.0, 316.05, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.38921500000000003
+half_height = 1.3961000000000001
+center = [0.0, 1.3961000000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 038 part 2 collision"
+position = [57.1758, -0.07984619980166945, 42.0349]
+euler = [0.0, 1.94, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.395505
+half_height = 1.50098
+center = [0.0, 1.50098, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 039 part 2 collision"
+position = [58.398, -0.18704994045371828, 27.9543]
+euler = [0.0, 125.61, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5237700000000001
+half_height = 1.83126
+center = [0.0, 1.83126, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 040 part 2 collision"
+position = [39.2863, 0.16242160577342907, 41.4028]
+euler = [0.0, 339.83, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.595595
+half_height = 2.24779
+center = [0.0, 2.24779, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 041 part 2 collision"
+position = [43.2656, 0.2545644775312605, 34.3798]
+euler = [0.0, 0.01, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.51
+half_height = 1.59068
+center = [0.0, 1.59068, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 042 part 2 collision"
+position = [64.7893, -0.15655314492836334, 41.6145]
+euler = [0.0, 53.1, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.502945
+half_height = 1.63576
+center = [0.0, 1.63576, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 043 part 2 collision"
+position = [56.7578, -0.1031981865516389, 23.2277]
+euler = [0.0, 196.58, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.40987
+half_height = 1.1713900000000002
+center = [0.0, 1.1713900000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 044 part 2 collision"
+position = [43.51, 0.25970072301625435, 30.0909]
+euler = [0.0, 55.15, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5155250000000001
+half_height = 1.94925
+center = [0.0, 1.94925, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 045 part 2 collision"
+position = [37.0985, 0.26502241484409944, 27.245]
+euler = [0.0, 171.29, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.6188
+half_height = 2.31656
+center = [0.0, 2.31656, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 046 part 2 collision"
+position = [58.8955, -0.19176632405717445, 35.8098]
+euler = [0.0, 186.08, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.40927500000000006
+half_height = 1.18588
+center = [0.0, 1.18588, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 047 part 2 collision"
+position = [59.9263, -0.23596808157723023, 32.0721]
+euler = [0.0, 225.15, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.455685
+half_height = 1.43244
+center = [0.0, 1.43244, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 048 part 2 collision"
+position = [39.261, 0.2938192599534833, 33.4493]
+euler = [0.0, 99.19, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.65484
+half_height = 2.50079
+center = [0.0, 2.50079, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 049 part 2 collision"
+position = [69.8873, -0.1125642144056036, 42.6178]
+euler = [0.0, 11.55, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5672050000000001
+half_height = 1.8354000000000001
+center = [0.0, 1.8354000000000001, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 050 part 2 collision"
+position = [62.4951, 0.038933203604626355, 48.5122]
+euler = [0.0, 44.54, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.41548
+half_height = 1.3795400000000002
+center = [0.0, 1.3795400000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 051 part 2 collision"
+position = [61.2147, 0.1288393088377644, 52.2631]
+euler = [0.0, 293.66, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.62577
+half_height = 2.14084
+center = [0.0, 2.14084, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 052 part 2 collision"
+position = [65.3675, -0.03468127233818752, 45.9652]
+euler = [0.0, 126.12, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.39678
+half_height = 1.33699
+center = [0.0, 1.33699, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 053 part 2 collision"
+position = [60.9038, -0.08242786164695821, 43.8517]
+euler = [0.0, 181.11, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.38675000000000004
+half_height = 1.33285
+center = [0.0, 1.33285, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 054 part 2 collision"
+position = [70.7678, 0.0457346244762499, 49.0335]
+euler = [0.0, 309.0, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.57188
+half_height = 1.81792
+center = [0.0, 1.81792, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 055 part 2 collision"
+position = [65.5874, -0.2447843265132315, 37.5783]
+euler = [0.0, 55.88, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.399415
+half_height = 1.3967900000000002
+center = [0.0, 1.3967900000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 056 part 2 collision"
+position = [72.8987, -0.14004612653370996, 38.715]
+euler = [0.0, 203.13, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.42236500000000005
+half_height = 1.3643600000000002
+center = [0.0, 1.3643600000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 057 part 2 collision"
+position = [46.3787, 0.12178003282434278, 40.4719]
+euler = [0.0, 94.06, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.421345
+half_height = 1.3346900000000002
+center = [0.0, 1.3346900000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 058 part 2 collision"
+position = [73.7987, 0.13602243162262678, 57.1266]
+euler = [0.0, 89.07, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.61863
+half_height = 2.12336
+center = [0.0, 2.12336, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 059 part 2 collision"
+position = [55.7492, -0.1186701263745792, 31.5406]
+euler = [0.0, 299.95, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.54655
+half_height = 1.59712
+center = [0.0, 1.59712, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 060 part 2 collision"
+position = [60.7061, -0.1715348696279329, 39.6622]
+euler = [0.0, 271.5, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.49036500000000005
+half_height = 1.73604
+center = [0.0, 1.73604, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 061 part 2 collision"
+position = [52.2092, -0.0016745478222213806, 50.2624]
+euler = [0.0, 308.67, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.446845
+half_height = 1.4076000000000002
+center = [0.0, 1.4076000000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 062 part 2 collision"
+position = [51.0585, 0.02930458753395764, 40.3334]
+euler = [0.0, 124.74, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.59653
+half_height = 2.00445
+center = [0.0, 2.00445, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 063 part 2 collision"
+position = [20.2975, 0.1645711144459399, 57.2013]
+euler = [0.0, 331.79, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.39287
+half_height = 1.38092
+center = [0.0, 1.38092, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 064 part 2 collision"
+position = [49.1906, -0.09947225754012501, 58.1685]
+euler = [0.0, 273.38, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.46231500000000003
+half_height = 1.59321
+center = [0.0, 1.59321, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 065 part 2 collision"
+position = [38.9225, 0.015902389030342926, 46.5931]
+euler = [0.0, 85.14, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.44931
+half_height = 1.35378
+center = [0.0, 1.35378, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 066 part 2 collision"
+position = [57.3327, 0.12005082749252158, 55.0489]
+euler = [0.0, 332.1, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.4301
+half_height = 1.2369400000000002
+center = [0.0, 1.2369400000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 067 part 2 collision"
+position = [26.0916, 0.0013376936882922696, 51.4654]
+euler = [0.0, 303.14, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.563975
+half_height = 1.77491
+center = [0.0, 1.77491, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 068 part 2 collision"
+position = [37.1562, -0.28944618869693944, 63.6431]
+euler = [0.0, 160.17, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.619395
+half_height = 2.36946
+center = [0.0, 2.36946, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 069 part 2 collision"
+position = [59.158, 0.17053447816820022, 69.5842]
+euler = [0.0, 292.29, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.40315500000000004
+half_height = 1.36321
+center = [0.0, 1.36321, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 070 part 2 collision"
+position = [29.0974, -0.10286224483208664, 62.5749]
+euler = [0.0, 113.97, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.522325
+half_height = 1.8830099999999999
+center = [0.0, 1.8830099999999999, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 071 part 2 collision"
+position = [24.8487, 0.039028276872664525, 68.9633]
+euler = [0.0, 55.59, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.42823000000000006
+half_height = 1.23855
+center = [0.0, 1.23855, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 072 part 2 collision"
+position = [42.5218, -0.2416381136816852, 67.9688]
+euler = [0.0, 304.98, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.423385
+half_height = 1.2371699999999999
+center = [0.0, 1.2371699999999999, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 073 part 2 collision"
+position = [28.2873, 0.001979750034501603, 46.8601]
+euler = [0.0, 250.24, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.527425
+half_height = 1.81194
+center = [0.0, 1.81194, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 074 part 2 collision"
+position = [61.2821, 0.2511419684806141, 59.7864]
+euler = [0.0, 329.57, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5625300000000001
+half_height = 2.13049
+center = [0.0, 2.13049, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 075 part 2 collision"
+position = [53.1454, 0.028235486507042357, 62.9336]
+euler = [0.0, 83.04, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.57511
+half_height = 1.86576
+center = [0.0, 1.86576, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 076 part 2 collision"
+position = [65.0355, 0.28856877737391107, 60.1063]
+euler = [0.0, 119.17, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.55522
+half_height = 1.8170000000000002
+center = [0.0, 1.8170000000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 077 part 2 collision"
+position = [63.3, 0.270906772550273, 66.4873]
+euler = [0.0, 316.07, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5513950000000001
+half_height = 1.7245400000000002
+center = [0.0, 1.7245400000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 078 part 2 collision"
+position = [69.3734, 0.15026614836963711, 53.0924]
+euler = [0.0, 151.2, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5690750000000001
+half_height = 1.63047
+center = [0.0, 1.63047, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 079 part 2 collision"
+position = [66.3641, 0.21948442610597707, 70.2678]
+euler = [0.0, 44.21, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.453985
+half_height = 1.33952
+center = [0.0, 1.33952, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 080 part 2 collision"
+position = [58.9893, 0.21273669844022186, 64.0291]
+euler = [0.0, 298.05, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.44939500000000004
+half_height = 1.27811
+center = [0.0, 1.27811, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 081 part 2 collision"
+position = [55.3863, 0.08843356488898517, 68.7523]
+euler = [0.0, 69.15, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.630445
+half_height = 2.4223600000000003
+center = [0.0, 2.4223600000000003, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 082 part 2 collision"
+position = [67.7063, 0.2787597392844, 65.5106]
+euler = [0.0, 171.29, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.43341500000000005
+half_height = 1.54031
+center = [0.0, 1.54031, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 083 part 2 collision"
+position = [54.8398, 0.07587281827247416, 57.5264]
+euler = [0.0, 38.75, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.44378500000000004
+half_height = 1.5483600000000002
+center = [0.0, 1.5483600000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 084 part 2 collision"
+position = [72.5928, 0.18411929583208586, 66.3838]
+euler = [0.0, 274.66, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.43681500000000006
+half_height = 1.4398
+center = [0.0, 1.4398, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Eastern woodland tree 085 part 2 collision"
+position = [29.9598, -0.09918413273945875, 69.9909]
+euler = [0.0, 79.46, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.480335
+half_height = 1.55894
+center = [0.0, 1.55894, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 086 part 2 collision"
+position = [11.5169, 0.005672363563835057, 47.3164]
+euler = [0.0, 50.62, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.65127
+half_height = 2.32714
+center = [0.0, 2.32714, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 087 part 2 collision"
+position = [0.4516, 0.01099254168944722, 54.5536]
+euler = [0.0, 336.45, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.622285
+half_height = 1.8101
+center = [0.0, 1.8101, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 088 part 2 collision"
+position = [7.3786, 0.1936575722609236, 68.6801]
+euler = [0.0, 328.81, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.658155
+half_height = 2.1286500000000004
+center = [0.0, 2.1286500000000004, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 089 part 2 collision"
+position = [-11.1366, -0.2442066339469924, 68.6237]
+euler = [0.0, 263.27, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5839500000000001
+half_height = 1.8669100000000003
+center = [0.0, 1.8669100000000003, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 090 part 2 collision"
+position = [3.4969, -0.05566481875049301, 42.3954]
+euler = [0.0, 20.75, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.44013
+half_height = 1.54146
+center = [0.0, 1.54146, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 091 part 2 collision"
+position = [-4.792, -0.06433493862896413, 51.177]
+euler = [0.0, 81.54, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.46690500000000007
+half_height = 1.43543
+center = [0.0, 1.43543, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 092 part 2 collision"
+position = [-17.4943, -0.21234687982307807, 56.7321]
+euler = [0.0, 9.77, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.39032
+half_height = 1.4260000000000002
+center = [0.0, 1.4260000000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 093 part 2 collision"
+position = [-32.1685, 0.11724190383519378, 53.4793]
+euler = [0.0, 344.08, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.61387
+half_height = 2.03343
+center = [0.0, 2.03343, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 094 part 2 collision"
+position = [-28.7352, 0.06346668481547021, 54.89]
+euler = [0.0, 25.22, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.558365
+half_height = 1.72431
+center = [0.0, 1.72431, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 095 part 2 collision"
+position = [-36.7767, 0.23425356508544085, 56.6883]
+euler = [0.0, 309.63, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.383435
+half_height = 1.31284
+center = [0.0, 1.31284, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 096 part 2 collision"
+position = [-24.6474, -0.015974456366522782, 50.0785]
+euler = [0.0, 48.38, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.533715
+half_height = 1.69188
+center = [0.0, 1.69188, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 097 part 2 collision"
+position = [-23.2653, -0.08789092821988582, 57.3787]
+euler = [0.0, 237.4, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.54859
+half_height = 1.79446
+center = [0.0, 1.79446, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 098 part 2 collision"
+position = [-40.3816, 0.009994316689526534, -16.1779]
+euler = [0.0, 206.34, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.46937000000000006
+half_height = 1.78848
+center = [0.0, 1.78848, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 099 part 2 collision"
+position = [-25.5765, -0.004211850758852241, -12.1538]
+euler = [0.0, 146.63, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.56287
+half_height = 1.7509900000000003
+center = [0.0, 1.7509900000000003, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 100 part 2 collision"
+position = [-35.2283, 0.04781958304283603, -13.8963]
+euler = [0.0, 28.47, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.547655
+half_height = 1.75352
+center = [0.0, 1.75352, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 101 part 2 collision"
+position = [-41.6681, 0.20964678655976157, -9.6241]
+euler = [0.0, 151.63, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.45245500000000005
+half_height = 1.45751
+center = [0.0, 1.45751, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 102 part 2 collision"
+position = [-30.832, -0.034848484145091174, -17.9189]
+euler = [0.0, 242.24, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.5355
+half_height = 1.8199900000000002
+center = [0.0, 1.8199900000000002, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 103 part 2 collision"
+position = [-35.2481, 0.1776292953785447, -8.3868]
+euler = [0.0, 87.8, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.536945
+half_height = 1.95017
+center = [0.0, 1.95017, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Edge grove tree 104 part 2 collision"
+position = [-35.7299, -0.047144177984135026, -17.4414]
+euler = [0.0, 14.1, 0.0]
+[entities.physics]
+shape = "cylinder"
+motion = "static"
+radius = 0.41514000000000006
+half_height = 1.34711
+center = [0.0, 1.34711, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 01 part 1 collision"
+position = [-53.0, -0.213, 16.0]
+euler = [0.0, 0.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [2.0, 0.65, 2.55]
+center = [0.0, 0.4, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 02 part 1 collision"
+position = [-56.0, -0.392, 34.0]
+euler = [0.0, 113.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.6, 0.52, 2.04]
+center = [0.0, 0.32, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 03 part 1 collision"
+position = [-58.0, -0.608, -20.0]
+euler = [0.0, 226.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [2.0, 0.65, 2.55]
+center = [0.0, 0.4, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 04 part 1 collision"
+position = [-39.0, 0.034, 55.0]
+euler = [0.0, 339.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.6, 0.52, 2.04]
+center = [0.0, 0.32, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 05 part 1 collision"
+position = [16.0, 3.497, -49.0]
+euler = [0.0, 92.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [2.4000000000000004, 0.78, 3.06]
+center = [0.0, 0.48, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 06 part 1 collision"
+position = [34.0, 12.469, -58.0]
+euler = [0.0, 205.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [2.8000000000000003, 0.91, 3.5700000000000003]
+center = [0.0, 0.56, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 07 part 1 collision"
+position = [45.0, 18.62, -65.0]
+euler = [0.0, 318.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [4.0, 1.3, 5.1]
+center = [0.0, 0.8, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 08 part 1 collision"
+position = [58.0, 5.808, -72.0]
+euler = [0.0, 71.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [4.800000000000001, 1.56, 6.12]
+center = [0.0, 0.96, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 09 part 1 collision"
+position = [17.0, 23.414, -72.0]
+euler = [0.0, 184.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [4.0, 1.3, 5.1]
+center = [0.0, 0.8, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 10 part 1 collision"
+position = [-10.0, 23.868, -70.0]
+euler = [0.0, 297.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [4.4, 1.4300000000000002, 5.61]
+center = [0.0, 0.88, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 11 part 1 collision"
+position = [-30.0, 17.153, -63.0]
+euler = [0.0, 50.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [3.6, 1.17, 4.59]
+center = [0.0, 0.72, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 12 part 1 collision"
+position = [41.0, 0.109, -37.0]
+euler = [0.0, 163.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [2.0, 0.65, 2.55]
+center = [0.0, 0.4, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 13 part 1 collision"
+position = [47.0, -0.041, -38.0]
+euler = [0.0, 276.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [2.0, 0.65, 2.55]
+center = [0.0, 0.4, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 14 part 1 collision"
+position = [44.0, 0.126, -41.0]
+euler = [0.0, 29.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [2.4000000000000004, 0.78, 3.06]
+center = [0.0, 0.48, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 15 part 1 collision"
+position = [60.0, 0.3133542041795623, 2.0]
+euler = [0.0, 142.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [1.6, 0.52, 2.04]
+center = [0.0, 0.32, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Landscape rock 16 part 1 collision"
+position = [70.0, -0.434, 35.0]
+euler = [0.0, 255.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [2.0, 0.65, 2.55]
+center = [0.0, 0.4, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Coastal lookout fragment 1 part 1 collision"
+position = [-47, 0.3722727272727273, 21]
+euler = [0.0, 15, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.42, 1.1199999999999999, 0.42]
+center = [0.0, 0.96, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Coastal lookout fragment 2 part 1 collision"
+position = [-45, 0.44499999999999995, 29]
+euler = [0.0, -20, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.42, 1.1199999999999999, 0.42]
+center = [0.0, 0.96, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Trailhead journal marker part 1 collision"
+position = [1.0, 0.0644457439097478, 30.0]
+euler = [0.0, 0.0, 0.0]
+[entities.physics]
+shape = "box"
+motion = "static"
+half_extents = [0.22499999999999998, 0.7, 0.22499999999999998]
+center = [0.0, 0.6, 0.0]
+friction = 0.8
+
+[[entities]]
+name = "Ruined arch exact collision"
+position = [-5.0, 0.02, -22.0]
+euler = [0.0, 90.0, 0.0]
+[entities.physics]
+shape = "mesh"
+motion = "static"
+mesh_source = "project://assets/models/sanctuary-arch-collision.gltf"
+friction = 0.8
+
+[[entities]]
+name = "Pond bridge exact collision"
+position = [-30.0, 0.075, 38.0]
+[entities.physics]
+shape = "mesh"
+motion = "static"
+mesh_source = "project://assets/models/sanctuary-bridge-collision.gltf"
+friction = 0.8

@@ -1,0 +1,85 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d', 'physics_3d']
+
+[[entities]]
+name = 'Explorer'
+position = [3.0, 0.5, 34.0]
+[entities.character_controller]
+radius = 0.3
+half_height = 0.6
+gravity_scale = 1.5
+ground_snap_distance = 0.3
+mass = 80.0
+max_push_force = 600.0
+max_slope_angle = 0.7853982
+step_height = 0.3
+[entities.grass_bender]
+radius = 0.9
+strength = 0.8
+[[entities.scripts]]
+type = 'ExplorerController'
+
+[[entities]]
+name = 'Explorer visual'
+parent = 0
+position = [3.0, 0.5, 34.0]
+
+[[entities]]
+name = 'Explorer body'
+parent = 1
+position = [3.0, 0.5, 34.0]
+scale = [0.01, 0.01, 0.01]
+mesh_renderer = true
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/Human/Human.gltf'
+index = 0
+[entities.material]
+base_color = [0.837, 0.3023, 0.2637, 1.0]
+metallic = 0.0
+roughness = 0.81
+receive_shadows = true
+[entities.skinned]
+clip = 0
+looping = true
+speed = 1.0
+time = 0.0
+
+[[entities]]
+name = 'Explorer joints'
+parent = 1
+position = [3.0, 0.5, 34.0]
+scale = [0.01, 0.01, 0.01]
+mesh_renderer = true
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/Human/Human.gltf'
+index = 1
+[entities.material]
+base_color = [0.3333, 0.1245, 0.1010, 1.0]
+metallic = 0.0
+roughness = 0.86
+receive_shadows = true
+[entities.skinned]
+clip = 0
+looping = true
+speed = 1.0
+time = 0.0
+
+[[entities]]
+name = 'Third person camera'
+position = [3.0, 3.144, 38.83]
+euler = [-15.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 55.0
+near = 0.1
+far = 300.0
+background = 'sky_gradient'
+depth_of_field = true
+focus_distance = 5.0
+aperture = 16.0
+focal_length_mm = 35.0

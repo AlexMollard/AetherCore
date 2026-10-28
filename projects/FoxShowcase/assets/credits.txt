@@ -1,0 +1,22 @@
+Fox model and animation: CC-BY 4.0 Model by PixelMannen https://opengameart.org/content/fox-and-shiba and @tomkranis https://sketchfab.com/3d-models/low-poly-fox-by-pixelmannen-animated-371dea88d7e04a76af5763f2a36866bc and @AsoboStudio with @scurest https://github.com/KhronosGroup/glTF-Sample-Models/pull/150#issuecomment-406300118
+License: https://creativecommons.org/licenses/by/4.0/
+
+Additional environment models by Kenney (www.kenney.nl), CC0 1.0 Universal:
+Nature Kit: https://kenney.nl/assets/nature-kit
+tree_detailed_dark, rock_largeA, statue_columnDamaged, bridge_stone, hanging_moss, mushroom_redGroup.
+Castle Kit: https://kenney.nl/assets/castle-kit
+wall-doorway and its colormap.
+License: https://creativecommons.org/publicdomain/zero/1.0/
+Upstream license notices: assets/licenses/kenney-nature.txt and assets/licenses/kenney-castle.txt.
+Adaptation: Nature Kit GLB scene roots were normalized to include the exporter's identity parent; model geometry and animation data were not changed.
+
+Deer and wolf models and animations by Quaternius, Ultimate Animated Animal Pack, CC0 1.0:
+https://quaternius.com/packs/ultimateanimatedanimals.html
+https://poly.pizza/bundle/Animated-Animal-Pack-ILAPXeUYiS
+Pack-specific license/source notice: assets/licenses/quaternius-animals.txt.
+
+Full Mixamo humanoid and Idle/Walking animations reused from this repository's Sandbox/assets/models/Human.
+Source setup and in-place walking receipt: projects/HumanDemo/README.md and projects/Sandbox/scripts/PlayerBody.cs.
+The model's existing provenance is retained; no additional CC0 claim is made for the humanoid.
+
+Field journal, illustrated world map and HUD ornaments: original procedural FoxShowcase artwork.

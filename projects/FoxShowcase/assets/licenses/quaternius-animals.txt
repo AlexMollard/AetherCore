@@ -1,0 +1,11 @@
+Quaternius Ultimate Animated Animal Pack: Deer and Wolf models and animations
+Creator: Quaternius
+License: Creative Commons CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+The creator's pack page identifies the pack as CC0:
+https://quaternius.com/packs/ultimateanimatedanimals.html
+Official glTF download folder:
+https://drive.google.com/drive/folders/1yJXdB1iSrI8Db7hG77zxZ66vKsqIt0ry
+The Poly Pizza bundle independently identifies the pack and both models as CC0:
+https://poly.pizza/bundle/Animated-Animal-Pack-ILAPXeUYiS
