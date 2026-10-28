@@ -3,7 +3,7 @@
   "target": "web",
   "profile": "webgpu-3d-v1",
   "language": "rust",
-  "engineRevision": "a500bf073bd1d6962ca91eba4a2e928779b5dee4",
+  "engineRevision": "9980bcd359f5d355a0d5caf88ec55d3fe04d0083",
   "project": {
     "id": "FoxShowcase",
     "name": "FoxShowcase",
@@ -58,8 +58,8 @@
     },
     {
       "path": "game.pak",
-      "sizeBytes": 22803822,
-      "sha256": "ee659350e2adcdbd9f5893d995615ce0811ddd1d348a36936ff23fad2c83728a"
+      "sizeBytes": 22803824,
+      "sha256": "2bdc6d2cfaeca63505d1f7298ca5712421daa8b1afbb69ddfd2bb9c30eda450f"
     },
     {
       "path": "index.html",
@@ -74,7 +74,7 @@
     {
       "path": "project.js",
       "sizeBytes": 1088,
-      "sha256": "0cf345516ccb5c95a82c8a44c399ea1e6276154bb0ada2a1a8fdce637705d09e"
+      "sha256": "159f48b37f8c75c9b035c1ee59df4d71d2add7b5ffc8b531712c228add6cccce"
     }
   ],
   "adapterRequirements": {

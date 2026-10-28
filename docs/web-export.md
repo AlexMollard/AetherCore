@@ -22,6 +22,11 @@ Build native `AssetPacker`, and install the exact versions in [toolchain.json](.
 
 Each project gets a separate `build/web-publish-<identity>` cache. A project-scoped lock serializes publishers sharing that cache. Rust links as a static library with Web-only abort panic policy; desktop Cargo profiles and C# compilation/reload remain unchanged.
 
+Project graphics keys follow native case-insensitive lookup. Publishing converts
+them to the browser manifest’s case-sensitive field names, so authored exposure,
+AO strength, colour grading and other supported post settings do not silently
+fall back to renderer defaults.
+
 ## Content declarations and preflight
 
 ```toml
@@ -101,8 +106,9 @@ Click the game for keyboard focus. WASD walks, Shift moves briskly, Space jumps,
 left-drag orbits, the wheel zooms and R respawns. E opens nearby field notes;
 Escape closes them and restores movement. Discover the trailhead, pond, sanctuary,
 woodland shrine and coastal lookout to complete the saved journal. The HUD uses
-an engraved sunset crest flush to the top-left corner, five stateful discovery
-stamps, individual keycaps and a lightweight illustrated journal hint. Field
+an engraved sunset crest flush to the top-left corner and five stateful discovery
+stamps. The travel controls sit flush to the bottom-left; the illustrated journal
+hint sits flush to the bottom-right. Both retain internal text padding. Field
 notes open a leather-bound journal with parchment pages and a world map whose
 exposed beach footprint is projected from the actual scene geometry; its slider
 and switch are real pointer/keyboard-operated 2D UI controls. At the sanctuary,

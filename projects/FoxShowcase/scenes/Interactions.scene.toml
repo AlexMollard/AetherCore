@@ -130,8 +130,8 @@ parent = 6
 [entities.ui_rect]
 anchor_min = [0.0, 1.0]
 anchor_max = [0.0, 1.0]
-offset_min = [20.0, -82.0]
-offset_max = [405.0, -20.0]
+offset_min = [0.0, -62.0]
+offset_max = [385.0, 0.0]
 [entities.ui_image]
 texture = 'project://assets/textures/ui/control-ribbon.png'
 
@@ -141,8 +141,8 @@ parent = 6
 [entities.ui_rect]
 anchor_min = [1.0, 1.0]
 anchor_max = [1.0, 1.0]
-offset_min = [-280.0, -92.0]
-offset_max = [-20.0, -20.0]
+offset_min = [-260.0, -72.0]
+offset_max = [0.0, 0.0]
 [entities.ui_image]
 texture = 'project://assets/textures/ui/context-hint.png'
 

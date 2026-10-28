@@ -19,6 +19,21 @@ REPO = Path(__file__).resolve().parents[2]
 PROFILE = 'webgpu-2d-v1'
 
 
+def graphics_for_web(graphics):
+    # Native TOML lookup folds keys; the browser graphics manifest uses these
+    # case-sensitive field names (WebScene::ExtractPostSettings).
+    names = (
+        'autoExposure', 'gradeContrast', 'gradeSaturation', 'gradeTemperature', 'gradeTint',
+        'vignetteIntensity', 'vignetteRoundness', 'chromaticAberration', 'filmGrain',
+        'motionBlur', 'motionBlurMaxRadius', 'gtaoRadius', 'gtaoStrength', 'specularFilter',
+        'foliageSkyLook', 'bloomStrength', 'bloomRadius', 'exposureKey', 'exposureSpeed',
+        'reflectionMaxRoughness', 'reflectionIntensity', 'renderScale', 'contactShadows',
+        'shadowSplitLambda',
+    )
+    canonical = {name.lower(): name for name in names}
+    return {canonical.get(key.lower(), key.lower()): value for key, value in graphics.items()}
+
+
 class PreflightError(Exception):
     def __init__(self, code, message):
         self.code = code
@@ -368,7 +383,7 @@ def publish(request, directory, output=None):
             shutil.copy2(build / 'web' / name, stage / name)
         identifier = data['settings'].get('publish', {}).get('web', {}).get('id', product)
         config = dict(schemaVersion=1, id=identifier, name=product, language=data['language'], startupScene=data['startup'], scenes=data['scenes'], profile=data['profile'],
-            paths=data['settings'].get('paths', {}), graphics=data['settings'].get('graphics', {}), instructions=data['settings'].get('publish', {}).get('web', {}).get('instructions', 'Select Play to use the keyboard.'))
+            paths=data['settings'].get('paths', {}), graphics=graphics_for_web(data['settings'].get('graphics', {})), instructions=data['settings'].get('publish', {}).get('web', {}).get('instructions', 'Select Play to use the keyboard.'))
         (stage / 'project.js').write_text('globalThis.aetherProject=' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
         revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
         files = [dict(path=path.relative_to(stage).as_posix(), sizeBytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in sorted(stage.rglob('*')) if path.is_file()]

@@ -121,6 +121,11 @@ class WebPreflightTests(unittest.TestCase):
   (self.root/'scenes/Start.scene.toml').rename(self.root/'scenes/Launch.scene.toml')
   (self.root/'ProjectSettings.toml').write_text(self.settings.replace('startupscene="Start"','startupScene="Launch"'),encoding='utf-8')
   self.assertEqual(self.api.preflight(self.root)['startup'],'Launch')
+ def test_authored_graphics_keep_browser_names_and_false_zero_values(self):
+  graphics='[graphics]\nexposureKey=0.06\nGTAOSTRENGTH=0.65\nautoExposure=false\nbloomStrength=0\nexposure=0.85\ntonemap="AgX"\n'
+  (self.root/'ProjectSettings.toml').write_text(self.settings+graphics,encoding='utf-8')
+  exported=self.api.graphics_for_web(self.api.preflight(self.root)['settings']['graphics'])
+  self.assertEqual(exported,{'exposureKey':0.06,'gtaoStrength':0.65,'autoExposure':False,'bloomStrength':0,'exposure':0.85,'tonemap':'AgX'})
  def test_3d_profile_follows_scene_and_prefab_links(self):
   (self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\nprofile="webgpu-3d-v1"\n',encoding='utf-8')
   (self.root/'scenes/Start.scene.toml').write_text('[scene]\nversion=16\nkind="3d"\n[[includes]]\nscene="Other"\n[[prefab_instances]]\nprefab="Prop"\n',encoding='utf-8')
