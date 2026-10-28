@@ -10,7 +10,7 @@ The homepage and article headers follow the landing-page section order: Developm
 
 ### Capture placeholders
 
-The committed website retains the approved HumanDemo hero image (`website/assets/human-demo.webp`), its fade into the background, and the AetherCore branding (`website/assets/aethercore-app-icon.png`). All other pictures use inline SVG capture placeholders, not image files. `data-capture-src` and `data-capture-image` retain intended image and zoom paths; workspace tabs preserve their selected capture path. README screenshot positions use text placeholders because GitHub does not reliably render inline image data URLs.
+The committed website retains the approved HumanDemo hero image (`website/assets/human-demo.webp`), its fade into the background, and the AetherCore branding (`website/assets/aethercore-app-icon.png`). All other pictures use inline SVG capture placeholders, not image files. `data-capture-src` and `data-capture-image` retain intended image and zoom paths; workspace tabs preserve their selected capture path. The concise README keeps its badges, logo and approved hero capture, with two screenshot slots using `docs/images/capture-pending.svg` until the fresh-image batch.
 
 Other local images in `website/assets/` and source captures in ignored `logs/website/` are deliberately excluded from this commit. The FoxShowcase grass pass makes those captures outdated. Refresh the compositions, inspect their UI, then add the remaining image bundle in one separate commit and restore the active image/zoom URLs. Do not use the rejected publishing overview with buggy UI.
 

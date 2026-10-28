@@ -4,13 +4,13 @@ const views = {
     image: 'assets/native-authoring.webp', alt: '3D workspace capture pending',
     label: 'ONE SCENE. THE FULL RENDERER.', title: 'The world, in context.',
     description: 'Author with a dockable viewport, hierarchy and component inspectors. The editor runs the full render graph: GPU-driven culling, tiled lighting, shadows and post-processing.',
-    link: 'https://github.com/AlexMollard/AetherCore#editor-workflow', linkText: 'Read the editor workflow ↗'
+    link: 'https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/editor-workflow.md#editor-workflow', linkText: 'Read the editor workflow ↗'
   },
   '2d': {
     image: 'assets/editor-2d.png', alt: '2D authoring capture pending',
     label: 'SAME ENGINE. ANOTHER DIMENSION.', title: 'From sheet to scene.',
     description: 'Place sprites with orthographic XY tools, slice sheets non-destructively, and author animation timing and events. Compatible re-slices preserve sprite identities. The same project structure carries your scripts, scenes and assets.',
-    link: 'https://github.com/AlexMollard/AetherCore#2d-workflow', linkText: 'Explore 2D authoring ↗'
+    link: 'https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/editor-workflow.md#2d-workflow', linkText: 'Explore 2D authoring ↗'
   },
   launcher: {
     image: 'assets/launcher.png', alt: 'Project launcher capture pending',

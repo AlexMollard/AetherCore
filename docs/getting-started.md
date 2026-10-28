@@ -16,8 +16,8 @@ cmake --build --preset default
 ```
 
 That produces the Launcher, the Editor, the standalone runtime and the asset tools under
-`build/default/`. The [README](../README.md#quick-start) covers requirements (Visual Studio,
-Vulkan SDK, .NET 10) and the other presets.
+`build/default/`. [Building and releases](building.md#quick-start) covers requirements
+(Visual Studio, Vulkan SDK, .NET 10) and the other presets.
 
 ## 1. Make a project
 
@@ -77,8 +77,9 @@ The starter Player already has this script attached. For a new sprite, use
 Inspector because it is a public field; edit it there and the value saves with the scene.
 
 Press **Play**. The editor builds the scripts first — a compile error stops Play and shows the
-file, line and error in the Console. While Play is running, **F5** rebuilds and hot-reloads your
-code without leaving Play.
+file, line and error in the Console. For C# assembly replacement in a development build,
+**Stop first**, then use **F5 / Reload Scripts**. Requests during Play are rejected;
+arbitrary live script state does not migrate. See [Editor and gameplay workflow](editor-workflow.md).
 
 `Self` is the entity the script is attached to. The lifecycle is `OnAttach` on the first tick,
 `OnUpdate` every tick after, `OnDetach` when the entity or component goes away.
