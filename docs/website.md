@@ -4,7 +4,9 @@ The public-facing site lives in `website/`. Edit that copy rather than the earli
 
 Development notes use image-led editorial rows rather than a card grid. The system explorer groups native disclosures with capture spaces, and articles retain implementation details and source links as prose and numbered steps rather than decorative architecture diagrams.
 
-The hero uses a foreground gradient into the page background on desktop and mobile. Keep that vertical fade above the horizontal text-contrast shade so the bottom edge reaches the exact background colour.
+The hero uses a factual engine description, not an advertising slogan or repeated brand labels. It uses a foreground gradient into the page background on desktop and mobile. Keep that vertical fade above the horizontal text-contrast shade so the bottom edge reaches the exact background colour.
+
+The homepage and article headers follow the landing-page section order: Development, Features, Showcase, then the external Docs and Get started links. Keep the header order aligned when moving sections.
 
 ### Capture placeholders
 
