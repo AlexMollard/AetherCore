@@ -10,10 +10,11 @@ Headers follow the landing-page order: Features, Development, then direct Play, 
 
 ### Engine captures
 
-The website retains the approved HumanDemo hero (`website/assets/human-demo.webp`) and AetherCore branding (`website/assets/aethercore-app-icon.png`). Every feature category, homepage note, archive entry and article body has a distinct real capture—not alternate crops or encodings passed off as new images. Expanding an image intentionally shows that same capture at full resolution. Native and browser captions describe what is actually visible, not a still image as proof of live networking or script reload.
+The website hero is a dedicated native Sanctuary daylight capture (`website/assets/website-hero.webp`); AetherCore branding remains unchanged (`website/assets/aethercore-app-icon.png`). Every feature category, homepage note, archive entry and article body has a distinct real capture—not alternate crops or encodings passed off as new images. Expanding an image intentionally shows that same capture at full resolution. Native and browser captions describe what is actually visible, not a still image as proof of live networking or script reload.
 
 | Asset in `website/assets/` | Pixels | Source |
 | --- | --- | --- |
+| `website-hero.webp` | 2560 × 1440 | Dedicated WebsiteHero scene, captured from the native renderer’s final-color attachment |
 | `native-authoring.webp` | 2560 × 1440 | Native FoxShowcase meadow, selected deer and component Inspector |
 | `engine-frame.webp` | 2560 × 1440 | Native FoxShowcase pond and bridge, Render Graph and texture diagnostics |
 | `engine-tools.webp` | 2560 × 1440 | Native material graph, sphere preview and scene viewport together; full 16:9 editor capture |
@@ -49,7 +50,15 @@ The bottom controls and journal hint now anchor flush to their respective canvas
 
 The final browser images were retaken after fixing graphics-key serialization. Native TOML keys are case-insensitive, while the runtime manifest reads camelCase names such as `exposureKey` and `gtaoStrength`. The previous export passed lowercase keys through and silently used defaults for those fields. The replacement applies FoxShowcase’s authored exposure key `0.06`, exposure speed `0.8`, GTAO strength `0.65` and grading controls. Manual exposure `0.85` was already read correctly. Images were not darkened in post.
 
-The README uses one `docs/images/showcase.webp` composite (2048 × 1776), retaining its badges and logo. A fresh browser capture at FoxShowcase’s shrine leads the image; larger supporting crops show INKBOUND’s 2D viewport and the native material graph with its sphere preview. Each capture has a padded, rounded frame with a subtle warm border and short amber accent. The outer background and gutters are transparent so the image sits naturally on light or dark README backgrounds; the frames and screenshots remain opaque. The shrine source is `logs/website/current-captures/browser/readme-shrine-angle.png`. Assembly only crops, resizes, letterboxes and frames real captures; it does not repaint scenes or fabricate UI. Update the README image URL’s content-version query when replacing the image to avoid stale cached previews. The approved HumanDemo remains the website hero.
+The README uses one `docs/images/showcase.webp` composite (2048 × 1776), retaining its badges and logo. A fresh browser capture at FoxShowcase’s shrine leads the image; larger supporting crops show INKBOUND’s 2D viewport and the native material graph with its sphere preview. Each capture has a padded, rounded frame with a subtle warm border and short amber accent. The outer background and gutters are transparent so the image sits naturally on light or dark README backgrounds; the frames and screenshots remain opaque. The shrine source is `logs/website/current-captures/browser/readme-shrine-angle.png`. Assembly only crops, resizes, letterboxes and frames real captures; it does not repaint scenes or fabricate UI. Update the README image URL’s content-version query when replacing the image to avoid stale cached previews.
+
+### Dedicated hero scene
+
+`projects/FoxShowcase/scenes/WebsiteHero.scene.toml` is an independent composition using the existing terrain, trails, landscape and fox assets. It adds a daylight environment, a warm subject fill, shorter grass, an authored camera and a sanctuary arch. The original playable scene, project startup scene and browser package are unchanged.
+
+To reproduce the capture, open WebsiteHero in the native editor, temporarily set `graphics.autoExposure=false` and `graphics.exposure=0.45`, then Play and capture `PostProcess.FinalColor`. Exposure is a project/editor setting, not scene-serialized state: restore the prior settings afterward. The capture contains no HUD or editor chrome and has no painted lighting or post-image brightness adjustment.
+
+Raw evidence is `logs/website/hero-scene/hero-dense.png`; the selected WebP is copied unchanged to the website. The owned capture session restored the seven baselines listed in `logs/website/hero-scene/backup.json`. The website crop keeps the fox on the right on desktop and below the text on mobile; its shorter bottom fade retains the cast shadows.
 
 ### Adding development notes
 

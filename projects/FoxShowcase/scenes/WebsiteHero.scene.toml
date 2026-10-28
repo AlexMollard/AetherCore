@@ -1,0 +1,174 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[[includes]]
+scene = 'SanctuaryLandscape'
+
+[environment]
+ambient = [0.30, 0.33, 0.29]
+sun_color = [1.0, 0.88, 0.70]
+sun_direction = [-0.45, 0.82, 0.35]
+sun_intensity = 4.0
+sky_horizon = [0.58, 0.78, 0.95]
+sky_zenith = [0.16, 0.39, 0.72]
+sky_void = [0.05, 0.09, 0.13]
+
+[[entities]]
+name = 'Daylight sky'
+[entities.sky]
+horizon_color = [0.58, 0.78, 0.95]
+zenith_color = [0.16, 0.39, 0.72]
+ground_color = [0.08, 0.12, 0.15]
+ambient_color = [0.30, 0.33, 0.29]
+physical_sky = false
+
+[[entities]]
+name = 'Sanctuary terrain'
+mesh_renderer = true
+position = [0.0, 0.0, 0.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-terrain.gltf'
+index = 0
+[entities.material]
+base_color = [1.0, 1.0, 1.0, 1.0]
+albedo = 'project://assets/textures/sanctuary-grass.png'
+normal = 'project://assets/textures/sanctuary-grass-normal.png'
+metallic = 0.0
+roughness = 0.96
+vertex_color = false
+receive_shadows = true
+
+[[entities]]
+name = 'Sanctuary trails'
+mesh_renderer = true
+position = [0.0, 0.0, 0.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary-trails.gltf'
+index = 0
+[entities.material]
+base_color = [0.9, 0.85, 0.76, 1.0]
+albedo = 'project://assets/textures/sanctuary-path.png'
+normal = 'project://assets/textures/sanctuary-stone-normal.png'
+roughness = 0.88
+receive_shadows = true
+
+[[entities]]
+name = 'Sanctuary meadow grass'
+mesh_renderer = true
+mesh_renderer_cast_shadows = false
+[entities.grass]
+enabled = true
+surface_mesh = 'project://assets/models/sanctuary-terrain.gltf'
+region_min = [-45.0, -80.0]
+region_max = [80.0, 80.0]
+spacing = 0.10
+chunk_size = 4.0
+height_range = [0.10, 0.20]
+blade_width = 0.038
+lod_distances = [10.0, 26.0]
+draw_distance = 44.0
+wind_strength = 0.5
+surface_mask = true
+seed = 5291
+base_color = [0.12, 0.24, 0.045]
+tip_color = [0.43, 0.57, 0.14]
+[entities.material]
+base_color = [1.0, 1.0, 1.0, 1.0]
+double_sided = true
+vertex_color = true
+foliage = true
+baked_lighting = false
+receive_shadows = true
+roughness = 1.0
+distance_fade = [33.0, 44.0]
+
+[[entities]]
+name = 'Sanctuary arch'
+mesh_renderer = true
+position = [-5.0, 0.02, -22.0]
+euler = [0.0, 60.0, 0.0]
+scale = [2.8, 4.2, 2.8]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/arch.glb'
+index = 0
+[entities.material]
+albedo = 'project://assets/models/sanctuary/Textures/colormap.png'
+base_color = [1.0, 1.0, 1.0, 1.0]
+roughness = 0.85
+receive_shadows = true
+
+[[entities]]
+name = 'Western mountain'
+mesh_renderer = true
+position = [-32.0, 0.0, 42.0]
+euler = [0.0, 15.0, -13.0]
+scale = [38.0, 65.0, 22.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 0
+[entities.material]
+base_color = [0.26, 0.34, 0.29, 1.0]
+roughness = 0.96
+receive_shadows = true
+
+[[entities]]
+name = 'Central mountain'
+mesh_renderer = true
+position = [-14.0, 0.0, 50.0]
+euler = [0.0, -12.0, 12.0]
+scale = [45.0, 80.0, 24.0]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/sanctuary/rock.glb'
+index = 0
+[entities.material]
+base_color = [0.30, 0.36, 0.32, 1.0]
+roughness = 0.96
+receive_shadows = true
+
+[[entities]]
+name = 'Fox'
+mesh_renderer = true
+position = [-5.7, 0.1, -24.0]
+euler = [0.0, 25.0, 0.0]
+scale = [0.018, 0.018, 0.018]
+[entities.mesh]
+kind = 'model'
+path = 'project://assets/models/Fox/Fox.gltf'
+index = 0
+[entities.material]
+albedo = 'project://assets/models/Fox/Texture.png'
+base_color = [1.0, 1.0, 1.0, 1.0]
+roughness = 0.58
+receive_shadows = true
+[entities.skinned]
+clip = 1
+looping = true
+speed = 1.0
+time = 0.0
+
+[[entities]]
+name = 'Warm fox fill'
+position = [-3.5, 3.0, -27.0]
+[entities.point_light]
+color = [1.0, 0.82, 0.60]
+intensity = 4.0
+radius = 9.0
+
+[[entities]]
+name = 'Hero camera'
+position = [0.0, 2.3, -30.0]
+euler = [-2.0, 158.0, 0.0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 55.0
+near = 0.1
+far = 300.0
+background = 'sky_gradient'

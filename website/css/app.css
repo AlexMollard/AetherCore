@@ -26,8 +26,8 @@ nav a[aria-current="location"],nav a[aria-current="page"]{color:var(--accent)}
 .nav-cta{border:1px solid #ffffff50;padding:11px 18px;border-radius:4px}
 #menu{display:none}
 .game-hero{height:clamp(620px,78vh,920px);position:relative;isolation:isolate;background:#20262c;display:flex;align-items:center;overflow:hidden}
-.hero-scene{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:62% 52%;z-index:-3}
-.hero-shade{position:absolute;inset:0;z-index:-2;background:linear-gradient(0deg,var(--bg) 0%,#0f0d0bf2 8%,#0f0d0b99 22%,transparent 48%),linear-gradient(90deg,#080b10ec 0%,#080b10bd 29%,#080b1055 58%,#080b1010 85%)}
+.hero-scene{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:70% 50%;z-index:-3}
+.hero-shade{position:absolute;inset:0;z-index:-2;background:linear-gradient(0deg,var(--bg) 0%,#0f0d0bf2 4%,#0f0d0b99 14%,transparent 28%),linear-gradient(90deg,#080b10ec 0%,#080b10bd 29%,#080b1026 58%,transparent 85%)}
 .hero-content{padding:100px var(--gutter) 70px;width:60%;max-width:1050px}
 .eyebrow{display:block;font-size:10px;line-height:1.7;letter-spacing:1.5px;font-weight:600;color:var(--accent)}
 h1{font-size:clamp(50px,5.1vw,94px);font-weight:800;line-height:1.03;letter-spacing:-.05em;margin:22px 0 25px;text-wrap:balance}
@@ -167,8 +167,8 @@ dialog p{font-size:12px;color:var(--muted);padding-top:12px}
   #menu{display:block;margin-left:auto;background:#0f0d0b80;border:1px solid #ffffff50;border-radius:3px;padding:7px 12px;font-size:12px}
   .masthead nav{display:none;position:absolute;top:74px;left:0;right:0;background:var(--surface);padding:23px var(--gutter);border-bottom:1px solid var(--border)}
   .masthead nav.open{display:flex;flex-direction:column;align-items:flex-start;gap:22px}
-  .game-hero{height:auto;min-height:690px;align-items:flex-start}.hero-scene{object-position:64% center}
-  .hero-shade{background:linear-gradient(0deg,var(--bg) 0%,#0f0d0bf2 8%,#0f0d0b99 22%,transparent 48%),linear-gradient(90deg,#080b10dc,#080b1070)}
+  .game-hero{height:auto;min-height:800px;align-items:flex-start}.hero-scene{object-position:81% center}
+  .hero-shade{background:linear-gradient(0deg,var(--bg) 0%,#0f0d0bf2 4%,#0f0d0b99 14%,transparent 28%),linear-gradient(180deg,#080b10bb 0%,#080b1099 48%,transparent 65%)}
   .hero-content{width:100%;padding:126px var(--gutter) 140px;max-width:560px}h1{font-size:clamp(43px,10.5vw,68px);margin:19px 0 23px}
   .hero-content p{font-size:16px;line-height:1.8}.hero-content p br{display:none}.hero-actions{gap:12px;margin-top:28px}.button{font-size:12px;padding:13px 18px}
   .hero-status{font-size:9px;max-width:240px;line-height:1.8}.hero-credit{bottom:22px;right:var(--gutter)}
