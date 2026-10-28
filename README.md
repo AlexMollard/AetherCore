@@ -24,7 +24,7 @@
   <a href="#documentation">Documentation</a>
 </p>
 
-![AetherCore showcase: FoxShowcase’s shrine in WebGPU, INKBOUND’s 2D scene and native material-graph authoring](docs/images/showcase.webp)
+![AetherCore showcase: FoxShowcase’s shrine in WebGPU, INKBOUND’s 2D scene and native material-graph authoring](docs/images/showcase.webp?v=efeac7e4)
 
 Actual engine captures: browser gameplay, 2D scenes and material authoring. [Explore the engine →](https://alexmollard.github.io/AetherCore/)
 
