@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="A game world changes constantly. AetherCore’s rendering architecture draws a boundary between that changing world and the frame sent to the renderer.">
+<title>From the scene to the screen. — AetherCore development notes</title>
+<link rel="icon" href="../assets/aethercore-app-icon.png"><link rel="stylesheet" href="../css/app.css">
+
+<script src="../js/navigation.js" defer></script>
+</head>
+<body class="article-page">
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="34" height="34" alt="">AetherCore</a><button id="menu" aria-controls="navigation" aria-expanded="false">Menu</button><nav id="navigation" aria-label="Main navigation"><a href="../#workspace">Features</a><a href="../#projects">Showcase</a><a href="../#notes">Development</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Docs ↗</a><a class="nav-cta" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started</a></nav></header>
+<main id="main" class="article-layout">
+  <article class="article-content">
+    <header class="article-hero">
+      <a class="read-link" href="../#notes">← All development notes</a>
+      <div class="article-meta"><span>Engineering</span><span>Rendering</span></div>
+      <h1>From the scene to the screen.</h1>
+      <p class="article-intro">A frame is not the world. It is a handoff: the producer extracts the renderable consequences of a changing scene, and the render thread consumes that frame without traversing the live ECS.</p>
+    </header>
+    <section id="boundary">
+      <h2>A boundary around mutable state</h2>
+      <p>Gameplay updates entities, components and scene settings on the producer thread. Rendering can overlap subsequent work, so letting it traverse that same mutable registry would make a draw depend on concurrent changes. AetherCore instead calls <code>PrepareFrame</code> on the producer and passes a <code>RenderFramePacket</code> to <code>ExecuteRenderFrame</code>. The latter takes a const packet, not a world argument; its render-side consumers use extracted data and prepared slot queues rather than querying the live ECS.</p>
+      <p>This is an extract-and-consume design, not a retained render proxy kept in sync by a stream of changes. It makes the handoff explicit, at the cost of building snapshots and draw lists for each frame. The <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/architecture/render-frame-extraction.md#L5-L29">architecture note</a> describes that tradeoff and separately identifies structural world changes as a different synchronization problem.</p>
+    </section>
+    <section id="walkthrough">
+      <h2>One frame, four stages</h2>
+      <p>Consider a frame containing a mesh, a camera and a point light. After simulation and the client update, the producer selects a draw slot, flushes the world’s mesh draws into its queue, prepares shadow and render-target queues, and copies the camera matrices and light list into the packet. The packet carries both the frame number and the slot that identifies the corresponding prepared queues.</p>
+      <figure class="article-capture">
+        <img  data-capture-src="../assets/engine-frame.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" width="2560" height="1440" loading="lazy" alt="Capture pending: FoxShowcase sanctuary pond in the native editor with render graph timings and texture diagnostics">
+        <figcaption>Capture pending: FoxShowcase’s sanctuary pond and the Render Graph diagnostics. Editor-view timings are not a benchmark.</figcaption>
+      </figure>
+      <ol class="process-steps">
+        <li><strong>Update:</strong> The producer advances the game and selects a reusable draw slot.</li>
+        <li><strong>Extract:</strong> World data becomes packet fields and slot-specific draw queues.</li>
+        <li><strong>Transfer:</strong> The packet moves through the render thread’s bounded channel.</li>
+        <li><strong>Consume:</strong> The render thread builds lighting, executes the graph and submits the frame.</li>
+      </ol>
+      <p>The packet and its matching per-slot queues form the frame handoff; GPU completion is a separate concern.</p>
+      <p>On the other side, <code>ExecuteRenderFrame</code> starts the frame, gives the 2D and debug renderers packet data, and calls <code>EndFrame</code>. That function checks the slot against the frame index, builds shadow and lighting data, executes the render graph and submits. See <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/AetherCore.cpp#L1142-L1212">extraction</a> and <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/AetherCore.cpp#L1377-L1417">consumption</a>.</p>
+    </section>
+    <section id="payload">
+      <h2>What actually crosses the boundary</h2>
+      <p>The packet owns its dynamic arrays: point and spot lights, debug vertices and physics-debug instances, alongside 2D, 3D and custom-pass frame data. Camera transforms, render and UI extents, scene settings and frame identity travel as values. Script-submitted custom passes are moved into the packet; light lists are copied. Physics shapes are extracted on the producer, so the debug pass need not walk colliders in the world.</p>
+      <p>Not every draw is embedded in that object. <code>WorldRenderer::Flush</code> fills the selected <code>RenderQueue</code>, while shadow and render-target services prepare their own queues for the same slot. A draw command includes a model matrix and material index, but also references to a mesh and pipeline. The packet also carries material and effect buffer device addresses. These are references to resources, not copies of the resources themselves: the handoff still depends on those resources remaining valid for their consumers. See the <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/rendering/RenderFramePacket.hpp#L53-L84">packet definition</a> and <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/rendering/RenderQueue.hpp#L38-L73">draw command</a>.</p>
+    </section>
+    <section id="slots">
+      <h2>A slot is a lifetime agreement</h2>
+      <p>The producer waits for an earlier frame to complete before selecting and clearing a slot; the configured frames-in-flight limit is clamped to the available slot count. The slot cycles by frame index modulo the maximum, and <code>EndFrame</code> asserts that the packet’s index and slot agree. This bounds run-ahead and prevents the producer from overwriting a queue while the render thread still needs its prior contents.</p>
+      <p>The packet is moved into a channel sized to the swapchain’s maximum frames in flight. After reading it, the render thread executes the frame, recycles overlay data and publishes the completed frame index. A reload can instead discard the packet’s pending queues; a render exception discards pending queues and closes the channel. These paths matter because a frame’s side queues have a lifetime beyond the packet’s scalar fields. <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/rendering/RenderThread.cpp#L16-L59">Channel and completion</a> · <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/rendering/RenderThread.cpp#L137-L183">consumer and discard paths</a>.</p>
+    </section>
+    <section id="gpu">
+      <h2>CPU completion is not GPU completion</h2>
+      <p>A subtle distinction appears in scene UI. Resolving canvases walks the ECS, so <code>UiRenderer::BuildFrame</code> runs on the producer, before packet submission. But it also fills GPU-visible memory. The producer’s throttle waits for render-thread frame completion, not for the GPU to finish reading that memory. UI therefore rotates multiple command buffers per slot to avoid rebuilding into memory still in use.</p>
+      <p>Most other per-slot GPU writes happen on the render thread after <code>BeginFrame</code> waits on the slot’s swapchain fence. Moving all UI work to the render thread would simplify where the upload happens, but would put its ECS traversal back across the ownership boundary. The chosen split retains that boundary and requires its own buffer-lifetime scheme. <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/AetherCore.cpp#L578-L600">Read the implementation commentary</a>.</p>
+    </section>
+    <section id="limits">
+      <h2>What the packet does not solve</h2>
+      <h3>What the handoff buys</h3>
+      <p>A particular frame’s camera, lights, debug data and prepared draws have an explicit owner and handoff. The renderer does not ask a changing world what to draw.</p>
+      <h3>What it still costs</h3>
+      <p>Extracting data and maintaining several in-flight slots takes work. Resource replacement, viewport changes and GPU completion still need coordinated lifetimes.</p>
+<p>A snapshot is not a general-purpose world lock or a deep copy of GPU assets. The frame loop drains and enters an exclusive operation before recreating swapchain resources or retiring affected UI viewports. A retained proxy could update deltas instead, but would introduce its own synchronization and lifetime machinery.</p>
+    </section>
+    <div class="article-next"><a href="csharp-iteration.html">Next: C# iteration →</a></div>
+  </article>
+  <aside class="article-sidebar">
+    <nav class="article-toc" aria-label="On this page"><h2>On this page</h2><a href="#boundary">The boundary</a><a href="#walkthrough">One frame</a><a href="#payload">The payload</a><a href="#slots">Slot lifetimes</a><a href="#gpu">CPU and GPU completion</a><a href="#limits">Limits</a></nav>
+    <div class="article-source-links"><h2>Sources</h2><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/architecture/render-frame-extraction.md#L5-L43">Extraction architecture ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/AetherCore.cpp#L1142-L1374">Frame preparation ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/rendering/RenderThread.cpp#L113-L183">Render thread ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/rendering/RenderQueue.hpp#L38-L73">Draw commands ↗</a></div>
+  </aside>
+</main>
+<footer class="site-footer"><div class="footer-main"><div class="footer-identity"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="28" height="28" alt="">AetherCore</a><p>A native engine for 2D and 3D games.</p></div><div class="footer-links"><h2>Engine</h2><a href="../#workspace">Features</a><a href="../#projects">Showcase</a><a href="../#notes">Development notes</a></div><div class="footer-links"><h2>Resources</h2><a href="https://github.com/AlexMollard/AetherCore">GitHub ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Documentation ↗</a></div></div><div class="footer-bottom"><span>In active development. APIs and asset formats may change.</span><a href="#main">Back to top ↑</a></div></footer>
+</body>
+</html>

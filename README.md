@@ -5,13 +5,15 @@
 <h1 align="center">AetherCore</h1>
 
 <p align="center">
-  <strong>A modern Vulkan game engine for 2D and 3D games, with an editor-first workflow and hot-reloadable C# gameplay.</strong>
+  <strong>A native 2D and 3D game engine with Vulkan rendering, C# and Rust gameplay, and self-contained WebGPU browser exports.</strong>
 </p>
 
 <p align="center">
   <img alt="C++ 23 / 26" src="https://img.shields.io/badge/C%2B%2B-23%20%2F%2026-FF9429?style=flat-square&labelColor=0F0D0B">
   <img alt="Vulkan" src="https://img.shields.io/badge/graphics-Vulkan-FF9429?style=flat-square&labelColor=0F0D0B">
   <img alt=".NET 10" src="https://img.shields.io/badge/gameplay-.NET%2010-FF9429?style=flat-square&labelColor=0F0D0B">
+  <img alt="Rust gameplay" src="https://img.shields.io/badge/gameplay-Rust-FF9429?style=flat-square&labelColor=0F0D0B">
+  <img alt="WebGPU browser exports" src="https://img.shields.io/badge/browser-WebGPU-FF9429?style=flat-square&labelColor=0F0D0B">
   <img alt="CMake" src="https://img.shields.io/badge/build-CMake-FF9429?style=flat-square&labelColor=0F0D0B">
 </p>
 
@@ -21,22 +23,31 @@
   <a href="#editor-workflow">Editor workflow</a> ·
   <a href="#2d-workflow">2D workflow</a> ·
   <a href="#c-scripting">C# scripting</a> ·
+  <a href="#rust-gameplay">Rust gameplay</a> ·
+  <a href="#foxshowcase-and-browser-play">Browser play</a> ·
   <a href="#engine-mcp">Engine MCP</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="#asset-and-shipping-pipeline">Asset pipeline</a>
+  <a href="#asset-and-shipping-pipeline">Asset pipeline</a> ·
+  <a href="docs/website.md">Website development</a>
 </p>
 
 <br>
 
-<img src="docs/images/editor.png" align="right" width="560" alt="AetherCore Editor authoring a 3D scene">
+## What is AetherCore?
+
+AetherCore brings scene authoring, gameplay, materials, physics and rendering into one native workspace. Build with the dockable editor, inspect the systems behind a frame, and publish supported projects as desktop games or static browser players.
+
+Screenshot spaces are reserved below while FoxShowcase’s grass and presentation are being updated. Fresh engine captures will arrive together in a separate image commit.
+
+> **3D workspace capture pending**
 
 ### 3D editor
 
-Dockable viewport, hierarchy, and inspectors on the full render graph-GPU-driven culling, tiled lighting, shadows, and post-processing.
+Dockable viewport, hierarchy and inspectors on the full native render graph: GPU-driven culling, tiled lighting, shadows and post-processing.
 <br>
 <br clear="all">
 
-<img src="docs/images/editor-2d.png" align="left" width="560" alt="AetherCore Editor authoring a 2D sprite scene">
+> **2D editor capture pending**
 
 ### 2D editor
 
@@ -45,11 +56,11 @@ The same shell in orthographic mode: sprite placement, non-destructive sheet sli
 <br clear="all">
 <br>
 
-<img src="docs/images/launcher.png" align="right" width="560" alt="AetherCore Project Launcher">
+> **Material authoring capture pending**
 
-### Project Launcher
+### Material authoring
 
-A standalone hub that spawns a dedicated Editor process per project and closes once startup finishes.
+Work with connected material inputs, a live sphere preview and the scene viewport in the same editor. Supported material graphs are cooked for browser publishing.
 
 <br clear="all">
 
@@ -60,14 +71,35 @@ A standalone hub that spawns a dedicated Editor process per project and closes o
 | **Editor** | Standalone project Launcher, Night Amber ImGui workspace, dockable viewport and inspectors, scene hierarchy, project/file browser, UI canvas tools, theme editor, render-graph and texture inspection |
 | **2D authoring** | Blank 2D projects, orthographic 2D viewport and XY tools, sprite placement and picking, non-destructive sheet slicing, sprite animation timelines, deterministic playback, and 2D asset publishing |
 | **Rendering** | Bindless descriptors, buffer device address, render graph, GPU-driven draw culling, tiled lighting, directional and local shadows, GTAO, FXAA, tonemapping, post-processing, offscreen cameras |
-| **Scene and simulation** | EnTT world, reflection-driven component editing and scene serialization, typed asset identities, Jolt rigid bodies, skeletal animation, blending, root motion, day/night lighting |
-| **Gameplay** | Public C# engine SDK, entity scripts, inspector-exposed fields, native interop boundary, collectible load contexts, F5 rebuild and hot reload, and one-click Visual Studio script debugging |
-| **Assets** | Virtual file system, glTF import, mesh and animation processing, texture transcoding, material presets, one-time `engine.pak` staging, and publish-only project PAKs |
+| **Scene and simulation** | EnTT world, reflection-driven component editing and scene serialization, typed asset identities, Jolt 3D and Box2D 2D physics, skeletal animation, blending, root motion, day/night lighting |
+| **Gameplay** | Public C# and Rust SDKs through a shared gameplay host; inspector-exposed C# fields, collectible assembly replacement outside Play, native interop and Visual Studio script debugging; Rust rebuild/relaunch |
+| **Assets** | Virtual file system, glTF import, mesh and animation processing, texture transcoding, material presets and graph authoring, shared engine content, and target-qualified project packages |
+| **Browser publishing** | Self-contained WebAssembly/WebGPU players for supported 2D and 3D profiles, cooked assets, packaged audio, browser saves, manifest integrity and explicit unsupported-content diagnostics |
 | **Diagnostics** | Tracy CPU/GPU instrumentation, render-pass timings, resource inspection, validation logging, built-in editor-control MCP scene authoring, and Visual Studio debugger MCP workflow |
 
 > [!NOTE]
 > AetherCore is under active development. The editor, runtime, scripting API, and
 > asset formats are usable today, but backward compatibility is not guaranteed yet.
+
+## FoxShowcase and browser play
+
+> **FoxShowcase gameplay capture pending**
+
+FoxShowcase brings a 3D landscape, animated wildlife, physics, materials and interactive field notes together in one example project. Its current game package and screenshots remain local while the grass pass is in progress; this website commit does not include a playable download.
+
+To explore the website locally, serve the repository:
+
+```powershell
+python -m http.server 8000 --bind 127.0.0.1
+```
+
+Open **http://127.0.0.1:8000/website/**. The showcase marks its browser build as pending instead of linking to an absent export.
+
+The site and player are static files suitable for GitHub Pages; gameplay runs on the visitor’s device. **GitHub Pages deployment and live-host qualification are not yet confirmed.** Free hosting has size and bandwidth limits, not unlimited traffic. See [website setup, hosting requirements and capture provenance](docs/website.md).
+
+Publish and qualify a fresh self-contained export before enabling browser play. The website’s responsive-layout checks are separate from gameplay verification.
+
+Browser support is profile-based, not a promise of universal native parity. Both Rust and C# use the publisher, with a documented C# browser subset; unsupported content is rejected rather than silently removed. See [Web exports](docs/web-export.md), [C# browser support](docs/csharp-web.md) and the [effect parity ledger](docs/architecture/webgpu-effect-parity.md).
 
 ## Quick start
 
@@ -128,8 +160,8 @@ Requires the Vulkan loader and driver, Clang, Ninja, and GLFW's platform develop
 
 1. Start `Launcher` and create or open a project; it spawns a dedicated `Editor` process and closes itself.
 2. Build a scene with the hierarchy, inspector, viewport, asset browser, and component tools.
-3. Add gameplay under the project's `scripts/` directory using the `AetherCore` SDK.
-4. Enter play mode to run it. In a development build, press **F5** to rebuild and hot-reload gameplay code.
+3. Author gameplay with the project's selected C# or Rust SDK under its `scripts/` directory.
+4. Enter Play to run it. For C# assembly replacement, **Stop first**, then use **F5 / Reload Scripts** in a development build. Requests during Play are rejected; arbitrary live script state is not migrated. Rust uses rebuild/relaunch.
 5. Use **Debug C#** in the Project panel to open scripts in Visual Studio with the debugger attached, or pack and publish a standalone build.
 6. **File > Save & Return to Project Launcher…** saves and hands control back to the hub when switching projects.
 
@@ -184,6 +216,12 @@ For exact declarations, SDK boundaries and working C#/Rust examples, start with
 [Rust gameplay](docs/rust-gameplay.md) covers the safe Rust SDK, project creation,
 rebuild/relaunch and publishing; Rust does not use C#'s F5 hot-reload path.
 
+## Rust gameplay
+
+Select Rust when creating a project. The safe SDK supplies `Script`, `Context`, registration macros and access to the shared gameplay host; desktop builds load the native module, while browser publishing links the selected game into the WebAssembly player. C# remains the default for projects without language metadata.
+
+Rust currently uses **rebuild/relaunch**, not the C# assembly-replacement path. Start with [Rust gameplay](docs/rust-gameplay.md) and [paired SDK examples](docs/getting-started.md#script-apis-and-examples).
+
 ## Engine MCP
 
 AetherCore ships its own MCP server, so a coding agent can run the test gauntlet,
@@ -211,8 +249,12 @@ flowchart LR
     Scripts["AetherGame scripts"] --> SDK["AetherCore C# SDK"]
     SDK --> Interop["AetherCore.Interop"]
     Interop --> Engine
+    Rust["Rust gameplay SDK / module"] --> Engine
     Engine --> GPU["GPU abstraction"]
     GPU --> Vulkan["Vulkan backend"]
+    Browser["WebAssembly player"] --> WebGPU["WebGPU browser backend"]
+    Scripts -. supported browser subset .-> Browser
+    Rust -. static Web build .-> Browser
     EngineAssets["Engine assets"] --> Packer["AssetPacker"]
     Packer --> EnginePak["engine.pak"]
     EnginePak --> VFS["Runtime VFS"]
@@ -236,10 +278,11 @@ The frame pipeline follows an extract-and-consume model: the producer thread gat
 | `src/engine/material/` | Material authoring, registries, texture lifetime, and GPU material data |
 | `src/engine/animation/` | Skeletons, clips, animation database, blending, and GPU skinning data |
 | `src/engine/physics/` | Jolt integration and physics components |
-| `src/engine/scripting/` | Native CoreCLR host and managed ABI bridge |
-| `src/app/debug/` | Editor panels, inspectors, project controls, and shared editor chrome |
-| `src/app/launcher/` | Standalone Launcher process, project hub, and Editor startup handoff |
-| `src/app/imgui/` | Dear ImGui backend and editor UI rendering integration |
+| `src/app/scripting/` | Shared gameplay host, C#/Rust project integration, build and run coordination |
+| `src/editor/debug/` | Editor panels, inspectors, project controls and shared editor chrome |
+| `src/editor/launcher/` | Standalone Launcher process, project hub and Editor startup handoff |
+| `src/editor/imgui/` | Dear ImGui backend and editor UI rendering integration |
+| `src/app/web/` | Browser runtime, scene loading and gameplay integration |
 
 Subsystems are wired through `ServiceContainer`. Engine startup and shutdown order is dependency-sensitive, and GPU-backed services are destroyed before the GPU device.
 
@@ -358,13 +401,16 @@ Common options:
 
 ```text
 src/engine/                 Native engine library
-src/app/                    Editor, Launcher, runtime shell, panels, and publishing tools
-src/app/launcher/           Standalone project hub and Editor startup handoff
+src/app/                    Runtime shell, gameplay host, scene integration and browser runtime
+src/editor/                 Native editor panels, authoring tools, Launcher and ImGui integration
 src/shaders/                Slang shader sources
 src/include/                Shared binary-format headers
 managed/AetherCore/         Public C# gameplay SDK
 managed/AetherCore.Interop/ Managed ABI and CoreCLR boot assembly
+rust/aethercore/            Safe Rust gameplay SDK
 projects/TestingProject/    Example editor project (scripts/AetherGame.csproj = game scripts)
+projects/FoxShowcase/       3D example project featured on the website
+website/                   Static product site, engineering articles and staged browser player
 resources/                  Engine-owned config, fonts, branding, and templates
 tools/assetpack/            Asset processing and PAK tooling
 tests/                      Doctest-based test sources
@@ -377,6 +423,11 @@ docs/                       Architecture, asset, tooling, and design notes
 - [Script APIs and examples](docs/getting-started.md#script-apis-and-examples) - public C#/Rust SDKs, reference games and agent workflow
 - [Asset database](docs/asset-database.md)
 - [Render-frame extraction architecture](docs/architecture/render-frame-extraction.md)
+- [Shared gameplay ABI and host](docs/architecture/gameplay-abi.md)
+- [Rust gameplay](docs/rust-gameplay.md)
+- [Web exports](docs/web-export.md)
+- [C# browser support](docs/csharp-web.md)
+- [Website, hosting limits and screenshot provenance](docs/website.md)
 - [MCP setup](docs/mcp-setup.md)
 - [Visual Studio debugger MCP](docs/VisualStudio-MCP.md)
 

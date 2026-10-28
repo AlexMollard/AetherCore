@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="AetherCore’s MCP tooling connects coding agents to the real editor: its scenes, components, panels and rendered output—not a separate imitation of the project.">
+<title>An editor your agent can use. — AetherCore development notes</title>
+<link rel="icon" href="../assets/aethercore-app-icon.png"><link rel="stylesheet" href="../css/app.css">
+
+<script src="../js/navigation.js" defer></script>
+</head>
+<body class="article-page">
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="34" height="34" alt="">AetherCore</a><button id="menu" aria-controls="navigation" aria-expanded="false">Menu</button><nav id="navigation" aria-label="Main navigation"><a href="../#workspace">Features</a><a href="../#projects">Showcase</a><a href="../#notes">Development</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Docs ↗</a><a class="nav-cta" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started</a></nav></header>
+<main id="main" class="article-layout">
+<article class="article-content">
+<header class="article-hero">
+<a class="read-link" href="../#notes">← All development notes</a>
+<div class="article-meta"><span>Engineering notes</span><span>Editor / MCP</span></div>
+<h1>An editor your agent can use.</h1>
+<p class="article-intro">An agent can inspect and change the live scene through editor operations, then ask the engine what happened. The interesting part is the boundary between that structured protocol and the actual editor state.</p>
+</header>
+
+<section id="boundary">
+<h2>Two protocols, one live editor</h2>
+<p>The MCP client speaks JSON-RPC over standard input and output to a Python server. For live editor operations, that server launches <code>aether-ctl</code>, a native client that sends JSON over ENet to the editor’s control endpoint. ENet remains on the C++ side; the Python server uses the standard library and subprocesses rather than a Python ENet binding.</p>
+<p>The MCP client discovers tools and sends a named call with arguments over stdio. The Python bridge maps the tool to a wire method and invokes <code>aether-ctl</code>; the editor endpoint queues the request, runs the handler on the main thread and returns a result or error. Offline gameplay jobs and the gauntlet do not require an editor endpoint.</p>
+<p>This extra process boundary has a cost: a live call depends on the bridge executable, a running endpoint and matching ports. In return, the agent requests editor-domain operations rather than reproducing the editor’s state model in a separate tool. See the <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/README.md#L1-L33">MCP architecture</a> and <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/aethercore_mcp.py#L130-L167">bridge invocation</a>.</p>
+<figure class="article-capture">
+<img  data-capture-src="../assets/engine-tools.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" width="2560" height="1440" loading="lazy" alt="Capture pending: FoxShowcase material graph with connected colour and surface inputs, material sphere preview and scene viewport">
+<figcaption>Capture pending: FoxShowcase’s material graph, sphere preview and scene viewport.</figcaption>
+</figure>
+</section>
+
+<section id="discovery">
+<h2>Discovery is part of the contract</h2>
+<p>The running endpoint’s <code>describe</code> returns each wire method, MCP tool name, description, mutation flag and parameter schema. The Python server turns those declarations into tools exposed through MCP <code>tools/list</code>. It merges the live manifest with a cached union of Launcher and Editor methods, so a client with a fixed tool list can survive their port handoff. A listed tool is not proof that the endpoint currently on that port implements it: calls still reach the current owner.</p>
+<p>Before dispatch, the editor checks required arguments and, for methods with declared properties, rejects unknown names and mismatched declared types; underscore-prefixed metadata is exempt from the unknown-name check. Handlers still enforce operation-specific constraints. This is useful protection against a misspelled field silently selecting a default, not a guarantee that every semantically invalid request is impossible. Reconnect after server or schema updates and consult the live <code>describe</code> rather than relying on an old tool list. <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/editor/editor/ControlServer.cpp#L364-L450">Read dispatch validation</a> and <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/aethercore_mcp.py#L523-L570">manifest generation</a>.</p>
+</section>
+
+<section id="dispatch">
+<h2>Mutation belongs on the editor thread</h2>
+<p>The network service parses and bounds incoming requests, then queues them for the main loop. When the queue changes from empty to non-empty it wakes the window; the main thread drains commands and dispatches handlers. Results are wrapped with the request ID, while handler errors become errors instead of successful results. The service also avoids delivering a delayed reply to a new connection that reused an old peer slot.</p>
+<p>For example, <code>scene.transform</code> is exposed as <code>set_transform</code>. It accepts an entity ID and optional position, Euler rotation or scale; omitted fields retain their current values. The handler records a transform command on the undo stack when one is available. This is a real editor operation, not a simulated drag: it can be precise and inspectable, but it does not by itself prove the resulting frame looks right. See <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/editor/editor/ControlServer.cpp#L224-L359">queue and dispatch</a> and <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/editor/editor/ControlMethods.cpp#L1100-L1180">transform handling</a>.</p>
+</section>
+
+<section id="workflow">
+<h2>Inspect, change, verify</h2>
+<p>From the repository, build the editor and client, register the server, and restart your MCP client. Start the Launcher and open a project, or launch a project-scoped Editor with a matching <code>AETHER_CONTROL_PORT</code>. The default is <code>8787</code>; the <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/mcp-setup.md#L20-L55">setup guide</a> gives the exact launch alternatives.</p>
+<pre><code>cmake --build --preset default --target Editor aether-ctl
+./scripts/Install-Mcp.ps1
+aether-ctl describe</code></pre>
+<p>Run the last command with the built <code>aether-ctl</code> on your PATH, or use its full path. In the MCP client, call <code>list_entities</code> and choose an ID from its returned names, positions and parent IDs. Call <code>get_entity</code> for details, then <code>set_transform</code> with that ID and the desired position. Read the entity again to check state; use <code>undo_status</code> or <code>undo</code> if appropriate. Finally, use <code>screenshot</code> to inspect the rendered editor frame and <code>save_scene</code> only when the change should persist. Use the live schema for argument shapes rather than guessing an entity ID or assuming a particular project.</p>
+<p>The standalone client also accepts wire names such as <code>scene.entities</code>; <code>describe</code> shows the wire-to-tool mapping. For larger requests, the bridge streams JSON through stdin rather than placing it on the Windows command line. Batch operations report individual failures, so inspect each result instead of treating a response as an all-or-nothing success. <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/README.md#L56-L107">Tool reference</a> · <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/control-client/main.cpp#L55-L81">client syntax</a>.</p>
+</section>
+
+<section id="feedback">
+<h2>State and pixels answer different questions</h2>
+<p><code>get_entity</code> and <code>list_entities</code> expose scene state; <code>get_console_log</code> returns a bounded, filterable log; <code>query_rendergraph</code> describes compiled passes; and <code>capture_texture</code> writes a PNG of a registered texture. A screenshot can show the viewport and panels, but it cannot establish every component value or explain a render pass. Conversely, a correct transform response does not establish visibility, lighting or framing. Use the observation that matches the question.</p>
+<p>UI automation is also available, but it is a different path. The setup guide distinguishes <code>ui.click</code> for the editor’s ImGui interface from <code>send_input</code> for game-rendered UI. Synthetic input can exercise much game input without window focus; actual cursor lock still depends on focus. Structured scene commands avoid fragile coordinates for scene edits, while UI interaction remains useful when the interface itself is what needs checking. <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/mcp-setup.md#L57-L112">Input boundaries</a>.</p>
+</section>
+
+<section id="locality">
+<h2>Local is a boundary, not a permission model</h2>
+<p>The control server binds to <code>127.0.0.1</code>; the Launcher starts a small hub endpoint and hands its port to the Editor when a project opens. The Control Server panel can start or stop the endpoint and select a port. The standalone GameRuntime does not include these endpoints. Loopback limits network exposure, but does not make an editor mutation harmless: treat processes and agents on the same machine as trusted users of a live project, and stop the endpoint when it is not needed.</p>
+<p>There are separate offline tools for project inspection and persistent build, test, run and publish jobs. An authored-file inspection is not runtime verification; likewise, a successful live edit is not a saved scene or a tested game. Choose the path whose evidence answers the actual question. <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/editor/editor/ControlServer.cpp#L105-L135">Loopback bind</a> · <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/README.md#L129-L147">handoff and port configuration</a> · <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/README.md#L204-L213">offline inspection limits</a>.</p>
+</section>
+<div class="article-next"><a href="render-frame.html">Next: From the scene to the screen. →</a></div>
+</article>
+<aside class="article-sidebar">
+<nav class="article-toc" aria-label="On this page"><h2>On this page</h2><a href="#boundary">Protocol boundary</a><a href="#discovery">Discovery and validation</a><a href="#dispatch">Editor-thread dispatch</a><a href="#workflow">Inspect, change, verify</a><a href="#feedback">State and pixels</a><a href="#locality">Locality and limits</a></nav>
+<div class="article-source-links"><h2>Source material</h2><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/mcp-setup.md">MCP setup guide ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/README.md">MCP tool reference ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/editor/editor/ControlServer.cpp">Control server ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/editor/editor/ControlMethods.cpp">Editor methods ↗</a></div>
+</aside>
+</main>
+<footer class="site-footer"><div class="footer-main"><div class="footer-identity"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="28" height="28" alt="">AetherCore</a><p>A native engine for 2D and 3D games.</p></div><div class="footer-links"><h2>Engine</h2><a href="../#workspace">Features</a><a href="../#projects">Showcase</a><a href="../#notes">Development notes</a></div><div class="footer-links"><h2>Resources</h2><a href="https://github.com/AlexMollard/AetherCore">GitHub ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Documentation ↗</a></div></div><div class="footer-bottom"><span>In active development. APIs and asset formats may change.</span><a href="#main">Back to top ↑</a></div></footer>
+</body>
+</html>

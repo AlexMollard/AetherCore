@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AetherCore is a native C++ game engine for 2D and 3D, with Vulkan rendering, C# and Rust gameplay, and an integrated editor.">
+  <title>AetherCore — 2D &amp; 3D game engine</title>
+  <link rel="icon" href="assets/aethercore-app-icon.png">
+
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/navigation.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead">
+  <a class="brand" href="./" aria-label="AetherCore home"><img src="assets/aethercore-app-icon.png" width="34" height="34" alt="">AetherCore</a>
+  <button id="menu" aria-controls="navigation" aria-expanded="false">Menu</button>
+  <nav id="navigation" aria-label="Main navigation"><a href="#workspace">Features</a><a href="#projects">Showcase</a><a href="#notes">Development</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Docs ↗</a><a class="nav-cta" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started</a></nav>
+</header>
+<main id="main">
+  <section class="game-hero" aria-labelledby="hero-title">
+    <img class="hero-scene" data-capture-src="assets/human-demo.webp" src="assets/human-demo.webp" width="2560" height="1440" fetchpriority="high" alt="HumanDemo running in AetherCore: a character among columns and reflective spheres">
+    <div class="hero-shade"></div>
+    <div class="hero-content"><span class="eyebrow">AETHERCORE GAME ENGINE</span><h1 id="hero-title">Your next game<br>starts here.</h1><p>A native engine for 2D and 3D. <br>Build with Vulkan, script in C# or Rust, <br>and make the editor your own workspace.</p><div class="hero-actions"><a class="button primary" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started with AetherCore <span>↗</span></a><a class="button secondary" href="#workspace">Explore the engine <span>↓</span></a></div><span class="hero-status">In active development · Source available on GitHub</span></div>
+    <button class="hero-credit" data-capture-image="assets/human-demo.webp" data-image="assets/human-demo.webp" data-caption="HumanDemo — native 3D character test scene in AetherCore" aria-label="Inspect HumanDemo capture"><span>RUNNING IN AETHERCORE</span><strong>HumanDemo <b>↗</b></strong><small>Native 3D character demo</small></button>
+  </section>
+
+  <section class="notes-section section-pad" id="notes" aria-labelledby="notes-title">
+    <div class="section-top"><div><span class="eyebrow">DEVELOPMENT NOTES</span><h2 id="notes-title">From inside the engine.</h2></div><p>The boundaries, trade-offs and implementation details behind the features. Follow a decision all the way into the source.</p></div>
+    <div class="notes-list">
+      <a class="note-row" href="articles/render-frame.html">
+        <span class="note-number">01</span><img class="note-image" data-capture-src="assets/engine-frame.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" alt="Capture pending: AetherCore native editor and rendered scene" loading="lazy">
+        <div class="note-content"><span class="eyebrow">RENDERING / OWNERSHIP</span><h3>A frame is not the world.</h3><p>Why the renderer receives an extracted packet, what stays alive around it, and why CPU completion is not GPU completion.</p><span class="read-link">Read the engineering note ↗</span></div>
+      </a>
+      <a class="note-row" href="articles/csharp-iteration.html">
+        <span class="note-number">02</span><img class="note-image" data-capture-src="assets/engine-inspector.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" alt="Capture pending: Components inspected inside AetherCore" loading="lazy">
+        <div class="note-content"><span class="eyebrow">GAMEPLAY / MANAGED &amp; NATIVE</span><h3>What survives a C# reload?</h3><p>A shared SDK identity, collectible assemblies and cached properties. Replacing code is not the same as preserving live state.</p><span class="read-link">Read the engineering note ↗</span></div>
+      </a>
+      <a class="note-row" href="articles/editor-mcp.html">
+        <span class="note-number">03</span><img class="note-image" data-capture-src="assets/engine-tools.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" alt="Capture pending: AetherCore editor tools and scene inspection" loading="lazy">
+        <div class="note-content"><span class="eyebrow">EDITOR / PROTOCOL &amp; FEEDBACK</span><h3>Commands, not coordinates.</h3><p>How MCP reaches the live editor, why mutations run on its main thread, and why a successful command still needs visual proof.</p><span class="read-link">Read the engineering note ↗</span></div>
+      </a>
+    </div>
+  </section>
+
+  <section class="editor-section section-pad" id="workspace" aria-labelledby="editor-title">
+    <div class="editor-heading"><span class="eyebrow">CREATE IN AETHERCORE</span><h2 id="editor-title">One engine.<br>Room for your whole game.</h2><p>Build scenes, author sprites, inspect components and run gameplay without leaving your project.</p></div>
+    <div class="editor-layout"><div class="editor-visual"><div class="tabs" role="tablist" aria-label="Editor workspace"><button id="tab-3d" role="tab" aria-selected="true" aria-controls="workspace-panel" data-view="3d">3D editor</button><button id="tab-2d" role="tab" aria-selected="false" aria-controls="workspace-panel" tabindex="-1" data-view="2d">2D authoring</button><button id="tab-launcher" role="tab" aria-selected="false" aria-controls="workspace-panel" tabindex="-1" data-view="launcher">Project launcher</button></div><div id="workspace-panel" role="tabpanel" aria-labelledby="tab-3d"><button class="image-button workspace-shot" data-capture-image="assets/native-authoring.webp" data-image="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" data-caption="Capture pending" aria-label="Expand workspace screenshot"><img id="workspace-image" data-capture-src="assets/native-authoring.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" width="2560" height="1440" loading="lazy" alt="Capture pending: AetherCore 3D workspace with the FoxShowcase sanctuary arch selected and material and mesh components visible"><span class="expand">View full resolution ↗</span></button></div></div><div class="workspace-copy" aria-live="polite"><span class="eyebrow" id="workspace-label">INTEGRATED AUTHORING</span><h3 id="workspace-title">The world, in context.</h3><p id="workspace-description">Author with a dockable viewport, hierarchy and component inspectors. The editor runs the full render graph: GPU-driven culling, tiled lighting, shadows and post-processing.</p><a class="read-link" id="workspace-link" href="https://github.com/AlexMollard/AetherCore#editor-workflow">Read the editor workflow ↗</a><div class="workspace-facts"><span>Native C++ core</span><span>Vulkan rendering</span><span>C# &amp; Rust gameplay</span></div></div></div>
+  </section>
+
+  <section class="showcase-section section-pad" id="projects" aria-labelledby="projects-title"><div class="showcase-copy"><span class="eyebrow">3D EXAMPLE PROJECT</span><h2 id="projects-title">A whole world.<br>Built with AetherCore.</h2><h3>FoxShowcase</h3><p>Walk the trails, meet animated wildlife and uncover field notes across a sunset landscape. Lighting, materials, physics, animation and interactive UI come together in one AetherCore example project.</p><div class="start-links"><span class="button secondary" aria-disabled="true">Browser build pending</span><a class="read-link" href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/web-export.md">Read about browser publishing ↗</a></div><span class="capture-note" id="fox-requirements">Fresh browser build and gameplay captures pending.</span></div><button class="image-button" data-capture-image="assets/fox-showcase.webp" data-image="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" data-caption="Capture pending" aria-label="Expand FoxShowcase browser gameplay"><img  data-capture-src="assets/fox-showcase.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" width="1280" height="720" loading="lazy" alt="Capture pending: FoxShowcase browser gameplay: a third-person explorer overlooking a wooded landscape, with an animated fox and distant ruins"><span class="expand">Inspect gameplay ↗</span></button></section>
+
+  <section class="engine-section section-pad" id="core" aria-labelledby="core-title">
+    <div class="section-top"><div><span class="eyebrow">BEHIND YOUR GAME</span><h2 id="core-title">Follow the systems.</h2></div><p>Select a layer to see what it owns, what it hands over, and the boundaries that keep the engine understandable.</p></div>
+    <div class="system-workbench">
+      <div class="workbench-bar"><span>ENGINE EXPLORER</span><span>PROJECT → PLAYER</span></div>
+      <div class="system-list">
+        <details name="engine-system" open>
+          <summary><span class="system-number">01</span><span class="system-name"><strong>Author</strong><small>Scenes &amp; asset identity</small></span></summary>
+          <div class="system-body">
+            <span class="eyebrow">IDENTITY BEFORE RESOURCE POINTERS</span><h3>Know the asset.<br>Resolve the resource.</h3>
+            <figure class="system-capture"><img  data-capture-src="assets/editor-2d.png" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" alt="Capture pending: AetherCore sprite authoring with hierarchy and component Inspector" loading="lazy"><figcaption>Capture pending: 2D authoring in the editor.</figcaption></figure>
+            <p>Components can name an asset without serializing a raw memory address. The catalogue resolves that identity through the engine’s existing mesh, texture and material systems.</p>
+            <dl class="system-facts"><div><dt>The choice</dt><dd>One catalogue; reuse the existing owning registries instead of introducing a second texture or material cache.</dd></div><div><dt>The boundary</dt><dd>Source-derived identity is not a promise of rename-stable GUIDs or automatic streaming.</dd></div></dl>
+            <a class="read-link" href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/asset-database.md">Read the asset design ↗</a>
+          </div>
+        </details>
+        <details name="engine-system">
+          <summary><span class="system-number">02</span><span class="system-name"><strong>Simulate</strong><small>Gameplay &amp; world state</small></span></summary>
+          <div class="system-body">
+            <span class="eyebrow">GAMEPLAY MEETS THE NATIVE WORLD</span><h3>Different languages.<br>Real engine systems.</h3>
+            <figure class="system-capture"><img  data-capture-src="assets/fox-journal.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" alt="Capture pending: FoxShowcase running with its field journal open" loading="lazy"><figcaption>Capture pending: FoxShowcase gameplay and its interactive journal.</figcaption></figure>
+            <p>Scripts work with the engine’s entities and components. Jolt handles 3D physics, Box2D handles 2D, and animation supplies the pose data that rendering consumes.</p>
+            <dl class="system-facts"><div><dt>The choice</dt><dd>C# uses a managed SDK and native host boundary; replacing its game assembly recreates script instances.</dd></div><div><dt>The boundary</dt><dd>Current C# reload requests require stopping Play. Rust uses rebuild/relaunch; arbitrary live state does not migrate.</dd></div></dl>
+            <a class="read-link" href="articles/csharp-iteration.html">Inspect the scripting boundary ↗</a>
+          </div>
+        </details>
+        <details name="engine-system">
+          <summary><span class="system-number">03</span><span class="system-name"><strong>Render</strong><small>Extraction &amp; frame ownership</small></span></summary>
+          <div class="system-body">
+            <span class="eyebrow">EXTRACT ONCE. CONSUME A FRAME.</span><h3>A moving world.<br>A defined handoff.</h3>
+            <figure class="system-capture"><img  data-capture-src="assets/engine-frame.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" alt="Capture pending: FoxShowcase sanctuary pond beside the native Render Graph and texture diagnostics" loading="lazy"><figcaption>Capture pending: the native Render Graph and texture diagnostics. Editor-view timings are not a benchmark.</figcaption></figure>
+            <p>The native renderer consumes an extracted frame rather than traversing a world that gameplay is changing. Camera, light and debug data travel with the frame’s identity and draw slot.</p>
+            <dl class="system-facts"><div><dt>The choice</dt><dd>Explicit per-frame extraction instead of a retained render proxy kept in sync by incremental changes.</dd></div><div><dt>The boundary</dt><dd>A packet is not a deep copy of GPU resources. Slot reuse and GPU completion still need their own lifetime rules.</dd></div></dl>
+            <a class="read-link" href="articles/render-frame.html">Trace a complete frame ↗</a>
+          </div>
+        </details>
+        <details name="engine-system">
+          <summary><span class="system-number">04</span><span class="system-name"><strong>Publish</strong><small>Cooked content &amp; target scope</small></span></summary>
+          <div class="system-body">
+            <span class="eyebrow">A PACKAGE, NOT YOUR CHECKOUT</span><h3>Ship the runtime.<br>Leave the tools behind.</h3>
+            <figure class="system-capture"><img  data-capture-src="assets/engine-publish.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" width="720" height="340" alt="Capture pending: AetherCore Build panel showing the Web publish target, output directory and Publish action" loading="lazy"><figcaption>Capture pending: the Build panel with the Web publish target selected.</figcaption></figure>
+            <p>Web publishing cooks supported content, builds the selected gameplay language and packages the loader, Wasm and asset payloads. A manifest records sizes and hashes.</p>
+            <dl class="system-facts"><div><dt>The choice</dt><dd>Qualify an extracted package at a nested URL, away from the source project, so local files cannot hide missing payloads.</dd></div><div><dt>The boundary</dt><dd>Browser support is profile-based, not universal desktop parity. Unsupported content is rejected instead of silently omitted.</dd></div></dl>
+            <a class="read-link" href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/web-export.md">Inspect the publishing contract ↗</a>
+          </div>
+        </details>
+        <div class="system-empty"><span class="eyebrow">CHOOSE A LAYER</span><p>Open a system on the left to inspect its handoff.</p></div>
+      </div>
+      <div class="workbench-foot"><span>Real editor and gameplay captures</span><a href="https://github.com/AlexMollard/AetherCore#architecture">Browse the source ↗</a></div>
+    </div>
+  </section>
+
+  <section class="start-section section-pad" id="start"><div><span class="eyebrow">MAKE SOMETHING YOURS</span><h2>Open the engine.<br>Start a project.</h2></div><div><p>The setup guide covers native builds and your first project. Browser publishing has its own supported profiles and requirements.</p><div class="start-links"><a class="button primary" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started ↗</a><a class="read-link" href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/web-export.md">Web publishing guide ↗</a></div></div></section>
+</main>
+<footer class="site-footer"><div class="footer-main"><div class="footer-identity"><a class="brand" href="./"><img src="assets/aethercore-app-icon.png" width="28" height="28" alt="">AetherCore</a><p>A native engine for 2D and 3D games.</p></div><div class="footer-links"><h2>Engine</h2><a href="#workspace">Features</a><a href="#projects">Showcase</a><a href="#notes">Development notes</a></div><div class="footer-links"><h2>Resources</h2><a href="https://github.com/AlexMollard/AetherCore">GitHub ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Documentation ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/mcp-setup.md">MCP setup ↗</a></div></div><div class="footer-bottom"><span>In active development. APIs and asset formats may change.</span><a href="#main">Back to top ↑</a></div></footer>
+<dialog id="image-dialog" aria-label="Expanded engine screenshot"><button id="close-image" aria-label="Close screenshot">Close ×</button><img id="expanded-image" alt=""><p id="image-caption"></p></dialog>
+</body>
+</html>
