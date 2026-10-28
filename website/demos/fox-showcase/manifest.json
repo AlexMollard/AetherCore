@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "target": "web",
+  "profile": "webgpu-3d-v1",
+  "language": "rust",
+  "engineRevision": "a500bf073bd1d6962ca91eba4a2e928779b5dee4",
+  "project": {
+    "id": "FoxShowcase",
+    "name": "FoxShowcase",
+    "startupScene": "FoxShowcase",
+    "scenes": [
+      "FoxShowcase"
+    ],
+    "startupSceneKind": "3d"
+  },
+  "toolchains": {
+    "schemaVersion": 1,
+    "emscripten": "6.0.12",
+    "emscriptenRevision": "6e9f6885cb17a3d6c8fd488a5cff730f50aba61d",
+    "rustNative": "1.99.0",
+    "rustWasm": "nightly-2026-10-18",
+    "rustWasmVersion": "1.101.0-nightly (8006091eb 2026-10-17)",
+    "rustWasmTarget": "wasm32-unknown-emscripten",
+    "rustBuildStd": "std,panic_abort",
+    "panicStrategy": "abort",
+    "cppExceptions": false,
+    "cppStandard": "c++26",
+    "slang": "2026.8",
+    "emdawnwebgpu": "v20260423.175430",
+    "box2d": "3.1.1",
+    "playwright": "1.62.1"
+  },
+  "files": [
+    {
+      "path": "aethercore-icon.png",
+      "sizeBytes": 42611,
+      "sha256": "48bcc40df23c845db3eabb2bde67b169b12367b841a4f92edd182ac56e1499b4"
+    },
+    {
+      "path": "AetherGame.data",
+      "sizeBytes": 384119,
+      "sha256": "b7de0d7f1ec4288349245383e9ade04ac7603e1baeded2b08a2d4e2ebee8aec3"
+    },
+    {
+      "path": "AetherGame.js",
+      "sizeBytes": 197614,
+      "sha256": "fe83e8c1e6b6112e5f48d5bd116aa23ea8b6d596bc558b662b8e044a0dcbf7d1"
+    },
+    {
+      "path": "AetherGame.wasm",
+      "sizeBytes": 4131439,
+      "sha256": "dea3834f004391eda63a62b5295e291b0b75af37bd8465487317b84b3f244477"
+    },
+    {
+      "path": "engine.pak",
+      "sizeBytes": 359855,
+      "sha256": "2578046ae4f330912c6d86b8ee42769d286ddff988f12ad5a9c4c2b5d18ee814"
+    },
+    {
+      "path": "game.pak",
+      "sizeBytes": 22803822,
+      "sha256": "ee659350e2adcdbd9f5893d995615ce0811ddd1d348a36936ff23fad2c83728a"
+    },
+    {
+      "path": "index.html",
+      "sizeBytes": 16279,
+      "sha256": "07da78b0d848fcd82302a17e19c5454570c5cef7703f7696d63df865c039eb01"
+    },
+    {
+      "path": "platform.js",
+      "sizeBytes": 12648,
+      "sha256": "ef0ee73cbd6491948e2e31ffaeea6e23a7a6160abc0d8cf3174aaf8f4e98c3ae"
+    },
+    {
+      "path": "project.js",
+      "sizeBytes": 1088,
+      "sha256": "0cf345516ccb5c95a82c8a44c399ea1e6276154bb0ada2a1a8fdce637705d09e"
+    }
+  ],
+  "adapterRequirements": {
+    "limits": {
+      "maxBindGroups": 3,
+      "maxBindingsPerBindGroup": 13,
+      "maxStorageBuffersPerShaderStage": 5,
+      "maxStorageBufferBindingSize": 8388608,
+      "maxBufferSize": 8388608,
+      "maxUniformBuffersPerShaderStage": 3,
+      "maxUniformBufferBindingSize": 65536,
+      "maxSampledTexturesPerShaderStage": 10,
+      "maxSamplersPerShaderStage": 2,
+      "maxTextureDimension2D": 7168,
+      "maxTextureArrayLayers": 1,
+      "maxColorAttachments": 3,
+      "maxColorAttachmentBytesPerSample": 12,
+      "maxVertexBuffers": 1,
+      "maxVertexAttributes": 8,
+      "maxComputeInvocationsPerWorkgroup": 256,
+      "maxVertexBufferArrayStride": 100,
+      "maxComputeWorkgroupSizeX": 256,
+      "maxComputeWorkgroupSizeY": 1,
+      "maxComputeWorkgroupSizeZ": 1,
+      "maxComputeWorkgroupStorageSize": 0,
+      "maxComputeWorkgroupsPerDimension": 144
+    },
+    "features": [],
+    "textureFormats": [
+      "depth32float",
+      "r32float",
+      "rgba16float",
+      "rgba8unorm",
+      "rgba8unorm-srgb",
+      "r8unorm"
+    ]
+  },
+  "cookedAssets": {
+    "meshes": [
+      "assets/models/Fox/Fox.mesh",
+      "assets/models/Human/Human.mesh",
+      "assets/models/material-card.mesh",
+      "assets/models/sanctuary-arch-collision.mesh",
+      "assets/models/sanctuary-beach.mesh",
+      "assets/models/sanctuary-bridge-collision.mesh",
+      "assets/models/sanctuary-collision-0.mesh",
+      "assets/models/sanctuary-collision-1.mesh",
+      "assets/models/sanctuary-collision-2.mesh",
+      "assets/models/sanctuary-collision-3.mesh",
+      "assets/models/sanctuary-courtyard.mesh",
+      "assets/models/sanctuary-crystal.mesh",
+      "assets/models/sanctuary-grass-exclusions.mesh",
+      "assets/models/sanctuary-hanging-relic.mesh",
+      "assets/models/sanctuary-pond-bank.mesh",
+      "assets/models/sanctuary-pond.mesh",
+      "assets/models/sanctuary-scree.mesh",
+      "assets/models/sanctuary-terrain.mesh",
+      "assets/models/sanctuary-trails.mesh",
+      "assets/models/sanctuary-vertex-rune.mesh",
+      "assets/models/sanctuary/arch.mesh",
+      "assets/models/sanctuary/bridge.mesh",
+      "assets/models/sanctuary/column.mesh",
+      "assets/models/sanctuary/moss.mesh",
+      "assets/models/sanctuary/mushroom.mesh",
+      "assets/models/sanctuary/rock.mesh",
+      "assets/models/sanctuary/tree.mesh",
+      "assets/models/wildlife/Deer.mesh",
+      "assets/models/wildlife/Wolf.mesh"
+    ],
+    "shaders": [
+      "assets/shaders/BrowserGraph.wshader"
+    ]
+  },
+  "gameplayInputs": {
+    "Cargo.toml": "9db80c76dc6c1e19a4bacfe382f58132358723feb37295dd369ad15a92c4d0d9",
+    "src/interactions.rs": "cb4e749f9c0dead6b7ccc3d3370d338e26b1089e59ec5e6e61e81459f38c73b8",
+    "src/lib.rs": "318f3c9d542d44c8aa1d635003f4d75598b33cb6d488771d96e032ab057a45f7",
+    "src/player.rs": "62e52bdbc93345176d065dc4257d321d8e79211021cfe9e4d852ffd1a2049c5b",
+    "src/wildlife.rs": "5810b62db9c61a2f60b64ee979ea6629ef3f571922fa5fbb52b26be12f4bac87"
+  }
+}

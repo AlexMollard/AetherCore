@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/png" href="aethercore-icon.png">
+<title>AetherCore · Play</title>
+<style>
+/* Night Amber: src/engine/Color.hpp, the editor default. */
+:root{--bg:#0f0d0b;--surface:#191613;--elevated:#201c18;--border:#322c26;--text:#ede9e3;--muted:#968d80;--faint:#635b50;--accent:#ff9429;--hover:#ffb352;--on-accent:#120f0b;--success:#8cd84a;--warning:#f0bc2e;--error:#ff4050}
+:root{font-family:Inter,"Segoe UI",system-ui,sans-serif;color:var(--text);background:var(--bg);font-synthesis:none}
+*{box-sizing:border-box}body{margin:0;min-width:280px}button{font:inherit;cursor:pointer}button:disabled{opacity:.45;cursor:wait}[hidden]{display:none!important}
+button:focus-visible,summary:focus-visible,canvas:focus-visible,a:focus-visible{outline:2px solid var(--hover);outline-offset:4px}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--hover);text-decoration:underline}
+.masthead{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:20px;min-height:72px;padding:12px max(24px,calc((100% - 1600px)/2));background:var(--bg);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;letter-spacing:-.7px;white-space:nowrap}.brand img{width:30px;height:30px}
+.back{font-size:12px;color:var(--muted);line-height:1.5}.back:hover{color:var(--accent);text-decoration:none}
+.badge{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);white-space:nowrap}
+.badge:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--warning)}body[data-state=ready] .badge:before,body[data-state=playing] .badge:before{background:var(--success)}
+body[data-state=failed] .badge:before{background:var(--error)}
+.shell{max-width:1600px;margin:auto;padding:clamp(28px,4vw,58px) 32px 72px}
+.heading{position:relative;margin:0 auto 24px;max-width:1440px;padding-bottom:24px;border-bottom:1px solid var(--border)}
+.heading:after{content:"";position:absolute;bottom:-1px;left:0;width:64px;height:2px;background:var(--accent)}
+h1{font-size:clamp(34px,4vw,64px);font-weight:800;letter-spacing:-.045em;line-height:1.08;margin:0;overflow-wrap:anywhere}
+.eyebrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:10px;line-height:1.7;letter-spacing:1.5px;font-weight:600;text-transform:uppercase;color:var(--accent);margin:0 0 12px}
+.layout{max-width:1440px;margin:auto;min-width:0}
+.player{overflow:hidden;border:1px solid var(--border);border-radius:5px;background:var(--bg);box-shadow:0 24px 70px #0005}
+.stage{position:relative;aspect-ratio:16/9;background:var(--surface)}canvas{display:block;width:100%;height:100%;object-fit:contain}
+.loading{position:absolute;inset:0;display:grid;place-content:center;text-align:center;gap:14px;background:radial-gradient(ellipse at center,#292017,var(--surface) 65%);color:var(--muted);pointer-events:none}
+.loading img{margin:auto;width:34px;height:34px;animation:pulse 1.8s ease-in-out infinite}.loading p{font-size:13px;margin:0}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;border-top:1px solid var(--border);background:var(--surface)}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.button{border:1px solid #66584a;border-radius:4px;padding:10px 16px;background:transparent;color:var(--text);font-size:13px;font-weight:600;line-height:1.5;min-height:40px;transition:background .18s ease,border-color .18s ease,color .18s ease}
+.button:hover:not(:disabled){color:var(--accent);border-color:var(--accent)}.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);min-width:104px}.primary:hover:not(:disabled){background:var(--hover);border-color:var(--hover);color:var(--on-accent)}
+.quiet{border-color:transparent;color:var(--muted)}
+.status{display:flex;justify-content:space-between;gap:20px;padding:16px 2px 0;color:var(--muted);font-size:12px;line-height:1.7}
+#instructions{margin:0}#result{margin:0;text-align:right}
+.panel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 7%;margin-top:48px;border-top:1px solid var(--border)}
+.panel section{min-width:0;padding:26px 0;border-bottom:1px solid var(--border)}
+.panel h2{font-size:10px;line-height:1.7;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin:0 0 12px;font-weight:600}
+.panel p{margin:0;max-width:60ch;font-size:14px;line-height:1.85;color:var(--muted)}.panel .look p{color:var(--text)}
+.compare{display:flex;flex-wrap:wrap;gap:8px}
+.compare a{padding:9px 14px;border:1px solid var(--border);border-radius:4px;font-size:13px;color:var(--muted)}.compare a:hover{border-color:var(--accent);color:var(--accent);text-decoration:none}
+.compare a[aria-current=page]{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600;text-decoration:none}
+.compare-note{font-size:12px!important;color:var(--muted)!important;margin-top:10px!important}
+.scene-id{font:12px/1.7 "JetBrains Mono",ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
+.error{padding:20px;margin-top:20px;border-left:2px solid var(--error);background:var(--surface)}
+.error h2{margin:0 0 8px;font-size:17px}.error p{font-size:13px;line-height:1.7;margin:0 0 12px;color:var(--muted)}.error code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,monospace;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:4px;margin-bottom:12px}
+details{margin-top:20px;color:var(--muted);font-size:12px}summary{cursor:pointer;width:max-content;max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 ui-monospace,monospace;max-height:260px;overflow:auto;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:4px}
+body[data-pixel-fixture=true] .stage{width:512px;max-width:100%;height:auto;aspect-ratio:1;margin:auto}
+.stage:fullscreen{display:grid;place-items:center;background:var(--bg);width:100vw;height:100vh;aspect-ratio:auto}.stage:fullscreen canvas{max-width:100vw;max-height:100vh}
+@keyframes pulse{50%{opacity:.35}}@media(prefers-reduced-motion:reduce){.loading img{animation:none}.button{transition:none}}
+@media(min-width:1000px) and (min-height:601px){.heading,.layout{max-width:min(1440px,calc((100svh - 360px)*16/9))}body[data-example=true] .heading>.eyebrow:first-child{display:none}}
+@media(max-width:600px){.masthead{min-height:60px;gap:12px;padding:10px 16px}.brand{font-size:17px}.brand img{width:26px;height:26px}.back{font-size:11px}.badge{font-size:11px}.shell{padding:28px 16px 48px}.heading{margin-bottom:18px;padding-bottom:18px}.toolbar{flex-wrap:wrap;padding:10px;gap:8px}.actions{gap:4px}.button{padding:9px 11px}.status{flex-direction:column;gap:4px}#result{text-align:left}.panel{grid-template-columns:minmax(0,1fr);margin-top:32px}.panel section{padding:22px 0}}
+@media(max-height:600px) and (min-width:601px){.masthead{min-height:44px;padding-block:6px}.brand img{width:24px;height:24px}.shell{padding-top:12px}.heading{margin-bottom:10px;padding-bottom:10px}.heading .eyebrow{display:none}h1{font-size:26px}.heading,.layout{max-width:calc((100svh - 160px)*16/9)}.toolbar{padding:8px;gap:6px}.actions{gap:4px}.button{padding:7px 9px;min-height:34px}.primary{min-width:80px}}
+</style>
+</head>
+<body data-state="loading">
+<header class="masthead"><div class="brand"><img id="brand-icon" src="aethercore-icon.png" alt="" aria-hidden="true">AetherCore</div><a class="back" id="back" href="/" hidden>&larr; All examples</a><span class="badge" id="status-label">Loading</span></header>
+<main class="shell">
+ <div class="heading"><p class="eyebrow">AetherCore · Browser player</p><h1 id="game-title">Game preview</h1></div>
+ <div class="layout">
+  <div>
+   <div class="player">
+    <div class="stage" id="stage"><canvas id="canvas" width="64" height="64" tabindex="0" aria-label="Game canvas"></canvas><div class="loading" id="loading"><img src="aethercore-icon.png" alt="" aria-hidden="true"><p id="loading-label">Getting your game ready…</p></div></div>
+    <div class="toolbar"><div class="actions"><button class="button primary" id="start" disabled>Loading…</button><button class="button quiet" id="stop" disabled>Stop</button><button class="button quiet" id="capture" hidden>Capture frame</button></div><div class="actions"><button class="button" id="reload">Restart</button><button class="button" id="fullscreen" aria-label="Enter fullscreen">Fullscreen ↗</button></div></div>
+   </div>
+   <div class="status"><p id="instructions">Select Play, then click the game to use the keyboard.</p><p id="result" role="status" aria-live="polite">Loading game files…</p></div>
+   <section class="error" id="error" role="alert" hidden><h2 id="error-title">The game couldn’t start</h2><p id="error-message"></p><div id="local-help" hidden><code id="local-command"></code><p>Run this command in PowerShell, then open <a href="http://127.0.0.1:8080/">http://127.0.0.1:8080/</a>.</p></div><button class="button" id="retry">Try again</button></section>
+   <details><summary>Technical details</summary><pre id="diagnostics"></pre></details>
+  </div>
+  <aside class="panel" id="example" hidden>
+   <section><h2>About this example</h2><p id="example-summary"></p></section>
+   <section class="look" id="example-look-section"><h2>What to look for</h2><p id="example-look"></p></section>
+   <section id="example-compare" hidden><h2>Compare</h2><div class="compare"><a id="compare-on">Feature on</a><a id="compare-off">Control (off)</a></div><p class="compare-note">The control scene is identical except the feature is switched off.</p></section>
+   <section><h2>Scene</h2><div class="scene-id" id="example-scene"></div></section>
+  </aside>
+ </div>
+</main>
+<script src="project.js"></script>
+<script>
+if(!globalThis.aetherProject && !location.search && location.protocol!=='file:'){history.replaceState(null,'','?reference=1&scene=EmberRun');}
+document.body.dataset.pixelFixture=String(!globalThis.aetherProject && new URLSearchParams(location.search).get('scene')==='BrowserFeatures');
+globalThis.aetherRuntime={status:'loading',state:'initializing',diagnostics:[],ticks:0,rendererReady:false,audioReady:false,storageReady:false};
+const byId=id=>document.getElementById(id);
+// Development previews receive their gallery catalogue entry from serve-preview.py; exports never do.
+const example=globalThis.aetherProject ? null : globalThis.aetherExample;
+const gameName=globalThis.aetherProject?.name || example?.title || (new URLSearchParams(location.search).get('scene')==='EmberRun' ? 'Ember Run' : 'AetherCore preview');
+document.title=gameName+' · AetherCore';byId('game-title').textContent=gameName;
+if(globalThis.aetherProject?.instructions){byId('instructions').textContent=aetherProject.instructions;}
+if(example){
+ document.body.dataset.example='true';
+ byId('back').hidden=false;byId('back').href=example.galleryUrl+(example.areaKey?'?area='+encodeURIComponent(example.areaKey):'');
+ byId('example').hidden=false;byId('example-summary').textContent=example.summary;
+ byId('example-look').textContent=example.lookFor||'';byId('example-look-section').hidden=!example.lookFor;
+ byId('example-scene').textContent=example.scene;
+ if(example.control){
+  byId('example-compare').hidden=false;byId('compare-on').href=example.featureUrl;byId('compare-off').href=example.controlUrl;
+  byId(example.isControl?'compare-off':'compare-on').setAttribute('aria-current','page');
+  if(example.isControl){byId('game-title').textContent=gameName+' (control)';}
+ }
+}
+var Module={canvas:byId('canvas'),onAbort(message){globalThis.aetherPlatform?.stop();aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WASM_ABORT',message:String(message)})},printErr(message){console.error(message)}};
+byId('canvas').addEventListener('pointerdown',()=>Module.canvas.focus());
+byId('capture').onclick=()=>Module._aether_web_capture?.();
+byId('stop').onclick=()=>Module._aether_web_stop?.();
+byId('reload').onclick=byId('retry').onclick=()=>location.reload();
+byId('fullscreen').onclick=async()=>{try{if(document.fullscreenElement){await document.exitFullscreen();}else{await byId('stage').requestFullscreen();}}catch{byId('result').textContent='Fullscreen is not available in this embed.';}};
+function updatePlayer(){
+ const runtime=aetherRuntime,platform=globalThis.aetherPlatform;
+ const fileLaunch=location.protocol==='file:';
+ const failed=fileLaunch || runtime.status==='failed' || runtime.state==='failed' || runtime.state==='device-lost';
+ const ready=runtime.rendererReady && (!platform || platform.fontReady);
+ const stopped=runtime.status==='stopped';
+ const state=failed?'failed':stopped?'stopped':ready?(platform?.started || !platform ? 'playing':'ready'):'loading';
+ document.body.dataset.state=state;
+ byId('status-label').textContent={failed:example?.statusKey==='expected-failure'?'Failed as expected':'Unable to start',stopped:'Stopped',playing:'Playing',ready:'Ready to play',loading:'Loading'}[state];
+ byId('start').disabled=!ready || failed || stopped;
+ byId('start').textContent=!ready?'Loading…':platform?.started?'Resume audio':'Play';
+ byId('stop').disabled=!ready || failed || stopped;
+ byId('capture').hidden=!!globalThis.aetherProject || (!new URLSearchParams(location.search).has('test') && !new URLSearchParams(location.search).has('automation'));
+ byId('loading').hidden=ready && !failed;
+ byId('loading-label').textContent=failed?'Unable to load the game':stopped?'Game stopped':'Getting your game ready…';
+ byId('error').hidden=!failed;
+ byId('local-help').hidden=!fileLaunch;
+ if(failed){
+  const unavailable=runtime.diagnostics.some(item=>item.code==='WEBGPU_UNAVAILABLE');
+  const expected=example?.statusKey==='expected-failure';
+  byId('error-title').textContent=fileLaunch?'Start a local server to play':unavailable?'This browser can’t run this game':expected?'Failed as expected':'The game couldn’t start';
+  const message=fileLaunch?'Opening index.html directly cannot load the game. Serve this folder using a local server.':unavailable?'WebGPU is unavailable. Try an up-to-date browser with hardware acceleration enabled, using HTTPS or localhost.':runtime.diagnostics.at(-1)?.message || 'The game files could not be loaded. Try restarting the page.';
+  byId('error-message').textContent=message;byId('result').textContent=message;
+  if(fileLaunch){let folder=decodeURIComponent(location.pathname).replace(/\/[^/]*$/,'');if(/^\/[A-Za-z]:\//.test(folder)){folder=folder.slice(1);}byId('local-command').textContent="python -m http.server 8080 --bind 127.0.0.1 --directory '"+folder.replaceAll("'","''")+"'";}
+ }else{byId('result').textContent=state==='ready'?'Ready when you are.':state==='loading'?'Loading game files…':state==='stopped'?'Select Restart to play again.':document.activeElement===Module.canvas && document.hasFocus()?'Keyboard controls active.':'Click the game to focus.';}
+ const {capture,...summary}=runtime;byId('diagnostics').textContent=JSON.stringify({...summary,capture:capture?{width:capture.width,height:capture.height}:null},null,2);
+}
+updatePlayer();setInterval(updatePlayer,150);
+setTimeout(()=>{if(aetherRuntime.state==='initializing'){aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WEBGPU_TIMEOUT',message:'The game did not finish loading within 30 seconds. Restart to try again.'})}},30000);
+</script>
+<script src="platform.js"></script>
+<script>
+if(location.protocol!=='file:'){
+ const loader=document.createElement('script');const managed=globalThis.aetherProject?.language==='csharp';loader.src=managed?'browser-main.mjs':'AetherGame.js';if(managed){loader.type='module';}loader.onerror=()=>{aetherRuntime.status='failed';aetherRuntime.diagnostics.push({code:'WASM_LOAD',message:'The game files are missing or could not be downloaded. Re-export the game and serve the complete folder.'});};document.body.append(loader);
+}
+</script>
+</body>
+</html>

@@ -4,3 +4,7 @@
 # CRLF, inflating a 7676-byte .fontmeta to 10292 bytes).
 *.fontatlas binary
 *.fontmeta binary
+
+# Published runtime files are hashed by their manifest; preserve exact bytes
+# across checkouts, including generated HTML and JavaScript.
+website/demos/** -text

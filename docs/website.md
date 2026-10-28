@@ -12,7 +12,7 @@ The homepage and article headers follow the landing-page section order: Developm
 
 The committed website retains the approved HumanDemo hero image (`website/assets/human-demo.webp`), its fade into the background, and the AetherCore branding (`website/assets/aethercore-app-icon.png`). All other pictures use inline SVG capture placeholders, not image files. `data-capture-src` and `data-capture-image` retain intended image and zoom paths; workspace tabs preserve their selected capture path. The concise README keeps its badges, logo and approved hero capture, with two screenshot slots using `docs/images/capture-pending.svg` until the fresh-image batch.
 
-Other local images in `website/assets/` and source captures in ignored `logs/website/` are deliberately excluded from this commit. The FoxShowcase grass pass makes those captures outdated. Refresh the compositions, inspect their UI, then add the remaining image bundle in one separate commit and restore the active image/zoom URLs. Do not use the rejected publishing overview with buggy UI.
+The additional image bundle is tracked for review; its presence does not activate the placeholder image or zoom URLs. FoxShowcase's scene and journal WebP files now come from the approved current browser build. Native compositions still need separate visual approval before replacing their placeholders. Do not activate the rejected publishing overview with buggy UI.
 
 Earlier local capture evidence remains under `logs/website/fresh-native/` and `logs/website/fresh-publish/`. Those owned hidden-editor sessions closed with Discard and restored preferences/layouts with matching hashes. Background mode alone does not isolate preferences. The publishing-panel capture showed available controls, not a completed publish. Browser capture attempts later hung; old browser images are not fresh gameplay qualification.
 
@@ -62,11 +62,11 @@ Use self-contained published game output described in [Web export](web-export.md
 
 ### FoxShowcase
 
-FoxShowcase is the intended featured 3D project. Its existing package in `website/demos/fox-showcase/` remains local and is deliberately excluded from this commit, together with screenshot assets. The homepage marks the browser build as pending; it must not link to an absent export or download game files during ordinary browsing.
+FoxShowcase's self-contained package is tracked in `website/demos/fox-showcase/`. It is copied byte-for-byte from the verified local publisher output, including the manifest and exactly its listed files. The homepage still marks public gameplay as pending and does not download this package during ordinary browsing.
 
-After the grass pass, publish a fresh self-contained build, verify it locally and on the target HTTPS host, then enable the homepage Play link. Keep gameplay behind an explicit visitor action and use the player’s Play gesture for keyboard focus and audio. Do not ship the development-gallery server.
+The staged package includes the completed grass, direct third-person camera and illustrated journal work. Local export and nested-path/iframe verification are required before committing a replacement. Target-host HTTPS verification is still required before enabling the homepage Play link or claiming a public deployment.
 
-The earlier local export was about 20.2 MB, but that is not the size of a future release. Recalculate the complete site and game transfer budget after publishing the replacement. Earlier evidence in `logs/website/fox-staged-export.json` is historical; it does not qualify the next export or GitHub Pages deployment.
+Keep gameplay behind an explicit visitor action and use the player's Play gesture for keyboard focus and audio. Do not ship the development-gallery server. The staged game is approximately 28 MB; measure the complete site again after changing media or packages rather than treating this as a future release budget.
 
 Run the existing production-export verifier against the replacement:
 
@@ -76,6 +76,8 @@ node tools/browser-tests/verify-export.mjs --root=website/demos/fox-showcase --r
 ```
 
 Build updates with the normal publisher described in [Web export](web-export.md). Distribute the manifest and exactly its listed files; preserve their bytes and hashes rather than editing generated loader/runtime files. Requalify the replacement before deployment. Keep ZIPs, verification reports, toolchains, and build caches out of `website/`.
+
+`website/demos/**` disables Git text conversion: generated HTML and JavaScript are covered by manifest hashes just like the binary payloads. Keep that byte-preservation rule when adding another staged export.
 
 ### Exported player layout
 
