@@ -67,12 +67,12 @@ region_min = [-45.0, -80.0]
 region_max = [80.0, 80.0]
 spacing = 0.10
 chunk_size = 4.0
-height_range = [0.10, 0.20]
-blade_width = 0.038
-lod_distances = [10.0, 26.0]
-draw_distance = 44.0
+height_range = [0.35, 0.65]
+blade_width = 0.050
+lod_distances = [12.0, 38.0]
+draw_distance = 100.0
 wind_strength = 0.5
-surface_mask = true
+surface_mask = false
 seed = 5291
 base_color = [0.12, 0.24, 0.045]
 tip_color = [0.43, 0.57, 0.14]
@@ -84,7 +84,7 @@ foliage = true
 baked_lighting = false
 receive_shadows = true
 roughness = 1.0
-distance_fade = [33.0, 44.0]
+distance_fade = [75.0, 100.0]
 
 [[entities]]
 name = 'Sanctuary arch'
