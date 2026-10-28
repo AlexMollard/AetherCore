@@ -38,7 +38,17 @@ The check exercises desktop and mobile navigation, the sticky header, editor tab
 
 ## GitHub Pages
 
-Publish the **contents** of `website/` as the site root, preserving `.nojekyll` and the relative directory structure. GitHub Pages branch publishing only selects the repository root or `/docs`; it cannot select `/website` directly. A deliberate `workflow_dispatch`-only deployment can publish `website/` without mixing the engine documentation and website source. No deployment workflow is included or enabled by this migration.
+`.github/workflows/pages.yml` publishes the **contents** of `website/` as the site root, preserving `.nojekyll` and relative URLs. It runs only through `workflow_dispatch`: pushes, pull requests and schedules do not deploy. The job uses a standard Ubuntu runner and runs only while this repository is public.
+
+After committing and pushing the workflow to `master`, open **Actions → Publish website → Run workflow**, select `master`, and run it. Alternatively:
+
+```powershell
+gh workflow run pages.yml --ref master
+```
+
+Repository **Settings → Pages → Source** must be **GitHub Actions**; this was already configured when the workflow was added. The deployment URL is <https://alexmollard.github.io/AetherCore/>. The workflow uses the built-in token and the `github-pages` environment; no personal access token or paid service is required.
+
+The owner approved one narrow storage exception: the Pages deployment artifact, retained for one day. No general artifacts, dependency caches, engine builds or local untracked captures are uploaded. Checkout includes only committed files, so the WIP game package stays local until deliberately added. Adding this workflow does not publish the site; dispatch it explicitly and verify the resulting live URL.
 
 The public repository is eligible for free GitHub Pages hosting. WebGPU gameplay runs on the visitor's device; Pages serves the static loader, WebAssembly, and game assets rather than renting a GPU per session. Published sites are limited to 1 GB, with a soft bandwidth limit of 100 GB per month. Large or popular demo downloads can reach those limits; GitHub may rate-limit or stop serving the site rather than provide unlimited hosting.
 
@@ -68,6 +78,8 @@ Build updates with the normal publisher described in [Web export](web-export.md)
 ### Exported player layout
 
 `resources/web/index.html` is the shared source for published players and development previews. Change it rather than hand-editing a generated package. Its Night Amber palette, typography and controls follow the public website while keeping the game central. Standalone exports keep relative runtime paths and do not depend on website CSS or hosted fonts. Preserve project metadata, gallery comparisons, Play/Stop/Restart, keyboard focus, fullscreen, loading and failure guidance, and diagnostics when changing the layout.
+
+The player heading omits gallery category and qualification badges; those belong in the gallery, not above the game. Live `?scene=` previews read the source template immediately. `/projects/` links serve existing exported packages unchanged, so those pages receive layout updates only after re-exporting.
 
 Layout verification exercised the source shell against the existing Ember Run standalone payload using a temporary browser document override, without rewriting that package or its manifest. Play, canvas focus, fullscreen, Stop, Restart and missing-WebGPU guidance were exercised. Responsive checks covered 1920, 1440, 768 and 390 pixels plus an 844 × 390 landscape viewport. This verifies the player shell, not a newly published FoxShowcase build.
 

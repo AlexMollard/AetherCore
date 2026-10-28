@@ -24,9 +24,6 @@ body[data-state=failed] .badge:before{background:var(--error)}
 .heading:after{content:"";position:absolute;bottom:-1px;left:0;width:64px;height:2px;background:var(--accent)}
 h1{font-size:clamp(34px,4vw,64px);font-weight:800;letter-spacing:-.045em;line-height:1.08;margin:0;overflow-wrap:anywhere}
 .eyebrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:10px;line-height:1.7;letter-spacing:1.5px;font-weight:600;text-transform:uppercase;color:var(--accent);margin:0 0 12px}
-.pill{font-size:10px;letter-spacing:.5px;padding:3px 9px;border-radius:3px;border:1px solid var(--border);color:var(--muted)}
-.pill[data-status=qualified]{color:#9fdc9a;border-color:#2f5a2c}.pill[data-status=in-progress]{color:var(--hover);border-color:#6b4a24}
-.pill[data-status=playable]{color:#8cc8ff;border-color:#24496b}.pill[data-status=expected-failure]{color:#ff8a7a;border-color:#6b2f24}
 .layout{max-width:1440px;margin:auto;min-width:0}
 .player{overflow:hidden;border:1px solid var(--border);border-radius:5px;background:var(--bg);box-shadow:0 24px 70px #0005}
 .stage{position:relative;aspect-ratio:16/9;background:var(--surface)}canvas{display:block;width:100%;height:100%;object-fit:contain}
@@ -62,7 +59,7 @@ body[data-pixel-fixture=true] .stage{width:512px;max-width:100%;height:auto;aspe
 <body data-state="loading">
 <header class="masthead"><div class="brand"><img id="brand-icon" src="aethercore-icon.png" alt="" aria-hidden="true">AetherCore</div><a class="back" id="back" href="/" hidden>&larr; All examples</a><span class="badge" id="status-label">Loading</span></header>
 <main class="shell">
- <div class="heading"><p class="eyebrow">AetherCore · Browser player</p><p class="eyebrow" id="eyebrow" hidden></p><h1 id="game-title">Game preview</h1></div>
+ <div class="heading"><p class="eyebrow">AetherCore · Browser player</p><h1 id="game-title">Game preview</h1></div>
  <div class="layout">
   <div>
    <div class="player">
@@ -95,8 +92,6 @@ if(globalThis.aetherProject?.instructions){byId('instructions').textContent=aeth
 if(example){
  document.body.dataset.example='true';
  byId('back').hidden=false;byId('back').href=example.galleryUrl+(example.areaKey?'?area='+encodeURIComponent(example.areaKey):'');
- const eyebrow=byId('eyebrow');eyebrow.hidden=!example.area;
- if(example.area){eyebrow.append(example.area);const pill=document.createElement('span');pill.className='pill';pill.dataset.status=example.statusKey;pill.textContent=example.status;eyebrow.append(pill);}
  byId('example').hidden=false;byId('example-summary').textContent=example.summary;
  byId('example-look').textContent=example.lookFor||'';byId('example-look-section').hidden=!example.lookFor;
  byId('example-scene').textContent=example.scene;
