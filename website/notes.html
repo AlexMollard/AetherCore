@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Development notes · AetherCore</title>
+<meta name="description" content="Engineering notes on AetherCore’s rendering, gameplay and editor tooling, with implementation details and source links.">
+<link rel="icon" href="assets/aethercore-app-icon.png">
+<link rel="stylesheet" href="css/app.css">
+<script src="js/navigation.js" defer></script>
+</head>
+<body class="article-page notes-page">
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead"><a class="brand" href="./"><img src="assets/aethercore-app-icon.png" width="34" height="34" alt="">AetherCore</a><button id="menu" aria-controls="navigation" aria-expanded="false">Menu</button><nav id="navigation" aria-label="Main navigation"><a href="./#features">Features</a><a href="notes.html" aria-current="page">Development</a><a href="demos/fox-showcase/">Play ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Docs ↗</a><a class="nav-cta" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started</a></nav></header>
+<main id="main" class="section-pad">
+<header class="notes-heading"><span class="eyebrow">DEVELOPMENT NOTES</span><h1>From inside the engine.</h1><p>The decisions, boundaries and implementation details behind AetherCore. Each note follows a system into the source.</p></header>
+<div class="notes-list">
+<a class="note-row" href="articles/render-frame.html"><img class="note-image" src="assets/archive-render.webp" width="2560" height="1440" alt="HumanDemo reflective sphere and pillar beside live Render Graph diagnostics" loading="lazy"><div class="note-content"><span class="eyebrow">RENDERING / OWNERSHIP</span><h2>A frame is not the world.</h2><p>Why the renderer receives an extracted packet, what stays alive around it, and why CPU completion is not GPU completion.</p><span class="read-link">Read the engineering note ↗</span></div></a>
+<a class="note-row" href="articles/csharp-iteration.html"><img class="note-image" src="assets/archive-csharp.webp" width="2560" height="1440" alt="Whisper Arena pause canvas with session, roster and pause-menu script properties" loading="lazy"><div class="note-content"><span class="eyebrow">GAMEPLAY / MANAGED &amp; NATIVE</span><h2>What survives a C# reload?</h2><p>A shared SDK identity, collectible assemblies and cached properties. Replacing code is not the same as preserving live state.</p><span class="read-link">Read the engineering note ↗</span></div></a>
+<a class="note-row" href="articles/editor-mcp.html"><img class="note-image" src="assets/archive-tools.webp" width="2560" height="1440" alt="INKBOUND Sandbox tile-map layout and populated Tile Palette in the native editor" loading="lazy"><div class="note-content"><span class="eyebrow">EDITOR / PROTOCOL &amp; FEEDBACK</span><h2>Commands, not coordinates.</h2><p>How MCP reaches the live editor, why mutations run on its main thread, and why a successful command still needs visual proof.</p><span class="read-link">Read the engineering note ↗</span></div></a>
+</div>
+</main>
+<footer class="site-footer"><div class="footer-bottom"><a href="./">← Back to AetherCore</a><span>In active development. APIs and asset formats may change.</span><a href="#main">Back to top ↑</a></div></footer>
+</body>
+</html>

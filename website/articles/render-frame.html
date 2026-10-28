@@ -10,7 +10,7 @@
 </head>
 <body class="article-page">
 <a class="skip" href="#main">Skip to content</a>
-<header class="masthead"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="34" height="34" alt="">AetherCore</a><button id="menu" aria-controls="navigation" aria-expanded="false">Menu</button><nav id="navigation" aria-label="Main navigation"><a href="../#notes">Development</a><a href="../#workspace">Features</a><a href="../#projects">Showcase</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Docs ↗</a><a class="nav-cta" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started</a></nav></header>
+<header class="masthead"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="34" height="34" alt="">AetherCore</a><button id="menu" aria-controls="navigation" aria-expanded="false">Menu</button><nav id="navigation" aria-label="Main navigation"><a href="../#features">Features</a><a href="../notes.html">Development</a><a href="../demos/fox-showcase/">Play ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Docs ↗</a><a class="nav-cta" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started</a></nav></header>
 <main id="main" class="article-layout">
   <article class="article-content">
     <header class="article-hero">
@@ -28,8 +28,8 @@
       <h2>One frame, four stages</h2>
       <p>Consider a frame containing a mesh, a camera and a point light. After simulation and the client update, the producer selects a draw slot, flushes the world’s mesh draws into its queue, prepares shadow and render-target queues, and copies the camera matrices and light list into the packet. The packet carries both the frame number and the slot that identifies the corresponding prepared queues.</p>
       <figure class="article-capture">
-        <img  data-capture-src="../assets/engine-frame.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" width="2560" height="1440" loading="lazy" alt="Capture pending: FoxShowcase sanctuary pond in the native editor with render graph timings and texture diagnostics">
-        <figcaption>Capture pending: FoxShowcase’s sanctuary pond and the Render Graph diagnostics. Editor-view timings are not a benchmark.</figcaption>
+        <img src="../assets/article-render.webp" width="2560" height="1440" loading="lazy" alt="HumanDemo in the native renderer with a walking figure, pillar shadows and a reflective gold sphere">
+        <figcaption>HumanDemo rendered in the native editor: character geometry, lighting, shadows and reflective materials meet in the final frame. The still illustrates the output, not the lifetime of its underlying resources.</figcaption>
       </figure>
       <ol class="process-steps">
         <li><strong>Update:</strong> The producer advances the game and selects a reusable draw slot.</li>
@@ -70,6 +70,6 @@
     <div class="article-source-links"><h2>Sources</h2><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/architecture/render-frame-extraction.md#L5-L43">Extraction architecture ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/AetherCore.cpp#L1142-L1374">Frame preparation ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/rendering/RenderThread.cpp#L113-L183">Render thread ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/engine/rendering/RenderQueue.hpp#L38-L73">Draw commands ↗</a></div>
   </aside>
 </main>
-<footer class="site-footer"><div class="footer-main"><div class="footer-identity"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="28" height="28" alt="">AetherCore</a><p>A native engine for 2D and 3D games.</p></div><div class="footer-links"><h2>Engine</h2><a href="../#workspace">Features</a><a href="../#projects">Showcase</a><a href="../#notes">Development notes</a></div><div class="footer-links"><h2>Resources</h2><a href="https://github.com/AlexMollard/AetherCore">GitHub ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Documentation ↗</a></div></div><div class="footer-bottom"><span>In active development. APIs and asset formats may change.</span><a href="#main">Back to top ↑</a></div></footer>
+<footer class="site-footer"><div class="footer-bottom"><a href="../notes.html">← All development notes</a><a href="../#features">Engine features</a><a href="../demos/fox-showcase/">Play FoxShowcase ↗</a></div></footer>
 </body>
 </html>

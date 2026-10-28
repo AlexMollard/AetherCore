@@ -9,7 +9,7 @@
 | **Editor** | Standalone project Launcher, Night Amber ImGui workspace, dockable viewport and inspectors, scene hierarchy, project/file browser, UI canvas tools, theme editor, render-graph and texture inspection |
 | **2D authoring** | Blank 2D projects, orthographic 2D viewport and XY tools, sprite placement and picking, non-destructive sheet slicing, sprite animation timelines, deterministic playback, and 2D asset publishing |
 | **Rendering** | Bindless descriptors, buffer device address, render graph, GPU-driven draw culling, tiled lighting, directional and local shadows, GTAO, FXAA, tonemapping, post-processing, offscreen cameras |
-| **Scene and simulation** | EnTT world, reflection-driven component editing and scene serialization, typed asset identities, Jolt 3D and Box2D 2D physics, skeletal animation, blending, root motion, day/night lighting |
+| **Scene and simulation** | EnTT world, reflection-driven component editing and scene serialization, typed asset identities, Jolt 3D and Box2D 2D physics, skeletal animation, blending and day/night lighting; root-motion extraction is not implemented |
 | **Gameplay** | Public C# and Rust SDKs through a shared gameplay host; inspector-exposed C# fields, collectible assembly replacement outside Play, native interop and Visual Studio script debugging; Rust rebuild/relaunch |
 | **Assets** | Virtual file system, glTF import, mesh and animation processing, texture transcoding, material presets and graph authoring, shared engine content, and target-qualified project packages |
 | **Browser publishing** | Self-contained WebAssembly/WebGPU players for supported 2D and 3D profiles, cooked assets, packaged audio, browser saves, manifest integrity and explicit unsupported-content diagnostics |

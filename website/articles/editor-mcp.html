@@ -10,7 +10,7 @@
 </head>
 <body class="article-page">
 <a class="skip" href="#main">Skip to content</a>
-<header class="masthead"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="34" height="34" alt="">AetherCore</a><button id="menu" aria-controls="navigation" aria-expanded="false">Menu</button><nav id="navigation" aria-label="Main navigation"><a href="../#notes">Development</a><a href="../#workspace">Features</a><a href="../#projects">Showcase</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Docs ↗</a><a class="nav-cta" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started</a></nav></header>
+<header class="masthead"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="34" height="34" alt="">AetherCore</a><button id="menu" aria-controls="navigation" aria-expanded="false">Menu</button><nav id="navigation" aria-label="Main navigation"><a href="../#features">Features</a><a href="../notes.html">Development</a><a href="../demos/fox-showcase/">Play ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Docs ↗</a><a class="nav-cta" href="https://github.com/AlexMollard/AetherCore#quick-start">Get started</a></nav></header>
 <main id="main" class="article-layout">
 <article class="article-content">
 <header class="article-hero">
@@ -26,8 +26,8 @@
 <p>The MCP client discovers tools and sends a named call with arguments over stdio. The Python bridge maps the tool to a wire method and invokes <code>aether-ctl</code>; the editor endpoint queues the request, runs the handler on the main thread and returns a result or error. Offline gameplay jobs and the gauntlet do not require an editor endpoint.</p>
 <p>This extra process boundary has a cost: a live call depends on the bridge executable, a running endpoint and matching ports. In return, the agent requests editor-domain operations rather than reproducing the editor’s state model in a separate tool. See the <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/README.md#L1-L33">MCP architecture</a> and <a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/aethercore_mcp.py#L130-L167">bridge invocation</a>.</p>
 <figure class="article-capture">
-<img  data-capture-src="../assets/engine-tools.webp" src="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%3E%3Crect%20width%3D'1600'%20height%3D'900'%20fill%3D'%23191613'%2F%3E%3Cpath%20d%3D'M32%2032H1568V868H32Z'%20fill%3D'none'%20stroke%3D'%23322c26'%20stroke-width%3D'2'%2F%3E%3Ctext%20x%3D'800'%20y%3D'450'%20text-anchor%3D'middle'%20fill%3D'%23968d80'%20font-family%3D'sans-serif'%20font-size%3D'36'%3ENew%20capture%20pending%3C%2Ftext%3E%3C%2Fsvg%3E" width="2560" height="1440" loading="lazy" alt="Capture pending: FoxShowcase material graph with connected colour and surface inputs, material sphere preview and scene viewport">
-<figcaption>Capture pending: FoxShowcase’s material graph, sphere preview and scene viewport.</figcaption>
+<img src="../assets/article-tools.webp" width="2560" height="1440" loading="lazy" alt="FoxShowcase project folders, selected tree and its material and mesh properties in the native editor">
+<figcaption>The live authoring surface: project files, a selected scene entity and its native component properties. This capture was taken through the editor’s control endpoint.</figcaption>
 </figure>
 </section>
 
@@ -71,6 +71,6 @@ aether-ctl describe</code></pre>
 <div class="article-source-links"><h2>Source material</h2><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/mcp-setup.md">MCP setup guide ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/tools/mcp/README.md">MCP tool reference ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/editor/editor/ControlServer.cpp">Control server ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/src/editor/editor/ControlMethods.cpp">Editor methods ↗</a></div>
 </aside>
 </main>
-<footer class="site-footer"><div class="footer-main"><div class="footer-identity"><a class="brand" href="../"><img src="../assets/aethercore-app-icon.png" width="28" height="28" alt="">AetherCore</a><p>A native engine for 2D and 3D games.</p></div><div class="footer-links"><h2>Engine</h2><a href="../#workspace">Features</a><a href="../#projects">Showcase</a><a href="../#notes">Development notes</a></div><div class="footer-links"><h2>Resources</h2><a href="https://github.com/AlexMollard/AetherCore">GitHub ↗</a><a href="https://github.com/AlexMollard/AetherCore/blob/HEAD/docs/getting-started.md">Documentation ↗</a></div></div><div class="footer-bottom"><span>In active development. APIs and asset formats may change.</span><a href="#main">Back to top ↑</a></div></footer>
+<footer class="site-footer"><div class="footer-bottom"><a href="../notes.html">← All development notes</a><a href="../#features">Engine features</a><a href="../demos/fox-showcase/">Play FoxShowcase ↗</a></div></footer>
 </body>
 </html>

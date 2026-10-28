@@ -23,35 +23,30 @@ fs.mkdirSync(outputDir, { recursive: true });
       await page.evaluate(() => scrollTo(0, 500));
       await page.waitForFunction(() => document.querySelector('.masthead').classList.contains('scrolled'));
       assert.equal(await page.locator('.masthead').evaluate(el => el.getBoundingClientRect().top), 0);
-      await page.locator('#tab-2d').click();
-      assert.match(await page.locator('#workspace-image').getAttribute('src'), /^data:image\/svg\+xml/);
-      assert.equal(await page.locator('#workspace-image').getAttribute('data-capture-src'), 'assets/editor-2d.png');
-      await page.locator('#tab-2d').press('ArrowRight');
-      assert.equal(await page.locator('#tab-launcher').getAttribute('aria-selected'), 'true');
-      await page.locator('#tab-3d').click();
-      await page.locator('.workspace-shot').click();
+      const notesTop = () => page.locator('#notes').evaluate(el => el.getBoundingClientRect().top + scrollY);
+      const beforeSwitch = await notesTop();
+      for (const id of ['feature-2d', 'feature-audio', 'feature-networking', 'feature-agents', 'feature-graphics']) {
+        if (width <= 760) await page.locator('.feature-picker select').selectOption(id);
+        else await page.locator(`#${id}-tab`).click();
+        assert.equal(await page.locator(`#${id}`).getAttribute('aria-hidden'), 'false');
+        assert.equal(await page.locator('.feature-panel:not([inert])').count(), 1);
+        assert(Math.abs(await notesTop() - beforeSwitch) < 1, 'Feature switching moves following content');
+        await page.locator(`#${id} img`).scrollIntoViewIfNeeded();
+        await page.locator(`#${id} img`).evaluate(img => img.decode());
+      }
+      if (width > 760) {
+        await page.locator('#feature-graphics-tab').press('End');
+        assert.equal(await page.locator('#feature-publishing-tab').getAttribute('aria-selected'), 'true');
+        await page.locator('#feature-publishing-tab').press('Home');
+      }
+      const imageButton = page.locator('.feature-panel.is-active .image-button');
+      const source = await imageButton.getAttribute('data-image');
+      await imageButton.click();
+      assert.equal(await page.locator('#expanded-image').getAttribute('src'), source);
       assert.equal(await page.locator('#image-dialog').evaluate(el => el.open), true);
       await page.keyboard.press('Escape');
-      assert.equal(await page.locator('#image-dialog').evaluate(el => el.open), false);
-      const systems = page.locator('.system-list details');
-      for (const index of [1, 2, 3, 0]) {
-        const system = systems.nth(index);
-        await system.locator('summary').focus();
-        await system.locator('summary').press('Enter');
-        assert.equal(await system.evaluate(el => el.open), true);
-        assert.equal(await page.locator('.system-list details[open]').count(), 1, 'System explorer must show one layer at a time');
-        assert.equal(await system.locator('.system-body').isVisible(), true);
-        await system.locator('.system-capture img').scrollIntoViewIfNeeded();
-        await system.locator('.system-capture img').evaluate(img => img.decode());
-        const bounds = await system.locator('.system-body').evaluate(el => ({
-          bottom: el.getBoundingClientRect().bottom,
-          footer: document.querySelector('.workbench-foot').getBoundingClientRect().top
-        }));
-        assert(bounds.bottom <= bounds.footer, `System content overlaps its footer at ${width}px`);
-      }
-      await systems.first().locator('summary').press('Enter');
-      assert.equal(await page.locator('.system-empty').isVisible(), true);
-      await systems.first().locator('summary').press('Enter');
+      await page.waitForFunction(() => !document.querySelector('#image-dialog').open && document.body.style.overflow === '');
+      assert.equal(await imageButton.evaluate(el => el === document.activeElement), true);
       if (width === 390) {
         await page.locator('#menu').click();
         assert.equal(await page.locator('#menu').getAttribute('aria-expanded'), 'true');
@@ -68,7 +63,7 @@ fs.mkdirSync(outputDir, { recursive: true });
       await page.waitForFunction(() => !document.querySelector('.masthead').classList.contains('scrolled'));
       await page.screenshot({ path: path.join(outputDir, `product-${width}.png`), fullPage: true });
       assert.deepEqual(gameRequests, [], 'Browsing the website must not download game packages before Play');
-      console.log(`PASS ${width}px: sticky header, tabs, keyboard, dialog, disclosures, images, overflow, runtime errors${width === 390 ? ', mobile navigation' : ''}`);
+      console.log(`PASS ${width}px: sticky header, stable feature switching, keyboard, dialog, images, overflow, runtime errors${width === 390 ? ', mobile navigation' : ''}`);
       await page.close();
     }
     const reduced = await browser.newPage({ reducedMotion: 'reduce' });
@@ -80,12 +75,11 @@ fs.mkdirSync(outputDir, { recursive: true });
     await reduced.close();
     const noScript = await browser.newPage({ javaScriptEnabled: false });
     await noScript.goto(siteUrl);
-    await noScript.locator('.system-list details').nth(2).locator('summary').click();
-    assert.equal(await noScript.locator('.system-list details').nth(2).locator('.system-body').isVisible(), true);
+    for (const panel of await noScript.locator('.feature-panel').all()) assert.equal(await panel.isVisible(), true);
     await noScript.locator('.note-row').first().click();
     assert.equal(await noScript.locator('.article-content section').first().isVisible(), true);
     await noScript.close();
-    console.log('PASS reduced motion and no-JavaScript system/article access');
+    console.log('PASS reduced motion and no-JavaScript feature/article access');
     for (const slug of ['render-frame', 'csharp-iteration', 'editor-mcp']) {
       for (const width of [1440, 390]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
@@ -109,13 +103,10 @@ fs.mkdirSync(outputDir, { recursive: true });
       if (width === 390) {
       await page.locator('#menu').click();
       }
-      await page.locator('#navigation a[href="../#notes"]').click();
-      await page.waitForURL('**/#notes');
-      const bounds = await page.evaluate(() => ({
-        section: document.querySelector('#notes').getBoundingClientRect().top,
-        header: document.querySelector('.masthead').getBoundingClientRect().bottom
-      }));
-      assert(bounds.section >= bounds.header, 'Sticky header obscures anchor destination');
+      await page.locator('#navigation a[href="../notes.html"]').click();
+      await page.waitForURL('**/notes.html');
+      assert.equal(await page.locator('.notes-heading').isVisible(), true);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       assert.deepEqual(errors, []);
       console.log(`PASS article ${slug} ${width}px: chapter navigation, active chapter, sticky header, return to notes, overflow`);
       await page.close();

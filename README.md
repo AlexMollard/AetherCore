@@ -24,16 +24,9 @@
   <a href="#documentation">Documentation</a>
 </p>
 
-![HumanDemo running in AetherCore: a character, columns and reflective spheres](website/assets/human-demo.webp)
+![AetherCore showcase: FoxShowcase’s shrine in WebGPU, INKBOUND’s 2D scene and native material-graph authoring](docs/images/showcase.webp)
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/capture-pending.svg" alt="Editor workspace screenshot pending a fresh capture"><br><strong>Editor workspace</strong></td>
-    <td width="50%"><img src="docs/images/capture-pending.svg" alt="FoxShowcase gameplay screenshot pending a fresh capture"><br><strong>FoxShowcase gameplay</strong></td>
-  </tr>
-</table>
-
-Fresh editor and gameplay captures will replace these placeholders after the scene updates.
+Actual engine captures: browser gameplay, 2D scenes and material authoring. [Explore the engine →](https://alexmollard.github.io/AetherCore/)
 
 ## What is AetherCore?
 

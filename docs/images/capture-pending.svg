@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
-  <rect width="1280" height="720" fill="#191613"/>
-  <rect x="24" y="24" width="1232" height="672" rx="8" fill="none" stroke="#322c26" stroke-width="2"/>
-  <text x="640" y="350" text-anchor="middle" fill="#ede9e3" font-family="Segoe UI, sans-serif" font-size="38">Fresh capture pending</text>
-  <text x="640" y="400" text-anchor="middle" fill="#aaa195" font-family="Segoe UI, sans-serif" font-size="24">The scene is being updated.</text>
-</svg>
