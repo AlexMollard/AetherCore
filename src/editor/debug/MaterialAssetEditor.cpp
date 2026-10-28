@@ -63,6 +63,7 @@ namespace aether::editor
 			else if (key == "character") { onto.character = from.character; }
 			else if (key == "additive_blend") { onto.additiveBlend = from.additiveBlend; }
 			else if (key == "uv_scroll") { onto.uvScroll = from.uvScroll; }
+			else if (key == "distance_fade") { onto.distanceFade = from.distanceFade; }
 		}
 	}
 

@@ -16,6 +16,9 @@
 #include "rendering/RagdollSkinDrive.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "scene/Components.hpp"
+#include "scene/GrassComponent.hpp"
+#include "scene/GrassRuntime.hpp"
+#include <glm/gtc/matrix_transform.hpp>
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
@@ -170,6 +173,43 @@ namespace aether
 				        .meshGeneration = meshGeneration,
 				        .blended = true,
 				        .viewDepthSq = viewDepthSq,
+				});
+			}
+		}
+		auto grassView = world.GetRegistry().view<const GrassComponent, const GrassRuntimeComponent, const TransformComponent>();
+		for (const auto entity: grassView)
+		{
+			const auto& grass = grassView.get<const GrassComponent>(entity);
+			const auto& runtime = grassView.get<const GrassRuntimeComponent>(entity);
+			const auto* pipeline = runtime.pipeline;
+			const auto& transform = grassView.get<const TransformComponent>(entity);
+			if (!grass.enabled || pipeline == nullptr || ecs::HasDisabledAncestor(world, World::FromEntt(entity)) || ecs::IsHiddenInEditor(world, World::FromEntt(entity)))
+			{
+				continue;
+			}
+			if (const auto* renderer = world.GetRegistry().try_get<MeshRendererComponent>(entity); renderer != nullptr && (!renderer->visible || (shadowPass && !renderer->castShadows)))
+			{
+				continue;
+			}
+			const auto* effect = world.GetRegistry().try_get<EffectParamsComponent>(entity);
+			for (const auto& draw: runtime.draws)
+			{
+				const auto& chunk = *draw.chunk;
+				const glm::mat4 model = glm::translate(transform.localToWorld, chunk.origin);
+				glm::vec4 sphere = TransformBoundingSphere(chunk.mesh.GetBoundingSphere(), model);
+				sphere.w += chunk.worldDisplacement;
+				const glm::vec3 delta = glm::vec3(sphere) - eyeWorldPos;
+				const float depth = glm::dot(delta, delta);
+				queue.Submit({
+				        .pipeline = pipeline,
+				        .mesh = &chunk.mesh,
+				        .modelMatrix = model,
+				        .materialIndex = draw.materialSlot,
+				        .effectParamIndex = effect ? effect->paramSlot : 0xFFFFFFFFu,
+				        .worldBoundingSphere = sphere,
+				        .meshGeneration = chunk.mesh.GetGeneration(),
+				        .blended = false,
+				        .viewDepthSq = depth,
 				});
 			}
 		}

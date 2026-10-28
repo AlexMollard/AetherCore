@@ -50,6 +50,7 @@ namespace aether::vulkan
 		m_graphicsFamily = graphicsFamily;
 		m_nextValue = 1;
 		m_lastSubmitted.store(0, std::memory_order_release);
+		m_graphicsDependency.store(0, std::memory_order_release);
 
 		AE_INFO(LogCategory::Vulkan, "TransferManager initialised on queue family {} ({}).", transferFamily, HasDedicatedFamily() ? "dedicated transfer" : "graphics fallback");
 	}
@@ -78,7 +79,7 @@ namespace aether::vulkan
 		m_queue = VK_NULL_HANDLE;
 	}
 
-	TransferManager::Ticket TransferManager::Submit(const std::function<void(gpu::CommandList&)>& record, std::function<void()> onComplete)
+	TransferManager::Ticket TransferManager::Submit(const std::function<void(gpu::CommandList&)>& record, std::function<void()> onComplete, bool requiredForNextFrame)
 	{
 		AE_PROFILE_ZONE();
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "TransferManager: Submit before Initialize");
@@ -153,7 +154,14 @@ namespace aether::vulkan
 		m_inFlight.push_back(InFlight{.value = value, .cmd = cmd, .onComplete = std::move(onComplete)});
 		++m_nextValue;
 		m_lastSubmitted.store(value, std::memory_order_release);
+		if (requiredForNextFrame) m_graphicsDependency.store(value, std::memory_order_release);
 		return value;
+	}
+
+	TransferManager::Ticket TransferManager::CompletedTicket() const
+	{
+		std::uint64_t counter = 0;
+		return m_device != VK_NULL_HANDLE && vkGetSemaphoreCounterValue(m_device, m_timeline, &counter) == VK_SUCCESS ? counter : 0;
 	}
 
 	bool TransferManager::IsComplete(Ticket ticket) const

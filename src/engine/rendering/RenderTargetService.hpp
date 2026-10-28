@@ -4,6 +4,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
+#include <glm/glm.hpp>
 #include <unordered_map>
 
 #include "gpu/GpuFormat.hpp"
@@ -11,6 +13,7 @@
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/FrameContext.hpp"
 #include "rendering/LightingManager.hpp"
+#include "scene/GrassBenderComponent.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
 
@@ -25,6 +28,7 @@ namespace aether
 	class EffectParamBuffer;
 	class Renderer;
 	class VulkanContext;
+	struct GrassTargetFrame;
 	class World;
 
 	class RenderTargetService
@@ -39,6 +43,9 @@ namespace aether
 		void RegisterPasses();
 
 		void PrepareQueues(std::uint32_t drawSlot, World& world);
+		void AppendCameraPositions(std::vector<glm::vec3>& positions) const;
+		void SetGrassFrame(const FrameConstants& frame, const std::vector<GrassTargetFrame>& targets);
+		void ExtractGrassFrames(const World& world, std::vector<GrassTargetFrame>& targets) const;
 		void ClearAllQueues();
 		void DiscardPendingQueues(std::uint32_t slot);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
@@ -69,6 +76,9 @@ namespace aether
 		};
 
 		void RegisterPassFor(std::uint32_t id);
+		struct TargetBenders { std::uint32_t id; GrassBenderFrame frame; };
+		std::vector<TargetBenders> m_grassBenders;
+		float m_grassElapsedTime = 0.0f;
 
 		std::unordered_map<std::uint32_t, Entry> m_targets;
 		std::uint32_t m_nextId = 1;

@@ -30,6 +30,9 @@ namespace aether::app::web
 			        },
 			        pixels.data(),
 			        m_advances.data());
+			m_font_ascent = static_cast<float>(EM_ASM_DOUBLE({ return aetherPlatform.fontAscent; }));
+			m_font_descent = static_cast<float>(EM_ASM_DOUBLE({ return aetherPlatform.fontDescent; }));
+			m_font_baseline = static_cast<float>(EM_ASM_DOUBLE({ return aetherPlatform.fontBaseline; }));
 			if (!m_graphics.UploadTexture(255, 1024, 1024, pixels))
 			{
 				AE_UNEXPECTED(AetherError::Asset("Browser glyph atlas upload failed"));
@@ -87,28 +90,49 @@ namespace aether::app::web
 				const float advance = m_advances[code] * scale;
 				if (text.wrap && !lines.back().empty() && widths.back() + advance > rect.z)
 				{
-					lines.emplace_back();
-					widths.push_back(0);
+					std::vector<unsigned> next;
+					float nextWidth = 0.0f;
+					auto& current = lines.back();
+					const auto space = std::find(current.rbegin(), current.rend(), 32u);
+					if (code != 32 && space != current.rend())
+					{
+						const auto word = space.base();
+						next.assign(word, current.end());
+						for (const auto glyph: next)
+						{
+							nextWidth += m_advances[glyph] * scale;
+						}
+						current.erase(word - 1, current.end());
+						widths.back() -= nextWidth + m_advances[32] * scale;
+					}
+					lines.push_back(std::move(next));
+					widths.push_back(nextWidth);
+					if (code == 32)
+					{
+						continue;
+					}
 				}
 				lines.back().push_back(code);
 				widths.back() += advance;
 			}
 			const float lineHeight = text.pixelSize * 1.3f;
-			const float blockHeight = lines.size() * lineHeight;
+			// Align the glyph metrics, not the trailing leading of the final line.
+			const float blockHeight = (lines.size() - 1) * lineHeight + (m_font_ascent + m_font_descent) * scale;
 			float y = rect.y + (text.vAlign == ui::UIText::VAlign::Bottom ? rect.w - blockHeight : text.vAlign == ui::UIText::VAlign::Middle ? (rect.w - blockHeight) * 0.5f : 0);
 			for (size_t line = 0; line < lines.size(); ++line, y += lineHeight)
 			{
 				float x = rect.x + (text.hAlign == ui::UIText::HAlign::Right ? rect.z - widths[line] : text.hAlign == ui::UIText::HAlign::Center ? (rect.z - widths[line]) * 0.5f : 0);
 				for (const auto code: lines[line])
 				{
+					const float glyphY = y + (m_font_ascent - m_font_baseline) * scale;
 					const float size = 64 * scale;
-					const glm::vec2 begin = glm::max(glm::vec2{x, y}, glm::vec2{rect});
-					const glm::vec2 end = glm::min(glm::vec2{x + size, y + size}, glm::vec2{rect.x + rect.z, rect.y + rect.w});
+					const glm::vec2 begin = glm::max(glm::vec2{x, glyphY}, glm::vec2{rect});
+					const glm::vec2 end = glm::min(glm::vec2{x + size, glyphY + size}, glm::vec2{rect.x + rect.z, rect.y + rect.w});
 					if (end.x > begin.x && end.y > begin.y)
 					{
 						const glm::vec2 cell{code % 16, code / 16};
-						const glm::vec2 uvBegin = (cell + (begin - glm::vec2{x, y}) / size) / 16.0f;
-						const glm::vec2 uvEnd = (cell + (end - glm::vec2{x, y}) / size) / 16.0f;
+						const glm::vec2 uvBegin = (cell + (begin - glm::vec2{x, glyphY}) / size) / 16.0f;
+						const glm::vec2 uvEnd = (cell + (end - glm::vec2{x, glyphY}) / size) / 16.0f;
 						quad({begin, end - begin}, text.color, 255, {uvBegin, uvEnd}, entity);
 						++glyphs;
 					}

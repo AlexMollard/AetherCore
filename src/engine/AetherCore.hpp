@@ -21,6 +21,7 @@
 #include "rendering/CustomPassRegistry.hpp"
 #include "rendering/Light2DSubmission.hpp"
 #include "rendering/RenderThread.hpp"
+#include "vulkan/Swapchain.hpp"
 #include "rendering/ScreenshotService.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/FramePacer.hpp"
@@ -153,6 +154,8 @@ namespace aether
 		int RunFrameLoop(EngineClient& client);
 
 		void RunExclusive(QuiesceMode mode, std::function<void()> mutation) override;
+		void QueueGrassStreaming(GrassStreamingCommands commands);
+		void FlushGrassStreaming();
 
 		[[nodiscard]] double RealElapsedSeconds() const override
 		{
@@ -309,7 +312,9 @@ namespace aether
 		void PumpEvents();
 		void Tick(float dt);
 		[[nodiscard]] RenderFramePacket PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex);
-		void ExecuteRenderFrame(const RenderFramePacket& packet);
+		void ExecuteRenderFrame(RenderFramePacket& packet);
+		void ProcessGrassStreaming(RenderFramePacket& packet);
+		void DeferGrassStreaming(RenderFramePacket& packet);
 		void DiscardPendingFrameQueues(const RenderFramePacket& packet);
 		void DiscardAllPendingFrameQueues();
 		void WaitIdle();
@@ -358,10 +363,20 @@ namespace aether
 
 		void BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc);
 		void PatchShadowIndices(std::uint32_t frameIdx);
-		void UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, FrameConstants fc);
+		void UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, FrameConstants fc, const RenderFramePacket& packet);
 		void SubmitAndAdvance(std::uint32_t frameIdx);
 
 		ServiceContainer m_services;
+		GrassStreamingCommands m_pendingGrassStreaming;
+		struct PendingGrassTransfer
+		{
+			std::shared_ptr<GrassRuntimeChunk> chunk;
+			std::uint64_t ticket = 0;
+		};
+		std::vector<PendingGrassTransfer> m_grassTransfers;
+		std::mutex m_grassDeferredMutex;
+		GrassStreamingCommands m_deferredGrassStreaming;
+		std::array<std::vector<MaterialHandle>, Swapchain::kMaxFramesInFlight> m_retiredGrassMaterials;
 		std::vector<DebugVertex> m_pendingDebugVertices;
 
 		std::unique_ptr<GpuDevice> m_gpu;

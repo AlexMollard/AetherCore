@@ -19,6 +19,7 @@
 #include "platform/Input.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
+#include "scripting/GameplayRotation.hpp"
 #include "rendering/CustomPassRegistry.hpp"
 #include "scripting/GameplayAccess.hpp"
 #include "scripting/GameplayCustomPass.hpp"
@@ -74,13 +75,13 @@ namespace aether::app::scripting
 	AetherGameplayServicesApi RustGameplayServices::EngineApi() const noexcept
 	{
 		uint64_t capabilities = 0;
-		for (uint32_t operation = 1; operation <= AE_GAMEPLAY_SERVICE_GET_CURRENT_CLIP; ++operation)
+		for (uint32_t operation = 1; operation <= AE_GAMEPLAY_SERVICE_SET_EULER; ++operation)
 		{
 			capabilities |= AE_GAMEPLAY_SERVICE_CAP(operation);
 		}
 		if (m_context.input == nullptr)
 		{
-			capabilities &= ~AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN);
+			capabilities &= ~(AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_MOUSE_DOWN) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_MOUSE_DELTA) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_SCROLL_DELTA));
 		}
 		if (m_context.physics2D == nullptr)
 		{
@@ -194,7 +195,7 @@ namespace aether::app::scripting
 			return AE_GAMEPLAY_WRONG_WORLD;
 		}
 		const bool entityOperation = request.operation == AE_GAMEPLAY_SERVICE_SET_SPRITE_COLOR || request.operation == AE_GAMEPLAY_SERVICE_GET_VELOCITY_2D || request.operation == AE_GAMEPLAY_SERVICE_SET_VELOCITY_2D
-		                             || request.operation == AE_GAMEPLAY_SERVICE_SET_UI_TEXT || request.operation == AE_GAMEPLAY_SERVICE_DESTROY_ENTITY || aether::scripting::gameplay3d::IsGameplay3DEntityOperation(request.operation);
+		                             || request.operation == AE_GAMEPLAY_SERVICE_SET_UI_TEXT || request.operation == AE_GAMEPLAY_SERVICE_DESTROY_ENTITY || request.operation == AE_GAMEPLAY_SERVICE_SET_EULER || aether::scripting::gameplay3d::IsGameplay3DEntityOperation(request.operation);
 		if (entityOperation)
 		{
 			const auto status = access.entityValid(access.context, request.entity, &valid);
@@ -220,6 +221,44 @@ namespace aether::app::scripting
 				value.type = AE_GAMEPLAY_PROPERTY_BOOL;
 				value.integer = m_context.input->IsKeyDown(static_cast<Key>(request.integer)) ? 1 : 0;
 				return AE_GAMEPLAY_OK;
+			case AE_GAMEPLAY_SERVICE_MOUSE_DOWN:
+				if (request.integer < 0 || request.integer > 2)
+				{
+					return AE_GAMEPLAY_INVALID_ARGUMENT;
+				}
+				if (!m_context.input)
+				{
+					return AE_GAMEPLAY_UNSUPPORTED;
+				}
+				value.type = AE_GAMEPLAY_PROPERTY_BOOL;
+				value.integer = m_context.input->IsMouseButtonDown(static_cast<MouseButton>(request.integer));
+				return AE_GAMEPLAY_OK;
+			case AE_GAMEPLAY_SERVICE_MOUSE_DELTA:
+			case AE_GAMEPLAY_SERVICE_SCROLL_DELTA:
+			{
+				if (!m_context.input)
+				{
+					return AE_GAMEPLAY_UNSUPPORTED;
+				}
+				const auto delta = request.operation == AE_GAMEPLAY_SERVICE_MOUSE_DELTA ? m_context.input->GetMouseDelta() : m_context.input->GetScrollDelta();
+				value.type = AE_GAMEPLAY_PROPERTY_VECTOR3;
+				value.vector[0] = delta.x;
+				value.vector[1] = delta.y;
+				return AE_GAMEPLAY_OK;
+			}
+			case AE_GAMEPLAY_SERVICE_SET_EULER:
+			{
+				const auto status = aether::scripting::SetGameplayEuler(world, entity, request.vector, m_context.physics);
+				if (status != AE_GAMEPLAY_OK)
+				{
+					return status;
+				}
+				if (m_context.physics2D)
+				{
+					m_context.physics2D->TeleportToTransform(world, entity);
+				}
+				return AE_GAMEPLAY_OK;
+			}
 			case AE_GAMEPLAY_SERVICE_SET_SPRITE_COLOR:
 				if (auto* sprite = world.TryGet<SpriteRendererComponent>(entity))
 				{

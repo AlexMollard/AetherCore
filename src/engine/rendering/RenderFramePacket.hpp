@@ -15,6 +15,21 @@
 #include "rendering/IUiOverlay.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/SceneKind.hpp"
+#include "scene/GrassBenderComponent.hpp"
+#if !defined(AETHERCORE_WEB_RUNTIME)
+#	include "scene/GrassRuntime.hpp"
+#endif
+#if !defined(AETHERCORE_WEB_RUNTIME)
+namespace aether
+{
+	struct GrassTargetFrame
+	{
+		std::uint32_t targetId = 0;
+		GrassBenderFrame benders{};
+	};
+}
+#endif
+
 
 namespace aether
 {
@@ -57,6 +72,12 @@ namespace aether
 		glm::mat4 view{1.0f};
 		glm::mat4 proj{1.0f};
 		glm::vec4 cameraWorldPos{0.0f};
+		GrassBenderFrame grassBenders{};
+#if !defined(AETHERCORE_WEB_RUNTIME)
+		GrassStreamingCommands grassStreaming;
+		GrassBenderFrame previewGrassBenders{};
+		std::vector<GrassTargetFrame> targetGrassBenders;
+#endif
 		float cameraNearPlane = 0.1f;
 		// When this frame sampled input, as a steady_clock epoch count. Carried all the way to
 		// the present so the present-wait thread can report true input-to-photon latency; it

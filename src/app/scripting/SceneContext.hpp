@@ -4,12 +4,16 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <map>
+#include <set>
+#include <unordered_map>
 
 #include "scene/Entity.hpp"
 #if !defined(AETHERCORE_WEB_RUNTIME)
 // GPU-backed model/material state; the browser runtime has none of it.
 #	include "gpu/GpuTypes.hpp"
 #	include "scene/LoadedModel.hpp"
+#	include "scene/GrassRuntime.hpp"
 #	include "material/EffectManager.hpp"
 #	include "material/MaterialAsset.hpp"
 #endif
@@ -103,6 +107,25 @@ namespace aether::app::scripting
 		// FileSystem::ContentStamp captured when each entry above was loaded; a mismatch
 		// (re-extract / re-bake) triggers a reload while unchanged files reuse the asset.
 		std::unordered_map<std::string, std::uint64_t> loadedModelStamps;
+		struct GrassFieldCache
+		{
+			aether::MeshGen::GrassField field;
+			std::map<aether::MeshGen::GrassChunkKey, std::shared_ptr<aether::GrassRuntimeChunk>> chunks;
+			std::vector<aether::MeshGen::GrassChunkKey> desired;
+			bool active = false;
+			std::vector<aether::MeshGen::GrassChunkKey> pending;
+		};
+		struct GrassRootCache
+		{
+			std::shared_ptr<aether::GrassMaterialState> material;
+			aether::MaterialHandle source{};
+			float windStrength = 0.0f;
+			std::array<glm::vec2, 3> fades{};
+		};
+		std::unordered_map<std::uint64_t, GrassFieldCache> grassMeshes;
+		std::unordered_map<std::uint32_t, GrassRootCache> grassRoots;
+		std::vector<glm::vec3> grassCameras;
+		std::vector<aether::MeshGen::GrassChunkKey> grassSelectionScratch;
 
 		struct CachedMesh
 		{

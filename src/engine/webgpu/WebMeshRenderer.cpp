@@ -49,6 +49,9 @@ namespace aether::webgpu
 			glm::uvec4 volumeCounts{};
 			std::array<glm::vec4, 64> blobs{};
 			std::array<glm::vec4, 32> darkness{};
+			glm::vec4 visibilityCamera;
+			std::array<glm::vec4, 8> grassBenders{};
+			std::array<glm::vec4, 8> grassBenderParams{};
 		};
 
 		struct ShadowData
@@ -58,6 +61,8 @@ namespace aether::webgpu
 
 		FrameConstants constants{};
 		std::vector<ShadowData> shadows;
+		std::vector<bool> cameraVisible;
+		std::vector<bool> distanceVisible;
 		std::size_t shadowCount = 0;
 	};
 
@@ -105,7 +110,7 @@ namespace aether::webgpu
 
 		for (auto material: materials)
 		{
-			wgpuBindGroupRelease(material);
+			if (material) { wgpuBindGroupRelease(material); }
 		}
 		if (depthView)
 		{
@@ -601,6 +606,12 @@ namespace aether::webgpu
 		mesh.indices = Buffer(device, queue, WGPUBufferUsage_Index, indices.data(), indices.size_bytes());
 		mesh.indexCount = static_cast<std::uint32_t>(indices.size());
 		mesh.jointCount = jointCount;
+		mesh.boundsMin = mesh.boundsMax = vertices.front().position;
+		for (const auto& vertex: vertices)
+		{
+			mesh.boundsMin = glm::min(mesh.boundsMin, vertex.position);
+			mesh.boundsMax = glm::max(mesh.boundsMax, vertex.position);
+		}
 		mesh.skinReady = skinReady;
 		if (!mesh.vertices || !mesh.indices)
 		{
@@ -611,7 +622,18 @@ namespace aether::webgpu
 			return false;
 		}
 		m_bytes += bytes;
+		mesh.bytes = bytes;
 		return true;
+	}
+
+	void WebMeshRenderer::Release(std::uint32_t slot)
+	{
+		if (slot >= m_meshes.size()) { return; }
+		auto& mesh = m_meshes[slot];
+		Destroy(mesh.vertices);
+		Destroy(mesh.indices);
+		m_bytes -= mesh.bytes;
+		mesh = {};
 	}
 
 	std::expected<std::vector<gpu::MeshGpuInstance>, std::string> WebMeshRenderer::Prepare(const RenderFramePacket& packet, std::span<const WGPUTexture> textures) const
@@ -698,6 +720,10 @@ namespace aether::webgpu
 		}
 		for (const auto& mesh: packet.render3D.meshes)
 		{
+			if (mesh.material.grass && !std::isfinite(mesh.material.grassWindStrength))
+			{
+				return std::unexpected("Invalid grass wind strength");
+			}
 			if (mesh.proceduralKind > 2 || !finite(mesh.effectTint) || !finite(mesh.effectParams))
 			{
 				return std::unexpected("Invalid procedural material kind or effect parameters");
@@ -714,7 +740,7 @@ namespace aether::webgpu
 		}
 		if (packet.renderLightingEnabled)
 		{
-			constexpr std::uint32_t kSupportedFlags = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | gpu::kMeshMirrored;
+			constexpr std::uint32_t kSupportedFlags = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32768 | gpu::kMeshMirrored;
 			for (const auto& instance: *instances)
 			{
 				if ((instance.metadata.w & ~kSupportedFlags) != 0)
@@ -783,6 +809,45 @@ namespace aether::webgpu
 		const auto clip = glm::transpose(packet.proj * packet.view);
 		frame = std::make_unique<WebMeshFrame>();
 		frame->prepared = std::make_unique<WebMeshPreparedData>();
+		// Use the same zero-to-one clip planes as the native FrameConstants.
+		// Animated and custom/procedural vertices can leave their authored bounds.
+		const std::array<glm::vec4, 6> planes{clip[3] + clip[0], clip[3] - clip[0], clip[3] + clip[1], clip[3] - clip[1], clip[2], clip[3] - clip[2]};
+		auto& visible = frame->prepared->cameraVisible;
+		visible.reserve(packet.render3D.meshes.size());
+		auto& distanceVisible = frame->prepared->distanceVisible;
+		distanceVisible.reserve(packet.render3D.meshes.size());
+		for (const auto& instance: packet.render3D.meshes)
+		{
+			if (!instance.skinMatrices.empty() || instance.customShaderSlot != UINT32_MAX || instance.proceduralKind != 0 || instance.material.sky)
+			{
+				visible.push_back(true);
+				++frame->cameraVisibleCount;
+				distanceVisible.push_back(true);
+				continue;
+			}
+			const auto& mesh = m_meshes[instance.mesh];
+			const auto center = glm::vec3(instance.world * glm::vec4((mesh.boundsMin + mesh.boundsMax) * 0.5f, 1.0f));
+			const auto half = (mesh.boundsMax - mesh.boundsMin) * 0.5f;
+			const auto inflation = instance.material.grass ? 1.25f * (mesh.boundsMax.y - mesh.boundsMin.y) * glm::length(glm::vec3(instance.world[1])) + 0.05f : 0.1f;
+			const auto extent = glm::abs(glm::vec3(instance.world[0])) * half.x + glm::abs(glm::vec3(instance.world[1])) * half.y + glm::abs(glm::vec3(instance.world[2])) * half.z + glm::vec3(inflation);
+			const auto fade = instance.material.distanceFade;
+			const auto delta = glm::max(glm::abs(center - glm::vec3(packet.cameraWorldPos)) - extent, glm::vec3(0.0f));
+			const bool inRange = fade.x < 0.0f || fade.y <= fade.x || glm::dot(delta, delta) <= fade.y * fade.y;
+			distanceVisible.push_back(inRange);
+			bool inside = true;
+			for (const auto& plane: planes)
+			{
+				if (glm::dot(glm::vec3(plane), center) + plane.w + glm::dot(glm::abs(glm::vec3(plane)), extent) < 0.0f)
+				{
+					inside = false;
+					break;
+				}
+			}
+			if (!inRange) { ++frame->distanceCulledCount; }
+			else if (!inside) { ++frame->frustumCulledCount; }
+			else { ++frame->cameraVisibleCount; }
+			visible.push_back(inside && inRange);
+		}
 
 		using FrameConstants = WebMeshPreparedData::FrameConstants;
 		using ShadowData = WebMeshPreparedData::ShadowData;
@@ -896,6 +961,9 @@ namespace aether::webgpu
 		constants.invClip0 = inverseClip[0]; constants.invClip1 = inverseClip[1];
 		constants.invClip2 = inverseClip[2]; constants.invClip3 = inverseClip[3];
 		constants.volumeCounts = glm::uvec4(std::min(packet.blobShadows.size(), std::size_t(64)), std::min(packet.blobCharacterCount, 64u), std::min(packet.darknessVolumes.size() / 2, std::size_t(16)), 0);
+		constants.visibilityCamera = packet.cameraWorldPos;
+		constants.grassBenders = packet.grassBenders.positions;
+		constants.grassBenderParams = packet.grassBenders.parameters;
 		std::copy_n(packet.blobShadows.begin(), constants.volumeCounts.x, constants.blobs.begin());
 		std::copy_n(packet.darknessVolumes.begin(), constants.volumeCounts.z * 2, constants.darkness.begin());
 		const auto shadowCount = shadows.size();
@@ -951,24 +1019,37 @@ namespace aether::webgpu
 		}
 		frame->lights = Buffer(device, queue, WGPUBufferUsage_Storage, lights.data(), lights.size() * sizeof(LightData));
 		frame->uniform = Buffer(device, queue, WGPUBufferUsage_Uniform, &constants, sizeof(constants));
-		auto materialInstances = std::vector<gpu::MeshGpuInstance>(instances.begin(), instances.end());
+		struct WebMeshInstance
+		{
+			gpu::MeshGpuInstance mesh;
+			glm::vec4 distanceFade;
+		};
+		static_assert(sizeof(WebMeshInstance) == 208);
+		std::vector<WebMeshInstance> materialInstances(instances.size());
 		for (std::size_t i = 0; i < materialInstances.size(); ++i)
 		{
+			materialInstances[i].mesh = instances[i];
+			const auto& material = packet.render3D.meshes[i].material;
+			materialInstances[i].distanceFade = glm::vec4(material.distanceFade, material.grassWindStrength, 0.0f);
 			std::uint32_t textureFlags = 0;
 			for (unsigned map = 0; map < 5; ++map)
 			{
 				if (packet.render3D.meshes[i].textures[map] != UINT32_MAX) { textureFlags |= 1u << map; }
 			}
-			materialInstances[i].factors.w = static_cast<float>(textureFlags);
+			materialInstances[i].mesh.factors.w = static_cast<float>(textureFlags);
+			if (packet.render3D.meshes[i].material.grass)
+			{
+				materialInstances[i].mesh.metadata.w |= 32768;
+			}
 		}
 		const auto originalCount = materialInstances.size();
 		materialInstances.resize(originalCount * 2);
 		for (std::size_t i = 0; i < originalCount; ++i)
 		{
 			materialInstances[originalCount + i] = materialInstances[i];
-			materialInstances[originalCount + i].metadata.w |= 1u << 30;
+			materialInstances[originalCount + i].mesh.metadata.w |= 1u << 30;
 		}
-		frame->instances = Buffer(device, queue, WGPUBufferUsage_Storage, materialInstances.data(), materialInstances.size() * sizeof(gpu::MeshGpuInstance));
+		frame->instances = Buffer(device, queue, WGPUBufferUsage_Storage, materialInstances.data(), materialInstances.size() * sizeof(WebMeshInstance));
 		std::vector<glm::mat4> palette;
 		for (const auto& mesh: packet.render3D.meshes)
 		{
@@ -1014,8 +1095,15 @@ namespace aether::webgpu
 		bindings.entries = entries.data();
 		bindings.entryCount = entries.size();
 		frame->bindings = wgpuDeviceCreateBindGroup(device, &bindings);
-		for (const auto& instance: packet.render3D.meshes)
+		for (std::size_t meshIndex = 0; meshIndex < packet.render3D.meshes.size(); ++meshIndex)
 		{
+			const auto& instance = packet.render3D.meshes[meshIndex];
+			const bool shadowDraw = shadowCount && instance.castShadows && !instance.material.alphaBlend && !instance.material.sky && frame->prepared->distanceVisible[meshIndex];
+			if (!frame->prepared->cameraVisible[meshIndex] && !shadowDraw)
+			{
+				frame->materials.push_back(nullptr);
+				continue;
+			}
 			std::array<WGPUBindGroupEntry, 6> materialEntries{};
 			std::array<WGPUTextureView, 5> views{};
 			constexpr std::array<unsigned, 5> textureIndices{0, 4, 1, 2, 3};
@@ -1082,7 +1170,7 @@ namespace aether::webgpu
 		for (unsigned i = 0; i < packet.render3D.meshes.size(); ++i)
 		{
 			const auto& instance = packet.render3D.meshes[i];
-			if (instance.material.alphaBlend) { continue; }
+			if (instance.material.alphaBlend || !frame->prepared->cameraVisible[i]) { continue; }
 			const unsigned winding = instance.material.doubleSided ? 0 : ((instances[i].metadata.w & gpu::kMeshMirrored) ? 2 : 1);
 			wgpuRenderPassEncoderSetPipeline(pass, instance.customShaderSlot != ~0u ? m_custom_auxiliary[instance.customShaderSlot][winding] : m_auxiliary_pipeline);
 			const auto& mesh = m_meshes[instance.mesh];
@@ -1193,7 +1281,7 @@ namespace aether::webgpu
 			for (unsigned i = 0; i < packet.render3D.meshes.size(); ++i)
 			{
 				const auto& instance = packet.render3D.meshes[i];
-				if (!instance.castShadows || instance.material.alphaBlend || instance.material.sky)
+				if (!instance.castShadows || instance.material.alphaBlend || instance.material.sky || !frame->prepared->distanceVisible[i])
 				{
 					continue;
 				}
@@ -1248,6 +1336,7 @@ namespace aether::webgpu
 		{
 			const auto index = drawIndex % instances.size();
 			const bool edge = drawIndex >= instances.size();
+			if (!frame->prepared->cameraVisible[index]) { continue; }
 			const auto& instance = packet.render3D.meshes[index];
 			const auto& mesh = m_meshes[instance.mesh];
 			const auto flags = instances[index].metadata.w;

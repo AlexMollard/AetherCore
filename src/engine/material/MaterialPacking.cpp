@@ -76,8 +76,13 @@ namespace aether
 		{
 			flags |= GpuMaterial::kCharacter;
 		}
+		if (a.grass)
+		{
+			flags |= GpuMaterial::kGrass;
+		}
 		g.flags = flags;
 		g.uvScroll = a.uvScroll;
+		g.distanceFade = glm::vec4(a.distanceFade, a.grassWindStrength, 0.0f);
 
 		auto slotFor = [&textures](const TextureHandle h) -> std::uint32_t
 		{

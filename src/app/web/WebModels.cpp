@@ -6,10 +6,14 @@
 #include "material/MaterialSerializer.hpp"
 #include "material/MaterialOverrides.hpp"
 #include "mesh/PrimitiveMeshData.hpp"
+#include "mesh/GrassMeshData.hpp"
+#include <glm/gtc/matrix_transform.hpp>
 #include "scene/SceneSerializerDetail.hpp"
 #include "scene/Hierarchy.hpp"
 #include "gpu/WebMaterialShader.hpp"
 #include "rendering/SceneEffectExtraction.hpp"
+#include "scene/GrassBenderExtraction.hpp"
+#include <set>
 
 namespace aether::app::web
 {
@@ -132,6 +136,27 @@ namespace aether::app::web
 	{
 		if (!record.mesh)
 		{
+			if (world.Has<GrassComponent>(entity))
+			{
+				if (record.skinned)
+				{
+					AE_UNEXPECTED(AetherError::Asset("Browser grass cannot have a skin: " + record.name));
+				}
+				MaterialAsset material;
+				material.doubleSided = true;
+				material.modulateVertexColor = true;
+				material.foliage = false;
+				if (record.material)
+				{
+					AE_TRY(resolved, ResolveMaterial(*record.material));
+					material = *resolved;
+				}
+				world.EmplaceOrReplace<MaterialInstanceComponent>(entity, MaterialInstanceComponent{material});
+				world.EmplaceOrReplace<MeshRendererComponent>(entity, MeshRendererComponent{
+				        record.meshRenderer ? record.meshRendererVisible : true,
+				        record.meshRenderer ? record.meshRendererCastShadows : false});
+				return {};
+			}
 			if (record.skinned || record.material)
 			{
 				AE_UNEXPECTED(AetherError::Asset("Browser material or skin has no mesh: " + record.name));
@@ -150,12 +175,9 @@ namespace aether::app::web
 				{
 					AE_UNEXPECTED(AetherError::Asset("Unknown browser primitive: " + name));
 				}
-				const auto mesh = GeneratePrimitiveMesh(*primitive);
-				if (!mesh || !m_graphics.UploadMesh(m_next_slot, mesh->vertices, mesh->indices))
-				{
-					AE_UNEXPECTED(AetherError::Asset("Browser primitive upload failed: " + name + ": " + m_graphics.MeshUploadError()));
-				}
-				m_primitives.emplace(name, m_next_slot++);
+				const auto slot = TakeSlot();
+				m_primitives.emplace(name, slot);
+				m_pending_uploads.push_back({name, slot, 0, false});
 			}
 			binding.slot = m_primitives.at(name);
 			const auto primitive = *scene::detail::PrimitiveFromName(name);
@@ -181,13 +203,11 @@ namespace aether::app::web
 					}
 					model.clipDurations.push_back(duration);
 				}
-				for (const auto& primitive: model.data.primitives)
+				for (std::size_t i = 0; i < model.data.primitives.size(); ++i)
 				{
-					if (!m_graphics.UploadMesh(m_next_slot, primitive.vertices, primitive.indices))
-					{
-						AE_UNEXPECTED(AetherError::Asset("Browser model upload failed: " + path + ": " + m_graphics.MeshUploadError()));
-					}
-					model.slots.push_back(m_next_slot++);
+					const auto slot = TakeSlot();
+					model.slots.push_back(slot);
+					m_pending_uploads.push_back({path, slot, i, true});
 				}
 				m_models.emplace(path, std::move(model));
 			}
@@ -274,11 +294,191 @@ namespace aether::app::web
 
 	Expected<void> WebModels::Extract(World& world, RenderFramePacket& packet)
 	{
-		std::erase_if(m_bindings, [&world](const auto& binding) { return !world.GetRegistry().valid(World::ToEntt(binding.entity)); });
+		packet.grassBenders = ExtractGrassBenders(world, glm::vec3(packet.cameraWorldPos));
+		std::erase_if(m_bindings, [&world](const auto& binding) {
+			return binding.grass || !world.GetRegistry().valid(World::ToEntt(binding.entity));
+		});
+		m_graphics.CollectRetiredMeshes(m_free_grass_slots);
+		const auto virtualCount = static_cast<std::size_t>(std::count_if(m_pending_uploads.begin(), m_pending_uploads.end(), [](const auto& pending) { return pending.slot >= 1024; }));
+		std::size_t pendingBytes = 0;
+		for (const auto& pending: m_pending_uploads)
+		{
+			if (pending.model)
+			{
+				const auto& primitive = m_models.at(pending.source).data.primitives[pending.primitive];
+				pendingBytes += primitive.vertices.size() * sizeof(MeshVertex) + primitive.indices.size() * sizeof(std::uint32_t);
+			}
+			else
+			{
+				const auto mesh = GeneratePrimitiveMesh(*scene::detail::PrimitiveFromName(pending.source));
+				if (!mesh) { AE_UNEXPECTED(AetherError::Asset("Browser primitive generation failed: " + pending.source)); }
+				pendingBytes += mesh->vertices.size() * sizeof(MeshVertex) + mesh->indices.size() * sizeof(std::uint32_t);
+			}
+		}
+		if (!m_graphics.MeshRetirementPending())
+		{
+			const auto neededSlots = virtualCount > m_free_grass_slots.size() ? virtualCount - m_free_grass_slots.size() : 0;
+			const auto available = m_graphics.AvailableMeshUploadBytes();
+			const auto neededBytes = pendingBytes > available ? pendingBytes - available : 0;
+			std::size_t freedBytes = 0;
+			std::vector<std::uint32_t> slots;
+			for (auto& [key, resident]: m_grass)
+			{
+				for (auto it = resident.chunks.begin(); it != resident.chunks.end() && (slots.size() < neededSlots || freedBytes < neededBytes);)
+				{
+					if (it->second.slot == UINT32_MAX) { ++it; continue; }
+					slots.push_back(it->second.slot);
+					freedBytes += it->second.bytes;
+					it = resident.chunks.erase(it);
+				}
+				if (slots.size() >= neededSlots && freedBytes >= neededBytes) { break; }
+			}
+			if (slots.size() < neededSlots) { AE_UNEXPECTED(AetherError::Asset("Browser model mesh slot capacity exceeded")); }
+			if (freedBytes < neededBytes) { AE_UNEXPECTED(AetherError::Asset("Browser model meshes exceed the 64 MiB upload budget")); }
+			RetireGrass(std::move(slots));
+		}
+		AE_TRY_VOID(FlushUploads());
+		if (m_pending_uploads.empty()) { m_initial_ready = true; }
+		struct Root { Entity entity; std::uint64_t field; std::vector<MeshGen::GrassChunkKey> chunks; };
+		std::vector<Root> roots;
+		for (auto& [key, resident]: m_grass) { resident.desired.clear(); }
+		auto grassView = world.GetRegistry().view<const GrassComponent, const TransformComponent>();
+		for (const auto raw: grassView)
+		{
+			const auto entity = World::FromEntt(raw);
+			const auto& grass = grassView.get<const GrassComponent>(raw);
+			if (!grass.enabled || world.Has<DisabledComponent>(entity) || ecs::HasDisabledAncestor(world, entity)) { continue; }
+			if (const auto* renderer = world.TryGet<MeshRendererComponent>(entity); renderer && !renderer->visible) { continue; }
+			if (!world.Has<MaterialInstanceComponent>(entity))
+			{
+				MaterialAsset material;
+				material.doubleSided = true;
+				material.modulateVertexColor = true;
+				world.Emplace<MaterialInstanceComponent>(entity, MaterialInstanceComponent{material});
+			}
+			if (!world.Has<MeshRendererComponent>(entity))
+			{
+				world.Emplace<MeshRendererComponent>(entity, MeshRendererComponent{true, false});
+			}
+			const auto key = MeshGen::GrassMeshKey(grass);
+			auto it = m_grass.find(key);
+			if (it == m_grass.end())
+			{
+				AE_TRY(field, MeshGen::GrassField::Load(grass));
+				it = m_grass.emplace(key, GrassResident{std::move(*field), {}, {}}).first;
+			}
+			const auto& worldMatrix = grassView.get<const TransformComponent>(raw).localToWorld;
+			const auto determinant = glm::determinant(glm::mat3(worldMatrix));
+			if (!std::isfinite(determinant) || std::abs(determinant) < 1e-12f)
+			{
+				AE_UNEXPECTED(AetherError::Asset("Browser grass root has a singular transform"));
+			}
+			const auto inverse = glm::inverse(worldMatrix);
+			const auto local = inverse * packet.cameraWorldPos;
+			const glm::mat3 linear(inverse);
+			float normSquared = 0.0f;
+			for (int i = 0; i < 3; ++i)
+			{
+				float row = 0.0f;
+				for (int j = 0; j < 3; ++j) { row += std::abs(glm::dot(linear[i], linear[j])); }
+				normSquared = std::max(normSquared, row);
+			}
+			const float localDistanceScale = std::sqrt(normSquared);
+			AE_TRY_VOID(it->second.field.SelectChunks({local.x, local.z}, m_selected_grass, localDistanceScale));
+			roots.push_back({entity, key, m_selected_grass});
+			auto& desired = it->second.desired;
+			desired.insert(desired.end(), m_selected_grass.begin(), m_selected_grass.end());
+		}
+		std::vector<std::uint32_t> retiring;
+		for (auto it = m_grass.begin(); it != m_grass.end();)
+		{
+			auto& resident = it->second;
+			const std::set<MeshGen::GrassChunkKey> wanted(resident.desired.begin(), resident.desired.end());
+			for (auto chunk = resident.chunks.begin(); chunk != resident.chunks.end();)
+			{
+				if (wanted.contains(chunk->first)) { ++chunk; continue; }
+				if (chunk->second.slot != UINT32_MAX) { retiring.push_back(chunk->second.slot); }
+				chunk = resident.chunks.erase(chunk);
+			}
+			if (resident.desired.empty()) { it = m_grass.erase(it); }
+			else { ++it; }
+		}
+		RetireGrass(std::move(retiring));
+		// Upload only a bounded number per frame; existing meshes remain drawable.
+		std::size_t uploaded = 0;
+		if (m_pending_uploads.empty())
+		{
+			for (auto& [key, resident]: m_grass)
+			{
+				for (const auto chunkKey: resident.desired)
+				{
+					if (uploaded >= 4) { break; }
+					if (resident.chunks.contains(chunkKey)) { continue; }
+					++uploaded;
+					AE_TRY(chunk, resident.field.GenerateChunk(chunkKey));
+					if (chunk->mesh.vertices.empty() || chunk->mesh.indices.empty())
+					{
+						resident.chunks.emplace(chunkKey, GrassSlot{UINT32_MAX, chunk->origin});
+						continue;
+					}
+					const auto bytes = chunk->mesh.vertices.size() * sizeof(MeshVertex) + chunk->mesh.indices.size() * sizeof(std::uint32_t);
+					m_graphics.CollectRetiredMeshes(m_free_grass_slots);
+					if (!m_graphics.HasMeshUploadCapacity(bytes))
+					{
+						if (m_graphics.MeshRetirementPending()) { break; }
+						AE_UNEXPECTED(AetherError::Asset("Browser grass desired residency exceeds the 64 MiB mesh upload budget"));
+					}
+					if (m_free_grass_slots.empty() && m_next_slot >= 1024)
+					{
+						if (m_graphics.MeshRetirementPending()) { break; }
+						AE_UNEXPECTED(AetherError::Asset("Browser grass desired residency exceeds the 1024 mesh slot limit"));
+					}
+					const auto slot = TakeSlot();
+					if (!m_graphics.UploadMesh(slot, chunk->mesh.vertices, chunk->mesh.indices))
+					{
+						m_free_grass_slots.push_back(slot);
+						AE_UNEXPECTED(AetherError::Asset("Browser grass upload failed: " + m_graphics.MeshUploadError()));
+					}
+					resident.chunks.emplace(chunkKey, GrassSlot{slot, chunk->origin, bytes});
+				}
+				if (uploaded >= 4) { break; }
+			}
+		}
+		m_streaming_pending = false;
+		for (const auto& [key, resident]: m_grass)
+		{
+			for (const auto chunk: resident.desired)
+			{
+				if (!resident.chunks.contains(chunk)) { m_streaming_pending = true; break; }
+			}
+			if (m_streaming_pending) { break; }
+		}
+		for (const auto& root: roots)
+		{
+			const auto& resident = m_grass.at(root.field);
+			for (const auto chunkKey: root.chunks)
+			{
+				const auto chunk = resident.chunks.find(chunkKey);
+				if (chunk == resident.chunks.end() || chunk->second.slot == UINT32_MAX) { continue; }
+				Binding binding{root.entity, chunk->second.slot};
+				binding.grass = true;
+				binding.origin = chunk->second.origin;
+				binding.grassFade = resident.field.DistanceFade(chunkKey.lod);
+				m_bindings.push_back(binding);
+			}
+		}
 		std::vector<BlobShadowSource> blobs;
 		for (const auto& binding: m_bindings)
 		{
+			if (!binding.grass && std::any_of(m_pending_uploads.begin(), m_pending_uploads.end(), [&binding](const auto& pending) { return pending.slot == binding.slot; }))
+			{
+				continue;
+			}
 			const auto entity = binding.entity;
+			if (binding.grass && !world.Get<GrassComponent>(entity).enabled)
+			{
+				continue;
+			}
 			const auto* renderer = world.TryGet<MeshRendererComponent>(entity);
 			if (!renderer || !renderer->visible || world.Has<DisabledComponent>(entity) || ecs::HasDisabledAncestor(world, entity))
 			{
@@ -286,9 +486,26 @@ namespace aether::app::web
 			}
 			MeshRenderInstance draw;
 			draw.world = world.Get<TransformComponent>(entity).localToWorld;
+			if (binding.grass)
+			{
+				draw.world = glm::translate(draw.world, binding.origin);
+			}
 			draw.mesh = binding.slot;
 			draw.castShadows = renderer->castShadows;
 			draw.material = world.Get<MaterialInstanceComponent>(entity).asset;
+			if (binding.grass)
+			{
+				const auto& grass = world.Get<GrassComponent>(entity);
+				draw.material.grass = true;
+				draw.material.grassWindStrength = grass.windStrength;
+				draw.material.modulateVertexColor = true;
+				draw.material.doubleSided = true;
+				draw.material.foliage = false;
+				draw.material.alphaBlend = false;
+				draw.material.alphaMask = false;
+				draw.material.additiveBlend = false;
+				draw.material.distanceFade = binding.grassFade;
+			}
 			const auto uri = draw.material.templateDesc.shaderVfsPath;
 			draw.proceduralKind = uri == "shaders://plasma.spv" ? 1 : uri == "shaders://molten.spv" ? 2 : 0;
 			if (const auto* effect = world.TryGet<EffectRefComponent>(entity))
@@ -317,7 +534,7 @@ namespace aether::app::web
 			}
 			AE_TRY(shader, ResolveShader(draw.material.templateDesc.shaderVfsPath));
 			draw.customShaderSlot = *shader;
-			if (draw.material.objectLit && !draw.material.alphaBlend)
+			if (!binding.grass && draw.material.objectLit && !draw.material.alphaBlend)
 			{
 				const auto* hierarchy = world.TryGet<HierarchyComponent>(entity);
 				const auto actor = hierarchy && hierarchy->parent.IsValid() ? hierarchy->parent : entity;
@@ -412,8 +629,96 @@ namespace aether::app::web
 		return false;
 	}
 
+
+	std::uint32_t WebModels::TakeSlot()
+	{
+		m_graphics.CollectRetiredMeshes(m_free_grass_slots);
+		if (m_free_grass_slots.empty()) { return m_next_slot < 1024 ? m_next_slot++ : m_next_virtual_slot++; }
+		const auto slot = m_free_grass_slots.back();
+		m_free_grass_slots.pop_back();
+		return slot;
+	}
+
+	Expected<void> WebModels::FlushUploads()
+	{
+		if (m_graphics.MeshRetirementPending()) { return {}; }
+		m_graphics.CollectRetiredMeshes(m_free_grass_slots);
+		const auto virtualCount = std::count_if(m_pending_uploads.begin(), m_pending_uploads.end(), [](const auto& pending) { return pending.slot >= 1024; });
+		if (static_cast<std::size_t>(virtualCount) > m_free_grass_slots.size()) { return {}; }
+		for (auto& pending: m_pending_uploads)
+		{
+			if (pending.slot < 1024) { continue; }
+			const auto oldSlot = pending.slot;
+			pending.slot = TakeSlot();
+			for (auto& binding: m_bindings) { if (binding.slot == oldSlot) { binding.slot = pending.slot; } }
+			for (auto& [name, slot]: m_primitives) { if (slot == oldSlot) { slot = pending.slot; } }
+			for (auto& [name, model]: m_models)
+			{
+				for (auto& slot: model.slots) { if (slot == oldSlot) { slot = pending.slot; } }
+			}
+		}
+		for (const auto& pending: m_pending_uploads)
+		{
+			if (pending.model)
+			{
+				const auto& primitive = m_models.at(pending.source).data.primitives[pending.primitive];
+				if (!m_graphics.UploadMesh(pending.slot, primitive.vertices, primitive.indices))
+				{
+					AE_UNEXPECTED(AetherError::Asset("Browser model upload failed: " + pending.source + ": " + m_graphics.MeshUploadError()));
+				}
+			}
+			else
+			{
+				const auto mesh = GeneratePrimitiveMesh(*scene::detail::PrimitiveFromName(pending.source));
+				if (!mesh || !m_graphics.UploadMesh(pending.slot, mesh->vertices, mesh->indices))
+				{
+					AE_UNEXPECTED(AetherError::Asset("Browser primitive upload failed: " + pending.source + ": " + m_graphics.MeshUploadError()));
+				}
+			}
+		}
+		m_pending_uploads.clear();
+		return {};
+	}
+	void WebModels::RetireGrass(std::vector<std::uint32_t> slots)
+	{
+		if (slots.empty()) { return; }
+		m_graphics.RetireMeshes(std::move(slots));
+	}
+
 	void WebModels::ClearEntities()
 	{
 		m_bindings.clear();
+		m_initial_ready = false;
+		m_streaming_pending = false;
+		std::vector<std::uint32_t> slots;
+		std::set<std::uint32_t> pendingSlots;
+		for (const auto& pending: m_pending_uploads)
+		{
+			pendingSlots.insert(pending.slot);
+			if (pending.slot < 1024) { m_free_grass_slots.push_back(pending.slot); }
+		}
+		m_pending_uploads.clear();
+		for (const auto& [path, model]: m_models)
+		{
+			for (const auto slot: model.slots)
+			{
+				if (!pendingSlots.contains(slot)) { slots.push_back(slot); }
+			}
+		}
+		for (const auto& [name, slot]: m_primitives)
+		{
+			if (!pendingSlots.contains(slot)) { slots.push_back(slot); }
+		}
+		m_models.clear();
+		m_primitives.clear();
+		for (const auto& [key, resident]: m_grass)
+		{
+			for (const auto& [chunk, data]: resident.chunks)
+			{
+				if (data.slot != UINT32_MAX) { slots.push_back(data.slot); }
+			}
+		}
+		m_grass.clear();
+		RetireGrass(std::move(slots));
 	}
 } // namespace aether::app::web

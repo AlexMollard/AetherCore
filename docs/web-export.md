@@ -78,3 +78,98 @@ node tools/browser-tests/verify-export.mjs `
 This checks immediate keyboard movement/scoring, audible collection, retry, a completed
 round and best-score persistence after reload, alongside normal export/iframe checks.
 Set `AETHER_PLAYWRIGHT_MODULE` to the pinned dependency as for publishing.
+
+## Animated 3D fox showcase
+
+`projects/FoxShowcase` is a Rust `webgpu-3d-v1` third-person sunset world.
+A continuous 160-by-160 landscape connects the fox meadow and ruined sanctuary
+to forests, rocky mountain trails and a western beach. The fox, two deer and
+two wolves travel through their habitats and alternate walking with resting
+animations. The Mixamo humanoid uses idle/walk animation, a capsule character
+controller, jumping and an orbiting camera. The low amber sun, muted horizon,
+restrained local lights and reduced exposure/bloom keep the lighting subdued.
+
+The environment includes water, molten/plasma, gem/sheen/character and
+object-lit materials, baked/vertex-colour surfaces, scrolling textures,
+wind foliage, a material graph, light shafts and 3D particles. Directional,
+point and spot shadows combine with physical sky/clouds, height fog, darkness,
+GTAO, SSR, volumetrics, bloom, auto exposure, DOF, camera motion blur,
+grading/lens effects, FXAA and sharpening.
+
+Click the game for keyboard focus. WASD walks, Shift moves briskly, Space jumps,
+left-drag orbits, the wheel zooms and R respawns. E opens nearby field notes;
+Escape closes them and restores movement. Discover the trailhead, pond, sanctuary,
+woodland shrine and coastal lookout to complete the saved journal. Its map,
+slider and switch are real 2D UI controls. At the sanctuary, F launches a stone
+toward the supported hinge relic; G removes the projectile and resets the resting
+stone. Gameplay continues while the journal is open, but player movement is blocked.
+
+Fox attribution and the Kenney/Quaternius CC0 notices are packaged in
+`assets/credits.txt` and `assets/licenses/`. Source scene includes separate
+landscape, wildlife, ground-cover, player, terrain-collision and interaction scenes.
+
+Publish through the normal Web pipeline with `-Project projects/FoxShowcase`.
+The development gallery at `http://127.0.0.1:18989/` lists the project and
+serves its published package at `/projects/FoxShowcase/`. Registered project
+routes cannot escape their package roots; unknown projects/files return 404.
+The ZIP is `projects/FoxShowcase/Builds/Web/FoxShowcase/FoxShowcase.zip`.
+This combined artistic map is not an additional native/WebGPU cross-product
+parity guarantee.
+
+## Built-in 3D grass
+
+Add the reflected **Grass** component in the native Inspector, or author
+`[entities.grass]` in a 3D scene. The same descriptor is consumed by native and
+Web runtimes; a project-specific grass script or prebuilt patch models are not
+required. Optional `surface_mesh` and `exclusion_mesh` models are sampled in
+the grass entity's local space; no surface means a flat field at local Y=0.
+Source node transforms are applied before sampling. Exclusions prevent blades
+on paths and paving; missing source surface triangles remain holes.
+
+```toml
+[[entities]]
+name = "Meadow"
+[entities.grass]
+surface_mesh = "project://assets/models/terrain.gltf"
+exclusion_mesh = "project://assets/models/paths.gltf"
+region_min = [-50.0, -50.0]
+region_max = [50.0, 50.0]
+spacing = 0.14
+chunk_size = 4.0
+height_range = [0.35, 0.85]
+blade_width = 0.035
+lod_distances = [10.0, 26.0]
+draw_distance = 44.0
+wind_strength = 1.0
+seed = 1
+```
+
+Spacing, chunk size, height and width use local-space metres. LOD and draw
+distances use world-space metres. Camera-local chunks contain deterministic,
+curved, opaque blades with vertex-tinted roots and tips. Three disjoint density
+layers fade gradually instead of replacing whole patches. Chunks retain
+ordinary camera-frustum culling, conservative wind bounds and terrain materials
+under the distant fade. Prepared surface/exclusion data and unchanged chunks
+are reused; outgoing GPU resources retire only after submitted work completes.
+
+Set `surface_mask = true` to paint growth through the surface model's vertex
+colours: red controls density, green scales height, blue blends toward dry gold.
+Keep vertex-colour rendering disabled on the terrain material when those colours
+are growth data rather than visible terrain tint. `base_color` and `tip_color`
+set the meadow palette. Wind strength changes material parameters without
+regenerating geometry.
+
+Add **Grass Bender** to the player or another moving entity:
+
+```toml
+[entities.grass_bender]
+radius = 0.9
+strength = 0.8
+```
+
+The nearest eight enabled benders per view bend nearby blades away with smooth
+radial falloff; roots remain planted. Wind and bending use the same displacement
+in colour, depth and shadow passes. The browser's 64 MiB resident mesh budget and
+1,024 mesh-slot limit include ordinary models as well as grass. Tune density and
+view distances for the rest of the scene; scene changes release old model,
+primitive and grass GPU residency rather than retaining historical worlds.

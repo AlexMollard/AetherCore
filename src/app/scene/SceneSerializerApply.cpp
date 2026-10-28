@@ -23,6 +23,7 @@
 #include "physics/PhysicsSystem.hpp"
 #include "physics2d/Physics2DSystem.hpp"
 #include "rendering/Renderer.hpp"
+#include "scene/GrassRuntime.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
 #include "scene/TransformEdit.hpp"
@@ -141,6 +142,7 @@ namespace aether::app::scene
 			RemoveIf<NameComponent>(world, entity);
 			RemoveIf<TransformComponent>(world, entity);
 			RemoveIf<HierarchyComponent>(world, entity);
+			RemoveIf<GrassRuntimeComponent>(world, entity);
 			RemoveIf<MeshComponent>(world, entity);
 			RemoveIf<MeshSourceComponent>(world, entity);
 			RemoveIf<MaterialComponent>(world, entity);

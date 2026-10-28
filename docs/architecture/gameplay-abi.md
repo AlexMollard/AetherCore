@@ -132,11 +132,35 @@ Operations 17-30 expose the Jolt 3D surface the C# SDK already has: rigid body v
 - `NO_AUTHORITY`: the native host refuses velocity, force, impulse and character writes on an entity the local peer does not own when a `NetworkContext` is registered (the guard the C# exports apply). The browser has no networking.
 - Animation operations apply to the entity's own skinned mesh and to its spawned child meshes, like the C# SDK. `SET_ANIMATION_CLIP` with a fade starts a cross-fade from the playing clip. There is no 3D clip event: native has none, so none is invented. In the browser, clip names come from the model loader through `gameplay3d::ClipCatalog`; the native engine reads them from the `AnimationDatabase`.
 - Raycast uses `text2` as a raw binary payload and result buffer as raw bytes, so hosts skip UTF-8 validation of `text2` for operation 21 (as for 16) and the Rust SDK allocates a 16-byte result buffer for it.
-- Capabilities: the native host advertises 17-25 only when it has a `PhysicsSystem`; 26-30 are always advertised. The browser reference path advertises 1-30.
+- Capabilities: the native host advertises 17-25 only when it has a `PhysicsSystem`; 26-30 are always advertised. The browser scene-gameplay path advertises 1-34; the procedural foundation path remains key-only.
 
 3D collision and trigger events are not operations. They are delivered through the existing physics event path as `AE_GAMEPLAY_EVENT_PHYSICS` with `flags & AE_GAMEPLAY_PHYSICS_FLAG_3D` set (2D events leave it clear); `code` is 0 collision enter, 1 collision exit, 2 trigger enter, 3 trigger exit, 4 overlapping. `ScriptComponentSystem` (native) and `WebGameplay::RunScripts` (browser) give every Rust instance's entity a `CollisionEventsComponent` when a PhysicsSystem exists and dispatch its lists before the instance's `update`, just as they do for Box2D. In Rust, `Event::physics_kind()` returns a `PhysicsEventKind` and `Event::is_3d()` tells the two worlds apart.
 
 Verification: `tests/scripting/RustGameplayServicesTests.cpp` runs a real Jolt world behind the services (velocity seed/bake, force, raycast hit/miss/malformed/short buffer, character move/jump/ground, ragdoll refusals, animation by name/index/fade/child mesh, catalog). `rust/aethercore/tests/sdk.rs` covers the SDK encoding. `logs/task5/rust3d/` records a native Rust run of a 3D scene (`Spatial3D` script: velocity, raycast, character, 3D collision events, ragdoll from `Human.gltf`, animation cross-fade) through `aether-project` on the desktop profile.
+
+### Pointer input and world rotation services
+
+Operations 31-34 extend the existing service table without changing its layout
+or the base gameplay ABI. The safe Rust SDK exposes `Context::mouse_down`,
+`mouse_delta`, `scroll_delta` and `set_euler`.
+
+| Op | Name | Input | Result |
+|---|---|---|---|
+| 31 | `MOUSE_DOWN` | `integer`: 0 left, 1 right, 2 middle | BOOL held state |
+| 32 | `MOUSE_DELTA` | none | VECTOR3: pointer delta x/y in pixels, z = 0 |
+| 33 | `SCROLL_DELTA` | none | VECTOR3: scroll x/y, positive y scrolls up, z = 0 |
+| 34 | `SET_EULER` | live entity, `vector[0..2]`: world-space YXZ Euler degrees | none |
+
+Native pointer capabilities are absent without an input service. Invalid button
+numbers and non-finite rotation values fail with `INVALID_ARGUMENT`; wrong-world
+and stale entity handles retain the existing checked-access errors. Rotation
+uses the scene's subtree-aware transform edit and synchronizes physics state.
+
+The browser accumulates focused-canvas pointer and wheel events until a fixed
+simulation tick, then clears the deltas so catch-up ticks do not replay a drag.
+Blur and hidden-document transitions release buttons and clear pending motion.
+`projects/FoxShowcase` uses these services for drag orbit, wheel zoom and
+keyboard navigation rather than a page-only camera override.
 
 ## Declaration generation and compatibility checks
 

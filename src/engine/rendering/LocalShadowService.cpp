@@ -461,6 +461,7 @@ namespace aether
 			lightFc[i] = fc;
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
 			lightFc[i].cameraWorldPos = m_perLightShadows[i].lightPosRange;
+			lightFc[i].visibilityCameraWorldPos = fc.cameraWorldPos;
 			lightFc[i].RefreshDerived();
 		}
 		gpu::ResourceRegistry::FlushMappedBuffer(m_lightConstantsBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(FrameConstants));

@@ -376,6 +376,12 @@ namespace aether
 			shadowFc.proj = glm::ortho(-orthoHalf, orthoHalf, -orthoHalf, orthoHalf, nearPlane, farPlane);
 			shadowFc.viewProj = shadowFc.proj * shadowFc.view;
 			shadowFc.cameraWorldPos = glm::vec4(lightEye, 1.0f);
+			shadowFc.visibilityCameraWorldPos = packet.cameraWorldPos;
+			for (std::size_t i = 0; i < packet.grassBenders.positions.size(); ++i)
+			{
+				shadowFc.grassBenders[i] = packet.grassBenders.positions[i];
+				shadowFc.grassBenderParams[i] = packet.grassBenders.parameters[i];
+			}
 			shadowFc.elapsedTime = packet.elapsedTime;
 			shadowFc.materialBufferAddr = packet.materialBufferAddr;
 			shadowFc.effectParamBufferAddr = packet.effectParamBufferAddr;

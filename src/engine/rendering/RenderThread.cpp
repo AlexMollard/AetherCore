@@ -143,6 +143,7 @@ namespace aether
 				packet = m_channel.read();
 				if (IsReloadInProgress())
 				{
+					m_engine->DeferGrassStreaming(packet);
 					m_engine->DiscardPendingFrameQueues(packet);
 					m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
 					m_isIdle.store(true, std::memory_order_release);

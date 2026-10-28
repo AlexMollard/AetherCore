@@ -18,6 +18,7 @@
 #include "ui/UiNavigationSystem.hpp"
 #include "ui/UiWidgetSystem.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scripting/GameplayRotation.hpp"
 #if defined(AE_WEB_MANAGED)
 #	include "BrowserManaged.hpp"
 #endif
@@ -495,6 +496,13 @@ namespace aether::app::web
 			m_input.SetSyntheticMouseButton(button, canvasFocused && (buttons & (1 << button)));
 		}
 		m_input.SetSyntheticMousePos({EM_ASM_DOUBLE({ return aetherInput.x; }), EM_ASM_DOUBLE({ return aetherInput.y; })});
+		m_mouse_delta += glm::vec2{static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.dx; aetherInput.dx = 0; return v; })),
+		        static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.dy; aetherInput.dy = 0; return v; }))};
+		m_scroll_delta.y += static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.scroll; aetherInput.scroll = 0; return v; }));
+		if (!canvasFocused)
+		{
+			m_mouse_delta = m_scroll_delta = {};
+		}
 		m_input.Update();
 		EM_ASM(
 		        {
@@ -559,6 +567,7 @@ namespace aether::app::web
 				// physics step and before particles - a velocity a script sets is first integrated
 				// on the following tick, and a burst it queues emits the same tick, as on desktop.
 				m_world.UpdateSystems(1.0f / 60.0f);
+				m_mouse_delta = m_scroll_delta = {};
 				AE_TRY_VOID(std::exchange(m_script_status, {}));
 				for (const auto entity: m_scene->TakeRetiredParticles())
 				{
@@ -591,7 +600,7 @@ namespace aether::app::web
 #if AE_WEB_TEST_BRIDGE
 		const bool advanceTemporal = testManual && (m_ticks != ticksBeforeFrame || m_manual_pending_advance);
 		if (testManual && !testStep && !m_manual_pending_frame && !capture && m_manual_warm_frames >= 3
-		        && width == m_last_render_width && height == m_last_render_height)
+		        && width == m_last_render_width && height == m_last_render_height && !m_scene->StreamingPending())
 		{
 			return {};
 		}
@@ -612,7 +621,7 @@ namespace aether::app::web
 		AE_TRY_VOID(m_scene->Extract(packet, width, height, m_ticks / 60.0f));
 		packet.renderCustom = m_custom_passes.frame;
 		const bool readbackRequested = capture;
-		const bool accepted = m_graphics.Draw(packet, capture);
+		const bool accepted = m_scene->RenderReady() && m_graphics.Draw(packet, capture);
 		if (accepted)
 		{
 			++m_frames;
@@ -688,7 +697,7 @@ namespace aether::app::web
 		value.structSize = sizeof(value);
 		const auto engine = m_access.EngineApi();
 		const Entity entity{request.entity.id};
-		const bool entityOperation = request.operation == 2 || request.operation == 3 || request.operation == 4 || request.operation == 9 || request.operation == 13 || aether::scripting::gameplay3d::IsGameplay3DEntityOperation(request.operation);
+		const bool entityOperation = request.operation == 2 || request.operation == 3 || request.operation == 4 || request.operation == 9 || request.operation == 13 || request.operation == AE_GAMEPLAY_SERVICE_SET_EULER || aether::scripting::gameplay3d::IsGameplay3DEntityOperation(request.operation);
 		if (entityOperation)
 		{
 			std::uint32_t valid = 0;
@@ -744,6 +753,36 @@ namespace aether::app::web
 				value.type = AE_GAMEPLAY_PROPERTY_BOOL;
 				value.integer = m_input.IsKeyDown(static_cast<Key>(request.integer));
 				return AE_GAMEPLAY_OK;
+			case AE_GAMEPLAY_SERVICE_MOUSE_DOWN:
+				if (request.integer < 0 || request.integer > 2)
+				{
+					return AE_GAMEPLAY_INVALID_ARGUMENT;
+				}
+				value.type = AE_GAMEPLAY_PROPERTY_BOOL;
+				value.integer = m_input.IsMouseButtonDown(static_cast<MouseButton>(request.integer));
+				return AE_GAMEPLAY_OK;
+			case AE_GAMEPLAY_SERVICE_MOUSE_DELTA:
+			case AE_GAMEPLAY_SERVICE_SCROLL_DELTA:
+			{
+				const auto delta = request.operation == AE_GAMEPLAY_SERVICE_MOUSE_DELTA ? m_mouse_delta : m_scroll_delta;
+				value.type = AE_GAMEPLAY_PROPERTY_VECTOR3;
+				value.vector[0] = delta.x;
+				value.vector[1] = delta.y;
+				return AE_GAMEPLAY_OK;
+			}
+			case AE_GAMEPLAY_SERVICE_SET_EULER:
+			{
+				const auto status = aether::scripting::SetGameplayEuler(m_world, entity, request.vector, static_cast<PhysicsSystem*>(m_world.FindSystem("PhysicsSystem")));
+				if (status != AE_GAMEPLAY_OK)
+				{
+					return status;
+				}
+				if (auto* physics = static_cast<Physics2DSystem*>(m_world.FindSystem("Physics2DSystem")))
+				{
+					physics->TeleportToTransform(m_world, entity);
+				}
+				return AE_GAMEPLAY_OK;
+			}
 			case AE_GAMEPLAY_SERVICE_SET_SPRITE_COLOR:
 				if (auto* sprite = m_world.TryGet<SpriteRendererComponent>(entity))
 				{

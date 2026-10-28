@@ -215,7 +215,7 @@ namespace
 			AetherGameplayServicesApi services{sizeof(services),
 			        1,
 			        engine.context,
-			        reference ? ((UINT64_C(1) << (AE_GAMEPLAY_SERVICE_GET_CURRENT_CLIP + 1)) - 2) : AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN), // ops 1-30 (custom pass = 14-16, 3D = 17-30)
+			        reference ? ((UINT64_C(1) << (AE_GAMEPLAY_SERVICE_SET_EULER + 1)) - 2) : AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN),
 			        [](std::uint64_t context, const AetherGameplayServiceRequest* request, AetherGameplayPropertyValue* result, AetherGameplayUtf8Buffer buffer) -> AetherGameplayStatus
 			        {
 				        auto& app = Get();
@@ -376,7 +376,9 @@ namespace
 			{
 				double width = 0, height = 0;
 				emscripten_get_element_css_size("#canvas", &width, &height);
-				graphics.Resize(static_cast<unsigned>(std::max(0.0, std::round(width))), static_cast<unsigned>(std::max(0.0, std::round(height))));
+				// CSS pixels under-sample high-DPI displays; retain the supported surface extent.
+				const double scale = std::min(EM_ASM_DOUBLE({ return window.devicePixelRatio || 1; }), 4096.0 / std::max({width, height, 1.0}));
+				graphics.Resize(static_cast<unsigned>(std::max(0.0, std::round(width * scale))), static_cast<unsigned>(std::max(0.0, std::round(height * scale))));
 			}
 			if (!texturesReady)
 			{

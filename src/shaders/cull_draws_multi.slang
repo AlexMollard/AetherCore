@@ -49,7 +49,7 @@ void main(uint3 tid : SV_DispatchThreadID)
     for (uint cascade = 0; cascade < kCullMultiFrustumCount; ++cascade)
     {
         FrameConstantsData* fc = pc.frame[cascade].Ptr();
-        const bool visible = forceVisible || TestSphereFrustum(inst.worldBoundingSphere, fc);
+        const bool visible = forceVisible || (TestSphereFrustum(inst.worldBoundingSphere, fc) && TestSphereDistance(inst.worldBoundingSphere, inst.materialIndex, fc));
 
         // Output slot = batch.outputStart + localOutputSlot, offset by cascade * stride.
         uint* out = (uint*)(outBase + cascade * pc.outputCascadeStride);

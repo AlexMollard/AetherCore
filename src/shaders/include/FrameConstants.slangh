@@ -53,6 +53,9 @@ struct FrameConstantsData
     // Darkness volumes: x = count; volume i = [2i] (centre xyz, fade depth), [2i+1] (half extents xyz, yaw).
     [[vk::offset(2048)]] uint4  darknessVolumeInfo;
     [[vk::offset(2064)]] float4 darknessVolumes[32];
+    [[vk::offset(2576)]] float4 visibilityCameraWorldPos;
+    [[vk::offset(2592)]] float4 grassBenders[8];
+    [[vk::offset(2720)]] float4 grassBenderParams[8];
 };
 
 #endif

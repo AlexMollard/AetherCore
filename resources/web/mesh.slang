@@ -3,6 +3,7 @@
 #include "../../src/shaders/include/MaterialLookMath.slangh"
 #include "../../src/shaders/include/SceneVolumeMath.slangh"
 #include "../../src/shaders/include/FoliageWindMath.slangh"
+#include "../../src/shaders/include/DistanceFade.slangh"
 #include "../../src/shaders/include/CloudMaterialMath.slangh"
 #include "../../src/shaders/include/LightShaftMath.slangh"
 #include "../../src/shaders/include/AmbientOcclusionMath.slangh"
@@ -28,6 +29,9 @@ struct FrameData
 	uint4 volumeCounts;
 	float4 blobs[64];
 	float4 darkness[32];
+	float4 visibilityCamera;
+	float4 grassBenders[8];
+	float4 grassBenderParams[8];
 };
 struct LightData { float4 positionRadius, colorIntensity, directionType, coneShadow; };
 struct ShadowData { float4 c0, c1, c2, c3, params, lightPosRange, region; };
@@ -40,6 +44,7 @@ struct MeshData
 	float4 factors;
 	float4 uvScroll;
 	uint4 metadata;
+	float4 distanceFade;
 };
 struct EffectData { float4 tint, params; };
 struct SkinData { float4 c0, c1, c2, c3; };
@@ -97,7 +102,10 @@ VertexOutput vertexMain(float3 position : POSITION, float3 color : COLOR0, float
 		}
 	}
 	float4 world = mesh.world0 * local.x + mesh.world1 * local.y + mesh.world2 * local.z + mesh.world3 * local.w;
-	world.xyz += SharedFoliageWindOffset(saturate(frame.shadingParams.w), mesh.metadata.w, frame.time.x, world.xyz, uv2.x);
+	if ((mesh.metadata.w & 32768) != 0)
+		world.xyz += SharedGrassDisplacement(frame.time.x, saturate(frame.shadingParams.w), world.xyz, uv2.x, uv2.y * length(mesh.world1.xyz), mesh.distanceFade.z, frame.grassBenders, frame.grassBenderParams);
+	else
+		world.xyz += SharedFoliageWindOffset(saturate(frame.shadingParams.w), mesh.metadata.w, frame.time.x, world.xyz, uv2.x);
 	if ((mesh.metadata.w & 512) != 0) { world.xyz += frame.camera.xyz - mesh.world3.xyz; }
 	VertexOutput output;
 	output.position = float4(dot(frame.clip0, world), dot(frame.clip1, world), dot(frame.clip2, world), dot(frame.clip3, world));
@@ -258,6 +266,7 @@ float shadowMain(VertexOutput input) : SV_Target
 	MeshData mesh = meshes[input.instance];
 	float alpha = input.color.a * albedo.Sample(materialSampler, input.uv).a;
 	if ((mesh.metadata.w & 4) != 0 && alpha < mesh.factors.z) { discard; }
+	if (DistanceFadeDiscard(mesh.distanceFade.xy, input.world, frame.visibilityCamera.xyz, input.position.xy)) { discard; }
 	return frame.camera.w > 0 ? saturate(distance(input.world, frame.camera.xyz) / frame.camera.w) : input.position.z;
 }
 float4 ShadeProcedural(VertexOutput input, EffectData data)
@@ -280,7 +289,9 @@ struct AuxiliaryOutput
 float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 {
 #ifdef AE_WEB_CUSTOM_MATERIAL
-	return ShadeGraphMaterial(input, front);
+	float4 graphColor = ShadeGraphMaterial(input, front);
+	if (DistanceFadeDiscard(meshes[input.instance].distanceFade.xy, input.world, frame.visibilityCamera.xyz, input.position.xy)) { discard; }
+	return graphColor;
 #endif
 	MeshData mesh = meshes[input.instance];
 	float2 uvDx = ddx(input.uv), uvDy = ddy(input.uv);
@@ -493,6 +504,8 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 				finalColor += key * lerp(surface.rgb, float3(1), 0.6) * (PickupHighlight(N, V, frame.objectLight0Direction.xyz, roughness) * 0.2);
 			}
 		}
+		if ((mesh.metadata.w & 32768) != 0)
+			finalColor += SharedGrassBacklight(surface.rgb, V, L, frame.sunColor.rgb, frame.sunDirectionIntensity.w, sunVisibility);
 		float fogAmount = frame.skyParams.z > 0 ? 0 : HeightFogAmount(frame.camera.xyz, input.world, frame.fogParams.x, frame.fogParams.y, frame.fogParams.w);
 		if (frame.skyParams.z <= 0 && (mesh.metadata.w & (512 | 1024 | 256)) == 0)
 		{
@@ -507,11 +520,13 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 		}
 		finalColor *= 1 - SharedDarknessVolumeAmount(frame.volumeCounts.z, frame.darkness, frame.camera.xyz, input.world);
 		EffectData effect = effects[mesh.metadata.x];
+		if (DistanceFadeDiscard(mesh.distanceFade.xy, input.world, frame.visibilityCamera.xyz, input.position.xy)) { discard; }
 		if (effect.params.w != 0) { return ShadeProcedural(input, effect); }
 		return float4(finalColor, (mesh.metadata.w & 2) != 0 ? saturate(surface.a) : edgeCoverage);
 
 	}
 	if ((mesh.metadata.w & 4) != 0 && surface.a < mesh.factors.z) { discard; }
+	if (DistanceFadeDiscard(mesh.distanceFade.xy, input.world, frame.visibilityCamera.xyz, input.position.xy)) { discard; }
 	EffectData effect = effects[mesh.metadata.x];
 	if (effect.params.w != 0) { return ShadeProcedural(input, effect); }
 	return float4(EncodeSrgb(surface.rgb + emission), surface.a);
@@ -521,7 +536,9 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 AuxiliaryOutput auxiliaryMain(VertexOutput input, bool front : SV_IsFrontFace)
 {
 #ifdef AE_WEB_CUSTOM_MATERIAL
-	return ShadeGraphAuxiliary(input, front);
+	AuxiliaryOutput graphOutput = ShadeGraphAuxiliary(input, front);
+	if (DistanceFadeDiscard(meshes[input.instance].distanceFade.xy, input.world, frame.visibilityCamera.xyz, input.position.xy)) { discard; }
+	return graphOutput;
 #endif
 	MeshData mesh = meshes[input.instance];
 	float2 uvDx = ddx(input.rawUv), uvDy = ddy(input.rawUv);
@@ -535,6 +552,7 @@ AuxiliaryOutput auxiliaryMain(VertexOutput input, bool front : SV_IsFrontFace)
 	float3 vertexColor = (mesh.metadata.w & 8) != 0 ? input.rawvertexColor : float3(1);
 	if (any(vertexColor < float3(0)) || any(vertexColor > float3(1)) || dot(vertexColor, vertexColor) < 0.0025) { vertexColor = float3(1); }
 	if ((mesh.metadata.w & (2 | 512)) != 0 || ((mesh.metadata.w & 4) != 0 && alpha < mesh.factors.z)) { discard; }
+	if (DistanceFadeDiscard(mesh.distanceFade.xy, input.world, frame.visibilityCamera.xyz, input.position.xy)) { discard; }
 	AuxiliaryOutput output;
 	output.depth = input.position.z;
 	output.surface = float4(EncodeOctNormal(N), saturate(roughness), saturate(mesh.factors.x * orm.b));

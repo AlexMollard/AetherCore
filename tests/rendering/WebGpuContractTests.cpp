@@ -143,6 +143,7 @@ TEST_CASE("Portable mesh materials retain factors and owned skin palette bounds"
 	mesh.material.alphaMask = true;
 	mesh.material.modulateVertexColor = true;
 	mesh.material.uvScroll = {0.5f, -1};
+	mesh.material.distanceFade = {28, 45};
 	mesh.skinMatrices = {glm::mat4(1), glm::mat4(2)};
 	mesh.skinMatrices[1][3][3] = 1;
 	frame.meshes = {mesh, mesh};
@@ -155,6 +156,8 @@ TEST_CASE("Portable mesh materials retain factors and owned skin palette bounds"
 	CHECK(plan->at(1).metadata.y == 2);
 	CHECK(plan->at(1).metadata.z == 2);
 	CHECK(plan->at(0).uvScroll.y == -1);
+	CHECK(plan->at(0).uvScroll.z == 28);
+	CHECK(plan->at(0).uvScroll.w == 45);
 	CHECK(frame.meshes[0].textures[0] == UINT32_MAX);
 	CHECK(gpu::ValidMeshSkinInfluences({0, 1, 0, 0}, {0.25f, 0.75f, 0, 0}, 2));
 	CHECK(gpu::ValidMeshSkinInfluences({0, UINT32_MAX, 0, 0}, {1, 0, 0, 0}, 2));

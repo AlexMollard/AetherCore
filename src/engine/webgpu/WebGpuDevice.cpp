@@ -73,6 +73,8 @@ namespace aether::webgpu
 		bool released = false;
 		unsigned callbacks = 0;
 		unsigned pendingFrames = 0;
+		unsigned pendingMeshRetirements = 0;
+		std::vector<std::uint32_t> completedMeshRetirements;
 
 		void Fail(const char* code, WGPUStringView message, bool lost = false)
 		{
@@ -510,6 +512,58 @@ namespace aether::webgpu
 		return true;
 	}
 
+	void WebGpuDevice::RetireMeshes(std::vector<std::uint32_t> slots)
+	{
+		if (slots.empty()) { return; }
+		auto& self = *m_impl;
+		struct Retirement
+		{
+			Impl* owner;
+			std::vector<std::uint32_t> slots;
+		};
+		auto* retirement = new Retirement{&self, std::move(slots)};
+		++self.callbacks;
+		++self.pendingMeshRetirements;
+		WGPUQueueWorkDoneCallbackInfo done = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
+		done.mode = WGPUCallbackMode_AllowSpontaneous;
+		done.userdata1 = retirement;
+		done.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
+		{
+			auto* retirement = static_cast<Retirement*>(data);
+			auto& self = *retirement->owner;
+			for (const auto slot: retirement->slots) { self.meshes.Release(slot); }
+			self.completedMeshRetirements.insert(self.completedMeshRetirements.end(), retirement->slots.begin(), retirement->slots.end());
+			--self.pendingMeshRetirements;
+			--self.callbacks;
+			if (status != WGPUQueueWorkDoneStatus_Success) { self.Fail("WEBGPU_MESH_RETIRE", message); }
+			delete retirement;
+			self.Release();
+		};
+		wgpuQueueOnSubmittedWorkDone(self.queue, done);
+	}
+
+	bool WebGpuDevice::MeshRetirementPending() const
+	{
+		return m_impl->pendingMeshRetirements != 0;
+	}
+
+	void WebGpuDevice::CollectRetiredMeshes(std::vector<std::uint32_t>& slots)
+	{
+		auto& completed = m_impl->completedMeshRetirements;
+		slots.insert(slots.end(), completed.begin(), completed.end());
+		completed.clear();
+	}
+
+	bool WebGpuDevice::HasMeshUploadCapacity(std::size_t bytes) const
+	{
+		return m_impl->meshes.HasUploadCapacity(bytes);
+	}
+
+	std::size_t WebGpuDevice::AvailableMeshUploadBytes() const
+	{
+		return m_impl->meshes.AvailableUploadBytes();
+	}
+
 	const std::string& WebGpuDevice::MeshUploadError() const
 	{
 		return m_impl->meshes.error;
@@ -813,6 +867,19 @@ namespace aether::webgpu
 			self.post.ClearOpaque(encoder, *frame->post);
 			self.post.EncodeAmbient(self.device, self.queue, encoder, packet, *frame->post, {});
 		}
+		EM_ASM(
+		        {
+			        aetherRuntime.meshCameraVisible = $0;
+			        aetherRuntime.meshFrustumCulled = $1;
+			        aetherRuntime.meshDistanceCulled = $2;
+			        aetherRuntime.renderWidth = $3;
+			        aetherRuntime.renderHeight = $4;
+		        },
+		        frame->meshes ? frame->meshes->cameraVisibleCount : 0,
+		        frame->meshes ? frame->meshes->frustumCulledCount : 0,
+		        frame->meshes ? frame->meshes->distanceCulledCount : 0,
+		        frame->renderWidth,
+		        frame->renderHeight);
 		if (frame->post)
 		{
 			self.post.EncodeScene(self.device, self.queue, encoder, sceneView, packet, *frame->post,

@@ -67,6 +67,7 @@ struct PrepassVSOutput
 	float2 uv            : TEXCOORD1;
 	nointerpolation uint materialIndex : TEXCOORD2;
 	float3 vertexColor   : TEXCOORD3;
+	float3 worldPos : TEXCOORD4;
 };
 
 struct PrepassOutput
@@ -137,6 +138,7 @@ PrepassVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_
 	o.uv = v.uv;
 	o.materialIndex = instance.materialIndex;
 	o.vertexColor = v.color;
+	o.worldPos = worldPos;
 	return o;
 }
 
@@ -150,6 +152,7 @@ PrepassOutput fragmentMain(PrepassVSOutput input, bool isFrontFace : SV_IsFrontF
 		discard;
 	}
 	AlphaMaskDiscard(input.materialIndex, input.uv);
+	MaterialDistanceDiscard(input.materialIndex, input.worldPos, input.svPosition.xy);
 
 	FrameConstantsData* fc = pc.frame.Ptr();
 	GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);

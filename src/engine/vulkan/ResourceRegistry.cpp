@@ -200,7 +200,6 @@ namespace aether
 		m_allocator = allocator;
 		m_textures.reserve(1024);
 		m_buffers.reserve(1024);
-		m_pipelines.reserve(256);
 	}
 
 	void ResourceRegistry::SetSharedBufferQueueFamilies(std::initializer_list<std::uint32_t> families) noexcept
@@ -1413,6 +1412,7 @@ namespace aether
 
 	void ResourceRegistry::AdvanceFrame()
 	{
+		const std::lock_guard lock(gpu::ResourceRegistry::BufferMutex());
 		AE_PROFILE_ZONE();
 		const std::uint32_t nextFrame = (m_currentFrame + 1u) % kMaxFramesInFlight;
 		RunDestroyersInRing(m_pendingDestructions[nextFrame]);
@@ -1512,6 +1512,12 @@ namespace
 
 namespace aether::gpu
 {
+	std::recursive_mutex& ResourceRegistry::BufferMutex() noexcept
+	{
+		static std::recursive_mutex mutex;
+		return mutex;
+	}
+
 	void ResourceRegistry::Initialize(const ResourceRegistryInitDesc& desc) noexcept
 	{
 		s_reg = static_cast<::aether::ResourceRegistry*>(desc.backendRegistry);
@@ -1520,61 +1526,73 @@ namespace aether::gpu
 
 	BufferHandle ResourceRegistry::CreateBuffer(const BufferDesc& d, std::source_location loc) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->CreateBuffer(d, loc);
 	}
 
 	BufferHandle ResourceRegistry::CreateMappedBuffer(const MappedBufferDesc& d, std::source_location loc) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->CreateMappedBuffer(d, loc);
 	}
 
 	TextureHandle ResourceRegistry::CreateTexture(const TextureDesc& d, std::source_location loc) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->CreateTexture(d, loc);
 	}
 
 	TextureHandle ResourceRegistry::CreateAliasedTexture(const TextureDesc& desc, void* existingAllocation, DeviceSize memoryOffset, const char* debugName) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->CreateAliasedTexture(desc, static_cast<VmaAllocation>(existingAllocation), static_cast<VkDeviceSize>(memoryOffset), debugName ? std::string_view(debugName) : std::string_view{});
 	}
 
 	BufferHandle ResourceRegistry::CreateAliasedBuffer(DeviceSize size, BufferUsage usage, void* existingAllocation, DeviceSize memoryOffset, const char* debugName) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->CreateAliasedBuffer(static_cast<VkDeviceSize>(size), gpu::ToVk(usage), static_cast<VmaAllocation>(existingAllocation), static_cast<VkDeviceSize>(memoryOffset), debugName ? std::string_view(debugName) : std::string_view{});
 	}
 
 	MappedBufferView ResourceRegistry::ResolveMappedBuffer(BufferHandle h) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->ResolveMappedBuffer(h);
 	}
 
 	void ResourceRegistry::FlushMappedBuffer(BufferHandle h, DeviceSize o, DeviceSize s) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->FlushMappedBuffer(h, o, s);
 	}
 
 	void ResourceRegistry::InvalidateMappedBuffer(BufferHandle h, DeviceSize o, DeviceSize s) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->InvalidateMappedBuffer(h, o, s);
 	}
 
 	void ResourceRegistry::Destroy(BufferHandle h) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->Destroy(h);
 	}
 
 	void ResourceRegistry::Destroy(TextureHandle h) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->Destroy(h);
 	}
 
 	void ResourceRegistry::Destroy(PipelineHandle h) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->Destroy(h);
 	}
 
 	void ResourceRegistry::DrainPendingDestructions() noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->DrainAll();
 	}
 
@@ -1591,6 +1609,7 @@ namespace aether::gpu
 		{
 			return PipelineHandle{};
 		}
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->RegisterPipeline(entryExp.value(), desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 	}
 
@@ -1631,6 +1650,7 @@ namespace aether::gpu
 		{
 			return PipelineHandle{};
 		}
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->RegisterPipeline(entryExp.value(), desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 	}
 
@@ -1654,6 +1674,7 @@ namespace aether::gpu
 		}
 		const std::unique_ptr<::aether::ResourceRegistry::PipelineEntry> entry(
 		        static_cast<::aether::ResourceRegistry::PipelineEntry*>(prepared.opaque));
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->RegisterPipeline(*entry, debugName ? std::string_view(debugName) : std::string_view{});
 	}
 
@@ -1671,6 +1692,7 @@ namespace aether::gpu
 
 	ResourceRegistry::ResolvedPipeline ResourceRegistry::ResolvePipeline(PipelineHandle h) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		const ::aether::ResourceRegistry::PipelineEntry* entry = s_reg->Resolve(h);
 		if (entry == nullptr)
 		{
@@ -1683,6 +1705,7 @@ namespace aether::gpu
 
 	ResourceRegistry::ResolvedTexture ResourceRegistry::ResolveTexture(TextureHandle h) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		const ::aether::ResourceRegistry::TextureEntry* entry = s_reg->Resolve(h);
 		if (entry == nullptr)
 		{
@@ -1700,6 +1723,7 @@ namespace aether::gpu
 
 	ResourceRegistry::ResolvedBuffer ResourceRegistry::ResolveBuffer(BufferHandle h) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		const ::aether::ResourceRegistry::BufferEntry* entry = s_reg->Resolve(h);
 		if (entry == nullptr)
 		{
@@ -1714,6 +1738,7 @@ namespace aether::gpu
 
 	void* ResourceRegistry::ResolveBufferVkHandle(BufferHandle handle) noexcept
 	{
+		const std::lock_guard lock(BufferMutex());
 		const ::aether::ResourceRegistry::BufferEntry* entry = s_reg->Resolve(handle);
 		if (entry == nullptr)
 		{
@@ -1738,11 +1763,13 @@ namespace aether::gpu
 
 	void ResourceRegistry::SetBufferName(BufferHandle handle, const char* name)
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->SetBufferName(handle, name);
 	}
 
 	void ResourceRegistry::SetTextureName(TextureHandle handle, const char* name)
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->SetTextureName(handle, name);
 	}
 
@@ -1753,6 +1780,7 @@ namespace aether::gpu
 
 	void ResourceRegistry::EnsureBindlessSampled(TextureHandle handle, ImageAspect aspectMask, ImageLayout descriptorLayout)
 	{
+		const std::lock_guard lock(BufferMutex());
 		auto result = s_reg->EnsureBindlessSampled(handle, aspectMask, descriptorLayout);
 		if (!result)
 		{
@@ -1762,16 +1790,19 @@ namespace aether::gpu
 
 	bool ResourceRegistry::HasBindlessSampled(TextureHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->HasBindlessSampled(handle);
 	}
 
 	std::uint32_t ResourceRegistry::GetBindlessSampledSlot(TextureHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetBindlessSampledSlot(handle);
 	}
 
 	std::uint32_t ResourceRegistry::ReserveBindlessSampledSlot()
 	{
+		const std::lock_guard lock(BufferMutex());
 		auto result = s_reg->ReserveBindlessSampledSlot();
 		if (!result)
 		{
@@ -1783,11 +1814,13 @@ namespace aether::gpu
 
 	void ResourceRegistry::ReleaseBindlessSampledSlot(std::uint32_t slot)
 	{
+		const std::lock_guard lock(BufferMutex());
 		s_reg->ReleaseBindlessSampledSlot(slot);
 	}
 
 	bool ResourceRegistry::BindSampledToSlot(TextureHandle handle, std::uint32_t slot, ImageAspect aspectMask, ImageLayout descriptorLayout)
 	{
+		const std::lock_guard lock(BufferMutex());
 		auto result = s_reg->BindSampledToSlot(handle, slot, aspectMask, descriptorLayout);
 		if (!result)
 		{
@@ -1799,56 +1832,67 @@ namespace aether::gpu
 
 	Format ResourceRegistry::GetTextureFormat(TextureHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetTextureFormat(handle);
 	}
 
 	Extent2D ResourceRegistry::GetTextureExtent(TextureHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetTextureExtent(handle);
 	}
 
 	std::uint32_t ResourceRegistry::GetTextureMipLevels(TextureHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetTextureMipLevels(handle);
 	}
 
 	std::uint32_t ResourceRegistry::GetTextureArrayLayers(TextureHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetTextureArrayLayers(handle);
 	}
 
 	ImageUsage ResourceRegistry::GetTextureUsage(TextureHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetTextureUsage(handle);
 	}
 
 	std::vector<DebugTextureInfo> ResourceRegistry::ListDebugTextures()
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->ListDebugTextures();
 	}
 
 	std::vector<DebugBufferInfo> ResourceRegistry::ListDebugBuffers()
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->ListDebugBuffers();
 	}
 
 	GpuMemoryReport ResourceRegistry::QueryMemoryReport()
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->QueryMemoryReport();
 	}
 
 	std::uint32_t ResourceRegistry::GetPendingDestructionCount()
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetPendingDestructionCount();
 	}
 
 	DeviceSize ResourceRegistry::GetBufferSize(BufferHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetBufferSize(handle);
 	}
 
 	BufferUsage ResourceRegistry::GetBufferUsage(BufferHandle handle)
 	{
+		const std::lock_guard lock(BufferMutex());
 		return s_reg->GetBufferUsage(handle);
 	}
 

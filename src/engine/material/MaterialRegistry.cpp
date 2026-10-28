@@ -89,14 +89,23 @@ namespace aether
 		return MaterialHandle{slot, e.generation};
 	}
 
+	bool MaterialRegistry::AddRef(MaterialHandle handle)
+	{
+		const std::scoped_lock lock(m_mutex);
+		if (!handle.IsValid() || handle.index >= m_slots.size()) return false;
+		auto& entry = m_slots[handle.index];
+		if (!entry.alive || entry.generation != handle.generation) return false;
+		++entry.refcount;
+		return true;
+	}
+
 	void MaterialRegistry::Release(MaterialHandle handle)
 	{
+		const std::scoped_lock lock(m_mutex);
 		if (!handle.IsValid() || handle.index >= m_slots.size())
 		{
 			return;
 		}
-
-		const std::scoped_lock lock(m_mutex);
 		SlotEntry& e = m_slots[handle.index];
 		if (!e.alive || e.generation != handle.generation)
 		{
@@ -145,22 +154,22 @@ namespace aether
 
 	std::uint32_t MaterialRegistry::GetFlags(MaterialHandle handle) const
 	{
+		const std::scoped_lock lock(m_mutex);
 		if (!handle.IsValid() || handle.index >= m_slots.size())
 		{
 			return 0u;
 		}
-		const std::scoped_lock lock(m_mutex);
 		const SlotEntry& e = m_slots[handle.index];
 		return (e.alive && e.generation == handle.generation) ? e.packed.flags : 0u;
 	}
 
 	bool MaterialRegistry::TryDescribe(MaterialHandle handle, MaterialAsset& out) const
 	{
+		const std::scoped_lock lock(m_mutex);
 		if (!handle.IsValid() || handle.index >= m_slots.size())
 		{
 			return false;
 		}
-		const std::scoped_lock lock(m_mutex);
 		const SlotEntry& e = m_slots[handle.index];
 		if (!e.alive || e.generation != handle.generation)
 		{
@@ -182,6 +191,8 @@ namespace aether
 		out.modulateVertexColor = (g.flags & GpuMaterial::kModulateVertexColor) != 0;
 		out.receiveShadows = (g.flags & GpuMaterial::kNoReceiveShadows) == 0;
 		out.foliage = (g.flags & GpuMaterial::kFoliage) != 0;
+		out.grass = (g.flags & GpuMaterial::kGrass) != 0;
+		out.grassWindStrength = g.distanceFade.z;
 		out.bakedLighting = (g.flags & GpuMaterial::kBakedLighting) != 0;
 		out.objectLit = (g.flags & GpuMaterial::kObjectLit) != 0;
 		out.sky = (g.flags & GpuMaterial::kSky) != 0;
@@ -194,6 +205,7 @@ namespace aether
 		// velocity and the sea/waterfalls/sky dome froze - the shader animates purely
 		// from this value and the frame clock.
 		out.uvScroll = g.uvScroll;
+		out.distanceFade = glm::vec2(g.distanceFade);
 		out.albedoTex = e.textures[0];
 		out.normalTex = e.textures[1];
 		out.metallicRoughnessTex = e.textures[2];

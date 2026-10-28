@@ -63,6 +63,7 @@ namespace aether::webgpu
 		WGPUBindGroup auxiliaryBindings = nullptr, inputBindings = nullptr;
 		WGPUTextureView opaqueDepthAttachment = nullptr;
 		WebShadowInputs directional;
+		std::uint32_t cameraVisibleCount = 0, frustumCulledCount = 0, distanceCulledCount = 0;
 		~WebMeshFrame();
 	};
 
@@ -73,6 +74,9 @@ namespace aether::webgpu
 		bool Initialize(WGPUDevice device);
 		bool UploadShader(WGPUDevice device, std::uint32_t slot, std::string_view wgsl);
 		bool Upload(WGPUDevice device, WGPUQueue queue, std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices);
+		void Release(std::uint32_t slot);
+		[[nodiscard]] bool HasUploadCapacity(std::size_t bytes) const { return bytes <= 64 * 1024 * 1024 - m_bytes; }
+		[[nodiscard]] std::size_t AvailableUploadBytes() const { return 64 * 1024 * 1024 - m_bytes; }
 		[[nodiscard]] std::expected<std::vector<gpu::MeshGpuInstance>, std::string> Prepare(const RenderFramePacket& packet, std::span<const WGPUTexture> textures) const;
 		void EncodeAuxiliary(WGPUDevice device,
 		        WGPUQueue queue,
@@ -109,6 +113,8 @@ namespace aether::webgpu
 			std::uint32_t indexCount = 0;
 			std::uint32_t jointCount = 0;
 			bool skinReady = false;
+			glm::vec3 boundsMin{0.0f}, boundsMax{0.0f};
+			std::size_t bytes = 0;
 		};
 
 		std::vector<MeshSlot> m_meshes;

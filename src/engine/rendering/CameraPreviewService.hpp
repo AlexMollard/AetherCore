@@ -13,6 +13,7 @@
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/LightingManager.hpp"
+#include "scene/GrassBenderComponent.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
 
@@ -46,9 +47,10 @@ namespace aether
 
 		// Game thread: mirror the scene's mesh draws into the preview queue.
 		void PrepareQueue(std::uint32_t drawSlot, World& world);
+		bool TryGetCameraPosition(glm::vec3& position);
 
 		// Render thread: build the preview frame constants (copy the main frame
-		void BuildFrameConstants(const FrameConstants& mainFc, std::uint32_t frameIdx, LightingManager* lighting);
+		void BuildFrameConstants(const FrameConstants& mainFc, std::uint32_t frameIdx, LightingManager* lighting, const GrassBenderFrame& benders);
 
 		void RegisterImages(RenderGraph& graph);
 

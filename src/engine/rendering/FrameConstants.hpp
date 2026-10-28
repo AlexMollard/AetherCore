@@ -15,7 +15,7 @@ namespace aether
 	// Darkness volumes (DarknessVolumeComponent), two vec4 each, see darknessVolumes below.
 	inline constexpr std::uint32_t kMaxDarknessVolumes = 16u;
 
-	// Layout (2576 bytes):
+	// Layout (2848 bytes):
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};
@@ -106,6 +106,10 @@ namespace aether
 		// darknessVolumes[2i] = (centre xyz, fade depth), [2i+1] = (half extents xyz, yaw radians).
 		glm::uvec4 darknessVolumeInfo{0u};
 		glm::vec4 darknessVolumes[kMaxDarknessVolumes * 2u]{};
+		// Main view camera, retained by shadow passes whose cameraWorldPos is the light.
+		glm::vec4 visibilityCameraWorldPos{0.0f, 0.0f, 0.0f, 1.0f};
+		glm::vec4 grassBenders[8]{};
+		glm::vec4 grassBenderParams[8]{};
 
 		void RefreshDerived()
 		{
@@ -131,7 +135,10 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 2576, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 2848, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(offsetof(FrameConstants, visibilityCameraWorldPos) == 2576);
+	static_assert(offsetof(FrameConstants, grassBenders) == 2592);
+	static_assert(offsetof(FrameConstants, grassBenderParams) == 2720);
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);

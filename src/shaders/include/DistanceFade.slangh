@@ -1,0 +1,16 @@
+#ifndef AETHER_DISTANCE_FADE_SLANGH
+#define AETHER_DISTANCE_FADE_SLANGH
+
+// Ordered coverage preserves depth writes and fades continuously into the surface below.
+bool DistanceFadeDiscard(float2 range, float3 worldPos, float3 cameraPos, float2 pixel)
+{
+    if (range.y <= range.x || range.x < 0.0) { return false; }
+    float coverage = 1.0 - smoothstep(range.x, range.y, distance(worldPos, cameraPos));
+    uint2 p = uint2(pixel) & 3u;
+    uint x = p.x, y = p.y;
+    uint rank = ((x & 1u) ^ (y & 1u)) * 8u + (y & 1u) * 4u
+              + (((x >> 1u) & 1u) ^ ((y >> 1u) & 1u)) * 2u + ((y >> 1u) & 1u);
+    return coverage <= (float(rank) + 0.5) / 16.0;
+}
+
+#endif

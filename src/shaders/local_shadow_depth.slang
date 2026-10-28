@@ -46,6 +46,7 @@ DepthVSOutputWithWorldPos vertexMain(uint vertexId : SV_VertexID, uint startInst
 float fragmentMain(DepthVSOutputWithWorldPos input) : SV_Target
 {
     AlphaMaskDiscard(input.materialIndex, input.uv);
+    MaterialDistanceDiscard(input.materialIndex, input.worldPos, input.svPosition.xy);
 
     // Foliage casts here too, matching the directional cascades (see shadow_depth.slang);
     // alpha-blended surfaces (the sea plane, the sky dome) never do.

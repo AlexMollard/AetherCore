@@ -55,6 +55,7 @@ namespace aether::app::web
 		AetherGameplayModuleApi m_module;
 		scripting::GameplayHost m_host;
 		Input m_input;
+		glm::vec2 m_mouse_delta{}, m_scroll_delta{};
 		std::unique_ptr<WebScene> m_scene;
 		std::vector<Instance> m_instances;
 		aether::CustomPassRegistry m_custom_passes;

@@ -38,14 +38,14 @@ namespace aether
 			return m_generation;
 		}
 
-		static Mesh Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices);
+		static Mesh Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices, std::uint64_t* uploadTicket = nullptr);
 		static Mesh Create(gpu::UploadContext& uploadContext,
 		        std::span<const Vertex> vertices,
 		        std::span<const std::uint32_t> indices,
 		        const float* aabbMin = nullptr,
 		        const float* aabbMax = nullptr,
 		        const float* sphereCenter = nullptr,
-		        float sphereRadius = 0.0f);
+		        float sphereRadius = 0.0f, std::uint64_t* uploadTicket = nullptr);
 
 		static Mesh CreateView(gpu::BufferHandle vertexBuffer,
 		        gpu::BufferHandle indexBuffer,

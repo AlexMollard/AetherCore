@@ -45,6 +45,7 @@ namespace aether
 		// Character look (Crash, Aku Aku): wrapped key, rim, eye catchlight and texture relief on
 		// top of the object lighting. Mirrors kFlagCharacter in GpuMaterial.slangh.
 		static constexpr std::uint32_t kCharacter = 1u << 14;
+		static constexpr std::uint32_t kGrass = 1u << 15;
 
 		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor{1.0f};
@@ -60,11 +61,12 @@ namespace aether
 		std::uint32_t emissiveSlot{kNoTexture};
 		// UV scroll velocity, UV units per second, added to the sampled UV scaled by frame time.
 		glm::vec2 uvScroll{0.0f, 0.0f};
+		glm::vec4 distanceFade{0.0f};
 
 		bool operator==(const GpuMaterial&) const = default;
 	};
 
-	static_assert(sizeof(GpuMaterial) == 80, "GpuMaterial size changed - update the Slang struct in gltf_mesh.slang.");
+	static_assert(sizeof(GpuMaterial) == 96, "GpuMaterial size changed - update the Slang struct in gltf_mesh.slang.");
 	static_assert(offsetof(GpuMaterial, baseColorFactor) == 0);
 	static_assert(offsetof(GpuMaterial, metallicFactor) == 16);
 	static_assert(offsetof(GpuMaterial, roughnessFactor) == 20);
@@ -78,4 +80,5 @@ namespace aether
 	static_assert(offsetof(GpuMaterial, occlusionSlot) == 64);
 	static_assert(offsetof(GpuMaterial, emissiveSlot) == 68);
 	static_assert(offsetof(GpuMaterial, uvScroll) == 72);
+	static_assert(offsetof(GpuMaterial, distanceFade) == 80);
 } // namespace aether

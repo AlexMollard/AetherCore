@@ -1,5 +1,6 @@
 #include "ScriptedSceneLayer.hpp"
 
+#include <algorithm>
 #include <string>
 
 #include "scripting/CSharpScriptingSubsystem.hpp"
@@ -16,6 +17,19 @@
 #include "material/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
+#include "mesh/GrassMeshData.hpp"
+#include "scene/Components.hpp"
+#include "scene/GrassComponent.hpp"
+#include "scene/GrassRuntime.hpp"
+#include "material/MaterialSystem.hpp"
+#include "material/MaterialRegistry.hpp"
+#include "material/PipelineCache.hpp"
+#include "rendering/RenderingSubsystem.hpp"
+#include "rendering/RenderTargetService.hpp"
+#include "scene/ModelBakeHook.hpp"
+#include <cmath>
+#include <glm/gtc/type_ptr.hpp>
+#include <limits>
 #include "scene/ModelSpawn.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "PlayState.hpp"
@@ -45,27 +59,37 @@ namespace aether::app
 	void ScriptedSceneLayer::DestroySceneEntities(LayerContext& context)
 	{
 		auto& world = context.Get<World>();
-		for (const aether::Entity e: m_sceneCtx.sceneEntities)
+		m_sceneCtx.engineRuntime->RunExclusive(QuiesceMode::Drain, [&]
 		{
-			world.Destroy(e);
-		}
-		m_sceneCtx.sceneEntities.clear();
-		{
+			context.Get<AetherCore>().FlushGrassStreaming();
+			for (const aether::Entity e: m_sceneCtx.sceneEntities)
+			{
+				world.Destroy(e);
+			}
+			m_sceneCtx.sceneEntities.clear();
 			auto& assets = context.Get<AssetManager>();
 			for (auto& model: m_sceneCtx.loadedModels)
 			{
 				assets.ReleaseModelTextures(model);
 			}
-		}
-		m_sceneCtx.loadedModels.clear();
-		m_sceneCtx.loadedModelMap.clear();
-		m_sceneCtx.loadedModelStamps.clear();
-		m_sceneCtx.meshCache.clear();
-
-		context.Get<AssetManager>().GetMaterialAuthoring().ReleaseAll();
-
-		context.Get<Renderer>().ClearPointLights();
-		context.Get<Renderer>().ClearSpotLights();
+			for (const auto& [id, root]: m_sceneCtx.grassRoots)
+			{
+				if (!root.material || !root.material->ready.load(std::memory_order_acquire)) continue;
+				for (const auto handle: root.material->handles)
+				{
+					assets.GetMaterialRegistry().Release(handle);
+				}
+			}
+			m_sceneCtx.grassRoots.clear();
+			m_sceneCtx.grassMeshes.clear();
+			m_sceneCtx.loadedModels.clear();
+			m_sceneCtx.loadedModelMap.clear();
+			m_sceneCtx.loadedModelStamps.clear();
+			m_sceneCtx.meshCache.clear();
+			assets.GetMaterialAuthoring().ReleaseAll();
+			context.Get<Renderer>().ClearPointLights();
+			context.Get<Renderer>().ClearSpotLights();
+		});
 	}
 
 	void ScriptedSceneLayer::DoReload(LayerContext& context)
@@ -253,6 +277,200 @@ namespace aether::app
 	void ScriptedSceneLayer::OnUpdate(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
+		auto& world = context.Get<World>();
+		auto& assets = context.Get<AssetManager>();
+		auto staleGrass = world.GetRegistry().view<GrassRuntimeComponent>(entt::exclude<GrassComponent>);
+		for (const auto entity: staleGrass)
+		{
+			world.GetRegistry().remove<GrassRuntimeComponent>(entity);
+		}
+		auto grassView = world.GetRegistry().view<GrassComponent>();
+		GrassStreamingCommands streaming;
+		auto& registry = assets.GetMaterialRegistry();
+		const auto* camera = m_sceneCtx.cameras->TryGetMainCamera();
+		auto& cameraPositions = m_sceneCtx.grassCameras;
+		cameraPositions.clear();
+		cameraPositions.push_back(camera ? camera->GetPosition() : glm::vec3(0.0f));
+		if (auto* targets = context.TryGet<RenderTargetService>()) targets->AppendCameraPositions(cameraPositions);
+		if (auto* rendering = context.TryGet<RenderingSubsystem>())
+		{
+			glm::vec3 preview;
+			if (rendering->GetCameraPreview().TryGetCameraPosition(preview)) cameraPositions.push_back(preview);
+		}
+		for (auto& [key, field]: m_sceneCtx.grassMeshes)
+		{
+			field.desired.clear();
+			field.pending.clear();
+			field.active = false;
+		}
+		std::set<std::uint32_t> liveRoots;
+		for (const auto id: grassView)
+		{
+			const Entity entity = World::FromEntt(id);
+			const auto& grass = grassView.get<GrassComponent>(id);
+			if (!world.Has<TransformComponent>(entity))
+			{
+				world.Emplace<TransformComponent>(entity);
+			}
+			if (!world.Has<MeshRendererComponent>(entity))
+			{
+				world.Emplace<MeshRendererComponent>(entity, MeshRendererComponent{.castShadows = false});
+			}
+			auto& runtime = world.GetRegistry().get_or_emplace<GrassRuntimeComponent>(id);
+			runtime.draws.clear();
+			runtime.selected.clear();
+			if (!grass.enabled)
+			{
+				continue;
+			}
+			auto key = MeshGen::GrassMeshKey(grass);
+			runtime.key = key;
+			auto fieldIt = m_sceneCtx.grassMeshes.find(key);
+			if (fieldIt == m_sceneCtx.grassMeshes.end())
+			{
+				if (const auto* hook = context.TryGet<scene::ModelBakeHook>(); hook && hook->ensureBaked)
+				{
+					for (const auto* path: {&grass.surfaceMesh, &grass.exclusionMesh})
+					{
+						if (path->empty()) continue;
+						std::string error;
+						if (!hook->ensureBaked(*path, error))
+						{
+							AE_WARN(LogCategory::App, "Grass source '{}' import failed: {}", *path, error);
+						}
+					}
+					key = MeshGen::GrassMeshKey(grass);
+					runtime.key = key;
+					fieldIt = m_sceneCtx.grassMeshes.find(key);
+				}
+				if (fieldIt == m_sceneCtx.grassMeshes.end())
+				{
+					auto prepared = MeshGen::GrassField::Load(grass);
+					if (!prepared)
+					{
+						AE_WARN(LogCategory::App, "Grass generation failed: {}", prepared.error());
+						continue;
+					}
+					fieldIt = m_sceneCtx.grassMeshes.try_emplace(key).first;
+					fieldIt->second.field = std::move(*prepared);
+				}
+			}
+			auto& field = fieldIt->second;
+			field.active = true;
+			const glm::mat4 inverse = glm::inverse(world.Get<TransformComponent>(entity).localToWorld);
+			const glm::mat3 basis(inverse);
+			const glm::mat3 gram = glm::transpose(basis) * basis;
+			float maxRow = 0.0f;
+			for (int row = 0; row < 3; ++row)
+			{
+				maxRow = std::max(maxRow, std::abs(gram[0][row]) + std::abs(gram[1][row]) + std::abs(gram[2][row]));
+			}
+			const float scale = std::sqrt(maxRow);
+			for (const glm::vec3 cameraPosition: cameraPositions)
+			{
+				const glm::vec3 localCamera = glm::vec3(inverse * glm::vec4(cameraPosition, 1.0f));
+				auto& selected = m_sceneCtx.grassSelectionScratch;
+				if (auto result = field.field.SelectChunks({localCamera.x, localCamera.z}, selected, scale); !result)
+				{
+					AE_WARN(LogCategory::App, "Grass chunk selection failed: {}", result.error());
+					continue;
+				}
+				runtime.selected.insert(runtime.selected.end(), selected.begin(), selected.end());
+				field.pending.insert(field.pending.end(), selected.begin(), selected.end());
+				field.desired.insert(field.desired.end(), selected.begin(), selected.end());
+			}
+			std::ranges::sort(runtime.selected);
+			runtime.selected.erase(std::unique(runtime.selected.begin(), runtime.selected.end()), runtime.selected.end());
+			const auto rootId = static_cast<std::uint32_t>(id);
+			liveRoots.insert(rootId);
+			auto& root = m_sceneCtx.grassRoots[rootId];
+			const auto* authored = world.TryGet<MaterialComponent>(entity);
+			const auto source = authored ? authored->handle : MaterialHandle{};
+			std::array<glm::vec2, 3> fades;
+			for (std::uint32_t lod = 0; lod < 3; ++lod) fades[lod] = field.field.DistanceFade(lod);
+			if (!(root.source == source) || root.windStrength != grass.windStrength || root.fades != fades || !root.material)
+			{
+				MaterialAsset material;
+				const bool held = source.IsValid() && registry.AddRef(source);
+				if (held) registry.TryDescribe(source, material);
+				material.grass = true;
+				material.grassWindStrength = grass.windStrength;
+				material.doubleSided = true;
+				material.modulateVertexColor = true;
+				material.alphaMask = false;
+				material.alphaBlend = false;
+				material.additiveBlend = false;
+				material.foliage = true;
+				if (root.material) streaming.retiredMaterials.push_back(std::move(root.material));
+				root.material = std::make_shared<GrassMaterialState>();
+				streaming.materials.push_back({root.material, std::move(material), held ? source : MaterialHandle{}, fades});
+				root.source = source;
+				root.windStrength = grass.windStrength;
+				root.fades = fades;
+			}
+			runtime.pipeline = root.material->ready.load(std::memory_order_acquire) ? root.material->pipeline : nullptr;
+		}
+		for (auto& [key, field]: m_sceneCtx.grassMeshes)
+		{
+			std::ranges::sort(field.desired);
+			field.desired.erase(std::unique(field.desired.begin(), field.desired.end()), field.desired.end());
+		}
+		std::erase_if(m_sceneCtx.grassRoots, [&](const auto& entry)
+		{
+			if (liveRoots.contains(entry.first)) return false;
+			if (entry.second.material) streaming.retiredMaterials.push_back(entry.second.material);
+			return true;
+		});
+		for (auto& [key, field]: m_sceneCtx.grassMeshes)
+		{
+			std::erase_if(field.chunks, [&](const auto& chunk)
+			{
+				if (std::binary_search(field.desired.begin(), field.desired.end(), chunk.first) && !(chunk.second->ready.load(std::memory_order_acquire) && chunk.second->failed)) return false;
+				streaming.retired.push_back(chunk.second);
+				return true;
+			});
+		}
+		std::erase_if(m_sceneCtx.grassMeshes, [](const auto& entry) { return !entry.second.active; });
+		for (auto& [key, field]: m_sceneCtx.grassMeshes)
+		{
+			for (const auto chunkKey: field.pending)
+			{
+				if (streaming.uploads.size() == 8) break;
+				if (field.chunks.contains(chunkKey)) continue;
+				auto generated = field.field.GenerateChunk(chunkKey);
+				if (!generated)
+				{
+					AE_WARN(LogCategory::App, "Grass chunk generation failed: {}", generated.error());
+					continue;
+				}
+				auto chunk = std::make_shared<GrassRuntimeChunk>();
+				chunk->key = chunkKey;
+				chunk->origin = generated->origin;
+				field.chunks.emplace(chunkKey, chunk);
+				streaming.uploads.push_back({std::move(chunk), std::move(generated->mesh)});
+			}
+		}
+		if (!streaming.uploads.empty() || !streaming.materials.empty() || !streaming.retired.empty() || !streaming.retiredMaterials.empty())
+		{
+			context.Get<AetherCore>().QueueGrassStreaming(std::move(streaming));
+		}
+		for (const auto id: grassView)
+		{
+			auto* runtime = world.GetRegistry().try_get<GrassRuntimeComponent>(id);
+			if (runtime == nullptr) continue;
+			const auto field = m_sceneCtx.grassMeshes.find(runtime->key);
+			const auto root = m_sceneCtx.grassRoots.find(static_cast<std::uint32_t>(id));
+			if (field == m_sceneCtx.grassMeshes.end() || root == m_sceneCtx.grassRoots.end()) continue;
+			if (!root->second.material || !root->second.material->ready.load(std::memory_order_acquire)) continue;
+			for (const auto chunkKey: runtime->selected)
+			{
+				const auto chunk = field->second.chunks.find(chunkKey);
+				if (chunk != field->second.chunks.end() && chunk->second->ready.load(std::memory_order_acquire) && chunk->second->mesh.IsValid() && chunk->second->mesh.IsIndexed())
+				{
+					runtime->draws.push_back({chunk->second.get(), root->second.material->slots[chunkKey.lod]});
+				}
+			}
+		}
 
 		if (m_csharp != nullptr && m_csharp->HasReloadRequest())
 		{

@@ -47,4 +47,5 @@ set(AETHER_WEB_ENGINE_SOURCES
 	gpu/PostEffectsPass.cpp
     mesh/PrimitiveMeshData.cpp
     mesh/MeshGen.cpp
+    mesh/GrassMeshData.cpp
 )

@@ -82,6 +82,12 @@ extern "C"
 #define AE_GAMEPLAY_SERVICE_GET_ANIMATION_TIME 28u
 #define AE_GAMEPLAY_SERVICE_FIND_ANIMATION_CLIP 29u
 #define AE_GAMEPLAY_SERVICE_GET_CURRENT_CLIP 30u
+// Mouse deltas and scroll are VECTOR3 (x/y, z=0); button numbers follow MouseButton
+// (0 left, 1 right, 2 middle). SET_EULER uses world-space degrees in vector[0..2].
+#define AE_GAMEPLAY_SERVICE_MOUSE_DOWN 31u
+#define AE_GAMEPLAY_SERVICE_MOUSE_DELTA 32u
+#define AE_GAMEPLAY_SERVICE_SCROLL_DELTA 33u
+#define AE_GAMEPLAY_SERVICE_SET_EULER 34u
 #define AE_GAMEPLAY_RAYCAST_PAYLOAD_BYTES 28u
 #define AE_GAMEPLAY_SERVICE_CAP(operation) (UINT64_C(1) << (operation))
 

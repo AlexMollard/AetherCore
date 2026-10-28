@@ -226,7 +226,7 @@ namespace aether::app::web
 			{
 				if (generic.type != "Rigid Body 2D" && generic.type != "Collider 2D" && generic.type != "Tile Map" && generic.type != "Character Controller"
 				        && generic.type != "Particle Emitter"
-				        && generic.type != "Darkness Volume"
+				        && generic.type != "Darkness Volume" && generic.type != "Grass" && generic.type != "Grass Bender"
 				        && generic.type != "Point Light" && generic.type != "Spot Light" && generic.type != "Sky" && generic.type != "Light 2D Settings"
 				        && (generic.type != "UI Canvas" && generic.type != "UI Rect" && generic.type != "UI Text" && generic.type != "UI Image" && generic.type != "UI Selectable" && generic.type != "UI Slider" && generic.type != "UI Toggle"
 				                && generic.type != "UI Button" && generic.type != "UI Progress Bar"))

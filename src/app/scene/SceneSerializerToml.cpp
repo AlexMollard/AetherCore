@@ -1151,6 +1151,10 @@ namespace aether::app::scene
 				{
 					m.insert("uv_scroll", Vec2ToToml(a.uvScroll));
 				}
+				if (wants("distance_fade") && a.distanceFade != glm::vec2(0.0f))
+				{
+					m.insert("distance_fade", Vec2ToToml(a.distanceFade));
+				}
 				const auto tex = [&m, &wants](const char* key, const std::string& path)
 				{
 					if (!path.empty() && wants(key))
@@ -1710,6 +1714,8 @@ namespace aether::app::scene
 				mat.asset.additiveBlend = mv["additive_blend"].value_or(false);
 				took("uv_scroll");
 				mat.asset.uvScroll = Vec2FromToml(mv["uv_scroll"], glm::vec2(0.0f));
+				took("distance_fade");
+				mat.asset.distanceFade = Vec2FromToml(mv["distance_fade"], glm::vec2(0.0f));
 				took("albedo");
 				mat.albedoPath = mv["albedo"].value_or(std::string{});
 				took("normal");

@@ -24,6 +24,7 @@ namespace aether
 		void InitializeDefault(const MaterialAsset& defaultAsset);
 
 		[[nodiscard]] MaterialHandle Acquire(const MaterialAsset& asset);
+		[[nodiscard]] bool AddRef(MaterialHandle handle);
 		void Release(MaterialHandle handle);
 		[[nodiscard]] std::uint32_t ResolveSlot(MaterialHandle handle) const;
 

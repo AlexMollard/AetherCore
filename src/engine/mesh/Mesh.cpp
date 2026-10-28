@@ -1,6 +1,7 @@
 #include "mesh/Mesh.hpp"
 
 #include <cstring>
+#include <algorithm>
 
 #include "gpu/ResourceRegistry.hpp"
 #include "gpu/UploadContext.hpp"
@@ -30,7 +31,7 @@ namespace aether
 		return mesh;
 	}
 
-	Mesh Mesh::Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices)
+	Mesh Mesh::Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices, std::uint64_t* uploadTicket)
 	{
 		AE_PROFILE_ZONE();
 		const gpu::DeviceSize size = sizeof(Vertex) * vertices.size();
@@ -66,9 +67,20 @@ namespace aether
 			return {};
 		}
 
-		uploadContext.CopyBuffer(stagingHandle, bufferHandle, size);
-
-		gpu::ResourceRegistry::Destroy(stagingHandle);
+		if (uploadTicket)
+		{
+			*uploadTicket = uploadContext.CopyBufferAsyncOwned(stagingHandle, bufferHandle, size);
+			if (*uploadTicket == 0)
+			{
+				gpu::ResourceRegistry::Destroy(bufferHandle);
+				return {};
+			}
+		}
+		else
+		{
+			uploadContext.CopyBuffer(stagingHandle, bufferHandle, size);
+			gpu::ResourceRegistry::Destroy(stagingHandle);
+		}
 
 		const gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
 
@@ -81,9 +93,9 @@ namespace aether
 		return mesh;
 	}
 
-	Mesh Mesh::Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius)
+	Mesh Mesh::Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius, std::uint64_t* uploadTicket)
 	{
-		Mesh mesh = Create(uploadContext, vertices);
+		Mesh mesh = Create(uploadContext, vertices, uploadTicket);
 		if (!mesh.IsValid())
 		{
 			// Vertex-buffer creation failed: the returned mesh does not own its buffers,
@@ -125,8 +137,21 @@ namespace aether
 			return mesh;
 		}
 
-		uploadContext.CopyBuffer(stagingHandle, bufferHandle, indexSize);
-		gpu::ResourceRegistry::Destroy(stagingHandle);
+		if (uploadTicket)
+		{
+			const auto indexTicket = uploadContext.CopyBufferAsyncOwned(stagingHandle, bufferHandle, indexSize);
+			if (indexTicket == 0)
+			{
+				gpu::ResourceRegistry::Destroy(bufferHandle);
+				return mesh;
+			}
+			*uploadTicket = std::max(*uploadTicket, indexTicket);
+		}
+		else
+		{
+			uploadContext.CopyBuffer(stagingHandle, bufferHandle, indexSize);
+			gpu::ResourceRegistry::Destroy(stagingHandle);
+		}
 
 		const gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
 

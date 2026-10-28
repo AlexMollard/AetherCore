@@ -29,11 +29,18 @@ float FoliageSkyLookStrength(FrameConstantsData* fc)
 
 // ponytail: every k* here is a look choice judged on the sheets, not measured - the PS2 had no wind.
 #include "FoliageWindMath.slangh"
-float3 FoliageWindOffset(FrameConstantsData* fc, uint materialIndex, float3 worldPos, float swayWeight)
+float3 FoliageWindOffset(FrameConstantsData* fc, uint materialIndex, float3 worldPos, float2 sway, float4x4 model)
 {
 	if (materialIndex == kNoTexture) { return float3(0); }
-	const uint flags = ((GpuMaterial*)(fc->materialBufferAddr))[materialIndex].flags;
-	return SharedFoliageWindOffset(FoliageSkyLookStrength(fc), flags, fc->elapsedTime, worldPos, swayWeight);
+	const GpuMaterial material = ((GpuMaterial*)(fc->materialBufferAddr))[materialIndex];
+	const uint flags = material.flags;
+	if ((flags & 32768u) != 0u)
+	{
+		const float bladeHeight = sway.y * length(mul(model, float4(0, 1, 0, 0)).xyz);
+		return SharedGrassDisplacement(fc->elapsedTime, FoliageSkyLookStrength(fc), worldPos, sway.x, bladeHeight,
+			material.distanceFade.z, fc->grassBenders, fc->grassBenderParams);
+	}
+	return SharedFoliageWindOffset(FoliageSkyLookStrength(fc), flags, fc->elapsedTime, worldPos, sway.x);
 }
 
 #endif

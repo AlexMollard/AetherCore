@@ -234,6 +234,7 @@ TEST_CASE("Gem, sheen, water and character material flags round-trip through cap
     sea.bakedLighting = true;
     sea.water = true;
     sea.uvScroll = glm::vec2(-0.05f, -0.08f);
+    sea.distanceFade = glm::vec2(28.0f, 45.0f);
     add("Sea", sea);
     MaterialAsset skin;
     skin.objectLit = true;
@@ -255,6 +256,7 @@ TEST_CASE("Gem, sheen, water and character material flags round-trip through cap
     CHECK_FALSE(described.sheen);
     CHECK_FALSE(described.gem);
     CHECK(described.uvScroll == glm::vec2(-0.05f, -0.08f));
+    CHECK(described.distanceFade == glm::vec2(28.0f, 45.0f));
     REQUIRE(mreg.TryDescribe(mreg.Acquire(skin), described));
     CHECK(described.character);
     CHECK_FALSE(described.sheen);
@@ -279,6 +281,7 @@ TEST_CASE("Gem, sheen, water and character material flags round-trip through cap
     REQUIRE(s.material.has_value());
     CHECK(s.material->asset.water);
     CHECK(s.material->asset.bakedLighting);
+    CHECK(s.material->asset.distanceFade == glm::vec2(28.0f, 45.0f));
     CHECK_FALSE(s.material->asset.gem);
     const EntityRecord& k = RecordOf(*parsed, "Skin");
     REQUIRE(k.material.has_value());
@@ -287,6 +290,7 @@ TEST_CASE("Gem, sheen, water and character material flags round-trip through cap
     CHECK_FALSE(k.material->asset.sheen);
     const EntityRecord& p = RecordOf(*parsed, "Plain");
     REQUIRE(p.material.has_value());
+    CHECK(p.material->asset.distanceFade == glm::vec2(0.0f));
     CHECK_FALSE(p.material->asset.gem);
     CHECK_FALSE(p.material->asset.sheen);
     CHECK_FALSE(p.material->asset.water);

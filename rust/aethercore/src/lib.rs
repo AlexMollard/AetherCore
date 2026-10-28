@@ -372,6 +372,26 @@ impl<'a> Context<'a> {
             Err(Error(1, "expected bool".into()))
         }
     }
+    /// Whether a mouse button is held (0 left, 1 right, 2 middle).
+    pub fn mouse_down(&mut self, button: i64) -> Result<bool> {
+        let (v, _) = self.service(31, Entity::NONE, [0.; 4], button, "", "")?;
+        if let Value::Bool(v) = v { Ok(v) } else { Err(Error(1, "expected bool".into())) }
+    }
+    /// Pointer motion since the last input frame, in pixels.
+    pub fn mouse_delta(&mut self) -> Result<Vec3> {
+        let (v, _) = self.service(32, Entity::NONE, [0.; 4], 0, "", "")?;
+        if let Value::Vector3(v) = v { Ok(v) } else { Err(Error(1, "expected vector".into())) }
+    }
+    /// Scroll delta in wheel steps, positive y for scrolling up.
+    pub fn scroll_delta(&mut self) -> Result<Vec3> {
+        let (v, _) = self.service(33, Entity::NONE, [0.; 4], 0, "", "")?;
+        if let Value::Vector3(v) = v { Ok(v) } else { Err(Error(1, "expected vector".into())) }
+    }
+    /// Set world-space Euler rotation in degrees.
+    pub fn set_euler(&mut self, entity: Entity, euler: Vec3) -> Result {
+        self.service(34, entity, [euler.x, euler.y, euler.z, 0.], 0, "", "")?;
+        Ok(())
+    }
     pub fn set_sprite_color(&mut self, e: Entity, color: [f32; 4]) -> Result {
         self.service(2, e, color, 0, "", "")?;
         Ok(())

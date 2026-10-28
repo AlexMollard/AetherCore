@@ -384,6 +384,14 @@ namespace aether
 				        }
 				        return;
 			        }
+			        if (entry.fullKey == "material.distancefade" || entry.fullKey == "distancefade")
+			        {
+				        if (const auto parsed = text::ParseFloatArray<2>(entry.value))
+				        {
+					        spec.material.distanceFade = glm::vec2((*parsed)[0], (*parsed)[1]);
+				        }
+				        return;
+			        }
 			        if (entry.fullKey == "material.doublesided" || entry.fullKey == "doublesided")
 			        {
 				        if (const auto parsed = text::ParseBool(entry.value))
@@ -485,6 +493,10 @@ namespace aether
 			if (m.uvScroll != glm::vec2(0.0f))
 			{
 				out += std::format("uvscroll = [ {}, {} ]\n", m.uvScroll.x, m.uvScroll.y);
+			}
+			if (m.distanceFade != glm::vec2(0.0f))
+			{
+				out += std::format("distancefade = [ {}, {} ]\n", m.distanceFade.x, m.distanceFade.y);
 			}
 			out += std::format("doublesided = {}\n", m.doubleSided ? "true" : "false");
 			out += std::format("alphablend = {}\n", m.alphaBlend ? "true" : "false");

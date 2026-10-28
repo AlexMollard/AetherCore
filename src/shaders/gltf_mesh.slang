@@ -31,6 +31,7 @@
 #include "include/MeshVertex.slangh"
 #include "include/Water.slangh"
 #include "include/Foliage.slangh"
+#include "include/DistanceFade.slangh"
 #define AETHER_VS_SKY_DEPTH 1
 #define AETHER_VS_FOLIAGE_WIND 1
 #include "include/DefaultVertex.slangh"
@@ -176,6 +177,7 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     mat.metallicRoughnessSlot = kNoTexture;
     mat.occlusionSlot = kNoTexture;
     mat.emissiveSlot = kNoTexture;
+    mat.distanceFade = float4(0.0);
 
     const bool hasMaterial = input.materialIndex != kNoTexture;
     if (hasMaterial)
@@ -719,6 +721,11 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
 
         finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
     }
+    if ((mat.flags & kFlagGrass) != 0u)
+    {
+        finalColor += SharedGrassBacklight(baseColor.rgb, V, sunDir, sunColor, sunIntensity, sunVisibility);
+    }
+
 
     // Atmospheric perspective. Applied here rather than as a separate screen pass
     // because the world position and the sky terms this needs are already in hand;
@@ -771,5 +778,6 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
     // half-transparent surface half-covers the background and half-blends with it.
     // Scenery foliage reports its soft edge (its pipeline blends; inside the cutoff this is 1).
     const float coverage = ((mat.flags & kFlagAlphaBlend) != 0u) ? saturate(baseColor.a) : edgeCoverage;
+    if (DistanceFadeDiscard(mat.distanceFade.xy, input.worldPos, fc->visibilityCameraWorldPos.xyz, input.svPosition.xy)) { discard; }
     return float4(finalColor, coverage);
 }

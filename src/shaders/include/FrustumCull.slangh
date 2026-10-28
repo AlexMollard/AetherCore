@@ -1,5 +1,14 @@
 #ifndef AETHER_FRUSTUM_CULL_SLANGH
 #define AETHER_FRUSTUM_CULL_SLANGH
+#include "GpuMaterial.slangh"
+
+bool TestSphereDistance(float4 sphere, uint materialIndex, FrameConstantsData* frame)
+{
+    if (sphere.w <= 0.0 || materialIndex == kNoTexture || frame->materialBufferAddr == 0uL) { return true; }
+    float2 range = ((GpuMaterial*)(frame->materialBufferAddr))[materialIndex].distanceFade.xy;
+    if (range.x < 0.0 || range.y <= range.x) { return true; }
+    return distance(sphere.xyz, frame->visibilityCameraWorldPos.xyz) <= range.y + sphere.w + 0.1;
+}
 
 // Test a world-space bounding sphere against the 6 pre-normalized frustum planes.
 // Returns true if the sphere is potentially visible (not fully outside any plane).

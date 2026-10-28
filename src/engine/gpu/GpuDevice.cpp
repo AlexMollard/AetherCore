@@ -1,4 +1,5 @@
 #include "gpu/GpuDevice.hpp"
+#include <algorithm>
 
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -158,7 +159,7 @@ namespace aether
 		// entirely until the first upload; waiting an already-signalled timeline value
 		// is a no-op, so steady state costs nothing.
 		vulkan::TransferManager& transfer = vk.GetTransferManager();
-		const std::uint64_t transferTicket = transfer.LastSubmitted();
+		const std::uint64_t transferTicket = std::max(transfer.GraphicsDependency(), transfer.CompletedTicket());
 		void* transferSemaphore = transferTicket > 0 ? static_cast<void*>(transfer.TimelineSemaphore()) : nullptr;
 
 		swapchain.SubmitAndPresent(vk.GetGraphicsQueue(), vk.GetPresentQueue(), asyncComputeSemaphoreHandle, asyncComputeTimelineValue, transferSemaphore, transferTicket);
@@ -243,10 +244,16 @@ namespace aether
 			fc.proj = packet.proj;
 			fc.viewProj = packet.proj * packet.view;
 			fc.cameraWorldPos = packet.cameraWorldPos;
+			fc.visibilityCameraWorldPos = packet.cameraWorldPos;
 		}
 		else
 		{
 			fc.viewProj = fallbackViewProj;
+		}
+		for (std::size_t i = 0; i < packet.grassBenders.positions.size(); ++i)
+		{
+			fc.grassBenders[i] = packet.grassBenders.positions[i];
+			fc.grassBenderParams[i] = packet.grassBenders.parameters[i];
 		}
 
 		fc.materialBufferAddr = packet.materialBufferAddr;

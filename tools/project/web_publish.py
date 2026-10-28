@@ -95,7 +95,7 @@ def preflight(project, startup_override=None):
         # SceneSerializerToml::ComponentTomlKey lowercases display names and replaces
         # spaces with underscores; Particle Emitter has its explicit legacy key.
         reflected = ('Rigid Body 2D', 'Collider 2D', 'Tile Map', 'Character Controller',
-            'Darkness Volume', 'Point Light', 'Spot Light', 'Sky', 'Light 2D Settings',
+            'Darkness Volume', 'Grass', 'Grass Bender', 'Point Light', 'Spot Light', 'Sky', 'Light 2D Settings',
             'UI Canvas', 'UI Rect', 'UI Text', 'UI Image', 'UI Selectable', 'UI Slider',
             'UI Toggle', 'UI Button', 'UI Progress Bar')
         allowed_entity_tables = {name.lower().replace(' ', '_') for name in reflected}
@@ -171,6 +171,8 @@ def preflight(project, startup_override=None):
             for entity in document.get('entities', []):
                 if is_3d:
                     features_used.update(key for key in entity if key in ('skinned', 'material', 'effect'))
+                    if 'grass' in entity:
+                        features_used.add('meshes_3d')
                     if 'material' in entity:
                         features_used.add('materials')
                     if 'effect' in entity:

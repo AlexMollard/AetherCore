@@ -1,4 +1,5 @@
 #include "AetherCore.hpp"
+#include "scene/GrassBenderExtraction.hpp"
 
 #include <algorithm>
 #include <array>
@@ -6,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <stdexcept>
 #include <span>
 #include <vector>
@@ -16,6 +18,8 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <limits>
 
 #include "animation/AnimationCompiler.hpp"
 #include "animation/AnimationDatabase.hpp"
@@ -265,6 +269,10 @@ namespace aether
 
 	void AetherCore::StopRenderThread()
 	{
+		if (m_producerFrameIndex > 0)
+		{
+			m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - 1);
+		}
 		// Join the render thread, THEN drain the GPU. RenderThread::Stop() does not
 		m_renderThread.Stop();
 		m_gpu->WaitIdle();
@@ -295,6 +303,132 @@ namespace aether
 		}
 
 		m_renderThread.SetReloadInProgress(false);
+	}
+
+	void AetherCore::QueueGrassStreaming(GrassStreamingCommands commands)
+	{
+		auto& pending = m_pendingGrassStreaming;
+		pending.uploads.insert(pending.uploads.end(), std::make_move_iterator(commands.uploads.begin()), std::make_move_iterator(commands.uploads.end()));
+		pending.materials.insert(pending.materials.end(), std::make_move_iterator(commands.materials.begin()), std::make_move_iterator(commands.materials.end()));
+		pending.retired.insert(pending.retired.end(), std::make_move_iterator(commands.retired.begin()), std::make_move_iterator(commands.retired.end()));
+		pending.retiredMaterials.insert(pending.retiredMaterials.end(), std::make_move_iterator(commands.retiredMaterials.begin()), std::make_move_iterator(commands.retiredMaterials.end()));
+	}
+
+	void AetherCore::DeferGrassStreaming(RenderFramePacket& packet)
+	{
+		const std::lock_guard lock(m_grassDeferredMutex);
+		auto& target = m_deferredGrassStreaming;
+		auto& source = packet.grassStreaming;
+		target.uploads.insert(target.uploads.end(), std::make_move_iterator(source.uploads.begin()), std::make_move_iterator(source.uploads.end()));
+		target.materials.insert(target.materials.end(), std::make_move_iterator(source.materials.begin()), std::make_move_iterator(source.materials.end()));
+		target.retired.insert(target.retired.end(), std::make_move_iterator(source.retired.begin()), std::make_move_iterator(source.retired.end()));
+		target.retiredMaterials.insert(target.retiredMaterials.end(), std::make_move_iterator(source.retiredMaterials.begin()), std::make_move_iterator(source.retiredMaterials.end()));
+		source.uploads.clear();
+		source.materials.clear();
+		source.retired.clear();
+		source.retiredMaterials.clear();
+	}
+
+	void AetherCore::ProcessGrassStreaming(RenderFramePacket& packet)
+	{
+		auto& assets = m_services.Get<AssetSubsystem>();
+		auto& upload = assets.GetUploadContext();
+		auto& commands = packet.grassStreaming;
+		{
+			const std::lock_guard lock(m_grassDeferredMutex);
+			auto& deferred = m_deferredGrassStreaming;
+			commands.uploads.insert(commands.uploads.begin(), std::make_move_iterator(deferred.uploads.begin()), std::make_move_iterator(deferred.uploads.end()));
+			commands.materials.insert(commands.materials.begin(), std::make_move_iterator(deferred.materials.begin()), std::make_move_iterator(deferred.materials.end()));
+			commands.retired.insert(commands.retired.begin(), std::make_move_iterator(deferred.retired.begin()), std::make_move_iterator(deferred.retired.end()));
+			commands.retiredMaterials.insert(commands.retiredMaterials.begin(), std::make_move_iterator(deferred.retiredMaterials.begin()), std::make_move_iterator(deferred.retiredMaterials.end()));
+			deferred.uploads.clear();
+			deferred.materials.clear();
+			deferred.retired.clear();
+			deferred.retiredMaterials.clear();
+		}
+		upload.CollectAsyncUploads();
+		std::erase_if(m_grassTransfers, [&](auto& transfer)
+		{
+			if (!upload.IsUploadComplete(transfer.ticket)) return false;
+			transfer.chunk->ready.store(true, std::memory_order_release);
+			return true;
+		});
+		for (auto& request: packet.grassStreaming.uploads)
+		{
+			auto& chunk = *request.chunk;
+			std::uint64_t ticket = 0;
+			if (!request.mesh.vertices.empty() && !request.mesh.indices.empty())
+			{
+				glm::vec3 lo(std::numeric_limits<float>::max());
+				glm::vec3 hi(std::numeric_limits<float>::lowest());
+				float height = 0.0f;
+				for (const auto& vertex: request.mesh.vertices)
+				{
+					lo = glm::min(lo, vertex.position);
+					hi = glm::max(hi, vertex.position);
+					height = std::max(height, vertex.uv2.y);
+				}
+				const float margin = 1.25f * height + 0.05f;
+				chunk.worldDisplacement = margin;
+				lo -= glm::vec3(margin);
+				hi += glm::vec3(margin);
+				const glm::vec3 center = (lo + hi) * 0.5f;
+				chunk.mesh = Mesh::Create(upload, request.mesh.vertices, request.mesh.indices, glm::value_ptr(lo), glm::value_ptr(hi), glm::value_ptr(center), glm::length(hi - center), &ticket);
+				chunk.failed = !chunk.mesh.IsValid() || !chunk.mesh.IsIndexed() || ticket == 0;
+				if (chunk.failed) AE_WARN(LogCategory::Render, "Grass mesh upload failed; retrying.");
+			}
+			if (ticket != 0)
+			{
+				m_grassTransfers.push_back({request.chunk, ticket});
+			}
+			else
+			{
+				chunk.ready.store(true, std::memory_order_release);
+			}
+		}
+		auto& retiredMaterials = m_retiredGrassMaterials[packet.frameIndex % m_retiredGrassMaterials.size()];
+		for (const auto handle: retiredMaterials) assets.GetMaterialRegistry().Release(handle);
+		retiredMaterials.clear();
+		for (auto& request: packet.grassStreaming.materials)
+		{
+			auto pipeline = request.material.templateDesc;
+			pipeline.cullMode = gpu::CullMode::None;
+			pipeline.blendEnable = false;
+			pipeline.depthWriteEnable = true;
+			request.state->pipeline = assets.GetPipelineCache().Acquire(pipeline);
+			for (std::uint32_t lod = 0; lod < 3; ++lod)
+			{
+				request.material.distanceFade = request.fades[lod];
+				request.state->handles[lod] = assets.GetMaterialRegistry().Acquire(request.material);
+				request.state->slots[lod] = assets.GetMaterialRegistry().ResolveSlot(request.state->handles[lod]);
+			}
+			if (request.sourceKeepalive.IsValid()) retiredMaterials.push_back(request.sourceKeepalive);
+			request.state->ready.store(true, std::memory_order_release);
+		}
+		for (const auto& state: packet.grassStreaming.retiredMaterials)
+		{
+			for (const auto handle: state->handles) retiredMaterials.push_back(handle);
+		}
+		// Release every packet keepalive on the registry-owning render thread.
+		packet.grassStreaming.uploads.clear();
+		packet.grassStreaming.materials.clear();
+		packet.grassStreaming.retired.clear();
+		packet.grassStreaming.retiredMaterials.clear();
+	}
+
+	void AetherCore::FlushGrassStreaming()
+	{
+		RenderFramePacket packet;
+		packet.grassStreaming = std::move(m_pendingGrassStreaming);
+		ProcessGrassStreaming(packet);
+		auto& upload = m_services.Get<AssetSubsystem>().GetUploadContext();
+		for (const auto& transfer: m_grassTransfers) upload.WaitForUpload(transfer.ticket);
+		ProcessGrassStreaming(packet);
+		for (auto& handles: m_retiredGrassMaterials)
+		{
+			for (const auto handle: handles) m_services.Get<AssetSubsystem>().GetMaterialRegistry().Release(handle);
+			handles.clear();
+		}
 	}
 
 	int AetherCore::RunFrameLoop(EngineClient& client)
@@ -1198,6 +1332,7 @@ namespace aether
 		m_rendering->GetMaterialThumbnailBaker().PrepareQueue(drawSlot);
 
 		RenderFramePacket packet;
+		packet.grassStreaming = std::move(m_pendingGrassStreaming);
 		packet.frameIndex = frameIndex;
 		packet.drawSlot = drawSlot;
 		packet.renderExtent = extent;
@@ -1284,6 +1419,13 @@ namespace aether
 			const Camera* const blobEye = cameras.TryGetMainCamera();
 			packet.blobCharacterCount = static_cast<std::uint32_t>(WorldRenderer::GatherBlobShadows(world, assetsSub.GetMaterialRegistry(), blobEye ? blobEye->GetPosition() : glm::vec3(0.0f), packet.blobShadows));
 			WorldRenderer::GatherDarknessVolumes(world, blobEye ? blobEye->GetPosition() : glm::vec3(0.0f), packet.darknessVolumes);
+			packet.grassBenders = ExtractGrassBenders(world, blobEye ? blobEye->GetPosition() : glm::vec3(0.0f));
+			rttService.ExtractGrassFrames(world, packet.targetGrassBenders);
+			glm::vec3 previewPosition;
+			if (m_rendering->GetCameraPreview().TryGetCameraPosition(previewPosition))
+			{
+				packet.previewGrassBenders = ExtractGrassBenders(world, previewPosition);
+			}
 		}
 		packet.skyHorizonColor = renderer.GetSkyHorizonColorVector();
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();
@@ -1374,7 +1516,7 @@ namespace aether
 		return packet;
 	}
 
-	void AetherCore::ExecuteRenderFrame(const RenderFramePacket& packet)
+	void AetherCore::ExecuteRenderFrame(RenderFramePacket& packet)
 	{
 		AE_PROFILE_ZONE();
 		const auto execStart = std::chrono::steady_clock::now();
@@ -1410,6 +1552,8 @@ namespace aether
 		const auto presentStart = std::chrono::steady_clock::now();
 		EndFrame(packet);
 		const auto presentEnd = std::chrono::steady_clock::now();
+		// Submit this frame before issuing optional grass transfers: they are not drawable yet.
+		if (m_profile == RuntimeProfile::Full) ProcessGrassStreaming(packet);
 		if (m_rendering && m_profile == RuntimeProfile::Full)
 		{
 			m_rendering->GetRenderer2D().EndFrame();
@@ -1498,7 +1642,7 @@ namespace aether
 			aether::GpuDevice::ApplyNoCameraLightingFallback(fc);
 		}
 
-		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);
+		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc, packet);
 		float exposureUsed = 1;
 		if (m_rendering)
 		{
@@ -1550,7 +1694,7 @@ namespace aether
 		m_cameras->GetLightingManager().ApplyShadowIndices(frameIdx, m_rendering->GetLocalShadowService().GetLightShadowIndices());
 	}
 
-	void AetherCore::UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, FrameConstants fc)
+	void AetherCore::UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, FrameConstants fc, const RenderFramePacket& packet)
 	{
 		const bool fullRuntime = m_profile == RuntimeProfile::Full;
 
@@ -1588,7 +1732,8 @@ namespace aether
 		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
 		if (fullRuntime)
 		{
-			m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx, &m_cameras->GetLightingManager());
+			m_rendering->GetRenderTargetService().SetGrassFrame(fc, packet.targetGrassBenders);
+			m_rendering->GetCameraPreview().BuildFrameConstants(fc, frameIdx, &m_cameras->GetLightingManager(), packet.previewGrassBenders);
 			m_rendering->GetModelPreview().BuildFrameConstants(fc, frameIdx);
 			m_rendering->GetMaterialThumbnailBaker().BuildFrameConstants(fc, frameIdx);
 		}

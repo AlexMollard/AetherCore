@@ -49,10 +49,10 @@ TEST_CASE("PackMaterial packs bools into flags") {
     CHECK((g.flags & GpuMaterial::kAlphaBlend) == 0u);
 }
 
-TEST_CASE("PackMaterial resolves handles to heap slots and freezes the 80-byte layout") {
+TEST_CASE("PackMaterial resolves handles to heap slots and freezes the 96-byte layout") {
     FakeTextureSink texSink(8);
     TextureRegistry tex(texSink);
-    static_assert(sizeof(GpuMaterial) == 80);
+    static_assert(sizeof(GpuMaterial) == 96);
     MaterialAsset a;
     a.albedoTex = tex.Acquire("brick.png");
     const std::uint32_t expected = tex.ResolveSlot(a.albedoTex);

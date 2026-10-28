@@ -344,6 +344,7 @@ namespace aether
 			fc.proj = m_camProj;
 			fc.viewProj = m_camProj * m_camView;
 			fc.cameraWorldPos = glm::vec4(m_camPos, 1.0f);
+			fc.visibilityCameraWorldPos = fc.cameraWorldPos;
 		}
 		fc.tiledLightGridInfo = glm::uvec4(0u);
 		fc.tiledLightBufferOffsets = glm::uvec4(0u);

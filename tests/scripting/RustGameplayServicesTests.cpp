@@ -19,6 +19,7 @@
 #include "io/FileSystem.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "platform/Input.hpp"
 #include "scene/Components.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scripting/Gameplay3D.hpp"
@@ -159,6 +160,46 @@ TEST_CASE("Rust services reject nested native service invocations")
 	CHECK(probe.status == AE_GAMEPLAY_REENTRANT);
 	world.GetRegistry().on_construct<NameComponent>().disconnect<&ReentrantProbe::OnName>(probe);
 }
+TEST_CASE("Rust pointer and Euler services negotiate and validate inputs")
+{
+	World world;
+	aether::scripting::GameplayAccess access(world);
+	SceneContext withoutInput{.world = &world};
+	RustGameplayServices unavailable(withoutInput, access);
+	const auto noInput = unavailable.EngineApi();
+	for (const auto op: {AE_GAMEPLAY_SERVICE_MOUSE_DOWN, AE_GAMEPLAY_SERVICE_MOUSE_DELTA, AE_GAMEPLAY_SERVICE_SCROLL_DELTA})
+	{
+		CHECK((noInput.capabilities & AE_GAMEPLAY_SERVICE_CAP(op)) == 0);
+	}
+	CHECK((noInput.capabilities & AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_SET_EULER)) != 0);
+	Input input;
+	SceneContext context{.world = &world, .input = &input};
+	RustGameplayServices services(context, access);
+	const auto api = services.EngineApi();
+	AetherGameplayPropertyValue value{.structSize = sizeof(value)};
+	AetherGameplayServiceRequest request{.structSize = sizeof(request), .operation = AE_GAMEPLAY_SERVICE_MOUSE_DOWN, .integer = 3};
+	CHECK(api.invoke(api.context, &request, &value, {}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK((api.capabilities & AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_MOUSE_DOWN)) != 0);
+	request.integer = 0;
+	input.SetSyntheticMouseButton(0, true);
+	input.Update();
+	REQUIRE(api.invoke(api.context, &request, &value, {}) == AE_GAMEPLAY_OK);
+	CHECK(value.type == AE_GAMEPLAY_PROPERTY_BOOL);
+	CHECK(value.integer == 1);
+	const auto entity = world.Create();
+	world.Emplace<TransformComponent>(entity);
+	request = {.structSize = sizeof(request), .operation = AE_GAMEPLAY_SERVICE_SET_EULER, .entity = access.Handle(entity), .vector = {0, 45, 0, 0}};
+	REQUIRE(api.invoke(api.context, &request, &value, {}) == AE_GAMEPLAY_OK);
+	glm::vec3 position{}, euler{}, scale{};
+	DecomposeTRS(world.Get<TransformComponent>(entity).localToWorld, position, euler, scale);
+	CHECK(euler.y == doctest::Approx(45));
+	request.vector[0] = std::numeric_limits<float>::infinity();
+	CHECK(api.invoke(api.context, &request, &value, {}) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	request.vector[0] = 0;
+	request.entity.world++;
+	CHECK(api.invoke(api.context, &request, &value, {}) == AE_GAMEPLAY_WRONG_WORLD);
+}
+
 
 TEST_CASE("Rust services copy strings and defer destructive operations")
 {

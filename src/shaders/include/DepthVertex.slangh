@@ -15,6 +15,7 @@ struct DepthVSOutput
     float4 svPosition : SV_Position;
     float2 uv         : TEXCOORD0;
     nointerpolation uint materialIndex : TEXCOORD1;
+    float3 worldPos : TEXCOORD2;
 };
 
 struct DepthVSOutputWithWorldPos
@@ -81,7 +82,7 @@ float4 DepthVertexTransform(uint vertexId, uint instanceIndex, out float3 worldP
 
     // Scenery foliage sways (Foliage.slangh): the same offset the forward pass adds, so a
     // swaying card's prepass depth and shadow follow it.
-    wPos.xyz += FoliageWindOffset(fc, instance.materialIndex, wPos.xyz, input.uv2.x);
+    wPos.xyz += FoliageWindOffset(fc, instance.materialIndex, wPos.xyz, input.uv2, instance.model);
     worldPos = wPos.xyz;
     return mul(fc->viewProj, wPos);
 }

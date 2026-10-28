@@ -2619,6 +2619,15 @@ namespace aether::editor
 				{
 					return json{{"error", "no undo stack (editor only)"}};
 				}
+				const auto* playState = ctx.services.TryGet<app::PlayState>();
+				if (playState == nullptr)
+				{
+					return json{{"queued", false}, {"reason", "play state unavailable"}};
+				}
+				if (playState->IsPlaying() || playState->IsCompiling())
+				{
+					return json{{"queued", false}, {"reason", "undo and redo are unavailable while playing or compiling"}};
+				}
 				const int depth = redo ? undo->RedoDepth() : undo->UndoDepth();
 				if (depth <= 0)
 				{

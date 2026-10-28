@@ -140,13 +140,29 @@ class AetherBrowserPlatform {
 	    context.font = '48px AetherRoboto';
 	    context.fillStyle = 'white';
 	    this.advances = new Float32Array(256);
+	    let ascent = 0;
+	    let descent = 0;
 	    for (let code = 32; code < 256; ++code) {
-		const glyph = String.fromCodePoint(code);
-		const advance = context.measureText(glyph).width;
-		if (advance > 64)
+		if (code >= 127 && code < 160)
+		    continue;
+		const metrics = context.measureText(String.fromCodePoint(code));
+		if (metrics.width > 64)
 		    throw Error('Font exceeds the 64-pixel glyph cell limit');
-		this.advances[code] = advance;
-		context.fillText(glyph, (code % 16) * 64, Math.floor(code / 16) * 64 + 48);
+		this.advances[code] = metrics.width;
+		ascent = Math.max(ascent, metrics.actualBoundingBoxAscent);
+		descent = Math.max(descent, metrics.actualBoundingBoxDescent);
+	    }
+	    // Round outward so rasterization cannot spill into the adjacent atlas row.
+	    this.fontAscent = Math.ceil(ascent);
+	    this.fontDescent = Math.ceil(descent);
+	    this.fontBaseline = this.fontAscent;
+	    if (this.fontAscent + this.fontDescent > 64)
+		throw Error('Font exceeds the 64-pixel glyph cell height');
+	    for (let code = 32; code < 256; ++code) {
+		if (code >= 127 && code < 160)
+		    continue;
+		context.fillText(String.fromCodePoint(code), (code % 16) * 64,
+		                 Math.floor(code / 16) * 64 + this.fontBaseline);
 	    }
 	    this.fontAtlas = context.getImageData(0, 0, 1024, 1024).data;
 	    this.fontReady = true;
@@ -254,7 +270,10 @@ globalThis.aetherInput = {
     x : -1000000,
     y : -1000000,
     buttons : 0,
-    pressed : 0
+    pressed : 0,
+    dx : 0,
+    dy : 0,
+    scroll : 0
 };
 const inputCanvas = document.getElementById('canvas');
 const pointer = event => {
@@ -264,7 +283,13 @@ const pointer = event => {
     // DOM buttons are left/right/middle; the shared input uses left/right/middle too.
     aetherInput.buttons = (event.buttons & 1) | ((event.buttons & 2)) | ((event.buttons & 4));
 };
-inputCanvas.addEventListener('pointermove', pointer);
+inputCanvas.addEventListener('pointermove', event => {
+    if (document.activeElement === inputCanvas && aetherInput.buttons) {
+        aetherInput.dx += event.movementX;
+        aetherInput.dy += event.movementY;
+    }
+    pointer(event);
+});
 inputCanvas.addEventListener('pointerdown', event => {
     inputCanvas.focus();
     inputCanvas.setPointerCapture(event.pointerId);
@@ -272,20 +297,29 @@ inputCanvas.addEventListener('pointerdown', event => {
     aetherInput.pressed |= aetherInput.buttons
 });
 inputCanvas.addEventListener('pointerup', pointer);
+inputCanvas.addEventListener('wheel', event => {
+    if (document.activeElement === inputCanvas && document.hasFocus() && !document.hidden) {
+        aetherInput.scroll -= event.deltaY / (event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 1 : 100);
+        event.preventDefault();
+    }
+}, {passive: false});
 inputCanvas.addEventListener('lostpointercapture', () => {aetherInput.buttons = 0});
 window.addEventListener('blur', () => {
     aetherInput.buttons = 0;
-    aetherInput.pressed = 0
+    aetherInput.pressed = 0;
+    aetherInput.dx = aetherInput.dy = aetherInput.scroll = 0;
 });
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
 	aetherInput.buttons = 0;
-	aetherInput.pressed = 0
+	aetherInput.pressed = 0;
+	aetherInput.dx = aetherInput.dy = aetherInput.scroll = 0;
     }
 });
 inputCanvas.addEventListener('blur', () => {
     aetherInput.buttons = 0;
-    aetherInput.pressed = 0
+    aetherInput.pressed = 0;
+    aetherInput.dx = aetherInput.dy = aetherInput.scroll = 0;
 });
 globalThis.aetherPlatform = null;
 if (globalThis.aetherProject || new URLSearchParams(location.search).has('reference') || new URLSearchParams(location.search).has('platform')) {

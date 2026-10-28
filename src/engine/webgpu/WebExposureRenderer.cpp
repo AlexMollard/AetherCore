@@ -188,7 +188,7 @@ namespace aether::webgpu
 			}
 		}
 		const bool enabled = packet.postEffects.autoExposure;
-		if (!m_state || m_state->width != width || m_state->height != height)
+		if (!m_state || m_state->width != width || m_state->height != height || m_state->sceneGeneration != sceneGeneration || m_state->enabled != enabled)
 		{
 			auto state = std::make_shared<WebExposureState>();
 			state->buffer = Buffer(device, 16, WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc);

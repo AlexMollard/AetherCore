@@ -84,6 +84,14 @@ namespace aether
 		m_enabled.store(enabled, std::memory_order_relaxed);
 	}
 
+	bool CameraPreviewService::TryGetCameraPosition(glm::vec3& position)
+	{
+		const std::lock_guard<std::mutex> lock(m_requestMutex);
+		if (!m_enabled.load(std::memory_order_relaxed)) return false;
+		position = m_reqCameraPos;
+		return true;
+	}
+
 	void CameraPreviewService::PrepareQueue(std::uint32_t drawSlot, World& world)
 	{
 		if (!m_initialized)
@@ -98,13 +106,18 @@ namespace aether
 		}
 	}
 
-	void CameraPreviewService::BuildFrameConstants(const FrameConstants& mainFc, std::uint32_t frameIdx, LightingManager* lighting)
+	void CameraPreviewService::BuildFrameConstants(const FrameConstants& mainFc, std::uint32_t frameIdx, LightingManager* lighting, const GrassBenderFrame& benders)
 	{
 		if (!m_initialized)
 		{
 			return;
 		}
 		FrameConstants fc = mainFc;
+		for (std::size_t i = 0; i < benders.positions.size(); ++i)
+		{
+			fc.grassBenders[i] = benders.positions[i];
+			fc.grassBenderParams[i] = benders.parameters[i];
+		}
 		float nearPlane = 0.1f;
 		{
 			const std::lock_guard<std::mutex> lock(m_requestMutex);
@@ -112,6 +125,7 @@ namespace aether
 			fc.proj = m_reqProj;
 			fc.viewProj = m_reqProj * m_reqView;
 			fc.cameraWorldPos = glm::vec4(m_reqCameraPos, 1.0f);
+			fc.visibilityCameraWorldPos = fc.cameraWorldPos;
 			// The preview is a still of another camera, not a continuous view, so it has no
 			// motion to reproject through. Equal matrices mean zero screen velocity; leaving
 			// the default identity here would read as the camera having jumped from the

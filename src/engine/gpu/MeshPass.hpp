@@ -154,7 +154,7 @@ namespace aether::gpu
 				}
 			}
 			if (!std::isfinite(material.metallicFactor) || !std::isfinite(material.roughnessFactor) || !std::isfinite(material.occlusionStrength) || !std::isfinite(material.alphaCutoff) || !std::isfinite(material.uvScroll.x)
-			        || !std::isfinite(material.uvScroll.y) || (material.additiveBlend && !material.alphaBlend))
+			        || !std::isfinite(material.uvScroll.y) || !std::isfinite(material.distanceFade.x) || !std::isfinite(material.distanceFade.y) || (material.additiveBlend && !material.alphaBlend))
 			{
 				return std::unexpected("Invalid mesh material factors or blend mode");
 			}
@@ -204,7 +204,7 @@ namespace aether::gpu
 			        baseColor,
 			        glm::vec4(material.emissiveFactor, material.roughnessFactor),
 			        {material.metallicFactor, material.occlusionStrength, material.alphaCutoff, 0},
-			        glm::vec4(material.uvScroll, 0, 0),
+			        glm::vec4(material.uvScroll, material.distanceFade),
 			        {static_cast<std::uint32_t>(instances.size()), paletteOffset, static_cast<std::uint32_t>(mesh.skinMatrices.size()), flags}});
 			paletteOffset += static_cast<std::uint32_t>(mesh.skinMatrices.size());
 		}

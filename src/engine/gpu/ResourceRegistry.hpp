@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
 #include <source_location>
 #include <span>
 #include <string>
@@ -153,6 +154,8 @@ namespace aether::gpu
 	class ResourceRegistry
 	{
 	public:
+		// Serializes registry pools, resolved-state lookups and pending GPU destruction.
+		[[nodiscard]] static std::recursive_mutex& BufferMutex() noexcept;
 		static void Initialize(const ResourceRegistryInitDesc& desc) noexcept;
 
 		[[nodiscard]] static BufferHandle CreateBuffer(const BufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;

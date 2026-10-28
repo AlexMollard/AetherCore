@@ -2,6 +2,10 @@
 #![allow(non_snake_case)]
 use crate::*;
 pub const AE_GAMEPLAY_SERVICES_MAJOR: u32 = 1;
+pub const AE_GAMEPLAY_SERVICE_MOUSE_DOWN: u32 = 31;
+pub const AE_GAMEPLAY_SERVICE_MOUSE_DELTA: u32 = 32;
+pub const AE_GAMEPLAY_SERVICE_SCROLL_DELTA: u32 = 33;
+pub const AE_GAMEPLAY_SERVICE_SET_EULER: u32 = 34;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct AetherGameplayServiceRequest {

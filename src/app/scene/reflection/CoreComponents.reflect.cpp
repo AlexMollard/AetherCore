@@ -10,6 +10,8 @@
 #include "scene/BehaviorComponents.hpp"
 #include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
+#include "scene/GrassComponent.hpp"
+#include "scene/GrassBenderComponent.hpp"
 #include "scene/LightComponents.hpp"
 #include "scene/TransformUtils.hpp"
 
@@ -74,6 +76,33 @@ namespace
 		return table;
 	}
 } // namespace
+
+AE_COMPONENT(GrassComponent, "Grass", "Rendering", ICON_FA_LEAF)
+AE_FIELD_N("surface_mesh", surfaceMesh, String)
+AE_FIELD_N("exclusion_mesh", exclusionMesh, String)
+AE_FIELD_N("region_min", regionMin, Vec2)
+AE_FIELD_N("region_max", regionMax, Vec2)
+AE_FIELD_N("spacing", spacing, Float)
+AE_FIELD_N("chunk_size", chunkSize, Float)
+AE_FIELD_N("height_range", heightRange, Vec2)
+AE_FIELD_N("blade_width", bladeWidth, Float)
+AE_FIELD_N("lod_distances", lodDistances, Vec2)
+AE_FIELD_N("draw_distance", drawDistance, Float)
+AE_FIELD_N("wind_strength", windStrength, Float)
+AE_FIELD_N("surface_mask", surfaceMask, Bool)
+AE_FIELD_N("seed", seed, UInt)
+AE_FIELD_N("base_color", baseColor, Color3)
+AE_FIELD_N("tip_color", tipColor, Color3)
+AE_FIELD_N("enabled", enabled, Bool)
+b.RequiresFeature(SceneFeatureFlags::Meshes3D | SceneFeatureFlags::Lighting3D);
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
+
+AE_COMPONENT(GrassBenderComponent, "Grass Bender", "Rendering", ICON_FA_LEAF)
+AE_FIELD_N("radius", radius, Float)
+AE_FIELD_N("strength", strength, Float)
+AE_GENERIC_SERIALIZE()
+AE_COMPONENT_END()
 
 AE_COMPONENT(SpriteRendererComponent, "Sprite Renderer", "Rendering", ICON_FA_IMAGE)
 AE_FIELD_N("texture", texturePath, String)

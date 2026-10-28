@@ -108,11 +108,11 @@ namespace aether
 
 	void TextureRegistry::AddRef(TextureHandle handle)
 	{
+		const std::scoped_lock lock(m_mutex);
 		if (!handle.IsValid() || handle.index >= m_entries.size())
 		{
 			return;
 		}
-		const std::scoped_lock lock(m_mutex);
 		Entry& e = m_entries[handle.index];
 		if (e.alive && e.generation == handle.generation)
 		{
@@ -122,12 +122,11 @@ namespace aether
 
 	void TextureRegistry::Release(TextureHandle handle)
 	{
+		const std::scoped_lock lock(m_mutex);
 		if (!handle.IsValid() || handle.index >= m_entries.size())
 		{
 			return;
 		}
-
-		const std::scoped_lock lock(m_mutex);
 		Entry& e = m_entries[handle.index];
 		if (!e.alive || e.generation != handle.generation)
 		{

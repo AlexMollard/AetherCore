@@ -1,4 +1,5 @@
 #include "RenderTargetService.hpp"
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <stdexcept>
 #include <string>
@@ -18,6 +19,8 @@
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
+#include "scene/GrassBenderExtraction.hpp"
+#include "rendering/RenderFramePacket.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether
@@ -102,6 +105,38 @@ namespace aether
 		{
 			(void) _;
 			RegisterPassFor(id);
+		}
+	}
+
+	void RenderTargetService::SetGrassFrame(const FrameConstants& frame, const std::vector<GrassTargetFrame>& targets)
+	{
+		m_grassElapsedTime = frame.elapsedTime;
+		m_grassBenders.clear();
+		for (const auto& target: targets) m_grassBenders.push_back({target.targetId, target.benders});
+	}
+
+	void RenderTargetService::ExtractGrassFrames(const World& world, std::vector<GrassTargetFrame>& targets) const
+	{
+		targets.clear();
+		if (!m_cameraManager) return;
+		for (const auto& [id, target]: m_targets)
+		{
+			if (const auto* camera = m_cameraManager->TryGet(CameraHandle{target.cameraHandleRaw}))
+			{
+				targets.push_back({id, ExtractGrassBenders(world, camera->GetPosition())});
+			}
+		}
+	}
+
+	void RenderTargetService::AppendCameraPositions(std::vector<glm::vec3>& positions) const
+	{
+		if (m_cameraManager == nullptr) return;
+		for (const auto& [id, target]: m_targets)
+		{
+			if (const auto* camera = m_cameraManager->TryGet(CameraHandle{target.cameraHandleRaw}))
+			{
+				positions.push_back(camera->GetPosition());
+			}
 		}
 	}
 
@@ -306,6 +341,16 @@ namespace aether
 			                fc.proj = cam->GetProjectionMatrix(aspect);
 			                fc.viewProj = fc.proj * fc.view;
 			                fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
+			                fc.visibilityCameraWorldPos = fc.cameraWorldPos;
+			                fc.elapsedTime = m_grassElapsedTime;
+			                if (const auto benders = std::ranges::find_if(m_grassBenders, [id](const auto& entry) { return entry.id == id; }); benders != m_grassBenders.end())
+			                {
+				                for (std::size_t i = 0; i < benders->frame.positions.size(); ++i)
+				                {
+					                fc.grassBenders[i] = benders->frame.positions[i];
+					                fc.grassBenderParams[i] = benders->frame.parameters[i];
+				                }
+			                }
 			                fc.materialBufferAddr = m_materialBuffer->GetDeviceAddressU64();
 			                fc.effectParamBufferAddr = (m_effectParamBuffer != nullptr) ? m_effectParamBuffer->GetDeviceAddressU64() : 0;
 			                fc.sunDirectionIntensity = m_renderer->GetDirectionalLightVector();

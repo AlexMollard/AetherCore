@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <optional>
 #include <source_location>
@@ -23,7 +24,7 @@ namespace aether
 
 namespace aether
 {
-	// Thread safety: none. Create / Destroy / AdvanceFrame / DrainAll /
+	// Concurrent callers use the GPU facade lock; direct backend access is owner-thread only.
 	class ResourceRegistry
 	{
 	public:
@@ -277,7 +278,8 @@ namespace aether
 
 		std::vector<TextureSlot> m_textures;
 		std::vector<BufferSlot> m_buffers;
-		std::vector<PipelineSlot> m_pipelines;
+		// ResolvedPipeline exposes an entry pointer while command recording continues.
+		std::deque<PipelineSlot> m_pipelines;
 
 		std::vector<std::uint32_t> m_freeTextureSlots;
 		std::vector<std::uint32_t> m_freeBufferSlots;

@@ -11,7 +11,8 @@ static const float kWindGustSpeed = 0.5f;          // rad/s of the gust wave
 // Visual only: colliders are built from the mesh on the CPU and never see it.
 float3 SharedFoliageWindOffset(float look, uint flags, float t, float3 worldPos, float swayWeight)
 {
-    if (look <= 0 || (flags & (32 | 64 | 512)) != (32 | 64)) { return float3(0); }
+    // Lit vegetation sways too; object-lit actors keep their own animation.
+    if (look <= 0 || (flags & (32 | 512)) != 32 || ((flags & 64) == 0 && (flags & (128 | 16384)) != 0)) { return float3(0); }
     const float along = dot(worldPos.xz, kWindDir);
     // A slow gust wave travelling downwind scales everything, so a field of grass leans in waves.
     const float gust = 0.55f + 0.45f * sin(along * kWindGustWavenumber - t * kWindGustSpeed);
@@ -23,6 +24,52 @@ float3 SharedFoliageWindOffset(float look, uint flags, float t, float3 worldPos,
     float3 offset = float3(kWindDir.x, 0.0f, kWindDir.y) * (kWindSway * gust * sway);
     offset += float3(0.6f, 1.0f, -0.8f) * (kWindFlutter * gust * flutter);
     return offset * (saturate(swayWeight) * look);
+}
+
+// Curved blades share a travelling wind field; individual flutter is deliberately small.
+float3 SharedGrassDisplacement(float t, float look, float3 worldPos, float anchorWeight, float bladeHeight,
+    float windStrength, float4 benders[8], float4 benderParams[8])
+{
+    const float anchor = saturate(anchorWeight);
+    const float height = max(bladeHeight, 0.0f);
+    const float along = dot(worldPos.xz, kWindDir);
+    const float across = dot(worldPos.xz, float2(-kWindDir.y, kWindDir.x));
+    const float gust = 0.5f + 0.5f * sin(along * 0.18f - t);
+    const float swell = sin(along * 0.07f + across * 0.035f - t * 0.63f);
+    const float flutter = sin(along * 2.1f + across * 3.7f + t * 4.3f);
+    float2 lean = kWindDir * (0.12f + 0.19f * gust + 0.055f * swell);
+    lean += float2(-kWindDir.y, kWindDir.x) * (0.045f * swell + 0.015f * flutter);
+    lean *= clamp(windStrength, 0.0f, 2.0f) * saturate(look);
+
+    float2 interaction = float2(0);
+    const float rootY = worldPos.y - anchor * height;
+    for (uint i = 0; i < 8; ++i)
+    {
+        const float radius = benders[i].w;
+        if (radius <= 0.0f) { continue; }
+        const float2 delta = worldPos.xz - benders[i].xz;
+        const float distance = length(delta);
+        const float influence = 1.0f - smoothstep(radius * 0.15f, radius, distance);
+        const float vertical = saturate(1.0f - max(abs(rootY - benders[i].y) - 0.25f, 0.0f) / 0.75f);
+        const float2 away = distance > 0.0001f ? delta / distance : kWindDir;
+        interaction += away * (influence * vertical * clamp(benderParams[i].x, 0.0f, 2.0f));
+    }
+    lean += interaction;
+    // This bound also defines the conservative CPU chunk inflation, including overlapping actors.
+    const float leanLength = length(lean);
+    lean *= min(1.0f, 1.1f / max(leanLength, 0.0001f));
+    const float weight = anchor * anchor;
+    const float2 horizontal = lean * (height * weight);
+    const float drop = height * weight * min(0.35f, dot(lean, lean) * 0.25f);
+    return float3(horizontal.x, -drop, horizontal.y);
+}
+
+float3 SharedGrassBacklight(float3 albedo, float3 viewDirection, float3 towardsSun,
+    float3 sunColor, float sunIntensity, float visibility)
+{
+    const float intoLight = saturate(dot(viewDirection, -towardsSun));
+    const float transmission = 0.05f + 0.25f * intoLight * intoLight * intoLight;
+    return albedo * sunColor * (max(sunIntensity, 0.0f) * transmission * saturate(visibility));
 }
 
 

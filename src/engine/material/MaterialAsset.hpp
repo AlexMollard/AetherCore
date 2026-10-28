@@ -52,9 +52,14 @@ namespace aether
 		// Character look (disk bit kMaterialDiskCharacter: Crash, Aku Aku): wrapped key light, rim,
 		// eye catchlight and texture relief on top of the PS2 object lighting.
 		bool character = false;
+		// Runtime-only generated grass settings; authored material fields remain unchanged.
+		bool grass = false;
+		float grassWindStrength = 0.0f;
 
 		// UV scroll velocity in UV units per second (Twinsanity sea, waterfalls, sky).
 		glm::vec2 uvScroll{0.0f, 0.0f};
+		// Camera-distance coverage transition; [0, 0] disables it.
+		glm::vec2 distanceFade{0.0f};
 
 		TextureHandle albedoTex{};
 		TextureHandle normalTex{};

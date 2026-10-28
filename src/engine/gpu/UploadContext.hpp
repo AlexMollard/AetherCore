@@ -32,6 +32,11 @@ namespace aether::gpu
 
 		// Blocking: returns once the copy has completed, so the caller may free `src`.
 		void CopyBuffer(BufferHandle src, BufferHandle dst, DeviceSize size);
+		// Takes ownership of src until the transfer timeline reaches the returned ticket.
+		[[nodiscard]] std::uint64_t CopyBufferAsyncOwned(BufferHandle src, BufferHandle dst, DeviceSize size);
+		void CollectAsyncUploads();
+		[[nodiscard]] bool IsUploadComplete(std::uint64_t ticket) const;
+		void WaitForUpload(std::uint64_t ticket);
 
 		[[nodiscard]] void* GetCommandPool() const;
 

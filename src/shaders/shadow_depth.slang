@@ -46,6 +46,7 @@ DepthVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_St
     o.svPosition = clipPos;
     o.uv = uv;
     o.materialIndex = materialIndex;
+    o.worldPos = worldPos;
     return o;
 }
 
@@ -70,4 +71,5 @@ void fragmentMain(DepthVSOutput input)
         }
     }
     AlphaMaskDiscard(input.materialIndex, input.uv);
+    MaterialDistanceDiscard(input.materialIndex, input.worldPos, input.svPosition.xy);
 }

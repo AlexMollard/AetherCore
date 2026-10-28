@@ -1,5 +1,14 @@
 #ifndef AETHER_ALPHA_MASK_TEST_SLANGH
 #define AETHER_ALPHA_MASK_TEST_SLANGH
+#include "DistanceFade.slangh"
+
+void MaterialDistanceDiscard(uint materialIndex, float3 worldPos, float2 pixel)
+{
+    if (materialIndex == kNoTexture) { return; }
+    FrameConstantsData* fc = pc.frame.Ptr();
+    const GpuMaterial mat = ((GpuMaterial*)(fc->materialBufferAddr))[materialIndex];
+    if (DistanceFadeDiscard(mat.distanceFade.xy, worldPos, fc->visibilityCameraWorldPos.xyz, pixel)) { discard; }
+}
 
 // Kept out of DepthVertex.slangh on purpose: this samples through the bindless heap, and not
 // every depth pass has one bound. A pass that includes this must declare g_textures and

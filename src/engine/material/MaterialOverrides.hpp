@@ -105,6 +105,10 @@ namespace aether
 			{
 				onto.uvScroll = from.uvScroll;
 			}
+			else if (key == "distance_fade")
+			{
+				onto.distanceFade = from.distanceFade;
+			}
 		}
 	}
 } // namespace aether
