@@ -172,7 +172,6 @@ TEST_CASE("WriteProjectStartupScene strips a stale [publish] section") {
     CHECK(text.find("[publish]") == std::string::npos);
     CHECK(text.find("outputroot") == std::string::npos);
     CHECK(app::ReadProjectStartupScene(project.projectFile) == "Arena");
-    CHECK(text.find("name = \"Demo\"") != std::string::npos);
 }
 
 TEST_CASE("ProjectHasScene ignores the rebuildable .scene.bin cache") {

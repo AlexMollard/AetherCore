@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <format>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -159,7 +160,11 @@ namespace aether
 			{
 				return "\"" + field + "\"";
 			}
-			else if constexpr (std::is_same_v<T, int> || std::is_same_v<T, float>)
+			else if constexpr (std::is_same_v<T, float>)
+			{
+				return std::format("{}", field);
+			}
+			else if constexpr (std::is_same_v<T, int>)
 			{
 				std::ostringstream value;
 				value << field;

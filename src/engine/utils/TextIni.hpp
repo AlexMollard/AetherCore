@@ -15,6 +15,8 @@ namespace aether::text
 		std::string key;
 		std::string value;
 		std::string fullKey;
+		// The TOML representation retains the node's type and escaping for persistence.
+		std::string tomlValue;
 	};
 
 	std::string TrimAscii(std::string value);

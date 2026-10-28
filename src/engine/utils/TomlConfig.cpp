@@ -11,78 +11,34 @@
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "utils/TextIni.hpp"
+#include <toml++/toml.hpp>
 
 namespace aether
 {
 	namespace
 	{
-		// A TOML basic string with the two characters that must not appear raw inside one
-		// escaped. Both Set and the re-quoting path below go through this: a Windows path
-		// round-tripped as `"D:\AetherCore\..."` is not merely ugly, `\A` is an invalid
-		// escape and the whole document stops parsing.
+		// Use the TOML formatter for string escaping, including control characters.
 		std::string QuoteTomlString(std::string_view value)
 		{
-			std::string quoted = "\"";
-			for (const char c: value)
-			{
-				if (c == '\\' || c == '"')
-				{
-					quoted += '\\';
-				}
-				quoted += c;
-			}
-			quoted += '"';
-			return quoted;
+			std::ostringstream out;
+			out << toml::toml_formatter{toml::value{std::string(value)}};
+			return out.str();
 		}
 
-		// loaded (not Set), we must re-quote bare strings to produce valid TOML.
-		bool IsBareStringValue(std::string_view value)
-		{
-			if (value.empty())
-			{
-				return true;
-			}
-			if (value.front() == '"' || value.front() == '\'')
-			{
-				return false;
-			}
-			if (value.front() == '[')
-			{
-				return false;
-			}
-			if (value == "true" || value == "false")
-			{
-				return false;
-			}
-			char* end = nullptr;
-			std::strtod(value.data(), &end);
-			return end != value.data() + value.size();
-		}
 	} // namespace
 
 	bool TomlConfig::Load(std::string_view tomlText)
 	{
 		m_values.clear();
+		m_serialized_values.clear();
 		m_dirty = false;
-		return text::ParseToml(tomlText, [this](const text::IniEntry& entry) { m_values[entry.fullKey] = entry.value; });
+		return text::ParseToml(tomlText, [this](const text::IniEntry& entry)
+		        {
+			        m_values[entry.fullKey] = entry.value;
+			        m_serialized_values[entry.fullKey] = entry.tomlValue;
+		        });
 	}
 
-	namespace
-	{
-		void WriteEntry(std::ostream& out, std::string_view key, std::string_view rawValue)
-		{
-			out << key << " = ";
-			if (IsBareStringValue(rawValue))
-			{
-				out << QuoteTomlString(rawValue);
-			}
-			else
-			{
-				out << rawValue;
-			}
-			out << "\n";
-		}
-	} // namespace
 
 	void TomlConfig::Save(std::ostream& out, std::string_view headerComment) const
 	{
@@ -93,18 +49,18 @@ namespace aether
 
 		// Section-less (top-level) keys MUST be emitted before any [section]
 		bool wroteAny = !headerComment.empty();
-		for (const auto& [fullKey, rawValue]: m_values)
+		for (const auto& [fullKey, rawValue]: m_serialized_values)
 		{
 			if (fullKey.contains('.'))
 			{
 				continue;
 			}
-			WriteEntry(out, fullKey, rawValue);
+			out << fullKey << " = " << rawValue << "\n";
 			wroteAny = true;
 		}
 
 		std::string currentSection;
-		for (const auto& [fullKey, rawValue]: m_values)
+		for (const auto& [fullKey, rawValue]: m_serialized_values)
 		{
 			const auto dot = fullKey.find('.');
 			if (dot == std::string::npos)
@@ -125,7 +81,7 @@ namespace aether
 				wroteAny = true;
 			}
 
-			WriteEntry(out, key, rawValue);
+			out << key << " = " << rawValue << "\n";
 		}
 	}
 
@@ -268,55 +224,47 @@ namespace aether
 		{
 			return std::string(defaultValue);
 		}
-		return text::StripQuotes(it->second);
+		return it->second;
+	}
+
+	void TomlConfig::SetValue(std::string_view key, std::string value, std::string serialized)
+	{
+		const std::string lowerKey = text::ToLowerAscii(std::string(key));
+		auto& decoded = m_values[lowerKey];
+		auto& encoded = m_serialized_values[lowerKey];
+		if (decoded != value || encoded != serialized)
+		{
+			decoded = std::move(value);
+			encoded = std::move(serialized);
+			m_dirty = true;
+		}
 	}
 
 	void TomlConfig::Set(std::string_view key, bool value)
 	{
-		const std::string lowerKey = text::ToLowerAscii(std::string(key));
 		const std::string str = value ? "true" : "false";
-		auto& entry = m_values[lowerKey];
-		if (entry != str)
-		{
-			entry = str;
-			m_dirty = true;
-		}
+		SetValue(key, str, str);
 	}
 
 	void TomlConfig::Set(std::string_view key, float value)
 	{
-		const std::string lowerKey = text::ToLowerAscii(std::string(key));
-		const std::string str = std::format("{:.2f}", value);
-		auto& entry = m_values[lowerKey];
-		if (entry != str)
+		std::string str = std::format("{}", value);
+		if (str.find_first_of(".eE") == std::string::npos && str != "inf" && str != "-inf" && str != "nan" && str != "-nan")
 		{
-			entry = str;
-			m_dirty = true;
+			str += ".0";
 		}
+		SetValue(key, str, str);
 	}
 
 	void TomlConfig::Set(std::string_view key, int value)
 	{
-		const std::string lowerKey = text::ToLowerAscii(std::string(key));
 		const std::string str = std::to_string(value);
-		auto& entry = m_values[lowerKey];
-		if (entry != str)
-		{
-			entry = str;
-			m_dirty = true;
-		}
+		SetValue(key, str, str);
 	}
 
 	void TomlConfig::Set(std::string_view key, std::string_view value)
 	{
-		const std::string lowerKey = text::ToLowerAscii(std::string(key));
-		std::string str = QuoteTomlString(value);
-		auto& entry = m_values[lowerKey];
-		if (entry != str)
-		{
-			entry = std::move(str);
-			m_dirty = true;
-		}
+		SetValue(key, std::string(value), QuoteTomlString(value));
 	}
 
 	bool TomlConfig::Has(std::string_view key) const
@@ -326,7 +274,9 @@ namespace aether
 
 	void TomlConfig::Erase(std::string_view key)
 	{
-		if (m_values.erase(text::ToLowerAscii(std::string(key))) > 0)
+		const std::string lowerKey = text::ToLowerAscii(std::string(key));
+		m_serialized_values.erase(lowerKey);
+		if (m_values.erase(lowerKey) > 0)
 		{
 			m_dirty = true;
 		}
@@ -335,6 +285,7 @@ namespace aether
 	void TomlConfig::Clear()
 	{
 		m_values.clear();
+		m_serialized_values.clear();
 		m_dirty = false;
 	}
 } // namespace aether

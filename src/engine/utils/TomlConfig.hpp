@@ -30,8 +30,7 @@ namespace aether
 
 		void Set(std::string_view key, bool value);
 		void Set(std::string_view key, float value);
-		// Written as an integer rather than routed through the float overload, which formats
-		// to two decimals and would turn a window width of 2560 into 2560.00.
+		// Preserve integer type instead of routing through the float overload.
 		void Set(std::string_view key, int value);
 		void Set(std::string_view key, std::string_view value);
 
@@ -63,7 +62,9 @@ namespace aether
 		void Clear();
 
 	private:
+		void SetValue(std::string_view key, std::string value, std::string serialized);
 		std::map<std::string, std::string, std::less<>> m_values;
+		std::map<std::string, std::string, std::less<>> m_serialized_values;
 		bool m_dirty = false;
 	};
 } // namespace aether

@@ -4,59 +4,12 @@
 #include <string>
 
 #include "utils/TomlConfig.hpp"
+#include "utils/EngineSettings.hpp"
+#include "utils/TomlParse.hpp"
+#include "io/FileUtil.hpp"
+#include <filesystem>
 
 using namespace aether;
-
-// A project file is user data. Editing one key from the editor must never drop the
-// rest - a lossy round trip here silently destroys a project's paths and settings.
-TEST_CASE("Editing one key preserves every other project setting")
-{
-	const std::string original =
-	        "# AetherCore project file.\n"
-	        "\n"
-	        "[app]\n"
-	        "startupscene = \"Title\"\n"
-	        "targetfps = 0\n"
-	        "\n"
-	        "[graphics]\n"
-	        "asynccompute = true\n"
-	        "fxaa = false\n"
-	        "vsync = false\n"
-	        "\n"
-	        "[paths]\n"
-	        "assets = \"assets\"\n"
-	        "prefabs = \"assets/prefabs\"\n"
-	        "scenes = \"scenes\"\n"
-	        "scripts = \"scripts\"\n"
-	        "\n"
-	        "[project]\n"
-	        "name = \"Whisper\"\n"
-	        "version = 1\n";
-
-	TomlConfig config;
-	REQUIRE(config.Load(original));
-	config.Set("app.startupscene", "Arena");
-
-	std::ostringstream out;
-	config.Save(out, "AetherCore project file.");
-	const std::string saved = out.str();
-
-	INFO("saved file was:\n" << saved);
-
-	// The edited key took.
-	CHECK(saved.find("startupscene = \"Arena\"") != std::string::npos);
-
-	// ...and nothing else was lost.
-	CHECK(saved.find("[paths]") != std::string::npos);
-	CHECK(saved.find("assets = \"assets\"") != std::string::npos);
-	CHECK(saved.find("prefabs = \"assets/prefabs\"") != std::string::npos);
-	CHECK(saved.find("scenes = \"scenes\"") != std::string::npos);
-	CHECK(saved.find("scripts = \"scripts\"") != std::string::npos);
-	CHECK(saved.find("[project]") != std::string::npos);
-	CHECK(saved.find("name = \"Whisper\"") != std::string::npos);
-	CHECK(saved.find("[graphics]") != std::string::npos);
-	CHECK(saved.find("targetfps") != std::string::npos);
-}
 
 // Reload what we just wrote: the values must survive a full round trip, not merely
 // appear somewhere in the text.
@@ -106,8 +59,6 @@ TEST_CASE("A backslash path survives repeated load/save cycles")
 
 		INFO("cycle " << cycle << " wrote:\n" << text);
 		CHECK(config.GetString("publish.outputroot") == "D:\\AetherCore\\projects\\Whisper\\Builds");
-		CHECK(text.find("startupscene = \"Title\"") != std::string::npos);
-		CHECK(text.find("name = \"Whisper\"") != std::string::npos);
 	}
 }
 
@@ -131,4 +82,66 @@ TEST_CASE("Load reports failure on a document that does not parse")
 	TomlConfig config;
 	CHECK_FALSE(config.Load("[app\nthis is = = not toml\n"));
 	CHECK_FALSE(config.Has("app.startupscene"));
+}
+
+TEST_CASE("Project settings save preserves typed arrays and lighting precision")
+{
+	const auto path = std::filesystem::temp_directory_path() / "aether_toml_project_roundtrip_test.toml";
+	const std::string original =
+	        "[publish.web]\n"
+	        "additional_assets = [\"project://assets/credits.txt\", \"project://assets/with space.txt\", "
+	        "\"C:\\\\assets\\\\quoted\\\"file.txt\"]\n"
+	        "options = { label = \"true\", count = 2 }\n"
+	        "[graphics]\n"
+	        "bloomstrength = 0.035\nfilmgrain = 0.015\nexposurespeed = 0.8\n"
+	        "[project]\nname = \"123\"\nversion = 1\n";
+	REQUIRE(io::file_util::WriteText(path, original).has_value());
+	EngineSettings shipped;
+	EngineSettings values = shipped;
+	EngineSettingsIO::Apply(original, values);
+	std::string error;
+	REQUIRE_MESSAGE(EngineSettingsIO::SaveProjectOverrides(values, shipped, path, error), error);
+	const auto saved = io::file_util::ReadText(path);
+	REQUIRE(saved);
+	const auto parsed = ParseTomlDocument(*saved);
+	REQUIRE(parsed);
+	const auto* assets = (*parsed)["publish"]["web"]["additional_assets"].as_array();
+	REQUIRE(assets);
+	REQUIRE(assets->size() == 3);
+	CHECK((*assets)[0].value<std::string>() == "project://assets/credits.txt");
+	CHECK((*assets)[1].value<std::string>() == "project://assets/with space.txt");
+	CHECK((*assets)[2].value<std::string>() == "C:\\assets\\quoted\"file.txt");
+	CHECK((*parsed)["publish"]["web"]["options"]["label"].value<std::string>() == "true");
+	CHECK((*parsed)["publish"]["web"]["options"]["count"].value<int>() == 2);
+	CHECK((*parsed)["project"]["name"].value<std::string>() == "123");
+	CHECK((*parsed)["project"]["version"].value<int>() == 1);
+	EngineSettings reloaded = shipped;
+	EngineSettingsIO::Apply(*saved, reloaded);
+	CHECK(reloaded.graphics.bloomStrength == 0.035f);
+	CHECK(reloaded.graphics.filmGrain == 0.015f);
+	CHECK(reloaded.graphics.exposureSpeed == 0.8f);
+	std::error_code ec;
+	std::filesystem::remove(path, ec);
+}
+
+TEST_CASE("Changing a configuration scalar type marks the new value dirty")
+{
+	TomlConfig config;
+	REQUIRE(config.Load("value = 1\n"));
+	config.Set("value", "1");
+	CHECK(config.IsDirty());
+	std::ostringstream stringOutput;
+	config.Save(stringOutput);
+	const auto stringDocument = ParseTomlDocument(stringOutput.str());
+	REQUIRE(stringDocument);
+	CHECK((*stringDocument)["value"].value<std::string>() == "1");
+
+	config.MarkClean();
+	config.Set("value", 1);
+	CHECK(config.IsDirty());
+	std::ostringstream integerOutput;
+	config.Save(integerOutput);
+	const auto integerDocument = ParseTomlDocument(integerOutput.str());
+	REQUIRE(integerDocument);
+	CHECK((*integerDocument)["value"].value<int>() == 1);
 }

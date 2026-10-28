@@ -14,7 +14,7 @@ namespace aether::text
 {
 	namespace
 	{
-		std::string TomlNodeToValueString(const toml::node& node)
+		std::string TomlNodeToValueString(const toml::node& node, const std::string& serialized)
 		{
 			if (const auto* const v = node.as_string())
 			{
@@ -28,31 +28,7 @@ namespace aether::text
 			{
 				return std::to_string(v->get());
 			}
-			if (const auto* const v = node.as_floating_point())
-			{
-				std::ostringstream out;
-				out << v->get();
-				return out.str();
-			}
-			if (const auto* const arr = node.as_array())
-			{
-				std::string value = "[";
-				for (std::size_t i = 0; i < arr->size(); ++i)
-				{
-					if (i > 0)
-					{
-						value += ", ";
-					}
-					const toml::node* elem = arr->get(i);
-					if (elem != nullptr)
-					{
-						value += TomlNodeToValueString(*elem);
-					}
-				}
-				value += "]";
-				return value;
-			}
-			return {};
+			return serialized;
 		}
 
 		void EmitTomlTable(const toml::table& table, const std::string& sectionPrefix, const std::function<void(const IniEntry&)>& onEntry)
@@ -66,7 +42,7 @@ namespace aether::text
 					fullKey += '.';
 				}
 				fullKey += keyStr;
-				if (const auto* const childTable = node.as_table())
+				if (const auto* const childTable = node.as_table(); childTable != nullptr && !childTable->is_inline())
 				{
 					EmitTomlTable(*childTable, fullKey, onEntry);
 					continue;
@@ -76,7 +52,10 @@ namespace aether::text
 				entry.section = sectionPrefix;
 				entry.key = keyStr;
 				entry.fullKey = std::move(fullKey);
-				entry.value = TomlNodeToValueString(node);
+				std::ostringstream serialized;
+				serialized << toml::toml_formatter{node};
+				entry.tomlValue = serialized.str();
+				entry.value = TomlNodeToValueString(node, entry.tomlValue);
 				onEntry(entry);
 			}
 		}
