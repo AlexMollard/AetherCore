@@ -151,17 +151,17 @@ TEST_CASE("tile extraction culls by chunk and rebuilds only dirty chunks")
 	CHECK(frame.sprites.size() == 3);
 	CHECK(fx.system.RebuildCount() == afterFirst);
 
-	// A view covering only chunk (0,0) extracts 2 instances.
-	frame.sprites.clear();
-	fx.system.Extract(fx.world, View2DBounds{.min = {0.0f, 0.0f}, .max = {10.0f, 10.0f}, .valid = true}, 0.0f, frame);
-	CHECK(frame.sprites.size() == 2);
-
 	// Editing one cell dirties exactly one chunk.
 	map.SetCell(0, {3, 3}, tilecell::Make(fx.grassIndex));
 	frame.sprites.clear();
 	fx.system.Extract(fx.world, View2DBounds{}, 0.0f, frame);
 	CHECK(frame.sprites.size() == 4);
 	CHECK(fx.system.RebuildCount() == afterFirst + 1);
+
+	// A view covering only chunk (0,0) extracts its three instances.
+	frame.sprites.clear();
+	fx.system.Extract(fx.world, View2DBounds{.min = {0.0f, 0.0f}, .max = {10.0f, 10.0f}, .valid = true}, 0.0f, frame);
+	CHECK(frame.sprites.size() == 3);
 }
 
 TEST_CASE("animated tiles patch UVs per frame without rebuilding the cache")
@@ -240,16 +240,16 @@ TEST_CASE("100k tile world: bounded visible work and single-chunk edits")
 	fx.system.Extract(fx.world, View2DBounds{}, 0.0f, frame);
 	CHECK(fx.system.RebuildCount() == initialRebuilds);
 
-	// A one-chunk viewport keeps resident work bounded.
-	frame.sprites.clear();
-	fx.system.Extract(fx.world, View2DBounds{.min = {1.0f, 1.0f}, .max = {30.0f, 30.0f}, .valid = true}, 0.0f, frame);
-	CHECK(frame.sprites.size() <= 4096); // at most a 2x2 chunk neighbourhood
-	CHECK(frame.sprites.size() >= 1024); // and at least the fully covered chunk
-
 	// Editing one cell rebuilds exactly one chunk on the next full pass.
 	map.SetCell(0, {100, 100}, tilecell::kEmpty);
 	frame.sprites.clear();
 	fx.system.Extract(fx.world, View2DBounds{}, 0.0f, frame);
 	CHECK(frame.sprites.size() == 102399);
 	CHECK(fx.system.RebuildCount() == initialRebuilds + 1);
+
+	// A one-chunk viewport keeps resident work bounded. Culled caches may retire.
+	frame.sprites.clear();
+	fx.system.Extract(fx.world, View2DBounds{.min = {1.0f, 1.0f}, .max = {30.0f, 30.0f}, .valid = true}, 0.0f, frame);
+	CHECK(frame.sprites.size() <= 4096); // at most a 2x2 chunk neighbourhood
+	CHECK(frame.sprites.size() >= 1024); // and at least the fully covered chunk
 }

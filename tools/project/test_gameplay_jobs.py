@@ -101,7 +101,9 @@ class GameplayJobTests(unittest.TestCase):
         self.assertTrue(Path(result['artifacts'][0]['path']).is_file())
 
     def test_timeout_keeps_worker_evidence_but_cannot_become_late_success(self):
-        result = self.wait(self.start('late-pass', timeout=500)['jobId'])['report']
+        job_id = self.start('late-pass')['jobId']
+        self.started(job_id)
+        result = self.wait(job_id)['report']
         self.assertEqual(result['status'], 'failed')
         self.assertEqual(result['exitCode'], 1)
         self.assertTrue(any(item['code'] == 'gameplay.timeout' for item in result['diagnostics']))
