@@ -41,11 +41,42 @@ capabilities = ["sprites", "audio", "saves", "scenes"]
 
 The optional ID namespaces browser storage; otherwise the product name is used, so give distinct games distinct IDs. Static Rust/C# scene, prefab and project asset references supplement the declarations. Dynamic scene names require `scenes`; dynamic audio/prefab paths require `additional_assets`. The browser refuses scene loads outside the packaged scene list. Include every dynamically reachable asset explicitly. Preflight scans authored source and reachable files conservatively; it does not prove every possible gameplay branch executes correctly.
 
-The `webgpu-2d-v1` profile supports 2D sprites, animation, tilemaps, Box2D, supported UI, packaged audio, input, scene/prefab loading and asynchronous browser saves. Scenes must declare `kind = "2d"`; authored cameras must be orthographic. Headerless 2D prefab fragments remain supported. UI currently uses packaged Roboto and Latin-1 glyphs. Custom shaders/materials, 3D content, networking and unsupported component tables are rejected. Native BC texture caches are not reused; the Web asset cooker produces target-qualified RGBA8 textures.
+`Assets.List` queries enumerate the content selected for the package; wildcard patterns do not implicitly make disk files reachable. Declare those files normally. `Assets.WriteText` destinations are output paths, not read dependencies; immutable asset mounts still reject the write at runtime.
 
-The `webgpu-3d-v1` profile also accepts perspective cameras, 3D meshes, lighting, authored materials and effects, and the implemented 3D physics and animation components. Reachable models are baked with the native asset packer; material graphs and portable custom passes are cooked before packing. Custom passes must use `include/CustomPass.slangh`; arbitrary Slang, raw SPIR-V, desktop-only APIs and networking are not portable. The report identifies used features with bounded or unqualified parity coverage; it does not claim arbitrary parameter ranges or combinations are qualified. See the [effect parity ledger](architecture/webgpu-effect-parity.md).
+The `webgpu-2d-v1` profile supports authored sprites, animation, tilemaps, Box2D, UI, packaged audio, input, scene/prefab loading and asynchronous browser saves. Scenes declare `kind = "2d"` and use orthographic cameras. Headerless 2D prefab fragments remain supported. UI shares native draw-command generation and font curves; UTF-8 selects the glyphs available in the native cooked font, with the same missing-glyph fallback. Native BC texture caches are not reused by WebGPU; the Web asset cooker produces target-qualified RGBA8 textures.
+
+The `webgpu-3d-v1` profile also accepts perspective cameras, meshes, lighting, authored materials/effects, and the implemented 3D physics and animation components. Reachable models are baked with the native asset packer; material graphs and portable custom passes are cooked before packing. Custom passes use `include/CustomPass.slangh`; UI materials/effects use their native fixed-layout ABI and current-element resources. Original shader sources are required; arbitrary global bindless indexing and raw SPIR-V are not portable. Declare dynamically named UI shaders in `additional_assets`. The report identifies bounded or unqualified coverage rather than claiming every parameter range or combination is qualified. See the [effect parity ledger](architecture/webgpu-effect-parity.md).
 
 Specific failures include `WEB_SCENE_MISSING`, `WEB_DYNAMIC_SCENE_UNDECLARED`, `WEB_DYNAMIC_ASSET_UNDECLARED`, `WEB_ASSET_PATH`, `WEB_ASSET_MISSING`, `WEB_ASSET_FORMAT`, `WEB_CAPABILITY_UNSUPPORTED`, `WEB_NETWORK_UNSUPPORTED`, `WEB_SHADER_UNSUPPORTED`, `WEB_FEATURE_UNSUPPORTED`, `WEB_FONT_UNSUPPORTED` and `WEB_TOOLCHAIN_MISSING`. Build/verification failures include paths to their logs. Never interpret a failed or missing required check as a usable release.
+
+## Native networking through the gateway
+
+Browser games use WebSocket transport to a self-hosted ENet gateway; native peers keep ENet. Declare the `network` capability and the public connection settings:
+
+```toml
+[publish.web.network]
+gatewayUrl = "ws://127.0.0.1:8788/net"
+targetAlias = "native"
+authToken = "local-development"
+```
+
+Build and run the gateway locally, using the exact browser origin that will connect:
+
+```powershell
+cmake --build --preset default --target NetGateway
+$env:Gateway__Token = 'local-development'
+$env:Gateway__Origins = 'http://127.0.0.1:18989'
+$env:Gateway__Targets__native__Host = '127.0.0.1'
+$env:Gateway__Targets__native__Port = '27000'
+dotnet build/default/tools/net-gateway/RelWithDebInfo/managed/NetGateway.dll
+```
+
+`Net.Connect("native", 27000)` uses the allowlisted target alias. A requested port that differs from the alias's configured port is rejected, not silently redirected. Room-code joins resolve the room's gateway-owned port instead. Replication, RPCs, prediction, ownership and disconnect reasons keep the native application protocol. Ping measures the full application route; it is zero until a real reply is available, not the partial UDP segment's RTT.
+
+Native and browser peers must use matching application wire schemas/builds. The canonical field schema and Ping/Pong changes are not a promise of interoperability with older native peer binaries.
+
+The default listener is loopback-only at `http://127.0.0.1:8788`; UDP hosting is limited to ports 27000–27100. `Gateway:AllowPublic=true` is an explicit opt-in for non-loopback listening/UDP hosting. Public sites need WSS/TLS and an exact origin allowlist. `authToken` is embedded in public `project.js`: it is an admission key, not a secret or player authentication. The gateway is bounded to 128 sessions and 64 peers per hosted session. Qualification covers localhost peers in both directions, not public deployment, LAN discovery, TURN or rendezvous services.
+
 
 ## Package and evidence
 
