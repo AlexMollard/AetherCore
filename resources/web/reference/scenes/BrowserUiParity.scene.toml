@@ -1,0 +1,142 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[[entities]]
+name = 'Camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.2, 0.4, 0.6]
+
+[[entities]]
+name = 'Canvas'
+[entities.ui_canvas]
+[entities.ui_rect]
+
+[[entities]]
+name = 'Rounded button'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 32.0]
+offset_max = [208.0, 80.0]
+[entities.ui_button]
+label = 'Button'
+font = 'Roboto'
+pixel_size = 20.0
+corner_radius = 20.0
+bg_color = [0.8, 0.2, 0.1, 1.0]
+
+[[entities]]
+name = 'Progress'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 104.0]
+offset_max = [208.0, 136.0]
+[entities.ui_progress_bar]
+value = 0.6
+corner_radius = 16.0
+track_color = [0.12, 0.12, 0.12, 1.0]
+fill_color = [0.1, 0.85, 0.35, 1.0]
+
+[[entities]]
+name = 'Toggle'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 160.0]
+offset_max = [112.0, 196.0]
+[entities.ui_toggle]
+on = true
+corner_radius = 18.0
+
+[[entities]]
+name = 'Slider'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 220.0]
+offset_max = [208.0, 252.0]
+[entities.ui_slider]
+value = 0.6
+corner_radius = 16.0
+
+[[entities]]
+name = 'Placeholder'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 280.0]
+offset_max = [240.0, 320.0]
+[entities.ui_text_box]
+placeholder = 'Type here'
+font = 'Roboto'
+pixel_size = 18.0
+corner_radius = 10.0
+
+[[entities]]
+name = 'Password'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 340.0]
+offset_max = [240.0, 380.0]
+[entities.ui_text_box]
+text = 'secret'
+password = true
+font = 'Roboto'
+pixel_size = 18.0
+corner_radius = 10.0
+
+[[entities]]
+name = 'Outer mask'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [288.0, 32.0]
+offset_max = [464.0, 192.0]
+[entities.ui_mask]
+enabled = true
+padding = 8.0
+[entities.ui_image]
+color = [0.8, 0.15, 0.15, 1.0]
+
+[[entities]]
+name = 'Inner mask'
+parent = 8
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 32.0]
+offset_max = [160.0, 128.0]
+[entities.ui_mask]
+enabled = true
+padding = 8.0
+[entities.ui_image]
+color = [0.1, 0.8, 0.2, 1.0]
+
+[[entities]]
+name = 'Clipped descendant'
+parent = 9
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [-32.0, -32.0]
+offset_max = [80.0, 128.0]
+[entities.ui_image]
+color = [0.15, 0.2, 0.95, 1.0]

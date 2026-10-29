@@ -128,49 +128,6 @@ class AetherBrowserPlatform {
 	this.audioPrepared = true;
 	this.audioBytes = true;
     }
-    async prepareFont(bytes) {
-	try {
-	    const face = await new FontFace('AetherRoboto', bytes).load();
-	    if (this.stopped || this.failed)
-		return;
-	    document.fonts.add(face);
-	    this.fontFace = face;
-	    const canvas = new OffscreenCanvas(1024, 1024);
-	    const context = canvas.getContext('2d', {willReadFrequently : true});
-	    context.font = '48px AetherRoboto';
-	    context.fillStyle = 'white';
-	    this.advances = new Float32Array(256);
-	    let ascent = 0;
-	    let descent = 0;
-	    for (let code = 32; code < 256; ++code) {
-		if (code >= 127 && code < 160)
-		    continue;
-		const metrics = context.measureText(String.fromCodePoint(code));
-		if (metrics.width > 64)
-		    throw Error('Font exceeds the 64-pixel glyph cell limit');
-		this.advances[code] = metrics.width;
-		ascent = Math.max(ascent, metrics.actualBoundingBoxAscent);
-		descent = Math.max(descent, metrics.actualBoundingBoxDescent);
-	    }
-	    // Round outward so rasterization cannot spill into the adjacent atlas row.
-	    this.fontAscent = Math.ceil(ascent);
-	    this.fontDescent = Math.ceil(descent);
-	    this.fontBaseline = this.fontAscent;
-	    if (this.fontAscent + this.fontDescent > 64)
-		throw Error('Font exceeds the 64-pixel glyph cell height');
-	    for (let code = 32; code < 256; ++code) {
-		if (code >= 127 && code < 160)
-		    continue;
-		context.fillText(String.fromCodePoint(code), (code % 16) * 64,
-		                 Math.floor(code / 16) * 64 + this.fontBaseline);
-	    }
-	    this.fontAtlas = context.getImageData(0, 0, 1024, 1024).data;
-	    this.fontReady = true;
-	    aetherRuntime.fontReady = true;
-	} catch (error) {
-	    this.fail('BROWSER_FONT', error);
-	}
-    }
     async startAudio() {
 	if (this.stopped || this.failed || !this.audioPrepared)
 	    return false;
@@ -255,14 +212,10 @@ class AetherBrowserPlatform {
 	this.voices.clear();
 	this.audioSources.clear();
 	this.buffers.clear();
-	this.fontAtlas = null;
-	this.advances = null;
 	this.audioReady = false;
 	aetherRuntime.audioReady = false;
 	if (this.audio && this.audio.state !== 'closed')
 	    this.audio.close().catch(() => {});
-	if (this.fontFace)
-	    document.fonts.delete(this.fontFace);
     }
 }
 

@@ -6,7 +6,9 @@
 #include "WebPostRenderer.hpp"
 #include "WebBillboardRenderer.hpp"
 #include "WebCustomPassRenderer.hpp"
+#include "WebUiRenderer.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <fstream>
@@ -69,6 +71,7 @@ namespace aether::webgpu
 		WebPostRenderer post;
 		WebBillboardRenderer billboards;
 		WebCustomPassRenderer customPasses;
+		WebUiRenderer ui;
 		unsigned width = 0, height = 0;
 		bool released = false;
 		unsigned callbacks = 0;
@@ -98,6 +101,7 @@ namespace aether::webgpu
 				post.Shutdown();
 				billboards.Shutdown();
 				customPasses.Shutdown();
+				ui.Shutdown();
 				for (auto texture: textures)
 				{
 					if (texture)
@@ -240,6 +244,10 @@ namespace aether::webgpu
 			{
 				Fail("WEBGPU_CUSTOM_PASS_SHADER", Text(customPasses.error.c_str()));
 			}
+			if (!ui.Initialize(device, queue))
+			{
+				Fail("WEBGPU_UI_SHADER", Text(ui.error.c_str()));
+			}
 			WGPUSamplerDescriptor sample = WGPU_SAMPLER_DESCRIPTOR_INIT;
 			sample.magFilter = WGPUFilterMode_Linear;
 			sample.minFilter = WGPUFilterMode_Linear;
@@ -296,6 +304,7 @@ namespace aether::webgpu
 			std::unique_ptr<WebPostFrame> post;
 			std::unique_ptr<WebBillboardFrame> billboards;
 			std::unique_ptr<WebCustomPassFrame> customPasses;
+			std::unique_ptr<WebUiFrame> ui;
 			unsigned width, height, row;
 			unsigned renderWidth = 0, renderHeight = 0;
 			std::uint64_t frameIndex = 0, temporalFrameIndex = 0, simulationTick = 0, generation = 0;
@@ -304,6 +313,7 @@ namespace aether::webgpu
 
 			void Finish()
 			{
+				ui.reset();
 				post.reset();
 				billboards.reset();
 				customPasses.reset();
@@ -572,6 +582,21 @@ namespace aether::webgpu
 	const std::string& WebGpuDevice::CustomPassError() const
 	{
 		return m_impl->customPasses.error;
+	}
+
+	bool WebGpuDevice::UploadUiFont(ui::FontAsset& font)
+	{
+		return State() == gpu::RenderState::Ready && m_impl->ui.UploadFont(m_impl->device, m_impl->queue, font);
+	}
+
+	bool WebGpuDevice::HasUiShader(std::string_view stem, bool effect, bool glyph) const
+	{
+		return m_impl->ui.HasShader(stem, effect, glyph);
+	}
+
+	bool WebGpuDevice::UploadUiShader(std::string_view stem, bool effect, bool glyph, std::string_view wgsl)
+	{
+		return State() == gpu::RenderState::Ready && m_impl->ui.UploadShader(m_impl->device, stem, effect, glyph, wgsl);
 	}
 
 	bool WebGpuDevice::UploadShader(std::uint32_t slot, std::string_view wgsl)
@@ -961,6 +986,15 @@ namespace aether::webgpu
 			wgpuRenderPassEncoderEnd(pass);
 			wgpuRenderPassEncoderRelease(pass);
 		}
+		if (!self.ui.Encode(self.device, self.queue, encoder, view, self.width, self.height, packet.renderUi, self.textures, self.sampler, frame->ui))
+		{
+			self.Fail("WEBGPU_UI", Text(self.ui.error.c_str()));
+			wgpuCommandEncoderRelease(encoder);
+			wgpuTextureViewRelease(view);
+			wgpuTextureRelease(current.texture);
+			frame->Finish();
+			return false;
+		}
 		if (capture)
 		{
 			frame->readback = self.Buffer(WGPUBufferUsage_MapRead, nullptr, frame->row * frame->height + 16);
@@ -979,6 +1013,9 @@ namespace aether::webgpu
 		}
 		auto commands = wgpuCommandEncoderFinish(encoder, nullptr);
 		wgpuQueueSubmit(self.queue, 1, &commands);
+		const auto uiGlyphs = std::count_if(packet.renderUi.commands.begin(), packet.renderUi.commands.end(),
+		        [](const auto& command) { return command.type == ui::kShapeGlyph; });
+		EM_ASM({ aetherRuntime.uiGlyphs = $0; }, static_cast<unsigned>(uiGlyphs));
 		wgpuCommandBufferRelease(commands);
 		wgpuCommandEncoderRelease(encoder);
 		wgpuTextureViewRelease(view);

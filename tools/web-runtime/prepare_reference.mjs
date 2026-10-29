@@ -21,6 +21,9 @@ await cp(path.join(repo, 'projects/EmberRun/assets/ember'), path.join(directory,
 await cp(path.join(repo, 'projects/EmberRun/scenes/EmberRun.scene.toml'), path.join(directory, 'scenes/EmberRun.scene.toml'));
 const fixture = path.join(repo, 'resources/web/reference');
 await cp(fixture, directory, {recursive : true});
+// Exercise a project-local custom font without duplicating the shipped font binary.
+await mkdir(path.join(directory, 'assets/fonts'), {recursive: true});
+await cp(path.join(repo, 'resources/fonts/fa-solid-900.ttf'), path.join(directory, 'assets/fonts/fa-solid-900.ttf'));
 // The Human skeleton/skinned model (two clips) feeds the 3D ragdoll and animation parity fixtures; it is
 // copied from its source project so the 10 MB buffer is not duplicated in the repository again.
 await mkdir(path.join(directory, 'assets/models/Human'), {recursive : true});

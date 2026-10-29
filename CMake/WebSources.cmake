@@ -26,8 +26,13 @@ set(AETHER_WEB_ENGINE_SOURCES
     material/MaterialSerializer.cpp
     rendering/SpriteSystem.cpp
     rendering/TileMapSystem.cpp
+    ui/FontRegistry.cpp
+    ui/UiDrawBuilder.cpp
+    ui/UiImageSystem.cpp
     ui/UiLayoutSystem.cpp
     ui/UiNavigationSystem.cpp
+    ui/UiTextBoxSystem.cpp
+    ui/UiTextEdit.cpp
     ui/UiWidgetSystem.cpp
     platform/Input.cpp
     utils/TomlConfig.cpp
@@ -38,6 +43,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     platform/web/WebAssetLoader.cpp
     platform/web/WebFileSystem.cpp
     webgpu/WebGpuDevice.cpp
+    webgpu/WebUiRenderer.cpp
     webgpu/WebMeshRenderer.cpp
 	webgpu/WebHdrRenderer.cpp
 	webgpu/WebLight2DRenderer.cpp

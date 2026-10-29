@@ -14,6 +14,8 @@ namespace aether
 	struct RenderFramePacket;
 }
 
+namespace aether::ui { struct FontAsset; }
+
 namespace aether::webgpu
 {
 	// Browser owner-thread backend. GPU completion callbacks own transient resources.
@@ -39,6 +41,9 @@ namespace aether::webgpu
 		[[nodiscard]] bool UploadShader(std::uint32_t slot, std::string_view wgsl);
 		[[nodiscard]] const std::string& MeshUploadError() const;
 		[[nodiscard]] bool UploadCustomPassShader(std::string_view stem, std::string_view wgsl);
+		[[nodiscard]] bool UploadUiFont(ui::FontAsset& font);
+		[[nodiscard]] bool HasUiShader(std::string_view stem, bool effect, bool glyph) const;
+		[[nodiscard]] bool UploadUiShader(std::string_view stem, bool effect, bool glyph, std::string_view wgsl);
 		[[nodiscard]] const std::string& CustomPassError() const;
 		void Resize(std::uint32_t width, std::uint32_t height);
 		void Stop();

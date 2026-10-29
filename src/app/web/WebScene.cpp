@@ -17,6 +17,7 @@
 #include <functional>
 #include "scene/SceneSerializerDetail.hpp"
 #include "scene/TransformUtils.hpp"
+#include "ui/UiImageSystem.hpp"
 #include "ui/UiComponents.hpp"
 #include "ui/UiLayoutSystem.hpp"
 #include "WebAssetFormat.hpp"
@@ -174,6 +175,7 @@ namespace aether::app::web
 		m_textures.InitializeWhite(TextureResource(1));
 		m_model_textures.InitializeDefault(TextureResource(0));
 		m_model_textures.InitializeWhite(TextureResource(1));
+		UiImageSystem::ConnectLifecycle(world, m_model_textures);
 		m_sprite_system.Initialize(m_textures, m_sprites);
 		m_tile_system.Initialize(m_textures, m_sprites, m_tiles);
 		// Native Application order: Animation, SpriteAnimation, Physics, Physics2D, (scripts),
@@ -201,6 +203,7 @@ namespace aether::app::web
 
 	WebScene::~WebScene()
 	{
+		UiImageSystem::DisconnectLifecycle(world);
 		world.UnregisterSystem("ParticleSystem");
 		world.UnregisterSystem("WebScriptSystem");
 		world.UnregisterSystem("Physics2DSystem");
@@ -233,7 +236,8 @@ namespace aether::app::web
 				        && generic.type != "Darkness Volume" && generic.type != "Grass" && generic.type != "Grass Bender"
 				        && generic.type != "Point Light" && generic.type != "Spot Light" && generic.type != "Sky" && generic.type != "Light 2D Settings"
 				        && (generic.type != "UI Canvas" && generic.type != "UI Rect" && generic.type != "UI Text" && generic.type != "UI Image" && generic.type != "UI Selectable" && generic.type != "UI Slider" && generic.type != "UI Toggle"
-				                && generic.type != "UI Button" && generic.type != "UI Progress Bar"))
+				                && generic.type != "UI Button" && generic.type != "UI Progress Bar" && generic.type != "UI Text Box"
+				                && generic.type != "UI Mask" && generic.type != "UI Effect" && generic.type != "UI Material"))
 				{
 					AE_UNEXPECTED(AetherError::Asset("Unsupported browser component: " + generic.type));
 				}
@@ -385,7 +389,9 @@ namespace aether::app::web
 			{
 				auto& image = world.EmplaceOrReplace<ui::UIImage>(entity);
 				image.color = record.uiImage->color;
+				image.cornerRadius = record.uiImage->cornerRadius;
 				image.texturePath = record.uiImage->texturePath;
+				image.textureDirty = true;
 				image.pixelArt = record.uiImage->pixelArt;
 			}
 			AE_TRY_VOID(m_models.Apply(world, entity, record));

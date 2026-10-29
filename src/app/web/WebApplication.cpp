@@ -412,13 +412,6 @@ namespace
 						EM_ASM({ aetherPlatform.prepareAudio(UTF8ToString($0), HEAPU8.slice($1, $1 + $2).buffer); }, uri.c_str(), audio->data(), audio->size());
 					}
 					EM_ASM({ aetherPlatform.finishAudioPreparation(); });
-					const auto font = aether::io::FileSystem::ReadFile("engine://Roboto-Regular.ttf");
-					if (!font)
-					{
-						Failure("Browser Roboto font is missing or corrupt");
-						return false;
-					}
-					EM_ASM({ aetherPlatform.prepareFont(HEAPU8.slice($0, $0 + $1).buffer); }, font->data(), font->size());
 				}
 				constexpr std::array<std::uint8_t, 16> quadrants{255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255};
 				constexpr std::array<std::uint8_t, 4> white{255, 255, 255, 255};
@@ -450,7 +443,7 @@ namespace
 						Failure("Browser platform initialization failed");
 						return false;
 					}
-					if (!EM_ASM_INT({ return aetherPlatform.storageReady && aetherPlatform.fontReady; }))
+					if (!EM_ASM_INT({ return aetherPlatform.storageReady; }))
 					{
 						return true;
 					}

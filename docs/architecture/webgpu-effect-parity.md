@@ -210,6 +210,26 @@ separate commit ownership: isolated parity changes are checkpointed, while mixed
 ABI2/streaming integration hunks remain unstaged for the concurrent work.
 Historical Task 6 measurements are not substituted for these new runs.
 
+### Prerequisite source checkpoint
+
+The curve-UI wiring is also exercised independently of uncommitted streaming
+implementation: a source export of `c85ec677` plus the isolated UI prerequisite
+blobs compiles, passes the Wasm import/source-closure audits, and runs
+`BrowserUiParity`, `BrowserUiShaders` and `BrowserFontParity` on hardware Chrome.
+`logs/parity-prerequisites/isolated-ui-smoke.json` records trusted startup,
+512x512 captures, empty runtime diagnostics and clean stop for all three scenes.
+This is source-isolation smoke proof, not another native pixel-comparison run.
+
+`Run-WebRuntimeChecks.ps1` now requires the supported `audio-source` case rather
+than the removed invalid-component case; the actual script passes all 72 cases
+in `logs/parity-prerequisites/browser/report.json`. The native ownership test
+explicitly selects fixed-delay interpolation without extrapolation: its prior
+behind-the-host assertion was incompatible with the default prediction policy.
+Production extrapolation defaults/budgets are unchanged. Both targeted ownership
+and re-entrant attach cases, followed by the full native suite, pass; see
+`logs/parity-prerequisites/native-unit.xml` and `verification.json`.
+
+
 ## Task 4 bounded post qualification
 
 `logs/task4/qualified-post-summary.json` records **30 passed post controls** at

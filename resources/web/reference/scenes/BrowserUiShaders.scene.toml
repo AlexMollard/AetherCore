@@ -1,0 +1,83 @@
+# Fixed camera/radiance qualification; effects disabled.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[[entities]]
+name = 'Fixed camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.2, 0.4, 0.6]
+
+
+[[entities]]
+name = 'Canvas'
+[entities.ui_canvas]
+[entities.ui_rect]
+
+[[entities]]
+name = 'Background effect'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 32.0]
+offset_max = [192.0, 128.0]
+[entities.ui_effect]
+shader = 'ui_parity_effect'
+background = true
+color0 = [0.9, 0.1, 0.1, 1.0]
+
+[[entities]]
+name = 'Overlay effect'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 160.0]
+offset_max = [192.0, 256.0]
+[entities.ui_image]
+color = [0.2, 0.8, 0.2, 1.0]
+[entities.ui_effect]
+shader = 'ui_parity_effect'
+background = false
+color0 = [0.1, 0.1, 0.9, 1.0]
+
+[[entities]]
+name = 'Material image'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 288.0]
+offset_max = [192.0, 384.0]
+[entities.ui_image]
+color = [1.0, 1.0, 1.0, 1.0]
+[entities.ui_material]
+shader = 'ui_parity_material'
+color0 = [0.9, 0.1, 0.8, 1.0]
+
+[[entities]]
+name = 'Glyph material'
+parent = 1
+[entities.ui_rect]
+anchor_min = [0.0, 0.0]
+anchor_max = [0.0, 0.0]
+offset_min = [32.0, 416.0]
+offset_max = [300.0, 472.0]
+[entities.ui_text]
+text = 'GLYPH'
+font = 'Roboto'
+pixel_size = 40.0
+color = [1.0, 1.0, 1.0, 1.0]
+[entities.ui_material]
+shader = 'ui_glitch_text'
+color0 = [0.9, 0.1, 0.2, 1.0]
+color1 = [0.1, 0.8, 0.9, 1.0]

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <functional>
 
 #include "scene/SceneSerializer.hpp"
@@ -10,6 +9,7 @@
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "material/TextureRegistry.hpp"
+#include "ui/FontRegistry.hpp"
 #include "rendering/SpriteSystem.hpp"
 #include "rendering/TileMapSystem.hpp"
 #include "webgpu/WebGpuDevice.hpp"
@@ -31,7 +31,7 @@ namespace aether::app::web
 
 		std::uint32_t Capacity() const override
 		{
-			return 255;
+			return 256;
 		}
 
 		std::string error;
@@ -110,6 +110,11 @@ namespace aether::app::web
 		Expected<void> Extract(RenderFramePacket& packet, unsigned width, unsigned height, float elapsed);
 		[[nodiscard]] bool RenderReady() const { return m_models.RenderReady(); }
 		[[nodiscard]] bool StreamingPending() const { return m_models.StreamingPending(); }
+		[[nodiscard]] ui::FontRegistry& Fonts()
+		{
+			return m_fonts;
+		}
+
 		World& world;
 
 	private:
@@ -122,6 +127,7 @@ namespace aether::app::web
 		WebTextureSink m_sink;
 		TextureRegistry m_textures;
 		TextureRegistry m_model_textures;
+		ui::FontRegistry m_fonts;
 		WebModels m_models;
 		SpriteAssetStore m_sprites;
 		TileAssetStore m_tiles;
@@ -132,10 +138,6 @@ namespace aether::app::web
 		bool m_default_lighting = false;
 		float m_light_time = 0.0f;
 		Expected<void> ExtractLighting(RenderFramePacket& packet);
-		std::array<float, 256> m_advances{};
-		float m_font_ascent = 0.0f, m_font_descent = 0.0f, m_font_baseline = 0.0f;
-		bool m_font_ready = false;
-		std::unordered_map<std::string, TextureHandle> m_ui_textures;
 		std::vector<Entity> m_retired_particles;
 		std::uint64_t m_scene_generation = 0;
 		Expected<void> ExtractUi(RenderFramePacket& packet, unsigned width, unsigned height);

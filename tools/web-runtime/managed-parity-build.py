@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-SHADERS = ['sprite', 'mesh', 'hdr', 'light2d', 'occluder2d', 'billboard', 'exposure']
+SHADERS = ['sprite', 'mesh', 'hdr', 'light2d', 'occluder2d', 'billboard', 'ui_shapes_web', 'exposure']
 POST = ['bloom', 'fxaa', 'tonemap', 'gtao_main', 'gtao_denoise', 'ssr', 'ssr_composite', 'dof', 'volumetric_fog', 'volumetric_composite']
 
 

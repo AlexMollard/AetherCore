@@ -13,6 +13,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "physics/PhysicsDebugData.hpp"
 #include "rendering/IUiOverlay.hpp"
+#include "ui/UiFrameData.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/SceneKind.hpp"
 #include "scene/GrassBenderComponent.hpp"
@@ -168,6 +169,7 @@ namespace aether
 		Render2DFrameData render2D;
 		Render3DFrameData render3D;
 		RenderCustomPassData renderCustom;
+		ui::UiFrameData renderUi;
 
 		// the debug toggle and puts the decision here; the render thread branches on
 		bool debugRenderingEnabled = false;

@@ -1,12 +1,11 @@
 #include "WebScene.hpp"
 
 #include <algorithm>
-#include <cmath>
-#include <emscripten.h>
-#include <glm/gtc/matrix_transform.hpp>
+#include "io/FileSystem.hpp"
+#include "gpu/WebMaterialShader.hpp"
 #include "scene/Hierarchy.hpp"
 #include "ui/UiComponents.hpp"
-#include "utils/Utf8.hpp"
+#include "ui/UiDrawBuilder.hpp"
 
 namespace aether::app::web
 {
@@ -16,220 +15,96 @@ namespace aether::app::web
 		{
 			return {};
 		}
-		if (!m_font_ready)
+		const auto loadFont = [&](std::string_view name) -> Expected<void>
 		{
-			if (!EM_ASM_INT({ return aetherPlatform.fontReady; }))
+			if (!m_fonts.Load(name))
 			{
-				return {};
+				AE_UNEXPECTED(AetherError::Asset("WEB_UI_FONT: missing font curves for " + std::string(name)));
 			}
-			std::vector<std::uint8_t> pixels(1024 * 1024 * 4);
-			EM_ASM(
-			        {
-				        HEAPU8.set(aetherPlatform.fontAtlas, $0);
-				        HEAPF32.set(aetherPlatform.advances, $1 / 4);
-			        },
-			        pixels.data(),
-			        m_advances.data());
-			m_font_ascent = static_cast<float>(EM_ASM_DOUBLE({ return aetherPlatform.fontAscent; }));
-			m_font_descent = static_cast<float>(EM_ASM_DOUBLE({ return aetherPlatform.fontDescent; }));
-			m_font_baseline = static_cast<float>(EM_ASM_DOUBLE({ return aetherPlatform.fontBaseline; }));
-			if (!m_graphics.UploadTexture(255, 1024, 1024, pixels))
+			auto* font = m_fonts.GetMutable(name);
+			if (!font || !m_graphics.UploadUiFont(*font))
 			{
-				AE_UNEXPECTED(AetherError::Asset("Browser glyph atlas upload failed"));
-			}
-			m_font_ready = true;
-		}
-		glm::mat4 pixelsToClip(1);
-		pixelsToClip[0][0] = 2.0f / width;
-		pixelsToClip[1][1] = 2.0f / height;
-		pixelsToClip[3] = {-1, -1, 0.5f, 1};
-		const auto pixelsToWorld = glm::inverse(packet.proj * packet.view) * pixelsToClip;
-		std::uint64_t order = UINT64_MAX - 65536;
-		unsigned glyphs = 0;
-		const auto quad = [&](glm::vec4 rect, glm::vec4 color, unsigned slot, glm::vec4 uv, Entity entity)
-		{
-			if (rect.z <= 0 || rect.w <= 0)
-			{
-				return;
-			}
-			packet.render2D.sprites.push_back({.world = pixelsToWorld * glm::translate(glm::mat4(1), {rect.x, rect.y, 0}),
-			        .uvRect = uv,
-			        .color = color,
-			        .sizeAndPivot = {rect.z, rect.w, 0, 0},
-			        .sortKey = order++,
-			        .textureIndex = slot,
-			        .entityId = entity.id,
-			        .flags = static_cast<SpriteInstanceFlags>(static_cast<std::uint32_t>(SpriteInstanceFlags::FlipY) | static_cast<std::uint32_t>(SpriteInstanceFlags::DisplaySpace))});
-		};
-		const auto label = [&](const ui::UIText& text, glm::vec4 rect, Entity entity) -> Expected<void>
-		{
-			if (text.fontName != "Roboto" || !IsValidUtf8(text.text.data(), text.text.size()) || text.text.size() > 4096 || !std::isfinite(text.pixelSize) || text.pixelSize < 1 || text.pixelSize > 192)
-			{
-				AE_UNEXPECTED(AetherError::Asset("Unsupported browser font, text length or font size"));
-			}
-			const float scale = text.pixelSize / 48;
-			std::vector<std::vector<unsigned>> lines(1);
-			std::vector<float> widths(1);
-			for (size_t index = 0; index < text.text.size();)
-			{
-				unsigned code = static_cast<unsigned char>(text.text[index++]);
-				if (code >= 0xC2 && code <= 0xC3 && index < text.text.size())
-				{
-					code = ((code & 31) << 6) | (static_cast<unsigned char>(text.text[index++]) & 63);
-				}
-				if (code == '\n')
-				{
-					lines.emplace_back();
-					widths.push_back(0);
-					continue;
-				}
-				if (code < 32 || code >= 256 || (code >= 127 && code < 160))
-				{
-					AE_UNEXPECTED(AetherError::Asset("Browser glyph atlas supports Latin-1 text and newlines"));
-				}
-				const float advance = m_advances[code] * scale;
-				if (text.wrap && !lines.back().empty() && widths.back() + advance > rect.z)
-				{
-					std::vector<unsigned> next;
-					float nextWidth = 0.0f;
-					auto& current = lines.back();
-					const auto space = std::find(current.rbegin(), current.rend(), 32u);
-					if (code != 32 && space != current.rend())
-					{
-						const auto word = space.base();
-						next.assign(word, current.end());
-						for (const auto glyph: next)
-						{
-							nextWidth += m_advances[glyph] * scale;
-						}
-						current.erase(word - 1, current.end());
-						widths.back() -= nextWidth + m_advances[32] * scale;
-					}
-					lines.push_back(std::move(next));
-					widths.push_back(nextWidth);
-					if (code == 32)
-					{
-						continue;
-					}
-				}
-				lines.back().push_back(code);
-				widths.back() += advance;
-			}
-			const float lineHeight = text.pixelSize * 1.3f;
-			// Align the glyph metrics, not the trailing leading of the final line.
-			const float blockHeight = (lines.size() - 1) * lineHeight + (m_font_ascent + m_font_descent) * scale;
-			float y = rect.y + (text.vAlign == ui::UIText::VAlign::Bottom ? rect.w - blockHeight : text.vAlign == ui::UIText::VAlign::Middle ? (rect.w - blockHeight) * 0.5f : 0);
-			for (size_t line = 0; line < lines.size(); ++line, y += lineHeight)
-			{
-				float x = rect.x + (text.hAlign == ui::UIText::HAlign::Right ? rect.z - widths[line] : text.hAlign == ui::UIText::HAlign::Center ? (rect.z - widths[line]) * 0.5f : 0);
-				for (const auto code: lines[line])
-				{
-					const float glyphY = y + (m_font_ascent - m_font_baseline) * scale;
-					const float size = 64 * scale;
-					const glm::vec2 begin = glm::max(glm::vec2{x, glyphY}, glm::vec2{rect});
-					const glm::vec2 end = glm::min(glm::vec2{x + size, glyphY + size}, glm::vec2{rect.x + rect.z, rect.y + rect.w});
-					if (end.x > begin.x && end.y > begin.y)
-					{
-						const glm::vec2 cell{code % 16, code / 16};
-						const glm::vec2 uvBegin = (cell + (begin - glm::vec2{x, glyphY}) / size) / 16.0f;
-						const glm::vec2 uvEnd = (cell + (end - glm::vec2{x, glyphY}) / size) / 16.0f;
-						quad({begin, end - begin}, text.color, 255, {uvBegin, uvEnd}, entity);
-						++glyphs;
-					}
-					x += m_advances[code] * scale;
-				}
+				AE_UNEXPECTED(AetherError::Asset("WEB_UI_FONT: upload failed for " + std::string(name)));
 			}
 			return {};
 		};
-
-		// Match the native canvas bias/entity ordering and parent-before-child walk.
-		std::vector<std::pair<int, Entity>> canvases;
-		world.View<ui::UICanvas>().each([&](entt::entity raw, const ui::UICanvas& canvas) { canvases.emplace_back(canvas.sortBias, World::FromEntt(raw)); });
-		std::sort(canvases.begin(), canvases.end(), [](const auto& a, const auto& b) { return a.first != b.first ? a.first < b.first : a.second.id < b.second.id; });
-		std::vector<Entity> ordered;
-		const auto walk = [&](auto&& self, Entity entity) -> void
+		for (const auto& [entity, text]: world.View<ui::UIText>().each())
 		{
-			if (world.Has<DisabledComponent>(entity) || ecs::HasDisabledAncestor(world, entity))
+			AE_TRY_VOID(loadFont(text.fontName));
+		}
+		for (const auto& [entity, button]: world.View<ui::UIButton>().each())
+		{
+			AE_TRY_VOID(loadFont(button.fontName));
+		}
+		for (const auto& [entity, box]: world.View<ui::UITextBox>().each())
+		{
+			AE_TRY_VOID(loadFont(box.fontName));
+		}
+		// UI textures share the color-managed registry, not the legacy unorm sprite registry:
+		// the native UI fragment expects sRGB decoding before its explicit display re-encode.
+		m_sink.colorManaged = true;
+		ui::BuildDrawCommands(world, packet.renderUi.commands, packet.renderUi.materials, &m_fonts, &m_model_textures);
+		m_sink.colorManaged = false;
+		for (const auto& [entity, effect, rect]: world.View<ui::UIEffect, ui::UIRect>().each())
+		{
+			if (!ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
 			{
-				return;
+				packet.renderUi.effects.push_back({effect.shader, rect.resolvedRect, effect.params, effect.color0, effect.color1, effect.background, effect.sortOrder});
 			}
-			if (world.Has<ui::UIRect>(entity))
+		}
+		std::stable_sort(packet.renderUi.effects.begin(), packet.renderUi.effects.end(), [](const auto& a, const auto& b) { return a.sortOrder < b.sortOrder; });
+		const auto shader = [&](std::string_view name, bool effect, bool glyph) -> Expected<void>
+		{
+			if (name.empty() || name.find_first_of("\\:") != std::string_view::npos || name.find('\0') != std::string_view::npos)
 			{
-				ordered.push_back(entity);
+				AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: invalid shader name"));
 			}
-			if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity))
+			for (std::size_t start = 0; start <= name.size();)
 			{
-				for (const auto child: hierarchy->children)
+				const auto end = name.find('/', start);
+				const auto part = name.substr(start, end == std::string_view::npos ? end : end - start);
+				if (part.empty() || part == "." || part == "..")
 				{
-					self(self, child);
+					AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: invalid shader path"));
 				}
+				if (end == std::string_view::npos)
+				{
+					break;
+				}
+				start = end + 1;
 			}
+			if (m_graphics.HasUiShader(name, effect, glyph))
+			{
+				return {};
+			}
+			const auto source = io::FileSystem::ReadFile("project://assets/shaders/" + std::string(name) + (effect ? ".ui-effect.wshader" : glyph ? ".ui-material-glyph.wshader" : ".ui-material.wshader"));
+			if (!source)
+			{
+				AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: missing cooked original source for " + std::string(name)));
+			}
+			const auto decoded = gpu::DecodeWebMaterialShader(*source);
+			if (!decoded)
+			{
+				AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: " + decoded.error()));
+			}
+			if (!m_graphics.UploadUiShader(name, effect, glyph, *decoded))
+			{
+				AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: pipeline creation failed for " + std::string(name)));
+			}
+			return {};
 		};
-		for (const auto& [bias, canvas]: canvases)
+		for (const auto& effect: packet.renderUi.effects)
 		{
-			walk(walk, canvas);
+			AE_TRY_VOID(shader(effect.shader, true, false));
 		}
-		for (const auto entity: ordered)
+		for (const auto& command: packet.renderUi.commands)
 		{
-			if (world.Has<DisabledComponent>(entity) || ecs::HasDisabledAncestor(world, entity))
+			const auto id = ui::UiFlagsShaderId(command.flags);
+			if (id && id <= packet.renderUi.materials.size())
 			{
-				continue;
-			}
-			const auto rect = world.Get<ui::UIRect>(entity).resolvedRect;
-			if (auto* image = world.TryGet<ui::UIImage>(entity))
-			{
-				unsigned slot = 1;
-				if (!image->texturePath.empty())
-				{
-					auto found = m_ui_textures.find(image->texturePath);
-					if (found == m_ui_textures.end())
-					{
-						found = m_ui_textures.emplace(image->texturePath, m_textures.Acquire(image->texturePath)).first;
-					}
-					slot = m_textures.ResolveSlot(found->second);
-				}
-				quad(rect, image->color, slot, {0, 0, 1, 1}, entity);
-			}
-			const auto* selectable = world.TryGet<ui::UISelectable>(entity);
-			const bool focused = selectable && selectable->focused;
-			if (const auto* button = world.TryGet<ui::UIButton>(entity))
-			{
-				quad(rect, focused ? button->bgColorFocused : button->bgColor, 1, {0, 0, 1, 1}, entity);
-				ui::UIText text;
-				text.text = button->label;
-				text.fontName = button->fontName;
-				text.pixelSize = button->pixelSize;
-				text.color = focused ? button->textColorFocused : button->textColor;
-				text.hAlign = button->hAlign;
-				text.vAlign = button->vAlign;
-				AE_TRY_VOID(label(text, rect, entity));
-			}
-			if (const auto* meter = world.TryGet<ui::UIProgressBar>(entity))
-			{
-				quad(rect, meter->trackColor, 1, {0, 0, 1, 1}, entity);
-				auto fill = rect;
-				fill.z *= std::clamp(meter->value, 0.0f, 1.0f);
-				quad(fill, meter->fillColor, 1, {0, 0, 1, 1}, entity);
-			}
-			if (const auto* slider = world.TryGet<ui::UISlider>(entity))
-			{
-				quad(rect, slider->trackColor, 1, {0, 0, 1, 1}, entity);
-				auto fill = rect;
-				fill.z *= std::clamp((slider->value - slider->minValue) / std::max(slider->maxValue - slider->minValue, 0.001f), 0.0f, 1.0f);
-				quad(fill, slider->fillColor, 1, {0, 0, 1, 1}, entity);
-				quad({fill.x + fill.z - 3, fill.y, 6, fill.w}, slider->handleColor, 1, {0, 0, 1, 1}, entity);
-			}
-			if (const auto* toggle = world.TryGet<ui::UIToggle>(entity))
-			{
-				quad(rect, toggle->on ? toggle->onColor : toggle->trackColor, 1, {0, 0, 1, 1}, entity);
-				quad({rect.x + (toggle->on ? rect.z * 0.5f : 0), rect.y, rect.z * 0.5f, rect.w}, toggle->knobColor, 1, {0, 0, 1, 1}, entity);
-			}
-			if (const auto* text = world.TryGet<ui::UIText>(entity))
-			{
-				AE_TRY_VOID(label(*text, rect, entity));
+				AE_TRY_VOID(shader(packet.renderUi.materials[id - 1].shader, false, command.type == ui::kShapeGlyph));
 			}
 		}
-		EM_ASM({ aetherRuntime.uiGlyphs = $0; }, glyphs);
 		return {};
 	}
 } // namespace aether::app::web

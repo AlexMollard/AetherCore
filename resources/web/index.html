@@ -111,7 +111,7 @@ function updatePlayer(){
  const runtime=aetherRuntime,platform=globalThis.aetherPlatform;
  const fileLaunch=location.protocol==='file:';
  const failed=fileLaunch || runtime.status==='failed' || runtime.state==='failed' || runtime.state==='device-lost';
- const ready=runtime.rendererReady && (!platform || platform.fontReady);
+ const ready=runtime.rendererReady && (!platform || platform.storageReady);
  const stopped=runtime.status==='stopped';
  const state=failed?'failed':stopped?'stopped':ready?(platform?.started || !platform ? 'playing':'ready'):'loading';
  document.body.dataset.state=state;

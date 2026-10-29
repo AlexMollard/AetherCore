@@ -132,7 +132,7 @@ file(MAKE_DIRECTORY "${_assets}" "${CMAKE_BINARY_DIR}/test-fixtures")
 if(NOT AETHER_WEB_PROJECT)
 add_custom_command(OUTPUT "${_assets}/reference.pak"
     COMMAND "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets" "${_assets}/reference.pak"
-    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" ${_game_sources}
+    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" ${_game_sources}
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/ProjectSettings.toml"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/audio/reference.wav"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/textures/reference.png"
@@ -142,7 +142,7 @@ endif()
 file(GLOB_RECURSE _shared_shader_includes CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/include/*.slangh")
 file(GLOB _material_shader_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/resources/web/*.slang*")
 configure_file("${CMAKE_SOURCE_DIR}/resources/web/exposure.wgsl" "${_assets}/exposure.wgsl" COPYONLY)
-foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard)
+foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard ui_shapes_web)
 	set(_shader_entries -entry vertexMain -entry fragmentMain)
 	if(_shader STREQUAL "mesh")
 		list(APPEND _shader_entries -entry shadowMain -entry auxiliaryMain)
@@ -154,7 +154,7 @@ foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard)
             -target wgsl ${_shader_entries} -o "${_assets}/${_shader}.wgsl.tmp"
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py" "${_assets}/${_shader}.wgsl.tmp"
         COMMAND "${CMAKE_COMMAND}" -E rename "${_assets}/${_shader}.wgsl.tmp" "${_assets}/${_shader}.wgsl"
-        DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang" ${_shared_shader_includes}
+        DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/${_shader}.slang" ${_shared_shader_includes} "${CMAKE_SOURCE_DIR}/src/shaders/text_curves.slangh"
             "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py"
         VERBATIM)
 endforeach()
@@ -175,7 +175,7 @@ foreach(_effect IN LISTS _post_effects)
         VERBATIM)
     list(APPEND _post_outputs "${_assets}/post-${_effect}.wgsl")
 endforeach()
-add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl" "${_assets}/hdr.wgsl" "${_assets}/light2d.wgsl" "${_assets}/occluder2d.wgsl" "${_assets}/billboard.wgsl" "${_assets}/exposure.wgsl" ${_post_outputs})
+add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl" "${_assets}/hdr.wgsl" "${_assets}/light2d.wgsl" "${_assets}/occluder2d.wgsl" "${_assets}/billboard.wgsl" "${_assets}/ui_shapes_web.wgsl" "${_assets}/exposure.wgsl" ${_post_outputs})
 if(NOT AETHER_WEB_PROJECT)
     add_custom_target(WebFixtureAssets DEPENDS "${_assets}/reference.pak")
     add_dependencies(WebAssets WebFixtureAssets)
@@ -190,24 +190,27 @@ if(AETHER_WEB_PROJECT)
             list(APPEND _material_compiler_args --compiler "${AETHER_WEB_MATERIAL_COMPILER}")
         endif()
         add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" "${AETHER_WEB_ASSETPACKER}" "${AETHER_WEB_STAGED_PROJECT}"
             COMMAND "${AETHER_WEB_ASSETPACKER}" bake-all "${AETHER_WEB_STAGED_PROJECT}"
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py"
                 --project "${AETHER_WEB_STAGED_PROJECT}" ${_material_compiler_args}
                 --slangc "${AETHER_WEB_SLANGC}" --report "${CMAKE_BINARY_DIR}/web/material-cook.json"
             COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target "${AETHER_WEB_PROFILE}" "${AETHER_WEB_STAGED_PROJECT}" "${CMAKE_BINARY_DIR}/web/game.pak"
-            DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_game_sources}
+            DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" ${_game_sources}
                 "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py" "${CMAKE_SOURCE_DIR}/tools/shaders/web_materials.py"
             VERBATIM)
     else()
         add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" "${AETHER_WEB_ASSETPACKER}" "${AETHER_WEB_STAGED_PROJECT}"
             COMMAND "${AETHER_WEB_ASSETPACKER}" --project --target "${AETHER_WEB_PROFILE}" "${AETHER_WEB_STAGED_PROJECT}" "${CMAKE_BINARY_DIR}/web/game.pak"
-            DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_game_sources}
+            DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" ${_game_sources}
             VERBATIM)
     endif()
 else()
 file(GLOB_RECURSE _game_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/*" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/scenes/*" "${CMAKE_SOURCE_DIR}/resources/web/reference/*" "${CMAKE_SOURCE_DIR}/projects/EmberRun/assets/ember/*" "${CMAKE_SOURCE_DIR}/projects/EmberRun/scenes/EmberRun.scene.toml")
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${AETHER_WEB_NODE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust" "${CMAKE_BINARY_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" "${AETHER_WEB_ASSETPACKER}" "${CMAKE_BINARY_DIR}/reference-project"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py"
         --project "${CMAKE_BINARY_DIR}/reference-project" --compiler "${AETHER_WEB_MATERIAL_COMPILER}" --slangc "${AETHER_WEB_SLANGC}"
         --report "${CMAKE_BINARY_DIR}/web/material-cook.json"
@@ -215,7 +218,7 @@ add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
         "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets"
         "${CMAKE_BINARY_DIR}/test-fixtures/desktop-reference.pak"
-    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" ${_game_sources}
+    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" ${_game_sources}
         "${AETHER_WEB_MATERIAL_COMPILER}" "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py" "${CMAKE_SOURCE_DIR}/tools/shaders/web_materials.py"
         ${_shared_shader_includes} ${_material_shader_sources}
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/ProjectSettings.toml"
@@ -229,9 +232,12 @@ add_dependencies(GameRuntime WebGameAssets)
 
 file(GLOB _font_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/resources/fonts/*")
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/engine.pak"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_assets}/engine-fonts/fonts"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/resources/fonts" "${_assets}/engine-fonts/fonts"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" "${AETHER_WEB_ASSETPACKER}" "${_assets}/engine-fonts/fonts"
     COMMAND "${AETHER_WEB_ASSETPACKER}" --target "${AETHER_WEB_PROFILE}"
-        "${CMAKE_SOURCE_DIR}/resources/fonts" "${CMAKE_BINARY_DIR}/web/engine.pak"
-    DEPENDS "${AETHER_WEB_ASSETPACKER}" ${_font_sources}
+        "${_assets}/engine-fonts" "${CMAKE_BINARY_DIR}/web/engine.pak"
+    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" ${_font_sources}
     VERBATIM)
 add_custom_target(WebEngineAssets DEPENDS "${CMAKE_BINARY_DIR}/web/engine.pak")
 add_dependencies(GameRuntime WebEngineAssets)
@@ -239,7 +245,7 @@ if(TARGET WebManagedRuntime)
     add_dependencies(WebManagedRuntime WebAssets WebGameAssets WebEngineAssets)
 endif()
 if(NOT AETHERCORE_WEB_MANAGED)
-foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard)
+foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard ui_shapes_web)
     set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/${_shader}.wgsl")
     target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/${_shader}.wgsl@/assets/${_shader}.wgsl")
 endforeach()
