@@ -317,6 +317,7 @@ target_compile_definitions(GameRuntime PRIVATE
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
+    target_compile_options(RuntimeFramework PRIVATE /bigobj)
 )
 
 # ── Managed (C#) assemblies ────────────────────────────────────────────────
