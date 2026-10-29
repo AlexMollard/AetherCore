@@ -6,7 +6,7 @@
 
 inline constexpr uint32_t PAK_VERSION = 2;
 inline constexpr uint32_t PAK_FLAG_ZSTD = 1u << 0;
-inline constexpr uint32_t PAK_PIPELINE_VERSION = 6;
+inline constexpr uint32_t PAK_PIPELINE_VERSION = 8;
 inline constexpr const char* PAK_MANIFEST_PATH = "__aetherpak/manifest.txt";
 
 #pragma pack(push, 1)

@@ -43,6 +43,9 @@ namespace aether
 
 		bool TryGetPath(TextureHandle handle, std::string& outPath) const;
 
+		// Retarget live path-backed entries without invalidating texture handles.
+		void RetargetPaths(std::string_view oldVfs, std::string_view newVfs);
+
 		[[nodiscard]] TextureHandle DefaultHandle() const
 		{
 			return m_defaultHandle;
@@ -58,6 +61,7 @@ namespace aether
 		struct Entry
 		{
 			std::string resolvedPath;
+			std::string reference;
 			std::uint64_t hash = 0;
 			TextureColorSpace colorSpace = TextureColorSpace::Srgb;
 			TextureResource texture;

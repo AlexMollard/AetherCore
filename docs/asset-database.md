@@ -1,144 +1,124 @@
-# Asset Database
+# Asset database and persistent identity
 
-A central, GUID-handle asset system so components reference assets by a **stable
-id** instead of raw resource pointers or ad-hoc path strings. It hardens
-serialization, decouples the renderer from fragile cached pointers, and is the
-seam for future hot-reload, streaming, and rename-stable `.meta` GUIDs.
+Project assets have a persistent 128-bit identity independent of their path. Runtime
+`AssetId` handles remain opaque 64-bit catalog keys; indexed file sources derive those
+keys from persistent identity rather than the filename. Built-in primitives keep their
+deterministic engine identities.
 
-## Why
+## Persistent project data
 
-Before this, a drawn mesh was a raw `const Mesh*` on `MeshComponent`, pointing
-either into the engine-owned `PrimitiveMeshes` cache or into a `LoadedModel`
-owned by the app-layer `SceneContext`. That pointer is fragile: it is invalid
-across a reload, cannot be serialized, and every consumer had to re-resolve a
-`MeshSourceComponent{kind, path, primitiveIndex}` by hand (the serializer, the
-inspector, the script API each duplicated the mapping).
+- `<asset-file>.uid` stores the asset's generated identity. Keep the sidecar with its
+  asset in source control and external file moves. Reimporting the file does not replace
+  its sidecar.
+- `asset-catalog.toml` has its own schema version and maps identities to current
+  project-relative paths. It also records document/field reference locations.
+- Authored references use `uid://<32 lowercase hexadecimal digits>`. An unknown UID
+  is an error, not permission to load a different file at an old path.
+- The dependency/reference index is derived data. Queries rescan current authored
+  documents, including binary tilemaps, rather than trusting stale reference counts.
+- Runtime packages contain the catalog but exclude sidecars and migration backups.
+  Native loose files, native packages, and the browser use the same UID representation.
 
-The asset database turns "where a resource comes from" into a first-class,
-hashable identity and gives one place to resolve, enumerate, and reload it.
+`AssetCatalog` owns discovery, migration, reference queries, and move transactions.
+`FileSystem::AssetReference`, `ResolveAssetPath`, and `ReloadAssetCatalog` connect that
+catalog to resource loading. Consumers that derive cooked filenames resolve the UID
+before changing extensions; authored records retain identity for subsequent saves.
 
-## Core types (`src/engine/assets/`)
+## Migrating an existing project
 
-- **`AssetId`** (`AssetId.hpp`) — an opaque 64-bit id. `0` is the invalid
-  sentinel. Serializes as 16-char hex (`ToHex`/`FromHex`). Has a `std::hash`
-  specialization so it keys unordered maps directly.
-- **`AssetSource`** (`AssetTypes.hpp`) — the canonical descriptor of where an
-  asset comes from: `{ AssetType type; std::string path; int subIndex; bool
-  builtin; }`. `ComputeAssetId(source)` is a deterministic FNV-1a hash of it, so
-  the same source always yields the same id across sessions.
-  - built-in primitive mesh → `MakePrimitiveMeshSource("cube")` (`builtin=true`)
-  - glTF model primitive → `MakeModelMeshSource("project://foo.glb", 2)`
-  - whole model / texture → `MakeModelSource` / `MakeTextureSource`
-- **`AssetDatabase`** (`AssetDatabase.hpp/.cpp`) — the catalog service:
-  - `Register(source, name) -> AssetId` (idempotent interning)
-  - `Describe` / `TypeOf` / `DisplayName` / `Generation` / `Contains`
-  - `Touch(id)` bumps a per-asset generation — the hot-reload signal
-  - `ResolveMesh(id) -> const Mesh*`
-  - `ForEach(type, fn)` for pickers, in registration order
+Normal project loading does not create sidecars or rewrite legacy files. Migration is
+explicit; preview first, then apply:
 
-## Layering: engine core, app-injected model resolution
-
-The database lives engine-side and must not depend on the app layer, but the
-glTF model cache (`loadedModels`) lives in the app-layer `SceneContext`. So:
-
-- Built-in **primitive** meshes resolve natively via `PrimitiveMeshes`.
-- **Model primitive** meshes resolve through an injected callback,
-  `AssetDatabase::SetModelMeshResolver(...)`, wired in
-  `ScriptedSceneLayer::OnAttach` to `scene::ResolveModelPrimitiveMesh` (which
-  loads through the `SceneContext` cache — the same shared pointer scene load
-  resolves).
-
-```
-MeshComponent.mesh (live ptr)  ← resolved from ←  AssetId  ← hash of ←  AssetSource
-                                                     │
-                                    AssetDatabase ───┤ primitive → PrimitiveMeshes
-                                                     └ model     → app resolver → SceneContext cache
+```powershell
+$packer = '.\build\default\tools\RelWithDebInfo\AssetPacker.exe'
+& $packer migrate-assets 'projects\MyGame'
+& $packer migrate-assets 'projects\MyGame' --apply
 ```
 
-## Lifecycle & integration
+Apply validates supported schemas and references, upgrades model bakes where needed,
+stages changes, backs up replaced files under `.asset-migration-backups/<transaction>/`,
+and commits the staged files. Failed commits roll back and report any rollback failure.
+TOML migration preserves values, not original comments or formatting; backups retain
+the original bytes. Generated metadata and text use CRLF.
 
-- **Bootstrap** (`AssetSubsystem::Init`): the database is constructed with
-  `PrimitiveMeshes`, registered as a service, and seeded with the five built-in
-  primitives (`RegisterBuiltinPrimitives`).
-- **Model load/assign** (`ModelSpawn::RegisterModelAssets`): dropping or
-  assigning a model registers the model and each of its primitives, so they
-  appear in the picker. Called from the inspector and hierarchy drop paths.
-- **Scene load** (`SceneSerializer::ApplyScene`): every resolved mesh source is
-  registered, so the catalog reflects a loaded scene immediately.
-- **Inspector** (Mesh Renderer panel): the "Mesh" field is a handle-based asset
-  picker — click it to choose any mesh asset (primitives + loaded model meshes)
-  from the database; selection resolves and rebinds the entity's mesh.
+Legacy path references remain supported in unmigrated projects. Once migrated, saves
+preserve GUID references. Run migration again to register newly added assets or rebuild
+the packaged catalog after external moves. Duplicate live sidecar identities are
+rejected instead of selecting one arbitrarily.
 
-## Textures & materials: one catalog, existing registries as backends
+## Safe rename and move
 
-Textures and material presets are catalogued too (`AssetType::Texture` /
-`AssetType::Material`), but the database does **not** re-own them — it resolves
-*through* the existing systems, so there is no second cache or ref-count:
+```powershell
+& $packer move-asset 'projects\MyGame' 'assets/textures/hero.png' 'assets/textures/player.png'
+& $packer move-asset 'projects\MyGame' 'assets/textures' 'assets/art'
+& $packer asset-references 'projects\MyGame' 'project://assets/art/player.png'
+```
 
-- A texture `AssetId` → `TextureRegistry::Acquire(path)` → `TextureHandle`.
-- A material-preset `AssetId` → `AssetManager::LoadMaterialPreset(path)`.
+The destination is the complete project-relative target path, not merely its parent
+directory. Its parent directory must already exist. The File Explorer uses the same
+catalog transaction for inline rename and drag/drop moves; unmigrated assets cannot
+be moved through that path.
 
-They are catalogued **on use** (dropped from the File Explorer, or resolved
-during scene load), Unity-style. The inspector's mesh field, sprite texture
-slot, and each material texture map share one `AssetPickerButton` that reads the
-catalog; the Material section also has a preset picker.
+Moves preflight containment, collisions, sidecars, and dependent references. They move
+identity metadata with the asset and update the catalog without rewriting GUID-bearing
+scene/prefab references. Unsafe relative glTF dependency moves are rejected; moving a
+self-contained folder preserves those relative relationships. Font source moves include
+their generated `.fontcurves` companion. Live world paths, texture registry entries,
+catalog entries, and the active scene reference are retargeted without changing handles.
 
-The rule: **if an asset already has a registry/handle, its `AssetId` resolves to
-that handle rather than creating a second identity.** Only meshes — which had
-only a raw `const Mesh*` — are owned by the catalog.
+The index covers authored resource fields; it is not a source-code refactoring engine.
+Arbitrary script strings and dynamically constructed file paths are not rewritten.
+Use UID references when authoring runtime asset loads that must survive moves.
 
-## Serialization
+## Scene, prefab, component, and asset upgrades
 
-Entity references still persist by source (`MeshSourceComponent`, material
-texture paths, `UIImage.texturePath`) — stable and backward-compatible.
+| Boundary | Current version | Compatibility |
+|---|---:|---|
+| Scene TOML | 17 | Legacy scene migrations retained; future/malformed versions rejected |
+| Prefab TOML | 1 | Independent `[prefab].version`; legacy headerless prefabs accepted |
+| Component tables | 1 | `schema_version`; missing legacy versions accepted |
+| Sprite atlas | 3 | Earlier supported schemas accepted |
+| Sprite animation | 2 | Legacy v1 accepted |
+| Tileset | 2 | Legacy v1 accepted |
+| Binary tilemap | 2 | Legacy v1 accepted |
+| Authored material | 1 | Missing legacy version accepted |
+| Cooked mesh | 4 | Explicit v3 decoder retained |
+| Asset catalog | 1 | Unsupported catalog schemas rejected |
 
-In addition, `CaptureScene` writes an **`[[assets]]` manifest** mapping every
-referenced mesh/texture to its stable `AssetId` + source, and `ApplyScene` seeds
-the catalog from it (so a loaded scene's assets appear in the picker
-immediately). The section is additive: it's omitted when empty, and scenes that
-predate it load unaffected. This puts the ids in the file and is the seam for
-rename-stable references.
+Cooked scenes retain their independent binary envelope version. Skeleton, animation,
+animation-set, material, font, and package readers validate their own format headers;
+package pipeline version 8 invalidates old caches for stable mesh keys and unique outputs.
+Migration refuses newer schemas rather than silently downgrading them.
 
-## Id-primary meshes + the resolve pass
+Cooked v4 meshes carry logical submesh keys from identifiable source node/mesh/material
+names. Keys survive geometry edits and named submesh reordering. Removed, duplicate,
+or unidentifiable keys fail closed rather than binding another primitive. Explicit
+migration materializes legacy model references from an identifiable v4 bake. Ambiguous
+source models require disambiguating source names before migration can complete.
 
-`MeshComponent` is now **id-primary**: `asset` (an `AssetId`) is the
-authoritative reference, and `mesh` (the `const Mesh*` the renderer reads) is a
-resolved cache. `AssetDatabase::ResolveWorldMeshes(world)` — called once per
-frame from `Application::OnUpdate`, in both play and edit modes — keeps them in
-sync:
+Packages contain one output per virtual path. Authored material overrides take
+precedence over fresh source cooks, which take precedence over baked caches.
+Conflicting outputs at the same precedence fail without replacing the existing
+package, rather than silently selecting a different resource.
 
-1. back-fills `asset` from `MeshSourceComponent` the first time it sees a mesh;
-2. re-points `mesh` whenever the asset's **generation** has bumped since the
-   last resolve (steady state is a single generation compare per mesh).
+## Runtime catalog and mesh resolution
 
-In the no-reload case this is a no-op (the first resolve returns the same
-pointer already set at spawn), so normal rendering is untouched.
+`AssetDatabase` catalogs meshes, models, textures, materials, and 2D assets without
+owning a second GPU cache. Texture and material resolution continues through the
+existing registries. Built-in meshes resolve through `PrimitiveMeshes`; project meshes
+use the app-injected model resolver.
 
-## Hot-reload
+`MeshComponent.asset` is the runtime handle, while its mesh pointer is a resolved
+cache. `ResolveWorldMeshes` uses catalog generations to refresh that cache after
+`Touch`/`TouchByPath`. Model reload retains old cache slots until scene teardown so
+existing render pointers do not dangle.
 
-`AssetDatabase::Touch(id)` / `TouchByPath(path)` bump generations; the resolve
-pass re-points meshes on the next frame. `scene::ReloadModelAssets` re-reads a
-model file into a **fresh** cache slot (a `std::deque`, so old element
-references stay valid) and touches its primitives — live `mesh` pointers into
-the old slot never dangle; they are re-pointed to the new slot next frame, and
-the old slot is orphaned until scene teardown (leak, not crash). The Mesh
-Renderer has a **Reload from disk** button for model meshes.
+The mesh resolve pass does not replace a skinned model's animation database after
+reload. That existing lifecycle limitation is separate from persisted asset identity.
 
-Limitation: the resolve pass re-points *meshes* only. A skinned model's
-`SkinnedMeshComponent.animDb` still points at the old slot after a reload (valid,
-so no crash; only a mismatch if the skeleton structure changed) — re-pointing
-the animation database is a follow-up.
+## Regression coverage
 
-## Roadmap (not yet implemented)
-
-- **`.meta` GUIDs**: swap the content-hash id for a random per-asset GUID
-  (persisted in a project manifest) so an edit to a source doesn't change its id
-  and a rename only updates the manifest. Because references are already
-  id-primary and opaque, this is a database-internal change — no component or
-  scene-format churn.
-- **Id-primary textures/materials**: same treatment for texture references
-  (`UIImage.texturePath`, material maps), resolving through `TextureRegistry`.
-- **OS file-watch**: watch source files and call `TouchByPath` automatically,
-  instead of the manual Reload button.
-- **Async / streaming**: an id can be "loading"; resolve returns a placeholder
-  until the real resource arrives.
+`AssetCatalogTests`, `AssetReferenceLifecycleTests`, `ModelIdentityTests`, and
+`SchemaVersionTests` exercise read-only previews, backups, unchanged references across
+file/folder moves, restart/reimport identity, moved scene/prefab links, binary tilemap
+package loading, named model reimports, missing UIDs, and unsupported schemas.

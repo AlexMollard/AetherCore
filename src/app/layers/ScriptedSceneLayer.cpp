@@ -51,6 +51,7 @@
 
 #ifdef AETHERCORE_EDITOR_APP
 #	include "editor/EditorProjectContext.hpp"
+#	include "project/ProjectStartupScene.hpp"
 #endif
 
 namespace aether::app
@@ -214,12 +215,15 @@ namespace aether::app
 #endif
 
 		const auto* settingsService = context.TryGet<aether::SettingsService>();
-		if (settingsService == nullptr || settingsService->Get().app.startupScene.empty())
+		std::string sceneName = settingsService != nullptr ? settingsService->Get().app.startupScene : std::string{};
+#ifdef AETHERCORE_EDITOR_APP
+		if (project != nullptr && project->IsLoaded()) sceneName = ReadProjectStartupScene(project->projectFile);
+#endif
+		if (sceneName.empty())
 		{
 			AE_WARN(LogCategory::App, "No startup scene configured (app.startupScene is empty) - booting an EMPTY world. Set it in ProjectSettings.toml / EngineSettings.toml.");
 			return;
 		}
-		const std::string& sceneName = settingsService->Get().app.startupScene;
 		scene::ApplySceneDeps deps{};
 		deps.assets = m_sceneCtx.assets;
 		deps.primitives = m_sceneCtx.primitives;
@@ -244,7 +248,7 @@ namespace aether::app
 			scene::ApplyScene(*desc, context.Get<World>(), deps);
 			AE_INFO(LogCategory::App, "Startup scene '{}' loaded ({} entities)", sceneName, desc->entities.size());
 		}
-		else if (m_sceneCtx.assets != nullptr)
+		else if (m_sceneCtx.assets != nullptr && !sceneName.contains("://"))
 		{
 			AE_WARN(LogCategory::App, "Startup scene '{}' could not be read - attempting to auto-generate it from script content.", sceneName);
 			const auto captured = scene::CaptureScene(context.Get<World>(), m_sceneCtx.assets->GetMaterialRegistry(), m_sceneCtx.assets->GetTextureRegistry(), m_sceneCtx.renderer);

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "assets/AssetDatabase.hpp"
+#include "assets/GltfAsset.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetTypes.hpp"
 #include "gpu/GpuEnums.hpp"
@@ -25,10 +26,16 @@ namespace aether::app::scene
 	// alive in ctx.loadedModels so live MeshComponent.mesh pointers never dangle.
 	LoadedModel* LoadCachedModel(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
 	{
-		const std::uint64_t stamp = io::FileSystem::ContentStamp(path);
-		if (const auto it = ctx.loadedModelMap.find(path); it != ctx.loadedModelMap.end())
+		const std::string resolved = io::FileSystem::ResolveAssetPath(path);
+		if (resolved.empty())
+			return nullptr;
+		std::string cooked = assets::GltfAsset::ResolveMeshPath(resolved);
+		if (cooked.empty() || !io::FileSystem::Exists(cooked))
+			cooked = resolved;
+		const std::uint64_t stamp = io::FileSystem::ContentStamp(cooked);
+		if (const auto it = ctx.loadedModelMap.find(resolved); it != ctx.loadedModelMap.end())
 		{
-			const auto stampIt = ctx.loadedModelStamps.find(path);
+			const auto stampIt = ctx.loadedModelStamps.find(resolved);
 			if (stampIt != ctx.loadedModelStamps.end() && stampIt->second == stamp)
 			{
 				return &ctx.loadedModels[it->second];
@@ -44,8 +51,8 @@ namespace aether::app::scene
 			return nullptr;
 		}
 		ctx.loadedModels.push_back(std::move(result.value()));
-		ctx.loadedModelMap[path] = ctx.loadedModels.size() - 1;
-		ctx.loadedModelStamps[path] = stamp;
+		ctx.loadedModelMap[resolved] = ctx.loadedModels.size() - 1;
+		ctx.loadedModelStamps[resolved] = stamp;
 		return &ctx.loadedModels.back();
 	}
 
@@ -116,7 +123,7 @@ namespace aether::app::scene
 				tc->localToWorld = localToWorld * tc->localToWorld;
 			}
 			world.EmplaceOrReplace<NameComponent>(meshEntity, NameComponent{.name = stem + " mesh"});
-			world.EmplaceOrReplace<MeshSourceComponent>(meshEntity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(i)});
+			world.EmplaceOrReplace<MeshSourceComponent>(meshEntity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(i), .primitiveKey = modelPtr->primitives[i].primitiveKey});
 			RememberSceneEntity(ctx, meshEntity);
 		}
 		return root;
@@ -193,7 +200,7 @@ namespace aether::app::scene
 				tc->localToWorld = rootTransform * tc->localToWorld;
 			}
 			world.EmplaceOrReplace<NameComponent>(meshEntity, NameComponent{.name = stem + " mesh"});
-			world.EmplaceOrReplace<MeshSourceComponent>(meshEntity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(i)});
+			world.EmplaceOrReplace<MeshSourceComponent>(meshEntity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(i), .primitiveKey = modelPtr->primitives[i].primitiveKey});
 			RememberSceneEntity(ctx, meshEntity);
 		}
 		return !meshEntities.empty();
@@ -213,6 +220,24 @@ namespace aether::app::scene
 			return nullptr;
 		}
 		return &modelPtr->primitives[static_cast<std::size_t>(primitiveIndex)].mesh;
+	}
+
+	int ResolveModelPrimitiveIndex(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path, std::string_view key)
+	{
+		const LoadedModel* model = LoadCachedModel(assets, ctx, path);
+		if (model == nullptr || key.empty() || key == "unidentified")
+			return -1;
+		int result = -1;
+		for (std::size_t i = 0; i < model->primitives.size(); ++i)
+		{
+			if (model->primitives[i].primitiveKey == key || (key.starts_with("geometry:") && model->primitives[i].legacyGeometryKey == key))
+			{
+				if (result != -1)
+					return -1;
+				result = static_cast<int>(i);
+			}
+		}
+		return result;
 	}
 
 	void RegisterModelAssets(AssetDatabase& db, AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
@@ -255,7 +280,7 @@ namespace aether::app::scene
 		}
 
 		world.EmplaceOrReplace<MeshComponent>(entity, MeshComponent{.mesh = &primitive.mesh});
-		world.EmplaceOrReplace<MeshSourceComponent>(entity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(primitiveIndex)});
+		world.EmplaceOrReplace<MeshSourceComponent>(entity, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(primitiveIndex), .primitiveKey = primitive.primitiveKey});
 
 		if (primitive.hasMaterial)
 		{
@@ -299,8 +324,12 @@ namespace aether::app::scene
 			return false;
 		}
 		ctx.loadedModels.push_back(std::move(result.value()));
-		ctx.loadedModelMap[path] = ctx.loadedModels.size() - 1;
-		ctx.loadedModelStamps[path] = io::FileSystem::ContentStamp(path);
+		const std::string resolved = io::FileSystem::ResolveAssetPath(path);
+		std::string cooked = assets::GltfAsset::ResolveMeshPath(resolved);
+		if (cooked.empty() || !io::FileSystem::Exists(cooked))
+			cooked = resolved;
+		ctx.loadedModelMap[resolved] = ctx.loadedModels.size() - 1;
+		ctx.loadedModelStamps[resolved] = io::FileSystem::ContentStamp(cooked);
 
 		RegisterModelAssets(db, assets, ctx, path);
 		db.TouchByPath(path);

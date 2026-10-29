@@ -144,6 +144,7 @@ namespace aether::assetpipeline
 				{
 					return {std::move(d), ".material", {}};
 				}
+				return {.error = "Material processing failed: " + diskPath.generic_string()};
 			}
 			return {};
 		}

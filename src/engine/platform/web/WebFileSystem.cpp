@@ -2,6 +2,8 @@
 
 #include <filesystem>
 #include <sstream>
+#include <optional>
+#include "assets/AssetCatalog.hpp"
 #include "io/FileSystem.hpp"
 #include "io/MemoryPak.hpp"
 #include "utils/Utf8.hpp"
@@ -12,6 +14,7 @@ namespace
 	const aether::io::MemoryPak* s_engine = nullptr;
 	bool s_initialized = false;
 	std::uint64_t s_generation = 0;
+	std::optional<aether::AssetCatalog> s_catalog;
 
 	std::string_view Relative(std::string_view path)
 	{
@@ -28,6 +31,9 @@ namespace aether::web
 			s_package = package;
 			s_engine = engine;
 			++s_generation;
+			s_catalog.reset();
+			if (s_package)
+				(void)io::FileSystem::ReloadAssetCatalog();
 		}
 	}
 } // namespace aether::web
@@ -60,14 +66,43 @@ namespace aether::io
 		return (s_package && mountPoint == "project") || (s_engine && mountPoint == "engine");
 	}
 
+	Expected<void> FileSystem::ReloadAssetCatalog()
+	{
+		std::optional<AssetCatalog> catalog;
+		if (s_package && s_package->Exists("asset-catalog.toml"))
+		{
+			AE_TRY(bytes, s_package->Read("asset-catalog.toml"));
+			AE_TRY(parsed, AssetCatalog::Parse(std::string_view(reinterpret_cast<const char*>(bytes->data()), bytes->size())));
+			catalog = std::move(*parsed);
+		}
+		s_catalog = std::move(catalog);
+		return {};
+	}
+
+	std::string FileSystem::ResolveAssetPath(std::string_view path)
+	{
+		if (!path.starts_with("uid://"))
+			return std::string(path);
+		return s_catalog ? s_catalog->Resolve(path) : std::string{};
+	}
+
+	std::string FileSystem::AssetReference(std::string_view path)
+	{
+		return s_catalog && path.starts_with("project://") ? s_catalog->Reference(path) : std::string(path);
+	}
+
 	bool FileSystem::Exists(std::string_view path)
 	{
+		const std::string resolved = ResolveAssetPath(path);
+		path = resolved;
 		const auto* package = path.starts_with("project://") ? s_package : path.starts_with("engine://") ? s_engine : nullptr;
 		return package && package->Exists(Relative(path));
 	}
 
 	Expected<std::vector<std::byte>> FileSystem::ReadFile(std::string_view path)
 	{
+		const std::string resolved = ResolveAssetPath(path);
+		path = resolved;
 		const auto* package = path.starts_with("project://") ? s_package : path.starts_with("engine://") ? s_engine : nullptr;
 		if (!s_initialized || !package)
 		{
@@ -98,8 +133,9 @@ namespace aether::io
 
 	Expected<std::unique_ptr<std::istream>> FileSystem::OpenStream(std::string_view path)
 	{
-		AE_TRY(text, ReadFileText(path));
-		return std::unique_ptr<std::istream>(std::make_unique<std::istringstream>(std::move(*text)));
+		AE_TRY(bytes, ReadFile(path));
+		return std::unique_ptr<std::istream>(std::make_unique<std::istringstream>(
+		        std::string(reinterpret_cast<const char*>(bytes->data()), bytes->size())));
 	}
 
 	Expected<std::vector<std::string>> FileSystem::Glob(std::string_view, const FileGlobOptions&)
@@ -123,10 +159,14 @@ namespace aether::io
 
 	std::string FileSystem::ResolveRelative(std::string_view base, std::string_view relative)
 	{
-		if (relative.find("://") != std::string_view::npos || base.find("://") == std::string_view::npos)
-		{
+		if (relative.find("://") != std::string_view::npos)
+			return ResolveAssetPath(relative);
+		const std::string resolvedBase = ResolveAssetPath(base);
+		if (base.starts_with("uid://") && resolvedBase.empty())
+			return {};
+		base = resolvedBase;
+		if (base.find("://") == std::string_view::npos)
 			return std::string(relative);
-		}
 		const auto scheme = base.find("://") + 3;
 		const std::filesystem::path path(base.substr(scheme));
 		return std::string(base.substr(0, scheme)) + (path.parent_path() / relative).lexically_normal().generic_string();

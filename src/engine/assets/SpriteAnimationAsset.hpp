@@ -33,7 +33,7 @@ namespace aether
 
 	struct SpriteAnimationAsset
 	{
-		static constexpr std::uint32_t kSchemaVersion = 1;
+		static constexpr std::uint32_t kSchemaVersion = 2;
 
 		std::uint32_t schemaVersion = kSchemaVersion;
 		std::string name = "Animation";

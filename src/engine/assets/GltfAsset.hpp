@@ -90,6 +90,7 @@ namespace aether::assets
 		std::uint32_t nodeIndex = 0;
 		std::int32_t materialIndex = -1;
 		std::int32_t skinIndex = -1;
+		std::string primitiveKey;
 		std::vector<MeshVertex> vertices;
 		std::vector<std::uint32_t> indices;
 
@@ -146,5 +147,9 @@ namespace aether::assets
 		[[nodiscard]] static Expected<GltfAsset> LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath);
 
 		[[nodiscard]] static std::string ResolveMeshPath(std::string_view vfsPath);
+
+		// Logical identity when available; legacy meshes use a geometry fingerprint.
+		[[nodiscard]] static std::string PrimitiveKey(const GltfPrimitive& primitive);
+		[[nodiscard]] static std::string GeometryPrimitiveKey(const GltfPrimitive& primitive);
 	};
 } // namespace aether::assets

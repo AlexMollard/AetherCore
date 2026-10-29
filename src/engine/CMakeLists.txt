@@ -22,6 +22,9 @@ add_library(Engine STATIC)
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "[/\\\\]platform[/\\\\]web[/\\\\]")
 list(FILTER ENGINE_SOURCES EXCLUDE REGEX "[/\\\\]webgpu[/\\\\]")
+list(REMOVE_ITEM ENGINE_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/AssetCatalog.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/AssetCatalogMigration.cpp")
 file(GLOB_RECURSE ENGINE_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 
 target_sources(Engine
@@ -33,6 +36,7 @@ target_sources(Engine
 
 target_link_libraries(Engine
     PUBLIC
+        AssetIdentity
         volk::volk_headers
         glfw
         glm::glm

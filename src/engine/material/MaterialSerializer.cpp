@@ -144,7 +144,7 @@ namespace aether
 			}
 			BinaryReader reader(*bytes);
 			MaterialHeaderDisk hdr;
-			if (!reader.TryRead(hdr) || !CheckMagic(hdr))
+			if (!reader.TryRead(hdr) || !CheckMagic(hdr) || hdr.version < 1 || hdr.version > MATL_VERSION)
 			{
 				AE_UNEXPECTED(AetherError::Asset("Invalid material header: " + std::string(path)));
 			}
@@ -316,10 +316,16 @@ namespace aether
 	{
 		MaterialPresetSpec spec;
 		spec.graphSection = ExtractGraphSection(text);
+		bool versionSupported = true;
 
 		const bool parsed = text::ParseToml(text,
-		        [&spec, path](const text::IniEntry& entry)
+		        [&spec, &versionSupported, path](const text::IniEntry& entry)
 		        {
+			        if (entry.fullKey == "material.schema_version" || entry.fullKey == "schema_version")
+			        {
+				        versionSupported = versionSupported && entry.tomlValue == "1";
+				        return;
+			        }
 			        for (const auto& field: kAdditionalFlags)
 			        {
 				        if (entry.fullKey == field.key || entry.fullKey == std::string("material.") + std::string(field.key))
@@ -464,10 +470,19 @@ namespace aether
 				        spec.emissivePath = io::FileSystem::ResolveRelative(path, entry.value);
 			        }
 		        });
+		for (auto* reference: {&spec.albedoPath, &spec.normalPath, &spec.metallicRoughnessPath, &spec.occlusionPath, &spec.emissivePath, &spec.shaderVfsPath})
+		{
+			if (reference->starts_with("uid://"))
+			{
+				auto resolved = io::FileSystem::ResolveAssetPath(*reference);
+				if (resolved.empty()) versionSupported = false;
+				else *reference = std::move(resolved);
+			}
+		}
 
 		if (ok != nullptr)
 		{
-			*ok = parsed;
+			*ok = parsed && versionSupported;
 		}
 		return spec;
 	}
@@ -482,6 +497,7 @@ namespace aether
 			// precision either truncates or writes noise digits nobody wants in a diff.
 			out += "# AetherCore material. Edit here or in the editor's material inspector.\n";
 			out += "[material]\n";
+			out += "schema_version = 1\n";
 			out += std::format("basecolorfactor = [ {}, {}, {}, {} ]\n",
 			        m.baseColorFactor.x, m.baseColorFactor.y, m.baseColorFactor.z, m.baseColorFactor.w);
 			out += std::format("emissivefactor = [ {}, {}, {} ]\n", m.emissiveFactor.x, m.emissiveFactor.y, m.emissiveFactor.z);
@@ -509,7 +525,7 @@ namespace aether
 			}
 			if (!spec.shaderVfsPath.empty())
 			{
-				out += std::format("shader = '{}'\n", spec.shaderVfsPath);
+				out += std::format("shader = '{}'\n", io::FileSystem::AssetReference(spec.shaderVfsPath));
 			}
 
 			// Omitted entirely when there is no texture, rather than written empty: an empty
@@ -530,7 +546,7 @@ namespace aether
 				{
 					if (!value->empty())
 					{
-						out += std::format("{} = '{}'\n", key, *value);
+						out += std::format("{} = '{}'\n", key, io::FileSystem::AssetReference(*value));
 					}
 				}
 			}

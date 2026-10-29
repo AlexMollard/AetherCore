@@ -218,7 +218,8 @@ namespace aether
 			TileDefinition tile;
 			tile.id = ParseId(config.GetString(TileKey(index, "id")));
 			tile.name = config.GetString(TileKey(index, "name"));
-			tile.atlasPath = config.GetString(TileKey(index, "atlas"));
+			AE_TRY(atlasPath, ReadAssetReference(config, TileKey(index, "atlas")));
+			tile.atlasPath = std::move(*atlasPath);
 			tile.spriteId = ParseId(config.GetString(TileKey(index, "sprite_id")));
 			tile.collision = CollisionFromName(config.GetString(TileKey(index, "collision"), "none"));
 			tile.oneWay = OneWayFromName(config.GetString(TileKey(index, "one_way"), "none"));

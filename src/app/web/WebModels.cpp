@@ -164,6 +164,7 @@ namespace aether::app::web
 			return {};
 		}
 		Binding binding{entity, 0};
+		std::uint32_t resolvedPrimitiveIndex = record.mesh->primitiveIndex;
 		MaterialAsset material;
 		if (record.mesh->kind == MeshSourceComponent::Kind::Primitive)
 		{
@@ -212,13 +213,34 @@ namespace aether::app::web
 				m_models.emplace(path, std::move(model));
 			}
 			auto& model = m_models.at(path);
-			if (record.mesh->primitiveIndex >= model.slots.size())
+			if (!record.mesh->primitiveKey.empty())
+			{
+				if (record.mesh->primitiveKey == "unidentified")
+				{
+					AE_UNEXPECTED(AetherError::Asset("Browser model primitive has no stable identity"));
+				}
+				std::size_t matches = 0;
+				for (std::size_t i = 0; i < model.data.primitives.size(); ++i)
+				{
+					const auto& candidate = model.data.primitives[i];
+					if (assets::GltfAsset::PrimitiveKey(candidate) == record.mesh->primitiveKey ||
+					    (record.mesh->primitiveKey.starts_with("geometry:") &&
+					        assets::GltfAsset::GeometryPrimitiveKey(candidate) == record.mesh->primitiveKey))
+					{
+						resolvedPrimitiveIndex = static_cast<std::uint32_t>(i);
+						++matches;
+					}
+				}
+				if (matches != 1)
+					AE_UNEXPECTED(AetherError::Asset("Browser model primitive key is missing or ambiguous: " + record.mesh->primitiveKey));
+			}
+			if (resolvedPrimitiveIndex >= model.slots.size())
 			{
 				AE_UNEXPECTED(AetherError::Asset("Browser model primitive index outside cooked model"));
 			}
 			binding.model = &model;
-			binding.slot = model.slots[record.mesh->primitiveIndex];
-			const auto& primitive = model.data.primitives[record.mesh->primitiveIndex];
+			binding.slot = model.slots[resolvedPrimitiveIndex];
+			const auto& primitive = model.data.primitives[resolvedPrimitiveIndex];
 			binding.localSphere = glm::vec4(primitive.sphereCenter[0], primitive.sphereCenter[1], primitive.sphereCenter[2], primitive.sphereRadius);
 			binding.skin = primitive.skinIndex;
 			if (binding.skin < -1 || (binding.skin >= 0 && static_cast<std::size_t>(binding.skin) >= model.data.skins.size()))
@@ -282,7 +304,8 @@ namespace aether::app::web
 			skin.playbackSpeed = record.skinned->playbackSpeed;
 			skin.looping = record.skinned->looping;
 		}
-		world.Emplace<MeshSourceComponent>(entity, *record.mesh);
+		auto& meshSource = world.Emplace<MeshSourceComponent>(entity, *record.mesh);
+		meshSource.primitiveIndex = resolvedPrimitiveIndex;
 		world.Emplace<MaterialInstanceComponent>(entity, MaterialInstanceComponent{material});
 		if (record.meshRenderer)
 		{

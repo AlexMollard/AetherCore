@@ -64,6 +64,41 @@ def preflight(project, startup_override=None):
         if not path.is_relative_to(project):
             reject('WEB_ASSET_PATH', 'Project path escapes its root: ' + value)
         return path
+    catalog_path = project / 'asset-catalog.toml'
+    identities = {}
+    if catalog_path.is_file():
+        catalog = tomllib.loads(catalog_path.read_text(encoding='utf-8-sig'))
+        if catalog.get('version') != 1 or not isinstance(catalog.get('assets', []), list):
+            reject('WEB_ASSET_CATALOG', 'Unsupported asset catalog')
+        paths_seen = set()
+        for entry in catalog.get('assets', []):
+            if not isinstance(entry, dict):
+                reject('WEB_ASSET_CATALOG', 'Invalid asset identity')
+            uid, path = entry.get('uid'), entry.get('path')
+            if (not isinstance(uid, str) or not re.fullmatch(r'[0-9a-f]{32}', uid)
+                    or not isinstance(path, str) or not path or uid in identities or path in paths_seen
+                    or Path(path).is_absolute() or any(part in ('.', '..') for part in path.split('/'))):
+                reject('WEB_ASSET_CATALOG', 'Invalid or duplicate asset identity')
+            local(path)
+            identities[uid] = path
+            paths_seen.add(path)
+    def resolve_uri(uri):
+        if uri.startswith('uid://'):
+            path = identities.get(uri[6:])
+            if path is None:
+                reject('WEB_ASSET_MISSING', 'Unknown asset identity: ' + uri)
+            return 'project://' + path
+        return uri
+    def scene_path(name, directory, suffix):
+        if name.startswith(('uid://', 'project://')):
+            uri = resolve_uri(name)
+            path = local(uri.removeprefix('project://'))
+            if not path.name.endswith(suffix):
+                reject('WEB_SCENE_NAME', 'Invalid scene reference: ' + name)
+            return path
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', name):
+            reject('WEB_SCENE_NAME', 'Invalid browser scene name: ' + str(name))
+        return directory / (name + suffix)
     scripts = local(paths.get('scripts', 'scripts'))
     managed_project = None
     if language == 'csharp':
@@ -104,6 +139,8 @@ def preflight(project, startup_override=None):
         elif not declared:
             reject('WEB_DYNAMIC_SCENE_UNDECLARED', 'Dynamic scene loads require publish.web.scenes')
     files = set()
+    if catalog_path.is_file():
+        files.add(catalog_path.resolve())
     allowed_entity_tables = {'sprite', 'sprite_animator', 'rigid_body_2d', 'collider_2d', 'joint_2d', 'camera', 'scripts',
         'ui_canvas', 'ui_rect', 'ui_text', 'ui_image', 'ui_selectable', 'ui_button', 'ui_slider', 'ui_toggle', 'ui_progress_bar', 'tile_map'}
     if is_3d:
@@ -131,8 +168,11 @@ def preflight(project, startup_override=None):
             for child in value:
                 yield from strings(child)
     def asset(uri):
-        if not isinstance(uri, str) or not uri.startswith('project://'):
-            reject('WEB_ASSET_PATH', 'Additional assets require a project:// path')
+        if not isinstance(uri, str):
+            reject('WEB_ASSET_PATH', 'Additional assets require a project:// or uid:// path')
+        uri = resolve_uri(uri)
+        if not uri.startswith('project://'):
+            reject('WEB_ASSET_PATH', 'Additional assets require a project:// or uid:// path')
         path = local(uri.removeprefix('project://'))
         unsupported = {'.spv', '.dds', '.ktx', '.fontcurves'}
         if not is_3d:
@@ -171,15 +211,16 @@ def preflight(project, startup_override=None):
         if path.name.endswith(('.scene.toml', '.prefab.toml')):
             document = tomllib.loads(path.read_text(encoding='utf-8-sig'))
             default_kind = '3d' if path.name.endswith('.scene.toml') else '2d'
-            if document.get('scene', {}).get('version', 0) > 16 or (not is_3d and document.get('scene', {}).get('kind', default_kind) != '2d'):
+            version = document.get('scene', {}).get('version', 1)
+            if type(version) is not int or not 1 <= version <= 17 or (not is_3d and document.get('scene', {}).get('kind', default_kind) != '2d'):
                 reject('WEB_FEATURE_UNSUPPORTED', 'Unsupported scene format or 3D scene: ' + path.name)
             if not is_3d and any(key in document for key in ('includes', 'prefab_instances', 'lights', 'environment')):
                 reject('WEB_FEATURE_UNSUPPORTED', 'Linked scenes/3D environment are not supported: ' + path.name)
             if is_3d:
                 for include in document.get('includes', []):
-                    visit(local(paths.get('scenes', 'scenes')) / (include['scene'] + '.scene.toml'))
+                    visit(scene_path(include['scene'], local(paths.get('scenes', 'scenes')), '.scene.toml'))
                 for instance in document.get('prefab_instances', []):
-                    visit(local(paths.get('prefabs', 'assets/prefabs')) / (instance['prefab'] + '.prefab.toml'))
+                    visit(scene_path(instance['prefab'], local(paths.get('prefabs', 'assets/prefabs')), '.prefab.toml'))
                 features_used.update(document.get('scene', {}).get('features', []))
                 if document.get('lights') or document.get('environment'):
                     features_used.add('lighting_3d')
@@ -215,29 +256,27 @@ def preflight(project, startup_override=None):
                 if shader.startswith('shaders://') and shader not in ('shaders://gltf_mesh.spv', 'shaders://plasma.spv', 'shaders://molten.spv') and 'graph' not in document:
                     visit(project / 'assets/shaders' / (Path(shader.removeprefix('shaders://')).stem + '.web.slangh'))
             for value in strings(document):
-                if value.startswith('project://'):
+                if value.startswith(('project://', 'uid://')):
                     asset(value)
-        elif path.suffix == '.tilemap':
+        elif path.suffix in ('.tiles', '.tilemap'):
             blob = path.read_bytes()
             if len(blob) < 12 or blob[:4] != b'ATLM':
                 reject('WEB_ASSET_FORMAT', 'Invalid ATLM header: ' + path.name)
             version, length = struct.unpack_from('<II', blob, 4)
-            if version != 1 or length > 4096 or len(blob) < 12 + length:
+            if version not in (1, 2) or length > 4096 or len(blob) < 12 + length:
                 reject('WEB_ASSET_FORMAT', 'Unsupported/truncated ATLM header: ' + path.name)
             asset(blob[12:12 + length].decode('utf-8'))
     scene_dir = local(paths.get('scenes', 'scenes'))
     for scene in scenes:
-        if not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', scene):
-            reject('WEB_SCENE_NAME', 'Invalid browser scene name: ' + str(scene))
-        path = scene_dir / (scene + '.scene.toml')
+        path = scene_path(scene, scene_dir, '.scene.toml')
         if not path.is_file():
             reject('WEB_SCENE_MISSING', 'Missing declared/reachable scene: ' + scene)
         visit(path)
     prefabs = local(paths.get('prefabs', 'assets/prefabs'))
     prefab_calls = r'\.instantiate_prefab\s*\(\s*"([^"\\]+)"' if language == 'rust' else r'\bScene\s*\.\s*Instantiate\s*\(\s*"([^"\\]+)"'
     for name in re.findall(prefab_calls, source):
-        visit(prefabs / (name + '.prefab.toml'))
-    for uri in re.findall(r'"(project://[^"\\]+)"', source):
+        visit(scene_path(name, prefabs, '.prefab.toml'))
+    for uri in re.findall(r'"((?:project|uid)://[^"\\]+)"', source):
         asset(uri)
     if is_3d:
         # Custom-pass APIs name shaders by stem rather than project URI.
@@ -260,7 +299,8 @@ def preflight(project, startup_override=None):
     for uri in additional:
         asset(uri)
     return dict(project=project, settings=settings, scripts=scripts, language=language, managed_project=managed_project,
-                profile=profile, scenes=sorted(scenes), startup=startup, files=files, features_used=sorted(features_used))
+                profile=profile, scenes=sorted(scenes), startup=startup,
+                startup_path=scene_path(startup, scene_dir, '.scene.toml'), files=files, features_used=sorted(features_used))
 
 
 def publish(request, directory, output=None):
@@ -395,7 +435,7 @@ def publish(request, directory, output=None):
                 limits={name: int(value) for name, value in re.findall(r'AE_WEBGPU_LIMIT\((\w+),\s*(\d+)\)', requirements)},
                 features=re.findall(r'AE_WEBGPU_FEATURE\(([\w-]+)\)', requirements),
                 textureFormats=re.findall(r'AE_WEBGPU_FORMAT\(([\w-]+)\)', requirements))
-            scene_file = inputs / data['settings'].get('paths', {}).get('scenes', 'scenes') / (data['startup'] + '.scene.toml')
+            scene_file = inputs / data['startup_path'].relative_to(project)
             manifest['project']['startupSceneKind'] = tomllib.loads(scene_file.read_text(encoding='utf-8-sig')).get('scene', {}).get('kind', '3d')
             manifest['cookedAssets'] = {
                 'meshes': sorted(path.relative_to(inputs).as_posix() for path in inputs.rglob('*.mesh')),

@@ -11,6 +11,7 @@
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "utils/TextIni.hpp"
+#include "utils/TomlParse.hpp"
 #include <toml++/toml.hpp>
 
 namespace aether
@@ -217,6 +218,35 @@ namespace aether
 		return parsed.has_value() ? *parsed : defaultValue;
 	}
 
+	std::optional<double> TomlConfig::GetNumber(std::string_view key) const
+	{
+		const auto it = m_serialized_values.find(text::ToLowerAscii(std::string(key)));
+		if (it == m_serialized_values.end())
+		{
+			return std::nullopt;
+		}
+		const auto table = ParseTomlDocument("value = " + it->second);
+		if (!table)
+		{
+			return std::nullopt;
+		}
+		if (const auto* integer = (*table)["value"].as_integer())
+		{
+			return static_cast<double>(integer->get());
+		}
+		if (const auto* floating = (*table)["value"].as_floating_point())
+		{
+			return floating->get();
+		}
+		return std::nullopt;
+	}
+
+	std::string TomlConfig::GetRawString(std::string_view key, std::string_view defaultValue) const
+	{
+		const auto it = m_values.find(text::ToLowerAscii(std::string(key)));
+		return it == m_values.end() ? std::string(defaultValue) : it->second;
+	}
+
 	std::string TomlConfig::GetString(std::string_view key, std::string_view defaultValue) const
 	{
 		const auto it = m_values.find(text::ToLowerAscii(std::string(key)));
@@ -224,7 +254,7 @@ namespace aether
 		{
 			return std::string(defaultValue);
 		}
-		return it->second;
+		return it->second.starts_with("uid://") ? io::FileSystem::ResolveAssetPath(it->second) : it->second;
 	}
 
 	void TomlConfig::SetValue(std::string_view key, std::string value, std::string serialized)
@@ -264,7 +294,8 @@ namespace aether
 
 	void TomlConfig::Set(std::string_view key, std::string_view value)
 	{
-		SetValue(key, std::string(value), QuoteTomlString(value));
+		const std::string reference = io::FileSystem::AssetReference(value);
+		SetValue(key, reference, QuoteTomlString(reference));
 	}
 
 	bool TomlConfig::Has(std::string_view key) const

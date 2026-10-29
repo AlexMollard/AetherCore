@@ -24,7 +24,7 @@ struct BoneEntryHeaderDisk
 };
 
 inline constexpr char MESH_MAGIC[4] = {'M', 'E', 'S', 'H'};
-inline constexpr uint32_t MESH_VERSION = 3;
+inline constexpr uint32_t MESH_VERSION = 4;
 
 struct MeshHeaderDisk
 {

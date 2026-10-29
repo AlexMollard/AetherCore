@@ -3,9 +3,11 @@
 #include "BakeOutputs.hpp"
 #include "MeshProcessor.hpp"
 #include "PipelineUtils.hpp"
+#include <BinaryFormats.hpp>
 
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 #include <span>
 #include <system_error>
 
@@ -19,6 +21,13 @@ namespace aether::assetpipeline
 			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 			return ext == ".glb" || ext == ".gltf";
 		}
+		bool HasCurrentMeshHeader(const fs::path& path)
+		{
+			std::ifstream stream(path, std::ios::binary);
+			MeshHeaderDisk header{};
+			return static_cast<bool>(stream.read(reinterpret_cast<char*>(&header), sizeof(header))) && CheckMagic(header);
+		}
+
 
 		// The newest mtime among `modelPath` itself and every EXTERNAL buffer/image it
 		// references - editing a `.gltf`'s external `.bin`/texture must be exactly as
@@ -81,7 +90,7 @@ namespace aether::assetpipeline
 			if (meshExisted)
 			{
 				const auto meshTime = fs::last_write_time(meshPath, meshEc);
-				stale = static_cast<bool>(meshEc) || sourceTime > meshTime;
+				stale = static_cast<bool>(meshEc) || sourceTime > meshTime || !HasCurrentMeshHeader(meshPath);
 			}
 			if (!stale)
 			{

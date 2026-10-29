@@ -188,12 +188,16 @@ namespace aether
 	coro::async<Expected<LoadedModel>> AssetManager::LoadModelAsync(std::string_view path)
 	{
 		AE_PROFILE_ZONE();
-		const std::string pathStr(path);
+		const std::string pathStr = io::FileSystem::ResolveAssetPath(path);
+		if (pathStr.empty())
+		{
+			co_return std::unexpected(AetherError::Asset("Unknown asset UID: " + std::string(path)));
+		}
 
 		std::string meshPath = assets::GltfAsset::ResolveMeshPath(pathStr);
 		if (meshPath.empty() || !io::FileSystem::Exists(meshPath))
 		{
-			meshPath = std::string(path);
+			meshPath = pathStr;
 		}
 
 		// Read the .mesh file on the I/O thread.
@@ -269,6 +273,8 @@ namespace aether
 
 			LoadedModelPrimitive loadedPrim;
 			loadedPrim.mesh = CreateMesh(primitive.vertices, primitive.indices, primitive.aabbMin, primitive.aabbMax, primitive.sphereCenter, primitive.sphereRadius);
+			loadedPrim.primitiveKey = assets::GltfAsset::PrimitiveKey(primitive);
+			loadedPrim.legacyGeometryKey = primitive.primitiveKey.empty() ? loadedPrim.primitiveKey : assets::GltfAsset::GeometryPrimitiveKey(primitive);
 			loadedPrim.skinIndex = primitive.skinIndex;
 
 			if (primitive.skinIndex < 0 && primitive.nodeIndex < worldNodeTransforms.size())

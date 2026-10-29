@@ -32,6 +32,9 @@
 #include "scene/reflection/Reflection.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
+#include "scene/GrassComponent.hpp"
+#include "scene/AudioComponents.hpp"
+#include "scene/SceneSerializerDetail.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
@@ -46,6 +49,7 @@ namespace aether::app::scene
 	{
 		std::filesystem::path g_projectScenesDirectory;
 		std::filesystem::path g_projectPrefabsDirectory;
+		std::filesystem::path g_projectRoot;
 
 		// Parsed-prefab cache: a game may instantiate the same prefab thousands of
 		// times (bullets, pickups, enemies); without this each spawn re-read the
@@ -238,7 +242,7 @@ namespace aether::app::scene
 		}
 	} // namespace
 
-	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir)
+	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir, std::filesystem::path projectRoot)
 	{
 		if (g_projectPrefabsDirectory != prefabsDir)
 		{
@@ -246,12 +250,14 @@ namespace aether::app::scene
 		}
 		g_projectScenesDirectory = std::move(scenesDir);
 		g_projectPrefabsDirectory = std::move(prefabsDir);
+		g_projectRoot = std::move(projectRoot);
 	}
 
 	void ClearProjectSceneDirectories()
 	{
 		g_projectScenesDirectory.clear();
 		g_projectPrefabsDirectory.clear();
+		g_projectRoot.clear();
 		InvalidatePrefabCache();
 	}
 
@@ -357,6 +363,16 @@ namespace aether::app::scene
 
 	std::optional<SceneDescription> ReadPrefabFile(const std::string& prefabName)
 	{
+		if (prefabName.starts_with("project://") || prefabName.starts_with("uid://"))
+		{
+			const std::string path = io::FileSystem::ResolveAssetPath(prefabName);
+			if (!path.starts_with("project://") || !path.ends_with(kPrefabSuffix) ||
+			    path.size() <= std::string_view("project://").size() + kPrefabSuffix.size()) return std::nullopt;
+			if (const auto text = io::FileSystem::ReadFileText(path)) return ParseToml(*text);
+			const std::string binaryPath = path.substr(0, path.size() - kPrefabSuffix.size()) + std::string(kPrefabBinSuffix);
+			if (const auto bytes = io::FileSystem::ReadFile(binaryPath)) return ReadSceneBinary(*bytes);
+			return std::nullopt;
+		}
 		{
 			const std::lock_guard<std::mutex> lock(g_prefabCacheMutex);
 			if (const auto it = g_prefabCache.find(prefabName); it != g_prefabCache.end())
@@ -464,6 +480,24 @@ namespace aether::app::scene
 
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene)
 	{
+		if (sceneName.starts_with("uid://") || sceneName.starts_with("project://"))
+		{
+			const std::string path = io::FileSystem::ResolveAssetPath(sceneName);
+			if (!path.starts_with("project://") || !path.ends_with(kSceneSuffix) || g_projectRoot.empty() ||
+			    path.size() <= std::string_view("project://").size() + kSceneSuffix.size()) return false;
+			const auto relative = std::filesystem::u8path(path.substr(10)).lexically_normal();
+			if (relative.empty() || relative.is_absolute() || *relative.begin() == "..") return false;
+			const auto physical = g_projectRoot / relative;
+			std::string text;
+			std::vector<std::byte> binary;
+			SerializeScene(scene, text, binary);
+			const std::lock_guard<std::mutex> lock(g_sceneWriteMutex);
+			if (!WriteTextAtomic(physical, text)) return false;
+			const std::string binaryVfs = path.substr(0, path.size() - kSceneSuffix.size()) + std::string(kSceneBinSuffix);
+			if (!io::file_util::WriteBinary(g_projectRoot / std::filesystem::u8path(binaryVfs.substr(10)), binary))
+				AE_WARN(LogCategory::App, "SaveSceneFile: cannot cook binary for '{}'", path);
+			return true;
+		}
 		if (!IsValidAssetName(sceneName))
 		{
 			AE_WARN(LogCategory::App, "SaveSceneFile: '{}' is not a usable scene name", sceneName);
@@ -544,6 +578,16 @@ namespace aether::app::scene
 
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName)
 	{
+		if (sceneName.starts_with("project://") || sceneName.starts_with("uid://"))
+		{
+			const std::string path = io::FileSystem::ResolveAssetPath(sceneName);
+			if (!path.starts_with("project://") || !path.ends_with(kSceneSuffix) ||
+			    path.size() <= std::string_view("project://").size() + kSceneSuffix.size()) return std::nullopt;
+			if (const auto text = io::FileSystem::ReadFileText(path)) return ParseToml(*text);
+			const std::string binaryPath = path.substr(0, path.size() - kSceneSuffix.size()) + std::string(kSceneBinSuffix);
+			if (const auto bytes = io::FileSystem::ReadFile(binaryPath)) return ReadSceneBinary(*bytes);
+			return std::nullopt;
+		}
 		// ONLY a directory a project has scoped may answer a scene lookup from disk.
 		// ScenesDirectory() substitutes the engine's shipped-template folder when nothing has,
 		// which is correct for the read-only fallback at the bottom of this function and wrong
@@ -620,6 +664,57 @@ namespace aether::app::scene
 		}
 		std::sort(names.begin(), names.end());
 		return names;
+	}
+
+	void RetargetWorldAssetPaths(World& world, std::string_view oldVfs, std::string_view newVfs)
+	{
+		while (oldVfs.ends_with('/')) oldVfs.remove_suffix(1);
+		while (newVfs.ends_with('/')) newVfs.remove_suffix(1);
+		if (!oldVfs.starts_with("project://") || !newVfs.starts_with("project://") ||
+		    oldVfs.size() <= 10 || newVfs.size() <= 10) return;
+		const auto retarget = [oldVfs, newVfs](std::string& path)
+		{
+			if (path != oldVfs && !(path.starts_with(oldVfs) && path.size() > oldVfs.size() && path[oldVfs.size()] == '/'))
+				return false;
+			path = io::FileSystem::AssetReference(std::string(newVfs) + path.substr(oldVfs.size()));
+			return true;
+		};
+		const auto named = [&retarget](std::string& value, std::string_view directory, std::string_view suffix)
+		{
+			if (value.contains("://")) { retarget(value); return; }
+			if (value.empty()) return;
+			std::string path = std::string(directory) + value + std::string(suffix);
+			if (retarget(path)) value = std::move(path);
+		};
+		auto& registry = world.GetRegistry();
+		for (auto&& [entity, component]: registry.view<MeshSourceComponent>().each()) retarget(component.path);
+		for (auto&& [entity, component]: registry.view<MaterialLinkComponent>().each()) retarget(component.assetPath);
+		for (auto&& [entity, component]: registry.view<SpriteRendererComponent>().each())
+		{
+			retarget(component.texturePath);
+			retarget(component.atlasPath);
+		}
+		for (auto&& [entity, component]: registry.view<SpriteAnimatorComponent>().each()) retarget(component.animationPath);
+		for (auto&& [entity, component]: registry.view<TileMapComponent>().each()) retarget(component.tilemapPath);
+		for (auto&& [entity, component]: registry.view<ParticleEmitterComponent>().each()) retarget(component.texturePath);
+		for (auto&& [entity, component]: registry.view<AudioSourceComponent>().each()) retarget(component.clipPath);
+		for (auto&& [entity, component]: registry.view<ui::UIText>().each()) retarget(component.fontName);
+		for (auto&& [entity, component]: registry.view<ui::UIButton>().each()) retarget(component.fontName);
+		for (auto&& [entity, component]: registry.view<ui::UITextBox>().each()) retarget(component.fontName);
+		for (auto&& [entity, component]: registry.view<GrassComponent>().each())
+		{
+			retarget(component.surfaceMesh);
+			retarget(component.exclusionMesh);
+		}
+		for (auto&& [entity, component]: registry.view<ColliderComponent>().each()) retarget(component.meshSource);
+		for (auto&& [entity, component]: registry.view<ui::UIImage>().each())
+			if (retarget(component.texturePath)) component.textureDirty = true;
+		for (auto&& [entity, component]: registry.view<PrefabInstanceComponent>().each())
+			named(component.prefabPath, "project://assets/prefabs/", kPrefabSuffix);
+		for (auto&& [entity, component]: registry.view<IncludedFromComponent>().each())
+			named(component.scene, "project://scenes/", kSceneSuffix);
+		if (auto* includes = registry.ctx().find<detail::ActiveSceneIncludes>())
+			for (auto& value: includes->scenes) named(value, "project://scenes/", kSceneSuffix);
 	}
 
 	ApplySceneDeps MakeApplySceneDeps(ServiceContainer& services)

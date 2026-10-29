@@ -187,29 +187,44 @@ namespace aether::ui
 			return cached;
 		}
 
-		// A font name resolves against project fonts first (games bring their
-		// own typefaces), then the engine's shipped set; both accept the plain
-		// stem and the conventional -Regular suffix.
-		const std::array<std::string, 4> candidates{
-		        "project://assets/fonts/" + std::string(name) + ".fontcurves",
-		        "project://assets/fonts/" + std::string(name) + "-Regular.fontcurves",
-		        "engine://fonts/" + std::string(name) + ".fontcurves",
-		        "engine://fonts/" + std::string(name) + "-Regular.fontcurves",
-		};
 		std::string curvePath;
 		Expected<std::vector<std::byte>> bytesResult = Unexpected{AetherError::Asset("no font candidates tried")};
-		for (const std::string& candidate: candidates)
+		if (name.starts_with("uid://") || name.starts_with("project://") || name.starts_with("engine://"))
 		{
-			bytesResult = io::FileSystem::ReadFile(candidate);
-			if (bytesResult.has_value())
+			const std::string source = io::FileSystem::ResolveAssetPath(name);
+			if (source.empty())
 			{
-				curvePath = candidate;
-				break;
+				AE_ERROR(LogCategory::UI, "FontRegistry: unresolved font identity '{}'", name);
+				return nullptr;
+			}
+			const auto slash = source.find_last_of('/');
+			const auto dot = source.find_last_of('.');
+			curvePath = dot != std::string::npos && (slash == std::string::npos || dot > slash)
+			        ? source.substr(0, dot) + ".fontcurves" : source + ".fontcurves";
+			bytesResult = io::FileSystem::ReadFile(curvePath);
+		}
+		else
+		{
+			// Plain families keep the project-first, engine-fallback behavior.
+			const std::array<std::string, 4> candidates{
+			        "project://assets/fonts/" + std::string(name) + ".fontcurves",
+			        "project://assets/fonts/" + std::string(name) + "-Regular.fontcurves",
+			        "engine://fonts/" + std::string(name) + ".fontcurves",
+			        "engine://fonts/" + std::string(name) + "-Regular.fontcurves",
+			};
+			for (const std::string& candidate: candidates)
+			{
+				bytesResult = io::FileSystem::ReadFile(candidate);
+				if (bytesResult.has_value())
+				{
+					curvePath = candidate;
+					break;
+				}
 			}
 		}
 		if (!bytesResult.has_value())
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: no .fontcurves for font '{}' in project://assets/fonts or engine://fonts (bake the TTF or check the name)", name);
+			AE_ERROR(LogCategory::UI, "FontRegistry: no .fontcurves for font '{}' (bake the font or check the reference)", name);
 			return nullptr;
 		}
 

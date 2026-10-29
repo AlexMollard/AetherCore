@@ -458,7 +458,7 @@ namespace aether::app::scripting
 				}
 			} cleanup{scripts, world, *host};
 
-			scene::SetProjectSceneDirectories(settings->scenesDir, settings->prefabsDir);
+			scene::SetProjectSceneDirectories(settings->scenesDir, settings->prefabsDir, request.project);
 
 			struct DirectoryCleanup
 			{

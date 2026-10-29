@@ -783,6 +783,7 @@ namespace aether::assetpipeline
 				uint32_t firstIndex;
 				uint32_t indexCount;
 				int32_t materialIndex;
+				std::string primitiveKey;
 			};
 
 			struct MeshExtractResult
@@ -1011,11 +1012,32 @@ namespace aether::assetpipeline
 						{
 							GenerateNormals(verts, indices);
 						}
+						// A material name is the only per-primitive source name glTF
+						// provides. An ordinal would silently retarget after a removal.
+						std::string primitiveKey = "unidentified";
+						if ((node.name && *node.name) || (node.mesh->name && *node.mesh->name))
+						{
+							std::string part;
+							if (prim.material && prim.material->name && *prim.material->name)
+								part = std::string("material:") + prim.material->name;
+							else if (node.mesh->primitives_count == 1)
+								part = "single";
+							if (!part.empty())
+							{
+								const std::string nodeName = SafeStr(node.name);
+								const std::string meshName = SafeStr(node.mesh->name);
+								std::string candidate = "logical:" + std::to_string(nodeName.size()) + ":" + nodeName +
+								                        std::to_string(meshName.size()) + ":" + meshName + part;
+								if (candidate.size() <= UINT16_MAX)
+									primitiveKey = std::move(candidate);
+							}
+						}
 
 						out.subMeshes.push_back({
 						        .firstIndex = static_cast<uint32_t>(out.indices.size()),
 						        .indexCount = static_cast<uint32_t>(indices.size()),
 						        .materialIndex = ToIndex(prim.material, *data),
+						        .primitiveKey = std::move(primitiveKey),
 						});
 
 						out.verts.insert(out.verts.end(), verts.begin(), verts.end());
@@ -1715,6 +1737,16 @@ namespace aether::assetpipeline
 					}
 					Append(result.meshData, smHdr);
 				}
+				// Ambiguous source identities must remain unresolved even if a later
+				// export removes one of the duplicates.
+				std::unordered_map<std::string, std::size_t> keyCounts;
+				for (const auto& sm: mesh.subMeshes)
+					++keyCounts[sm.primitiveKey];
+				for (const auto& sm: mesh.subMeshes)
+				{
+					AppendStr(result.meshData, keyCounts[sm.primitiveKey] == 1 ? sm.primitiveKey : std::string("unidentified"));
+				}
+
 
 				AppendStringData(result.meshData, mesh.skinRefPath);
 				for (const auto& matPath: materialPaths)

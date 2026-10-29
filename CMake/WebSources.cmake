@@ -11,6 +11,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     animation/AnimationSystem.cpp
     scripting/Gameplay3D.cpp
     physics2d/TileMapCollision.cpp
+    assets/AssetCatalog.cpp
     assets/TileAssetStore.cpp
     assets/TileSetAsset.cpp
     assets/TileMapAsset.cpp

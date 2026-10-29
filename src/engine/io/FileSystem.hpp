@@ -44,6 +44,11 @@ namespace aether::io
 		// so is one whose base names no mount - there is nothing to resolve against.
 		[[nodiscard]] static std::string ResolveRelative(std::string_view basePath, std::string_view relativePath);
 
+		// Reload the read-only catalog from the currently mounted project.
+		[[nodiscard]] static Expected<void> ReloadAssetCatalog();
+		[[nodiscard]] static std::string ResolveAssetPath(std::string_view path);
+		[[nodiscard]] static std::string AssetReference(std::string_view path);
+
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 
 		[[nodiscard]] static Expected<std::vector<std::byte>> ReadFile(std::string_view virtualPath);

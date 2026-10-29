@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -18,14 +19,15 @@ namespace aether::app
 	// Writes app.startupScene into the project file, preserving every other key. Refuses
 	// rather than clobbering when the file exists but cannot be read or parsed.
 	bool WriteProjectStartupScene(const std::filesystem::path& projectFile, std::string_view sceneName, std::string& error);
+	[[nodiscard]] std::optional<std::filesystem::path> ProjectScenePath(const std::filesystem::path& scenesDir, std::string_view sceneName, const std::filesystem::path& projectRoot);
 
 	// Whether the project actually carries this scene. The authored .scene.toml is the
 	// truth: the .scene.bin beside it is a rebuildable cache and is absent on a fresh clone.
-	[[nodiscard]] bool ProjectHasScene(const std::filesystem::path& scenesDir, std::string_view sceneName);
+	[[nodiscard]] bool ProjectHasScene(const std::filesystem::path& scenesDir, std::string_view sceneName, const std::filesystem::path& projectRoot = {});
 
 	// A startup scene must name a scene the project has. A dangling name boots an empty
 	// world, and a published game has no editor to notice, so this is an error - never a
 	// warning - on every path that would bake or persist it.
-	bool ValidateProjectStartupScene(const std::filesystem::path& scenesDir, std::string_view sceneName, std::string& error);
+	bool ValidateProjectStartupScene(const std::filesystem::path& scenesDir, std::string_view sceneName, std::string& error, const std::filesystem::path& projectRoot = {});
 
 } // namespace aether::app

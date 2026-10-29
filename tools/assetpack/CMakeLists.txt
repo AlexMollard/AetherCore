@@ -11,6 +11,21 @@ list(REMOVE_ITEM ASSETPIPELINE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/StbImageImpl.cpp"
 )
 
+add_library(AssetIdentity STATIC
+    "${CMAKE_SOURCE_DIR}/src/engine/assets/AssetCatalog.cpp"
+    "${CMAKE_SOURCE_DIR}/src/engine/assets/AssetCatalogMigration.cpp")
+target_include_directories(AssetIdentity PUBLIC "${CMAKE_SOURCE_DIR}/src/engine")
+target_include_directories(AssetIdentity PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
+target_link_libraries(AssetIdentity PRIVATE nlohmann_json::nlohmann_json)
+if(TARGET tomlplusplus::tomlplusplus)
+    target_link_libraries(AssetIdentity PRIVATE tomlplusplus::tomlplusplus)
+elseif(TARGET tomlplusplus_tomlplusplus)
+    target_link_libraries(AssetIdentity PRIVATE tomlplusplus_tomlplusplus)
+else()
+    target_include_directories(AssetIdentity SYSTEM PRIVATE "${tomlplusplus_SOURCE_DIR}/include")
+endif()
+aethercore_target_defaults(AssetIdentity)
+
 add_library(AssetPipeline STATIC
     ${ASSETPIPELINE_SOURCES}
     ${ASSETPIPELINE_HEADERS}
@@ -34,7 +49,7 @@ target_include_directories(AssetPipeline SYSTEM PRIVATE
     "${glm_SOURCE_DIR}"             # glm/glm.hpp
 )
 
-target_link_libraries(AssetPipeline PRIVATE zstd::libzstd_static freetype)
+target_link_libraries(AssetPipeline PUBLIC AssetIdentity PRIVATE zstd::libzstd_static freetype)
 
 if(TARGET tomlplusplus::tomlplusplus)
     target_link_libraries(AssetPipeline PRIVATE tomlplusplus::tomlplusplus)

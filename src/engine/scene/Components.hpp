@@ -127,6 +127,7 @@ namespace aether
 		Kind kind = Kind::Primitive;
 		std::string path;
 		std::uint32_t primitiveIndex = 0;
+		std::string primitiveKey;
 	};
 
 	struct MeshRendererComponent

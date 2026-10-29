@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <string>
 #include <vector>
 
 #include "animation/AnimationDatabase.hpp"
@@ -16,6 +17,8 @@ namespace aether
 		bool hasMaterial = false;
 		glm::mat4 localTransform{1.0f};
 		std::int32_t skinIndex = -1;
+		std::string primitiveKey;
+		std::string legacyGeometryKey;
 	};
 
 	struct LoadedModel

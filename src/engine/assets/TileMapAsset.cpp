@@ -156,11 +156,21 @@ namespace aether
 
 	Expected<void> TileMapAsset::Save(const std::filesystem::path& path) const
 	{
+		return SaveImpl(path, true);
+	}
+
+	Expected<void> TileMapAsset::SaveRaw(const std::filesystem::path& path) const
+	{
+		return SaveImpl(path, false);
+	}
+
+	Expected<void> TileMapAsset::SaveImpl(const std::filesystem::path& path, bool encodeReferences) const
+	{
 		std::string out;
 		out.reserve(4096);
 		WriteBytes(out, kMagic.data(), kMagic.size());
 		WritePod(out, kFormatVersion);
-		WriteString(out, tileSetPath);
+		WriteString(out, encodeReferences ? io::FileSystem::AssetReference(tileSetPath) : tileSetPath);
 		WritePod(out, cellSize);
 		WritePod(out, static_cast<std::uint32_t>(tilePalette.size()));
 		for (const AssetObjectId id: tilePalette)
@@ -262,6 +272,14 @@ namespace aether
 		if (!reader.ReadString(map.tileSetPath) || !reader.ReadPod(map.cellSize) || !reader.ReadPod(paletteCount) || paletteCount > kMaxPaletteEntries)
 		{
 			AE_UNEXPECTED(AetherError::Asset("Tile map '" + path.string() + "' is truncated (header)."));
+		}
+		if (map.tileSetPath.starts_with("uid://"))
+		{
+			auto resolved = io::FileSystem::ResolveAssetPath(map.tileSetPath);
+			if (resolved.empty())
+			{
+				AE_UNEXPECTED(AetherError::Asset("Tile map '" + path.string() + "' references an unresolved tileset UID."));
+			}
 		}
 		map.tilePalette.resize(paletteCount);
 		for (AssetObjectId& id: map.tilePalette)

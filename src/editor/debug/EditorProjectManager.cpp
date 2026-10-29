@@ -32,6 +32,7 @@
 #include "io/OverlayBackend.hpp"
 #include "project/ProjectCommon.hpp"
 #include "project/ProjectPaths.hpp"
+#include "project/ProjectStartupScene.hpp"
 #include "rendering/ScreenshotService.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/SceneSubsystem.hpp"
@@ -465,7 +466,7 @@ namespace aether::editor
 		CompileProjectShadersAndRefreshOverlay(m_currentProject.root);
 		BuildAndReloadProjectScripts();
 		BakeProjectFonts();
-		app::scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir);
+		app::scene::SetProjectSceneDirectories(m_currentProject.scenesDir, m_currentProject.prefabsDir, m_currentProject.root);
 		RefreshServices();
 		AddRecentProject(m_currentProject.root, m_currentProject.name);
 		m_projectLoaded = true;
@@ -536,11 +537,7 @@ namespace aether::editor
 			return;
 		}
 
-		std::string sceneName;
-		if (const auto* settings = m_services->TryGet<aether::SettingsService>())
-		{
-			sceneName = settings->Get().app.startupScene;
-		}
+		const std::string sceneName = app::ReadProjectStartupScene(m_currentProject.projectFile);
 
 		// startup scene - so switching projects never leaves the old scene live.
 		const bool loaded = app::scene::SwitchScene(sceneName, *world, app::scene::MakeApplySceneDeps(*m_services), app::scene::OnLoadFailure::ClearWorld);

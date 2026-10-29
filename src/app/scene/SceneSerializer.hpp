@@ -6,6 +6,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -310,7 +311,8 @@ namespace aether::app::scene
 	// v14 added the Physics3D feature flag (feature-driven system activation).
 	// v15 added the tile_map record and made Tilemaps a Scene2D default feature.
 	// v16 added prefab_instances (linked prefab instances).
-	inline constexpr int kSceneFormatVersion = 16;
+	// v17 records stable asset references and model primitive keys.
+	inline constexpr int kSceneFormatVersion = 17;
 
 	struct AssetManifestEntry
 	{
@@ -390,7 +392,7 @@ namespace aether::app::scene
 	std::optional<SceneDescription> ReadSceneBinary(const std::byte* data, std::size_t size);
 	std::optional<SceneDescription> ReadSceneBinary(const std::vector<std::byte>& bytes);
 
-	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir);
+	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir, std::filesystem::path projectRoot = {});
 	void ClearProjectSceneDirectories();
 
 	std::string ScenesDirectory();
@@ -409,6 +411,8 @@ std::vector<std::string> ListSceneFiles();
 	std::string PrefabsDirectory();
 	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefab);
 	std::optional<SceneDescription> ReadPrefabFile(const std::string& prefabName);
+	// Retarget authored live-world references after a project asset or folder moves.
+	void RetargetWorldAssetPaths(World& world, std::string_view oldVfs, std::string_view newVfs);
 	std::vector<std::string> ListPrefabFiles();
 
 	struct ApplySceneDeps

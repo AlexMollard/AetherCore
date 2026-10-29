@@ -7,10 +7,12 @@
 #include "scene/SceneComponentSerde.hpp"
 
 #include <algorithm>
+#include <utility>
 
 #include "assets/AssetDatabase.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetTypes.hpp"
+#include "io/FileSystem.hpp"
 #include "mesh/Mesh.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scene/Components.hpp"
@@ -49,6 +51,7 @@ namespace aether::app::scene
 			const ApplySceneDeps& deps = c.deps;
 
 			const Mesh* resolved = nullptr;
+			std::uint32_t primitiveIndex = c.rec.mesh->primitiveIndex;
 			LoadedModel* model = nullptr;
 			if (c.rec.mesh->kind == MeshSourceComponent::Kind::Primitive)
 			{
@@ -65,58 +68,68 @@ namespace aether::app::scene
 				auto& ctx = *deps.sceneContext;
 				if (deps.assets != nullptr)
 				{
-					model = LoadCachedModel(*deps.assets, ctx, c.rec.mesh->path);
-					if (model == nullptr && deps.ensureModelBaked)
+					const std::string sourcePath = io::FileSystem::ResolveAssetPath(c.rec.mesh->path);
+					bool bakeReady = true;
+					if (deps.ensureModelBaked && (sourcePath.ends_with(".gltf") || sourcePath.ends_with(".glb")) && io::FileSystem::Exists(sourcePath))
 					{
 						std::string bakeError;
-						if (deps.ensureModelBaked(c.rec.mesh->path, bakeError))
-						{
-							AE_INFO(LogCategory::App, "Scene load: auto-imported model '{}'", c.rec.mesh->path);
-							model = LoadCachedModel(*deps.assets, ctx, c.rec.mesh->path);
-						}
-						else
-						{
+						bakeReady = deps.ensureModelBaked(sourcePath, bakeError);
+						if (!bakeReady)
 							AE_WARN(LogCategory::App, "Scene load: auto-import of model '{}' failed: {}", c.rec.mesh->path, bakeError);
-						}
 					}
+					if (bakeReady)
+						model = LoadCachedModel(*deps.assets, ctx, c.rec.mesh->path);
 					if (model == nullptr)
 					{
 						AE_WARN(LogCategory::App, "Scene load: model '{}' failed", c.rec.mesh->path);
 					}
 				}
-				if (model != nullptr && c.rec.mesh->primitiveIndex < model->primitives.size())
+				if (model != nullptr)
 				{
-					resolved = &model->primitives[c.rec.mesh->primitiveIndex].mesh;
+					if (!c.rec.mesh->primitiveKey.empty())
+					{
+						const int index = ResolveModelPrimitiveIndex(*deps.assets, ctx, c.rec.mesh->path, c.rec.mesh->primitiveKey);
+						primitiveIndex = index < 0 ? static_cast<std::uint32_t>(model->primitives.size()) : static_cast<std::uint32_t>(index);
+					}
+					if (primitiveIndex < model->primitives.size())
+						resolved = &model->primitives[primitiveIndex].mesh;
 				}
 			}
 
 			if (resolved != nullptr)
 			{
 				world.Emplace<MeshComponent>(e, MeshComponent{.mesh = resolved});
-				world.Emplace<MeshSourceComponent>(e, *c.rec.mesh);
+				auto source = *c.rec.mesh;
+				if (model != nullptr && primitiveIndex < model->primitives.size())
+				{
+					source.primitiveIndex = primitiveIndex;
+					source.primitiveKey = model->primitives[primitiveIndex].primitiveKey;
+				}
+				world.Emplace<MeshSourceComponent>(e, std::move(source));
 				if (deps.assetDatabase != nullptr)
 				{
-					deps.assetDatabase->Register(c.rec.mesh->kind == MeshSourceComponent::Kind::Primitive ? MakePrimitiveMeshSource(c.rec.mesh->path) : MakeModelMeshSource(c.rec.mesh->path, static_cast<int>(c.rec.mesh->primitiveIndex)));
+					deps.assetDatabase->Register(c.rec.mesh->kind == MeshSourceComponent::Kind::Primitive ? MakePrimitiveMeshSource(c.rec.mesh->path) : MakeModelMeshSource(c.rec.mesh->path, static_cast<int>(primitiveIndex)));
 				}
 			}
 			else
 			{
+				world.Emplace<MeshSourceComponent>(e, *c.rec.mesh);
 				AE_WARN(LogCategory::App, "Scene load: mesh source '{}' unresolved for '{}'", c.rec.mesh->path, c.rec.name);
 			}
 
 			const bool skinnable = c.rec.skinned && model != nullptr && model->animationDb.IsValid();
-			if (skinnable && c.rec.mesh->primitiveIndex >= model->primitives.size())
+			if (skinnable && primitiveIndex >= model->primitives.size())
 			{
 				// Same bound as the `resolved` lookup above: a file whose mesh.index
 				// exceeds the loaded model's primitive count (model re-exported with
 				// fewer primitives, a hand-edited or corrupt file) would read out of
 				// bounds here and cast a garbage skinIndex into SkinnedMeshComponent.
 				AE_WARN(LogCategory::App, "Scene load: skinned record for '{}' skipped - mesh index {} outside model '{}' ({} primitives)",
-				        c.rec.name, c.rec.mesh->primitiveIndex, c.rec.mesh->path, model->primitives.size());
+				        c.rec.name, primitiveIndex, c.rec.mesh->path, model->primitives.size());
 			}
 			else if (skinnable)
 			{
-				const auto& primitive = model->primitives[c.rec.mesh->primitiveIndex];
+				const auto& primitive = model->primitives[primitiveIndex];
 				if (primitive.skinIndex >= 0)
 				{
 					const auto skinIdx = static_cast<std::uint32_t>(primitive.skinIndex);

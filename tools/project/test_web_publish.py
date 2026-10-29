@@ -121,6 +121,51 @@ class WebPreflightTests(unittest.TestCase):
   (self.root/'scenes/Start.scene.toml').rename(self.root/'scenes/Launch.scene.toml')
   (self.root/'ProjectSettings.toml').write_text(self.settings.replace('startupscene="Start"','startupScene="Launch"'),encoding='utf-8')
   self.assertEqual(self.api.preflight(self.root)['startup'],'Launch')
+ def test_startup_uid_resolves_catalog_and_stages_it(self):
+  uid='0123456789abcdef0123456789abcdef'
+  (self.root/'scenes/Start.scene.toml').rename(self.root/'scenes/Renamed.scene.toml')
+  catalog=self.root/'asset-catalog.toml'
+  catalog.write_text('version=1\n[[assets]]\nuid="'+uid+'"\npath="scenes/Renamed.scene.toml"\n',encoding='utf-8')
+  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('startupscene="Start"','startupscene="uid://'+uid+'"'),encoding='utf-8')
+  result=self.api.preflight(self.root)
+  self.assertEqual(result['startup'],'uid://'+uid)
+  self.assertEqual(result['startup_path'],(self.root/'scenes/Renamed.scene.toml').resolve())
+  self.assertIn(catalog.resolve(),result['files'])
+ def test_missing_startup_uid_fails(self):
+  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('startupscene="Start"','startupscene="uid://0123456789abcdef0123456789abcdef"'),encoding='utf-8')
+  self.expect('WEB_ASSET_MISSING')
+ def test_scene_uid_asset_is_reachable(self):
+  uid='0123456789abcdef0123456789abcdef'
+  (self.root/'asset-catalog.toml').write_text('version=1\n[[assets]]\nuid="'+uid+'"\npath="assets/atlas.toml"\n',encoding='utf-8')
+  asset=self.root/'assets/atlas.toml';asset.write_text('[atlas]\n',encoding='utf-8')
+  scene=self.root/'scenes/Start.scene.toml';scene.write_text(scene.read_text(encoding='utf-8')+'[entities.sprite]\natlas="uid://'+uid+'"\n',encoding='utf-8')
+  self.assertIn(asset.resolve(),self.api.preflight(self.root)['files'])
+ def test_upgraded_scene_schema_and_legacy_versions_remain_publishable(self):
+  scene=self.root/'scenes/Start.scene.toml'
+  original=scene.read_text(encoding='utf-8')
+  for version in (1,16,17):
+   with self.subTest(version=version):
+    scene.write_text(original.replace('version=16','version='+str(version)),encoding='utf-8')
+    self.assertEqual(self.api.preflight(self.root)['startup'],'Start')
+  for version in ('18','0','true','1.5','"17"'):
+   with self.subTest(version=version):
+    scene.write_text(original.replace('version=16','version='+version),encoding='utf-8')
+    self.expect('WEB_FEATURE_UNSUPPORTED')
+ def test_script_prefab_references_follow_moved_asset(self):
+  uid='0123456789abcdef0123456789abcdef'
+  (self.root/'assets/moved').mkdir()
+  prefab=self.root/'assets/moved/Coin.prefab.toml'
+  prefab.write_text('[[entities]]\nname="Coin"\n[entities.sprite]\n',encoding='utf-8')
+  (self.root/'asset-catalog.toml').write_text('version=1\n[[assets]]\nuid="'+uid+'"\npath="assets/moved/Coin.prefab.toml"\n',encoding='utf-8')
+  for language,source,call in (('rust','src/lib.rs','ctx.instantiate_prefab'),('csharp','Main.cs','Scene.Instantiate')):
+   (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust',language),encoding='utf-8')
+   (self.root/'scripts/AetherGame.csproj').write_text('<Project/>',encoding='utf-8')
+   for reference in ('uid://'+uid,'project://assets/moved/Coin.prefab.toml'):
+    with self.subTest(language=language,reference=reference):
+     (self.root/'scripts'/source).write_text(call+'("'+reference+'")',encoding='utf-8')
+     self.assertIn(prefab.resolve(),self.api.preflight(self.root)['files'])
+   (self.root/'scripts'/source).write_text(call+'("uid://ffffffffffffffffffffffffffffffff")',encoding='utf-8')
+   self.expect('WEB_ASSET_MISSING')
  def test_authored_graphics_keep_browser_names_and_false_zero_values(self):
   graphics='[graphics]\nexposureKey=0.06\nGTAOSTRENGTH=0.65\nautoExposure=false\nbloomStrength=0\nexposure=0.85\ntonemap="AgX"\n'
   (self.root/'ProjectSettings.toml').write_text(self.settings+graphics,encoding='utf-8')

@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -26,7 +27,10 @@ namespace aether
 
 		[[nodiscard]] bool GetBool(std::string_view key, bool defaultValue) const;
 		[[nodiscard]] float GetFloat(std::string_view key, float defaultValue) const;
+		// Only TOML integer and floating-point nodes are accepted, not numeric strings.
+		[[nodiscard]] std::optional<double> GetNumber(std::string_view key) const;
 		[[nodiscard]] std::string GetString(std::string_view key, std::string_view defaultValue = {}) const;
+		[[nodiscard]] std::string GetRawString(std::string_view key, std::string_view defaultValue = {}) const;
 
 		void Set(std::string_view key, bool value);
 		void Set(std::string_view key, float value);

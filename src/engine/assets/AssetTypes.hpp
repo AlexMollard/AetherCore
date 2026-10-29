@@ -7,6 +7,7 @@
 #include <string_view>
 #include <utility>
 
+#include "io/FileSystem.hpp"
 #include "assets/AssetId.hpp"
 #include "utils/Hash.hpp"
 
@@ -84,7 +85,7 @@ namespace aether
 	};
 
 	// invalid id (0) is never produced.
-	[[nodiscard]] inline AssetId ComputeAssetId(const AssetSource& source) noexcept
+	[[nodiscard]] inline AssetId ComputeAssetId(const AssetSource& source)
 	{
 		utils::Fnv1aHasher hasher;
 		const std::uint8_t typeByte = static_cast<std::uint8_t>(source.type);
@@ -92,7 +93,10 @@ namespace aether
 		hasher.MixValue(typeByte);
 		hasher.MixValue(builtinByte);
 		hasher.MixValue(source.subIndex);
-		hasher.Mix(source.path);
+		if (!source.builtin && source.path.starts_with("project://"))
+			hasher.Mix(io::FileSystem::AssetReference(source.path));
+		else
+			hasher.Mix(source.path);
 
 		const std::uint64_t h = hasher.Value();
 		return AssetId{h == 0 ? 1ull : h}; // never collide with the invalid sentinel

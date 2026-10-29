@@ -5,6 +5,7 @@
 
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scene/Components.hpp"
+#include "io/FileSystem.hpp"
 #include "scene/World.hpp"
 
 namespace aether
@@ -58,19 +59,44 @@ namespace aether
 		{
 			return AssetId{};
 		}
-		const AssetId id = ComputeAssetId(source);
+		std::string resolved;
+		if (!source.builtin && source.path.starts_with("uid://"))
+		{
+			resolved = io::FileSystem::ResolveAssetPath(source.path);
+			if (resolved.empty()) return AssetId{};
+		}
+		AssetId id = ComputeAssetId(source);
 		auto it = m_entries.find(id);
+		if (it == m_entries.end() && !source.builtin)
+		{
+			const std::string_view path = resolved.empty() ? std::string_view(source.path) : std::string_view(resolved);
+			for (auto candidate = m_entries.begin(); candidate != m_entries.end(); ++candidate)
+			{
+				const auto& existing = candidate->second.source;
+				if (!existing.builtin && existing.type == source.type && existing.subIndex == source.subIndex && existing.path == path)
+				{
+					it = candidate;
+					id = candidate->first;
+					break;
+				}
+			}
+		}
 		if (it == m_entries.end())
 		{
 			Entry entry;
 			entry.source = source;
+			if (!resolved.empty())
+				entry.source.path = resolved;
 			entry.displayName = displayName.empty() ? source.path : displayName;
 			m_entries.emplace(id, std::move(entry));
 			m_order.push_back(id);
 		}
-		else if (it->second.displayName.empty() && !displayName.empty())
+		else
 		{
-			it->second.displayName = std::move(displayName);
+			if (!source.builtin)
+				it->second.source.path = resolved.empty() ? source.path : resolved;
+			if (it->second.displayName.empty() && !displayName.empty())
+				it->second.displayName = std::move(displayName);
 		}
 		return id;
 	}
@@ -117,12 +143,23 @@ namespace aether
 		}
 	}
 
+	void AssetDatabase::RetargetPaths(std::string_view oldVfs, std::string_view newVfs)
+	{
+		for (auto& [id, entry]: m_entries)
+		{
+			if (!entry.source.builtin && (entry.source.path == oldVfs ||
+			        (entry.source.path.starts_with(oldVfs) && entry.source.path.size() > oldVfs.size() && entry.source.path[oldVfs.size()] == '/')))
+				entry.source.path = std::string(newVfs) + entry.source.path.substr(oldVfs.size());
+		}
+	}
+
 	std::size_t AssetDatabase::TouchByPath(const std::string& path)
 	{
 		std::size_t touched = 0;
 		for (auto& [id, entry]: m_entries)
 		{
-			if (entry.source.path == path)
+			if (entry.source.path == path || (!entry.source.builtin &&
+			        io::FileSystem::AssetReference(entry.source.path) == io::FileSystem::AssetReference(path)))
 			{
 				++entry.generation;
 				++touched;

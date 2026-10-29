@@ -18,6 +18,7 @@
 #include "KenneyImport.hpp"
 #include "MaterialImporter.hpp"
 #include "MeshProcessor.hpp"
+#include "assets/AssetCatalog.hpp"
 
 using namespace aether::assetpipeline;
 
@@ -123,6 +124,9 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 		std::cerr << "       AssetPacker bake-font <ttf> <outDir>\n";
 		std::cerr << "       AssetPacker bake <gltf-or-glb-path> <project-root>\n";
 		std::cerr << "       AssetPacker bake-all <project-root>\n";
+		std::cerr << "       AssetPacker migrate-assets <project-root> [--apply]\n";
+		std::cerr << "       AssetPacker move-asset <project-root> <source-relative> <destination-relative>\n";
+		std::cerr << "       AssetPacker asset-references <project-root> <uid-or-project-path>\n";
 		std::cerr << "       AssetPacker kenney list-packs|list-models|import ... (see 'AssetPacker kenney' with no args)\n";
 		return std::nullopt;
 	}
@@ -563,6 +567,92 @@ static int RunBakeAllCommand(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
+	if (argc >= 2 && std::string_view(argv[1]) == "migrate-assets")
+	{
+		if (argc < 3 || argc > 4 || (argc == 4 && std::string_view(argv[3]) != "--apply"))
+		{
+			std::cerr << "Usage: AssetPacker migrate-assets <project-root> [--apply]\n";
+			return 1;
+		}
+		const bool apply = argc == 4;
+		if (apply)
+		{
+			const auto baked = BakeAllModels(fs::path(argv[2]));
+			if (baked.failed != 0)
+			{
+				for (const auto& failure: baked.failures)
+				{
+					std::cerr << "Asset migration bake failed: " << failure << "\n";
+				}
+				return 1;
+			}
+		}
+		const auto report = aether::AssetCatalog::Migrate(fs::path(argv[2]), apply);
+		if (!report)
+		{
+			std::cerr << "Asset migration failed: " << report.error().message << "\n";
+			return 1;
+		}
+		for (const auto& change: report->changes)
+		{
+			std::cout << change << "\n";
+		}
+		if (apply && !report->backupDirectory.empty())
+		{
+			std::cout << "Backup: " << report->backupDirectory.generic_string() << "\n";
+		}
+		std::cout << (apply ? "Migration applied\n" : "Preview only; use --apply to migrate\n");
+		return 0;
+	}
+	if (argc >= 2 && std::string_view(argv[1]) == "move-asset")
+	{
+		if (argc != 5)
+		{
+			std::cerr << "Usage: AssetPacker move-asset <project-root> <source-relative> <destination-relative>\n";
+			return 1;
+		}
+		auto catalog = aether::AssetCatalog::Load(fs::path(argv[2]));
+		if (!catalog)
+		{
+			std::cerr << "Cannot load asset identities: " << catalog.error().message << "\n";
+			return 1;
+		}
+		const auto moved = catalog->Move(fs::path(argv[3]), fs::path(argv[4]));
+		if (!moved)
+		{
+			std::cerr << "Asset move failed: " << moved.error().message << "\n";
+			return 1;
+		}
+		std::cout << "Moved " << argv[3] << " -> " << argv[4] << "\n";
+		return 0;
+	}
+	if (argc >= 2 && std::string_view(argv[1]) == "asset-references")
+	{
+		if (argc != 4)
+		{
+			std::cerr << "Usage: AssetPacker asset-references <project-root> <uid-or-project-path>\n";
+			return 1;
+		}
+		const auto catalog = aether::AssetCatalog::Load(fs::path(argv[2]));
+		if (!catalog)
+		{
+			std::cerr << catalog.error().message << "\n";
+			return 1;
+		}
+		const auto references = catalog->References(argv[3]);
+		if (!references)
+		{
+			std::cerr << references.error().message << "\n";
+			return 1;
+		}
+		nlohmann::json result = nlohmann::json::array();
+		for (const auto& reference: *references)
+		{
+			result.push_back({{"document", reference.document}, {"field", reference.field}, {"uid", reference.uid}});
+		}
+		std::cout << result.dump(2) << "\n";
+		return 0;
+	}
 	if (argc >= 2 && std::string(argv[1]) == "kenney")
 	{
 		return RunKenneyCommand(argc, argv, 2);

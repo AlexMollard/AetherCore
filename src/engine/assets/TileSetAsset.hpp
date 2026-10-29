@@ -81,7 +81,7 @@ namespace aether
 
 	struct TileSetAsset
 	{
-		static constexpr std::uint32_t kSchemaVersion = 1;
+		static constexpr std::uint32_t kSchemaVersion = 2;
 
 		std::uint32_t schemaVersion = kSchemaVersion;
 		std::string name = "Tile Set";

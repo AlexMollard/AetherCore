@@ -84,7 +84,7 @@ namespace aether
 	// binary file (magic "ATLM", zstd-compressed chunks), never in scene TOML.
 	struct TileMapAsset
 	{
-		static constexpr std::uint32_t kFormatVersion = 1;
+		static constexpr std::uint32_t kFormatVersion = 2;
 
 		std::string tileSetPath;
 		float cellSize = 1.0f; // mirrored from the tileset when bound
@@ -110,8 +110,13 @@ namespace aether
 		[[nodiscard]] std::size_t TotalCellCount() const noexcept; // non-empty cells across layers
 
 		[[nodiscard]] Expected<void> Save(const std::filesystem::path& path) const;
+		// Writes tileSetPath verbatim for explicit migration staging.
+		[[nodiscard]] Expected<void> SaveRaw(const std::filesystem::path& path) const;
 		[[nodiscard]] static Expected<TileMapAsset> Load(const std::filesystem::path& path);
+	private:
+		[[nodiscard]] Expected<void> SaveImpl(const std::filesystem::path& path, bool encodeReferences) const;
 	};
+
 
 	// Cell -> chunk mapping (floor division so negative cells map correctly).
 	[[nodiscard]] constexpr std::int32_t TileFloorDiv(std::int32_t value, std::int32_t divisor) noexcept

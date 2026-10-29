@@ -185,7 +185,7 @@ namespace aether::editor
 		// that baking never disturbs what the Material window is showing.
 		void PumpMaterialThumbnailBakes(app::LayerContext& context);
 		void DrawFileRow(app::LayerContext& context, const Entry& entry);
-		bool DrawActiveRename(const Entry& entry);
+		bool DrawActiveRename(app::LayerContext& context, const Entry& entry);
 		void DrawSearchResults(app::LayerContext& context, const Entry& entry);
 		bool DrawRowContextMenu(app::LayerContext& context, const Entry& entry);
 		void DrawPendingPopups(app::LayerContext& context);
@@ -194,10 +194,9 @@ namespace aether::editor
 		bool CreateAsset(NewAssetKind kind, const std::filesystem::path& dir);
 
 		void BeginRename(const Entry& entry);
-		bool ApplyRename(const std::filesystem::path& target, std::string_view newName);
-		// Point every scene / prefab / material that referenced a renamed asset at its new
-		// path. Returns how many files were rewritten.
-		int RetargetAssetReferences(const std::filesystem::path& oldPath, const std::filesystem::path& newPath);
+		bool ApplyRename(app::LayerContext& context, const std::filesystem::path& target, std::string_view newName);
+		// Move the file and its identity together; unmigrated projects are read-only here.
+		bool RelocateAsset(app::LayerContext& context, const std::filesystem::path& oldPath, const std::filesystem::path& newPath);
 
 		// "project://..." for a path inside the project, or empty for one outside it.
 		[[nodiscard]] std::string VfsPathFor(const std::filesystem::path& path) const;
@@ -206,10 +205,8 @@ namespace aether::editor
 		// dialog warns with.
 		[[nodiscard]] int CountAssetReferences(const std::filesystem::path& target, bool isDirectory) const;
 		bool DuplicateEntry(const std::filesystem::path& target);
-		// Move an asset into another folder, repointing everything that referenced it. This is
-		// the same problem rename solves, so it shares rename's retargeting rather than
-		// growing a second answer to it.
-		bool MoveEntry(const std::filesystem::path& source, const std::filesystem::path& destDir);
+		// Rename and drag/drop share the same catalog transaction.
+		bool MoveEntry(app::LayerContext& context, const std::filesystem::path& source, const std::filesystem::path& destDir);
 		// A folder row or tile as a drop target. Returns true when something was moved.
 		bool AcceptFileDropIntoFolder(app::LayerContext& context, const std::filesystem::path& destDir);
 		// The physical path behind a "project://..." payload, or empty when it is outside.

@@ -10,6 +10,7 @@
 #include <optional>
 #include <string_view>
 #include <filesystem>
+#include <initializer_list>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -21,6 +22,7 @@
 #include "utils/BinaryReader.hpp"
 #include "utils/BinaryWriter.hpp"
 
+#include "io/FileSystem.hpp"
 #include "scene/TagSlots.hpp"
 #include "scene/World.hpp"
 #include "scene/reflection/Reflection.hpp"
@@ -224,6 +226,178 @@ namespace aether::app::scene
 					migration.apply(root);
 				}
 			}
+		}
+
+		constexpr int kPrefabFormatVersion = 1;
+		constexpr int kComponentFormatVersion = 1;
+
+		bool SupportedVersion(const toml::table& table, std::string_view key, int current)
+		{
+			const auto node = table[key];
+			if (!node)
+			{
+				return true; // Headerless legacy documents and components are v1.
+			}
+			const auto version = node.value<std::int64_t>();
+			return node.is_integer() && version && *version >= 1 && *version <= current;
+		}
+
+		bool ValidateEntityComponents(const toml::table& entity)
+		{
+			for (const auto& [key, node]: entity)
+			{
+				if (const auto* component = node.as_table())
+				{
+					if (!SupportedVersion(*component, "schema_version", kComponentFormatVersion))
+					{
+						return false;
+					}
+				}
+				else if (key == "scripts")
+				{
+					if (const auto* scripts = node.as_array())
+					{
+						for (const auto& script: *scripts)
+						{
+							if (const auto* scriptComponent = script.as_table(); scriptComponent && !SupportedVersion(*scriptComponent, "schema_version", kComponentFormatVersion))
+							{
+								return false;
+							}
+						}
+					}
+				}
+			}
+			return true;
+		}
+
+		bool ValidateEntityArray(const toml::array* entities)
+		{
+			if (entities)
+			{
+				for (const auto& node: *entities)
+				{
+					if (const auto* entity = node.as_table(); entity && !ValidateEntityComponents(*entity))
+					{
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		bool ValidateComponentVersions(const toml::table& root)
+		{
+			if (!ValidateEntityArray(root["entities"].as_array()))
+			{
+				return false;
+			}
+			if (const auto* instances = root["prefab_instances"].as_array())
+			{
+				for (const auto& node: *instances)
+				{
+					if (const auto* instance = node.as_table())
+					{
+						if (!ValidateEntityArray((*instance)["added"].as_array()) ||
+						    !ValidateEntityArray((*instance)["overrides"].as_array()))
+						{
+							return false;
+						}
+					}
+				}
+			}
+			return true;
+		}
+
+		bool RewriteAssetValue(toml::table& table, std::string_view key, bool encode)
+		{
+			auto* value = table[key].as_string();
+			if (!value) return true;
+			std::string& text = value->get();
+			if (encode && text.starts_with("project://"))
+				text = io::FileSystem::AssetReference(text);
+			if (text.starts_with("uid://") && io::FileSystem::ResolveAssetPath(text).empty())
+				return false;
+			return true;
+		}
+
+		bool RewriteAssetReferences(toml::table& root, bool encode)
+		{
+			const auto entity = [encode](toml::table& record)
+			{
+				const auto component = [&](std::string_view name, std::initializer_list<std::string_view> fields)
+				{
+					if (auto* table = record[name].as_table())
+					{
+						for (const auto field: fields)
+						{
+							if (!RewriteAssetValue(*table, field, encode))
+							{
+								return false;
+							}
+						}
+					}
+					return true;
+				};
+				return component("mesh", {"path"})
+				       && component("material", {"asset", "albedo", "normal", "metallic_roughness", "occlusion_tex", "emissive_tex"})
+				       && component("physics", {"mesh_source"}) && component("ui_image", {"texture"})
+				       && component("sprite", {"texture", "atlas"}) && component("sprite_animator", {"animation"})
+				       && component("tile_map", {"tilemap"}) && component("grass", {"surface_mesh", "exclusion_mesh"})
+				       && component("particles", {"texture"}) && component("audio_source", {"clipPath", "clippath", "clip_path"})
+				       && component("ui_text", {"font"}) && component("ui_button", {"font"}) && component("ui_text_box", {"font"});
+			};
+			const auto entities = [&entity](toml::array* array)
+			{
+				if (array)
+					for (auto& node: *array)
+						if (auto* table = node.as_table(); table && !entity(*table)) return false;
+				return true;
+			};
+			if (!entities(root["entities"].as_array())) return false;
+			if (auto* assets = root["assets"].as_array())
+				for (auto& node: *assets)
+					if (auto* table = node.as_table(); table && !RewriteAssetValue(*table, "path", encode)) return false;
+			if (auto* instances = root["prefab_instances"].as_array())
+				for (auto& node: *instances)
+					if (auto* table = node.as_table(); table &&
+					    (!entities((*table)["added"].as_array()) || !entities((*table)["overrides"].as_array()))) return false;
+			return true;
+		}
+
+		bool RewriteNamedReferences(toml::table& root, bool encode)
+		{
+			const auto rewrite = [encode](toml::table& entry, std::string_view key, std::string_view directory, std::string_view suffix)
+			{
+				auto* value = entry[key].as_string();
+				if (!value) return true;
+				std::string& name = value->get();
+				if (encode && name.starts_with("project://"))
+					name = io::FileSystem::AssetReference(name);
+				else if (encode && !name.empty() && !name.contains("://"))
+				{
+					const std::string reference = io::FileSystem::AssetReference(std::string(directory) + name + std::string(suffix));
+					if (reference.starts_with("uid://")) name = reference;
+				}
+				if (name.starts_with("uid://") || name.starts_with("project://"))
+				{
+					const std::string path = io::FileSystem::ResolveAssetPath(name);
+					if (!path.starts_with("project://") || !path.ends_with(suffix) || path.size() <= std::string_view("project://").size() + suffix.size()) return false;
+				}
+				return true;
+			};
+			for (const auto& [arrayName, key, directory, suffix]: {
+			             std::array<std::string_view, 4>{"prefab_instances", "prefab", "project://assets/prefabs/", ".prefab.toml"},
+			             std::array<std::string_view, 4>{"includes", "scene", "project://scenes/", ".scene.toml"}})
+			{
+				if (auto* entries = root[arrayName].as_array())
+				{
+					for (auto& node: *entries)
+					{
+						if (auto* entry = node.as_table(); entry && !rewrite(*entry, key, directory, suffix)) return false;
+					}
+				}
+			}
+			return true;
 		}
 
 		const char* ShapeName(PhysicsShapeType t)
@@ -915,6 +1089,12 @@ namespace aether::app::scene
 			header.insert("features", SceneFeaturesToToml(scene.features));
 			root.insert("scene", std::move(header));
 		}
+		else
+		{
+			toml::table header;
+			header.insert("version", kPrefabFormatVersion);
+			root.insert("prefab", std::move(header));
+		}
 
 		if (scene.environment)
 		{
@@ -1036,6 +1216,7 @@ namespace aether::app::scene
 				m.insert("kind", rec.mesh->kind == MeshSourceComponent::Kind::Model ? "model" : "primitive");
 				m.insert("path", rec.mesh->path);
 				m.insert("index", static_cast<std::int64_t>(rec.mesh->primitiveIndex));
+				if (!rec.mesh->primitiveKey.empty()) m.insert("primitive_key", rec.mesh->primitiveKey);
 				t.insert("mesh", std::move(m));
 			}
 			if (rec.material)
@@ -1325,6 +1506,26 @@ namespace aether::app::scene
 				}
 				t.insert("script_joints", std::move(joints));
 			}
+			for (auto& [key, node]: t)
+			{
+				if (auto* component = node.as_table())
+				{
+					component->insert_or_assign("schema_version", kComponentFormatVersion);
+				}
+				else if (key == "scripts")
+				{
+					if (auto* scripts = node.as_array())
+					{
+						for (auto& script: *scripts)
+						{
+							if (auto* scriptComponent = script.as_table())
+							{
+								scriptComponent->insert_or_assign("schema_version", kComponentFormatVersion);
+							}
+						}
+					}
+				}
+			}
 			return t;
 		};
 
@@ -1448,6 +1649,8 @@ namespace aether::app::scene
 
 		// Normalize every float to its shortest float32 representation so both the TOML
 		// text and the cooked binary (both built from this tree) are clean and stable.
+		RewriteAssetReferences(root, true);
+		RewriteNamedReferences(root, true);
 		CleanFloatsInTree(root);
 		return root;
 	}
@@ -1471,6 +1674,18 @@ namespace aether::app::scene
 	// text parser and the binary reader, which decodes the same document tree).
 	std::optional<SceneDescription> BuildSceneFromToml(toml::table root)
 	{
+		if ((root.contains("scene") && (!root["scene"].is_table() || !SupportedVersion(*root["scene"].as_table(), "version", kSceneFormatVersion))) ||
+		    (root.contains("prefab") && (!root["prefab"].is_table() || !SupportedVersion(*root["prefab"].as_table(), "version", kPrefabFormatVersion))) ||
+		    !ValidateComponentVersions(root))
+		{
+			AE_WARN(LogCategory::App, "Unsupported or malformed scene, prefab or component schema version");
+			return std::nullopt;
+		}
+		if (!RewriteNamedReferences(root, false) || !RewriteAssetReferences(root, false))
+		{
+			AE_WARN(LogCategory::App, "Scene references an unresolved asset UID");
+			return std::nullopt;
+		}
 		const int sourceVersion = static_cast<int>(root["scene"]["version"].value_or(std::int64_t{1}));
 		ApplySceneMigrations(root, sourceVersion);
 
@@ -1650,6 +1865,7 @@ namespace aether::app::scene
 				ms.kind = mv["kind"].value_or(std::string{"primitive"}) == "model" ? MeshSourceComponent::Kind::Model : MeshSourceComponent::Kind::Primitive;
 				ms.path = mv["path"].value_or(std::string{});
 				ms.primitiveIndex = static_cast<std::uint32_t>(mv["index"].value_or(std::int64_t{0}));
+				ms.primitiveKey = mv["primitive_key"].value_or(std::string{});
 				rec.mesh = std::move(ms);
 			}
 			if (const auto* m = tv["material"].as_table())

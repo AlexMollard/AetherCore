@@ -44,6 +44,8 @@ namespace aether
 
 		std::size_t TouchByPath(const std::string& path);
 
+		void RetargetPaths(std::string_view oldVfs, std::string_view newVfs);
+
 		void ResolveWorldMeshes(World& world);
 
 		[[nodiscard]] const Mesh* ResolveMesh(AssetId id) const;

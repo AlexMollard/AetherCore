@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "assets/AssetCatalog.hpp"
 #include "utils/AetherExceptions.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/Assert.hpp"
@@ -40,6 +41,8 @@ namespace aether::io
 			std::map<std::string, std::shared_ptr<IFileBackend>, std::less<>> mounts;
 			std::mutex mountsMutex;
 			std::unique_ptr<IoExecutor> ioThread;
+			std::mutex catalogMutex;
+			std::optional<AssetCatalog> catalog;
 
 			// does so before any other thread can be touching s_backend. Every
 			std::optional<OverlayBackend::Layer> engineShaderLayer;
@@ -483,8 +486,19 @@ namespace aether::io
 		}
 
 		AE_INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, PlatformPaths::PathToUtf8(physicalPath));
-		const std::scoped_lock lock(s_backend->mountsMutex);
-		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<DirectoryBackend>(std::move(physicalPath)));
+		{
+			const std::scoped_lock lock(s_backend->mountsMutex);
+			s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<DirectoryBackend>(std::move(physicalPath)));
+		}
+		if (mountPoint == "project")
+		{
+			{
+				const std::scoped_lock lock(s_backend->catalogMutex);
+				s_backend->catalog.reset();
+			}
+			if (auto result = ReloadAssetCatalog(); !result)
+				AE_WARN(LogCategory::FileSystem, "Could not load asset catalog: {}", result.error().ToString());
+		}
 	}
 
 	void FileSystem::MountPak(std::string_view mountPoint, std::filesystem::path pakPath)
@@ -496,8 +510,19 @@ namespace aether::io
 		}
 
 		AE_INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, PlatformPaths::PathToUtf8(pakPath));
-		const std::scoped_lock lock(s_backend->mountsMutex);
-		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<PakBackend>(std::move(pakPath)));
+		{
+			const std::scoped_lock lock(s_backend->mountsMutex);
+			s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<PakBackend>(std::move(pakPath)));
+		}
+		if (mountPoint == "project")
+		{
+			{
+				const std::scoped_lock lock(s_backend->catalogMutex);
+				s_backend->catalog.reset();
+			}
+			if (auto result = ReloadAssetCatalog(); !result)
+				AE_WARN(LogCategory::FileSystem, "Could not load asset catalog: {}", result.error().ToString());
+		}
 	}
 
 	namespace
@@ -533,6 +558,41 @@ namespace aether::io
 		return s_shaderOverlayGen.load(std::memory_order_relaxed);
 	}
 
+	Expected<void> FileSystem::ReloadAssetCatalog()
+	{
+		if (!s_backend)
+			AE_UNEXPECTED(AetherError::FileSystem("File system is not initialized"));
+		auto backend = TryResolveBackend("project");
+		std::optional<AssetCatalog> catalog;
+		if (backend && backend->Exists("asset-catalog.toml"))
+		{
+			AE_TRY(bytes, backend->Read("asset-catalog.toml"));
+			AE_TRY(parsed, AssetCatalog::Parse(std::string_view(reinterpret_cast<const char*>(bytes->data()), bytes->size())));
+			catalog = std::move(*parsed);
+		}
+		const std::scoped_lock lock(s_backend->catalogMutex);
+		s_backend->catalog = std::move(catalog);
+		return {};
+	}
+
+	std::string FileSystem::ResolveAssetPath(std::string_view path)
+	{
+		if (!path.starts_with("uid://"))
+			return std::string(path);
+		if (!s_backend)
+			return {};
+		const std::scoped_lock lock(s_backend->catalogMutex);
+		return s_backend->catalog ? s_backend->catalog->Resolve(path) : std::string{};
+	}
+
+	std::string FileSystem::AssetReference(std::string_view path)
+	{
+		if (!path.starts_with("project://") || !s_backend)
+			return std::string(path);
+		const std::scoped_lock lock(s_backend->catalogMutex);
+		return s_backend->catalog ? s_backend->catalog->Reference(path) : std::string(path);
+	}
+
 	std::string FileSystem::ResolveRelative(std::string_view basePath, std::string_view relativePath)
 	{
 		if (relativePath.empty())
@@ -541,10 +601,12 @@ namespace aether::io
 		}
 		if (relativePath.contains("://"))
 		{
-			return std::string(relativePath);
+			return ResolveAssetPath(relativePath);
 		}
 
-		const std::string base(basePath);
+		const std::string base = ResolveAssetPath(basePath);
+		if (basePath.starts_with("uid://") && base.empty())
+			return {};
 		const std::size_t mountPos = base.find("://");
 		if (mountPos == std::string::npos)
 		{
@@ -565,6 +627,13 @@ namespace aether::io
 			AE_ASSERT_ALWAYS(false, "FileSystem::Exists() called before Initialize().");
 		}
 
+		std::string resolved;
+		if (virtualPath.starts_with("uid://"))
+		{
+			resolved = ResolveAssetPath(virtualPath);
+			if (resolved.empty()) return false;
+			virtualPath = resolved;
+		}
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		const auto backend = TryResolveBackend(mountPoint);
 		return backend != nullptr && backend->Exists(relativePath);
@@ -578,6 +647,13 @@ namespace aether::io
 			AE_ASSERT_ALWAYS(false, "FileSystem::ReadFile() called before Initialize().");
 		}
 
+		std::string resolved;
+		if (virtualPath.starts_with("uid://"))
+		{
+			resolved = ResolveAssetPath(virtualPath);
+			if (resolved.empty()) AE_UNEXPECTED(AetherError::FileSystem("Unknown asset UID: " + std::string(virtualPath)));
+			virtualPath = resolved;
+		}
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		AE_VERBOSE(LogCategory::FileSystem, "ReadFile: {}", virtualPath);
 		const auto backend = TryResolveBackend(mountPoint);
@@ -601,6 +677,13 @@ namespace aether::io
 			AE_ASSERT_ALWAYS(false, "FileSystem::WriteFile() called before Initialize().");
 		}
 
+		std::string resolved;
+		if (virtualPath.starts_with("uid://"))
+		{
+			resolved = ResolveAssetPath(virtualPath);
+			if (resolved.empty()) AE_UNEXPECTED(AetherError::FileSystem("Unknown asset UID: " + std::string(virtualPath)));
+			virtualPath = resolved;
+		}
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		AE_VERBOSE(LogCategory::FileSystem, "WriteFile: {}", virtualPath);
 		const auto backend = TryResolveBackend(mountPoint);
@@ -624,6 +707,13 @@ namespace aether::io
 			AE_ASSERT_ALWAYS(false, "FileSystem::OpenStream() called before Initialize().");
 		}
 
+		std::string resolved;
+		if (virtualPath.starts_with("uid://"))
+		{
+			resolved = ResolveAssetPath(virtualPath);
+			if (resolved.empty()) AE_UNEXPECTED(AetherError::FileSystem("Unknown asset UID: " + std::string(virtualPath)));
+			virtualPath = resolved;
+		}
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		AE_VERBOSE(LogCategory::FileSystem, "OpenStream: {}", virtualPath);
 		const auto backend = TryResolveBackend(mountPoint);
@@ -665,6 +755,13 @@ namespace aether::io
 		if (s_backend == nullptr)
 		{
 			return 0;
+		}
+		std::string resolved;
+		if (virtualPath.starts_with("uid://"))
+		{
+			resolved = ResolveAssetPath(virtualPath);
+			if (resolved.empty()) return 0;
+			virtualPath = resolved;
 		}
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		const auto backend = TryResolveBackend(mountPoint);

@@ -215,7 +215,7 @@ namespace aether::assets
 			SkelHeaderDisk hdr;
 			// TryRead, not Read: see LoadFromMesh's own comment on why - SkelHeaderDisk
 			// also default-initialises magic/version to its own valid values.
-			if (!reader.TryRead(hdr) || !CheckMagic(hdr))
+			if (!reader.TryRead(hdr) || !CheckMagic(hdr) || hdr.version != SKEL_VERSION)
 			{
 				AE_WARN(LogCategory::Engine, "Invalid skeleton magic: {}", skelPath);
 				return false;
@@ -366,7 +366,7 @@ namespace aether::assets
 			hdr.channelCount = v1Hdr.channelCount;
 			hdr.nameLen = v1Hdr.nameLen;
 
-			if (!CheckMagic(hdr))
+			if (!CheckMagic(hdr) || hdr.version < 1 || hdr.version > ANIM_VERSION)
 			{
 				AE_WARN(LogCategory::Engine, "Invalid animation magic: {}", animPath);
 				return anim;
@@ -552,8 +552,8 @@ namespace aether::assets
 			}
 
 			BinaryReader reader(*animSetData);
-			auto asetHdr = reader.Read<AnimSetHeaderDisk>();
-			if (!CheckMagic(asetHdr))
+			AnimSetHeaderDisk asetHdr;
+			if (!reader.TryRead(asetHdr) || !CheckMagic(asetHdr) || asetHdr.version != ASET_VERSION)
 			{
 				return false;
 			}
@@ -615,7 +615,7 @@ namespace aether::assets
 			// TryRead, not Read: see LoadFromMesh's own comment on why -
 			// MaterialHeaderDisk also default-initialises magic/version to its own
 			// valid values.
-			if (!reader.TryRead(hdr) || !CheckMagic(hdr))
+			if (!reader.TryRead(hdr) || !CheckMagic(hdr) || hdr.version < 1 || hdr.version > MATL_VERSION)
 			{
 				return false;
 			}
@@ -684,7 +684,7 @@ namespace aether::assets
 			{
 				AE_UNEXPECTED(AetherError::Asset("invalid mesh magic: " + std::string(meshVfsPath)));
 			}
-			if (hdr.version != MESH_VERSION)
+			if (hdr.version != 3 && hdr.version != MESH_VERSION)
 			{
 				AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(MESH_VERSION) + ") for '" + std::string(meshVfsPath) + "'. Re-run AssetPacker."));
 			}
@@ -742,10 +742,27 @@ namespace aether::assets
 				}
 			}
 
+			if (static_cast<std::uint64_t>(reader.Remaining()) < static_cast<std::uint64_t>(hdr.subMeshCount) * sizeof(SubMeshHeaderDisk))
+				AE_UNEXPECTED(AetherError::Asset("truncated mesh subheaders: " + std::string(meshVfsPath)));
 			std::vector<SubMeshHeaderDisk> subMeshes(hdr.subMeshCount);
 			for (uint32_t sm = 0; sm < hdr.subMeshCount; ++sm)
 			{
 				subMeshes[sm] = reader.Read<SubMeshHeaderDisk>();
+			}
+			std::vector<std::string> primitiveKeys(hdr.subMeshCount);
+			if (hdr.version >= 4)
+			{
+				for (auto& key : primitiveKeys)
+				{
+					std::uint16_t length = 0;
+					if (!reader.TryRead(length) || !reader.CanRead(length))
+						AE_UNEXPECTED(AetherError::Asset("truncated mesh primitive key: " + std::string(meshVfsPath)));
+					key.resize(length);
+					if (length != 0)
+						reader.ReadRaw(key.data(), length);
+					if (key.empty())
+						key = "unidentified";
+				}
 			}
 			for (uint32_t sm = 0; sm < hdr.subMeshCount; ++sm)
 			{
@@ -796,6 +813,8 @@ namespace aether::assets
 					prim.nodeIndex = 0;
 					prim.materialIndex = (smHdr.materialIndex < hdr.materialCount) ? static_cast<int32_t>(smHdr.materialIndex) : static_cast<int32_t>(hdr.materialCount > 0 ? 0 : -1);
 					prim.skinIndex = skinIndex;
+					if (hdr.version >= 4)
+						prim.primitiveKey = primitiveKeys[sm];
 
 					uint32_t minVert = UINT32_MAX;
 					uint32_t maxVert = 0;
@@ -842,6 +861,8 @@ namespace aether::assets
 			else
 			{
 				GltfPrimitive prim;
+				if (hdr.version >= 4)
+					prim.primitiveKey = "unidentified";
 				prim.nodeIndex = 0;
 				prim.materialIndex = hdr.materialCount > 0 ? 0 : -1;
 				prim.skinIndex = skinIndex;
@@ -921,7 +942,7 @@ namespace aether::assets
 					// TryRead, not Read: see LoadFromMesh's own comment on why -
 					// AnimSetHeaderDisk also default-initialises magic/version to its
 					// own valid values.
-					if (animSetReader.TryRead(asetHdr) && CheckMagic(asetHdr))
+					if (animSetReader.TryRead(asetHdr) && CheckMagic(asetHdr) && asetHdr.version == ASET_VERSION)
 					{
 						AE_VERBOSE(LogCategory::Engine, "  AnimSet: {} animations, skeletonHash={}", asetHdr.animCount, asetHdr.skeletonHash);
 
@@ -1021,12 +1042,52 @@ namespace aether::assets
 		}
 	} // namespace
 
+	std::string GltfAsset::PrimitiveKey(const GltfPrimitive& primitive)
+	{
+		if (!primitive.primitiveKey.empty())
+			return primitive.primitiveKey;
+		return GeometryPrimitiveKey(primitive);
+	}
+
+	std::string GltfAsset::GeometryPrimitiveKey(const GltfPrimitive& primitive)
+	{
+		std::uint64_t a = 14695981039346656037ull;
+		std::uint64_t b = 7809847782465536322ull;
+		auto add = [&](const void* data, std::size_t size)
+		{
+			const auto* bytes = static_cast<const unsigned char*>(data);
+			for (std::size_t i = 0; i < size; ++i)
+			{
+				a = (a ^ bytes[i]) * 1099511628211ull;
+				b = (b ^ bytes[i]) * 14029467366897019727ull;
+			}
+		};
+		const std::uint64_t vertexCount = primitive.vertices.size();
+		const std::uint64_t indexCount = primitive.indices.size();
+		add(&vertexCount, sizeof(vertexCount));
+		add(&indexCount, sizeof(indexCount));
+		for (const auto& vertex : primitive.vertices)
+			add(&vertex, sizeof(vertex));
+		for (const auto index : primitive.indices)
+			add(&index, sizeof(index));
+		constexpr char hex[] = "0123456789abcdef";
+		std::string key = "geometry:";
+		for (const auto value : {a, b})
+			for (int shift = 60; shift >= 0; shift -= 4)
+				key += hex[(value >> shift) & 15];
+		return key;
+	}
+
 	Expected<GltfAsset> GltfAsset::LoadFromVfsPath(std::string_view path)
 	{
 		AE_PROFILE_ZONE();
 		AE_PROFILE_SET_ZONE_NAME(path.data());
 
-		const std::string vfsPath(path);
+		const std::string vfsPath = io::FileSystem::ResolveAssetPath(path);
+		if (vfsPath.empty())
+		{
+			AE_UNEXPECTED(AetherError::Asset("Unknown asset UID: " + std::string(path)));
+		}
 
 		auto TryMesh = [&](const std::string& meshPath) -> bool
 		{
@@ -1075,11 +1136,18 @@ namespace aether::assets
 
 	Expected<GltfAsset> GltfAsset::LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath)
 	{
-		return LoadFromMesh(meshData, debugPath);
+		const std::string resolved = io::FileSystem::ResolveAssetPath(debugPath);
+		if (resolved.empty() && !debugPath.empty())
+		{
+			AE_UNEXPECTED(AetherError::Asset("Unknown asset UID: " + std::string(debugPath)));
+		}
+		return LoadFromMesh(meshData, resolved);
 	}
 
 	std::string GltfAsset::ResolveMeshPath(std::string_view vfsPath)
 	{
+		const std::string resolved = io::FileSystem::ResolveAssetPath(vfsPath);
+		vfsPath = resolved;
 		const std::size_t ss = vfsPath.find("://");
 		if (ss == std::string_view::npos)
 		{

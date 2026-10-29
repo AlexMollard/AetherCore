@@ -7,16 +7,18 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <toml++/toml.hpp>
+#include "assets/AssetCatalog.hpp"
 
 namespace aether::assetpipeline
 {
 	namespace MaterialProcessor
 	{
-		ByteBuffer Process(std::span<const std::byte> tomlData, const std::filesystem::path& sourcePath, const std::filesystem::path& /*sourceDir*/)
+		ByteBuffer Process(std::span<const std::byte> tomlData, const std::filesystem::path& sourcePath, const std::filesystem::path& sourceDir)
 		{
 			const std::string_view text(reinterpret_cast<const char*>(tomlData.data()), tomlData.size());
 
@@ -29,6 +31,16 @@ namespace aether::assetpipeline
 			{
 				std::cerr << "  MaterialProcessor: TOML parse error in " << sourcePath << ": " << e.description() << "\n";
 				return {};
+			}
+
+			if (const auto* version = tbl["material"]["schema_version"].node())
+			{
+				const auto* integer = version->as_integer();
+				if (integer == nullptr || integer->get() != 1)
+				{
+					std::cerr << "  MaterialProcessor: unsupported material schema version in " << sourcePath << "\n";
+					return {};
+				}
 			}
 
 			// TOML integers are idiomatic for whole values (e.g. roughnessFactor = 0); accept both node kinds.
@@ -125,13 +137,38 @@ namespace aether::assetpipeline
 				auto* const v = tbl["material"]["modulateVertexColor"].as_boolean();
 				return v && v->get();
 			}();
+			std::optional<AssetCatalog> catalog;
+			bool missingReference = false;
+			auto resolveReference = [&](std::string_view value) -> std::string
+			{
+				if (!value.starts_with("uid://")) return std::string(value);
+				if (!catalog)
+				{
+					auto loaded = AssetCatalog::Load(sourceDir);
+					if (!loaded)
+					{
+						std::cerr << "  MaterialProcessor: cannot load asset catalog for " << sourcePath << ": " << loaded.error().ToString() << "\n";
+						missingReference = true;
+						return {};
+					}
+					catalog = std::move(*loaded);
+				}
+				auto path = catalog->Resolve(value);
+				if (path.empty())
+				{
+					std::cerr << "  MaterialProcessor: unresolved asset " << value << " in " << sourcePath << "\n";
+					missingReference = true;
+				}
+				return path;
+			};
+
 
 			std::string shaderVfsPath;
 			{
 				auto* const v = tbl["material"]["shader"].as_string();
 				if (v)
 				{
-					shaderVfsPath = v->get();
+					shaderVfsPath = resolveReference(v->get());
 				}
 			}
 
@@ -148,7 +185,7 @@ namespace aether::assetpipeline
 				auto* const v = tbl["textures"][key].as_string();
 				if (v)
 				{
-					textures.push_back({static_cast<uint8_t>(type), std::string(v->get())});
+					textures.push_back({static_cast<uint8_t>(type), resolveReference(v->get())});
 				}
 			};
 
@@ -157,6 +194,9 @@ namespace aether::assetpipeline
 			addTex("metallicRoughness", TextureTypeDisk::MetallicRoughness);
 			addTex("occlusion", TextureTypeDisk::Occlusion);
 			addTex("emissive", TextureTypeDisk::Emissive);
+			if (missingReference)
+				return {};
+
 
 			MaterialHeaderDisk hdr;
 			std::memcpy(hdr.baseColorFactor, baseColor, sizeof(baseColor));

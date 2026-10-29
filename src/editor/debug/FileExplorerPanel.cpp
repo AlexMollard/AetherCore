@@ -26,6 +26,11 @@
 #include <imgui.h>
 
 #include "assets/AssetManager.hpp"
+#include "assets/AssetCatalog.hpp"
+#include "assets/AssetDatabase.hpp"
+#include "assets/AssetSubsystem.hpp"
+#include "scene/SceneSerializer.hpp"
+#include "io/FileSystem.hpp"
 #include "EditorDragDrop.hpp"
 #include "debug/EditorShortcuts.hpp"
 #include "Icons.hpp"
@@ -33,6 +38,7 @@
 #include "SceneSelection.hpp"
 #include "editor/ModelImport.hpp"
 #include "scene/World.hpp"
+#include "scene/SceneSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ModelBake.hpp"
@@ -215,7 +221,7 @@ namespace aether::editor
 
 		bool IsIgnoredDirectory(const std::string& name)
 		{
-			return name == "bin" || name == "obj" || name == ".git" || name == ".vs" || name == ".idea" || name == ".vscode";
+			return name == "bin" || name == "obj" || name == ".git" || name == ".vs" || name == ".idea" || name == ".vscode" || name == ".asset-migration-backups";
 		}
 
 		void OpenInOS(const std::filesystem::path& path)
@@ -547,7 +553,7 @@ namespace aether::editor
 					dirs.push_back(entry);
 				}
 			}
-			else if (entry.is_regular_file(typeEc))
+			else if (entry.is_regular_file(typeEc) && entry.path().extension() != ".uid" && entry.path().filename() != "asset-catalog.toml")
 			{
 				files.push_back(entry);
 			}
@@ -678,6 +684,28 @@ namespace aether::editor
 		{
 			return 0;
 		}
+		if (const auto catalog = AssetCatalog::Load(m_root))
+		{
+			int references = 0;
+			for (const auto& path: paths)
+			{
+				const auto locations = catalog->References(catalog->Reference(path));
+				if (!locations)
+				{
+					return -1;
+				}
+				for (const auto& reference: *locations)
+				{
+					const auto document = m_root / reference.document;
+					const auto relative = document.lexically_relative(target);
+					if (!isDirectory || !IsSubpath(relative))
+					{
+						++references;
+					}
+				}
+			}
+			return references;
+		}
 
 		int references = 0;
 		for (const auto& entry: std::filesystem::recursive_directory_iterator(m_root, ec))
@@ -708,84 +736,42 @@ namespace aether::editor
 		return references;
 	}
 
-	int FileExplorerPanel::RetargetAssetReferences(const std::filesystem::path& oldPath, const std::filesystem::path& newPath)
+	bool FileExplorerPanel::RelocateAsset(app::LayerContext& context, const std::filesystem::path& oldPath, const std::filesystem::path& newPath)
 	{
-		// Scenes, prefabs and materials refer to assets by "project://" string. Renaming only
-		// the file left all of them pointing at nothing: the scene still loaded, but an entity
-		// inheriting from the asset fell back to defaults with only a log line to say so.
-		std::error_code ec;
-		const std::filesystem::path oldRel = std::filesystem::relative(oldPath, m_root, ec);
-		const std::filesystem::path newRel = std::filesystem::relative(newPath, m_root, ec);
-		if (ec || oldRel.empty() || newRel.empty())
+		auto catalog = AssetCatalog::Load(m_root);
+		if (!catalog)
 		{
-			return 0;
+			m_opError = "Migrate this project's asset identities before moving assets: " + catalog.error().message;
+			return false;
 		}
-		const std::string oldVfs = "project://" + oldRel.generic_string();
-		const std::string newVfs = "project://" + newRel.generic_string();
-		if (oldVfs == newVfs)
+		const auto result = catalog->Move(oldPath.lexically_relative(m_root), newPath.lexically_relative(m_root));
+		if (!result)
 		{
-			return 0;
+			m_opError = result.error().message;
+			return false;
 		}
-
-		int rewritten = 0;
-		for (const auto& entry: std::filesystem::recursive_directory_iterator(m_root, ec))
+		const auto refreshed = io::FileSystem::ReloadAssetCatalog();
+		if (!refreshed)
 		{
-			if (ec)
-			{
-				break;
-			}
-			if (!entry.is_regular_file(ec) || entry.path().extension() != ".toml")
-			{
-				continue;
-			}
-			const auto text = io::file_util::ReadText(entry.path());
-			if (!text)
-			{
-				continue;
-			}
-			std::string updated = *text;
-			bool changed = false;
-			for (std::size_t at = updated.find(oldVfs); at != std::string::npos; at = updated.find(oldVfs, at + newVfs.size()))
-			{
-				// Only a whole quoted path: without this, renaming "Rock" would also rewrite a
-				// reference to "Rock_Wet" that merely starts with the same text.
-				const std::size_t after = at + oldVfs.size();
-				if (after >= updated.size() || (updated[after] != '\'' && updated[after] != '"'))
-				{
-					continue;
-				}
-				updated.replace(at, oldVfs.size(), newVfs);
-				changed = true;
-			}
-			if (!changed || !io::file_util::WriteText(entry.path(), updated))
-			{
-				continue;
-			}
-			++rewritten;
-			// The cooked sibling still holds the old path and is preferred over the .toml, so
-			// leaving it behind would undo the rewrite on the next load.
-			for (const std::string_view cooked: {".scene.bin", ".prefab.bin"})
-			{
-				const std::string name = entry.path().filename().generic_string();
-				const std::string_view suffix = cooked == ".scene.bin" ? ".scene.toml" : ".prefab.toml";
-				if (!name.ends_with(suffix))
-				{
-					continue;
-				}
-				std::filesystem::path bin = entry.path();
-				bin.replace_filename(name.substr(0, name.size() - suffix.size()) + std::string(cooked));
-				std::error_code removeEc;
-				std::filesystem::remove(bin, removeEc);
-			}
+			m_opError = "Asset moved, but the live catalog could not reload: " + refreshed.error().message;
+			return false;
 		}
-		if (rewritten > 0)
+		const auto oldVfs = VfsPathFor(oldPath);
+		const auto newVfs = VfsPathFor(newPath);
+		app::scene::RetargetWorldAssetPaths(context.Get<World>(), oldVfs, newVfs);
+		context.Get<AssetSubsystem>().GetTextureRegistry().RetargetPaths(oldVfs, newVfs);
+		context.Get<AssetDatabase>().RetargetPaths(oldVfs, newVfs);
+		auto& sceneState = context.Get<SceneSubsystem>();
+		const auto& current = sceneState.GetCurrentScene();
+		const auto currentVfs = current.contains("://") ? current : VfsPathFor(std::filesystem::path(app::scene::ScenesDirectory()) / (current + ".scene.toml"));
+		if (currentVfs == oldVfs || (currentVfs.starts_with(oldVfs) && currentVfs.size() > oldVfs.size() && currentVfs[oldVfs.size()] == '/'))
 		{
-			AE_INFO(LogCategory::App, "Renamed '{}' -> '{}'; updated references in {} file(s).", oldVfs, newVfs, rewritten);
+			sceneState.SetCurrentScene(io::FileSystem::AssetReference(newVfs + currentVfs.substr(oldVfs.size())));
 		}
-		return rewritten;
+		return true;
 	}
 
-	bool FileExplorerPanel::ApplyRename(const std::filesystem::path& target, std::string_view newName)
+	bool FileExplorerPanel::ApplyRename(app::LayerContext& context, const std::filesystem::path& target, std::string_view newName)
 	{
 		const std::string trimmed = TrimCopy(newName);
 		if (trimmed.empty() || trimmed.contains('/') || trimmed.contains('\\'))
@@ -804,15 +790,10 @@ namespace aether::editor
 			m_opError = "Something with that name already exists.";
 			return false;
 		}
-		std::filesystem::rename(target, newPath, ec);
-		if (ec)
+		if (!RelocateAsset(context, target, newPath))
 		{
-			m_opError = "Rename failed (" + ec.message() + ").";
 			return false;
 		}
-		// After the move, so a failed rename cannot leave references pointing at a file that
-		// was never renamed.
-		RetargetAssetReferences(target, newPath);
 		m_opError.clear();
 		m_selectedPath = ToUtf8Path(newPath);
 		m_treeDirty = true;
@@ -904,7 +885,7 @@ namespace aether::editor
 		return m_root / std::filesystem::path(std::string(vfsPath.substr(kPrefix.size())));
 	}
 
-	bool FileExplorerPanel::MoveEntry(const std::filesystem::path& source, const std::filesystem::path& destDir)
+	bool FileExplorerPanel::MoveEntry(app::LayerContext& context, const std::filesystem::path& source, const std::filesystem::path& destDir)
 	{
 		m_opError.clear();
 		if (source.empty() || destDir.empty())
@@ -939,16 +920,10 @@ namespace aether::editor
 			m_opError = target.filename().generic_string() + " already exists there.";
 			return false;
 		}
-		std::filesystem::rename(source, target, ec);
-		if (ec)
+		if (!RelocateAsset(context, source, target))
 		{
-			m_opError = "Could not move " + source.filename().generic_string() + ": " + ec.message();
 			return false;
 		}
-		// Everything that referred to the old "project://" path has to follow it, exactly as
-		// it does for a rename - otherwise the move silently unhooks the asset from every
-		// scene, prefab and material that used it.
-		RetargetAssetReferences(source, target);
 		if (m_selectedPath == ToUtf8Path(source))
 		{
 			m_selectedPath = ToUtf8Path(target);
@@ -975,13 +950,13 @@ namespace aether::editor
 			{
 				for (const std::string& path: m_selectedPaths)
 				{
-					moved = MoveEntry(std::filesystem::u8path(path), destDir) || moved;
+					moved = MoveEntry(context, std::filesystem::u8path(path), destDir) || moved;
 				}
 				m_selectedPaths.clear();
 			}
 			else
 			{
-				moved = MoveEntry(dragged, destDir);
+				moved = MoveEntry(context, dragged, destDir);
 			}
 		}
 		else if (const ImGuiPayload* scriptPayload = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload); scriptPayload != nullptr && scriptPayload->DataSize == sizeof(dragdrop::ScriptPayload))
@@ -989,7 +964,7 @@ namespace aether::editor
 			// A script's payload already carries its physical path, because a script is
 			// dragged to be attached rather than to be resolved through the VFS.
 			const auto* script = static_cast<const dragdrop::ScriptPayload*>(scriptPayload->Data);
-			moved = MoveEntry(std::filesystem::u8path(script->sourcePath), destDir);
+			moved = MoveEntry(context, std::filesystem::u8path(script->sourcePath), destDir);
 		}
 		ImGui::EndDragDropTarget();
 		if (moved)
@@ -1064,7 +1039,14 @@ namespace aether::editor
 		m_deleteReferenceCount = 0;
 		for (const DeleteTarget& target: m_deleteTargets)
 		{
-			m_deleteReferenceCount += CountAssetReferences(target.path, target.isDirectory);
+			const int count = CountAssetReferences(target.path, target.isDirectory);
+			if (count < 0)
+			{
+				m_opError = "Cannot validate asset references; repair the project index before deleting.";
+				m_deleteTargets.clear();
+				return;
+			}
+			m_deleteReferenceCount += count;
 		}
 		m_openDeletePopup = true;
 	}
@@ -1354,7 +1336,7 @@ namespace aether::editor
 
 	// Draws the inline rename input when `entry` is the active rename target. Returns
 	// true when it consumed the row (the caller pushed an ID and must PopID + return).
-	bool FileExplorerPanel::DrawActiveRename(const Entry& entry)
+	bool FileExplorerPanel::DrawActiveRename(app::LayerContext& context, const Entry& entry)
 	{
 		if (m_renameTarget != entry.path)
 		{
@@ -1368,7 +1350,7 @@ namespace aether::editor
 		}
 		if (ImGui::InputText("##feRename", m_renameBuf, sizeof(m_renameBuf), ImGuiInputTextFlags_EnterReturnsTrue))
 		{
-			ApplyRename(m_renameTarget, m_renameBuf);
+			ApplyRename(context, m_renameTarget, m_renameBuf);
 			m_renameTarget.clear();
 		}
 		if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (!ImGui::IsItemActive() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsItemHovered()))
@@ -1382,7 +1364,7 @@ namespace aether::editor
 	{
 		ImGui::PushID(ToUtf8Path(entry.path).c_str());
 
-		if (DrawActiveRename(entry))
+		if (DrawActiveRename(context, entry))
 		{
 			ImGui::PopID();
 			return;
@@ -1530,7 +1512,7 @@ namespace aether::editor
 	{
 		ImGui::PushID(ToUtf8Path(entry.path).c_str());
 
-		if (DrawActiveRename(entry))
+		if (DrawActiveRename(context, entry))
 		{
 			ImGui::PopID();
 			return;
@@ -2069,7 +2051,7 @@ namespace aether::editor
 		{
 			ImGui::BeginGroup();
 			ImGui::PushItemWidth(tileSize);
-			const bool handled = DrawActiveRename(entry);
+			const bool handled = DrawActiveRename(context, entry);
 			ImGui::PopItemWidth();
 			ImGui::EndGroup();
 			if (handled)

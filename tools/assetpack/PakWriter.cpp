@@ -36,7 +36,7 @@ namespace aether::assetpipeline
 			// ".aether" is the editor's own corner of a project: the launcher thumbnail and
 			// crash-recovery autosaves. Packing it shipped several megabytes of dead weight
 			// AND put snapshots of the developer's in-progress scenes in the players' build.
-			return first == "Builds" || first == "artifacts" || first == "scripts" || first == ".git" || first == ".vs" || first == ".aether";
+			return first == "Builds" || first == "artifacts" || first == "scripts" || first == ".git" || first == ".vs" || first == ".aether" || first == ".asset-migration-backups";
 		}
 
 		bool IsExcludedProjectFile(const fs::path& rel)
@@ -85,7 +85,7 @@ namespace aether::assetpipeline
 				it.disable_recursion_pending();
 				continue;
 			}
-			if (entry.is_regular_file() && (IsExcludedProjectFile(rel) || rel.generic_string() == "ProjectSettings.toml" || rel.extension() == ".slang"))
+			if (entry.is_regular_file() && (IsExcludedProjectFile(rel) || rel.generic_string() == "ProjectSettings.toml" || rel.extension() == ".slang" || rel.extension() == ".uid"))
 			{
 				continue;
 			}
@@ -186,13 +186,15 @@ namespace aether::assetpipeline
 			uint32_t flags = 0;
 			uint64_t rawSize = 0;
 			uint64_t contentHash = 0;
+			int sourcePriority = 0;
 		};
 
 		std::vector<PackItem> items;
 		items.reserve(allResults.size() * 2);
 
-		for (const auto& res: allResults)
+		for (std::size_t sourceIndex = 0; sourceIndex < allResults.size(); ++sourceIndex)
 		{
+			const auto& res = allResults[sourceIndex];
 			if (!res.ok)
 			{
 				continue;
@@ -200,7 +202,9 @@ namespace aether::assetpipeline
 
 			if (res.hasPrimary)
 			{
-				items.push_back({res.virtualPath, res.data, res.flags, res.rawSize, res.contentHash});
+				// Authored material overrides outrank fresh cooks, which outrank baked caches.
+				const int priority = res.virtualPath == m_files[sourceIndex].virtualPath ? 0 : res.virtualPath.ends_with(".material") ? 2 : 1;
+				items.push_back({res.virtualPath, res.data, res.flags, res.rawSize, res.contentHash, priority});
 			}
 
 			for (const auto& extra: res.extraFiles)
@@ -209,9 +213,44 @@ namespace aether::assetpipeline
 				{
 					continue;
 				}
-				items.push_back({extra.virtualPath, extra.data, extra.flags, extra.rawSize, extra.contentHash});
+				items.push_back({extra.virtualPath, extra.data, extra.flags, extra.rawSize, extra.contentHash, 1});
 			}
 		}
+
+		std::sort(items.begin(), items.end(), [](const PackItem& a, const PackItem& b)
+		        {
+			        const int order = a.virtualPath.compare(b.virtualPath);
+			        if (order != 0)
+			        {
+				        return order < 0;
+			        }
+			        if (a.sourcePriority != b.sourcePriority)
+			        {
+				        return a.sourcePriority > b.sourcePriority;
+			        }
+			        return a.data.size() < b.data.size();
+		        });
+		std::size_t uniqueCount = 0;
+		for (std::size_t i = 0; i < items.size(); ++i)
+		{
+			auto& item = items[i];
+			if (uniqueCount > 0 && items[uniqueCount - 1].virtualPath == item.virtualPath)
+			{
+				const auto& winner = items[uniqueCount - 1];
+				if (winner.sourcePriority == item.sourcePriority && (winner.contentHash != item.contentHash || winner.rawSize != item.rawSize))
+				{
+					std::cerr << "AssetPacker: conflicting sources for package path '" << item.virtualPath << "'\n";
+					return false;
+				}
+				continue;
+			}
+			if (uniqueCount != i)
+			{
+				items[uniqueCount] = std::move(item);
+			}
+			++uniqueCount;
+		}
+		items.resize(uniqueCount);
 
 		{
 			std::ostringstream manifest;
@@ -226,10 +265,15 @@ namespace aether::assetpipeline
 			std::vector<std::byte> manifestData(manifestText.size());
 			std::memcpy(manifestData.data(), manifestText.data(), manifestText.size());
 			const uint64_t manifestHash = XXH3_64bits(manifestData.data(), manifestData.size());
-			items.push_back({PAK_MANIFEST_PATH, std::move(manifestData), 0, static_cast<uint64_t>(manifestText.size()), manifestHash});
+			const auto position = std::lower_bound(items.begin(), items.end(), std::string_view(PAK_MANIFEST_PATH),
+			        [](const PackItem& item, std::string_view path) { return item.virtualPath < path; });
+			if (position != items.end() && position->virtualPath == PAK_MANIFEST_PATH)
+			{
+				std::cerr << "AssetPacker: reserved package manifest path is present in source assets\n";
+				return false;
+			}
+			items.insert(position, PackItem{PAK_MANIFEST_PATH, std::move(manifestData), 0, static_cast<uint64_t>(manifestText.size()), manifestHash});
 		}
-
-		std::sort(items.begin(), items.end(), [](const PackItem& a, const PackItem& b) { return a.virtualPath < b.virtualPath; });
 
 		std::vector<std::byte> pathData;
 		std::vector<std::byte> assetData;

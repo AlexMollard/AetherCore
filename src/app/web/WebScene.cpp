@@ -33,6 +33,14 @@ namespace aether::app::web
 {
 	std::string WebScene::ProjectPath(std::string_view kind, std::string_view name, std::string_view suffix)
 	{
+		if (name.starts_with("project://") || name.starts_with("uid://"))
+		{
+			const std::string path = io::FileSystem::ResolveAssetPath(std::string(name));
+			if (!path.starts_with("project://") || !path.ends_with(suffix) ||
+			    path.size() <= std::string_view("project://").size() + suffix.size()) return {};
+			return path;
+		}
+		if (name.empty() || name.size() > 128 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != std::string_view::npos) return {};
 		const std::string key(kind);
 		const auto length = EM_ASM_INT({ return lengthBytesUTF8(globalThis.aetherProject ?.paths ?.[UTF8ToString($0)] || (UTF8ToString($0) == 'prefabs' ? 'assets/prefabs' : 'scenes')); }, key.c_str());
 		std::string base(length, '\0');
@@ -42,10 +50,6 @@ namespace aether::app::web
 
 	namespace
 	{
-		bool ValidName(std::string_view name)
-		{
-			return !name.empty() && name.size() <= 128 && name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == std::string_view::npos;
-		}
 
 		// Same per-entity physics-domain rule as native SceneSerializerApply: one entity never
 		// simulates 2D and 3D physics at once; the scene kind breaks the tie.
@@ -521,11 +525,12 @@ namespace aether::app::web
 
 	Expected<std::vector<WebScriptRecord>> WebScene::Load(std::string_view name)
 	{
-		if (!ValidName(name))
+		const std::string path = ProjectPath("scenes", name, ".scene.toml");
+		if (path.empty())
 		{
-			AE_UNEXPECTED(AetherError::Asset("Invalid scene name"));
+			AE_UNEXPECTED(AetherError::Asset("Invalid scene name or reference"));
 		}
-		AE_TRY(text, io::FileSystem::ReadFileText(ProjectPath("scenes", name, ".scene.toml")));
+		AE_TRY(text, io::FileSystem::ReadFileText(path));
 		auto description = scene::ParseToml(*text);
 		if (!description)
 		{
@@ -608,11 +613,12 @@ namespace aether::app::web
 
 	Expected<WebInstantiated> WebScene::Instantiate(std::string_view name, glm::vec3 position)
 	{
-		if (!ValidName(name))
+		const std::string path = ProjectPath("prefabs", name, ".prefab.toml");
+		if (path.empty())
 		{
-			AE_UNEXPECTED(AetherError::Asset("Invalid prefab name"));
+			AE_UNEXPECTED(AetherError::Asset("Invalid prefab name or reference"));
 		}
-		AE_TRY(text, io::FileSystem::ReadFileText(ProjectPath("prefabs", name, ".prefab.toml")));
+		AE_TRY(text, io::FileSystem::ReadFileText(path));
 		auto description = scene::ParseToml(*text);
 		if (!description)
 		{

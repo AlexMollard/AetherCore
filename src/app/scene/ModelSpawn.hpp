@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 #include <glm/glm.hpp>
 
@@ -37,6 +38,9 @@ namespace aether::app::scene
 	int ModelPrimitiveCount(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path);
 
 	const Mesh* ResolveModelPrimitiveMesh(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path, int primitiveIndex);
+
+	// Returns -1 for an absent or ambiguous primitive key.
+	int ResolveModelPrimitiveIndex(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path, std::string_view key);
 
 	void RegisterModelAssets(AssetDatabase& db, AssetManager& assets, scripting::SceneContext& ctx, const std::string& path);
 

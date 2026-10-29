@@ -150,7 +150,7 @@ namespace aether::editor
 
 			const std::string startupScene = app::ReadProjectStartupScene(plan.projectFile);
 			std::string error;
-			if (!app::ValidateProjectStartupScene(plan.scenesDir, startupScene, error))
+			if (!app::ValidateProjectStartupScene(plan.scenesDir, startupScene, error, plan.projectRoot))
 			{
 				return Failed(std::move(error), "Set a startup scene in the Project panel, or with the star in the Scenes list.");
 			}
@@ -303,11 +303,12 @@ namespace aether::editor
 		{
 			const std::filesystem::path settingsPath = plan.outputDir / "data" / "config" / "EngineSettings.toml";
 			LoadedEngineSettings loaded = EngineSettingsIO::LoadLayered(settingsPath.string(), plan.projectFile);
+			loaded.base.app.startupScene = app::ReadProjectStartupScene(plan.projectFile);
 
 			// Never bake a scene the project does not have: a published game has no editor to
 			// fall back on, so a dangling name is an empty world with no way to notice.
 			std::string error;
-			if (!app::ValidateProjectStartupScene(plan.scenesDir, loaded.base.app.startupScene, error))
+			if (!app::ValidateProjectStartupScene(plan.scenesDir, loaded.base.app.startupScene, error, plan.projectRoot))
 			{
 				return Failed(std::move(error), "Set a startup scene in the Project panel, then publish again.");
 			}

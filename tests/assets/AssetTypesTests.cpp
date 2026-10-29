@@ -44,7 +44,7 @@ namespace
 	{
 		MeshHeaderDisk hdr{};
 		std::memcpy(hdr.magic, MESH_MAGIC, 4);
-		hdr.version = MESH_VERSION;
+		hdr.version = 3; // Legacy layout intentionally lacks v4 primitive keys.
 		hdr.vertexCount = vertexCount;
 		hdr.indexCount = static_cast<std::uint32_t>(indices.size());
 		hdr.subMeshCount = static_cast<std::uint32_t>(subMeshes.size());

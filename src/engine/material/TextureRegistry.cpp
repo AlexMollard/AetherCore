@@ -1,5 +1,6 @@
 #include "material/TextureRegistry.hpp"
 
+#include "io/FileSystem.hpp"
 #include "utils/Hash.hpp"
 #include "utils/Logger.hpp"
 
@@ -56,7 +57,15 @@ namespace aether
 
 	TextureHandle TextureRegistry::Acquire(std::string_view path, TextureColorSpace colorSpace)
 	{
-		const std::string resolved = m_sink.ResolvePath(path);
+		std::string reference = path.starts_with("uid://") ? std::string(path) : io::FileSystem::AssetReference(path);
+		const std::string source = io::FileSystem::ResolveAssetPath(reference);
+		if (source.empty())
+			return TextureHandle::Broken();
+		const std::string resolved = m_sink.ResolvePath(source);
+		if (!reference.starts_with("uid://"))
+		{
+			reference = resolved;
+		}
 		const std::uint64_t hash = utils::Fnv1a(resolved) ^ (colorSpace == TextureColorSpace::Linear ? 0x9e3779b97f4a7c15ull : 0ull);
 
 		const std::scoped_lock lock(m_mutex);
@@ -67,6 +76,10 @@ namespace aether
 			Entry& e = m_entries[it->second];
 			if (e.alive && e.colorSpace == colorSpace && e.resolvedPath == resolved)
 			{
+				if (reference.starts_with("uid://"))
+				{
+					e.reference = reference;
+				}
 				++e.refcount;
 				return TextureHandle{it->second, e.generation};
 			}
@@ -97,6 +110,7 @@ namespace aether
 
 		Entry& e = m_entries[index];
 		e.resolvedPath = resolved;
+		e.reference = reference;
 		e.hash = hash;
 		e.colorSpace = colorSpace;
 		e.texture = std::move(*loaded);
@@ -149,6 +163,7 @@ namespace aether
 		e.alive = false;
 		++e.generation;
 		e.resolvedPath.clear();
+		e.reference.clear();
 		e.texture = TextureResource{};
 	}
 
@@ -196,7 +211,61 @@ namespace aether
 		{
 			return false;
 		}
-		outPath = e.resolvedPath;
+		outPath = e.reference.empty() ? e.resolvedPath : e.reference;
 		return true;
+	}
+	void TextureRegistry::RetargetPaths(std::string_view oldVfs, std::string_view newVfs)
+	{
+		const std::scoped_lock lock(m_mutex);
+		for (std::uint32_t index = 0; index < m_entries.size(); ++index)
+		{
+			auto& e = m_entries[index];
+			if (!e.alive || e.resolvedPath.starts_with("\x01"))
+			{
+				continue;
+			}
+			const auto matches = [](std::string_view path, std::string_view prefix)
+			{
+				return path == prefix || (path.starts_with(prefix) && path.size() > prefix.size() && path[prefix.size()] == '/');
+			};
+			std::string newPath;
+			if (e.reference.starts_with("uid://"))
+			{
+				newPath = io::FileSystem::ResolveAssetPath(e.reference);
+				if (!matches(newPath, newVfs))
+				{
+					continue;
+				}
+			}
+			else if (matches(e.reference, oldVfs))
+			{
+				newPath = std::string(newVfs) + e.reference.substr(oldVfs.size());
+			}
+			else if (e.resolvedPath == m_sink.ResolvePath(oldVfs))
+			{
+				newPath = std::string(newVfs);
+			}
+			else
+			{
+				continue;
+			}
+			auto range = m_hashToEntry.equal_range(e.hash);
+			for (auto it = range.first; it != range.second; ++it)
+			{
+				if (it->second == index)
+				{
+					m_hashToEntry.erase(it);
+					break;
+				}
+			}
+			if (!e.reference.starts_with("uid://"))
+			{
+				const auto reference = io::FileSystem::AssetReference(newPath);
+				e.reference = reference.starts_with("uid://") ? reference : m_sink.ResolvePath(newPath);
+			}
+			e.resolvedPath = m_sink.ResolvePath(newPath);
+			e.hash = utils::Fnv1a(e.resolvedPath) ^ (e.colorSpace == TextureColorSpace::Linear ? 0x9e3779b97f4a7c15ull : 0ull);
+			m_hashToEntry.emplace(e.hash, index);
+		}
 	}
 } // namespace aether

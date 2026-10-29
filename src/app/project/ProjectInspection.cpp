@@ -56,10 +56,10 @@ namespace aether::app::project
 			issue("GAMEPLAY_INSPECT_BUILD_ENTRY", "Gameplay build entry is missing; restore it before building", buildEntry);
 		}
 		const auto startup = ReadProjectStartupScene(project.projectFile);
-		inventory["startupScene"] = {{"name", startup}, {"exists", scene::IsValidAssetName(startup) && File(project.scenesDir / std::filesystem::u8path(startup + ".scene.toml"))["exists"].get<bool>()}};
+		inventory["startupScene"] = {{"name", startup}, {"exists", ProjectHasScene(project.scenesDir, startup, project.root)}};
 		if (!inventory["startupScene"]["exists"].get<bool>())
 		{
-			issue("GAMEPLAY_INSPECT_STARTUP", "Set app.startupscene to an existing authored scene name", project.projectFile);
+			issue("GAMEPLAY_INSPECT_STARTUP", "Set app.startupscene to an existing authored scene", project.projectFile);
 		}
 
 		constexpr std::size_t kSceneLimit = 512;
@@ -106,12 +106,13 @@ namespace aether::app::project
 		}
 		if (!sceneName.empty())
 		{
-			if (!scene::IsValidAssetName(sceneName))
+			const auto scenePath = ProjectScenePath(project.scenesDir, sceneName, project.root);
+			if (!scenePath)
 			{
-				issue("GAMEPLAY_INSPECT_SCENE_NAME", "Scene must be a bare scene name without an extension or directory", project.scenesDir);
+				issue("GAMEPLAY_INSPECT_SCENE_NAME", "Scene must be a valid scene name or project scene reference", project.scenesDir);
 				return result;
 			}
-			const auto path = project.scenesDir / std::filesystem::u8path(std::string(sceneName) + std::string(kSuffix));
+			const auto& path = *scenePath;
 			const auto bytes = std::filesystem::file_size(path, error);
 			if (error || bytes > 1024 * 1024)
 			{

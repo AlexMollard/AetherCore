@@ -133,7 +133,8 @@ namespace aether
 		AE_TRY(schemaVersion, ReadAssetVersion(config, "animation.schema_version", SpriteAnimationAsset::kSchemaVersion));
 		animation.schemaVersion = *schemaVersion;
 		animation.name = config.GetString("animation.name", "Animation");
-		animation.atlasPath = config.GetString("animation.atlas");
+		AE_TRY(atlasPath, ReadAssetReference(config, "animation.atlas"));
+		animation.atlasPath = std::move(*atlasPath);
 		animation.loopMode = ParseLoopMode(config.GetString("animation.loop_mode", "loop"));
 		AE_TRY(frameCountValue, ReadAssetCount(config, "animation.frame_count", 65536));
 		const auto frameCount = *frameCountValue;

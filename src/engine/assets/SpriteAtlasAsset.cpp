@@ -306,7 +306,8 @@ namespace aether
 		SpriteAtlasAsset atlas;
 		AE_TRY(schemaVersion, ReadAssetVersion(config, "atlas.schema_version", SpriteAtlasAsset::kSchemaVersion));
 		atlas.schemaVersion = *schemaVersion;
-		atlas.texturePath = config.GetString("atlas.texture");
+		AE_TRY(texturePath, ReadAssetReference(config, "atlas.texture"));
+		atlas.texturePath = std::move(*texturePath);
 		AE_TRY(textureWidth, ReadAssetCount(config, "atlas.texture_width", 16384, 1));
 		atlas.textureWidth = std::max(static_cast<std::int32_t>(*textureWidth), 1);
 		AE_TRY(textureHeight, ReadAssetCount(config, "atlas.texture_height", 16384, 1));

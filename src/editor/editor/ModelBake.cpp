@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include <BinaryFormats.hpp>
 #include "MeshProcessor.hpp"
 
 #include "assets/GltfAsset.hpp"
@@ -50,14 +51,11 @@ namespace aether::editor
 
 	bool EnsureModelBaked(const std::string& vfsModelPath, const app::EditorProjectContext& project, std::string& error)
 	{
-		const std::string meshVfs = assets::GltfAsset::ResolveMeshPath(vfsModelPath);
-		if (!meshVfs.empty() && io::FileSystem::Exists(meshVfs))
-		{
-			return true;
-		}
-
 		if (!project.IsLoaded())
 		{
+			const std::string meshVfs = assets::GltfAsset::ResolveMeshPath(vfsModelPath);
+			if (!meshVfs.empty() && io::FileSystem::Exists(meshVfs))
+				return true;
 			error = "no project loaded";
 			return false;
 		}
@@ -66,21 +64,49 @@ namespace aether::editor
 
 	bool EnsureModelBaked(const std::string& vfsModelPath, const fs::path& projectRoot, std::string& error)
 	{
-		const std::string meshVfs = assets::GltfAsset::ResolveMeshPath(vfsModelPath);
-		if (!meshVfs.empty() && io::FileSystem::Exists(meshVfs))
-		{
+		const std::string resolved = io::FileSystem::ResolveAssetPath(vfsModelPath);
+		const std::string meshVfs = assets::GltfAsset::ResolveMeshPath(resolved);
+		const std::string rel = StripMount(resolved);
+		const fs::path diskPath = projectRoot / rel;
+		const bool meshExists = !meshVfs.empty() && io::FileSystem::Exists(meshVfs);
+		if (meshExists && resolved.ends_with(".mesh"))
 			return true;
+		if (meshExists && !io::FileSystem::Exists(resolved))
+			return true; // Cooked-only projects can still consume legacy meshes.
+		if (meshExists)
+		{
+			const fs::path meshPath = projectRoot / StripMount(meshVfs);
+			std::ifstream stream(meshPath, std::ios::binary);
+			MeshHeaderDisk header{};
+			std::error_code ec;
+			const auto meshTime = fs::last_write_time(meshPath, ec);
+			bool current = !ec && static_cast<bool>(stream.read(reinterpret_cast<char*>(&header), sizeof(header))) && CheckMagic(header);
+			const auto sourceTime = fs::last_write_time(diskPath, ec);
+			current = current && !ec && sourceTime <= meshTime;
+			if (current)
+			{
+				for (const auto& dependency : assetpipeline::MeshProcessor::CollectExternalSourceFiles(diskPath))
+				{
+					std::error_code depEc;
+					const auto depTime = fs::last_write_time(dependency, depEc);
+					if (!depEc && depTime > meshTime)
+					{
+						current = false;
+						break;
+					}
+				}
+			}
+			if (current)
+				return true;
 		}
 
-		const auto raw = io::FileSystem::ReadFile(vfsModelPath);
+		const auto raw = io::FileSystem::ReadFile(resolved);
 		if (!raw)
 		{
 			error = "cannot read model '" + vfsModelPath + "'";
 			return false;
 		}
 
-		const std::string rel = StripMount(vfsModelPath);
-		const fs::path diskPath = projectRoot / rel;
 
 		const auto result = assetpipeline::MeshProcessor::Process(std::span<const std::byte>(raw->data(), raw->size()), diskPath, rel, projectRoot);
 

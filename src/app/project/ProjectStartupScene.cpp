@@ -4,6 +4,8 @@
 #include <string>
 #include <system_error>
 
+#include "assets/AssetCatalog.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "io/FileUtil.hpp"
 #include "utils/TomlConfig.hpp"
 
@@ -31,7 +33,7 @@ namespace aether::app
 		{
 			return {};
 		}
-		return config.GetString(kStartupSceneKey);
+		return config.GetRawString(kStartupSceneKey);
 	}
 
 	bool WriteProjectStartupScene(const std::filesystem::path& projectFile, const std::string_view sceneName, std::string& error)
@@ -91,26 +93,50 @@ namespace aether::app
 		return true;
 	}
 
-	bool ProjectHasScene(const std::filesystem::path& scenesDir, const std::string_view sceneName)
+	std::optional<std::filesystem::path> ProjectScenePath(const std::filesystem::path& scenesDir, const std::string_view sceneName, const std::filesystem::path& projectRoot)
 	{
-		if (scenesDir.empty() || sceneName.empty())
+		if (sceneName.empty()) return std::nullopt;
+		std::filesystem::path path;
+		if (sceneName.starts_with("uid://") || sceneName.starts_with("project://"))
 		{
-			return false;
+			if (projectRoot.empty()) return std::nullopt;
+			std::string reference(sceneName);
+			if (sceneName.starts_with("uid://"))
+			{
+				const auto catalog = AssetCatalog::Load(projectRoot);
+				if (!catalog) return std::nullopt;
+				reference = catalog->Resolve(reference);
+			}
+			if (!reference.starts_with("project://") || !reference.ends_with(kSceneSuffix)) return std::nullopt;
+			const auto relative = std::filesystem::u8path(reference.substr(10)).lexically_normal();
+			if (relative.empty() || relative.is_absolute() || *relative.begin() == "..") return std::nullopt;
+			path = projectRoot / relative;
 		}
-		std::error_code ec;
-		return std::filesystem::exists(scenesDir / (std::string(sceneName) + std::string(kSceneSuffix)), ec);
+		else
+		{
+			if (scenesDir.empty() || !scene::IsValidAssetName(sceneName)) return std::nullopt;
+			path = scenesDir / std::filesystem::u8path(std::string(sceneName) + std::string(kSceneSuffix));
+		}
+		return path;
 	}
 
-	bool ValidateProjectStartupScene(const std::filesystem::path& scenesDir, const std::string_view sceneName, std::string& error)
+	bool ProjectHasScene(const std::filesystem::path& scenesDir, const std::string_view sceneName, const std::filesystem::path& projectRoot)
+	{
+		const auto path = ProjectScenePath(scenesDir, sceneName, projectRoot);
+		std::error_code ec;
+		return path && std::filesystem::is_regular_file(*path, ec);
+	}
+
+	bool ValidateProjectStartupScene(const std::filesystem::path& scenesDir, const std::string_view sceneName, std::string& error, const std::filesystem::path& projectRoot)
 	{
 		if (sceneName.empty())
 		{
 			error = "No startup scene is set. Pick one in the Project panel (or the star in the Scenes list) so the game knows what to boot.";
 			return false;
 		}
-		if (!ProjectHasScene(scenesDir, sceneName))
+		if (!ProjectHasScene(scenesDir, sceneName, projectRoot))
 		{
-			error = "Startup scene '" + std::string(sceneName) + "' does not exist in this project (expected " + (scenesDir / (std::string(sceneName) + std::string(kSceneSuffix))).generic_string() + ").";
+			error = "Startup scene '" + std::string(sceneName) + "' does not exist in this project.";
 			return false;
 		}
 		return true;

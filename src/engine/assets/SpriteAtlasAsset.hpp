@@ -84,7 +84,7 @@ namespace aether
 
 	struct SpriteAtlasAsset
 	{
-		static constexpr std::uint32_t kSchemaVersion = 2;
+		static constexpr std::uint32_t kSchemaVersion = 3;
 
 		std::uint32_t schemaVersion = kSchemaVersion;
 		std::string texturePath;
