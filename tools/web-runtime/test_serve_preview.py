@@ -44,6 +44,8 @@ class PublishedProjectRoutingTests(unittest.TestCase):
             package.mkdir(parents=True)
             (package / 'index.html').write_text('<title>Published project</title>', encoding='utf-8')
             (package / 'game.wasm').write_bytes(b'\0asm')
+            for name in ('browser-main.mjs', 'module.js'):
+                (package / name).write_text('export const ready = true;', encoding='utf-8')
             (package.parent / 'secret.txt').write_text('outside package', encoding='utf-8')
             catalog = {'projects': {'Published': {'directory': 'projects/Published/Builds/Web/Published'}}}
             with patch.object(preview, 'REPO', repo), patch.object(preview, 'load_catalog', return_value=catalog):
@@ -56,6 +58,12 @@ class PublishedProjectRoutingTests(unittest.TestCase):
                         self.assertIn(b'<title>Published project</title>', response.read())
                     with urlopen(base + '/projects/Published/game.wasm') as response:
                         self.assertEqual(response.headers.get_content_type(), 'application/wasm')
+                    # Windows file associations must not turn ES modules into plain text.
+                    with patch('mimetypes.guess_type', return_value=('text/plain', None)):
+                        for name in ('browser-main.mjs', 'module.js'):
+                            with urlopen(base + '/projects/Published/' + name) as response:
+                                self.assertEqual(response.headers.get_content_type(), 'text/javascript')
+                                self.assertIn(b'export const ready = true;', response.read())
                     for route in ('/projects/Published/%2e%2e/secret.txt', '/projects/Unknown/game.wasm',
                                   '/projects/Published/%2fsecret.txt'):
                         with self.subTest(route=route), self.assertRaises(HTTPError) as error:

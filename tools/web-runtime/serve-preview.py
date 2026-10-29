@@ -151,6 +151,9 @@ def example_page(build, name):
 
 
 class Preview(SimpleHTTPRequestHandler):
+    extensions_map = {**SimpleHTTPRequestHandler.extensions_map, '.js': 'text/javascript',
+                      '.mjs': 'text/javascript', '.wasm': 'application/wasm'}
+
     def __init__(self, *args, build, **kwargs):
         self.build = build
         super().__init__(*args, directory=str(build / 'web'), **kwargs)
@@ -175,7 +178,7 @@ class Preview(SimpleHTTPRequestHandler):
                 return None
             stream = asset.open('rb')
             self.send_response(200)
-            self.send_header('Content-Type', 'application/wasm' if asset.suffix == '.wasm' else self.guess_type(str(asset)))
+            self.send_header('Content-Type', self.guess_type(str(asset)))
             self.send_header('Content-Length', str(asset.stat().st_size))
             self.end_headers()
             return stream

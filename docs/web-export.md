@@ -59,6 +59,8 @@ The terminal report links `web-verification.json`, logs, manifest and ZIP; brows
 
 Serve the extracted directory over HTTPS or localhost; opening `index.html` through `file://` is not supported. Use a WebGPU-capable hardware browser and appropriate iframe permissions (`autoplay; fullscreen; gamepad`, plus host-specific WebGPU policy when required). Start enables audio through a real gesture. Local nested-URL/iframe verification does not establish support on itch.io or another external host. Use [autonomous distribution qualification](distribution-qualification.md) for Task 13 measurements and the browser/host matrix. External hosting remains pending until an authorized uploaded draft is exercised.
 
+The bundled preview server sends `.js` and `.mjs` as `text/javascript`, and `.wasm` as `application/wasm`, including nested published packages. Configure the same MIME types on external hosts.
+
 ## Playable sample and local preview
 
 [Ember Run](../projects/EmberRun/README.md) is a Rust collect-and-dodge sample with
