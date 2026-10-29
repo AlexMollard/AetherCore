@@ -258,6 +258,18 @@ namespace aether::app::web
 		Stop();
 	}
 
+	std::uint64_t WebGameplay::GetInstanceHandle(Entity entity, std::uint32_t scriptIndex) const
+	{
+		for (const auto& instance: m_instances)
+		{
+			if (instance.entity == entity && instance.scriptIndex == scriptIndex)
+			{
+				return instance.handle;
+			}
+		}
+		return 0;
+	}
+
 	void WebGameplay::Stop()
 	{
 		m_host.Clear(++m_generation);
@@ -328,7 +340,7 @@ namespace aether::app::web
 			{
 				AE_TRY(handle, m_host.CreateInstance(record.record.type, record.entity.id));
 				EnablePhysicsEvents(record.entity);
-				m_instances.push_back({record.entity, *handle, record.record.type});
+				m_instances.push_back({record.entity, *handle, record.record.type, record.scriptIndex});
 				AE_TRY_VOID(m_host.TryApplyProperties(*handle, record.record.type, record.record.properties));
 			}
 			for (const auto& instance: m_instances)
@@ -428,7 +440,7 @@ namespace aether::app::web
 			}
 			AE_TRY(handle, m_host.CreateInstance(record.record.type, record.entity.id));
 			EnablePhysicsEvents(record.entity);
-			m_instances.push_back({record.entity, *handle, record.record.type});
+			m_instances.push_back({record.entity, *handle, record.record.type, record.scriptIndex});
 			AE_TRY_VOID(m_host.TryApplyProperties(*handle, record.record.type, record.record.properties));
 		}
 		for (auto index = first; index < m_instances.size(); ++index)

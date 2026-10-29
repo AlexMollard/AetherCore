@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "net/NetTypes.hpp"
 #include "scene/Components.hpp"
@@ -45,6 +46,9 @@ namespace aether::app
 
 		void Update(World& world, float dt) override;
 
+		// Instantiate predicted prefabs synchronously without running their updates.
+		void AttachPredicted(World& world, const std::vector<Entity>& entities);
+
 		void Invalidate(World& world);
 
 		// Scene.Load support: destroys instances whose entities die in the switch
@@ -76,7 +80,7 @@ namespace aether::app
 		void SyncPropertiesFromLiveInstance(Entity entity, std::uint32_t scriptIndex, ScriptEntry& entry) const;
 
 	private:
-		bool UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt);
+		bool UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt, bool attachOnly = false);
 		void PurgeStaleInstances(World& world, scripting::GameplayHost& host, scripting::SceneContext& ctx);
 		void DestroyAllInstances(scripting::GameplayHost& host, scripting::SceneContext& ctx);
 

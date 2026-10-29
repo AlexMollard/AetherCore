@@ -46,6 +46,7 @@ namespace aether::app::web
 	{
 		Entity entity;
 		scene::ScriptRecord record;
+		std::uint32_t scriptIndex;
 	};
 
 	struct WebInstantiated

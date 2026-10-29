@@ -160,7 +160,7 @@ namespace aether::app
 		return true;
 	}
 
-	bool ScriptComponentSystem::UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt)
+	bool ScriptComponentSystem::UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt, bool attachOnly)
 	{
 		if (!host.IsAvailable())
 		{
@@ -273,6 +273,11 @@ namespace aether::app
 			}
 		}
 
+		if (attachOnly)
+		{
+			return true;
+		}
+
 		// Every frame, not just on attach: this is also how a later Welcome landing
 		// or an ownership hand-off (see NetworkSystems.cpp's PruneDisconnected) gets
 		// noticed on an instance that has been live for a while.
@@ -376,6 +381,32 @@ namespace aether::app
 			(void) host.Destroy(instance.handle);
 		}
 		m_instances.clear();
+	}
+
+	void ScriptComponentSystem::AttachPredicted(World& world, const std::vector<Entity>& entities)
+	{
+		auto* sceneCtx = m_services.TryGet<scripting::SceneContext>();
+		auto* host = m_services.TryGet<scripting::GameplayHost>();
+		if (sceneCtx == nullptr || host == nullptr || !host->IsAvailable())
+		{
+			return;
+		}
+		for (const Entity entity: entities)
+		{
+			for (std::size_t i = 0; world.GetRegistry().valid(World::ToEntt(entity)); ++i)
+			{
+				auto* scripts = world.TryGet<ScriptComponent>(entity);
+				if (scripts == nullptr || i >= scripts->scripts.size())
+				{
+					break;
+				}
+				if (!scripts->scripts[i].path.empty())
+				{
+					const ActiveContextScope scope(*sceneCtx);
+					UpdateScriptEntity(*host, *sceneCtx, entity, static_cast<std::uint32_t>(i), scripts->scripts[i], 0.0f, true);
+				}
+			}
+		}
 	}
 
 	void ScriptComponentSystem::Update(World& world, float dt)

@@ -592,6 +592,12 @@ namespace aether::app::web
 		std::vector<WebScriptRecord> scripts;
 		for (size_t i = 0; i < created.size(); ++i)
 		{
+			if (description.entities[i].scripts.empty())
+			{
+				continue;
+			}
+			ScriptComponent component;
+			component.scripts.reserve(description.entities[i].scripts.size());
 			for (const auto& script: description.entities[i].scripts)
 			{
 				auto resolved = script;
@@ -605,8 +611,11 @@ namespace aether::app::web
 					}
 					resolved.properties[property].i64 = created[std::distance(description.entities.begin(), found)].id;
 				}
-				scripts.push_back({created[i], std::move(resolved)});
+				const auto scriptIndex = static_cast<std::uint32_t>(component.scripts.size());
+				component.scripts.push_back(ScriptEntry{.path = resolved.type, .attached = false, .properties = resolved.properties});
+				scripts.push_back({created[i], std::move(resolved), scriptIndex});
 			}
+			world.Emplace<ScriptComponent>(created[i], std::move(component));
 		}
 		return scripts;
 	}

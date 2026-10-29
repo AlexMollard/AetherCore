@@ -21,6 +21,7 @@ namespace aether::app::web
 		Expected<void> Frame(double now, bool& capture);
 		AetherGameplayStatus Invoke(const AetherGameplayServiceRequest& request, AetherGameplayPropertyValue& result, AetherGameplayUtf8Buffer buffer);
 		void Stop();
+		std::uint64_t GetInstanceHandle(Entity entity, std::uint32_t scriptIndex) const;
 
 		void ResetTiming()
 		{
@@ -34,6 +35,7 @@ namespace aether::app::web
 			Entity entity;
 			std::uint64_t handle;
 			std::string type;
+			std::uint32_t scriptIndex = 0;
 		};
 
 		Expected<void> Load(const std::string& name, bool deferScripts = false);

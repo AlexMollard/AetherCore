@@ -236,6 +236,33 @@ TEST_CASE("Shared gameplay runner preserves ordered sibling lifecycle and reload
 	CHECK(fixture.state.contextsValid);
 }
 
+TEST_CASE("Predicted prefab hierarchy attaches synchronously without updating twice")
+{
+	RunnerFixture fixture;
+	const Entity root = fixture.Scripted({ScriptEntry{.path = "First"}});
+	const Entity child = fixture.Scripted({ScriptEntry{.path = "Second"}});
+	bool nested = false;
+	fixture.state.onAttach = [&]
+	{
+		if (!std::exchange(nested, true))
+		{
+			fixture.runner->AttachPredicted(fixture.world, {child});
+		}
+	};
+	fixture.runner->AttachPredicted(fixture.world, {root, child});
+	CHECK(std::ranges::count(fixture.state.calls, "attach:1") == 1);
+	CHECK(std::ranges::count(fixture.state.calls, "attach:2") == 1);
+	CHECK(std::ranges::count(fixture.state.calls, "update:1") == 0);
+	CHECK(std::ranges::count(fixture.state.calls, "update:2") == 0);
+	fixture.state.onAttach = {};
+	fixture.runner->Update(fixture.world, 0.1f);
+	CHECK(std::ranges::count(fixture.state.calls, "attach:1") == 1);
+	CHECK(std::ranges::count(fixture.state.calls, "attach:2") == 1);
+	CHECK(std::ranges::count(fixture.state.calls, "update:1") == 1);
+	CHECK(std::ranges::count(fixture.state.calls, "update:2") == 1);
+	CHECK(fixture.state.contextsValid);
+}
+
 TEST_CASE("Shared gameplay runner tolerates an attach callback growing component and script storage")
 {
 	RunnerFixture fixture;
