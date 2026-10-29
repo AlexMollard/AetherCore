@@ -26,17 +26,16 @@ namespace aether::webgpu
 		std::array<WGPUBuffer, 3> histograms{};
 		std::array<bool, 3> ready{};
 		unsigned width = 0, height = 0;
-		std::uint64_t generation = 0, sceneGeneration = 0;
+		unsigned outputWidth = 0, outputHeight = 0;
+		float renderScale = 1;
 		std::uint64_t frameIndex = 0;
-		float lastTime = -1;
-		glm::mat4 lastViewProj{1};
-		bool enabled = false;
 		~WebExposureState();
 	};
 
 	struct WebExposureFrame
 	{
 		std::shared_ptr<WebExposureState> state;
+		std::array<bool, 3> ready{};
 		WGPUBuffer uniform = nullptr;
 		std::uint32_t slot = 0;
 		std::uint64_t frameIndex = 0;
@@ -49,7 +48,7 @@ namespace aether::webgpu
 	public:
 		~WebExposureRenderer();
 		bool Initialize(WGPUDevice device);
-		[[nodiscard]] std::expected<std::shared_ptr<WebExposureState>, std::string> Prepare(WGPUDevice device, WGPUQueue queue, const RenderFramePacket& packet, unsigned width, unsigned height, std::uint64_t sceneGeneration = 0);
+		[[nodiscard]] std::expected<std::shared_ptr<WebExposureState>, std::string> Prepare(WGPUDevice device, WGPUQueue queue, const RenderFramePacket& packet, unsigned width, unsigned height, unsigned outputWidth, unsigned outputHeight);
 		void Encode(WGPUDevice device,
 		        WGPUQueue queue,
 		        WGPUCommandEncoder encoder,
@@ -68,6 +67,7 @@ namespace aether::webgpu
 		        const gpu::PostEffectsSettings& settings,
 		        const std::shared_ptr<WebExposureState>& state,
 		        std::unique_ptr<WebExposureFrame>& frame);
+		void Commit(const std::shared_ptr<WebExposureState>& state, const WebExposureFrame* frame);
 		void Reset();
 		void Shutdown();
 		std::string error;
@@ -77,6 +77,5 @@ namespace aether::webgpu
 		WGPUBindGroupLayout m_layout = nullptr;
 		WGPUSampler m_sampler = nullptr;
 		std::shared_ptr<WebExposureState> m_state;
-		std::uint64_t m_generation = 0;
 	};
 } // namespace aether::webgpu

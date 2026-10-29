@@ -166,7 +166,7 @@ namespace aether::webgpu
 		return true;
 	}
 
-	std::expected<std::shared_ptr<WebExposureState>, std::string> WebExposureRenderer::Prepare(WGPUDevice device, WGPUQueue queue, const RenderFramePacket& packet, unsigned width, unsigned height, std::uint64_t sceneGeneration)
+	std::expected<std::shared_ptr<WebExposureState>, std::string> WebExposureRenderer::Prepare(WGPUDevice device, WGPUQueue queue, const RenderFramePacket& packet, unsigned width, unsigned height, unsigned outputWidth, unsigned outputHeight)
 	{
 		if (!width || !height || width > 8192 || height > 8192 || !std::isfinite(packet.elapsedTime))
 		{
@@ -187,10 +187,12 @@ namespace aether::webgpu
 				}
 			}
 		}
-		const bool enabled = packet.postEffects.autoExposure;
-		if (!m_state || m_state->width != width || m_state->height != height || m_state->sceneGeneration != sceneGeneration || m_state->enabled != enabled)
+		// Native keeps the adapted value and pending histogram across scene, camera,
+		// and enable changes; recreating the post stack on extent changes resets it.
+		auto state = m_state;
+		if (!state || state->width != width || state->height != height || state->outputWidth != outputWidth || state->outputHeight != outputHeight || state->renderScale != packet.postEffects.renderScale)
 		{
-			auto state = std::make_shared<WebExposureState>();
+			state = std::make_shared<WebExposureState>();
 			state->buffer = Buffer(device, 16, WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc);
 			if (!state->buffer)
 			{
@@ -210,16 +212,12 @@ namespace aether::webgpu
 			}
 			state->width = width;
 			state->height = height;
-			state->generation = ++m_generation;
-			state->sceneGeneration = sceneGeneration;
-			state->enabled = enabled;
-			m_state = std::move(state);
+			state->outputWidth = outputWidth;
+			state->outputHeight = outputHeight;
+			state->renderScale = packet.postEffects.renderScale;
 		}
-		m_state->lastTime = packet.elapsedTime;
-		m_state->enabled = enabled;
-		m_state->lastViewProj = viewProj;
-		m_state->frameIndex = packet.temporalFrameIndex == UINT64_MAX ? packet.frameIndex : packet.temporalFrameIndex;
-		return m_state;
+		state->frameIndex = packet.temporalFrameIndex == UINT64_MAX ? packet.frameIndex : packet.temporalFrameIndex;
+		return state;
 	}
 
 	void WebExposureRenderer::EncodeAdapt(WGPUDevice device,
@@ -239,6 +237,7 @@ namespace aether::webgpu
 		}
 		auto owned = std::make_unique<WebExposureFrame>();
 		owned->state = state;
+		owned->ready = state->ready;
 		owned->frameIndex = state->frameIndex;
 		owned->slot = static_cast<std::uint32_t>(state->frameIndex % state->histograms.size());
 		if (!settings.autoExposure)
@@ -278,7 +277,7 @@ namespace aether::webgpu
 			error = "WEB_EXPOSURE_BINDING: meter binding failed";
 			return;
 		}
-		if (state->ready[owned->slot])
+		if (owned->ready[owned->slot])
 		{
 			WGPUComputePassDescriptor descriptor = WGPU_COMPUTE_PASS_DESCRIPTOR_INIT;
 			const auto pass = wgpuCommandEncoderBeginComputePass(encoder, &descriptor);
@@ -287,7 +286,7 @@ namespace aether::webgpu
 			wgpuComputePassEncoderDispatchWorkgroups(pass, 1, 1, 1);
 			wgpuComputePassEncoderEnd(pass);
 			wgpuComputePassEncoderRelease(pass);
-			state->ready[owned->slot] = false;
+			owned->ready[owned->slot] = false;
 		}
 		frame = std::move(owned);
 	}
@@ -316,7 +315,16 @@ namespace aether::webgpu
 		wgpuComputePassEncoderDispatchWorkgroups(pass, 144, 1, 1);
 		wgpuComputePassEncoderEnd(pass);
 		wgpuComputePassEncoderRelease(pass);
-		state->ready[frame->slot] = true;
+		frame->ready[frame->slot] = true;
+	}
+
+	void WebExposureRenderer::Commit(const std::shared_ptr<WebExposureState>& state, const WebExposureFrame* frame)
+	{
+		if (frame)
+		{
+			state->ready = frame->ready;
+		}
+		m_state = state;
 	}
 
 } // namespace aether::webgpu

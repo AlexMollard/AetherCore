@@ -870,7 +870,7 @@ namespace aether::webgpu
 				return false;
 			}
 			frame->hdr = std::move(*allocated);
-			auto effects = self.post.Allocate(self.device, self.queue, *postPlan, packet);
+			auto effects = self.post.Allocate(self.device, self.queue, *postPlan, packet, self.width, self.height);
 			if (!effects)
 			{
 				self.Fail("WEBGPU_EFFECTS", Text(effects.error().c_str()));
@@ -1063,6 +1063,7 @@ namespace aether::webgpu
 		const auto uiGlyphs = std::count_if(packet.renderUi.commands.begin(), packet.renderUi.commands.end(),
 		        [](const auto& command) { return command.type == ui::kShapeGlyph; });
 		EM_ASM({ aetherRuntime.uiGlyphs = $0; }, static_cast<unsigned>(uiGlyphs));
+		self.post.Commit(packet, frame->post.get());
 		wgpuCommandBufferRelease(commands);
 		wgpuCommandEncoderRelease(encoder);
 		wgpuTextureViewRelease(view);

@@ -138,8 +138,7 @@ namespace aether::webgpu
 		}
 		m_white.reset();
 		m_exposure.Shutdown();
-		m_previous_width = m_previous_height = 0;
-		m_previous_time = -1;
+		m_hasPrevious = false;
 	}
 
 	bool WebPostRenderer::Initialize(WGPUDevice device, WGPUQueue queue)
@@ -249,11 +248,11 @@ namespace aether::webgpu
 		return true;
 	}
 
-	std::expected<std::unique_ptr<WebPostFrame>, std::string> WebPostRenderer::Allocate(WGPUDevice device, WGPUQueue queue, const gpu::PostEffectsPlan& plan, const RenderFramePacket& packet)
+	std::expected<std::unique_ptr<WebPostFrame>, std::string> WebPostRenderer::Allocate(WGPUDevice device, WGPUQueue queue, const gpu::PostEffectsPlan& plan, const RenderFramePacket& packet, unsigned outputWidth, unsigned outputHeight)
 	{
 		auto frame = std::make_unique<WebPostFrame>();
 		frame->plan = plan;
-		auto exposure = m_exposure.Prepare(device, queue, packet, plan.width, plan.height, packet.renderSceneGeneration);
+		auto exposure = m_exposure.Prepare(device, queue, packet, plan.width, plan.height, outputWidth, outputHeight);
 		if (!exposure)
 		{
 			return std::unexpected(exposure.error());
@@ -317,8 +316,7 @@ namespace aether::webgpu
 		result.proj = packet.proj;
 		result.viewProj = packet.proj * packet.view;
 		result.invViewProj = glm::inverse(result.viewProj);
-		const bool reset = !m_previous_width || m_previous_width != frame.plan.width || m_previous_height != frame.plan.height;
-		result.prevViewProj = reset ? result.viewProj : m_previous;
+		result.prevViewProj = m_hasPrevious ? m_previous : result.viewProj;
 		result.shadowViewProjCascades = shadows.viewProj;
 		result.cameraWorldPos = packet.cameraWorldPos;
 		result.sunDirectionIntensity = packet.sunDirectionIntensity;
@@ -626,12 +624,18 @@ namespace aether::webgpu
 				Draw(device, queue, encoder, Pass::Fxaa, canvas, outputWidth, outputHeight, inputs, constants, &present, sizeof(present), packet, frame);
 			}
 		}
+	}
+
+	void WebPostRenderer::Commit(const RenderFramePacket& packet, const WebPostFrame* frame)
+	{
+		if (frame)
+		{
+			m_exposure.Commit(frame->exposureState, frame->exposureFrame.get());
+		}
 		if (packet.advanceTemporalEffects)
 		{
-			m_previous = constants.viewProj;
-			m_previous_width = w;
-			m_previous_height = h;
-			m_previous_time = packet.elapsedTime;
+			m_previous = packet.proj * packet.view;
+			m_hasPrevious = true;
 		}
 	}
 } // namespace aether::webgpu

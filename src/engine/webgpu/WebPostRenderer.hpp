@@ -47,7 +47,7 @@ namespace aether::webgpu
 		~WebPostRenderer();
 		bool Initialize(WGPUDevice device, WGPUQueue queue);
 		void Shutdown();
-		[[nodiscard]] std::expected<std::unique_ptr<WebPostFrame>, std::string> Allocate(WGPUDevice device, WGPUQueue queue, const gpu::PostEffectsPlan& plan, const RenderFramePacket& packet);
+		[[nodiscard]] std::expected<std::unique_ptr<WebPostFrame>, std::string> Allocate(WGPUDevice device, WGPUQueue queue, const gpu::PostEffectsPlan& plan, const RenderFramePacket& packet, unsigned outputWidth, unsigned outputHeight);
 		void ClearOpaque(WGPUCommandEncoder encoder, const WebPostFrame& frame) const;
 		void EncodeAmbient(WGPUDevice device, WGPUQueue queue, WGPUCommandEncoder encoder, const RenderFramePacket& packet, WebPostFrame& frame, const WebShadowInputs& shadows);
 		void EncodeScene(WGPUDevice device, WGPUQueue queue, WGPUCommandEncoder encoder, WGPUTextureView scene, const RenderFramePacket& packet, WebPostFrame& frame, const WebShadowInputs& shadows);
@@ -62,6 +62,7 @@ namespace aether::webgpu
 		        WebPostFrame& frame,
 		        const WebShadowInputs& shadows,
 		        const std::function<void(WGPUTextureView, unsigned, unsigned)>& afterTonemap = {});
+		void Commit(const RenderFramePacket& packet, const WebPostFrame* frame);
 		std::string error;
 
 	private:
@@ -102,7 +103,6 @@ namespace aether::webgpu
 		std::unique_ptr<WebEffectImage> m_white;
 		WebExposureRenderer m_exposure;
 		glm::mat4 m_previous{1};
-		unsigned m_previous_width = 0, m_previous_height = 0;
-		float m_previous_time = -1;
+		bool m_hasPrevious = false;
 	};
 } // namespace aether::webgpu
