@@ -8,7 +8,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {checkBudgets, measureDistribution, qualifyAgentGame} from './distribution-metrics.mjs';
 import {isHardwareAdapter} from '../experiments/rust-webgpu/browser-checks.mjs';
-import {isExportPath, pakPaths, validate3dAssets} from './export-paths.mjs';
+import {isExportPath, pakPaths, streamingPaths, validate3dAssets} from './export-paths.mjs';
 
 const options=Object.fromEntries(process.argv.slice(2).map(arg=>{const i=arg.indexOf('=');return [arg.slice(2,i),arg.slice(i+1)];}));
 const root=path.resolve(options.root), reportPath=path.resolve(options.report);
@@ -30,8 +30,13 @@ try {
   assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256);
   if(/\.(m?js|html|wasm)$/.test(file.path))for(const marker of ['aetherTestInternal','aether_web_lose_device','aether_browser_test_panic','test-bridge.js'])assert.equal(bytes.includes(Buffer.from(marker)),false,marker+' leaked into export');
  }
+ const contentPaths=pakPaths(await readFile(path.join(root,'game.pak')));
+ if(manifest.files.some(file=>file.path==='streaming-manifest.json')){
+  const streaming=JSON.parse(await readFile(path.join(root,'streaming-manifest.json'),'utf8'));
+  for(const name of streamingPaths(manifest,streaming))contentPaths.add(name);
+ }
  if(manifest.profile==='webgpu-3d-v1'){
-  validate3dAssets(manifest,pakPaths(await readFile(path.join(root,'game.pak'))));
+  validate3dAssets(manifest,contentPaths);
   assert.ok(['2d','3d'].includes(manifest.project.startupSceneKind),'Missing startup scene kind');
   report.checks.push({name:'3d-cooked-package-contract',status:'passed'});
  }

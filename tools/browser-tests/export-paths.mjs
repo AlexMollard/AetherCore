@@ -31,3 +31,21 @@ export function validate3dAssets(manifest, paths) {
                 throw Error(`Missing or invalid cooked ${kind} entry: ${name}`);
         }
 }
+
+export function streamingPaths(manifest, streaming) {
+    if (streaming.schemaVersion !== 1 || !streaming.assets || typeof streaming.assets !== 'object' || Array.isArray(streaming.assets))
+        throw Error('Invalid streaming manifest');
+    const files = new Map(manifest.files.map(file => [file.path, file]));
+    const paths = new Set();
+    for (const [reference, asset] of Object.entries(streaming.assets)) {
+        if (!reference.startsWith('project://') || !isExportPath(reference.slice(10)) ||
+            !asset || !/^[0-9a-f]{64}$/.test(asset.sha256) ||
+            asset.url !== 'streaming/' + asset.sha256 || !Number.isSafeInteger(asset.size) || asset.size < 0)
+            throw Error('Invalid streaming asset: ' + reference);
+        const file = files.get(asset.url);
+        if (!file || file.sizeBytes !== asset.size || file.sha256 !== asset.sha256)
+            throw Error('Missing or inconsistent streaming blob: ' + reference);
+        paths.add(reference.slice(10));
+    }
+    return paths;
+}

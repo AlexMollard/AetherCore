@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {isExportPath, pakPaths, validate3dAssets} from './export-paths.mjs';
+import {isExportPath, pakPaths, streamingPaths, validate3dAssets} from './export-paths.mjs';
 
 test('export paths support managed framework files without escaping the package', () => {
     for (const name of ['index.html','_framework/dotnet.native.hash.wasm','_framework/System.Runtime.hash.wasm']) {
@@ -26,4 +26,22 @@ test('3D manifest cooked assets must exist in the pak index', () => {
     assert.throws(()=>validate3dAssets({},paths),/declarations/);
     pak.writeUInt32LE(999,68);
     assert.throws(()=>pakPaths(pak),/Invalid game.pak path/);
+});
+
+test('streamed cooked assets require an integrity-checked content-addressed blob', () => {
+    const sha256 = 'a'.repeat(64), url = 'streaming/' + sha256;
+    const manifest = {
+        files: [{path:url, sizeBytes:424, sha256}],
+        cookedAssets: {meshes:['assets/model.mesh'], shaders:[]}
+    };
+    const streamed = {schemaVersion:1, assets:{
+        'project://assets/model.mesh': {url, size:424, sha256}
+    }};
+    validate3dAssets(manifest,streamingPaths(manifest,streamed));
+    assert.throws(()=>streamingPaths({...manifest,files:[]},streamed),/Missing/);
+    assert.throws(()=>streamingPaths({...manifest,files:[{path:url,sizeBytes:425,sha256}]},streamed),/inconsistent/);
+    assert.throws(()=>streamingPaths(manifest,{...streamed,schemaVersion:2}),/Invalid streaming manifest/);
+    assert.throws(()=>streamingPaths(manifest,{...streamed,assets:{
+        'project://../outside.mesh':streamed.assets['project://assets/model.mesh']
+    }}),/Invalid streaming asset/);
 });
