@@ -1,0 +1,1201 @@
+# Fixed camera/radiance qualification; effects disabled.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.0, 0.0, 0.0]
+sun_direction = [0.0, 0.0, 1.0]
+sun_intensity = 0.0
+sky_horizon = [0.0, 0.0, 0.0]
+sky_zenith = [0.0, 0.0, 0.0]
+sky_void = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Fixed camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 60.0
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'White rough dielectric'
+mesh_renderer = true
+position = [0.0, 0.0, -5.0]
+scale = [9.0, 9.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [1.0, 1.0, 1.0, 1.0]
+roughness = 1.0
+metallic = 0.0
+
+[[entities]]
+name = 'Distributed light 000'
+position = [-12.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 001'
+position = [-10.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 002'
+position = [-8.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 003'
+position = [-6.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 004'
+position = [-4.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 005'
+position = [-2.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 006'
+position = [0.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 007'
+position = [2.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 008'
+position = [4.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 009'
+position = [6.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 010'
+position = [8.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 011'
+position = [10.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 012'
+position = [12.0, -9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 013'
+position = [-12.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 014'
+position = [-10.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 015'
+position = [-8.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 016'
+position = [-6.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 017'
+position = [-4.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 018'
+position = [-2.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 019'
+position = [0.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 020'
+position = [2.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 021'
+position = [4.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 022'
+position = [6.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 023'
+position = [8.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 024'
+position = [10.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 025'
+position = [12.0, -7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 026'
+position = [-12.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 027'
+position = [-10.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 028'
+position = [-8.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 029'
+position = [-6.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 030'
+position = [-4.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 031'
+position = [-2.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 032'
+position = [0.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 033'
+position = [2.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 034'
+position = [4.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 035'
+position = [6.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 036'
+position = [8.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 037'
+position = [10.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 038'
+position = [12.0, -5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 039'
+position = [-12.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 040'
+position = [-10.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 041'
+position = [-8.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 042'
+position = [-6.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 043'
+position = [-4.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 044'
+position = [-2.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 045'
+position = [0.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 046'
+position = [2.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 047'
+position = [4.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 048'
+position = [6.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 049'
+position = [8.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 050'
+position = [10.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 051'
+position = [12.0, -3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 052'
+position = [-12.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 053'
+position = [-10.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 054'
+position = [-8.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 055'
+position = [-6.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 056'
+position = [-4.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 057'
+position = [-2.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 058'
+position = [0.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 059'
+position = [2.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 060'
+position = [4.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 061'
+position = [6.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 062'
+position = [8.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 063'
+position = [10.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 064'
+position = [12.0, -1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 065'
+position = [-12.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 066'
+position = [-10.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 067'
+position = [-8.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 068'
+position = [-6.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 069'
+position = [-4.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 070'
+position = [-2.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 071'
+position = [0.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 072'
+position = [2.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 073'
+position = [4.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 074'
+position = [6.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 075'
+position = [8.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 076'
+position = [10.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 077'
+position = [12.0, 1.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 078'
+position = [-12.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 079'
+position = [-10.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 080'
+position = [-8.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 081'
+position = [-6.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 082'
+position = [-4.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 083'
+position = [-2.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 084'
+position = [0.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 085'
+position = [2.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 086'
+position = [4.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 087'
+position = [6.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 088'
+position = [8.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 089'
+position = [10.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 090'
+position = [12.0, 3.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 091'
+position = [-12.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 092'
+position = [-10.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 093'
+position = [-8.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 094'
+position = [-6.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 095'
+position = [-4.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 096'
+position = [-2.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 097'
+position = [0.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 098'
+position = [2.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 099'
+position = [4.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 100'
+position = [6.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 101'
+position = [8.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 102'
+position = [10.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 103'
+position = [12.0, 5.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 104'
+position = [-12.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 105'
+position = [-10.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 106'
+position = [-8.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 107'
+position = [-6.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 108'
+position = [-4.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 109'
+position = [-2.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 110'
+position = [0.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 111'
+position = [2.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 112'
+position = [4.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 113'
+position = [6.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 114'
+position = [8.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 115'
+position = [10.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 116'
+position = [12.0, 7.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 117'
+position = [-12.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 118'
+position = [-10.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 119'
+position = [-8.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 120'
+position = [-6.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 121'
+position = [-4.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 122'
+position = [-2.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 123'
+position = [0.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 124'
+position = [2.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 125'
+position = [4.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 126'
+position = [6.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Distributed light 127'
+position = [8.0, 9.0, -4.0]
+[entities.point_light]
+color = [1.0, 1.0, 1.0]
+intensity = 1.0
+radius = 1.5
+shadow = false
+
+[[entities]]
+name = 'Off-axis 129th light'
+position = [1.5, 0.0, -3.0]
+[entities.point_light]
+color = [1.0, 0.3, 0.1]
+intensity = 4.0
+radius = 3.0
+shadow = false

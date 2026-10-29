@@ -1,0 +1,101 @@
+# Three view-depth receivers around the 320-unit directional shadow limit.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+[environment]
+ambient = [0.0, 0.0, 0.0]
+sun_direction = [0.6, 0.0, 0.8]
+sun_intensity = 2.0
+sky_horizon = [0.0, 0.0, 0.0]
+sky_zenith = [0.0, 0.0, 0.0]
+sky_void = [0.0, 0.0, 0.0]
+[[entities]]
+name = 'Fixed camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 400.0
+background = 'solid_colour'
+clear_color = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Near receiver'
+mesh_renderer = true
+position = [-2.5, 0.0, -250.0]
+scale = [2.3, 3.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.7, 0.7, 0.7, 1.0]
+roughness = 1.0
+receive_shadows = false
+[[entities]]
+name = 'Near caster'
+mesh_renderer = true
+position = [-2.05, 0.0, -249.0]
+scale = [0.6, 0.6, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.1, 0.1, 0.1, 1.0]
+roughness = 1.0
+
+[[entities]]
+name = 'Fade receiver'
+mesh_renderer = true
+position = [0, 0.0, -300.0]
+scale = [2.3, 3.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.7, 0.7, 0.7, 1.0]
+roughness = 1.0
+receive_shadows = false
+[[entities]]
+name = 'Fade caster'
+mesh_renderer = true
+position = [0.45, 0.0, -299.0]
+scale = [0.6, 0.6, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.1, 0.1, 0.1, 1.0]
+roughness = 1.0
+
+[[entities]]
+name = 'Beyond receiver'
+mesh_renderer = true
+position = [2.5, 0.0, -330.0]
+scale = [2.3, 3.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.7, 0.7, 0.7, 1.0]
+roughness = 1.0
+receive_shadows = false
+[[entities]]
+name = 'Beyond caster'
+mesh_renderer = true
+position = [2.95, 0.0, -329.0]
+scale = [0.6, 0.6, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.1, 0.1, 0.1, 1.0]
+roughness = 1.0

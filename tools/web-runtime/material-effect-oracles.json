@@ -18,7 +18,17 @@
     "BrowserParticlesDisplayOnly",
     "BrowserGraph",
     "BrowserGraphBackface",
-    "BrowserGraphBackfaceOff"
+    "BrowserGraphBackfaceOff",
+    "BrowserCrossMaskOn",
+    "BrowserCrossMaskOff",
+    "BrowserCrossMaskSolid",
+    "BrowserCrossSkinOn",
+    "BrowserCrossSkinOff",
+    "BrowserCrossMirror",
+    "BrowserCrossControl",
+    "BrowserSpecularVariance",
+    "BrowserDataMipAlpha",
+    "BrowserDataMipOpaque"
   ],
   "graphics": {
     "contactShadows": true,
@@ -32,6 +42,31 @@
     "exposure": 1
   },
   "pairs": [
+    {
+      "name": "data mip alpha independence",
+      "on": "BrowserDataMipAlpha",
+      "off": "BrowserDataMipOpaque",
+      "region": [0.3, 0.3, 0.7, 0.7],
+      "minDifference": 0,
+      "maxDifference": 1,
+      "direction": "unchanged"
+    },
+    {
+      "name": "mirrored tangent normals",
+      "on": "BrowserCrossMirror",
+      "off": "BrowserCrossControl",
+      "region": [0.3, 0.3, 0.7, 0.7],
+      "minDifference": 2,
+      "direction": "darker"
+    },
+    {
+      "name": "animated mirrored cutout skin shadow",
+      "on": "BrowserCrossSkinOn",
+      "off": "BrowserCrossSkinOff",
+      "region": [0.42, 0.46, 0.48, 0.49],
+      "minDifference": 1,
+      "direction": "darker"
+    },
     {
       "name": "water shading",
       "on": "BrowserWater",

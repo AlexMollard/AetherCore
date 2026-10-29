@@ -65,7 +65,7 @@ try {
   const page=await context.newPage();page.setDefaultTimeout(20000);
   page.on('console',message=>report.console.push({type:message.type(),text:message.text()}));page.on('pageerror',error=>report.pageErrors.push(error.stack));
   await page.goto(base+'/nested/game/');
-  await page.waitForFunction(()=>(aetherRuntime.rendererReady && aetherRuntime.fontReady && aetherRuntime.scene) || aetherRuntime.status==='failed');
+  await page.waitForFunction(()=>(aetherRuntime.rendererReady && aetherRuntime.scene) || aetherRuntime.status==='failed');
   assert.notEqual(await page.evaluate(()=>aetherRuntime.status),'failed',JSON.stringify(await page.evaluate(()=>aetherRuntime.diagnostics)));
   report.environment.viewport=page.viewportSize();report.environment.canvas=await page.locator('#canvas').evaluate(canvas=>({width:canvas.width,height:canvas.height,devicePixelRatio}));
   report.environment.gpu=await page.evaluate(()=>aetherRuntime.adapter);assert.ok(isHardwareAdapter(report.environment.gpu),'Hardware WebGPU adapter required');
@@ -91,7 +91,7 @@ try {
    await page.waitForFunction(()=>aetherRuntime.platform.committedWrites>0);
    assert.equal(await page.evaluate(()=>aetherPlatform.read('ember_best')),'10');
    report.emberRun={score:10,keyboardMovement:true,retry:true,realAudio:true,completedRun:true,savedBest:10};
-   await page.reload();await page.waitForFunction(()=>aetherRuntime.rendererReady && aetherRuntime.fontReady && aetherRuntime.storageReady);
+   await page.reload();await page.waitForFunction(()=>aetherRuntime.rendererReady && aetherRuntime.storageReady);
    assert.equal(await page.evaluate(()=>aetherPlatform.read('ember_best')),'10','Best score survives a fresh reload');
    await page.locator('#start').click();assert.equal(await page.evaluate(()=>document.activeElement?.id),'canvas');
    await page.waitForFunction(()=>aetherRuntime.ticks>=3);
@@ -117,7 +117,7 @@ try {
   await page.goto(base+'/embed.html');
   await page.locator('iframe').waitFor();
   const frame=page.frames().find(frame=>frame.url().includes('/nested/game/'));
-  assert.ok(frame);await frame.waitForFunction(()=>aetherRuntime.scene && aetherRuntime.rendererReady && aetherRuntime.fontReady);
+  assert.ok(frame);await frame.waitForFunction(()=>aetherRuntime.scene && aetherRuntime.rendererReady);
   await frame.locator('#start').click();assert.equal(await frame.evaluate(()=>document.activeElement?.id),'canvas','Iframe Play must focus the game');
   await frame.waitForFunction(()=>aetherRuntime.ticks>=3 || aetherRuntime.status==='failed');
   assert.equal(await frame.evaluate(()=>aetherRuntime.status),'running');

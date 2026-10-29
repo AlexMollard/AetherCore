@@ -85,11 +85,27 @@ await materialPng('browser-material-alpha.png', 1, 1, () => [255, 255, 255, 128]
 await materialPng('browser-material-mask.png', 2, 2, (x, y) => [255, 255, 255, (x + y) % 2 ? 255 : 0]);
 await materialPng('browser-shadow-art.png', 4, 4, (x, y) => [255, 255, 255, y < 2 ? 255 : 0]);
 await materialPng('browser-normal-right.png', 1, 1, () => [255, 128, 128, 255]);
+// Opposing unit normals average to a short vector in lower mips, producing
+// measurable normal variance for the specular-filter control.
+await materialPng('browser-normal-variance.png', 256, 256, (x, y) =>
+    (x + y) % 2 ? [230, 128, 204, 255] : [26, 128, 204, 255]);
 await materialPng('browser-orm.png', 1, 1, () => [64, 128, 255, 255]);
-// One white column per eight texels: level 3 is encoded gray 32. Base-only
-// sampling aliases to black at these fixture pixel centers.
+// Metallic/roughness maps have identical data RGB; alpha must not weight
+// their independently averaged mip channels.
+for (const [name, variableAlpha] of [['browser-data-alpha.png', true], ['browser-data-opaque.png', false]]) {
+    await materialPng(name, 256, 256, (x, y) => {
+        const high = (x + y) % 2;
+        return [high ? 255 : 0, high ? 255 : 0, 255, variableAlpha && !high ? 64 : 255];
+    });
+}
+// One white column per eight texels: minification retains one eighth radiance.
+// Base-only sampling aliases to black at these fixture pixel centers.
 await materialPng('browser-material-mips.png', 64, 64, x => {
     const value = x % 8 === 7 ? 255 : 0;
+    return [value, value, value, 255];
+});
+await materialPng('browser-sampler.png', 256, 256, x => {
+    const value = x % 8 < 4 ? 224 : 32;
     return [value, value, value, 255];
 });
 const header = Buffer.alloc(13);

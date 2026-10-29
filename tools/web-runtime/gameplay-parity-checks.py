@@ -217,7 +217,7 @@ def perturb(web_states, amount):
 # 3D probe scripts live outside each project's scripts/ directory (projects/*/fixtures3d) because the 2D production
 # publisher scans everything under scripts/. Staging injects them into the private project only.
 FIXTURE_3D_SCRIPTS = ('Bodies3DProbe', 'Raycast3DProbe', 'Contacts3DProbe', 'Walker3DProbe', 'Ragdoll3DProbe', 'Skin3DProbe',
-                      'Spawner3DProbe', 'Transition3DProbe', 'TransitionResult3DProbe')
+                      'Spawner3DProbe', 'Transition3DProbe', 'TransitionResult3DProbe', 'TemporalCutProbe', 'TemporalSwitchProbe')
 
 
 def inject_3d_fixtures(language, project):

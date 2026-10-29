@@ -22,6 +22,41 @@ def validate_selection(scenes, graphics):
         raise ValueError('Foliage qualification requires foliageSkyLook>0 for both backends')
     if any(scene.startswith('BrowserGraphBackface') for scene in selected) and 'BrowserGraph' not in selected:
         raise ValueError('Backface qualification also requires BrowserGraph to stage and verify the native custom shader')
+    mask = {'BrowserCrossMaskOn', 'BrowserCrossMaskOff', 'BrowserCrossMaskSolid'}
+    if selected & mask and not mask <= selected:
+        raise ValueError('Cutout-shadow qualification requires masked, receive-off and solid controls')
+    for pair in ({'BrowserCrossSkinOn', 'BrowserCrossSkinOff'},
+                 {'BrowserCrossMirror', 'BrowserCrossControl'}):
+        if selected & pair and not pair <= selected:
+            raise ValueError('Cross-product qualification requires both controls: ' + ', '.join(sorted(pair)))
+
+
+def specular_filter_features(on, off, width, height, region):
+    """Compare the same fixture at specularFilter=1 and =0, on one backend."""
+    metrics = region_metrics(on, off, width, height, region)
+    checks = {'filterChangesHighlight': metrics['meanAbsoluteDifference'] >= 1.0}
+    return dict(passed=all(checks.values()), checks=checks, **metrics)
+
+
+def mirrored_normal_features(mirrored, control, width, height, region):
+    """The +X tangent-space normal faces the +X light only without reflection."""
+    metrics = region_metrics(control, mirrored, width, height, region)
+    checks = {'unmirroredFacesLight': metrics['meanSignedDifference'] >= 2.0}
+    return dict(passed=all(checks.values()), checks=checks, **metrics)
+
+
+def cutout_shadow_features(masked, unshadowed, solid, width, height, hole, opaque):
+    """A cutout hole stays lit while the adjacent opaque part casts a shadow."""
+    hole_mask = region_metrics(masked, unshadowed, width, height, hole)
+    hole_solid = region_metrics(solid, unshadowed, width, height, hole)
+    opaque_mask = region_metrics(masked, unshadowed, width, height, opaque)
+    checks = {
+        'holeRemainsLit': hole_mask['meanAbsoluteDifference'] <= 2.0,
+        'solidCastsIntoHole': hole_solid['meanSignedDifference'] <= -2.0,
+        'opaquePartCasts': opaque_mask['meanSignedDifference'] <= -2.0,
+    }
+    return dict(passed=all(checks.values()), checks=checks,
+                holeMasked=hole_mask, holeSolid=hole_solid, opaqueMasked=opaque_mask)
 
 
 def region_metrics(on, off, width, height, region):
@@ -45,6 +80,7 @@ def region_metrics(on, off, width, height, region):
 
 def pair_features(pair, on, off, width, height):
     metrics = region_metrics(on, off, width, height, pair['region'])
+    normal = mirrored_normal_features(on, off, width, height, pair['region']) if pair['on'] == 'BrowserCrossMirror' else None
     checks = dict(authoredReceiverChanges=metrics['meanAbsoluteDifference'] >= pair['minDifference'])
     if pair.get('direction') == 'darker':
         checks['receiverDarkens'] = metrics['meanSignedDifference'] < -pair['minDifference']
@@ -54,6 +90,8 @@ def pair_features(pair, on, off, width, height):
         checks['receiverPreserved'] = metrics['meanAbsoluteDifference'] <= pair['maxDifference']
     corner = region_metrics(on, off, width, height, [.02, .02, .08, .08])
     checks['independentCornerUnchanged'] = corner['meanAbsoluteDifference'] <= 1
+    if normal:
+        checks.update(normal['checks'])
     return dict(passed=all(checks.values()), checks=checks, **metrics, cornerDifference=corner['meanAbsoluteDifference'],
                 receiverRegion=pair['region'], minimumMeanDifference=pair['minDifference'])
 
@@ -65,7 +103,7 @@ def scene_features(scene, image, width, height, sample):
     # when its noise hash became bit-identical across backends; its 3x3 neighbourhood
     # is >138 in both molten scenes on both backends.
     centre = ((44, 32) if 'Foliage' in scene else (35, 34) if 'Plasma' in scene else (35, 41) if 'Molten' in scene
-              else (16, 32) if 'Blob' in scene else (32, 32))
+              else (48, 32) if scene == 'BrowserCrossMaskSolid' else (16, 32) if 'Blob' in scene else (32, 32))
     probes = dict(center=sample(*centre), left=sample(16, 32), right=sample(48, 32))
     if scene == 'BrowserParticlesDisplayOnly':
         background = sample(4, 4)

@@ -347,6 +347,32 @@ impl Script for Spawner3DProbe {
     }
 }
 
+// Both transitions occur on the tenth update, the exact frame captured by the
+// post parity harness. The earlier frames deliberately keep the camera still.
+gameplay_script! { pub struct TemporalCutProbe { pub ticks: i64 = 0 } }
+impl Script for TemporalCutProbe {
+    fn update(&mut self, ctx: &mut Context<'_>, _delta: f32) -> Result {
+        self.ticks += 1;
+        if self.ticks == 10 {
+            let mut position = ctx.position(ctx.entity())?;
+            position.x = 1.5;
+            ctx.set_position(ctx.entity(), position)?;
+        }
+        Ok(())
+    }
+}
+
+gameplay_script! { pub struct TemporalSwitchProbe { pub ticks: i64 = 0 } }
+impl Script for TemporalSwitchProbe {
+    fn update(&mut self, ctx: &mut Context<'_>, _delta: f32) -> Result {
+        self.ticks += 1;
+        if self.ticks == 10 {
+            ctx.load_scene("BrowserPostTemporalDestination")?;
+        }
+        Ok(())
+    }
+}
+
 // Lets a body fall for 20 ticks, saves a marker and loads the second 3D scene.
 gameplay_script! { pub struct Transition3DProbe { pub ticks: i64 = 0 } }
 

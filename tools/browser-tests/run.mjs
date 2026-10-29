@@ -206,7 +206,7 @@ try {
 		if (name === 'oversize-package')
 		    await page.waitForFunction(() => aetherRuntime.gameplayStopped);
 	    } else {
-		await page.waitForFunction(() => aetherRuntime.scene === 'ReferenceStart' && aetherRuntime.fontReady);
+		await page.waitForFunction(() => aetherRuntime.scene === 'ReferenceStart' && aetherRuntime.rendererReady);
 		await page.locator('#start').click();
 		await page.waitForFunction(() => aetherTest.readiness().ready && aetherRuntime.audioReady);
 		await page.locator('#canvas').focus();

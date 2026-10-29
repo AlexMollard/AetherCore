@@ -1,0 +1,241 @@
+# Matched shadow receive on/off; fixed camera, pose and exposure.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [0.0, 0.0, 0.0]
+sun_direction = [0.6, 0.0, 0.8]
+sun_intensity = 0.0
+sky_horizon = [0.0, 0.0, 0.0]
+sky_zenith = [0.0, 0.0, 0.0]
+sky_void = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Fixed camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Receiver'
+mesh_renderer = true
+position = [0.0, 0.0, -4.0]
+scale = [7.0, 7.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.7, 0.7, 0.7, 1.0]
+roughness = 1.0
+receive_shadows = true
+
+[[entities]]
+name = 'Shadow caster'
+mesh_renderer = true
+position = [0.0, 0.0, -2.0]
+scale = [1.0, 1.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+base_color = [0.1, 0.1, 0.1, 1.0]
+alpha_mask = true
+albedo = 'project://assets/textures/browser-shadow-art.png'
+roughness = 1.0
+
+[[entities]]
+name = 'Atlas spot 01'
+position = [0.00, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 02'
+position = [0.05, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 03'
+position = [0.10, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 04'
+position = [0.15, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 05'
+position = [0.20, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 06'
+position = [0.25, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 07'
+position = [0.30, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 08'
+position = [0.35, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 09'
+position = [0.40, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 10'
+position = [0.45, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 11'
+position = [0.50, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 12'
+position = [0.55, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 13'
+position = [0.60, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 14'
+position = [0.65, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 15'
+position = [0.70, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Atlas spot 16'
+position = [0.75, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 0.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0
+
+[[entities]]
+name = 'Shadow spot'
+position = [1.5, 0.0, 0.0]
+[entities.spot_light]
+color = [1.0, 1.0, 1.0]
+intensity = 30.0
+radius = 12.0
+shadow = true
+inner_rad = 0.8
+outer_rad = 1.0

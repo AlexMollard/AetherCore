@@ -6,6 +6,7 @@ Never publishes, changes user settings, or changes the maintained reference proj
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import hashlib
 import json
 import math
@@ -23,6 +24,7 @@ import zlib
 from material_effect_oracles import (SCENES as MATERIAL_SCENES, PAIRS as MATERIAL_PAIRS, LIMITS as MATERIAL_LIMITS,
                                      validate_selection as validate_material_selection, scene_features as material_scene_features,
                                      pair_features as material_pair_features)
+from ui_parity_oracles import scene_features as ui_scene_features, shader_features as ui_shader_features
 
 ROOT = Path(__file__).resolve().parents[2]
 SHADOWS = ('Sun', 'Point', 'Spot', 'Mask', 'Skin')
@@ -44,7 +46,14 @@ EFFECTS = ('ObjectLights', 'Baked', 'Gem', 'Sheen', 'Character', 'Fog', 'Clouds'
            'UvScroll', 'VertexColor', 'SkyMesh', 'CustomPass')
 EFFECT_SCENES = tuple('Browser'+name+state for name in EFFECTS for state in ('', 'Off') if name != 'Dof') + ('BrowserDofOn', 'BrowserDofOff', 'BrowserParticles2D', 'BrowserParticles3D')
 POST_SCENES = ('BrowserPostPattern', 'BrowserPostCorner', 'BrowserPostVolumetric', 'BrowserPostMotion', 'BrowserPostExposure', 'BrowserPostDisplay', 'BrowserPostTonemap')
-MAINTAINED_SCENES = tuple(dict.fromkeys(SCENES + EFFECT_SCENES + ('BrowserGraph',) + POST_SCENES + MATERIAL_SCENES))
+TEMPORAL_SCENES = ('BrowserPostTemporalCut', 'BrowserPostTemporalSwitch', 'BrowserPostTemporalControl', 'BrowserPostTemporalDestination')
+POST_SCENES += TEMPORAL_SCENES
+CAPACITY_PAIRS = (('BrowserTileOrthoOn', 'BrowserTileOrthoOff'),
+                  ('BrowserTilePerspectiveOn', 'BrowserTilePerspectiveOff'),
+                  ('BrowserShadowBudgetSelected', 'BrowserShadowBudgetDropped'),
+                  ('BrowserShadowAtlas17On', 'BrowserShadowAtlas17Off'),
+                  ('BrowserShadowFarFadeOn', 'BrowserShadowFarFadeOff'))
+MAINTAINED_SCENES = tuple(dict.fromkeys(SCENES + EFFECT_SCENES + ('BrowserGraph', 'BrowserSampler', 'BrowserUiParity', 'BrowserUiShaders', 'BrowserUiShadersOff', 'BrowserFontParity') + POST_SCENES + MATERIAL_SCENES + tuple(name for pair in CAPACITY_PAIRS for name in pair)))
 
 
 def graphics_settings(overrides):
@@ -53,7 +62,7 @@ def graphics_settings(overrides):
     defaults = dict(GRAPHICS, vignetteRoundness=1.0, motionBlurMaxRadius=16.0,
                     gtaoRadius=.5, gtaoStrength=1.0, specularFilter=0.0, foliageSkyLook=0.0,
                     bloomRadius=1.0, exposureKey=.18, exposureSpeed=2.0,
-                    reflectionMaxRoughness=.8, reflectionIntensity=1.0, shadowSplitLambda=.9)
+                    reflectionMaxRoughness=.8, reflectionIntensity=1.0, shadowSplitLambda=.9, mipLodBias=0.0)
     for key, value in overrides.items():
         if key not in defaults:
             raise ValueError('Unknown graphics setting: '+key)
@@ -70,6 +79,8 @@ def graphics_settings(overrides):
             raise ValueError('Render-scale qualification requires .25..2')
         if key == 'anisotropy' and (type(value) is not int or value not in (1, 2, 4, 8, 16)):
             raise ValueError('Invalid graphics setting: anisotropy')
+        if key == 'mipLodBias' and not -4 <= value <= 4:
+            raise ValueError('Invalid graphics setting: mipLodBias')
     return dict(GRAPHICS, **overrides)
 
 
@@ -283,6 +294,40 @@ def native_custom_pass_cook(project, build, deadline, scenes, *, slang=None, run
     return dict(status='passed', slang=version, overlay='Builds/Intermediate/shaders/', compiledShaders=compiled,
                 qualification='Actual native SPIR-V staged from the portable fixture; ordering oracles independently establish execution')
 
+def native_ui_shader_cook(project, build, deadline, scenes):
+    if 'BrowserUiShaders' not in scenes:
+        return dict(status='skipped', reason='No UI shader scene selected')
+    project = project.resolve()
+    if not project.is_relative_to((ROOT/'.temp/lighting-parity').resolve()):
+        raise ValueError('Native UI shader cooking is restricted to the private qualification project')
+    sys.path.insert(0, str(ROOT/'tools/shaders'))
+    from web_materials import run
+    slang = resolve_slang(build)
+    scratch = project/'Builds/Intermediate/ui-shader-logs'
+    scratch.mkdir(parents=True, exist_ok=True)
+    version_log = scratch/'slang-version.log'
+    run([slang, '-version'], version_log, deadline)
+    version = version_log.read_text(encoding='utf-8', errors='replace').strip()
+    pin = json.loads((ROOT/'tools/experiments/rust-webgpu/toolchain.json').read_text(encoding='utf-8'))['slang']
+    if pin not in version:
+        raise ValueError('NATIVE_UI_TOOLCHAIN: expected pinned Slang '+pin+'; got '+version)
+    compiled = []
+    for stem in ('ui_parity_effect', 'ui_parity_material', 'ui_glitch_text'):
+        source = project/'assets/shaders'/(stem+'.slang')
+        binary = project/'Builds/Intermediate/shaders'/(stem+'.spv')
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+        run([slang, source, '-target', 'spirv', '-emit-spirv-directly', '-fvk-use-scalar-layout',
+             '-matrix-layout-column-major', '-I', ROOT/'src/shaders', '-o', binary], scratch/(stem+'.log'), deadline)
+        data = binary.read_bytes()
+        if len(data) < 20 or data[:4] != bytes.fromhex('03022307'):
+            raise ValueError('NATIVE_UI_SPIRV: invalid module for '+stem)
+        if hashlib.sha256(source.read_bytes()).hexdigest() != source_hash:
+            raise RuntimeError('Native UI shader cooking changed the authored shader: '+stem)
+        compiled.append(dict(stem=stem, runtimeUri='shaders://'+stem+'.spv',
+                             output=str(binary), sha256=hashlib.sha256(data).hexdigest(), sourceSha256=source_hash))
+    return dict(status='passed', slang=version, overlay='Builds/Intermediate/shaders/', compiledShaders=compiled)
+
 
 def png(path):
     data = path.read_bytes()
@@ -388,6 +433,10 @@ def feature_checks(scene, image, width, height):
         checks['normalMapAffectsLighting'] = probes['base'][0]-probes['normal'][0] > 10
         checks['occlusionAffectsAmbient'] = probes['base'][0]-probes['ao'][0] > 5
         checks['metalRoughnessAffectsBrdf'] = max(abs(a-b) for a, b in zip(probes['metal'], probes['base'])) > 15
+    elif scene == 'BrowserSampler':
+        probes.update(front=p(16, 20), grazing=p(32, 44), background=p(4, 4))
+        checks['texturedSurfacesVisible'] = max(probes['front']) > 20 and max(probes['grazing']) > 20
+        checks['backgroundRemainsDark'] = max(probes['background']) < 10
     elif scene == 'BrowserLight2D':
         probes.update(blocked=p(52, 20), open=p(52, 44))
         checks['artworkAlphaShadow'] = probes['open'][0]-probes['blocked'][0] > 25
@@ -401,6 +450,29 @@ def feature_checks(scene, image, width, height):
         checks['customGraphRedSurface'] = all(red > 70 and red-green > 25 and green-blue > 8
                                               for red, green, blue in (probes['left'], probes['right']))
         checks['customGraphDiffersFromBackground'] = max(abs(a-b) for a,b in zip(probes['center'],p(4,4))) > 40
+    elif scene in ('BrowserUiParity', 'BrowserUiShaders', 'BrowserUiShadersOff'):
+        if (width, height) != (512, 512):
+            raise ValueError('UI fixture probes require 512x512')
+        probes.update(background=p(56, 56, False), panel=p(12, 12, False))
+        if scene == 'BrowserUiParity':
+            probes['maskChild'] = p(42.5, 11.25, False)
+            checks['childVisible'] = probes['maskChild'][2] > probes['maskChild'][0] + 20
+        elif scene == 'BrowserUiShaders':
+            checks['backgroundEffectVisible'] = probes['panel'][0] > probes['panel'][1] + 20
+        else:
+            probes['overlayControl'] = p(12, 26, False)
+            checks['unshadedControlVisible'] = probes['overlayControl'][1] > probes['overlayControl'][0] + 20
+    elif scene == 'BrowserFontParity':
+        if (width, height) != (512, 512):
+            raise ValueError('Font fixture probes require 512x512')
+        background = image[0:3]
+        def ink_count(y0, y1):
+            return sum(max(abs(image[(y * width + x) * 4 + c] - background[c]) for c in range(3)) > 40
+                       for y in range(y0, y1) for x in range(20, 490))
+        counts = [ink_count(20, 105), ink_count(130, 225), ink_count(250, 360)]
+        checks['allFontRowsVisible'] = all(count > 20 for count in counts)
+        return dict(passed=all(checks.values()), checks=checks, probes=probes,
+                    rowInkPixels=counts, centerProbeSquarePixels=list(center))
     elif scene in MATERIAL_SCENES:
         return material_scene_features(scene, image, width, height, p)
     elif scene in POST_SCENES:
@@ -444,6 +516,8 @@ def feature_checks(scene, image, width, height):
         else:
             checks['authoredMaterialVisible'] = max(probes['center']) > 40
             checks['materialDiffersFromBackground'] = max(abs(a-b) for a,b in zip(probes['center'],p(4,4))) > 25
+    elif any(scene in pair for pair in CAPACITY_PAIRS):
+        checks['receiverRendered'] = max(probes['center'] + probes['left'] + probes['right']) > 5
     elif scene.startswith('BrowserShadow') and scene in SCENES:
         checks['receiverRendered'] = max(probes['left']+probes['right']) > 70
         if scene == 'BrowserShadowNoCast':
@@ -541,6 +615,45 @@ def effect_features(kind, on, off, width, height):
                 thresholdExclusive=3, minimumChangedProbePixels=4, maximumProbeDifference=max(differences), **extra)
 
 
+# Probes derived from the native captures, outside the shadow caster silhouette.
+# Positive delta means the 129th light adds light or the selected shadow darkens.
+CAPACITY_PROBES = {
+    'BrowserTileOrthoOn': (44, 32, 1),
+    'BrowserTilePerspectiveOn': (48, 32, 1),
+    'BrowserShadowBudgetSelected': (27, 30, -1),
+    'BrowserShadowAtlas17On': (27, 29, -1),
+}
+
+def capacity_features(name, on, off, width, height):
+    if name == 'BrowserShadowFarFadeOn':
+        # Native and Web captures place these on the receiver shadows, clear of the caster silhouettes.
+        positions = [(10, 32), (30, 32), (50, 32)]
+        on_probes = [patch(on, width, height, x, y, False) for x, y in positions]
+        off_probes = [patch(off, width, height, x, y, False) for x, y in positions]
+        delta = [b[0]-a[0] for a, b in zip(on_probes, off_probes)]
+        checks = dict(nearShadow=delta[0] > 20, partialFade=5 < delta[1] < delta[0]-5,
+                      beyondFade=abs(delta[2]) < 6)
+        return dict(passed=all(checks.values()), checks=checks, probes=positions,
+                    on=[v for probe in on_probes for v in probe],
+                    off=[v for probe in off_probes for v in probe], shadowDeltas=delta)
+    x, y, sign = CAPACITY_PROBES[name]
+    on_probe = patch(on, width, height, x, y, False)
+    off_probe = patch(off, width, height, x, y, False)
+    delta = sign * (on_probe[0] - off_probe[0])
+    return dict(passed=delta > 20, probe=[x, y], on=on_probe, off=off_probe,
+                signedRedDifference=delta, minimumExclusive=20)
+
+
+def capacity_pair_features(name, native_on, native_off, web_on, web_off, width, height):
+    results = dict(native=capacity_features(name, native_on, native_off, width, height),
+                   web=capacity_features(name, web_on, web_off, width, height))
+    errors = {state: max(abs(a-b) for a,b in zip(results['native'][state], results['web'][state]))
+              for state in ('on', 'off')}
+    return dict(feature=name, **results, probeMaxChannelErrors=errors, probeTolerance=12,
+                status='passed' if all(result['passed'] for result in results.values())
+                and max(errors.values()) <= 12 else 'failed')
+
+
 def shadow_features(kind, on, off, width, height):
     differences = []
     for y in range(20, 44):
@@ -571,6 +684,7 @@ def main():
     parser.add_argument('--extent', default='512x512', help='Requested output WIDTHxHEIGHT, both1..2048; actual native extent must match')
     parser.add_argument('--initial-extent', help='Starting WIDTHxHEIGHT when --changes-json resizes to --extent; defaults to --extent')
     parser.add_argument('--changes-json', type=Path, help='JSON array of {tick, graphics?, resize?} applied identically before update tick+1 on both backends')
+    parser.add_argument('--reject-capture-once', action='store_true', help='Reject the final Web capture attempt and prove its accepted retry preserves temporal history')
     parser.add_argument('--isolate-render-scale',action='store_true',help='Apply validated native desktop per-run scale override with persistence disabled; requires GPU source-extent evidence')
     parser.add_argument('--timeout', type=int, default=600, help='Shared deadline in seconds, 30..1200')
     parser.add_argument('--playwright', default=os.environ.get('AETHER_PLAYWRIGHT_MODULE'),
@@ -603,6 +717,14 @@ def main():
         scenes = args.scenes.split(',')
         if not scenes or len(set(scenes)) != len(scenes) or any(s not in MAINTAINED_SCENES for s in scenes):
             raise ValueError('--scenes must contain unique maintained scene names')
+        if 'BrowserUiParity' in scenes and ('BrowserSolid' not in scenes or (output_width, output_height) != (512, 512)):
+            raise ValueError('UI qualification requires BrowserSolid and a 512x512 output')
+        if ('BrowserUiShaders' in scenes) != ('BrowserUiShadersOff' in scenes):
+            raise ValueError('UI shader qualification requires both feature and control scenes')
+        if 'BrowserUiShaders' in scenes and (output_width, output_height) != (512, 512):
+            raise ValueError('UI shader qualification requires a 512x512 output')
+        if any(scene in TEMPORAL_SCENES for scene in scenes) and args.language != 'rust':
+            raise ValueError('Temporal transition probes require the Rust gameplay fixture')
         for kind in SHADOWS:
             if sum('BrowserShadow'+kind+state in scenes for state in ('On', 'Off')) == 1:
                 raise ValueError('Shadow qualification requires both On and Off scenes: '+kind)
@@ -610,6 +732,9 @@ def main():
             on, off = 'Browser'+kind+('On' if kind == 'Dof' else ''), 'Browser'+kind+'Off'
             if (on in scenes) != (off in scenes):
                 raise ValueError('Effect qualification requires feature and control scenes: '+kind)
+        for on, off in CAPACITY_PAIRS:
+            if (on in scenes) != (off in scenes):
+                raise ValueError('Capacity qualification requires both controls: '+on+', '+off)
         validate_material_selection(scenes, effective_graphics)
         report['requestedScenes'] = scenes
         if any(scene in MATERIAL_SCENES for scene in scenes):
@@ -630,6 +755,11 @@ def main():
         staged = args.build.resolve()/'reference-project'
         for name in ('assets', 'scenes'):
             shutil.copytree(staged/name, project/name, dirs_exist_ok=True)
+        if any(scene in TEMPORAL_SCENES for scene in scenes):
+            fixture_spec = importlib.util.spec_from_file_location('gameplay_parity', Path(__file__).with_name('gameplay-parity-checks.py'))
+            fixture_module = importlib.util.module_from_spec(fixture_spec)
+            fixture_spec.loader.exec_module(fixture_module)
+            fixture_module.inject_3d_fixtures(args.language, project)
         if args.language == 'rust':
             manifest = project/'scripts/Cargo.toml'
             manifest.write_text(manifest.read_text(encoding='utf-8').replace('../../../rust/aethercore', (ROOT/'rust/aethercore').as_posix()), encoding='utf-8')
@@ -661,7 +791,8 @@ def main():
         report['nativeBake'] = bake_native(project, directory, deadline)
         report['nativeGraphCook'] = native_graph_cook(project, args.build.resolve(), deadline, scenes)
         report['nativeCustomPassCook'] = native_custom_pass_cook(project, args.build.resolve(), deadline, scenes)
-        launch = lambda scene: dict(profile='native-desktop-2d-v1', assertions=[dict(entity='$runtime', type='$engine', property='scene', equals=scene)],
+        report['nativeUiShaderCook'] = native_ui_shader_cook(project, args.build.resolve(), deadline, scenes)
+        launch = lambda scene: dict(profile='native-desktop-2d-v1', assertions=[dict(entity='$runtime', type='$engine', property='scene', equals='BrowserPostTemporalDestination' if scene == 'BrowserPostTemporalSwitch' else scene)],
             **({'renderScale':effective_graphics['renderScale']} if args.isolate_render_scale else {}), **({'changes': changes} if changes else {}))
         request = dict(project=str(project), operation='test', target='desktop', ticks=60, step=1/60, scene=scenes[0], timeoutMs=min(600000,args.timeout*1000),
                        launchConfig=launch(scenes[0]), cases=[dict(name=s, scene=s, launchConfig=launch(s)) for s in scenes])
@@ -679,6 +810,8 @@ def main():
         for index, scene in enumerate(scenes):
             runtime_log = native_dir/'cases'/str(index)/'runtime.log'
             runtime_text = runtime_log.read_text(encoding='utf-8', errors='replace')
+            if any(marker in runtime_text.lower() for marker in ('scene parse error', "could not be read - attempting to auto-generate")):
+                raise RuntimeError('Native authored scene failed to load; inspect '+str(runtime_log))
             if any(marker in runtime_text.lower() for marker in ('invalid mesh magic', 'failed to load gltf', 'failed to load model')):
                 raise RuntimeError('Native model load failed despite completed gameplay assertions; inspect '+str(runtime_log))
             if scene == 'BrowserGraph' and any(marker in runtime_text.lower() for marker in ('pipeline build failed', 'failed to load shader', 'failed to read shader')):
@@ -699,7 +832,7 @@ def main():
             captures.append(dict(scene=scene, width=width, height=height, native=str(destination),nativeFrameEvidence=evidence))
         capture_request = directory/'browser-request.json'
         capture_request.write_text(json.dumps(dict(root=str(args.build.resolve()/'web'), language=args.language, graphics=effective_graphics, captures=captures,
-                                                  changes=changes, initialExtent=[initial_width, initial_height],
+                                                  changes=changes, initialExtent=[initial_width, initial_height], rejectCaptureOnce=args.reject_capture_once,
                                                   playwright=args.playwright)), encoding='utf-8')
         browser_report = directory/'browser.json'
         with (directory/'browser.log').open('wb') as stream:
@@ -775,6 +908,18 @@ def main():
             web_pair = effect_features(kind,(directory/(on_name+'-web.rgba')).read_bytes(),(directory/(off_name+'-web.rgba')).read_bytes(),width,height)
             report['effectPairs'].append(dict(feature=kind,native=native_pair,web=web_pair,
                                              status='passed' if native_pair['passed'] and web_pair['passed'] else 'failed'))
+        report['capacityPairs'] = []
+        for on_name, off_name in CAPACITY_PAIRS:
+            if on_name not in scenes:
+                continue
+            on_capture = next(c for c in captures if c['scene'] == on_name)
+            off_capture = next(c for c in captures if c['scene'] == off_name)
+            width, height, native_on = png(Path(on_capture['native']))
+            off_width, off_height, native_off = png(Path(off_capture['native']))
+            if (width, height) != (off_width, off_height):
+                raise ValueError('Capacity control capture dimensions differ: '+on_name)
+            report['capacityPairs'].append(capacity_pair_features(on_name, native_on, native_off,
+                (directory/(on_name+'-web.rgba')).read_bytes(), (directory/(off_name+'-web.rgba')).read_bytes(), width, height))
         report['materialPairs'] = []
         for pair in MATERIAL_PAIRS:
             if pair['on'] not in scenes:
@@ -790,12 +935,58 @@ def main():
                                                (directory/(pair['off']+'-web.rgba')).read_bytes(), width, height)
             report['materialPairs'].append(dict(feature=pair['name'], native=native_pair, web=web_pair,
                                                status='passed' if native_pair['passed'] and web_pair['passed'] else 'failed'))
+        if 'BrowserCrossMaskOn' in scenes:
+            from material_effect_oracles import cutout_shadow_features
+            names = ('BrowserCrossMaskOn', 'BrowserCrossMaskOff', 'BrowserCrossMaskSolid')
+            native_images = {name: png(Path(next(c['native'] for c in captures if c['scene'] == name))) for name in names}
+            width, height, _ = native_images[names[0]]
+            outputs = {}
+            for backend in ('native', 'web'):
+                images = [native_images[name][2] if backend == 'native' else (directory/(name+'-web.rgba')).read_bytes() for name in names]
+                outputs[backend] = cutout_shadow_features(*images, width, height, [.23, .53, .27, .56], [.23, .44, .27, .47])
+            report['materialPairs'].append(dict(feature='mirrored cutout shadow holes', **outputs,
+                status='passed' if all(value['passed'] for value in outputs.values()) else 'failed'))
+        report['uiFeatures'] = []
+        if 'BrowserUiParity' in scenes:
+            captures_by_scene = {capture['scene']: capture for capture in captures}
+            outputs = {}
+            for backend in ('native', 'web'):
+                if backend == 'native':
+                    width, height, image = png(Path(captures_by_scene['BrowserUiParity']['native']))
+                    control_width, control_height, control = png(Path(captures_by_scene['BrowserSolid']['native']))
+                    if (width, height) != (control_width, control_height):
+                        raise ValueError('UI control capture dimensions differ')
+                else:
+                    image = (directory/'BrowserUiParity-web.rgba').read_bytes()
+                    control = (directory/'BrowserSolid-web.rgba').read_bytes()
+                outputs[backend] = ui_scene_features(image, control, width, height)
+            report['uiFeatures'].append(dict(feature='widgets and nested clipping', **outputs,
+                status='passed' if all(value['passed'] for value in outputs.values()) else 'failed'))
+        if 'BrowserUiShaders' in scenes:
+            captures_by_scene = {capture['scene']: capture for capture in captures}
+            outputs = {}
+            for backend in ('native', 'web'):
+                if backend == 'native':
+                    width, height, image = png(Path(captures_by_scene['BrowserUiShaders']['native']))
+                    control_width, control_height, control = png(Path(captures_by_scene['BrowserUiShadersOff']['native']))
+                    if (width, height) != (control_width, control_height):
+                        raise ValueError('UI shader control capture dimensions differ')
+                else:
+                    image = (directory/'BrowserUiShaders-web.rgba').read_bytes()
+                    control = (directory/'BrowserUiShadersOff-web.rgba').read_bytes()
+                outputs[backend] = ui_shader_features(image, control, width, height)
+            report['uiFeatures'].append(dict(feature='UI effects and element material', **outputs,
+                status='passed' if all(value['passed'] for value in outputs.values()) else 'failed'))
         report['status'] = 'passed' if report['cases'] and all(c['status'] == 'passed' for c in report['cases']) else 'failed'
         if any(pair['status'] != 'passed' for pair in report['shadowPairs']):
             report['status'] = 'failed'
         if any(pair['status'] != 'passed' for pair in report['effectPairs']):
             report['status'] = 'failed'
         if any(pair['status'] != 'passed' for pair in report['materialPairs']):
+            report['status'] = 'failed'
+        if any(pair['status'] != 'passed' for pair in report['capacityPairs']):
+            report['status'] = 'failed'
+        if any(feature['status'] != 'passed' for feature in report['uiFeatures']):
             report['status'] = 'failed'
     except (Exception, KeyboardInterrupt) as error:
         report['diagnostics'].append(dict(code='LIGHTING_PARITY', message=str(error)))

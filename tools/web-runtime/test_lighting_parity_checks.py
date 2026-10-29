@@ -129,6 +129,33 @@ class LightingParityTests(unittest.TestCase):
                 tomllib.loads('\n'.join(a))
                 tomllib.loads('\n'.join(b))
 
+    def test_capacity_fixtures_keep_their_authored_boundaries(self):
+        source = parity.ROOT/'resources/web/reference/scenes'
+        def entities(name):
+            return tomllib.loads((source/(name+'.scene.toml')).read_text(encoding='utf-8'))['entities']
+        for projection in ('Ortho', 'Perspective'):
+            on = entities('BrowserTile'+projection+'On')
+            off = entities('BrowserTile'+projection+'Off')
+            self.assertEqual(sum('point_light' in e for e in on), 129)
+            self.assertEqual(sum('point_light' in e for e in off), 129)
+            self.assertEqual(on[-1]['point_light']['intensity'], 4.0)
+            self.assertEqual(off[-1]['point_light']['intensity'], 0.0)
+        for name, count in (('BrowserShadowBudgetSelected', 8), ('BrowserShadowBudgetDropped', 9)):
+            lights = [e for e in entities(name) if 'point_light' in e]
+            self.assertEqual(len(lights), count)
+            self.assertTrue(all(e['point_light']['shadow'] for e in lights))
+        for state in ('On', 'Off'):
+            lights = [e for e in entities('BrowserShadowAtlas17'+state) if 'spot_light' in e]
+            self.assertEqual(len(lights), 17)
+            self.assertTrue(all(e['spot_light']['shadow'] for e in lights))
+        for state in ('On', 'Off'):
+            receivers = [e for e in entities('BrowserShadowFarFade'+state) if e['name'].endswith(' receiver')]
+            self.assertEqual([e['position'][2] for e in receivers], [-250.0, -300.0, -330.0])
+            self.assertTrue(all(e['material']['receive_shadows'] == (state == 'On') for e in receivers))
+        image = bytes([150, 120, 90, 255]*64*64)
+        for name, _ in parity.CAPACITY_PAIRS:
+            self.assertFalse(parity.capacity_features(name, image, image, 64, 64)['passed'])
+
     def test_non_casting_mesh_stays_visible_and_leaves_receiver_lit(self):
         clear = bytes([150, 150, 150, 255] * 64 * 64)
         self.assertFalse(parity.feature_checks('BrowserShadowNoCast', clear, 64, 64)['passed'], 'Removing the entire caster must not pass')

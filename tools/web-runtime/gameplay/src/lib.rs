@@ -26,11 +26,11 @@ use custom_pass::CustomPassProbe;
 mod gameplay3d;
 use gameplay3d::{
     Bodies3DProbe, Contacts3DProbe, Ragdoll3DProbe, Raycast3DProbe, Skin3DProbe, Spawner3DProbe,
-    Transition3DProbe, TransitionResult3DProbe, Walker3DProbe,
+    TemporalCutProbe, TemporalSwitchProbe, Transition3DProbe, TransitionResult3DProbe, Walker3DProbe,
 };
 export_gameplay!(BrowserMover, ReferencePlayer, ReferenceResult, EmberRun, ModelProbe, CustomPassProbe,
     Bodies3DProbe, Raycast3DProbe, Contacts3DProbe, Walker3DProbe, Ragdoll3DProbe, Skin3DProbe, Spawner3DProbe,
-    Transition3DProbe, TransitionResult3DProbe);
+    TemporalCutProbe, TemporalSwitchProbe, Transition3DProbe, TransitionResult3DProbe);
 
 #[cfg(feature = "automation")]
 #[unsafe(no_mangle)]

@@ -557,3 +557,11 @@ the same simulated state before accepting another tick. Motion qualification
 therefore observes the moving frame instead of an extra stationary capture frame.
 Native screenshot sidecars and Web GPU readbacks expose actual frame/exposure
 evidence. The bounded post summary below qualifies these mechanisms for its recorded cases; it does not replace the remaining effect/material/native/language gates.
+
+## Source-isolated prerequisite checkpoints
+
+Local master source checkpoints: `c85ec677` (indexed scripts and attach-only lifecycle), `e0b18581` (curve UI and packaging), `1fd75cd3` (sampling, tiled lights and native shadow selection), and `7aced827` (accepted-frame temporal history). These commits exclude the concurrent streaming implementation; shared working files retain its unstaged hunks.
+
+The prerequisite verification reports are `logs/parity-prerequisites/browser/report.json` (72 browser cases passed) and `logs/parity-prerequisites/native-unit.xml` (full native suite, zero failures/errors). `1f135bc3` updates the required browser audio case; `e7075422` makes the authority regression explicitly test fixed-delay interpolation without extrapolation. The reported 107.517 overshoot is compatible with production extrapolation, but its exact timing cannot be reconstructed from the assertion alone.
+
+A separate committed-source export plus isolated rendering/history candidates builds without streaming overlays. `logs/render-themes/isolated-ui-smoke.json` records seven hardware-Chrome scene smokes covering UI, sampling, both tiled-light projections, seventeen local shadow maps, directional far fade and the exposure fixture; all start, render and stop without diagnostics. These are source-closure/runtime smokes, not additional native-image comparisons or proof of universal 1:1 parity. The earlier UI-only export and its receipts remain unchanged under `logs/parity-prerequisites/`.

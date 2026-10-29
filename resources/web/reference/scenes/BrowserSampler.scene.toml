@@ -1,0 +1,54 @@
+# Identical texture on a front-facing card and a grazing-angle card.
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[environment]
+ambient = [1.0, 1.0, 1.0]
+sun_direction = [0.0, 0.0, 1.0]
+sun_intensity = 0.0
+sky_horizon = [0.0, 0.0, 0.0]
+sky_zenith = [0.0, 0.0, 0.0]
+sky_void = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Sampler camera'
+position = [0.0, 0.0, 0.0]
+[entities.camera]
+main = true
+projection = 'orthographic'
+orthographic_height = 8.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.0, 0.0, 0.0]
+
+[[entities]]
+name = 'Front-facing striped card'
+mesh_renderer = true
+position = [-2.0, 1.5, -12.0]
+scale = [2.0, 2.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+baked_lighting = true
+receive_shadows = false
+albedo = 'project://assets/textures/browser-sampler.png'
+
+[[entities]]
+name = 'Grazing striped card'
+mesh_renderer = true
+position = [0.0, -1.5, -12.0]
+euler = [88.0, 0.0, 0.0]
+scale = [6.0, 16.0, 1.0]
+[entities.mesh]
+kind = 'primitive'
+path = 'quad'
+[entities.material]
+double_sided = true
+baked_lighting = true
+receive_shadows = false
+albedo = 'project://assets/textures/browser-sampler.png'

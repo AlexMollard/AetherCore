@@ -41,7 +41,7 @@ try {
             if(url.pathname==='/favicon.ico'){res.writeHead(204).end();return;}
             if(url.pathname==='/project.js'){
                 const config = {schemaVersion:1,id:'private-lighting-parity',name:'Lighting parity',language:request.language || 'rust',
-                    startupScene:active.scene,scenes:request.captures.map(c=>c.scene),graphics:request.graphics,
+                    startupScene:active.scene,scenes:[...new Set([...request.captures.map(c=>c.scene),...(active.scene==='BrowserPostTemporalSwitch'?['BrowserPostTemporalDestination']:[])])],graphics:request.graphics,
                     paths:{assets:'assets',scenes:'scenes',prefabs:'assets/prefabs',scripts:'scripts'}};
                 res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'}).end('globalThis.aetherProject='+JSON.stringify(config)+';');
                 return;
@@ -89,10 +89,40 @@ try {
                 if(change.graphics){await page.evaluate(values=>{globalThis.aetherProject.graphics={...globalThis.aetherProject.graphics,...values};},change.graphics);}
                 if(change.resize){await page.evaluate(([width,height])=>Module._aether_web_resize(width,height),change.resize);}
             }
+            if(request.rejectCaptureOnce){
+                if(ticks<9){ticks=(await page.evaluate(n=>aetherTest.step(n),9-ticks)).ticks;}
+                assert.equal(ticks,9,'Reject probe must arm immediately before the captured update');
+                const prior=await page.evaluate(()=>aetherTest.capture());
+                await page.evaluate(()=>Module._aether_web_capture());
+                await page.waitForFunction(frame=>aetherRuntime.capture?.frameIndex>frame,prior.frameIndex);
+                const frozen=await page.evaluate(()=>structuredClone(aetherRuntime.capture));
+                assert.equal(frozen.simulationTick,prior.simulationTick,'Frozen capture must not step simulation');
+                assert.equal(frozen.temporalFrameIndex,prior.temporalFrameIndex,'Frozen capture must not advance temporal history');
+                assert.equal(frozen.exposureUsed,prior.exposureUsed,'Frozen capture must not adapt exposure');
+                const before=await page.evaluate(()=>aetherRuntime.captureDeferred || 0);
+                await page.evaluate(()=>{aetherTestInternal.rejectCaptureOnce=true;});
+                item.rejectEvidence={priorFrameIndex:prior.frameIndex,priorTemporalFrameIndex:prior.temporalFrameIndex,priorTick:prior.simulationTick,priorGeneration:prior.generation,frozenFrameIndex:frozen.frameIndex,frozenExposureUsed:frozen.exposureUsed,before};
+            }
             const stepped=await page.evaluate(n=>aetherTest.step(n),10-ticks);assert.equal(stepped.ticks,10);
             const image=await page.evaluate(()=>aetherTest.capture());
             item.frameEvidence=Object.fromEntries(['frameIndex','temporalFrameIndex','simulationTick','generation','exposureUsed','width','height','renderWidth','renderHeight'].map(key=>[key,image[key]]));
             assert.ok(Number.isSafeInteger(image.frameIndex) && Number.isSafeInteger(image.temporalFrameIndex) && image.simulationTick===10,'Actual accepted-frame identity/tick10 receipt required; rebuild browser runtime');
+            if(request.rejectCaptureOnce){
+                const deferred=await page.evaluate(()=>aetherRuntime.captureDeferred || 0);
+                assert.equal(deferred,item.rejectEvidence.before+1,'Exactly one final capture must be rejected');
+                assert.equal(item.rejectEvidence.priorTick,9);
+                assert.equal(image.temporalFrameIndex,item.rejectEvidence.priorTemporalFrameIndex+1,'Rejected capture must not consume temporal history');
+                if(capture.scene==='BrowserPostTemporalSwitch'){
+                    assert.ok(image.generation>item.rejectEvidence.priorGeneration,'Scene switch must precede the first accepted capture');
+                    assert.equal(await page.evaluate(()=>aetherRuntime.scene),'BrowserPostTemporalDestination');
+                }else if(capture.scene==='BrowserPostTemporalCut'){
+                    assert.equal(image.generation,item.rejectEvidence.priorGeneration,'Camera cut must not switch scenes');
+                }
+                item.rejectEvidence.acceptedGeneration=image.generation;
+                item.rejectEvidence.after=deferred;
+                item.rejectEvidence.acceptedFrameIndex=image.frameIndex;
+                item.rejectEvidence.acceptedTemporalFrameIndex=image.temporalFrameIndex;
+            }
             assert.ok(Number.isFinite(image.exposureUsed) && image.exposureUsed>=0,'Finite actual GPU exposure receipt required');
             if(capture.scene.startsWith('BrowserPost')){
                 const before=await page.evaluate(()=>aetherTest.snapshot());
@@ -111,7 +141,12 @@ try {
             const stem=path.join(path.dirname(reportPath),capture.scene+'-web');
             await writeFile(stem+'.rgba',pixels);await writeFile(stem+'.png',png(capture.width,capture.height,pixels));
             item.state=await page.evaluate(()=>aetherTest.snapshot());
-            assert.deepEqual(item.state.diagnostics,[]);assert.deepEqual(item.console,[]);assert.deepEqual(item.pageErrors,[]);
+            const expectedBudgetDiagnostic = 'WebGPU local shadow budget: 1 shadow-casting lights are unshadowed (48 map entries).';
+            const diagnostics = capture.scene === 'BrowserShadowBudgetDropped'
+                ? item.state.diagnostics.filter(message => message !== expectedBudgetDiagnostic) : item.state.diagnostics;
+            const consoleErrors = capture.scene === 'BrowserShadowBudgetDropped'
+                ? item.console.filter(message => message !== expectedBudgetDiagnostic) : item.console;
+            assert.deepEqual(diagnostics,[]);assert.deepEqual(consoleErrors,[]);assert.deepEqual(item.pageErrors,[]);
             await page.evaluate(()=>aetherTest.stop());
             await page.waitForFunction(()=>aetherRuntime.state==='stopped' && aetherRuntime.inFlight===0);
             item.retired=await page.evaluate(()=>({state:aetherRuntime.state,inFlight:aetherRuntime.inFlight}));
