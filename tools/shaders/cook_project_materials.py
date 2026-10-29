@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import shutil
 import tomllib
-from web_materials import cook, cook_custom_pass, custom_pass_stem, resolve_compiler, shader_output_name
+from web_materials import cook, cook_custom_pass, cook_ui_shader, custom_pass_stem, resolve_compiler, shader_output_name
 
 
 BUILT_INS = {'', 'shaders://gltf_mesh.spv', 'shaders://plasma.spv', 'shaders://molten.spv'}
@@ -39,7 +39,40 @@ def custom_materials(project):
 EXCLUDED_DIRECTORIES = {'build', 'builds', 'obj', 'bin', 'out', 'intermediate', 'intermediates', 'cache'}
 
 
-def custom_pass_sources(project, materials):
+def ui_shader_sources(project):
+    """Find explicitly authored UI shader roles in scenes and prefabs."""
+    shaders = (project/'assets/shaders').resolve()
+    claims = set()
+    for root in (project/'scenes', project/'assets'):
+        if not root.is_dir():
+            continue
+        for path in root.rglob('*.toml'):
+            if not path.name.endswith(('.scene.toml', '.prefab.toml')):
+                continue
+            document = tomllib.loads(path.read_text(encoding='utf-8-sig'))
+            for entity in document.get('entities', []):
+                for table, role in (('ui_material', 'material'), ('ui_effect', 'effect')):
+                    name = entity.get(table, {}).get('shader', '')
+                    if not name:
+                        continue
+                    if not isinstance(name, str):
+                        raise ValueError('WEB_UI_SOURCE: shader must be a string in '+str(path))
+                    source = (shaders/(name+'.slang')).resolve()
+                    if not source.is_relative_to(shaders) or not source.is_file():
+                        raise ValueError('WEB_UI_SOURCE: missing or invalid shader '+name+' in '+str(path))
+                    claims.add((source, role))
+    manifest = project/'.web-ui-roles.json'
+    if manifest.is_file():
+        for item in json.loads(manifest.read_text(encoding='utf-8')):
+            source = (project/item['source']).resolve()
+            role = item['role']
+            if role not in ('material', 'effect') or not source.is_relative_to(shaders) or not source.is_file():
+                raise ValueError('WEB_UI_SOURCE: invalid staged UI shader role')
+            claims.add((source, role))
+    return sorted(claims)
+
+
+def custom_pass_sources(project, materials, ui_sources=()):
     """Find assets/shaders/**/*.slang that no custom material claims as its native source.
 
     Every one must be a portable custom pass: a source without the CustomPass.slangh include is
@@ -52,6 +85,7 @@ def custom_pass_sources(project, materials):
         document = tomllib.loads(material.read_text(encoding='utf-8-sig'))
         uri = document.get('material', document).get('shader', '')
         claimed.add((shaders/(shader_output_name(uri)[:-len('.wshader')]+'.slang')).resolve())
+    claimed.update(source for source, _ in ui_sources)
     result, stems = [], {}
     for source in sorted(shaders.rglob('*.slang')):
         parts = source.relative_to(shaders).parts[:-1]
@@ -73,22 +107,27 @@ def main():
     parser.add_argument('--timeout', type=int, default=120, help='Deadline in seconds per material')
     parser.add_argument('--report', required=True, type=Path)
     args = parser.parse_args()
-    results, custom_passes = [], []
+    results, custom_passes, ui_shaders = [], [], []
     try:
         project = args.project.resolve()
         if not (project/'assets').is_dir():
             raise ValueError('WEB_SHADER_PROJECT: staged project has no assets directory')
         materials = custom_materials(project)
-        passes = custom_pass_sources(project, materials)
+        ui_sources = ui_shader_sources(project)
+        passes = custom_pass_sources(project, materials, ui_sources)
         compiler = resolve_compiler(args.compiler) if materials else None
         for material in materials:
             results.append(cook(project, material, project/'assets/shaders', compiler, args.slangc, args.timeout))
         for source in passes:
             custom_passes.append(cook_custom_pass(project, source, project/'assets/shaders', args.slangc, args.timeout))
-        report = dict(schemaVersion=1, status='passed', project=str(project), materials=results, customPasses=custom_passes,
+        for source, role in ui_sources:
+            ui_shaders.append(cook_ui_shader(project, source, project/'assets/shaders', args.slangc, role, args.timeout))
+            if role == 'material':
+                ui_shaders.append(cook_ui_shader(project, source, project/'assets/shaders', args.slangc, role, args.timeout, glyph=True))
+        report = dict(schemaVersion=1, status='passed', project=str(project), materials=results, customPasses=custom_passes, uiShaders=ui_shaders,
                       qualification='Cook compilation only; browser execution and native visual parity are separate checks')
     except Exception as error:
-        report = dict(schemaVersion=1, status='failed', project=str(args.project), materials=results, customPasses=custom_passes,
+        report = dict(schemaVersion=1, status='failed', project=str(args.project), materials=results, customPasses=custom_passes, uiShaders=ui_shaders,
                       diagnostics=[dict(code='WEB_MATERIAL_PROJECT_COOK', message=str(error))])
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2)+'\n', encoding='utf-8')

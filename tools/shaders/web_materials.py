@@ -84,12 +84,12 @@ def validate_graph(graph):
             raise ValueError('WEB_SHADER_GRAPH_NODE: node '+str(name)+' needs four finite values')
 
 
-def encode_shader(wgsl, source_hash):
+def encode_shader(wgsl, source_hash, fragment_only=False):
     if not 0 < len(wgsl) <= MAX_SHADER_BYTES or len(source_hash) != 32 or b'\0' in wgsl:
         raise ValueError('WEB_SHADER_BUDGET: shader exceeds the 1 MiB source budget or has invalid bytes')
     text = wgsl.decode('utf-8')
-    if '@vertex' not in text or '@fragment' not in text or 'vertexMain' not in text or 'fragmentMain' not in text:
-        raise ValueError('WEB_SHADER_WGSL: compiler did not produce the vertex/fragment WGSL contract')
+    if '@fragment' not in text or 'fragmentMain' not in text or (not fragment_only and ('@vertex' not in text or 'vertexMain' not in text)):
+        raise ValueError('WEB_SHADER_WGSL: compiler did not produce the required WGSL entry points')
     checksum = 1469598103934665603
     for byte in wgsl:
         checksum = ((checksum ^ byte)*1099511628211) & ((1<<64)-1)
@@ -244,6 +244,108 @@ def local_includes(source, text, project, seen=None):
             seen.add(path)
             local_includes(path, path.read_text(encoding='utf-8-sig'), project, seen)
     return seen
+
+
+def cook_ui_shader(project, source, output_dir, slang, role, timeout=120, glyph=False):
+    """Compile a native UI fragment with the fixed browser UI resource layout."""
+    project, source, output_dir = project.resolve(), source.resolve(), output_dir.resolve()
+    shaders = project / 'assets/shaders'
+    if glyph and role != 'material':
+        raise ValueError('WEB_UI_SOURCE: glyph variant requires a UI material')
+    if role not in ('material', 'effect') or not source.is_relative_to(shaders) or not source.is_file() or source.suffix != '.slang':
+        raise ValueError('WEB_UI_SOURCE: UI shader must be a project shader source')
+    if source.stat().st_size > MAX_CUSTOM_PASS_SOURCE_BYTES:
+        raise ValueError('WEB_UI_SOURCE: UI shader exceeds 256 KiB')
+    text = source.read_text(encoding='utf-8-sig')
+    clean = strip_comments(text)
+    push = re.search(r'struct\s+(\w+)\s*\{([^{}]*)\}\s*;\s*\[\[\s*vk::push_constant\s*\]\]\s*\1\s+(\w+)\s*;', clean, re.S)
+    if not push:
+        raise ValueError('WEB_UI_PORTABILITY: expected the native UI push-constant struct and declaration in '+str(source))
+    fields = re.findall(r'\b(float4|uint64_t|uint)\s+(\w+)\s*;', push.group(2))
+    types = [kind for kind, _ in fields]
+    expected = ['float4'] * 5 if role == 'effect' else ['float4', 'uint64_t', 'uint', 'uint', 'float4', 'float4', 'float4']
+    if types != expected or re.sub(r'\b(?:float4|uint64_t|uint)\s+\w+\s*;', '', push.group(2)).strip():
+        raise ValueError('WEB_UI_PORTABILITY: incompatible native UI '+role+' push-constant layout in '+str(source))
+    # Only the current command's texture has a browser equivalent. Other
+    # bindless indices may refer to unrelated native resources and must fail.
+    native_resources = re.findall(r'\[\[\s*vk::binding\([^]]+\)\s*\]\]\s*(Texture2D|SamplerState)\s+(\w+)(\[\])?\s*;', clean)
+    for kind, name, array in native_resources:
+        declaration = r'\[\[\s*vk::binding\([^]]+\)\s*\]\]\s*'+kind+r'\s+'+re.escape(name)+r'(?:\[\])?\s*;'
+        clean = re.sub(declaration, '', clean)
+        if kind == 'Texture2D' and array and role == 'material':
+            current = r'\b'+re.escape(name)+r'\s*\[\s*NonUniformResourceIndex\s*\(\s*\w+\.textureSlot\s*\)\s*\]'
+            clean = re.sub(current, 'webUiTexture', clean)
+        elif kind == 'SamplerState' and role == 'material' and not glyph:
+            clean = re.sub(r'\b'+re.escape(name)+r'\b', 'webUiSampler', clean)
+        if re.search(r'\b'+re.escape(name)+r'\b', clean):
+            raise ValueError('WEB_UI_PORTABILITY: unsupported native bindless resource '+name+' in '+str(source))
+    push = re.search(r'struct\s+(\w+)\s*\{([^{}]*)\}\s*;\s*\[\[\s*vk::push_constant\s*\]\]\s*\1\s+(\w+)\s*;', clean, re.S)
+    variable = push.group(3)
+    clean = clean[:push.start()] + clean[push.end():]
+    slots = ['screen', 'rect', 'params', 'color0', 'color1'] if role == 'effect' else ['screen', None, None, None, 'params', 'color0', 'color1']
+    for (_, field), slot in zip(fields, slots):
+        pattern = r'\b'+re.escape(variable)+r'\s*\.\s*'+re.escape(field)+r'\b'
+        if slot is None and re.search(pattern, clean):
+            raise ValueError('WEB_UI_PORTABILITY: native command address is not available in '+str(source))
+        if slot:
+            clean = re.sub(pattern, 'webUiScreen' if slot == 'screen' else 'webUiData.'+slot, clean)
+    if re.search(r'\b'+re.escape(variable)+r'\b', clean):
+        raise ValueError('WEB_UI_PORTABILITY: unsupported push constant access in '+str(source))
+    entries = ['-entry', 'fragmentMain']
+    if role == 'effect':
+        vertex = re.search(r'\[shader\("vertex"\)\]\s*(\w+)\s+vertexMain\s*\(\s*uint\s+(\w+)\s*:\s*SV_VertexID\s*\)', clean)
+        if not vertex:
+            raise ValueError('WEB_UI_PORTABILITY: effect vertex must accept a single SV_VertexID in '+str(source))
+        output_type, argument = vertex.groups()
+        clean = clean[:vertex.start()] + re.sub(r'\[shader\("vertex"\)\]', '', vertex.group(0)).replace('vertexMain', 'webUiNativeVertex') + clean[vertex.end():]
+        clean += ('\n[shader("vertex")] '+output_type+' vertexMain(uint '+argument+' : SV_VertexID) { '
+                  +output_type+' output = webUiNativeVertex('+argument+'); output.position.y = -output.position.y; return output; }\n')
+        entries = ['-entry', 'vertexMain', '-entry', 'fragmentMain']
+    prefix = ('struct WebUiData { float4 rect; float4 params; float4 color0; float4 color1; };\n'
+              '[[vk::binding(0, 0)]] ConstantBuffer<float4> webUiScreen;\n'
+              '[[vk::binding(5, 0)]] ConstantBuffer<WebUiData> webUiData;\n')
+    if role == 'material':
+        prefix += ('[[vk::binding('+('4' if glyph else '2')+', 0)]] Texture2D webUiTexture;\n'
+                   + ('' if glyph else '[[vk::binding(3, 0)]] SamplerState webUiSampler;\n'))
+    suffix = '.ui-material-glyph.wshader' if glyph else '.ui-'+role+'.wshader'
+    output = output_dir / (custom_pass_stem(project, source)+suffix)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic()+timeout
+    with tempfile.TemporaryDirectory(prefix='.web-ui-', dir=output.parent) as directory:
+        scratch = Path(directory)
+        version = check_slang_version(slang, scratch, deadline)
+        dependencies = [source, *sorted(local_includes(source, text, project)), ROOT/'src/shaders/text_curves.slangh',
+                        *sorted((ROOT/'src/shaders/include').rglob('*.slangh'))]
+        digest = hashlib.sha256()
+        for path in sorted(set(dependencies)):
+            name = path.relative_to(project).as_posix() if path.is_relative_to(project) else 'engine/'+path.relative_to(ROOT).as_posix()
+            digest.update(name.encode()+b'\0'+hashlib.sha256(path.read_bytes()).digest())
+        digest.update(version.encode())
+        staged_source = scratch/'ui.slang'
+        staged_source.write_text(prefix+clean, encoding='utf-8')
+        wgsl = scratch/'ui.wgsl'
+        run([slang, staged_source, '-target', 'wgsl', *entries, '-I', source.parent,
+             '-I', ROOT/'src/shaders', '-o', wgsl], scratch/'slang.log', deadline)
+        compiled = wgsl.read_text(encoding='utf-8')
+        # Slang 2026.8 copies interpolation attributes onto its internal
+        # helper structs as well as actual stage IO. WGSL permits those
+        # attributes only on location-decorated IO members.
+        compiled = re.sub(r'(?m)^(\s*)@interpolate\(flat\)(?![^\n]*@location\()', r'\1', compiled)
+        for declaration in re.findall(r'(?:@(?:binding|group)\(\d+\)\s*){2}var[^;]*;', compiled):
+            group = re.search(r'@group\((\d+)\)', declaration)
+            binding = re.search(r'@binding\((\d+)\)', declaration)
+            slot = int(binding.group(1)) if binding else -1
+            expected = ('var<uniform>' if slot in (0, 5) else
+                        'texture_2d<f32>' if role == 'material' and slot == (4 if glyph else 2) else
+                        'sampler' if slot == 3 and not glyph and role == 'material' else None)
+            if not group or int(group.group(1)) != 0 or not expected or expected not in declaration:
+                raise ValueError('WEB_UI_BINDINGS: unsupported resource in '+str(source)+': '+declaration)
+        validate_negated_vector_sums(compiled, str(source))
+        encoded = encode_shader(compiled.encode('utf-8'), digest.digest(), fragment_only=role == 'material')
+        staged = scratch/'shader.wshader'
+        staged.write_bytes(encoded)
+        os.replace(staged, output)
+        return dict(status='passed', kind='ui-'+role, shader=custom_pass_stem(project, source), output=str(output))
 
 
 def cook_custom_pass(project, source, output_dir, slang, timeout=120):

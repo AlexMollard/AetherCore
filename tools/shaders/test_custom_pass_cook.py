@@ -160,6 +160,58 @@ class CustomPassCookTests(unittest.TestCase):
             web_materials.cook_custom_pass(self.project, extra, self.shaders, REAL_SLANGC)
         self.assertFalse((self.shaders/'extra.wshader').exists())
 
+    @unittest.skipUnless(REAL_SLANGC.is_file(), 'pinned slangc is not installed')
+    def test_original_ui_sources_cook_in_distinct_roles(self):
+        examples = web_materials.ROOT/'projects/INKBOUND/assets/shaders'
+        for name, role in (('ui_ink_ui', 'material'), ('ui_glitch_text', 'material'), ('ui_void_bg', 'effect')):
+            source = self.source(name+'.slang', (examples/(name+'.slang')).read_text(encoding='utf-8'))
+            result = web_materials.cook_ui_shader(self.project, source, self.shaders, REAL_SLANGC, role)
+            output = self.shaders/(name+'.ui-'+role+'.wshader')
+            self.assertEqual(Path(result['output']), output)
+            self.assertEqual(output.read_bytes()[:4], b'AEWG')
+            if role == 'material':
+                glyph = web_materials.cook_ui_shader(self.project, source, self.shaders, REAL_SLANGC, role, glyph=True)
+                self.assertEqual(Path(glyph['output']), self.shaders/(name+'.ui-material-glyph.wshader'))
+                self.assertEqual(Path(glyph['output']).read_bytes()[:4], b'AEWG')
+                if name == 'ui_glitch_text':
+                    wgsl = Path(glyph['output']).read_bytes()[88:].decode('utf-8')
+                    for line in wgsl.splitlines():
+                        if '@interpolate(' in line:
+                            self.assertIn('@location(', line)
+
+    def test_ui_shader_rejects_used_native_bindless_resource(self):
+        source = self.source('native.slang', '''
+[[vk::binding(0, 0)]] Texture2D g_textures[];
+struct P { float4 screenSize; float4 rect; float4 params; float4 color0; float4 color1; };
+[[vk::push_constant]] P pc;
+float4 fragmentMain() : SV_Target0 { return g_textures[0].Load(int3(0, 0, 0)); }
+''')
+        with self.assertRaisesRegex(ValueError, 'WEB_UI_PORTABILITY.*native bindless resource'):
+            web_materials.cook_ui_shader(self.project, source, self.shaders, Path(__file__), 'effect')
+        self.assertFalse((self.shaders/'native.ui-effect.wshader').exists())
+
+    def test_ui_bad_compiled_resource_preserves_previous_artifact(self):
+        examples = web_materials.ROOT/'projects/INKBOUND/assets/shaders'
+        source = self.source('ui_ink_ui.slang', (examples/'ui_ink_ui.slang').read_text(encoding='utf-8'))
+        output = self.shaders/'ui_ink_ui.ui-material.wshader'
+        output.write_bytes(b'previous')
+        bad = '@binding(5) @group(0) var<storage, read_write> extra : array<vec4<f32>>;\n'
+        with patch.object(web_materials, 'run', fake_run(bad)), self.assertRaisesRegex(ValueError, 'WEB_UI_BINDINGS'):
+            web_materials.cook_ui_shader(self.project, source, self.shaders, Path(__file__), 'material')
+        self.assertEqual(output.read_bytes(), b'previous')
+
+    def test_ui_discovery_rejects_missing_shader_and_excludes_claimed_sources(self):
+        scenes = self.project/'scenes'
+        scenes.mkdir()
+        scene = scenes/'Start.scene.toml'
+        scene.write_text('[[entities]]\n[entities.ui_material]\nshader="ink"\n', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'WEB_UI_SOURCE'):
+            cook_project_materials.ui_shader_sources(self.project)
+        source = self.source('ink.slang', 'source')
+        claims = cook_project_materials.ui_shader_sources(self.project)
+        self.assertEqual(claims, [(source.resolve(), 'material')])
+        self.assertEqual(cook_project_materials.custom_pass_sources(self.project, [], claims), [])
+
 
 if __name__ == '__main__':
     unittest.main()
