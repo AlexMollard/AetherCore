@@ -1,0 +1,173 @@
+// Batched UI shape shader.
+// One indirect-instanced draw emits rectangles/circles/lines/textured-rects/SDF-glyphs
+// from a device-addressable command buffer.
+
+struct DrawCommandData { float4 data0; float4 data1; float4 color; float4 clipRect; uint type; int layer; uint textureSlot; uint flags; };
+#include "../../src/shaders/include/UiVertexOut.slangh"
+#include "../../src/shaders/text_curves.slangh"
+
+static const uint kShapeRect        = 0;
+static const uint kShapeCircle      = 1;
+static const uint kShapeLine        = 2;
+static const uint kShapeTexturedRect = 3;
+static const uint kShapeGlyph       = 4;
+
+[[vk::binding(0, 0)]] ConstantBuffer<float4> g_screenSize;
+[[vk::binding(1, 0)]] StructuredBuffer<DrawCommandData> g_commands;
+[[vk::binding(2, 0)]] Texture2D g_colorTexture;
+[[vk::binding(3, 0)]] SamplerState g_linearSampler;
+[[vk::binding(4, 0)]] Texture2D g_curveTexture;
+struct UiParameters { float4 rect; float4 params; float4 color0; float4 color1; };
+[[vk::binding(5, 0)]] ConstantBuffer<UiParameters> g_uiParameters;
+
+[shader("vertex")]
+VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
+{
+    const DrawCommandData cmd = g_commands[instanceId];
+
+    const float2 uvRect[6] = {
+        float2(0.0, 1.0),
+        float2(1.0, 1.0),
+        float2(1.0, 0.0),
+        float2(0.0, 1.0),
+        float2(1.0, 0.0),
+        float2(0.0, 0.0),
+    };
+
+    float2 sp = float2(0.0, 0.0);
+    const float2 uv = uvRect[vertexId % 6u];
+    float2 outTexUV = float2(0.0, 0.0);
+
+    if (cmd.type == kShapeRect || cmd.type == kShapeTexturedRect || cmd.type == kShapeGlyph)
+    {
+        const float2 minPt = cmd.data0.xy;
+        const float2 size  = cmd.data0.zw;
+        sp = minPt + uv * size;
+
+        if (cmd.type == kShapeTexturedRect || cmd.type == kShapeGlyph)
+        {
+            // data1 = u0, v0, u1, v1
+            outTexUV = float2(
+                lerp(cmd.data1.x, cmd.data1.z, uv.x),
+                lerp(cmd.data1.y, cmd.data1.w, uv.y)
+            );
+        }
+    }
+    else if (cmd.type == kShapeCircle)
+    {
+        const float2 center = cmd.data0.xy;
+        const float radius  = cmd.data0.z;
+        sp = center + (uv * 2.0 - 1.0) * radius;
+    }
+    else // kShapeLine
+    {
+        const float2 a  = cmd.data0.xy;
+        const float2 b  = cmd.data0.zw;
+        const float2 ab = b - a;
+        const float  len = max(length(ab), 0.0001);
+        const float2 dir = ab / len;
+        const float2 n   = float2(-dir.y, dir.x);
+        const float thickness = max(cmd.data1.x, 1.0);
+
+        const float2 local = float2(uv.x * len, (uv.y - 0.5) * thickness);
+        sp = a + dir * local.x + n * local.y;
+    }
+
+    const float ndcX = (sp.x / g_screenSize.x) * 2.0f - 1.0f;
+    const float ndcY = 1.0f - (sp.y / g_screenSize.y) * 2.0f;
+
+    VSOutput output;
+    output.position    = float4(ndcX, ndcY, 0.0, 1.0);
+    output.color       = cmd.color;
+    output.local       = uv * 2.0 - 1.0;
+    output.localScale  = cmd.data0.zw;
+    output.cornerRadius = (cmd.type == kShapeTexturedRect || cmd.type == kShapeGlyph) ? 0.0 : cmd.data1.x;
+    output.type        = cmd.type;
+    output.texUV       = outTexUV;
+    output.glyphBands  = cmd.data1;
+    output.textureSlot = cmd.textureSlot;
+    output.flags       = cmd.flags;
+    output.clipRect    = cmd.clipRect;
+    return output;
+}
+
+// Exact sRGB OETF (IEC 61966-2-1), for textured rects: see the kShapeTexturedRect branch.
+float3 LinearToSrgbUi(float3 c)
+{
+    c = saturate(c);
+    return select(c <= 0.0031308, c * 12.92, 1.055 * pow(c, 1.0 / 2.4) - 0.055);
+}
+
+[shader("fragment")]
+float4 fragmentMain(VSOutput input) : SV_Target0
+{
+    // WebGPU requires derivatives in uniform control flow, before clipping or type dispatch.
+    const float2 halfSize = max(input.localScale * 0.5, float2(0.001, 0.001));
+    const float radius = min(input.cornerRadius, min(halfSize.x, halfSize.y));
+    const float2 p = abs(input.local * halfSize);
+    const float2 q = p - (halfSize - radius);
+    const float signedDist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+    const float aa = max(fwidth(signedDist), 0.001);
+    uint imageWidth, imageHeight;
+    g_colorTexture.GetDimensions(imageWidth, imageHeight);
+    const float2 texSize = float2(max(imageWidth, 1u), max(imageHeight, 1u));
+    const float2 snappedUv = (floor(input.texUV * texSize) + 0.5) / texSize;
+    const float2 sampleUv = (input.flags & 1u) != 0u ? snappedUv : input.texUV;
+    const float2 uvDx = ddx(sampleUv);
+    const float2 uvDy = ddy(sampleUv);
+    UiClipDiscard(input);
+
+    if (input.type == kShapeCircle)
+    {
+        if (dot(input.local, input.local) > 1.0)
+            discard;
+        return input.color;
+    }
+
+    if (input.type == kShapeGlyph)
+    {
+        // The quad IS the glyph's outline box, so the interpolated local coordinate is a
+        // position in the glyph's own [0,1] curve space - after flipping Y, because UI space
+        // runs downward and font outlines run upward.
+        const float2 glyphLocal = float2(input.local.x * 0.5 + 0.5, 0.5 - input.local.y * 0.5);
+        // One pixel measured in that same space, which is what makes the coverage filter
+        // exactly one pixel wide at any size.
+        const float2 pixelSize = 1.0 / max(input.localScale, float2(1e-4, 1e-4));
+
+        // NonUniformResourceIndex is REQUIRED here, not decorative: one batch draws glyphs
+        // from every font on screen, so the slot varies between lanes of the same wave.
+        // Indexing the heap without it is undefined, and what it does in practice is let one
+        // lane's font win for the whole wave - text in font A rendered against font B's
+        // curves, which reads as glyphs that are subtly wrong or missing entirely.
+        Texture2D curveTexture = g_curveTexture;
+        uint texWidth, texHeight;
+        curveTexture.GetDimensions(texWidth, texHeight);
+
+        const float alpha = GlyphCoverage(
+            curveTexture, texWidth, glyphLocal, pixelSize,
+            uint(input.glyphBands.x), uint(input.glyphBands.y), uint(input.glyphBands.z));
+        if (alpha <= 0.002)
+            discard;
+        return float4(input.color.rgb, input.color.a * alpha);
+    }
+
+    if (input.type == kShapeTexturedRect)
+    {
+        const float4 texColor = g_colorTexture.SampleGrad(g_linearSampler, sampleUv, uvDx, uvDy);
+        // UI textures are acquired sRGB, so the fetch decodes them to linear light; but this pass
+        // writes straight to a UNORM target holding display-encoded values (input.color is one too).
+        // Re-encode, or every mid-tone is drawn gamma-darkened: the Twinsanity hint glyphs' orange
+        // (disc texel G 150) came out at G 57 against the PS2's 105 (logs/tutorialfinal/hint_colour.md).
+        return float4(LinearToSrgbUi(texColor.rgb), texColor.a) * input.color;
+    }
+
+    if (input.type == kShapeRect && input.cornerRadius > 0.5)
+    {
+        const float alpha = saturate(0.5 - signedDist / aa);
+        if (alpha <= 0.001)
+            discard;
+        return float4(input.color.rgb, input.color.a * alpha);
+    }
+
+    return input.color;
+}
