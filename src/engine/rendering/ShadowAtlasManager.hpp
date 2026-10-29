@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <LocalShadowPlan.hpp>
 
 #include "gpu/GpuFormat.hpp"
 #include "gpu/GpuHandles.hpp"
@@ -53,14 +54,8 @@ namespace aether
 		}
 
 	private:
-		struct Shelf
-		{
-			std::uint32_t y = 0;
-			std::uint32_t height = 0;
-			std::uint32_t cursorX = 0;
-		};
 
-		std::vector<Shelf> m_shelves;
+		std::vector<ShadowShelf> m_shelves;
 		Region m_usedBounds{};
 	};
 } // namespace aether

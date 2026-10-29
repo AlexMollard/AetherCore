@@ -1,5 +1,6 @@
 #include "rendering/LocalShadowService.hpp"
 #include "utils/Logger.hpp"
+#include <LocalShadowPlan.hpp>
 
 #include <algorithm>
 #include <ranges>
@@ -32,8 +33,8 @@
 namespace
 {
 	constexpr std::uint32_t kPointLightFaceCount = 6u;
-	constexpr std::uint32_t kMaxRenderedLocalShadowEntries = 48u;
-	constexpr std::uint32_t kPointShadowFaceRes = 384u;
+	constexpr std::uint32_t kMaxRenderedLocalShadowEntries = aether::kLocalShadowEntryLimit;
+	constexpr std::uint32_t kPointShadowFaceRes = aether::kLocalPointShadowResolution;
 	// which needs no separate coverage). Radial depth is face-invariant, so the
 	constexpr float kPointLightFovDeg = 90.0f;
 
@@ -58,7 +59,7 @@ namespace
 
 	// Fixed resolution for all spot shadows - avoids atlas layout shifts when
 	// the light set changes between frames.
-	constexpr std::uint32_t kSpotShadowRes = 512u;
+	constexpr std::uint32_t kSpotShadowRes = aether::kLocalSpotShadowResolution;
 	constexpr std::uint32_t kLargestShadowRes = std::max(kSpotShadowRes, kPointShadowFaceRes);
 
 	// Worst-case height the shelf packer can consume, so the atlas is sized to the
@@ -264,84 +265,18 @@ namespace aether
 		const auto pointCount = static_cast<std::uint32_t>(packet.pointLights.size());
 		const auto spotCount = static_cast<std::uint32_t>(packet.spotLights.size());
 
-		struct ShadowCandidate
-		{
-			glm::vec3 position;
-			float radius;
-			float sourceRadius;
-			std::uint32_t lightIndex;
-			std::uint32_t lightType;
-			float distanceSq;
-		};
-
-		std::vector<ShadowCandidate> candidates;
-
-		{
-			const std::span<const Renderer::PointLight> ptLights = packet.pointLights;
-			for (std::size_t i = 0; i < ptLights.size() && candidates.size() < kMaxLocalShadows; ++i)
-			{
-				if (!ptLights[i].castsShadow)
-				{
-					continue;
-				}
-				const glm::vec3 dPos = ptLights[i].position - camPos;
-				const float dsq = glm::dot(dPos, dPos);
-				candidates.push_back(ShadowCandidate{
-				        .position = ptLights[i].position,
-				        .radius = ptLights[i].radius,
-				        .sourceRadius = ptLights[i].sourceRadius,
-				        .lightIndex = static_cast<std::uint32_t>(i),
-				        .lightType = 0u,
-				        .distanceSq = dsq,
-				});
-			}
-		}
-
-		{
-			const std::span<const Renderer::SpotLight> spLights = packet.spotLights;
-			for (std::size_t i = 0; i < spLights.size() && candidates.size() < kMaxLocalShadows; ++i)
-			{
-				if (!spLights[i].castsShadow)
-				{
-					continue;
-				}
-				const glm::vec3 dPos2 = spLights[i].position - camPos;
-				const float dsq = glm::dot(dPos2, dPos2);
-				candidates.push_back(ShadowCandidate{
-				        .position = spLights[i].position,
-				        .radius = spLights[i].radius,
-				        .sourceRadius = spLights[i].sourceRadius,
-				        .lightIndex = static_cast<std::uint32_t>(i),
-				        .lightType = 1u,
-				        .distanceSq = dsq,
-				});
-			}
-		}
-
-		std::ranges::sort(candidates,
-		        [](const ShadowCandidate& a, const ShadowCandidate& b)
-		        {
-			        if (std::abs(a.distanceSq - b.distanceSq) > 1e-4f)
-			        {
-				        return a.distanceSq < b.distanceSq;
-			        }
-			        if (a.lightType != b.lightType)
-			        {
-				        return a.lightType < b.lightType;
-			        }
-			        return a.lightIndex < b.lightIndex;
-		        });
-
-		const std::uint32_t budget = std::min(static_cast<std::uint32_t>(candidates.size()), kMaxLocalShadows);
+		static_assert(kMaxLocalShadows == kLocalShadowCandidateLimit);
+		auto candidates = LocalShadowCandidates(packet.pointLights, packet.spotLights, camPos);
+		const auto budget = static_cast<std::uint32_t>(candidates.size());
+		const auto selected = SelectLocalShadows(std::move(candidates));
 
 		const std::uint32_t totalLights = pointCount + spotCount;
 		m_lightShadowIndices.assign(totalLights, glm::vec2(-1.0f, 1.0f));
 
 		std::uint32_t shadowDataIdx = 0;
 
-		for (std::uint32_t i = 0; i < budget; ++i)
+		for (const auto& c: selected)
 		{
-			const ShadowCandidate& c = candidates[i];
 
 			if (c.lightType == 0u)
 			{
