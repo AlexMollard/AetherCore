@@ -98,7 +98,7 @@ namespace aether::io
 		return result;
 	}
 
-	Expected<std::vector<std::byte>> MemoryPak::Read(std::string_view path) const
+	Expected<std::vector<std::byte>> MemoryPak::Read(std::string_view path, const std::function<bool(std::size_t)>& reserve) const
 	{
 		const auto found = m_index.find(std::string(path));
 		if (found == m_index.end())
@@ -115,6 +115,10 @@ namespace aether::io
 			{
 				AE_UNEXPECTED(AetherError::FileSystem("Invalid or oversized compressed asset: " + std::string(path)));
 			}
+			if (reserve && !reserve(static_cast<size_t>(size)))
+			{
+				AE_UNEXPECTED(AetherError::FileSystem("Asset allocation reservation rejected: " + std::string(path)));
+			}
 			output.resize(static_cast<size_t>(size));
 			const auto decoded = ZSTD_decompress(output.data(), output.size(), data.data(), data.size());
 			if (ZSTD_isError(decoded) || decoded != output.size())
@@ -124,6 +128,10 @@ namespace aether::io
 		}
 		else
 		{
+			if (reserve && !reserve(data.size()))
+			{
+				AE_UNEXPECTED(AetherError::FileSystem("Asset allocation reservation rejected: " + std::string(path)));
+			}
 			output.assign(data.begin(), data.end());
 		}
 		if (XXH3_64bits(output.data(), output.size()) != entry.contentHash)

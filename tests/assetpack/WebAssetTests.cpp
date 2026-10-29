@@ -29,6 +29,23 @@ TEST_CASE("Web package validates target UTF8 compression versions and hashes")
 	auto content = archive->Read("caf\xc3\xa9.txt");
 	REQUIRE(content.has_value());
 	CHECK(content->size() == 4096);
+	std::size_t reservedBytes = 0;
+	CHECK_FALSE(archive->Read("caf\xc3\xa9.txt", [&](std::size_t size)
+	{
+		reservedBytes = size;
+		return false;
+	}).has_value());
+	CHECK(reservedBytes == 4096);
+	auto admitted = archive->Read("caf\xc3\xa9.txt", [](std::size_t size) { return size == 4096; });
+	REQUIRE(admitted.has_value());
+	CHECK(*admitted == *content);
+	reservedBytes = 0;
+	CHECK_FALSE(archive->Read("missing.txt", [&](std::size_t size)
+	{
+		reservedBytes = size;
+		return true;
+	}).has_value());
+	CHECK(reservedBytes == 0);
 	CHECK_FALSE(archive->Read("missing.txt").has_value());
 	CHECK_FALSE(aether::io::MemoryPak::Open(bytes, "desktop").has_value());
 	auto corrupt = bytes;

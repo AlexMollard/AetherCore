@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -17,7 +18,7 @@ namespace aether::io
 		static constexpr size_t kMaxPackageBytes = 256u * 1024u * 1024u;
 		static constexpr size_t kMaxAssetBytes = 64u * 1024u * 1024u + 65536u;
 		[[nodiscard]] static Expected<MemoryPak> Open(std::span<const std::byte> bytes, std::string_view expectedTarget);
-		[[nodiscard]] Expected<std::vector<std::byte>> Read(std::string_view path) const;
+		[[nodiscard]] Expected<std::vector<std::byte>> Read(std::string_view path, const std::function<bool(std::size_t)>& reserve = {}) const;
 		[[nodiscard]] bool Exists(std::string_view path) const;
 		[[nodiscard]] std::vector<std::string> Paths() const;
 
