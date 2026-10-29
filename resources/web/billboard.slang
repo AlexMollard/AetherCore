@@ -90,7 +90,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     particleTexture.GetDimensions(width, height);
     const float2 texSize = float2(max(width, 1u), max(height, 1u));
     const float2 uv = width <= 128u ? (floor(input.uv * texSize) + 0.5) / texSize : input.uv;
-    float4 texel = particleTexture.Sample(particleSampler, uv);
+    float4 texel = particleTexture.SampleGrad(particleSampler, uv, ddx(uv) * exp2(frame.extent.w), ddy(uv) * exp2(frame.extent.w));
 	// Particle pages share the sprite registry's encoded RGBA8 storage. Native
 	// textures decode sRGB on sampling before either HDR lighting or display gamma.
 	texel.rgb = select(texel.rgb <= float3(0.04045), texel.rgb / 12.92, pow((texel.rgb + 0.055) / 1.055, float3(2.4)));

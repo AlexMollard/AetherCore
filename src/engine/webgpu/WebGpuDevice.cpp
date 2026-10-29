@@ -63,6 +63,7 @@ namespace aether::webgpu
 		WGPUSurface surface = nullptr;
 		std::array<WGPURenderPipeline, 8> pipelines{};
 		WGPUSampler sampler = nullptr;
+		int samplerAnisotropy = 1;
 		std::vector<WGPUTexture> textures;
 		std::size_t textureBytes = 0;
 		WebMeshRenderer meshes;
@@ -250,6 +251,7 @@ namespace aether::webgpu
 			}
 			WGPUSamplerDescriptor sample = WGPU_SAMPLER_DESCRIPTOR_INIT;
 			sample.magFilter = WGPUFilterMode_Linear;
+			sample.mipmapFilter = WGPUMipmapFilterMode_Linear;
 			sample.minFilter = WGPUFilterMode_Linear;
 			sampler = wgpuDeviceCreateSampler(device, &sample);
 			WGPUEmscriptenSurfaceSourceCanvasHTMLSelector canvas = {};
@@ -449,6 +451,11 @@ namespace aether::webgpu
 #undef AE_WEBGPU_LIMIT
 #undef AE_WEBGPU_FEATURE
 #undef AE_WEBGPU_FORMAT
+				// Content-sized shadow atlases and light lists may exceed the profile minima.
+				// A device otherwise exposes only the explicitly requested limits.
+				required.maxTextureDimension2D = supported.maxTextureDimension2D;
+				required.maxStorageBufferBindingSize = supported.maxStorageBufferBindingSize;
+				required.maxBufferSize = supported.maxBufferSize;
 				descriptor.requiredLimits = &required;
 			}
 			descriptor.uncapturedErrorCallbackInfo.userdata1 = &self;
@@ -729,6 +736,19 @@ namespace aether::webgpu
 		{
 			return false;
 		}
+		const int anisotropy = ClampTextureAnisotropy(packet.anisotropy);
+		if (anisotropy != self.samplerAnisotropy)
+		{
+			WGPUSamplerDescriptor sample = WGPU_SAMPLER_DESCRIPTOR_INIT;
+			sample.magFilter = sample.minFilter = WGPUFilterMode_Linear;
+			sample.mipmapFilter = WGPUMipmapFilterMode_Linear;
+			sample.maxAnisotropy = static_cast<std::uint16_t>(anisotropy);
+			const auto replacement = wgpuDeviceCreateSampler(self.device, &sample);
+			if (!replacement) { self.Fail("WEBGPU_SAMPLER", Text("Sprite sampler creation failed")); return false; }
+			wgpuSamplerRelease(self.sampler);
+			self.sampler = replacement;
+			self.samplerAnisotropy = anisotropy;
+		}
 		auto plan = gpu::PlanSpritePass(packet.render2D, 1024, 65536);
 		if (!plan)
 		{
@@ -824,9 +844,9 @@ namespace aether::webgpu
 		frame->exposure = hdrPlan ? packet.tonemapExposure : 1.0f;
 		frame->autoExposure = packet.postEffects.autoExposure;
 		const auto clip = glm::transpose(packet.proj * packet.view);
-		const std::array<glm::vec4, 5> constants{clip[0], clip[1], clip[2], clip[3], glm::vec4(sceneWidth, sceneHeight, hdrPlan ? 1 : 0, 0)};
+		const std::array<glm::vec4, 5> constants{clip[0], clip[1], clip[2], clip[3], glm::vec4(sceneWidth, sceneHeight, hdrPlan ? 1 : 0, ClampTextureLodBias(packet.mipLodBias))};
 		frame->uniform = self.Buffer(WGPUBufferUsage_Uniform, constants.data(), sizeof(constants));
-		const std::array<glm::vec4, 5> displayConstants{clip[0], clip[1], clip[2], clip[3], glm::vec4(self.width, self.height, 0, 0)};
+		const std::array<glm::vec4, 5> displayConstants{clip[0], clip[1], clip[2], clip[3], glm::vec4(self.width, self.height, 0, ClampTextureLodBias(packet.mipLodBias))};
 		frame->displayUniform = self.Buffer(WGPUBufferUsage_Uniform, displayConstants.data(), sizeof(displayConstants));
 		frame->instances = self.Buffer(WGPUBufferUsage_Storage, plan->instances.empty() ? nullptr : plan->instances.data(), std::max(size_t(128), plan->instances.size() * 128));
 		WGPUSurfaceTexture current = WGPU_SURFACE_TEXTURE_INIT;
@@ -882,10 +902,28 @@ namespace aether::webgpu
 			{
 				const auto opaque = frame->post->OpaqueInputs();
 				self.meshes.EncodeAuxiliary(self.device, self.queue, encoder, sceneWidth, sceneHeight, packet, meshInstances, self.textures, opaque, frame->meshes);
+				if (!frame->meshes)
+				{
+					self.Fail("WEBGPU_SAMPLER", Text(self.meshes.error.c_str()));
+					wgpuCommandEncoderRelease(encoder);
+					wgpuTextureViewRelease(view);
+					wgpuTextureRelease(current.texture);
+					frame->Finish();
+					return false;
+				}
 				self.post.EncodeAmbient(self.device, self.queue, encoder, packet, *frame->post, frame->meshes->directional);
 				inputs = frame->post->OpaqueInputs();
 			}
 			self.meshes.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, meshInstances, self.textures, frame->meshes, hdrPlan.has_value(), inputs);
+			if (!frame->meshes)
+			{
+				self.Fail("WEBGPU_SAMPLER", Text(self.meshes.error.c_str()));
+				wgpuCommandEncoderRelease(encoder);
+				wgpuTextureViewRelease(view);
+				wgpuTextureRelease(current.texture);
+				frame->Finish();
+				return false;
+			}
 		}
 		else if (frame->post)
 		{
@@ -985,6 +1023,15 @@ namespace aether::webgpu
 			drawSprites(pass, true);
 			wgpuRenderPassEncoderEnd(pass);
 			wgpuRenderPassEncoderRelease(pass);
+		}
+		if (!self.billboards.error.empty())
+		{
+			self.Fail("WEBGPU_BILLBOARDS", Text(self.billboards.error.c_str()));
+			wgpuCommandEncoderRelease(encoder);
+			wgpuTextureViewRelease(view);
+			wgpuTextureRelease(current.texture);
+			frame->Finish();
+			return false;
 		}
 		if (!self.ui.Encode(self.device, self.queue, encoder, view, self.width, self.height, packet.renderUi, self.textures, self.sampler, frame->ui))
 		{

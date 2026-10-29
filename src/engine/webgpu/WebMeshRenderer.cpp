@@ -1,7 +1,11 @@
 #include "WebMeshRenderer.hpp"
 
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
 #include <array>
 #include <ShadowCascadeFit.hpp>
+#include <LocalShadowPlan.hpp>
 #include <cmath>
 #include <fstream>
 #include <iterator>
@@ -13,13 +17,38 @@ namespace aether::webgpu
 {
 	namespace
 	{
+
+		struct ShadowPlan
+		{
+			std::vector<LocalShadowCandidate> selected;
+			std::vector<glm::vec4> regions;
+			unsigned width = 1, height = 1;
+		};
+
+		ShadowPlan PlanShadows(const RenderFramePacket& packet, unsigned maxDimension)
+		{
+			ShadowPlan plan;
+			plan.selected = SelectLocalShadows(LocalShadowCandidates(packet.pointLights, packet.spotLights, glm::vec3(packet.cameraWorldPos)));
+			std::vector<unsigned> sizes;
+			if (packet.directionalShadowEnabled) { sizes = {4096, 2048, 2048}; }
+			for (const auto& candidate: plan.selected)
+			{
+				for (unsigned i = 0; i < (candidate.lightType ? 1u : 6u); ++i) { sizes.push_back(candidate.lightType ? kLocalSpotShadowResolution : kLocalPointShadowResolution); }
+			}
+			auto atlas = PackShadowAtlas(sizes, maxDimension);
+			plan.regions = std::move(atlas.regions);
+			plan.width = atlas.width;
+			plan.height = atlas.height;
+			return plan;
+		}
+
 		WGPUBuffer Buffer(WGPUDevice device, WGPUQueue queue, WGPUBufferUsage usage, const void* data, std::size_t bytes)
 		{
 			WGPUBufferDescriptor descriptor = WGPU_BUFFER_DESCRIPTOR_INIT;
 			descriptor.size = bytes;
 			descriptor.usage = usage | WGPUBufferUsage_CopyDst;
 			const auto buffer = wgpuDeviceCreateBuffer(device, &descriptor);
-			if (buffer)
+			if (buffer && data)
 			{
 				wgpuQueueWriteBuffer(queue, buffer, 0, data, bytes);
 			}
@@ -93,6 +122,9 @@ namespace aether::webgpu
 		}
 		if (auxiliaryBindings) { wgpuBindGroupRelease(auxiliaryBindings); }
 		if (inputBindings) { wgpuBindGroupRelease(inputBindings); }
+		if (tileCullBindings) { wgpuBindGroupRelease(tileCullBindings); }
+		Destroy(tileCullUniform);
+		Destroy(lightTiles);
 		Destroy(uniform);
 		Destroy(instances);
 		Destroy(skin);
@@ -149,6 +181,8 @@ namespace aether::webgpu
 		m_bytes = 0;
 		m_shadow_targets.reset();
 		m_shadow_fallback.reset();
+		if (m_tile_cull_pipeline) { wgpuComputePipelineRelease(m_tile_cull_pipeline); m_tile_cull_pipeline = nullptr; }
+		if (m_tile_cull_layout) { wgpuBindGroupLayoutRelease(m_tile_cull_layout); m_tile_cull_layout = nullptr; }
 		if (m_auxiliary_pipeline)
 		{
 			wgpuRenderPipelineRelease(m_auxiliary_pipeline);
@@ -197,6 +231,7 @@ namespace aether::webgpu
 			wgpuSamplerRelease(m_sampler);
 			m_sampler = nullptr;
 		}
+		m_sampler_anisotropy = 1;
 		if (m_white)
 		{
 			wgpuTextureDestroy(m_white);
@@ -210,6 +245,39 @@ namespace aether::webgpu
 		WGPULimits limits = WGPU_LIMITS_INIT;
 		wgpuDeviceGetLimits(device, &limits);
 		m_max_texture_dimension = limits.maxTextureDimension2D;
+		m_max_storage_binding_size = std::min<std::uint64_t>(limits.maxStorageBufferBindingSize, limits.maxBufferSize);
+		m_max_compute_workgroups = limits.maxComputeWorkgroupsPerDimension;
+		std::ifstream cullInput("/assets/tiled_light_cull.wgsl");
+		const std::string cullCode(std::istreambuf_iterator<char>(cullInput), {});
+		if (cullCode.empty()) { error = "Missing tiled light cull WGSL"; return false; }
+		WGPUShaderSourceWGSL cullSource = WGPU_SHADER_SOURCE_WGSL_INIT;
+		cullSource.code = {cullCode.data(), cullCode.size()};
+		WGPUShaderModuleDescriptor cullShaderDescriptor = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
+		cullShaderDescriptor.nextInChain = &cullSource.chain;
+		const auto cullShader = wgpuDeviceCreateShaderModule(device, &cullShaderDescriptor);
+		std::array<WGPUBindGroupLayoutEntry, 3> cullEntries{};
+		for (unsigned i = 0; i < cullEntries.size(); ++i)
+		{
+			cullEntries[i].binding = i;
+			cullEntries[i].visibility = WGPUShaderStage_Compute;
+			cullEntries[i].buffer.type = i == 0 ? WGPUBufferBindingType_Uniform : (i == 1 ? WGPUBufferBindingType_ReadOnlyStorage : WGPUBufferBindingType_Storage);
+		}
+		WGPUBindGroupLayoutDescriptor cullLayoutDescriptor = WGPU_BIND_GROUP_LAYOUT_DESCRIPTOR_INIT;
+		cullLayoutDescriptor.entryCount = cullEntries.size();
+		cullLayoutDescriptor.entries = cullEntries.data();
+		m_tile_cull_layout = wgpuDeviceCreateBindGroupLayout(device, &cullLayoutDescriptor);
+		WGPUPipelineLayoutDescriptor cullPipelineLayoutDescriptor = WGPU_PIPELINE_LAYOUT_DESCRIPTOR_INIT;
+		cullPipelineLayoutDescriptor.bindGroupLayoutCount = 1;
+		cullPipelineLayoutDescriptor.bindGroupLayouts = &m_tile_cull_layout;
+		const auto cullPipelineLayout = wgpuDeviceCreatePipelineLayout(device, &cullPipelineLayoutDescriptor);
+		WGPUComputePipelineDescriptor cullPipelineDescriptor = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
+		cullPipelineDescriptor.layout = cullPipelineLayout;
+		cullPipelineDescriptor.compute.module = cullShader;
+		cullPipelineDescriptor.compute.entryPoint = {"computeMain", 11};
+		m_tile_cull_pipeline = wgpuDeviceCreateComputePipeline(device, &cullPipelineDescriptor);
+		wgpuPipelineLayoutRelease(cullPipelineLayout);
+		wgpuShaderModuleRelease(cullShader);
+		if (!m_tile_cull_pipeline) { error = "Failed to create tiled light cull pipeline"; return false; }
 		std::ifstream input("/assets/mesh.wgsl");
 		const std::string code(std::istreambuf_iterator<char>(input), {});
 		if (code.empty())
@@ -273,7 +341,7 @@ namespace aether::webgpu
 		descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleList;
 		descriptor.primitive.cullMode = WGPUCullMode_None;
 		// A shared explicit layout makes every blend/winding variant bind-compatible.
-		std::array<WGPUBindGroupLayoutEntry, 7> frameEntries{};
+		std::array<WGPUBindGroupLayoutEntry, 8> frameEntries{};
 		for (unsigned i = 0; i < 5; ++i)
 		{
 			frameEntries[i].binding = i;
@@ -287,6 +355,9 @@ namespace aether::webgpu
 		frameEntries[6].binding = 6;
 		frameEntries[6].visibility = WGPUShaderStage_Fragment;
 		frameEntries[6].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
+		frameEntries[7].binding = 7;
+		frameEntries[7].visibility = WGPUShaderStage_Fragment;
+		frameEntries[7].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
 		WGPUBindGroupLayoutDescriptor layoutDescriptor = WGPU_BIND_GROUP_LAYOUT_DESCRIPTOR_INIT;
 		layoutDescriptor.entryCount = frameEntries.size();
 		layoutDescriptor.entries = frameEntries.data();
@@ -638,26 +709,16 @@ namespace aether::webgpu
 
 	std::expected<std::vector<gpu::MeshGpuInstance>, std::string> WebMeshRenderer::Prepare(const RenderFramePacket& packet, std::span<const WGPUTexture> textures) const
 	{
-		if (packet.pointLights.size() + packet.spotLights.size() > 128)
+		const auto plan = PlanShadows(packet, m_max_texture_dimension);
+		const std::size_t shadowMaps = plan.regions.size();
+		const bool requestedShadows = packet.directionalShadowEnabled || !plan.selected.empty();
+		if (requestedShadows && plan.regions.empty())
 		{
-			return std::unexpected("WebGPU local light limit exceeded (128)");
+			return std::unexpected("WebGPU adapter maxTextureDimension2D cannot fit the selected native shadow maps");
 		}
-		std::size_t shadowMaps = packet.directionalShadowEnabled ? 3 : 0;
-		for (const auto& light: packet.pointLights)
+		if ((packet.pointLights.size() + packet.spotLights.size()) > m_max_storage_binding_size / 64)
 		{
-			shadowMaps += light.castsShadow ? 6 : 0;
-		}
-		for (const auto& light: packet.spotLights)
-		{
-			shadowMaps += light.castsShadow ? 1 : 0;
-		}
-		if (shadowMaps > 16)
-		{
-			return std::unexpected("WebGPU shadow map limit exceeded (16 layers)");
-		}
-		if (shadowMaps && m_max_texture_dimension < 7168)
-		{
-			return std::unexpected("WebGPU shadow atlas requires maxTextureDimension2D >= 7168");
+			return std::unexpected("WebGPU adapter storage buffer limit cannot fit local lights");
 		}
 		const auto finite = [](glm::vec4 value)
 		{
@@ -806,9 +867,42 @@ namespace aether::webgpu
 	        const RenderFramePacket& packet, std::span<const gpu::MeshGpuInstance> instances,
 	        std::span<const WGPUTexture> textures, std::unique_ptr<WebMeshFrame>& frame, bool hdr)
 	{
+		const std::uint64_t tilesX = (std::uint64_t(width) + 15) / 16;
+		const std::uint64_t tilesY = (std::uint64_t(height) + 15) / 16;
+		const std::uint64_t stride = std::min<std::uint64_t>(packet.pointLights.size() + packet.spotLights.size(), 128) + 1;
+		if (!tilesX || !tilesY || tilesX > m_max_compute_workgroups || tilesY > m_max_compute_workgroups ||
+		    tilesX * tilesY > UINT32_MAX / stride || tilesX * tilesY > m_max_storage_binding_size / (stride * sizeof(std::uint32_t)))
+		{
+			error = "WEBGPU_LIGHT_TILES: viewport exceeds tile buffer or dispatch limits";
+			return;
+		}
+		const std::uint64_t tileBytes = tilesX * tilesY * stride * sizeof(std::uint32_t);
+		const int anisotropy = ClampTextureAnisotropy(packet.anisotropy);
+		if (anisotropy != m_sampler_anisotropy)
+		{
+			WGPUSamplerDescriptor sampler = WGPU_SAMPLER_DESCRIPTOR_INIT;
+			sampler.addressModeU = sampler.addressModeV = sampler.addressModeW = WGPUAddressMode_Repeat;
+			sampler.magFilter = sampler.minFilter = WGPUFilterMode_Linear;
+			sampler.mipmapFilter = WGPUMipmapFilterMode_Linear;
+			sampler.lodMinClamp = 0;
+			sampler.lodMaxClamp = 32;
+			sampler.maxAnisotropy = static_cast<std::uint16_t>(anisotropy);
+			const auto replacement = wgpuDeviceCreateSampler(device, &sampler);
+			if (!replacement)
+			{
+				error = "WEBGPU_SAMPLER: failed to create mesh sampler";
+				return;
+			}
+			// Existing frame bind groups retain their sampler through GPU completion.
+			wgpuSamplerRelease(m_sampler);
+			m_sampler = replacement;
+			m_sampler_anisotropy = anisotropy;
+		}
 		const auto clip = glm::transpose(packet.proj * packet.view);
 		frame = std::make_unique<WebMeshFrame>();
 		frame->prepared = std::make_unique<WebMeshPreparedData>();
+		frame->tilesX = static_cast<unsigned>(tilesX);
+		frame->tilesY = static_cast<unsigned>(tilesY);
 		// Use the same zero-to-one clip planes as the native FrameConstants.
 		// Animated and custom/procedural vertices can leave their authored bounds.
 		const std::array<glm::vec4, 6> planes{clip[3] + clip[0], clip[3] - clip[0], clip[3] + clip[1], clip[3] - clip[1], clip[2], clip[3] - clip[2]};
@@ -853,20 +947,18 @@ namespace aether::webgpu
 		using ShadowData = WebMeshPreparedData::ShadowData;
 		std::vector<ShadowData> shadows;
 		glm::vec4 splits(0);
-		auto appendShadow = [&](glm::mat4 matrix, glm::vec4 params, glm::vec4 lightPosRange = glm::vec4(0), unsigned resolution = 512)
+		const auto plan = PlanShadows(packet, m_max_texture_dimension);
+		const auto requested = std::count_if(packet.pointLights.begin(), packet.pointLights.end(), [](const auto& light) { return light.castsShadow; })
+		        + std::count_if(packet.spotLights.begin(), packet.spotLights.end(), [](const auto& light) { return light.castsShadow; });
+		const auto dropped = hdr ? std::size_t(requested) - plan.selected.size() : 0;
+		if (dropped != m_dropped_shadow_casters)
 		{
-			const auto index = unsigned(shadows.size());
-			glm::vec4 region;
-			if (packet.directionalShadowEnabled && index < 3)
-			{
-				region = index == 0 ? glm::vec4(0, 0, 4096, 4096) : glm::vec4((index - 1) * 2048, 4096, 2048, 2048);
-			}
-			else
-			{
-				const auto tile = index - (packet.directionalShadowEnabled ? 3 : 0);
-				region = glm::vec4((tile % 8) * 512, 6144 + (tile / 8) * 512, resolution, resolution);
-			}
-			shadows.push_back({matrix[0], matrix[1], matrix[2], matrix[3], params, lightPosRange, region});
+			m_dropped_shadow_casters = dropped;
+			if (dropped) { std::fprintf(stderr, "WebGPU local shadow budget: %zu shadow-casting lights are unshadowed (48 map entries).\n", dropped); }
+		}
+		auto appendShadow = [&](glm::mat4 matrix, glm::vec4 params, glm::vec4 lightPosRange = glm::vec4(0), unsigned = 512)
+		{
+			shadows.push_back({matrix[0], matrix[1], matrix[2], matrix[3], params, lightPosRange, plan.regions[shadows.size()]});
 		};
 		if (hdr && packet.directionalShadowEnabled)
 		{
@@ -911,40 +1003,46 @@ namespace aether::webgpu
 		std::vector<LightData> lights;
 		constexpr std::array<glm::vec3, 6> directions{glm::vec3(1, 0, 0), glm::vec3(-1, 0, 0), glm::vec3(0, 1, 0), glm::vec3(0, -1, 0), glm::vec3(0, 0, 1), glm::vec3(0, 0, -1)};
 		constexpr std::array<glm::vec3, 6> ups{glm::vec3(0, -1, 0), glm::vec3(0, -1, 0), glm::vec3(0, 0, 1), glm::vec3(0, 0, -1), glm::vec3(0, -1, 0), glm::vec3(0, -1, 0)};
-		for (const auto& light: packet.pointLights)
+		std::vector<float> shadowIndices(packet.pointLights.size() + packet.spotLights.size(), -1.0f);
+		if (hdr) for (const auto& candidate: plan.selected)
 		{
-			const float layer = hdr && light.castsShadow ? float(shadows.size()) : -1;
-			lights.push_back({glm::vec4(light.position, light.radius), glm::vec4(light.color, light.intensity), glm::vec4(0, -1, 0, 0), glm::vec4(0, 0, layer, 0)});
-			if (layer >= 0)
+			const auto index = candidate.lightIndex + (candidate.lightType ? packet.pointLights.size() : 0);
+			shadowIndices[index] = float(shadows.size());
+			if (!candidate.lightType)
 			{
+				const auto& light = packet.pointLights[candidate.lightIndex];
 				for (int face = 0; face < 6; ++face)
 				{
 					appendShadow(glm::perspective(2.0f * std::atan(396.0f / 384.0f), 1.0f, 0.1f, light.radius) * glm::lookAt(light.position, light.position + directions[face], ups[face]),
-					        glm::vec4(0, 2.0f * (396.0f / 384.0f) / 384.0f, light.sourceRadius, 1),
-					        glm::vec4(light.position, light.radius),
-					        384);
+					        glm::vec4(0, 2.0f * (396.0f / 384.0f) / 384.0f, light.sourceRadius, 1), glm::vec4(light.position, light.radius), 384);
 				}
 			}
-		}
-		for (const auto& light: packet.spotLights)
-		{
-			const float layer = hdr && light.castsShadow ? float(shadows.size()) : -1;
-			const auto direction = glm::normalize(light.direction);
-			lights.push_back({glm::vec4(light.position, light.radius), glm::vec4(light.color, light.intensity), glm::vec4(direction, 1), glm::vec4(std::cos(light.innerAngleRad), std::cos(light.outerAngleRad), layer, 0)});
-			if (layer >= 0)
+			else
 			{
+				const auto& light = packet.spotLights[candidate.lightIndex];
+				const auto direction = glm::normalize(light.direction);
 				const auto up = std::abs(direction.y) > 0.95f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
 				appendShadow(glm::perspective(std::min(2 * (light.outerAngleRad + glm::radians(4.0f)), glm::radians(175.0f)), 1.0f, 0.1f, light.radius) * glm::lookAt(light.position, light.position + direction, up),
-				        glm::vec4(0, 2.0f * std::tan(std::min(light.outerAngleRad + glm::radians(4.0f), glm::radians(87.5f))) / 512, light.sourceRadius, 1),
-				        glm::vec4(light.position, light.radius));
+				        glm::vec4(0, 2.0f * std::tan(std::min(light.outerAngleRad + glm::radians(4.0f), glm::radians(87.5f))) / 512, light.sourceRadius, 1), glm::vec4(light.position, light.radius));
 			}
+		}
+		for (std::size_t i = 0; i < packet.pointLights.size(); ++i)
+		{
+			const auto& light = packet.pointLights[i];
+			lights.push_back({glm::vec4(light.position, light.radius), glm::vec4(light.color, light.intensity), glm::vec4(0, -1, 0, 0), glm::vec4(0, 0, shadowIndices[i], 0)});
+		}
+		for (std::size_t i = 0; i < packet.spotLights.size(); ++i)
+		{
+			const auto& light = packet.spotLights[i];
+			const auto direction = glm::normalize(light.direction);
+			lights.push_back({glm::vec4(light.position, light.radius), glm::vec4(light.color, light.intensity), glm::vec4(direction, 1), glm::vec4(std::cos(light.innerAngleRad), std::cos(light.outerAngleRad), shadowIndices[packet.pointLights.size() + i], 0)});
 		}
 		const auto viewRows = glm::transpose(packet.view);
 		FrameConstants constants{clip[0],
 		        clip[1],
 		        clip[2],
 		        clip[3],
-		        glm::vec4(packet.elapsedTime, hdr ? 1 : 0, 0, 0),
+		        glm::vec4(packet.elapsedTime, hdr ? 1 : 0, ClampTextureLodBias(packet.mipLodBias), static_cast<float>(width)),
 		        packet.cameraWorldPos,
 		        packet.sunDirectionIntensity,
 		        packet.sunColor,
@@ -978,11 +1076,14 @@ namespace aether::webgpu
 		// Queue submissions execute in order, so frames can reuse the atlas while
 		// retaining its ownership until their own completion callback retires.
 		auto& cache = shadowCount ? m_shadow_targets : m_shadow_fallback;
+		if (cache && (cache->width != (shadowCount ? plan.width : 1u) || cache->height != (shadowCount ? plan.height : 1u))) { cache.reset(); }
 		if (!cache)
 		{
 			cache = std::make_shared<WebShadowTargets>();
+			cache->width = shadowCount ? plan.width : 1u;
+			cache->height = shadowCount ? plan.height : 1u;
 			WGPUTextureDescriptor texture = WGPU_TEXTURE_DESCRIPTOR_INIT;
-			texture.size = shadowCount ? WGPUExtent3D{4096, 7168, 1} : WGPUExtent3D{1, 1, 1};
+			texture.size = WGPUExtent3D{cache->width, cache->height, 1};
 			texture.dimension = WGPUTextureDimension_2D;
 			texture.format = WGPUTextureFormat_R32Float;
 			texture.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
@@ -1019,6 +1120,22 @@ namespace aether::webgpu
 		}
 		frame->lights = Buffer(device, queue, WGPUBufferUsage_Storage, lights.data(), lights.size() * sizeof(LightData));
 		frame->uniform = Buffer(device, queue, WGPUBufferUsage_Uniform, &constants, sizeof(constants));
+		struct CullData { glm::vec4 view0, view1, view2, projection; glm::uvec4 dimensions; };
+		const CullData cull{viewRows[0], viewRows[1], viewRows[2],
+		        glm::vec4(packet.cameraNearPlane, 1.0f / packet.proj[0][0], 1.0f / packet.proj[1][1], std::abs(packet.proj[3][3] - 1.0f) < 1e-6f ? 1.0f : 0.0f),
+		        glm::uvec4(width, height, frame->tilesX, constants.counts.x)};
+		frame->tileCullUniform = Buffer(device, queue, WGPUBufferUsage_Uniform, &cull, sizeof(cull));
+		WGPUBufferDescriptor tileDescriptor = WGPU_BUFFER_DESCRIPTOR_INIT;
+		tileDescriptor.size = tileBytes;
+		tileDescriptor.usage = WGPUBufferUsage_Storage;
+		frame->lightTiles = wgpuDeviceCreateBuffer(device, &tileDescriptor);
+		std::array<WGPUBindGroupEntry, 3> cullBindings{};
+		cullBindings[0].binding = 0; cullBindings[0].buffer = frame->tileCullUniform; cullBindings[0].size = sizeof(cull);
+		cullBindings[1].binding = 1; cullBindings[1].buffer = frame->lights; cullBindings[1].size = wgpuBufferGetSize(frame->lights);
+		cullBindings[2].binding = 2; cullBindings[2].buffer = frame->lightTiles; cullBindings[2].size = tileBytes;
+		WGPUBindGroupDescriptor cullGroup = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+		cullGroup.layout = m_tile_cull_layout; cullGroup.entryCount = cullBindings.size(); cullGroup.entries = cullBindings.data();
+		frame->tileCullBindings = wgpuDeviceCreateBindGroup(device, &cullGroup);
 		struct WebMeshInstance
 		{
 			gpu::MeshGpuInstance mesh;
@@ -1069,7 +1186,7 @@ namespace aether::webgpu
 		frame->effects = Buffer(device, queue, WGPUBufferUsage_Storage, effects.data(), effects.size() * sizeof(EffectData));
 
 
-		std::array<WGPUBindGroupEntry, 7> entries{};
+		std::array<WGPUBindGroupEntry, 8> entries{};
 		entries[0].binding = 0;
 		entries[0].buffer = frame->uniform;
 		entries[0].size = sizeof(constants);
@@ -1090,6 +1207,9 @@ namespace aether::webgpu
 		entries[6].binding = 6;
 		entries[6].buffer = frame->effects;
 		entries[6].size = effects.size() * sizeof(EffectData);
+		entries[7].binding = 7;
+		entries[7].buffer = frame->lightTiles;
+		entries[7].size = tileBytes;
 		WGPUBindGroupDescriptor bindings = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
 		bindings.layout = m_frame_layout;
 		bindings.entries = entries.data();
@@ -1143,6 +1263,7 @@ namespace aether::webgpu
 		{
 			PrepareFrame(device, queue, width, height, packet, instances, textures, frame, true);
 		}
+		if (!frame) { return; }
 		frame->opaqueDepthAttachment = inputs.depthAttachment;
 		std::array<WGPURenderPassColorAttachment, 3> attachments{};
 		const std::array<WGPUTextureView, 3> views{inputs.sceneDepth, inputs.normalRoughness, inputs.albedo};
@@ -1199,6 +1320,18 @@ namespace aether::webgpu
 		if (!frame)
 		{
 			PrepareFrame(device, queue, width, height, packet, instances, textures, frame, hdr);
+		}
+		if (!frame) { return; }
+		if (!frame->tilesEncoded)
+		{
+			WGPUComputePassDescriptor descriptor = WGPU_COMPUTE_PASS_DESCRIPTOR_INIT;
+			const auto pass = wgpuCommandEncoderBeginComputePass(encoder, &descriptor);
+			wgpuComputePassEncoderSetPipeline(pass, m_tile_cull_pipeline);
+			wgpuComputePassEncoderSetBindGroup(pass, 0, frame->tileCullBindings, 0, nullptr);
+			wgpuComputePassEncoderDispatchWorkgroups(pass, frame->tilesX, frame->tilesY, 1);
+			wgpuComputePassEncoderEnd(pass);
+			wgpuComputePassEncoderRelease(pass);
+			frame->tilesEncoded = true;
 		}
 		if (!frame->inputBindings)
 		{

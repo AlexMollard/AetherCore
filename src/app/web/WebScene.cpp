@@ -138,6 +138,10 @@ namespace aether::app::web
 #undef AE_WEB_POST_FIELD
 			AE_TRY(contact, readBool("contactShadows", authored ? defaults.contactShadows : packet.contactShadows));
 			AE_TRY(split, readFloat("shadowSplitLambda", authored ? defaults.shadowSplitLambda : packet.shadowSplitLambda));
+			AE_TRY(anisotropy, readFloat("anisotropy", static_cast<float>(authored ? defaults.anisotropy : packet.anisotropy)));
+			AE_TRY(lodBias, readFloat("mipLodBias", authored ? defaults.mipLodBias : packet.mipLodBias));
+			packet.anisotropy = static_cast<int>(std::clamp(*anisotropy, 1.0f, 16.0f));
+			packet.mipLodBias = ClampTextureLodBias(*lodBias);
 			packet.contactShadows = *contact;
 			packet.shadowSplitLambda = *split;
 			return {};

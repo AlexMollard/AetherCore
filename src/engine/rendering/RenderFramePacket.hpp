@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -34,6 +35,9 @@ namespace aether
 
 namespace aether
 {
+	inline int ClampTextureAnisotropy(int value) { return std::clamp(value, 1, 16); }
+	inline float ClampTextureLodBias(float value) { return std::clamp(value, -4.0f, 4.0f); }
+
 	// Where a project-registered custom render pass is injected into the frame graph. Both stages draw
 	// into the scene HDR colour (before tonemap); more insertion points can be added as needed.
 	enum class CustomPassStage : std::uint8_t
@@ -142,6 +146,9 @@ namespace aether
 		bool contactShadows = false;
 		// 0 splits the cascades evenly across the view distance, 1 logarithmically.
 		float shadowSplitLambda = 0.65f;
+		// Global game-texture sampling settings, copied into each submitted frame.
+		int anisotropy = 16;
+		float mipLodBias = 0.0f;
 		bool directionalShadowEnabled = false;
 
 		// Camera-owned background, composited WYSIWYG in the tonemap pass.

@@ -17,6 +17,8 @@ struct GraphSurface
 bool GraphTexturePresent(uint mask, uint slot) { return (mask & (1u << slot)) != 0; }
 float4 GraphSampleTextureGrad(uint slot, float2 uv, float2 dx, float2 dy)
 {
+    dx *= exp2(frame.time.z);
+    dy *= exp2(frame.time.z);
     switch (slot)
     {
         case 0u: return albedo.SampleGrad(materialSampler, uv, dx, dy);

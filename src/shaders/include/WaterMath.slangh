@@ -33,7 +33,7 @@ struct WaterFrame
 	float4x4 viewProj, invViewProj;
 	float4 cameraWorldPos, sunDirectionIntensity, sunColor, skyHorizonColor, skyZenithColor, skyVoidColor;
 	float4 skyParams, shadingParams, shadowParams;
-	float elapsedTime;
+	float elapsedTime, explicitLodBias;
 	bool sceneDepthValid, sceneColorValid;
 };
 struct WaterMaterial
@@ -287,7 +287,7 @@ float3 SharedWaterShade(WaterFrame fc, WaterMaterial mat, Texture2D<float4> tex,
 	{
 		uint texW, texH, texLevels;
 		tex.GetDimensions(0u, texW, texH, texLevels);
-		coarseTex = tex.SampleLevel(sampler, uv, max(log2(float(max(texW, texH))) - 2.0, 0.0));
+		coarseTex = tex.SampleLevel(sampler, uv, max(log2(float(max(texW, texH))) - 2.0, 0.0) + fc.explicitLodBias);
 	}
 	const float3 texAvg = coarseTex.rgb;
 	const float pattern = clamp(dot(albedo, kLuma) / max(dot(bakedLight * texAvg, kLuma), 1e-4), 0.0, 2.5);
@@ -302,7 +302,7 @@ float3 SharedWaterShade(WaterFrame fc, WaterMaterial mat, Texture2D<float4> tex,
 	{
 		// The streak thresholds were tuned against the texel over the material-only whole-texture
 		// average (the fall's vertex colour left in), so they keep reading it that way.
-		const float fallAvg = max(dot(mat.baseColorFactor.rgb * tex.SampleLevel(sampler, uv, 12.0).rgb, kLuma), 1e-4);
+		const float fallAvg = max(dot(mat.baseColorFactor.rgb * tex.SampleLevel(sampler, uv, 12.0 + fc.explicitLodBias).rgb, kLuma), 1e-4);
 		const float2 uv2 = meshUv * float2(0.5, 0.5) + fract(mat.uvScroll * 0.5 * t) + float2(0.37, 0.0);
 		const float3 layer2 = mat.baseColorFactor.rgb * tex.SampleGrad(sampler, uv2, derivatives.uvDx * 0.5, derivatives.uvDy * 0.5).rgb;
 		const float streak = smoothstep(0.9, 1.6, clamp(dot(albedo, kLuma) / fallAvg, 0.0, 2.5)) * smoothstep(0.9, 1.5, dot(layer2, kLuma) / fallAvg);

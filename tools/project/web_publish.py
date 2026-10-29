@@ -28,7 +28,7 @@ def graphics_for_web(graphics):
         'motionBlur', 'motionBlurMaxRadius', 'gtaoRadius', 'gtaoStrength', 'specularFilter',
         'foliageSkyLook', 'bloomStrength', 'bloomRadius', 'exposureKey', 'exposureSpeed',
         'reflectionMaxRoughness', 'reflectionIntensity', 'renderScale', 'contactShadows',
-        'shadowSplitLambda',
+        'shadowSplitLambda', 'mipLodBias',
     )
     canonical = {name.lower(): name for name in names}
     return {canonical.get(key.lower(), key.lower()): value for key, value in graphics.items()}
@@ -419,7 +419,7 @@ def publish(request, directory, output=None):
         if data['language'] == 'rust':
             names += ['AetherGame.js', 'AetherGame.wasm', 'AetherGame.data']
         else:
-            names += ['browser-main.mjs', 'sprite.wgsl', 'mesh.wgsl', 'hdr.wgsl', 'light2d.wgsl', 'occluder2d.wgsl', 'billboard.wgsl', 'exposure.wgsl', 'ui_shapes_web.wgsl']
+            names += ['browser-main.mjs', 'sprite.wgsl', 'mesh.wgsl', 'tiled_light_cull.wgsl', 'hdr.wgsl', 'light2d.wgsl', 'occluder2d.wgsl', 'billboard.wgsl', 'exposure.wgsl', 'ui_shapes_web.wgsl']
             names += ['post-'+name+'.wgsl' for name in ('bloom', 'fxaa', 'tonemap', 'gtao_main', 'gtao_denoise', 'ssr', 'ssr_composite', 'dof', 'volumetric_fog', 'volumetric_composite')]
             shutil.copytree(build / 'web/_framework', stage / '_framework')
             managed = json.loads((build / 'web-managed-build.json').read_text(encoding='utf-8'))

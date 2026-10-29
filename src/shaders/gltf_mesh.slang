@@ -155,7 +155,7 @@ static const float kAerialMax = 0.22;
 #include "include/CloudMaterialMath.slangh"
 float3 CloudShade(Texture2D tex, float2 uv, float alpha0, float3 worldPos, float3 cameraPos, float3 L)
 {
-	return SharedCloudShade(tex, g_linearSampler, uv, alpha0, worldPos, cameraPos, L);
+	return SharedCloudShade(tex, g_linearSampler, uv, alpha0, worldPos, cameraPos, L, 1.0);
 }
 
 [shader("fragment")]

@@ -122,9 +122,12 @@ namespace aether
 
 		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .presentMode = config.presentMode, .enableGpuDiagnostics = config.enableGpuDiagnostics, .enableValidation = config.enableValidation, .maxAnisotropy = static_cast<std::uint32_t>(std::max(m_settings.graphics.anisotropy, 1))}));
 		m_screenshotService.Init(m_gpu->GetDevice(), m_gpu->GetGraphicsQueueFamily(), m_gpu->GetGraphicsQueue());
-		// A project-authored LOD bias rides the pending path: it is applied on the first
-		// quiesced frame, when rewriting the sampler is safe.
-		SetMipLodBias(m_settings.graphics.mipLodBias);
+		// Settings already contain the authored value, so the setter's equality guard
+		// would skip it. Queue nonzero startup bias before the first quiesced frame.
+		if (m_settings.graphics.mipLodBias != 0.0f)
+		{
+			m_pendingMipLodBias.store(static_cast<int>(std::clamp(m_settings.graphics.mipLodBias, -4.0f, 4.0f) * 1000.0f), std::memory_order_release);
+		}
 		m_gpu->GetSwapchain().SetPrePresentCapture([this](void* cmd, void* image, gpu::Extent2D extent) { m_screenshotService.RecordFrameCapture(cmd, image, extent, m_gpu->GetSwapchainColorFormat()); });
 
 		aether::SceneSubsystem::Init();
@@ -973,8 +976,9 @@ namespace aether
 		const bool lazyTargetsPending = m_rendering != nullptr && m_rendering->IsLazyTargetRebuildPending();
 		// Same reason: the sampler rewrite needs the GPU idle, which is only true on that path.
 		const bool anisotropyPending = m_pendingAnisotropy.load(std::memory_order_acquire) != 0;
+		const bool lodBiasPending = m_pendingMipLodBias.load(std::memory_order_acquire) != INT_MAX;
 		const bool asyncComputePending = m_pendingAsyncCompute.load(std::memory_order_acquire) != 0;
-		return framebufferResized || swapchainOutOfDate || viewportPending || lazyTargetsPending || anisotropyPending || asyncComputePending;
+		return framebufferResized || swapchainOutOfDate || viewportPending || lazyTargetsPending || anisotropyPending || lodBiasPending || asyncComputePending;
 	}
 
 	void AetherCore::RecreateSwapchainAndResources()
@@ -1104,14 +1108,14 @@ namespace aether
 		m_settings.graphics.mipLodBias = clamped;
 
 		// Recorded, applied on the quiesced frame - same reason as anisotropy: rewriting the
-		// sampler needs the GPU idle. x1000 so a nonzero bias fits the pending int flag.
+		// sampler needs the GPU idle. Zero is a valid request, distinct from INT_MAX.
 		m_pendingMipLodBias.store(static_cast<int>(clamped * 1000.0f), std::memory_order_release);
 	}
 
 	bool AetherCore::ApplyPendingMipLodBias()
 	{
-		const int pending = m_pendingMipLodBias.exchange(0, std::memory_order_acq_rel);
-		if (pending == 0 || !m_gpu)
+		const int pending = m_pendingMipLodBias.exchange(INT_MAX, std::memory_order_acq_rel);
+		if (pending == INT_MAX || !m_gpu)
 		{
 			return false;
 		}

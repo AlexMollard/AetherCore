@@ -35,12 +35,13 @@ namespace aether::webgpu
 	{
 		WGPUTextureView atlas = nullptr;
 		std::array<glm::mat4, 3> viewProj{};
-		std::array<glm::vec4, 3> regions{}; // Pixel x/y/width/height in the 4096 x 7168 atlas.
+		std::array<glm::vec4, 3> regions{}; // Pixel x/y/width/height in the shadow atlas.
 		glm::vec4 depthBias{}, normalOffset{}, penumbraScale{}, splits{};
 		bool enabled = false;
 	};
 	struct WebShadowTargets
 	{
+		unsigned width = 0, height = 0;
 		WGPUTexture color = nullptr, depth = nullptr;
 		WGPUTextureView sample = nullptr;
 		WGPUTextureView sceneSample = nullptr;
@@ -51,6 +52,10 @@ namespace aether::webgpu
 	struct WebMeshFrame
 	{
 		WGPUBuffer uniform = nullptr, instances = nullptr, skin = nullptr, lights = nullptr;
+		WGPUBuffer tileCullUniform = nullptr, lightTiles = nullptr;
+		WGPUBindGroup tileCullBindings = nullptr;
+		unsigned tilesX = 0, tilesY = 0;
+		bool tilesEncoded = false;
 		WGPUBindGroup bindings = nullptr;
 		std::vector<WGPUBindGroup> materials;
 		WGPUTexture depth = nullptr;
@@ -122,14 +127,20 @@ namespace aether::webgpu
 		std::vector<std::array<WGPURenderPipeline, 18>> m_custom_pipelines;
 		std::vector<std::array<WGPURenderPipeline, 3>> m_custom_auxiliary;
 		WGPURenderPipeline m_shadow_pipeline = nullptr;
+		WGPUComputePipeline m_tile_cull_pipeline = nullptr;
+		WGPUBindGroupLayout m_tile_cull_layout = nullptr;
 		WGPURenderPipeline m_auxiliary_pipeline = nullptr;
 		WGPUBindGroupLayout m_input_layout = nullptr;
 		WGPUBindGroupLayout m_frame_layout = nullptr, m_material_layout = nullptr;
 		WGPUBindGroupLayout m_shadow_frame_layout = nullptr;
 		WGPUTexture m_white = nullptr;
 		WGPUSampler m_sampler = nullptr, m_scene_sampler = nullptr;
+		int m_sampler_anisotropy = 1;
 		std::size_t m_bytes = 0;
 		unsigned m_max_texture_dimension = 0;
+		std::uint64_t m_max_storage_binding_size = 0;
+		unsigned m_max_compute_workgroups = 0;
+		std::size_t m_dropped_shadow_casters = 0;
 		std::shared_ptr<WebShadowTargets> m_shadow_targets;
 		std::shared_ptr<WebShadowTargets> m_shadow_fallback;
 	};

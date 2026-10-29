@@ -79,7 +79,7 @@ def publish(project, build):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
     post = tuple('post-'+name for name in ('bloom', 'fxaa', 'tonemap', 'gtao_main', 'gtao_denoise', 'ssr', 'ssr_composite', 'dof', 'volumetric_fog', 'volumetric_composite'))
-    for shader in ('sprite', 'mesh', 'hdr', 'light2d', 'occluder2d', 'billboard', 'ui_shapes_web', 'exposure')+post:
+    for shader in ('sprite', 'mesh', 'tiled_light_cull', 'hdr', 'light2d', 'occluder2d', 'billboard', 'ui_shapes_web', 'exposure')+post:
         shutil.copy2(build / ('web-assets/' + shader + '.wgsl'), web / (shader + '.wgsl'))
     sys.path.insert(0, str(ROOT / 'tools/web-runtime'))
     import audit

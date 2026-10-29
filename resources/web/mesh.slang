@@ -55,6 +55,7 @@ struct SkinData { float4 c0, c1, c2, c3; };
 [[vk::binding(4, 0)]] StructuredBuffer<ShadowData> shadows;
 [[vk::binding(5, 0)]] Texture2DArray<float> shadowDepth;
 [[vk::binding(6, 0)]] StructuredBuffer<EffectData> effects;
+[[vk::binding(7, 0)]] StructuredBuffer<uint> lightTiles;
 [[vk::binding(0, 1)]] Texture2D<float4> albedo;
 [[vk::binding(1, 1)]] Texture2D<float4> emissive;
 [[vk::binding(2, 1)]] SamplerState materialSampler;
@@ -264,7 +265,8 @@ uint PointFace(float3 delta)
 float shadowMain(VertexOutput input) : SV_Target
 {
 	MeshData mesh = meshes[input.instance];
-	float alpha = input.color.a * albedo.Sample(materialSampler, input.uv).a;
+	float2 biasScale = float2(exp2(frame.time.z));
+	float alpha = input.color.a * albedo.SampleGrad(materialSampler, input.uv, ddx(input.uv) * biasScale, ddy(input.uv) * biasScale).a;
 	if ((mesh.metadata.w & 4) != 0 && alpha < mesh.factors.z) { discard; }
 	if (DistanceFadeDiscard(mesh.distanceFade.xy, input.world, frame.visibilityCamera.xyz, input.position.xy)) { discard; }
 	return frame.camera.w > 0 ? saturate(distance(input.world, frame.camera.xyz) / frame.camera.w) : input.position.z;
@@ -296,23 +298,23 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 	MeshData mesh = meshes[input.instance];
 	float2 uvDx = ddx(input.uv), uvDy = ddy(input.uv);
 	float3 faceN = cross(ddx(input.world), ddy(input.world));
-	float4 surface = input.color * albedo.SampleGrad(materialSampler, input.uv, uvDx, uvDy);
-	float3 cloudShade = SharedCloudShade(albedo, materialSampler, input.uv, surface.a / max(input.color.a, 1e-6), input.world, frame.camera.xyz, normalize(frame.sunDirectionIntensity.xyz));
+	float4 surface = input.color * albedo.SampleGrad(materialSampler, input.uv, uvDx * exp2(frame.time.z), uvDy * exp2(frame.time.z));
+	float3 cloudShade = SharedCloudShade(albedo, materialSampler, input.uv, surface.a / max(input.color.a, 1e-6), input.world, frame.camera.xyz, normalize(frame.sunDirectionIntensity.xyz), exp2(frame.time.z));
 	if ((mesh.metadata.w & 512) != 0 && mesh.factors.x > 0 && (uint(mesh.factors.w) & 1) != 0)
 	{
 		surface.rgb *= lerp(float3(1), cloudShade, saturate(mesh.factors.x) * saturate(frame.shadingParams.w));
 	}
 	if ((mesh.metadata.w & 1024) != 0) { surface.a *= LightShaftCoverage(input); }
-	float3 emission = mesh.emissiveRoughness.xyz * emissive.SampleGrad(materialSampler, input.uv, uvDx, uvDy).xyz;
+	float3 emission = mesh.emissiveRoughness.xyz * emissive.SampleGrad(materialSampler, input.uv, uvDx * exp2(frame.time.z), uvDy * exp2(frame.time.z)).xyz;
 	MaterialLookDerivatives lookDerivatives;
 	lookDerivatives.worldDx = ddx(input.world); lookDerivatives.worldDy = ddy(input.world);
 	lookDerivatives.uvDx = uvDx; lookDerivatives.uvDy = uvDy;
 	float luminance = dot(surface.rgb, float3(0.299, 0.587, 0.114));
 	lookDerivatives.luminanceDx = ddx(luminance); lookDerivatives.luminanceDy = ddy(luminance);
-	float3 tangentNormal = normalMap.SampleGrad(materialSampler, input.uv, uvDx, uvDy).xyz * 2 - 1;
+	float3 tangentNormal = normalMap.SampleGrad(materialSampler, input.uv, uvDx * exp2(frame.time.z), uvDy * exp2(frame.time.z)).xyz * 2 - 1;
 	float alphaWidth = fwidth(surface.a);
 	float edgeCoverage = 1;
-	float3 averageAlbedo = albedo.SampleLevel(materialSampler, input.uv, 12).rgb * input.color.rgb;
+	float3 averageAlbedo = albedo.SampleLevel(materialSampler, input.uv, 12 + frame.time.z).rgb * input.color.rgb;
 
 	if (frame.time.y != 0)
 	{
@@ -332,7 +334,7 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 			variance = max(0, 1 - len - 0.04) / max(len, 1e-3);
 			N = SafeNormal(lerp(N, SafeNormal(T * tn.x + B * tn.y + N * tn.z, N), 0.60), N);
 		}
-		float3 orm = metallicRoughness.SampleGrad(materialSampler, input.uv, uvDx, uvDy).xyz;
+		float3 orm = metallicRoughness.SampleGrad(materialSampler, input.uv, uvDx * exp2(frame.time.z), uvDy * exp2(frame.time.z)).xyz;
 		float roughness = clamp(mesh.emissiveRoughness.w * orm.g, 0.04, 1);
 		float metallic = saturate(mesh.factors.x * orm.b);
 		float3 dx = ddx(N), dy = ddy(N);
@@ -348,7 +350,7 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 		sceneDepth.GetDimensions(depthWidth, depthHeight);
 		float screenAo = saturate(ambientOcclusion.SampleLevel(sceneSampler, saturate(input.position.xy / float2(depthWidth, depthHeight)), 0).r);
 		screenAo = (mesh.metadata.w & (2 | 4 | 128)) == 0 ? screenAo : 1;
-		float ao = saturate(lerp(1, occlusion.SampleGrad(materialSampler, input.uv, uvDx, uvDy).r, mesh.factors.y) * screenAo);
+		float ao = saturate(lerp(1, occlusion.SampleGrad(materialSampler, input.uv, uvDx * exp2(frame.time.z), uvDy * exp2(frame.time.z)).r, mesh.factors.y) * screenAo);
 		float3 V = SafeNormal(frame.camera.xyz - input.world, N);
 		float3 L = SafeNormal(frame.sunDirectionIntensity.xyz, float3(0, 1, 0));
 		float3 lit = Brdf(N, V, L, surface.rgb, metallic, roughness, 1) * frame.sunColor.rgb * frame.sunDirectionIntensity.w;
@@ -379,10 +381,12 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 		float3 sunRadiance = frame.sunColor.rgb * frame.sunDirectionIntensity.w;
 		lit = (Brdf(N, V, L, surface.rgb, metallic, roughness, 1) * sunVisibility
 			+ Brdf(N, V, L, surface.rgb, metallic, roughness, 0) * (max(sunVisibility, 0.08) - sunVisibility)) * sunRadiance;
-		for (uint i = 0; i < frame.counts.x; ++i)
+		uint tilesX = (uint(frame.time.w) + 15) / 16;
+		uint tile = (uint(input.position.y) / 16 * tilesX + uint(input.position.x) / 16) * (min(frame.counts.x, 128) + 1);
+		for (uint i = 0; i < lightTiles[tile]; ++i)
 		{
 			float3 Nlocal = SafeNormal(lerp(Ngeom, N, 0.35), Ngeom);
-			LightData light = lights[i];
+			LightData light = lights[lightTiles[tile + 1 + i]];
 			float3 delta = light.positionRadius.xyz - input.world;
 			float dist2 = dot(delta, delta), radius2 = light.positionRadius.w * light.positionRadius.w;
 			float3 direction = delta / max(sqrt(max(dist2, 1e-8)), 1e-4);
@@ -440,13 +444,14 @@ float4 fragmentMain(VertexOutput input, bool front : SV_IsFrontFace) : SV_Target
 			water.skyHorizonColor = frame.horizon; water.skyZenithColor = frame.zenith; water.skyVoidColor = frame.ground;
 			water.skyParams = frame.skyParams; water.shadingParams = frame.shadingParams; water.shadowParams = float4(0, 0, 1, frame.counts.w);
 			water.elapsedTime = frame.time.x; water.sceneDepthValid = true; water.sceneColorValid = true;
+			water.explicitLodBias = frame.time.z;
 			WaterMaterial material;
 			material.baseColorFactor = mesh.color; material.emissiveFactor = float4(mesh.emissiveRoughness.xyz, 0);
 			material.uvScroll = mesh.uvScroll.xy; material.roughnessFactor = mesh.emissiveRoughness.w; material.metallicFactor = mesh.factors.x;
 			material.flags = mesh.metadata.w; material.albedoSlot = (uint(mesh.factors.w) & 1) != 0 ? 0 : 0xFFFFFFFFu;
 			WaterDerivatives derivatives;
 			derivatives.worldDx = lookDerivatives.worldDx; derivatives.worldDy = lookDerivatives.worldDy;
-			derivatives.uvDx = lookDerivatives.uvDx; derivatives.uvDy = lookDerivatives.uvDy;
+			derivatives.uvDx = lookDerivatives.uvDx * exp2(frame.time.z); derivatives.uvDy = lookDerivatives.uvDy * exp2(frame.time.z);
 			float3 vertexColor = (mesh.metadata.w & 8) != 0 ? input.rawvertexColor : float3(1);
 			if (any(vertexColor < float3(0)) || any(vertexColor > float3(1)) || dot(vertexColor, vertexColor) < 0.0025) { vertexColor = float3(1); }
 			float coverage;
@@ -541,7 +546,7 @@ AuxiliaryOutput auxiliaryMain(VertexOutput input, bool front : SV_IsFrontFace)
 	return graphOutput;
 #endif
 	MeshData mesh = meshes[input.instance];
-	float2 uvDx = ddx(input.rawUv), uvDy = ddy(input.rawUv);
+	float2 uvDx = ddx(input.rawUv) * exp2(frame.time.z), uvDy = ddy(input.rawUv) * exp2(frame.time.z);
 	float4 base = albedo.SampleGrad(materialSampler, input.rawUv, uvDx, uvDy);
 	float alpha = mesh.color.a * albedo.SampleGrad(materialSampler, input.uv, uvDx, uvDy).a;
 	float3 orm = metallicRoughness.SampleGrad(materialSampler, input.rawUv, uvDx, uvDy).rgb;

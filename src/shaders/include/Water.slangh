@@ -39,6 +39,7 @@ float3 WaterShade(FrameConstantsData* fc, GpuMaterial mat, float3 albedo, float 
 	value.skyHorizonColor = fc->skyHorizonColor; value.skyZenithColor = fc->skyZenithColor; value.skyVoidColor = fc->skyVoidColor;
 	value.skyParams = fc->skyParams; value.shadingParams = fc->shadingParams; value.shadowParams = fc->shadowParams;
 	value.elapsedTime = fc->elapsedTime;
+	value.explicitLodBias = 0.0; // Native sampler supplies its own bias.
 	const ResourceEntry depth = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
 	const ResourceEntry color = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneBaseColor);
 	value.sceneDepthValid = depth.type == kResourceTypeBindlessTexture && depth.address != 0xFFFFFFFFu && depth.width > 0 && depth.height > 0;

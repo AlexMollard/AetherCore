@@ -277,8 +277,7 @@ namespace aether
 
 		// Sets the global texture LOD bias. Negative picks sharper mips than the screen
 		// footprint asks for. Recorded like SetAnisotropy and applied on the next quiesced
-		// frame (the sampler rewrite needs the GPU idle). Bias is stored x1000 so it fits
-		// the pending int flag: 0 means nothing pending.
+		// frame (the sampler rewrite needs the GPU idle).
 		void SetMipLodBias(float bias);
 
 		// Whether the render graph may schedule passes on a dedicated compute queue. Applied
@@ -354,9 +353,8 @@ namespace aether
 		// Requested anisotropy waiting to be applied, or 0 for none. Atomic because the
 		// setting can change on any thread while the render loop reads it.
 		std::atomic<int> m_pendingAnisotropy{0};
-		// Requested LOD bias x1000; 0 means nothing pending (a true 0.0 bias is the default
-		// and never needs rewriting).
-		std::atomic<int> m_pendingMipLodBias{0};
+		// Requested LOD bias x1000; INT_MAX means none so resetting to zero is a request.
+		std::atomic<int> m_pendingMipLodBias{INT_MAX};
 		// Requested async-compute state: +1 on, -1 off, 0 nothing pending. A tri-state
 		// rather than a bool pair, because "no request" and "requested off" are different.
 		std::atomic<int> m_pendingAsyncCompute{0};

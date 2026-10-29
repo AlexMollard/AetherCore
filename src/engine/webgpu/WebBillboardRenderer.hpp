@@ -52,6 +52,7 @@ namespace aether::webgpu
 		std::array<WGPURenderPipeline, 4> m_pipelines{};
 		WGPUBindGroupLayout m_frame_layout = nullptr, m_texture_layout = nullptr;
 		WGPUSampler m_sampler = nullptr;
+		int m_sampler_anisotropy = 1;
 		WGPUTexture m_white = nullptr;
 	};
 } // namespace aether::webgpu

@@ -158,6 +158,14 @@ foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard ui_shapes_
             "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py"
         VERBATIM)
 endforeach()
+add_custom_command(OUTPUT "${_assets}/tiled_light_cull.wgsl"
+    COMMAND "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/tiled_light_cull.slang"
+        -target wgsl -entry computeMain -o "${_assets}/tiled_light_cull.wgsl.tmp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py" "${_assets}/tiled_light_cull.wgsl.tmp"
+    COMMAND "${CMAKE_COMMAND}" -E rename "${_assets}/tiled_light_cull.wgsl.tmp" "${_assets}/tiled_light_cull.wgsl"
+    DEPENDS "${AETHER_WEB_SLANGC}" "${CMAKE_SOURCE_DIR}/resources/web/tiled_light_cull.slang" ${_shared_shader_includes}
+        "${CMAKE_SOURCE_DIR}/tools/shaders/wgsl_checks.py"
+    VERBATIM)
 set(_post_effects bloom fxaa tonemap gtao_main gtao_denoise ssr ssr_composite dof volumetric_fog volumetric_composite)
 set(_post_outputs)
 foreach(_effect IN LISTS _post_effects)
@@ -175,7 +183,7 @@ foreach(_effect IN LISTS _post_effects)
         VERBATIM)
     list(APPEND _post_outputs "${_assets}/post-${_effect}.wgsl")
 endforeach()
-add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl" "${_assets}/hdr.wgsl" "${_assets}/light2d.wgsl" "${_assets}/occluder2d.wgsl" "${_assets}/billboard.wgsl" "${_assets}/ui_shapes_web.wgsl" "${_assets}/exposure.wgsl" ${_post_outputs})
+add_custom_target(WebAssets DEPENDS "${_assets}/sprite.wgsl" "${_assets}/mesh.wgsl" "${_assets}/tiled_light_cull.wgsl" "${_assets}/hdr.wgsl" "${_assets}/light2d.wgsl" "${_assets}/occluder2d.wgsl" "${_assets}/billboard.wgsl" "${_assets}/ui_shapes_web.wgsl" "${_assets}/exposure.wgsl" ${_post_outputs})
 if(NOT AETHER_WEB_PROJECT)
     add_custom_target(WebFixtureAssets DEPENDS "${_assets}/reference.pak")
     add_dependencies(WebAssets WebFixtureAssets)
@@ -245,7 +253,7 @@ if(TARGET WebManagedRuntime)
     add_dependencies(WebManagedRuntime WebAssets WebGameAssets WebEngineAssets)
 endif()
 if(NOT AETHERCORE_WEB_MANAGED)
-foreach(_shader IN ITEMS sprite mesh hdr light2d occluder2d billboard ui_shapes_web)
+foreach(_shader IN ITEMS sprite mesh tiled_light_cull hdr light2d occluder2d billboard ui_shapes_web)
     set_property(TARGET GameRuntime APPEND PROPERTY LINK_DEPENDS "${_assets}/${_shader}.wgsl")
     target_link_options(GameRuntime PRIVATE "--preload-file=${_assets}/${_shader}.wgsl@/assets/${_shader}.wgsl")
 endforeach()

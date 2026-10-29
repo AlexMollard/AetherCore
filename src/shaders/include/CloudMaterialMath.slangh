@@ -5,7 +5,7 @@ static const float kCloudShadeContrast = 4.0;
 static const float3 kCloudShadow = float3(0.62, 0.62, 0.80);
 static const float3 kCloudLight = float3(1.16, 1.09, 1.0);
 static const float kCloudSilver = 0.35;
-float3 SharedCloudShade(Texture2D tex, SamplerState sampler, float2 uv, float alpha0, float3 worldPos, float3 cameraPos, float3 L)
+float3 SharedCloudShade(Texture2D tex, SamplerState sampler, float2 uv, float alpha0, float3 worldPos, float3 cameraPos, float3 L, float gradientScale)
 {
     const float3 dpdx = ddx(worldPos);
     const float3 dpdy = ddy(worldPos);
@@ -26,7 +26,7 @@ float3 SharedCloudShade(Texture2D tex, SamplerState sampler, float2 uv, float al
         const float2 duv = ((b1 * a22 - b2 * a12) * duvdx + (a11 * b2 - a12 * b1) * duvdy) / det;
         towardSun = dot(duv, duv) > 1e-16 ? normalize(duv) * kCloudShadeStep : float2(0.0, 0.0);
     }
-    const float alpha1 = tex.SampleGrad(sampler, uv + towardSun, duvdx, duvdy).a;
+    const float alpha1 = tex.SampleGrad(sampler, uv + towardSun, duvdx * gradientScale, duvdy * gradientScale).a;
     const float lit = saturate(0.5 + (alpha0 - alpha1) * kCloudShadeContrast);
     const float thin = saturate(alpha0 * (1.0 - alpha0) * 4.0);
     return lerp(kCloudShadow, kCloudLight, lit) + kCloudSilver * thin * lit;

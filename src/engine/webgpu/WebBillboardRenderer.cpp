@@ -67,6 +67,7 @@ namespace aether::webgpu
 			wgpuSamplerRelease(m_sampler);
 			m_sampler = nullptr;
 		}
+		m_sampler_anisotropy = 1;
 		if (m_white)
 		{
 			wgpuTextureDestroy(m_white);
@@ -205,6 +206,20 @@ namespace aether::webgpu
 		{
 			return;
 		}
+		const int anisotropy = ClampTextureAnisotropy(packet.anisotropy);
+		if (anisotropy != m_sampler_anisotropy)
+		{
+			WGPUSamplerDescriptor sampler = WGPU_SAMPLER_DESCRIPTOR_INIT;
+			sampler.addressModeU = sampler.addressModeV = sampler.addressModeW = WGPUAddressMode_Repeat;
+			sampler.magFilter = sampler.minFilter = WGPUFilterMode_Linear;
+			sampler.mipmapFilter = WGPUMipmapFilterMode_Linear;
+			sampler.maxAnisotropy = static_cast<std::uint16_t>(anisotropy);
+			const auto replacement = wgpuDeviceCreateSampler(device, &sampler);
+			if (!replacement) { error = "WEBGPU_SAMPLER: failed to create billboard sampler"; return; }
+			wgpuSamplerRelease(m_sampler);
+			m_sampler = replacement;
+			m_sampler_anisotropy = anisotropy;
+		}
 		if (!frame)
 		{
 			frame = std::make_unique<WebBillboardFrame>();
@@ -246,7 +261,7 @@ namespace aether::webgpu
 		        packet.sunDirectionIntensity,
 		        packet.sunColor,
 		        packet.skyZenithColor,
-		        glm::vec4(width, height, sceneDepth ? 1 : 0, 0)};
+		        glm::vec4(width, height, sceneDepth ? 1 : 0, ClampTextureLodBias(packet.mipLodBias))};
 		const auto uniform = Upload(device, queue, WGPUBufferUsage_Uniform, &constants, sizeof(constants));
 		const auto instances = Upload(device, queue, WGPUBufferUsage_Storage, particles.data(), particles.size() * sizeof(BillboardParticleInstance));
 		frame->buffers.push_back(uniform);

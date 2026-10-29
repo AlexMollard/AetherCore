@@ -89,7 +89,7 @@ float4 ShadeGraphMaterial(VertexOutput input, bool front)
     uint width, height;
     sceneDepth.GetDimensions(width, height);
     const float gtao = saturate(ambientOcclusion.SampleLevel(sceneSampler, saturate(input.position.xy / float2(max(width, 1u), max(height, 1u))), 0).r);
-    const float bakedOcclusion = occlusion.SampleGrad(materialSampler, input.rawUv, uvDx, uvDy).r;
+    const float bakedOcclusion = occlusion.SampleGrad(materialSampler, input.rawUv, uvDx * exp2(frame.time.z), uvDy * exp2(frame.time.z)).r;
     const float materialAo = GraphTexturePresent(graphInput.textureMask, 3) ? lerp(1, bakedOcclusion, mesh.factors.y) : 1;
     const float ao = saturate(materialAo * gtao);
     float3 color = direct + ambientDiffuse * MultiBounceAo(ao, surface.baseColor) + ambientSpecular * SpecularOcclusion(ao, nv, roughness) + surface.emissive;

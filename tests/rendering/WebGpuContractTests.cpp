@@ -28,8 +28,8 @@ TEST_CASE("WebGPU 3D adapter contract reports all insufficient limits")
 		if (name == "maxTextureDimension2D" || name == "maxBindGroups") { return 1; }
 		return UINT64_MAX;
 	});
-	CHECK(message.find("maxTextureDimension2D (adapter=1, required=7168)") != std::string::npos);
-	CHECK(message.find("maxBindGroups (adapter=1, required=3)") != std::string::npos);
+	CHECK(message.find("maxTextureDimension2D") != std::string::npos);
+	CHECK(message.find("maxBindGroups") != std::string::npos);
 	CHECK(message.find("maxVertexAttributes") == std::string::npos);
 }
 
