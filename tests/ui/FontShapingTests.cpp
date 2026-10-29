@@ -90,3 +90,14 @@ TEST_CASE("ShapeText trailing newline does not add a phantom line") {
     CHECK(trailing[0].rect.y == doctest::Approx(plain[0].rect.y));
     CHECK(trailing[0].rect.y == doctest::Approx(35.f));
 }
+
+TEST_CASE("ShapeText decodes UTF-8 glyphs and skips missing or malformed characters") {
+    auto f = MakeMonoFont();
+    f.glyphs[0xE9] = MonoGlyph(0xE9, true);
+    f.glyphs[0xF004] = MonoGlyph(0xF004, true);
+    const auto glyphs = ShapeText(f, "A\xc3\xa9\xef\x80\x84\xce\xa9\xff" "B", 48.f, {0, 0, 1000, 100}, false, 0, 0);
+    REQUIRE(glyphs.size() == 4);
+    for (std::size_t i = 0; i < glyphs.size(); ++i)
+        CHECK(glyphs[i].rect.x == doctest::Approx(24.f * static_cast<float>(i)));
+}
+

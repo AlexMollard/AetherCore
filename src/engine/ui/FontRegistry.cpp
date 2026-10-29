@@ -5,6 +5,7 @@
 
 #include "io/FileSystem.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Utf8.hpp"
 
 namespace aether::ui
 {
@@ -74,15 +75,27 @@ namespace aether::ui
 			wordStartPen = boxRect.x;
 		};
 
-		for (const char ch: text)
+		for (std::size_t offset = 0; offset < text.size();)
 		{
-			if (ch == '\n')
+			const auto lead = static_cast<unsigned char>(text[offset]);
+			const std::size_t length = lead < 0x80 ? 1 : lead >= 0xC2 && lead <= 0xDF ? 2 : lead >= 0xE0 && lead <= 0xEF ? 3 : lead >= 0xF0 && lead <= 0xF4 ? 4 : 0;
+			if (length == 0 || length > text.size() - offset || !IsValidUtf8(text.data() + offset, length))
+			{
+				++offset;
+				continue;
+			}
+			std::uint32_t codepoint = lead & (length == 1 ? 0x7F : length == 2 ? 0x1F : length == 3 ? 0x0F : 0x07);
+			for (std::size_t i = 1; i < length; ++i)
+			{
+				codepoint = (codepoint << 6) | (static_cast<unsigned char>(text[offset + i]) & 0x3F);
+			}
+			offset += length;
+			if (codepoint == '\n')
 			{
 				newLine();
 				continue;
 			}
 
-			const auto codepoint = static_cast<std::uint32_t>(static_cast<unsigned char>(ch));
 			const GlyphCurve* glyph = font.Find(codepoint);
 			if (glyph == nullptr)
 			{
@@ -133,7 +146,7 @@ namespace aether::ui
 			pen.x += advance;
 
 			// A space ends the word: everything after it is the next candidate to carry.
-			if (ch == ' ')
+			if (codepoint == ' ')
 			{
 				wordStart = out.size();
 				wordStartPen = pen.x;
