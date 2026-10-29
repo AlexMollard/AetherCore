@@ -116,6 +116,21 @@ existing render pointers do not dangle.
 The mesh resolve pass does not replace a skinned model's animation database after
 reload. That existing lifecycle limitation is separate from persisted asset identity.
 
+## Streaming residency accounting
+
+`streaming::BudgetLedger` admits CPU and GPU content reservations independently.
+Pending, resident, and retiring allocations all consume their domain's budget.
+Staging consumes both the CPU budget and its own staging limit.
+
+Admission and transfers are thread-safe and overflow-checked. Rejected reservations
+leave existing charges unchanged. Lowering a budget does not erase live charges:
+same-domain transitions into retirement remain possible, and new allocations wait
+until enough charged memory has actually been released.
+
+Callers reserve before allocating and release only when the corresponding ownership
+ends. These are streaming-content limits, not a whole-process heap or driver-memory
+ceiling; renderer baseline allocations and driver overhead are separate.
+
 ## Regression coverage
 
 `AssetCatalogTests`, `AssetReferenceLifecycleTests`, `ModelIdentityTests`, and
