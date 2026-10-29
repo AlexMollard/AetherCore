@@ -490,11 +490,10 @@ TEST_CASE("An owned entity is not corrected even by a host that insists")
 
 TEST_CASE("A non-owned entity is still interpolated, and an owned one is not")
 {
-	// Interpolation is what makes OTHER players smooth between snapshots, and the
-	// move to client authority must not have taken it out along with the correction
-	// machinery. A remote entity is rendered slightly in the past, so while it is
-	// moving the client shows it BEHIND the value that has already arrived; once it
-	// stops, the render time catches up and the two agree.
+	// Exercise interpolation explicitly: the default adaptive delay and proactive
+	// extrapolation may predict AHEAD of the host when this stepped motion and
+	// wall-clock packet cadence do not line up. A pinned delay and no extrapolation
+	// instead make the assertion below about confirmed, buffered motion.
 	//
 	// The entity this client owns, in the same world and the same frames, is the
 	// control: it must show exactly what this peer simulated, with no lag at all.
@@ -504,9 +503,15 @@ TEST_CASE("A non-owned entity is still interpolated, and an owned one is not")
 	const std::uint32_t mine = s.Spawn({6.f, 0.f, 0.f}, s.connections.front());
 
 	// Smoothing is opt-in per entity: without a NetworkTransform an arriving snapshot
-	// is applied raw. Both get one so the difference below is about ownership.
-	client.world.Emplace<aether::net::NetworkTransform>(client.context.Session().EntityFor(theirs));
-	client.world.Emplace<aether::net::NetworkTransform>(client.context.Session().EntityFor(mine));
+	// is applied raw. Give both the same fixed interpolation-only tuning so the
+	// difference below is about ownership, not the default prediction policy.
+	const aether::net::NetworkTransform interpolation{
+	        .interpolationDelaySeconds = 0.1f,
+	        .autoInterpolationDelay = false,
+	        .extrapolate = false,
+	};
+	client.world.Emplace<aether::net::NetworkTransform>(client.context.Session().EntityFor(theirs), interpolation);
+	client.world.Emplace<aether::net::NetworkTransform>(client.context.Session().EntityFor(mine), interpolation);
 
 	client.MoveNetId(mine, {20.f, 0.f, 0.f});
 	Run(s.All(), kNever, 100);
