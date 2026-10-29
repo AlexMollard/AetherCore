@@ -4,6 +4,8 @@
 #include <coroutine>
 #include <exception>
 #include <memory>
+#include <mutex>
+#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -173,6 +175,7 @@ namespace aether::coro
 		struct task_state
 		{
 			std::atomic<bool> ready{false};
+			std::mutex mutex;
 			std::exception_ptr error;
 			T value;
 			std::coroutine_handle<> continuation;
@@ -183,19 +186,14 @@ namespace aether::coro
 			task_state(task_state&&) = delete;
 			task_state& operator=(task_state&&) = delete;
 
-			~task_state()
-			{
-				if (ready.load(std::memory_order_acquire) && !error)
-				{
-					value.~T();
-				}
-			}
+			~task_state() = default;
 		};
 
 		template<>
 		struct task_state<void>
 		{
 			std::atomic<bool> ready{false};
+			std::mutex mutex;
 			std::exception_ptr error;
 			std::coroutine_handle<> continuation;
 
@@ -223,12 +221,16 @@ namespace aether::coro
 		void set_value(T v) noexcept
 		{
 			auto st = m_state.get();
-			if constexpr (!std::is_void_v<T>)
+			std::coroutine_handle<> c;
 			{
-				st->value = std::move(v);
+				std::lock_guard lock(st->mutex);
+				if constexpr (!std::is_void_v<T>)
+				{
+					st->value = std::move(v);
+				}
+				st->ready.store(true, std::memory_order_release);
+				c = std::exchange(st->continuation, nullptr);
 			}
-			st->ready.store(true, std::memory_order_release);
-			auto c = std::exchange(st->continuation, nullptr);
 			if (c)
 			{
 				executor::schedule_on_resumer(c);
@@ -238,9 +240,13 @@ namespace aether::coro
 		void set_exception(const std::exception_ptr& e) noexcept
 		{
 			auto st = m_state.get();
-			st->error = std::move(e);
-			st->ready.store(true, std::memory_order_release);
-			auto c = std::exchange(st->continuation, nullptr);
+			std::coroutine_handle<> c;
+			{
+				std::lock_guard lock(st->mutex);
+				st->error = e;
+				st->ready.store(true, std::memory_order_release);
+				c = std::exchange(st->continuation, nullptr);
+			}
 			if (c)
 			{
 				executor::schedule_on_resumer(c);
@@ -293,14 +299,12 @@ namespace aether::coro
 			bool await_suspend(std::coroutine_handle<> awaiting) noexcept
 			{
 				auto st = m_state.get();
-				st->continuation = awaiting;
-
+				std::lock_guard lock(st->mutex);
 				if (st->ready.load(std::memory_order_acquire))
 				{
-					st->continuation = nullptr;
-					executor::schedule_on_resumer(awaiting);
 					return false;
 				}
+				st->continuation = awaiting;
 				return true;
 			}
 

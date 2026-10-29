@@ -131,6 +131,10 @@ Callers reserve before allocating and release only when the corresponding owners
 ends. These are streaming-content limits, not a whole-process heap or driver-memory
 ceiling; renderer baseline allocations and driver overhead are separate.
 
+Cross-thread loader tasks serialize completion with waiter registration and retain
+their result until ownership ends. `CoroutineTaskTests` checks exact-once result
+destruction and completion between the awaiter's readiness and suspension steps.
+
 ## Regression coverage
 
 `AssetCatalogTests`, `AssetReferenceLifecycleTests`, `ModelIdentityTests`, and
