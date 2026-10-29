@@ -385,3 +385,43 @@ unit failure without its assertion in the condensed output
 (`logs/task6/native-unit.xml`) and the isolated final gauntlet passed.
 The intermittent failure was not identified or classified as pre-existing.
 `cmake --preset clangd` and `graphify update .` completed.
+
+## Rendering and runtime expansion checkpoint (29 October 2026)
+
+- [x] Share colour-space-aware mip filtering and complete native DDS mip uploads;
+  keep linear data channels independent of alpha.
+- [x] Match sampler anisotropy/LOD reset, specular filtering, tiled light selection,
+  local-shadow budgets/atlas packing and temporal-history acceptance.
+- [x] Reuse native animation import/compile semantics and physics-debug extraction.
+- [x] Bridge native/browser replication, RPC, prediction and application-route
+  ping through a bounded self-hosted WebSocket/ENet gateway.
+- [x] Reuse native miniaudio DSP with a no-device/no-thread AudioWorklet sink;
+  verify buses, fades, spatial parameters, codecs, Audio Source and motion.
+- [x] Implement actual pointer lock, asynchronous clipboard and immutable PAK glob
+  enumeration. Unsupported physical haptics are explicit, not fake success.
+- [x] Use native UI draw commands/font curves for rounded widgets, masks, text
+  boxes, image/glyph materials and effects; remove Canvas text rasterization.
+- [x] Qualify both authored languages' 3D production exports and byte-identical
+  PAK automation siblings without adding a production test bridge.
+
+Source-current receipts are linked in the
+[rendering/runtime effect ledger](../../architecture/webgpu-effect-parity.md#rendering-and-runtime-parity-expansion).
+Debug build, 1,607/1,607 native cases and both Vulkan validation smokes pass.
+The hardware browser gauntlet passes. Both languages' 3D gameplay traces match
+at ticks 1/10/30/60/120/150 with 1e-5 tolerance and 1e-3 perturbation detection.
+UI comparisons, FXAA ordering and half-scale output retain the existing image
+budgets; none were widened. Python suites pass 80 project (6 skipped), 104
+web-runtime and 28 shader cases; browser-verifier unit checks pass 10/10.
+
+The owner requested incremental commits, then selected separate ownership for
+the concurrent streaming work. Isolated parity fixes are committed; shared
+ABI2/streaming source hunks remain unstaged rather than recording another task's
+changes. Qualification describes the combined working tree, not the isolated
+commit subset alone.
+
+Native-specific OS services, arbitrary global Vulkan shader resources, physical
+controller/speaker output, public gateway deployment and other browser/device
+matrices are not implied by localhost qualification. Clipboard API proof uses a
+verified isolated headless shell; an earlier UI copy/paste check may have altered
+the owner's OS clipboard and was stopped rather than blindly restored.
+

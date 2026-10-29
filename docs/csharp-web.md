@@ -1,6 +1,6 @@
 # C# browser support
 
-C# games can publish to the existing WebGPU 2D player through the editor, CLI or MCP `target: "web", operation: "publish"`. Use the same [Web publishing command](web-export.md) with `projects/AgentPipelineCSharp` or a selected C# project. Rust exports and native C# compilation, collectible reload, serialization and desktop publishing keep their existing paths. No project language is changed automatically.
+C# games can publish to the WebGPU 2D and 3D players through the editor, CLI or MCP `target: "web", operation: "publish"`. Use the same [Web publishing command](web-export.md) with `projects/AgentPipelineCSharp` or a selected C# project. Rust exports and native C# compilation, collectible reload, serialization and desktop publishing keep their existing paths. No project language is changed automatically.
 
 ## Qualified configuration
 
@@ -16,9 +16,11 @@ AOT was tested separately with `python tools/experiments/csharp-webgpu/run.py --
 
 ## Supported gameplay surface
 
-The proven C# subset includes script discovery/properties, attach/update/detach, entity validity/destruction, position, keyboard input, scene find/load, prefab instantiation, UI text, Box2D linear velocity and collision/trigger callbacks, default one-shot Sfx audio, and durable browser saves. Script callback failures become `BROWSER_CSHARP` diagnostics; initialization failures become `BROWSER_CSHARP_STARTUP`. Unsupported audio volume/pitch/loop/bus options fail explicitly rather than silently changing behavior.
+The portable bridge reuses native gameplay exports for script discovery/properties, lifecycle callbacks, entity and prefab operations, Box2D/Jolt physics, animation, audio and UI. Packaged asset enumeration runs against the immutable PAK indexes. Networking uses the self-hosted WebSocket-to-ENet gateway described in [Web exports](web-export.md), including replication, RPCs, predicted prefab hierarchies and application-route ping.
 
-This is a scoped SDK bridge, not full desktop SDK parity. Other native SDK imports fail during linking and retain `managed-publish.log`; managed APIs that require unavailable browser services fail at startup with diagnostics. External native imports, networking and editor tools are rejected in preflight. 3D physics callbacks are explicitly unsupported. Native networking/editor behavior is unchanged. The underlying WebGPU content profile still supports its documented authored 2D sprites, UI, physics and assets; this does not imply every C# wrapper has a browser implementation.
+Pointer lock follows the browser's actual grant and Escape release. Use `Input.ReadClipboardTextAsync()` and `Input.WriteClipboardTextAsync(string)` for portable clipboard access; browser permissions and focus requirements still apply. The synchronous `Input.Clipboard` property remains native-only and throws on the browser rather than returning a fake OS clipboard. Unsupported browser haptics fail explicitly; physical rumble requires compatible connected hardware.
+
+Script callback failures become `BROWSER_CSHARP` diagnostics; initialization failures become `BROWSER_CSHARP_STARTUP`. External native libraries, editor tools, arbitrary desktop OS services and browser CoreCLR/Roslyn reload are not provided by Mono/Wasm. The [parity ledger](architecture/webgpu-effect-parity.md) records exercised cases and remaining qualification limits; source coverage is not proof that every parameter range, third-party library or feature combination is qualified.
 
 Exports include nested `_framework` resources and a relative module loader. ZIP verification checks their hashes and runs the actual extracted game at a nested URL and in a sandboxed cross-origin iframe. Failed compilation or verification preserves the previous export. Browser saves continue using the existing asynchronous browser storage contract, including UTF-8/NUL values. External hosting, Firefox, Safari and non-Windows browser qualification remain pending.
 

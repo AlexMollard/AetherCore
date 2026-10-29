@@ -68,14 +68,147 @@ records the samples and fixture guardrails:
 These are single local fixture samples, not universal performance claims;
 no edited-publish budget is asserted.
 
-Portable custom passes are qualified only for the Rust 2D fixture below;
-time-driven passes, 3D scenes, the non-HDR path, other projects and C# browser
-custom passes remain unqualified. Shadow cascade boundaries/far fade and light
-capacity, material cross-products and specular filtering, skin configurations
-outside recorded fixtures, and effect parameter ranges and combinations outside
-recorded cases remain unqualified. Arbitrary Slang, raw SPIR-V, networking and
-desktop-only APIs are unsupported and rejected rather than silently approximated.
-The default 2D profile and its existing restrictions are unchanged.
+The Task 6 evidence alone does not qualify portable custom passes outside its
+Rust 2D fixture, arbitrary material/effect combinations, other devices or external
+hosts. The parity expansion below records later measurements separately.
+Arbitrary Slang, raw SPIR-V and desktop-only services remain outside the portable
+contract; networking uses an explicit WebSocket gateway rather than browser UDP.
+
+## Rendering and runtime parity expansion
+
+The 29 October 2026 integration extends the native contract rather than changing
+the image limits. Qualification is still case-specific:
+
+- `logs/parity-full/samplers-fixed.json` records passing anisotropy 16 versus 1,
+  LOD bias 2 versus 0, and bias reset to zero. Its aggregate failed the then-invalid
+  specular control; `logs/parity-full/specular-qualified.json` subsequently passes
+  the separate specular-filter enabled/control case. Native loose/cooked and Web
+  textures now use the same alpha-weighted, colour-space-aware mip construction.
+  Native cooked data textures have separate linear variants and DDS loading
+  uploads the complete mip chain.
+- `.temp/lighting-capacity/report7.json` records eight passing 512x512 native/Web
+  captures: 129 distributed lights with off-axis perspective/orthographic controls,
+  a visible 17th spot-shadow map and the eight-versus-nine-point 48-entry budget.
+  `.temp/lighting-capacity/oracle-rerun.json` exercises the added semantic ROI
+  comparison on those recorded images. These do not qualify per-tile overflow.
+- `.temp/lighting-capacity/farfade1.json` records directional shadow receiver
+  controls at view depths 250, 300 and 330. Native red-channel shadow deltas are
+  48.92, 16.76 and 0; Web deltas are 48.84, 17.80 and 0. The maximum semantic
+  probe error is 1.12 under the unchanged limit 12. Global MAE/p95 pass despite
+  an individual sampled-channel error of 87; this is not a maximum-pixel guarantee.
+- `logs/parity-full/material-cross-qualified.json` passes seven mirrored,
+  nonuniform-scale, alpha-blend/cutout and animated-skin captures plus three
+  independent semantic controls. Per-scene MAE is at most 0.227 and p95 is 1;
+  the existing maximum-pixel differences are not hidden or used as a new limit.
+- `logs/parity-full/temporal-transition-probes.json` qualifies the first accepted
+  camera-cut and scene-switch frame at tick 10. Motion probes change on both
+  backends while adapted exposure survives. A real frozen tick-9 capture and a
+  deliberately rejected tick-10 capture leave the final image and exposure
+  unchanged on retry.
+- `logs/parity-full/runtime-api-smoke.json` records actual C# animation import,
+  pending-clear and compile behavior on native and hardware WebGPU. Pending clips
+  are animator-local; compilation extends the shared model catalog as on native.
+  The Web smoke also exercises joint offsets and all four master/physics-debug
+  toggle combinations. Debug geometry remains at the same output-pixel positions
+  with 512x512 output and 256x256 scene depth; disabled overlays contribute no
+  diagnostic-colour pixels. This is a runtime/semantic smoke, not a whole-image
+  native debug comparison.
+- `.temp/data-mip-pair-report.json` passes the alpha-varied versus opaque linear
+  data texture pair. Each backend's receiver ROI is unchanged (MAD 0, limit 1);
+  native/Web MAE is 1.159, p95 is 9 and maximum probe error is 2.72. Alpha no
+  longer weights or dilates unrelated linear data channels.
+
+Networking uses a bounded WebSocket-to-ENet gateway with shared replication/RPC,
+ownership and application-route ping. Final hierarchy evidence is
+`.temp/network-hierarchy-client-connected.json`,
+`.temp/network-hierarchy-browser-host.json` and native jobs
+`logs/gameplay-jobs/c6e6765f-6eb1-42f5-84ec-c5c1076f24e5/` and
+`logs/gameplay-jobs/ee07fe55-d3ae-4449-93b8-823bf954a75c/`.
+Both initial-attachment root and child consume payload 99, report local
+ownership/authority and cannot send an RPC. Both host directions exchange
+actors, fields, RPCs and real application-route ping. Host goodbye reaches the
+opposite client before cleanup, leaving only the local predicted hierarchy.
+`.temp/network-gateway-admission-evidence.json` also rejects an allowlisted
+alias requested with the wrong port (1008), invalid tokens and disallowed origins.
+These are localhost paths, not public deployment or native LAN/TURN services.
+
+`.temp/input-parity-proof.json` records real pointer-lock acquisition/movement
+and Escape release on hardware Chrome, plus managed async Unicode clipboard
+access and permission denial in an isolated headless-shell clipboard.
+Physical rumble is unqualified because no controller was connected. The earlier
+UI copy/paste check used unified headless Chrome without preserving the owner's
+OS clipboard; it may have overwritten it. Subsequent checks do not use that
+unsafe procedure.
+
+Packaged C# enumeration matches seven native PAK outcomes, including nested
+matches, invalid/traversal paths, engine enumeration and read-only writes:
+`.temp/packaged-glob-native/report.json` and
+`.temp/packaged-glob-native/browser-report.json`.
+
+`logs/parity-full/audio-runtime-proof.json` measures actual post-mixer
+AudioWorklet output for gain, pitch, looping, buses, music fade/interruption,
+cone/distance attenuation, WAV/MP3/FLAC and Audio Source playback. It is digital
+signal evidence, not physical speaker/device-latency qualification.
+
+`.temp/ui-parity-restaged.json` passes five 512x512 native/Web captures with
+FXAA enabled and unchanged MAE 8 / p95 18 / probe 12 limits:
+
+| UI fixture | MAE | p95 |
+| --- | ---: | ---: |
+| Rounded widgets, nested masks and text boxes | 0.114 | 1 |
+| Native UI effects, image and glyph materials | 0.121 | 1 |
+| Shader control | 0.131 | 1 |
+| Native font curves, Latin-1 and private-use icons | 0.056 | 1 |
+| Solid background | 0.146 | 1 |
+
+Original UI shader sources are compiled to native SPIR-V in the private capture
+overlay and to role-specific WGSL; a missing native shader is not a valid control.
+`.temp/ui-fxaa-order-control.json` records zero changed UI ROI channels between
+FXAA on/off on each backend. `.temp/ui-parity-half-scale-report.json` passes
+512x512 output with 256x256 scene rendering (MAE 0.105, p95 1). Trusted typing,
+non-monospace selection and mouse-positioned insertion are recorded separately.
+
+Final source-current gates:
+
+- `logs/parity-full/native-debug-gauntlet.json`: Debug Editor/GameRuntime build,
+  1,607/1,607 native cases and both Vulkan validation smokes pass with zero
+  validation errors, warnings or advisories. The earlier Debug failure exposed
+  a missing `/bigobj` option on `RuntimeFramework`; the failed receipt is retained.
+- `logs/parity-full/browser-gauntlet.json`: hardware Chrome automation and
+  bridge-free production-boundary gauntlet passes; its browser/server/child
+  cleanup is recorded. This is not a cross-browser result.
+- Basic Rust/C# production exports pass relocated ZIP/iframe verification:
+  jobs `4cf8ddfd-467a-483b-a0a1-0bf8cd6a8bfd` and
+  `79c91bc0-9879-493a-bc17-5ee5b2592d50`. Initial verifier failures were missing
+  the pinned Playwright module; reruns supply it in the child environment.
+- Real Rust 3D production and package-sibling qualification pass:
+  `logs/parity-full/rust3d/publish.json` and
+  `logs/parity-full/rust3d/retry/parity.json`. Physics, bodies, raycast and
+  contact traces match at ticks 1/10/30/60/120/150 to 1e-5 and detect 1e-3 drift.
+- C# 3D production and package-sibling qualification pass:
+  `logs/parity-full/csharp3d/publish-final-retry.json` and
+  `logs/parity-full/csharp3d/package-parity.json`. Bodies, contacts, raycast and
+  character traces use the same checkpoints/tolerance and perturbation control.
+  Both languages' production/sibling PAKs and gameplay input hashes match;
+  the bridge-enabled executables are not claimed identical to production.
+- `logs/parity-full/audio-motion-proof.json` adds actual moving-emitter Doppler
+  and camera-listener translation output checks. The static/audio-motion cases
+  do not qualify arbitrary motion, physical speakers or latency.
+- Final Python suites pass: project 80 (6 skipped), web-runtime 104 and shaders
+  28. Browser verifier unit checks pass 10/10. clangd configuration and the
+  graphify code graph are refreshed.
+
+The C# 3D run exposed static asset enumeration/write destinations being mistaken
+for read dependencies. The publisher now treats `Assets.List` patterns and
+`Assets.WriteText` destinations as queries/output paths; real read references
+remain validated and enumerated files still need normal reachability/declarations.
+Transient sccache connection failures and initial fixture/cook failures remain
+in their original reports rather than being reclassified as passes.
+
+These receipts qualify the tested combined working tree. The owner selected
+separate commit ownership: isolated parity changes are checkpointed, while mixed
+ABI2/streaming integration hunks remain unstaged for the concurrent work.
+Historical Task 6 measurements are not substituted for these new runs.
 
 ## Task 4 bounded post qualification
 
@@ -126,9 +259,9 @@ disabling it at tick 6 returns manual exposure 1 and the neutral image. Resize
 targets follow `--extent`; the three resize transitions also pass at the odd
 513x511 extent (`logs/task4/rerun/transitions-odd.json`).
 
-Remaining unqualified coverage: specular filter, minified anisotropy/LOD behavior,
-camera/scene-change history and adversarial content combinations. Implementation
-range checks do not qualify those ranges.
+The later expansion above qualifies the recorded specular, minified sampler and
+first-frame camera/scene-history cases. Arbitrary adversarial combinations remain
+separate gates; implementation range checks do not qualify those ranges.
 The Web effect planner rejects non-finite settings, invalid scale/radius/exposure
 values, source/output extents above 4096 and estimated transient effects above
 512 MiB before allocation. Project custom passes are supported only through the
@@ -196,9 +329,9 @@ The authoritative runtime ordering is
 | Main draw culling; `$CullDraws_Shadow`; `$CullLocalShadowDraws` | `CullPass.cpp`, `ShadowService.cpp`, `LocalShadowService.cpp`; `cull_draws*.slang` | Infrastructure: browser explicit bounded draws | Visibility, disabled ancestors, winding, bounds and draw-limit rejection; no dropped valid draw |
 | Pose init, clip sampling, node flatten, skin palette build | `RenderQueue.cpp`; `pose_init`, `animation_sample`, `node_flatten`, `skin_palette_build` | Infrastructure: portable CPU pose extraction, qualified limited fixtures | Fixed pose and interpolation, multiple primitives, shadow pose; full gameplay animation remains Task 5 |
 | `$ScenePreDepth` | `scene_prepass.slang`, `DepthVertex.slangh` | Implemented auxiliary normal/base-colour/depth prepass; bounded GTAO/SSR post cases qualified | Same depth, octahedral normal and base colour at opaque/cutout/skinned edges |
-| `$DirectionalShadow_Cn`, `$ShadowDepthTransition` | `ShadowService.cpp`, `shadow_depth.slang` | Qualified bounded three-cascade path | Existing Sun/Mask/Skin/NoCast fixtures; cascade boundaries and far fade still need explicit transition fixtures |
-| `$LocalShadowAtlasRender` | `LocalShadowService.cpp`, `local_shadow_depth.slang` | Qualified bounded point/spot shadows | Existing asymmetric Point/Spot and receive-shadow checks; atlas capacity rejection |
-| `$Lighting` tiled light list compute | `LightingManager.cpp`, `tiled_light_cull.slang` | Infrastructure: bounded explicit light loop | Same point/spot contribution for perspective and orthographic views, including off-axis tiles |
+| `$DirectionalShadow_Cn`, `$ShadowDepthTransition` | `ShadowService.cpp`, `shadow_depth.slang` | Qualified bounded three-cascade path and 250/300/330 far-fade controls | Existing Sun/Mask/Skin/NoCast fixtures; other cascade boundaries remain unqualified |
+| `$LocalShadowAtlasRender` | `LocalShadowService.cpp`, `local_shadow_depth.slang` | Qualified bounded point/spot shadows, visible 17th spot map and eight-versus-nine-point 48-entry selection | Shared native map resolutions and dynamic shelf packing; broader scene distributions remain unqualified |
+| `$Lighting` tiled light list compute | `LightingManager.cpp`, `tiled_light_cull.slang` | Infrastructure: Web compute tile lists with the native 128-per-tile bound; qualified 129 globally distributed lights | Off-axis perspective/orthographic controls; per-tile overflow and arbitrary distributions remain unqualified |
 | `$GTAO_Main`, `$GTAO_Denoise` | `GTAOPass.cpp`; `gtao_main`, `gtao_denoise` | Qualified bounded ambient-corner on/off case, radius 1.5 and strength 2 sweeps, tick-9 enable transition; material texture AO is separate | Ambient-only corners, denoise edge preservation and empty-3D reset |
 | `$Skybox` | `skybox.slang`, `Sky.slangh` | Qualified Task 3 gradient; physical sky and cloud on/off pairs qualified by the Task 4 scene-effect suite | Turbidity/sun-elevation sweeps, solar disk/stars and cloud speed over time remain unqualified |
 | `$EngineForward` | `gltf_mesh.slang`, shared includes | Qualified Task 3 standard PBR subset; specialized variants, contact shadows, height fog and darkness volumes qualified by bounded Task 4 pairs below | Cross-products of specialized variants and the unqualified rows below |
@@ -216,7 +349,7 @@ The authoritative runtime ordering is
 | `$PostProcess` | `tonemap.slang` | Qualified 11 operators and bounded grade/lens/grain/motion controls; see settings scope below | All operators, bloom/DOF blend, grade, lens effects, grain, motion blur and sharpening; see post-settings table |
 | `$BillboardParticlesDisplay` | after-tonemap callback in `RenderingSubsystem.cpp` | Implemented before final resolve; qualified display-particle FXAA/sharpen/render-scale controls | Gamma/display-space alpha/additive, depth and mixed ordering combinations remain unqualified |
 | `$FXAA` / final resolve | `PostProcessStack.cpp`, `fxaa.slang` | Qualified diagonal/display-particle controls and bounded scaled output | Odd extents, resize and mixed UI ordering coverage remain separate gates |
-| `$Debug` physics/debug geometry | `PhysicsDebugRenderer`, `DebugLayer` | Missing exported debug overlay; not a game-effect substitute | Diagnostic-only visibility and shutdown; normal game images unchanged when disabled |
+| `$Debug` physics/debug geometry | `PhysicsDebugRenderer`, `DebugLayer`, `WebDebugRenderer` | Runtime-qualified C# immediate geometry and collider overlay; shared toggles/shape extraction | Four master/physics toggle states, correct clip-Y orientation and scaled-depth path; native/Web whole-image comparison remains separate |
 | `$UiOverlay` shape draw building, shapes and text | `UIRenderer`; `ui_build_draws`, `ui_shapes`, text shader includes | Qualified bounded browser UI subset; separate browser extraction | Post-tonemap display colour, text/atlas bounds, clipping/ordering and input regressions |
 | `$CameraRT_<id>` and its cull | `RenderTargetService.cpp` | Not reachable from exported games: `CreateCameraRenderTarget` has no caller and no C#, Rust, interop, scene or reflected field creates a target, so no game can request one on either backend | Port together with whatever first exposes it to gameplay: multiple target extents, camera state, texture feedback prohibition, resize and target retirement |
 | Camera/model/material-thumbnail preview passes and ready transitions | `CameraPreviewService.cpp`, `ModelPreviewService.cpp`, `MaterialThumbnailBaker` | Native tooling | Keep native smoke checks; not required to ship an editor inside the browser |
@@ -267,7 +400,7 @@ recorded configurations above.
 | Chromatic aberration, sharpness, film grain | `tonemap.slang` | Implemented shared composition; bounded chromatic/sharpen/grain controls qualified; arbitrary parameter combinations unqualified |
 | Motion-blur strength/max-radius | `tonemap.slang`, previous view-projection in frame constants | Implemented accepted-frame camera history; moving-camera control qualified; native history persists across scene/camera changes, and transition combinations remain unqualified |
 | FXAA, render scale | final resolve in `PostProcessStack.cpp` | Implemented source/output split, native floor/clamp scaling and final resolve; bounded mesh/display-particle controls qualified |
-| Anisotropy and mip LOD bias | `EngineSettings::Graphics`, native sampler creation and material sampling | Match effective adapter-clamped settings, minified angled surfaces and mip transitions; cooked mip filter qualification does not establish sampler parity |
+| Anisotropy and mip LOD bias | `EngineSettings::Graphics`, native sampler creation and material sampling | Qualified minified angled 16-versus-1 anisotropy, bias 2-versus-0 and reset-to-zero controls; other values and devices remain unqualified |
 | Sky/fog | `DayNightSystem::ApplyStaticSky`; `SkyComponent`; `Sky.slangh`, `HeightFog.slangh` | Shared extraction; fog, clouds and physical-sky pairs qualified |
 | DOF | thin-lens extraction in `AetherCore.cpp` from CameraComponent | Shared thin-lens extraction; DofOn/DofOff pair qualified |
 | Darkness volumes | `WorldRenderer::GatherDarknessVolumes` | Shared bounded extraction; Darkness/DarknessOff pair qualified |
