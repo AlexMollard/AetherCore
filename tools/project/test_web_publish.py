@@ -222,4 +222,17 @@ class WebPreflightTests(unittest.TestCase):
      if key=='effect':text+='name="plasma"\n'
     (self.root/'scenes/Start.scene.toml').write_text(text,encoding='utf-8')
     self.api.preflight(self.root)
+ def test_asset_queries_and_write_destinations_are_not_read_dependencies(self):
+  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust','csharp'),encoding='utf-8')
+  (self.root/'scripts/AetherGame.csproj').write_text('<Project/>',encoding='utf-8')
+  used=self.root/'assets/read.txt';used.write_text('read',encoding='utf-8')
+  unused=self.root/'assets/unused.txt';unused.write_text('not declared',encoding='utf-8')
+  source=self.root/'scripts/Game.cs'
+  code='Assets.List("project://assets/*.txt"); Assets.List("project://../*"); Assets.WriteText("project://assets/new.txt","x"); Assets.ReadText("project://assets/read.txt");'
+  source.write_text(code,encoding='utf-8')
+  result=self.api.preflight(self.root)
+  self.assertIn(used.resolve(),result['files'])
+  self.assertNotIn(unused.resolve(),result['files'])
+  source.write_text(code+' Assets.ReadText("project://assets/*.txt");',encoding='utf-8')
+  self.expect('WEB_ASSET_MISSING')
 if __name__=='__main__':unittest.main()

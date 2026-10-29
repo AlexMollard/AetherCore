@@ -276,7 +276,16 @@ def preflight(project, startup_override=None):
     prefab_calls = r'\.instantiate_prefab\s*\(\s*"([^"\\]+)"' if language == 'rust' else r'\bScene\s*\.\s*Instantiate\s*\(\s*"([^"\\]+)"'
     for name in re.findall(prefab_calls, source):
         visit(scene_path(name, prefabs, '.prefab.toml'))
-    for uri in re.findall(r'"((?:project|uid)://[^"\\]+)"', source):
+    # Enumeration patterns and write destinations are not read dependencies.
+    non_read_uri_spans = {
+        match.span(1) for match in re.finditer(
+            r'\bAssets\s*\.\s*(?:List|WriteText)\s*\(\s*"((?:project|uid)://[^"\\]+)"',
+            source)
+    } if language == 'csharp' else set()
+    for match in re.finditer(r'"((?:project|uid)://[^"\\]+)"', source):
+        if match.span(1) in non_read_uri_spans:
+            continue
+        uri = match.group(1)
         asset(uri)
     if is_3d:
         # Custom-pass APIs name shaders by stem rather than project URI.
