@@ -18,7 +18,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#include <TextureDilate.hpp>
+#include <TextureMips.hpp>
 
 #include "io/FileSystem.hpp"
 #include "utils/Expected.hpp"
@@ -60,84 +60,10 @@ namespace aether
 			}
 		};
 
-		// sRGB <-> linear. A mip is an average of the light the parent texels carry, and
-		// sRGB values are not proportional to light, so averaging them directly is simply
-		// the wrong sum: mid-tones come out too dark and the chain drifts as it descends.
-		// The decode is a 256-entry table because there are only 256 possible inputs.
-		const std::array<float, 256>& SrgbToLinearTable()
-		{
-			static const std::array<float, 256> table = []
-			{
-				std::array<float, 256> t{};
-				for (std::size_t i = 0; i < t.size(); ++i)
-				{
-					const float c = static_cast<float>(i) / 255.0f;
-					t[i] = (c <= 0.04045f) ? (c / 12.92f) : std::pow((c + 0.055f) / 1.055f, 2.4f);
-				}
-				return t;
-			}();
-			return table;
-		}
-
-		stbi_uc LinearToSrgbByte(float linear)
-		{
-			const float c = (linear <= 0.0031308f) ? (linear * 12.92f) : (1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f);
-			return static_cast<stbi_uc>(std::lround(std::clamp(c, 0.0f, 1.0f) * 255.0f));
-		}
-
 		std::uint32_t MipCountFor(int width, int height)
 		{
 			const auto largest = static_cast<std::uint32_t>(std::max(width, height));
 			return static_cast<std::uint32_t>(std::bit_width(largest));
-		}
-
-		// Box-filter the parent level down by two. Colour is averaged in linear light;
-		// alpha is already linear and is averaged as-is.
-		std::vector<stbi_uc> DownsampleRgba(const stbi_uc* src, int srcWidth, int srcHeight, int dstWidth, int dstHeight, TextureColorSpace colorSpace)
-		{
-			const bool decode = colorSpace == TextureColorSpace::Srgb;
-			const auto& toLinear = SrgbToLinearTable();
-			std::vector<stbi_uc> dst(static_cast<std::size_t>(dstWidth) * static_cast<std::size_t>(dstHeight) * 4u);
-
-			for (int y = 0; y < dstHeight; ++y)
-			{
-				const int y0 = std::min(y * 2, srcHeight - 1);
-				const int y1 = std::min(y0 + 1, srcHeight - 1);
-				for (int x = 0; x < dstWidth; ++x)
-				{
-					const int x0 = std::min(x * 2, srcWidth - 1);
-					const int x1 = std::min(x0 + 1, srcWidth - 1);
-
-					const std::size_t taps[4] = {
-					        (static_cast<std::size_t>(y0) * srcWidth + x0) * 4u,
-					        (static_cast<std::size_t>(y0) * srcWidth + x1) * 4u,
-					        (static_cast<std::size_t>(y1) * srcWidth + x0) * 4u,
-					        (static_cast<std::size_t>(y1) * srcWidth + x1) * 4u,
-					};
-
-					float rgb[3] = {0.0f, 0.0f, 0.0f};
-					float alpha = 0.0f;
-					for (const std::size_t tap: taps)
-					{
-						rgb[0] += decode ? toLinear[src[tap + 0]] : static_cast<float>(src[tap + 0]);
-						rgb[1] += decode ? toLinear[src[tap + 1]] : static_cast<float>(src[tap + 1]);
-						rgb[2] += decode ? toLinear[src[tap + 2]] : static_cast<float>(src[tap + 2]);
-						alpha += static_cast<float>(src[tap + 3]);
-					}
-
-					const std::size_t out = (static_cast<std::size_t>(y) * dstWidth + x) * 4u;
-					const auto encode = [decode](float v) -> stbi_uc
-					{
-						return decode ? LinearToSrgbByte(v) : static_cast<stbi_uc>(std::lround(std::clamp(v, 0.0f, 255.0f)));
-					};
-					dst[out + 0] = encode(rgb[0] * 0.25f);
-					dst[out + 1] = encode(rgb[1] * 0.25f);
-					dst[out + 2] = encode(rgb[2] * 0.25f);
-					dst[out + 3] = static_cast<stbi_uc>(std::lround(alpha * 0.25f));
-				}
-			}
-
-			return dst;
 		}
 
 		gpu::TextureHandle UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace, const char* debugName = nullptr)
@@ -176,18 +102,22 @@ namespace aether
 					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: host transition to GENERAL failed"));
 				}
 
-				// Cut-out textures: transparent texels take their visible neighbours' colour on every
-				// level, so bilinear filtering and the box downsample never pull in the near-black RGB
-				// PS2 art stores there (see DilateTransparentRgb).
-				std::vector<stbi_uc> base(pixels, pixels + static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
-				DilateTransparentRgb(base.data(), width, height, 4);
-				const std::int32_t copyResult = vkutil::HostCopyMipToImage(device, image, base.data(), static_cast<uint32_t>(width), static_cast<uint32_t>(height), 0u);
+				// Colour cut-outs dilate transparent RGB; data-map alpha is an independent channel.
+				std::vector<stbi_uc> base;
+				const stbi_uc* source = pixels;
+				if (colorSpace == TextureColorSpace::Srgb)
+				{
+					base.assign(pixels, pixels + static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+					DilateTransparentRgb(base.data(), width, height, 4);
+					source = base.data();
+				}
+				const std::int32_t copyResult = vkutil::HostCopyMipToImage(device, image, source, static_cast<uint32_t>(width), static_cast<uint32_t>(height), 0u);
 				if (copyResult != 0)
 				{
 					Throw(AetherError::Vulkan(copyResult, "UploadRgbaToGpuImage: HostCopyMipToImage failed"));
 				}
 
-				const stbi_uc* parent = base.data();
+				const stbi_uc* parent = source;
 				std::vector<stbi_uc> parentOwned;
 				int parentWidth = width;
 				int parentHeight = height;
@@ -196,8 +126,12 @@ namespace aether
 					const int levelWidth = std::max(1, parentWidth / 2);
 					const int levelHeight = std::max(1, parentHeight / 2);
 
-					std::vector<stbi_uc> levelPixels = DownsampleRgba(parent, parentWidth, parentHeight, levelWidth, levelHeight, colorSpace);
-					DilateTransparentRgb(levelPixels.data(), levelWidth, levelHeight, 4);
+					std::vector<stbi_uc> levelPixels(static_cast<std::size_t>(levelWidth) * static_cast<std::size_t>(levelHeight) * 4u);
+					DownsampleBox2x2(parent, parentWidth, parentHeight, 4, levelPixels.data(), colorSpace == TextureColorSpace::Srgb);
+					if (colorSpace == TextureColorSpace::Srgb)
+					{
+						DilateTransparentRgb(levelPixels.data(), levelWidth, levelHeight, 4);
+					}
 					const std::int32_t levelResult =
 					        vkutil::HostCopyMipToImage(device, image, levelPixels.data(), static_cast<uint32_t>(levelWidth), static_cast<uint32_t>(levelHeight), level);
 					if (levelResult != 0)
@@ -328,12 +262,33 @@ namespace aether
 			const uint32_t height = hdr.height;
 			const std::string ddsName(debugPath);
 			const gpu::TextureDesc desc{
+			const uint32_t mipLevels = std::max(1u, hdr.mipMapCount);
+			if (!width || !height || mipLevels > std::bit_width(std::max(width, height)))
+			{
+				AE_UNEXPECTED(AetherError::Asset("invalid DDS dimensions or mip count: " + std::string(debugPath)));
+			}
+			const std::size_t blockBytes = dx10.dxgiFormat == DXGI_BC4_UNORM ? 8u : 16u;
+			std::size_t remaining = fileData.size() - kMinSize;
+			uint32_t mipWidth = width, mipHeight = height;
+			for (uint32_t level = 0; level < mipLevels; ++level)
+			{
+				const std::size_t blocksX = (std::size_t(mipWidth) + 3) / 4;
+				const std::size_t blocksY = (std::size_t(mipHeight) + 3) / 4;
+				if (blocksX > remaining / blockBytes / blocksY)
+				{
+					AE_UNEXPECTED(AetherError::Asset("truncated DDS mip chain: " + std::string(debugPath)));
+				}
+				remaining -= blocksX * blocksY * blockBytes;
+				mipWidth = std::max(1u, mipWidth / 2);
+				mipHeight = std::max(1u, mipHeight / 2);
+			}
 			        .format = *gpuFmt,
 			        .extent = {width, height},
 			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
 			        .aspect = gpu::ImageAspect::Color,
 			        .debugName = ddsName.c_str(),
 			};
+			        .mipLevels = mipLevels,
 			gpu::TextureHandle handle = gpu::ResourceRegistry::CreateTexture(desc);
 			if (!handle.IsValid())
 			{
@@ -341,19 +296,30 @@ namespace aether
 			}
 
 			const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(handle);
+			ScopedTexture lease{handle};
 
 			{
-				const std::int32_t copyResult = vkutil::HostCopyToImage(device, image, p, width, height);
+				Throw(AetherError::Vulkan(0, "UploadBcnDds: host transition to GENERAL failed"));
+			}
+			mipWidth = width;
+			mipHeight = height;
+			for (uint32_t level = 0; level < mipLevels; ++level)
+			{
+				const std::int32_t copyResult = vkutil::HostCopyMipToImage(device, image, p, mipWidth, mipHeight, level);
+			if (vkutil::HostTransitionImage(static_cast<VkDevice>(device), static_cast<VkImage>(image), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, mipLevels) != VK_SUCCESS)
 				if (copyResult != 0)
 				{
-					Throw(AetherError::Vulkan(copyResult, "UploadBcnDds: HostCopyToImage failed"));
+					Throw(AetherError::Vulkan(copyResult, "UploadBcnDds: HostCopyMipToImage failed"));
 				}
 			}
 
+				p += ((std::size_t(mipWidth) + 3) / 4) * ((std::size_t(mipHeight) + 3) / 4) * blockBytes;
+				mipWidth = std::max(1u, mipWidth / 2);
+				mipHeight = std::max(1u, mipHeight / 2);
 			// Same host-side finish as UploadRgbaToGpuImage (see comment there).
 			if (vkutil::SupportsHostImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
 			{
-				if (vkutil::HostTransitionImageToShaderRead(device, image) != 0)
+				if (vkutil::HostTransitionImageToShaderRead(device, image, mipLevels) != 0)
 				{
 					Throw(AetherError::Vulkan(0, "UploadBcnDds: host layout transition failed"));
 				}
@@ -376,6 +342,7 @@ namespace aether
 			RegisterTextureBindless(handle, gpu::ImageLayout::ShaderReadOnly);
 
 			return handle;
+			lease.released = true;
 		}
 	} // namespace
 
@@ -446,7 +413,12 @@ namespace aether
 		AE_PROFILE_ZONE();
 		AE_PROFILE_SET_ZONE_NAME(path.data());
 
-		const std::string resolved = ResolveTexturePath(path);
+		std::string resolved = ResolveTexturePath(path);
+		if (colorSpace == TextureColorSpace::Linear && resolved.ends_with(".texture"))
+		{
+			const std::string variant = resolved.substr(0, resolved.size() - 8) + ".linear.texture";
+			if (io::FileSystem::Exists(variant)) { resolved = variant; }
+		}
 		AE_TRY(data, io::FileSystem::ReadFile(resolved));
 		return LoadFromFileData(*data, resolved, device, uploadQueue, uploadPool, colorSpace);
 	}

@@ -105,10 +105,21 @@ namespace aether::assetpipeline
 
 		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".webp")
 		{
-			auto d = webTarget ? TextureProcessor::ToRGBA8(raw) : TextureProcessor::ToDDS(raw, diskPath, TextureProcessor::BC7Quality::Normal);
-			if (!d.empty())
+			if (webTarget)
 			{
-				return {std::move(d), ".texture", {}};
+				auto d = TextureProcessor::ToRGBA8(raw);
+				if (!d.empty()) { return {std::move(d), ".texture", {}}; }
+			}
+			else
+			{
+				auto color = TextureProcessor::ToDDS(raw, diskPath, true);
+				auto linear = TextureProcessor::ToDDS(raw, diskPath, false);
+				if (!color.empty() && !linear.empty())
+				{
+					auto variant = Utf8Path(virtualPath);
+					variant.replace_extension(".linear.texture");
+					return {std::move(color), ".texture", {{PathUtf8(variant), std::move(linear)}}};
+				}
 			}
 			if (webTarget)
 			{

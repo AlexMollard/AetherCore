@@ -173,12 +173,13 @@ namespace aether::assetpipeline
 			        });
 		}
 
-		ByteBuffer ToDDS(std::span<const std::byte> imageData, const std::filesystem::path& sourcePath, BC7Quality quality)
+		ByteBuffer ToDDS(std::span<const std::byte> imageData, const std::filesystem::path& sourcePath, bool srgb, BC7Quality quality)
 		{
 			InitEncoders();
 
-			int width = 0, height = 0, srcChannels = 0;
-			const StbiImage pixels(stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(imageData.data()), static_cast<int>(imageData.size()), &width, &height, &srcChannels, 0));
+			int width = 0, height = 0, decodedChannels = 0;
+			constexpr int srcChannels = 4;
+			const StbiImage pixels(stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(imageData.data()), static_cast<int>(imageData.size()), &width, &height, &decodedChannels, srcChannels));
 
 			if (!pixels)
 			{
@@ -186,7 +187,7 @@ namespace aether::assetpipeline
 				return {};
 			}
 
-			const BCnFmt fmt = ChooseFormat(sourcePath, srcChannels);
+			const BCnFmt fmt = srgb ? BCnFmt::BC7_SRGB : BCnFmt::BC7_LINEAR;
 
 			bc7enc_compress_block_params bc7Params;
 			bc7enc_compress_block_params_init(&bc7Params);
@@ -204,14 +205,16 @@ namespace aether::assetpipeline
 
 			std::vector<MipData> mips;
 			int mipW = width, mipH = height;
-			// A writable copy: every level has its transparent texels recoloured before it is
-			// compressed (see DilateTransparentRgb).
+			// Colour cut-outs dilate transparent RGB; linear data remains channel-independent.
 			std::vector<uint8_t> level(pixels.get(), pixels.get() + static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * static_cast<std::size_t>(srcChannels));
 			std::vector<uint8_t> next;
 
 			while (true)
 			{
-				DilateTransparentRgb(level.data(), mipW, mipH, srcChannels);
+				if (srgb)
+				{
+					DilateTransparentRgb(level.data(), mipW, mipH, srcChannels);
+				}
 				auto blocks = CompressBlocks(level.data(), mipW, mipH, srcChannels, fmt, bc7Params);
 				mips.push_back({mipW, mipH, std::move(blocks)});
 
@@ -223,7 +226,7 @@ namespace aether::assetpipeline
 				const int newW = std::max(1, mipW / 2);
 				const int newH = std::max(1, mipH / 2);
 				next.resize(static_cast<std::size_t>(newW) * static_cast<std::size_t>(newH) * static_cast<std::size_t>(srcChannels));
-				DownsampleBox2x2(level.data(), mipW, mipH, srcChannels, next.data());
+				DownsampleBox2x2(level.data(), mipW, mipH, srcChannels, next.data(), fmt == BCnFmt::BC7_SRGB);
 				level.swap(next);
 
 				mipW = newW;

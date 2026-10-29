@@ -15,7 +15,7 @@ namespace aether::assetpipeline
 {
 	namespace fs = std::filesystem;
 
-	inline constexpr int kManifestVersion = 5;
+	inline constexpr int kManifestVersion = 7;
 
 	// on-disk pak format + pipeline versions, so bumping any of them invalidates a
 	inline std::string ManifestHeaderLine(std::string_view target = "desktop")

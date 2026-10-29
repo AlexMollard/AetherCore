@@ -114,45 +114,6 @@ namespace aether::assetpipeline
 		}
 	}
 
-	inline BCnFmt ChooseFormat(const std::filesystem::path& path, int channels)
-	{
-		if (channels == 1)
-		{
-			return BCnFmt::BC4;
-		}
-
-		const std::string stem = path.stem().string();
-		std::string lower;
-		lower.reserve(stem.size());
-		for (const char c: stem)
-		{
-			lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-		}
-
-		constexpr std::string_view kLinearKeywords[] = {
-		        "normal",
-		        "nrm",
-		        "nrml",
-		        "roughness",
-		        "rough",
-		        "metallic",
-		        "metal",
-		        "occlusion",
-		        "ao",
-		        "displacement",
-		        "height",
-		        "mask",
-		};
-		for (const std::string_view kw: kLinearKeywords)
-		{
-			if (lower.contains(kw))
-			{
-				return BCnFmt::BC7_LINEAR;
-			}
-		}
-
-		return BCnFmt::BC7_SRGB;
-	}
 
 	using aether::DownsampleBox2x2;
 

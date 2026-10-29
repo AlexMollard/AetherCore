@@ -608,7 +608,7 @@ namespace aether::webgpu
 		{
 			return false;
 		}
-		const auto levels = BuildRgbaTextureMips(rgba, width, height, mipmapped, budget);
+		const auto levels = BuildRgbaTextureMips(rgba, width, height, mipmapped, budget, srgb);
 		if (!levels)
 		{
 			return false;
