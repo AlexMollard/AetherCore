@@ -251,6 +251,10 @@ def stage_project(language, scenes, build, directory_root, fixtures_3d=False):
         # The staged copy lives outside projects/, so its relative engine reference no longer resolves.
         csproj.write_text(re.sub(r'(<ProjectReference\s+Include=")[^"]+AetherCore\.csproj"', lambda m: m[1]+(ROOT/'managed/AetherCore/AetherCore.csproj').as_posix()+'"',
                                  csproj.read_text(encoding='utf-8-sig')), encoding='utf-8')
+        # Enumeration is dynamic; the publisher cannot infer these package members from a glob.
+        if 'BrowserPackagedGlob' in scenes:
+            with (project/'ProjectSettings.toml').open('a', encoding='utf-8') as settings:
+                settings.write('\n[publish.web]\nadditional_assets = ["project://assets/glob-probe/root.txt", "project://assets/glob-probe/nested/child.txt"]\n')
     if fixtures_3d:
         inject_3d_fixtures(language, project)
     for scene in scenes:

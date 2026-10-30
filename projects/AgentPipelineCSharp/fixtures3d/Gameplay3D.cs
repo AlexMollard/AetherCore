@@ -336,3 +336,26 @@ public sealed class TransitionResult3DProbe : EntityScript
         arrival_y = Self.Position.Y;
     }
 }
+
+// Packaged VFS probe: results are published for the native/browser checkpoint harness.
+public sealed class PackagedGlobProbe : EntityScript
+{
+    public string simple = "";
+    public string recursive = "";
+    public int missing;
+    public int invalid;
+    public int traversal;
+    public bool engine;
+    public bool package_read_only;
+
+    public override void OnAttach()
+    {
+        simple = string.Join("|", Assets.List("project://assets/glob-probe/*.txt"));
+        recursive = string.Join("|", Assets.List("project://assets/glob-probe/**/*.txt"));
+        missing = Assets.List("project://assets/glob-probe/*.missing").Length;
+        invalid = Assets.List("invalid://assets/glob-probe/*.txt").Length;
+        traversal = Assets.List("project://assets/glob-probe/../*.txt").Length;
+        engine = Assets.List("engine://**").Length > 0;
+        package_read_only = !Assets.WriteText("project://assets/glob-probe/root.txt", "changed");
+    }
+}

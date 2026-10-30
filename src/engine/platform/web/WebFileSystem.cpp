@@ -1,8 +1,11 @@
 #include "WebFileSystem.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <sstream>
 #include <optional>
+#include <regex>
+#include "io/GlobMatch.hpp"
 #include "assets/AssetCatalog.hpp"
 #include "io/FileSystem.hpp"
 #include "io/MemoryPak.hpp"
@@ -138,9 +141,31 @@ namespace aether::io
 		        std::string(reinterpret_cast<const char*>(bytes->data()), bytes->size())));
 	}
 
-	Expected<std::vector<std::string>> FileSystem::Glob(std::string_view, const FileGlobOptions&)
+	Expected<std::vector<std::string>> FileSystem::Glob(std::string_view pattern, const FileGlobOptions& options)
 	{
-		AE_UNEXPECTED(AetherError::FileSystem("Browser package globbing is not supported in this profile"));
+		const auto separator = pattern.find("://");
+		if (separator == std::string_view::npos)
+		{
+			AE_UNEXPECTED(AetherError::FileSystem("Invalid virtual path (missing ://): " + std::string(pattern)));
+		}
+		const auto mount = pattern.substr(0, separator);
+		const auto* package = mount == "project" ? s_package : mount == "engine" ? s_engine : nullptr;
+		if (!s_initialized || !package)
+		{
+			return std::vector<std::string>{};
+		}
+		const auto relative = pattern.substr(separator + 3);
+		if (relative.size() > 4096 || relative.find('\0') != std::string_view::npos || !IsValidUtf8(relative.data(), relative.size()))
+		{
+			AE_UNEXPECTED(AetherError::FileSystem("Invalid browser package glob pattern"));
+		}
+		const auto flags = options.caseSensitive ? std::regex::ECMAScript : std::regex::ECMAScript | std::regex::icase;
+		const std::regex matcher(GlobToRegex(relative), flags);
+		auto paths = package->Paths();
+		std::sort(paths.begin(), paths.end());
+		paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+		std::erase_if(paths, [&matcher](const std::string& path) { return !std::regex_search(path, matcher); });
+		return paths;
 	}
 
 	std::uint64_t FileSystem::ContentStamp(std::string_view path)

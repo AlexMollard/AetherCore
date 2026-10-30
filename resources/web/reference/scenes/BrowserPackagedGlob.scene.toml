@@ -1,0 +1,21 @@
+[scene]
+version = 16
+kind = '3d'
+features = ['meshes_3d', 'lighting_3d']
+
+[[entities]]
+name = 'Glob probe'
+[[entities.scripts]]
+type = 'PackagedGlobProbe'
+
+[[entities]]
+name = 'Camera'
+position = [0, 0, 5]
+[entities.camera]
+main = true
+projection = 'perspective'
+fov = 60.0
+near = 0.1
+far = 100.0
+background = 'solid_colour'
+clear_color = [0.02, 0.025, 0.04]
