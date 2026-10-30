@@ -2,7 +2,7 @@
 
 #include "physics/PhysicsComponents.hpp"
 #if !defined(__EMSCRIPTEN__)
-#	include "physics/PhysicsDebugRenderer.hpp"
+#	include "physics/PhysicsDebugShared.hpp"
 #endif
 #include "scripting/Gameplay3D.hpp"
 #include "physics/PhysicsSystem.hpp"

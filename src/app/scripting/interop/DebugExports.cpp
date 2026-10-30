@@ -1,6 +1,6 @@
 #include "scripting/interop/InteropCommon.hpp"
 
-#include "physics/PhysicsDebugRenderer.hpp"
+#include "physics/PhysicsDebugShared.hpp"
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;

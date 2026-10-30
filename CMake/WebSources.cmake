@@ -6,6 +6,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     physics2d/Physics2DSystem.cpp
     physics2d/PhysicsDomainGate.cpp
     physics/PhysicsSystem.cpp
+    physics/PhysicsDebugShared.cpp
     physics/RagdollBuilder.cpp
     physics/ColliderMeshSource.cpp
     animation/AnimationSystem.cpp

@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "physics/PhysicsDebugRenderer.hpp" // DebugVertex + enable toggles
+#include "physics/PhysicsDebugShared.hpp"
 
 namespace aether
 {

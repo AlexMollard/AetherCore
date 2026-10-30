@@ -8,6 +8,7 @@
 
 #include "io/FileSystem.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsDebugShared.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/TransformUtils.hpp"
@@ -64,6 +65,30 @@ namespace
 		}
 	};
 } // namespace
+
+TEST_CASE("Physics debug geometry is shared line-list wireframe data")
+{
+	using namespace aether;
+	const auto& box = GetPhysicsDebugGeometry(PhysicsShapeType::Box);
+	const auto& sphere = GetPhysicsDebugGeometry(PhysicsShapeType::Sphere);
+	const auto& capsule = GetPhysicsDebugGeometry(PhysicsShapeType::Capsule);
+	const auto& cylinder = GetPhysicsDebugGeometry(PhysicsShapeType::Cylinder);
+	CHECK(box.size() == 24);
+	CHECK(sphere.size() == 1024);
+	CHECK(capsule.size() == 288);
+	CHECK(cylinder.size() == 96);
+	CHECK(GetPhysicsDebugGeometry(PhysicsShapeType::Mesh).empty());
+	for (const auto* geometry: {&box, &sphere, &capsule, &cylinder})
+	{
+		CHECK(geometry->size() % 2 == 0);
+		for (const auto& vertex: *geometry)
+		{
+			CHECK(vertex.color == glm::vec4(1.0f));
+		}
+	}
+	CHECK(box.front().position == glm::vec3(-0.5f, -0.5f, -0.5f));
+	CHECK(box[1].position == glm::vec3(0.5f, -0.5f, -0.5f));
+}
 
 TEST_CASE("A dynamic body comes to rest on a static floor")
 {
