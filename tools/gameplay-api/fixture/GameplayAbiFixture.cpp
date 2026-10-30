@@ -55,7 +55,7 @@ namespace
 	}
 	AetherGameplayStatus Missing(uint32_t, uint32_t, AetherGameplayModuleApi* outApi)
 	{
-		aether_gameplay_query(1, sizeof(*outApi), outApi);
+		aether_gameplay_query(AE_GAMEPLAY_ABI_MAJOR, sizeof(*outApi), outApi);
 		outApi->update = nullptr;
 		return AE_GAMEPLAY_OK;
 	}
@@ -73,7 +73,7 @@ int main()
 {
 	using namespace aether::scripting;
 	AetherGameplayModuleApi api{};
-	Check(QueryGameplayModule(aether_gameplay_query, 1, sizeof(api), &api) == AE_GAMEPLAY_OK, "query accepted");
+	Check(QueryGameplayModule(aether_gameplay_query, AE_GAMEPLAY_ABI_MAJOR, sizeof(api), &api) == AE_GAMEPLAY_OK, "query accepted");
 	if (!api.initialize)
 	{
 		std::printf("{\"schemaVersion\":1,\"probe\":\"gameplay_abi\",\"status\":\"failed\",\"checks\":%u,\"failures\":%u}\n", s_checks, s_failures);
@@ -82,10 +82,10 @@ int main()
 	const auto original = api;
 	Check(aether_gameplay_query(999, sizeof(api), &api) == AE_GAMEPLAY_ABI_MISMATCH && Empty(api), "Rust query major rejection clears stale table");
 	api = original;
-	Check(aether_gameplay_query(1, sizeof(api) - 1, &api) == AE_GAMEPLAY_BUFFER_TOO_SMALL && api.initialize == nullptr, "Rust query short table rejection");
-	Check(aether_gameplay_query(1, sizeof(api), nullptr) == AE_GAMEPLAY_INVALID_ARGUMENT, "Rust query null output rejection");
+	Check(aether_gameplay_query(AE_GAMEPLAY_ABI_MAJOR, sizeof(api) - 1, &api) == AE_GAMEPLAY_BUFFER_TOO_SMALL && api.initialize == nullptr, "Rust query short table rejection");
+	Check(aether_gameplay_query(AE_GAMEPLAY_ABI_MAJOR, sizeof(api), nullptr) == AE_GAMEPLAY_INVALID_ARGUMENT, "Rust query null output rejection");
 	api = original;
-	Check(QueryGameplayModule(ThrowQuery, 1, sizeof(api), &api) == AE_GAMEPLAY_SCRIPT_ERROR && Empty(api), "C++ query exception contained");
+	Check(QueryGameplayModule(ThrowQuery, AE_GAMEPLAY_ABI_MAJOR, sizeof(api), &api) == AE_GAMEPLAY_SCRIPT_ERROR && Empty(api), "C++ query exception contained");
 	const size_t mandatoryCallbacks[] = {
 		offsetof(AetherGameplayModuleApi, initialize), offsetof(AetherGameplayModuleApi, shutdown),
 		offsetof(AetherGameplayModuleApi, getTypeCount), offsetof(AetherGameplayModuleApi, getTypeInfo),
@@ -93,25 +93,26 @@ int main()
 		offsetof(AetherGameplayModuleApi, destroy), offsetof(AetherGameplayModuleApi, attach),
 		offsetof(AetherGameplayModuleApi, update), offsetof(AetherGameplayModuleApi, detach),
 		offsetof(AetherGameplayModuleApi, getProperty), offsetof(AetherGameplayModuleApi, setProperty),
-		offsetof(AetherGameplayModuleApi, getDefaultProperty)};
+		offsetof(AetherGameplayModuleApi, getDefaultProperty), offsetof(AetherGameplayModuleApi, captureStreamingState),
+		offsetof(AetherGameplayModuleApi, restoreStreamingState)};
 	for (const auto offset : mandatoryCallbacks)
 	{
 		auto incomplete = original;
 		std::memset(reinterpret_cast<unsigned char*>(&incomplete) + offset, 0, sizeof(api.initialize));
 		api = original;
-		Check(PublishGameplayModule(incomplete, 1, sizeof(api), &api) == AE_GAMEPLAY_INVALID_ARGUMENT && Empty(api), "each mandatory callback rejected with empty output");
+		Check(PublishGameplayModule(incomplete, AE_GAMEPLAY_ABI_MAJOR, sizeof(api), &api) == AE_GAMEPLAY_INVALID_ARGUMENT && Empty(api), "each mandatory callback rejected with empty output");
 	}
 	api = original;
 	Check(QueryGameplayModule(aether_gameplay_query, 999, sizeof(api), &api) == AE_GAMEPLAY_ABI_MISMATCH && Empty(api), "major rejection clears stale table");
 	api = original;
-	Check(QueryGameplayModule(Missing, 1, sizeof(api), &api) == AE_GAMEPLAY_INVALID_ARGUMENT && Empty(api), "missing callback clears stale table");
+	Check(QueryGameplayModule(Missing, AE_GAMEPLAY_ABI_MAJOR, sizeof(api), &api) == AE_GAMEPLAY_INVALID_ARGUMENT && Empty(api), "missing callback clears stale table");
 	api = original;
-	Check(QueryGameplayModule(aether_gameplay_query, 1, sizeof(api) - 1, &api) == AE_GAMEPLAY_BUFFER_TOO_SMALL && api.initialize == nullptr, "short table rejected");
+	Check(QueryGameplayModule(aether_gameplay_query, AE_GAMEPLAY_ABI_MAJOR, sizeof(api) - 1, &api) == AE_GAMEPLAY_BUFFER_TOO_SMALL && api.initialize == nullptr, "short table rejected");
 	api = original;
 	api.structSize -= 1;
 	Check(ValidateGameplayModule(api) == AE_GAMEPLAY_ABI_MISMATCH, "module struct size rejected");
 	api = original;
-	AetherGameplayEngineApi engine{sizeof(engine), 1, 0, 77, Valid, Get, Set, Diagnostic};
+	AetherGameplayEngineApi engine{sizeof(engine), AE_GAMEPLAY_ABI_MAJOR, 0, 77, Valid, Get, Set, Diagnostic};
 	auto badEngine = engine;
 	badEngine.abiMajor = 999;
 	Check(api.initialize(api.context, &badEngine) == AE_GAMEPLAY_ABI_MISMATCH, "Rust rejects engine ABI major");
@@ -247,7 +248,9 @@ int main()
 		offsetof(AetherGameplayModuleApi, getProperty),
 		offsetof(AetherGameplayModuleApi, setProperty),
 		offsetof(AetherGameplayModuleApi, getDefaultProperty),
-		offsetof(AetherGameplayModuleApi, dispatchEvent)};
+		offsetof(AetherGameplayModuleApi, dispatchEvent),
+		offsetof(AetherGameplayModuleApi, captureStreamingState),
+		offsetof(AetherGameplayModuleApi, restoreStreamingState)};
 	for (uint32_t i = 0; i < std::size(layout); ++i)
 	{
 		Check(fixture_layout(i) == layout[i], "Rust/C++ record size alignment and field offset");

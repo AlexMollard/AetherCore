@@ -8,9 +8,8 @@ namespace aether
 {
 	// A sound an entity emits. Authored entirely through the reflected fields
 	// (scene TOML, inspector, MCP); the audio::AudioSystem drives it each frame
-	// on the game thread. Runtime state (which voice is playing) lives in the
-	// system-side map keyed by entity, NOT here - this stays pure data so the
-	// serializer round-trips it unchanged.
+	// on the game thread. The transient play request is not reflected or serialized;
+	// voice ownership remains in the system-side map keyed by entity.
 	struct AudioSourceComponent
 	{
 		// VFS path to the clip (project://, engine://). Empty = silent.
@@ -21,6 +20,7 @@ namespace aether
 		// 2D sounds play at full level regardless of listener position.
 		bool spatial = true;
 		bool playOnStart = true;
+		bool playRequested = false;
 		// Linear attenuation range in world units (spatial only).
 		float minDistance = 1.0f;
 		float maxDistance = 50.0f;

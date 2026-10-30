@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <utility>
 #include <vector>
 #include <imgui.h>
 #include "gpu/GpuEnums.hpp"
@@ -75,6 +76,9 @@ namespace aether
 		[[nodiscard]] ImTextureID RegisterTexture(gpu::ImageView imageView, gpu::ImageLayout layout);
 		void UnregisterTexture(ImTextureID textureId);
 
+		// Keep resources referenced by this producer frame alive through its snapshot.
+		void RetainFrameResource(std::shared_ptr<const void> resource) { m_frameResources.push_back(std::move(resource)); }
+
 		// retire frame.  Only safe when the GPU is idle and the render thread is
 		void FlushPendingTextureReleasesImmediate() override;
 
@@ -120,6 +124,7 @@ namespace aether
 		std::vector<std::byte> m_iconFontDataRegular;
 
 		std::vector<PendingTextureRelease> m_pendingTextureReleases;
+		std::vector<std::shared_ptr<const void>> m_frameResources;
 		std::unique_ptr<ImguiViewportRenderer> m_viewportRenderer;
 
 		bool m_viewportsEnabled = true;

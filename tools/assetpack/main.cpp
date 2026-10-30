@@ -497,6 +497,11 @@ static int RunBakeCommand(int argc, char* argv[])
 	}
 	const fs::path rel = fs::relative(modelPath, projectRoot);
 	const auto result = MeshProcessor::Process(std::span<const std::byte>(raw.data(), raw.size()), modelPath, rel.generic_string(), projectRoot);
+	if (!result.error.empty())
+	{
+		std::cerr << "AssetPacker bake: " << result.error << "\n";
+		return 1;
+	}
 	if (result.meshData.empty())
 	{
 		std::cerr << "AssetPacker bake: no mesh geometry produced from '" << modelPath.string() << "'\n";

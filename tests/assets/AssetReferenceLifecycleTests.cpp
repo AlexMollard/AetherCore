@@ -6,6 +6,7 @@
 
 #include "assets/AssetCatalog.hpp"
 #include "assets/TileMapAsset.hpp"
+#include "assets/StreamingDecode.hpp"
 #include "AssetPipeline.hpp"
 #include "io/FileSystem.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -135,4 +136,41 @@ TEST_CASE("Binary tile references retain identity through migration move and pac
 	REQUIRE(restored->tilePalette.size() == 1);
 	CHECK(restored->tilePalette[0] == AssetObjectId{42});
 	CHECK(restored->GetCell(0, {-3, 6}) == tilecell::Make(0, true, false));
+}
+
+TEST_CASE("Streamed animation decode rejects a denied parse reservation and can be retried")
+{
+	const auto root = std::filesystem::temp_directory_path() / ("ae-stream-decode-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	struct Cleanup
+	{
+		std::filesystem::path root;
+		~Cleanup()
+		{
+			std::error_code ignored;
+			std::filesystem::remove_all(root, ignored);
+		}
+	} cleanup{root};
+	std::filesystem::create_directories(root);
+	std::ofstream(root / "walk.spriteanim.toml") << "[animation]\nname='Walk'\natlas='hero.spriteatlas.toml'\nframe_count=0\nevent_count=0\n";
+	if (!io::FileSystem::IsInitialized())
+	{
+		io::FileSystem::Initialize();
+	}
+	io::FileSystem::Mount("asset-retry-test", root);
+
+	std::size_t reservations = 0;
+	const auto denied = assets::DecodeStreamingAsset("asset-retry-test://walk.spriteanim.toml", [&](std::size_t bytes)
+	{
+		if (bytes == 0) return true;
+		return ++reservations == 1;
+	});
+	CHECK_FALSE(denied.has_value());
+	CHECK(reservations >= 2);
+
+	const auto retried = assets::DecodeStreamingAsset("asset-retry-test://walk.spriteanim.toml", [](std::size_t) { return true; });
+	REQUIRE(retried.has_value());
+	REQUIRE(retried->animation.has_value());
+	CHECK(retried->animation->name == "Walk");
+	REQUIRE(retried->dependencies.size() == 1);
+	CHECK(retried->dependencies[0] == "asset-retry-test://hero.spriteatlas.toml");
 }

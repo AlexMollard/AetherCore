@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -61,9 +62,26 @@ namespace aether::ui
 		{
 			return m_fontRegistry;
 		}
+		struct FontUpload
+		{
+			gpu::TextureHandle texture{};
+			std::uint64_t ticket = 0;
+			std::uint32_t x = 0, y = 0;
+			bool submitted = false, complete = false;
+		};
+		[[nodiscard]] std::uint64_t FontUploadBytes(const FontAsset& font) const;
+		[[nodiscard]] Expected<FontUpload> BeginStreamedFontUpload(const FontAsset& font);
+		[[nodiscard]] Expected<std::uint64_t> PumpStreamedFontUpload(FontUpload& upload, const FontAsset& font, std::uint64_t maxBytes,
+		        const std::function<bool(std::uint64_t)>& reserveStaging, const std::function<void(std::uint64_t)>& retireStaging);
+		[[nodiscard]] Expected<bool> FinishStreamedFontUpload(std::string name, FontAsset asset, FontUpload& upload);
+		void DiscardStreamedFontUpload(FontUpload& upload, std::function<void()> onGpuRetired);
+		[[nodiscard]] std::uint32_t StreamedFontSlot(std::string_view name) const;
+		void RetireStreamedFont(std::string_view name, std::function<void()> onGpuRetired = {});
 
 		// Resolves layout + builds draw commands for m_world, uploads into frame
 		void BuildFrame(glm::vec2 outputExtent, std::uint32_t frameSlot);
+		// Producer-thread commands from the most recent BuildFrame.
+		[[nodiscard]] const std::vector<UiDrawCommand>& BuiltCommands() const { return m_scratch; }
 
 		void RegisterPass(RenderGraph& graph, RGImage color, gpu::Extent2D extent, BindlessManager& bindless);
 

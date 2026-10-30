@@ -14,6 +14,7 @@
 #include "material/TextureRegistry.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
+#include "scripting/SceneContext.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether::app::scene
@@ -78,7 +79,14 @@ namespace aether::app::scene
 			// they are whatever the asset says today, which is the whole point of the link.
 			if (!c.rec.material->assetPath.empty())
 			{
-				if (auto loaded = c.deps.assets->LoadMaterialPreset(c.rec.material->assetPath))
+				auto load = [&]() -> std::optional<MaterialAsset>
+				{
+					if (c.deps.sceneContext != nullptr && c.deps.sceneContext->streamedModelActivation)
+						return c.deps.assets->TryLoadStreamedMaterialPreset(c.rec.material->assetPath);
+					auto loaded = c.deps.assets->LoadMaterialPreset(c.rec.material->assetPath);
+					return loaded ? std::optional<MaterialAsset>{std::move(*loaded)} : std::nullopt;
+				};
+				if (auto loaded = load())
 				{
 					MaterialAsset merged = *loaded;
 					ApplyMaterialOverrides(merged, c.rec.material->asset, c.rec.material->overrides);
@@ -96,7 +104,9 @@ namespace aether::app::scene
 			{
 				if (loadedLink && !IsMaterialFieldOverridden(c.rec.material->overrides, key)) { return; }
 				if (loadedLink && out.IsValid()) { textures.Release(out); }
-				out = path.empty() ? TextureHandle{} : textures.Acquire(path, colorSpace);
+				out = path.empty() ? TextureHandle{} :
+				        (c.deps.sceneContext != nullptr && c.deps.sceneContext->streamedModelActivation
+				             ? textures.FindAndAcquire(path, colorSpace) : textures.Acquire(path, colorSpace));
 			};
 			// Base colour and emissive encode light; the rest encode numbers and must not
 			// be run through the sampler's sRGB decode.

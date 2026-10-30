@@ -5,6 +5,7 @@
 #include <sstream>
 #include <optional>
 #include <regex>
+#include <unordered_map>
 #include "io/GlobMatch.hpp"
 #include "assets/AssetCatalog.hpp"
 #include "io/FileSystem.hpp"
@@ -18,6 +19,7 @@ namespace
 	bool s_initialized = false;
 	std::uint64_t s_generation = 0;
 	std::optional<aether::AssetCatalog> s_catalog;
+	std::unordered_map<std::string, std::vector<std::byte>> s_streamed;
 
 	std::string_view Relative(std::string_view path)
 	{
@@ -39,6 +41,30 @@ namespace aether::web
 				(void)io::FileSystem::ReloadAssetCatalog();
 		}
 	}
+
+	Expected<void> MountWebAsset(std::string path, std::vector<std::byte> bytes)
+	{
+		if (!path.starts_with("project://") || path.size() <= 10 || path.find("..") != std::string::npos ||
+		    path.find('\\') != std::string::npos || path.find('\0') != std::string::npos)
+			AE_UNEXPECTED(AetherError::FileSystem("Invalid streamed asset path"));
+		if (!s_streamed.emplace(std::move(path), std::move(bytes)).second)
+			AE_UNEXPECTED(AetherError::FileSystem("Streamed asset already mounted"));
+		++s_generation;
+		return {};
+	}
+
+	void UnmountWebAsset(std::string_view path)
+	{
+		if (s_streamed.erase(std::string(path)))
+			++s_generation;
+	}
+
+	std::span<const std::byte> FindWebAsset(std::string_view path)
+	{
+		const auto resolved = io::FileSystem::ResolveAssetPath(path);
+		const auto it = s_streamed.find(resolved);
+		return it == s_streamed.end() ? std::span<const std::byte>{} : std::span<const std::byte>{it->second};
+	}
 } // namespace aether::web
 
 namespace aether::io
@@ -55,7 +81,9 @@ namespace aether::io
 
 	void FileSystem::Shutdown()
 	{
+		s_streamed.clear();
 		web::SetWebPackage(nullptr);
+		s_catalog.reset();
 		s_initialized = false;
 	}
 
@@ -72,7 +100,13 @@ namespace aether::io
 	Expected<void> FileSystem::ReloadAssetCatalog()
 	{
 		std::optional<AssetCatalog> catalog;
-		if (s_package && s_package->Exists("asset-catalog.toml"))
+		if (const auto mounted = s_streamed.find("project://asset-catalog.toml"); mounted != s_streamed.end())
+		{
+			const auto& bytes = mounted->second;
+			AE_TRY(parsed, AssetCatalog::Parse(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size())));
+			catalog = std::move(*parsed);
+		}
+		else if (s_package && s_package->Exists("asset-catalog.toml"))
 		{
 			AE_TRY(bytes, s_package->Read("asset-catalog.toml"));
 			AE_TRY(parsed, AssetCatalog::Parse(std::string_view(reinterpret_cast<const char*>(bytes->data()), bytes->size())));
@@ -98,20 +132,35 @@ namespace aether::io
 	{
 		const std::string resolved = ResolveAssetPath(path);
 		path = resolved;
+		if (s_streamed.contains(resolved))
+			return true;
 		const auto* package = path.starts_with("project://") ? s_package : path.starts_with("engine://") ? s_engine : nullptr;
 		return package && package->Exists(Relative(path));
 	}
 
 	Expected<std::vector<std::byte>> FileSystem::ReadFile(std::string_view path)
 	{
+		return ReadFileReserved(path, {});
+	}
+
+	Expected<std::vector<std::byte>> FileSystem::ReadFileReserved(std::string_view path, const std::function<bool(std::size_t)>& reserve)
+	{
 		const std::string resolved = ResolveAssetPath(path);
 		path = resolved;
+		if (auto found = s_streamed.find(resolved); found != s_streamed.end())
+		{
+			if (reserve && !reserve(found->second.size()))
+			{
+				AE_UNEXPECTED(AetherError::FileSystem("Asset allocation reservation rejected: " + resolved));
+			}
+			return found->second;
+		}
 		const auto* package = path.starts_with("project://") ? s_package : path.starts_with("engine://") ? s_engine : nullptr;
 		if (!s_initialized || !package)
 		{
 			AE_UNEXPECTED(AetherError::FileSystem("Browser project package is not mounted: " + std::string(path)));
 		}
-		return package->Read(Relative(path));
+		return package->Read(Relative(path), reserve);
 	}
 
 	Expected<std::string> FileSystem::ReadFileText(std::string_view path)
@@ -151,17 +200,17 @@ namespace aether::io
 		const auto mount = pattern.substr(0, separator);
 		const auto* package = mount == "project" ? s_package : mount == "engine" ? s_engine : nullptr;
 		if (!s_initialized || !package)
-		{
 			return std::vector<std::string>{};
-		}
 		const auto relative = pattern.substr(separator + 3);
 		if (relative.size() > 4096 || relative.find('\0') != std::string_view::npos || !IsValidUtf8(relative.data(), relative.size()))
-		{
 			AE_UNEXPECTED(AetherError::FileSystem("Invalid browser package glob pattern"));
-		}
 		const auto flags = options.caseSensitive ? std::regex::ECMAScript : std::regex::ECMAScript | std::regex::icase;
 		const std::regex matcher(GlobToRegex(relative), flags);
 		auto paths = package->Paths();
+		if (mount == "project")
+			for (const auto& [path, bytes] : s_streamed)
+				if (std::regex_search(path.substr(10), matcher))
+					paths.push_back(path.substr(10));
 		std::sort(paths.begin(), paths.end());
 		paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
 		std::erase_if(paths, [&matcher](const std::string& path) { return !std::regex_search(path, matcher); });

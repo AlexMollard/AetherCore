@@ -501,6 +501,7 @@ namespace aether::app::scene
 			if (const auto* node = world.TryGet<SceneNodeComponent>(e))
 			{
 				scene.entities[i].nodeId = node->id;
+				scene.entities[i].sourceNodeId = node->sourceId;
 			}
 			else
 			{
@@ -540,6 +541,10 @@ namespace aether::app::scene
 		if (const auto* includes = reg.ctx().find<ActiveSceneIncludes>())
 		{
 			scene.includes = includes->scenes;
+		}
+		if (const auto* regions = reg.ctx().find<ActiveStreamingRegions>())
+		{
+			scene.streamingRegions = regions->regions;
 		}
 		return scene;
 	}

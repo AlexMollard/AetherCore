@@ -146,7 +146,7 @@ TEST_CASE("Asset migration rejects unsupported source schemas without writes")
 		const char* path;
 		const char* text;
 	} cases[] = {
-	        {"scenes/start.scene.toml", "[scene]\nversion=18\n"},
+	        {"scenes/start.scene.toml", "[scene]\nversion=19\n"},
 	        {"scenes/start.scene.toml", "[scene]\nversion='17'\n"},
 	        {"scenes/start.scene.toml", "[scene]\nversion=17\n[[entities]]\n[entities.ui_image]\nschema_version=2\n"},
 	        {"assets/hero.prefab.toml", "[prefab]\nversion=2\n"},
@@ -218,4 +218,39 @@ TEST_CASE("Legacy float-valued sprite schemas migrate without losing texture ref
 	REQUIRE(atlas.has_value());
 	CHECK(atlas->schemaVersion == SpriteAtlasAsset::kSchemaVersion);
 	CHECK(atlas->texturePath == catalog->Reference("project://assets/textures/hero.png"));
+}
+
+TEST_CASE("Stream region references preserve identity across chunk scene moves")
+{
+	CatalogProject project;
+	const auto worldPath = project.root / "scenes/world.scene.toml";
+	std::ofstream(worldPath, std::ios::binary)
+	        << "[scene]\nversion=18\n[[stream_regions]]\nid='west'\nscene='start'\n"
+	           "bounds_min=[-5.0,-5.0,-5.0]\nbounds_max=[5.0,5.0,5.0]\n";
+	REQUIRE(AssetCatalog::Migrate(project.root, true).has_value());
+	auto catalog = AssetCatalog::Load(project.root);
+	REQUIRE(catalog.has_value());
+	const auto reference = catalog->Reference("project://scenes/start.scene.toml");
+	REQUIRE(reference.starts_with("uid://"));
+	const auto worldBefore = CatalogText(worldPath);
+	CHECK(worldBefore.find(reference) != std::string::npos);
+	const auto references = catalog->References(reference);
+	REQUIRE(references.has_value());
+	REQUIRE(references->size() == 1);
+	CHECK(references->front().document == "scenes/world.scene.toml");
+	REQUIRE(catalog->Move("scenes/start.scene.toml", "scenes/renamed.scene.toml").has_value());
+	CHECK(catalog->Resolve(reference) == "project://scenes/renamed.scene.toml");
+	CHECK(CatalogText(worldPath) == worldBefore);
+	if (!io::FileSystem::IsInitialized())
+	{
+		io::FileSystem::Initialize();
+	}
+	io::FileSystem::Mount("project", project.root);
+	REQUIRE(io::FileSystem::ReloadAssetCatalog().has_value());
+	const auto restored = app::scene::ParseToml(worldBefore);
+	REQUIRE(restored.has_value());
+	REQUIRE(restored->streamingRegions.size() == 1);
+	CHECK(restored->streamingRegions.front().scene == reference);
+	CHECK(restored->streamingRegions.front().boundsMin.x == -5.0f);
+	CHECK(io::FileSystem::Exists(reference));
 }

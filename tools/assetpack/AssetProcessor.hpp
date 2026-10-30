@@ -169,6 +169,8 @@ namespace aether::assetpipeline
 		if (ext == ".gltf" || ext == ".glb")
 		{
 			auto meshResult = MeshProcessor::Process(raw, diskPath, virtualPath, sourceDir);
+			if (!meshResult.error.empty())
+				return {.error = "Model processing failed: " + diskPath.generic_string() + ": " + meshResult.error};
 
 			const std::string stem = Stem(diskPath);
 			const std::string dir = Utf8Path(virtualPath).parent_path().generic_string();

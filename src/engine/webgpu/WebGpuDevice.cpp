@@ -14,12 +14,14 @@
 #include <fstream>
 #include <iterator>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 #include <TextureMips.hpp>
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #include <webgpu/webgpu.h>
 #include "gpu/SpritePass.hpp"
+#include "streaming/StreamingBudget.hpp"
 #include "rendering/RenderFramePacket.hpp"
 
 namespace aether::webgpu
@@ -65,7 +67,10 @@ namespace aether::webgpu
 		WGPUSampler sampler = nullptr;
 		int samplerAnisotropy = 1;
 		std::vector<WGPUTexture> textures;
+		std::vector<std::size_t> textureSizes;
+		std::vector<std::uint32_t> completedTextureRetirements;
 		std::size_t textureBytes = 0;
+		std::string textureUploadError;
 		WebMeshRenderer meshes;
 		WebHdrRenderer hdr;
 		WebLight2DRenderer lights2D;
@@ -78,7 +83,45 @@ namespace aether::webgpu
 		unsigned callbacks = 0;
 		unsigned pendingFrames = 0;
 		unsigned pendingMeshRetirements = 0;
+		unsigned pendingTextureRetirements = 0;
+		unsigned pendingStreamingUploads = 0;
+		bool streamingUploadBlocked = false;
 		std::vector<std::uint32_t> completedMeshRetirements;
+		struct StreamingCharge
+		{
+			std::shared_ptr<streaming::BudgetLedger> ledger;
+			std::uint64_t bytes = 0;
+			streaming::MemoryClass category = streaming::MemoryClass::GpuPending;
+		};
+		std::unordered_map<std::uint32_t, StreamingCharge> meshCharges, textureCharges, fontCharges;
+		struct UploadJob
+		{
+			struct Level { std::size_t offset; std::uint32_t width, height; };
+			std::shared_ptr<streaming::BudgetLedger> ledger;
+			std::vector<std::byte> payload;
+			std::array<Level, 13> levels{};
+			std::uint32_t slot = 0, levelCount = 0, level = 0;
+			std::size_t cursor = 0, vertexBytes = 0;
+			bool texture = false, font = false, cancelled = false;
+			~UploadJob() { if (ledger) ledger->Release(streaming::MemoryClass::CpuPending, payload.size()); }
+		};
+		std::vector<std::shared_ptr<UploadJob>> uploadJobs;
+
+		void CancelUploads(bool texture, bool font, std::span<const std::uint32_t> slots)
+		{
+			for (auto it = uploadJobs.begin(); it != uploadJobs.end();)
+			{
+				auto& job = *it;
+				if (job->texture == texture && job->font == font && std::find(slots.begin(), slots.end(), job->slot) != slots.end())
+				{
+					job->cancelled = true;
+					--pendingStreamingUploads;
+					it = uploadJobs.erase(it);
+				}
+				else ++it;
+			}
+
+		}
 
 		void Fail(const char* code, WGPUStringView message, bool lost = false)
 		{
@@ -103,6 +146,12 @@ namespace aether::webgpu
 				billboards.Shutdown();
 				customPasses.Shutdown();
 				ui.Shutdown();
+				for (auto& [slot, charge]: meshCharges) charge.ledger->Release(charge.category, charge.bytes);
+				for (auto& [slot, charge]: textureCharges) charge.ledger->Release(charge.category, charge.bytes);
+				for (auto& [slot, charge]: fontCharges) charge.ledger->Release(charge.category, charge.bytes);
+				meshCharges.clear();
+				textureCharges.clear();
+				fontCharges.clear();
 				for (auto texture: textures)
 				{
 					if (texture)
@@ -509,18 +558,65 @@ namespace aether::webgpu
 		wgpuInstanceRequestAdapter(self.instance, &options, callback);
 	}
 
-	bool WebGpuDevice::UploadMesh(std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices)
+	bool WebGpuDevice::UploadMesh(std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices, std::shared_ptr<streaming::BudgetLedger> budget)
 	{
 		auto& self = *m_impl;
 		if (State() != gpu::RenderState::Ready) { self.meshes.error = "Mesh upload requires a ready WebGPU device"; return false; }
-		if (!self.meshes.Upload(self.device, self.queue, slot, vertices, indices)) { return false; }
+		const auto bytes = vertices.size_bytes() + indices.size_bytes();
+		if (budget && !budget->TryReserve(streaming::MemoryClass::GpuPending, bytes))
+		{
+			self.meshes.error = "Streaming GPU budget exceeded";
+			return false;
+		}
+		if (budget)
+		{
+			if (!budget->TryReserve(streaming::MemoryClass::CpuPending, bytes))
+			{
+				budget->Release(streaming::MemoryClass::GpuPending, bytes);
+				self.meshes.error = "Streaming CPU budget exceeded";
+				return false;
+			}
+			auto job = std::make_shared<Impl::UploadJob>();
+			job->payload.resize(bytes);
+			job->ledger = budget;
+			job->slot = slot;
+			job->vertexBytes = vertices.size_bytes();
+			std::memcpy(job->payload.data(), vertices.data(), vertices.size_bytes());
+			std::memcpy(job->payload.data() + vertices.size_bytes(), indices.data(), indices.size_bytes());
+			if (!self.meshes.Allocate(self.device, self.queue, slot, vertices, indices))
+			{
+				budget->Release(streaming::MemoryClass::GpuPending, bytes);
+				return false;
+			}
+			self.meshCharges.emplace(slot, Impl::StreamingCharge{budget, bytes});
+			self.uploadJobs.push_back(std::move(job));
+			++self.pendingStreamingUploads;
+			return true;
+		}
+		if (!self.meshes.Upload(self.device, self.queue, slot, vertices, indices))
+		{
+			if (budget) budget->Release(streaming::MemoryClass::GpuPending, bytes);
+			return false;
+		}
+		const bool streamingUpload = static_cast<bool>(budget);
+		if (budget) { self.meshCharges.emplace(slot, Impl::StreamingCharge{std::move(budget), bytes}); ++self.pendingStreamingUploads; }
+		struct UploadCompletion { Impl* owner; std::uint32_t slot; bool streaming; };
 		++self.callbacks;
 		WGPUQueueWorkDoneCallbackInfo uploaded = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
 		uploaded.mode = WGPUCallbackMode_AllowSpontaneous;
-		uploaded.userdata1 = &self;
+		uploaded.userdata1 = new UploadCompletion{&self, slot, streamingUpload};
 		uploaded.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
 		{
-			auto& self = *static_cast<Impl*>(data);
+			auto* completion = static_cast<UploadCompletion*>(data);
+			auto& self = *completion->owner;
+			if (auto it = self.meshCharges.find(completion->slot); it != self.meshCharges.end() && it->second.category == streaming::MemoryClass::GpuPending)
+			{
+				auto& charge = it->second;
+				if (charge.ledger->Transfer(charge.category, streaming::MemoryClass::GpuResident, charge.bytes))
+					charge.category = streaming::MemoryClass::GpuResident;
+			}
+			if (completion->streaming) --self.pendingStreamingUploads;
+			delete completion;
 			--self.callbacks;
 			if (status != WGPUQueueWorkDoneStatus_Success) { self.Fail("WEBGPU_MESH_UPLOAD", message); }
 			self.Release();
@@ -529,10 +625,187 @@ namespace aether::webgpu
 		return true;
 	}
 
+	void WebGpuDevice::RetireTextures(std::vector<std::uint32_t> slots)
+	{
+		if (slots.empty()) return;
+		auto& self = *m_impl;
+		self.CancelUploads(true, false, slots);
+		for (const auto slot: slots)
+			if (auto it = self.textureCharges.find(slot); it != self.textureCharges.end())
+			{
+				auto& charge = it->second;
+				if (charge.ledger->Transfer(charge.category, streaming::MemoryClass::GpuRetiring, charge.bytes))
+					charge.category = streaming::MemoryClass::GpuRetiring;
+			}
+		struct Retirement
+		{
+			Impl* owner;
+			std::vector<std::uint32_t> slots;
+		};
+		auto* retirement = new Retirement{&self, std::move(slots)};
+		++self.callbacks;
+		++self.pendingTextureRetirements;
+		WGPUQueueWorkDoneCallbackInfo done = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
+		done.mode = WGPUCallbackMode_AllowSpontaneous;
+		done.userdata1 = retirement;
+		done.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
+		{
+			auto* retirement = static_cast<Retirement*>(data);
+			auto& self = *retirement->owner;
+			for (const auto slot: retirement->slots)
+			{
+				if (slot < self.textures.size() && self.textures[slot])
+				{
+					wgpuTextureDestroy(self.textures[slot]);
+					wgpuTextureRelease(self.textures[slot]);
+					self.textures[slot] = nullptr;
+					self.textureBytes -= self.textureSizes[slot];
+					self.textureSizes[slot] = 0;
+					self.completedTextureRetirements.push_back(slot);
+				}
+				if (auto it = self.textureCharges.find(slot); it != self.textureCharges.end())
+				{
+					it->second.ledger->Release(it->second.category, it->second.bytes);
+					self.textureCharges.erase(it);
+				}
+			}
+			--self.callbacks;
+			--self.pendingTextureRetirements;
+			if (status != WGPUQueueWorkDoneStatus_Success) self.Fail("WEBGPU_TEXTURE_RETIRE", message);
+			delete retirement;
+			self.Release();
+		};
+		wgpuQueueOnSubmittedWorkDone(self.queue, done);
+	}
+
+	bool WebGpuDevice::TextureRetirementPending() const
+	{
+		return m_impl->pendingTextureRetirements != 0;
+	}
+
+	bool WebGpuDevice::StreamingUploadsPending() const
+	{
+		return m_impl->pendingStreamingUploads != 0;
+	}
+	bool WebGpuDevice::StreamingUploadBlocked() const
+	{
+		return m_impl->streamingUploadBlocked;
+	}
+
+
+	void WebGpuDevice::PumpStreamingUploads()
+	{
+		auto& self = *m_impl;
+		self.streamingUploadBlocked = false;
+		if (State() != gpu::RenderState::Ready || self.uploadJobs.empty()) return;
+		std::uint64_t remaining = self.uploadJobs.front()->ledger->Limits().uploadBytesPerFrame;
+		while (remaining >= 4 && !self.uploadJobs.empty())
+		{
+			auto job = self.uploadJobs.front();
+			const auto& limits = job->ledger->Limits();
+			const auto stagingUsed = job->ledger->Bytes(streaming::MemoryClass::Staging);
+			if (stagingUsed >= limits.stagingBytes) break;
+			const std::size_t alignment = job->font ? 16 : 4;
+			if (remaining < alignment) break;
+			std::size_t amount = static_cast<std::size_t>(std::min(remaining, limits.stagingBytes - stagingUsed)) & ~(alignment - 1);
+			if (job->texture)
+			{
+				const auto& level = job->levels[job->level];
+				const auto rowBytes = std::size_t(level.width) * alignment;
+				if (job->cursor % rowBytes || amount < rowBytes) amount = std::min(amount, rowBytes - job->cursor % rowBytes);
+				else amount = std::min(amount / rowBytes, std::size_t(level.height) - job->cursor / rowBytes) * rowBytes;
+			}
+			else
+			{
+				const auto end = job->cursor < job->vertexBytes ? job->vertexBytes : job->payload.size();
+				amount = std::min(amount, end - job->cursor);
+			}
+			while (amount && !job->ledger->TryReserve(streaming::MemoryClass::Staging, amount))
+			{
+				amount = (amount / 2) & ~(alignment - 1);
+				if (job->texture)
+				{
+					const auto rowBytes = std::size_t(job->levels[job->level].width) * alignment;
+					if (amount >= rowBytes) amount = amount / rowBytes * rowBytes;
+				}
+			}
+			if (!amount) { self.streamingUploadBlocked = stagingUsed == 0; break; }
+			if (job->texture)
+			{
+				const auto& level = job->levels[job->level];
+				const auto rowBytes = std::size_t(level.width) * alignment;
+				WGPUTexelCopyTextureInfo destination = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+				destination.texture = job->font ? self.ui.FontTexture(job->slot) : self.textures[job->slot];
+				destination.mipLevel = job->level;
+				destination.origin = {static_cast<std::uint32_t>((job->cursor % rowBytes) / alignment), static_cast<std::uint32_t>(job->cursor / rowBytes), 0};
+				WGPUTexelCopyBufferLayout layout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
+				const auto rows = amount >= rowBytes && job->cursor % rowBytes == 0 ? amount / rowBytes : 1;
+				const auto row = rows > 1 ? rowBytes : amount;
+				layout.bytesPerRow = static_cast<std::uint32_t>(row);
+				layout.rowsPerImage = static_cast<std::uint32_t>(rows);
+				const WGPUExtent3D extent{static_cast<std::uint32_t>(row / alignment), static_cast<std::uint32_t>(rows), 1};
+				wgpuQueueWriteTexture(self.queue, &destination, job->payload.data() + level.offset + job->cursor, amount, &layout, &extent);
+				job->cursor += amount;
+				if (job->cursor == rowBytes * level.height) { job->cursor = 0; ++job->level; }
+			}
+			else
+			{
+				const bool indices = job->cursor >= job->vertexBytes;
+				self.meshes.WriteSlice(self.queue, job->slot, indices, indices ? job->cursor - job->vertexBytes : job->cursor, job->payload.data() + job->cursor, amount);
+				job->cursor += amount;
+			}
+			remaining -= amount;
+			const bool final = job->texture ? job->level == job->levelCount : job->cursor == job->payload.size();
+			if (final) self.uploadJobs.erase(self.uploadJobs.begin());
+			struct Completion { Impl* owner; std::shared_ptr<Impl::UploadJob> job; std::size_t bytes; bool final; };
+			++self.callbacks;
+			WGPUQueueWorkDoneCallbackInfo done = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
+			done.mode = WGPUCallbackMode_AllowSpontaneous;
+			done.userdata1 = new Completion{&self, job, amount, final};
+			done.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
+			{
+				auto* completion = static_cast<Completion*>(data);
+				auto& self = *completion->owner;
+				auto& job = *completion->job;
+				job.ledger->Release(streaming::MemoryClass::Staging, completion->bytes);
+				if (completion->final)
+				{
+					auto& charges = job.font ? self.fontCharges : job.texture ? self.textureCharges : self.meshCharges;
+					if (auto it = charges.find(job.slot); it != charges.end() && it->second.category == streaming::MemoryClass::GpuPending && status == WGPUQueueWorkDoneStatus_Success)
+					{
+						auto& charge = it->second;
+						if (charge.ledger->Transfer(charge.category, streaming::MemoryClass::GpuResident, charge.bytes)) charge.category = streaming::MemoryClass::GpuResident;
+					}
+					--self.pendingStreamingUploads;
+				}
+				delete completion;
+				--self.callbacks;
+				if (status != WGPUQueueWorkDoneStatus_Success) self.Fail("WEBGPU_UPLOAD", message);
+				self.Release();
+			};
+			wgpuQueueOnSubmittedWorkDone(self.queue, done);
+		}
+	}
+
+	void WebGpuDevice::CollectRetiredTextures(std::vector<std::uint32_t>& slots)
+	{
+		auto& completed = m_impl->completedTextureRetirements;
+		slots.insert(slots.end(), completed.begin(), completed.end());
+		completed.clear();
+	}
+
 	void WebGpuDevice::RetireMeshes(std::vector<std::uint32_t> slots)
 	{
 		if (slots.empty()) { return; }
 		auto& self = *m_impl;
+		self.CancelUploads(false, false, slots);
+		for (const auto slot: slots)
+			if (auto it = self.meshCharges.find(slot); it != self.meshCharges.end())
+			{
+				auto& charge = it->second;
+				if (charge.ledger->Transfer(charge.category, streaming::MemoryClass::GpuRetiring, charge.bytes))
+					charge.category = streaming::MemoryClass::GpuRetiring;
+			}
 		struct Retirement
 		{
 			Impl* owner;
@@ -548,7 +821,15 @@ namespace aether::webgpu
 		{
 			auto* retirement = static_cast<Retirement*>(data);
 			auto& self = *retirement->owner;
-			for (const auto slot: retirement->slots) { self.meshes.Release(slot); }
+			for (const auto slot: retirement->slots)
+			{
+				self.meshes.Release(slot);
+				if (auto it = self.meshCharges.find(slot); it != self.meshCharges.end())
+				{
+					it->second.ledger->Release(it->second.category, it->second.bytes);
+					self.meshCharges.erase(it);
+				}
+			}
 			self.completedMeshRetirements.insert(self.completedMeshRetirements.end(), retirement->slots.begin(), retirement->slots.end());
 			--self.pendingMeshRetirements;
 			--self.callbacks;
@@ -590,10 +871,83 @@ namespace aether::webgpu
 	{
 		return m_impl->customPasses.error;
 	}
-
-	bool WebGpuDevice::UploadUiFont(ui::FontAsset& font)
+	bool WebGpuDevice::UploadUiFont(ui::FontAsset& font, std::shared_ptr<streaming::BudgetLedger> budget)
 	{
-		return State() == gpu::RenderState::Ready && m_impl->ui.UploadFont(m_impl->device, m_impl->queue, font);
+		auto& self = *m_impl;
+		self.textureUploadError.clear();
+		if (State() != gpu::RenderState::Ready) return false;
+		if (!budget || font.curveBindlessSlot != 0xffffffffu) return self.ui.UploadFont(self.device, self.queue, font);
+		const auto bytes = font.texels.size() * sizeof(glm::vec4);
+		if (!bytes || !font.textureWidth || !font.textureHeight || font.texels.size() != std::uint64_t(font.textureWidth) * font.textureHeight)
+		{
+			self.textureUploadError = "Invalid UI font curve payload"; return false;
+		}
+		if (!budget->TryReserve(streaming::MemoryClass::GpuPending, bytes))
+		{
+			self.textureUploadError = "Streaming GPU budget exceeded"; return false;
+		}
+		if (!budget->TryReserve(streaming::MemoryClass::CpuPending, bytes))
+		{
+			budget->Release(streaming::MemoryClass::GpuPending, bytes);
+			self.textureUploadError = "Streaming CPU budget exceeded"; return false;
+		}
+		auto job = std::make_shared<Impl::UploadJob>();
+		job->payload.resize(bytes);
+		job->ledger = budget;
+		std::memcpy(job->payload.data(), font.texels.data(), bytes);
+		if (!self.ui.AllocateFont(self.device, font))
+		{
+			budget->Release(streaming::MemoryClass::GpuPending, bytes);
+			self.textureUploadError = "UI font curve allocation failed"; return false;
+		}
+		job->texture = true; job->font = true; job->slot = font.curveBindlessSlot;
+		job->levelCount = 1; job->levels[0] = {0, font.textureWidth, font.textureHeight};
+		self.fontCharges.emplace(job->slot, Impl::StreamingCharge{budget, bytes});
+		self.uploadJobs.push_back(std::move(job));
+		++self.pendingStreamingUploads;
+		return true;
+	}
+
+	bool WebGpuDevice::UiFontReady(std::uint32_t slot) const
+	{
+		const auto& self = *m_impl;
+		const auto it = self.fontCharges.find(slot);
+		return self.ui.FontTexture(slot) && (it == self.fontCharges.end() || it->second.category == streaming::MemoryClass::GpuResident);
+	}
+
+	void WebGpuDevice::RetireUiFont(ui::FontAsset& font)
+	{
+		auto& self = *m_impl;
+		const auto slot = font.curveBindlessSlot;
+		if (slot == 0xffffffffu) return;
+		auto it = self.fontCharges.find(slot);
+		if (it == self.fontCharges.end()) return;
+		font.curveBindlessSlot = 0xffffffffu;
+		const std::array<std::uint32_t, 1> slots{slot};
+		self.CancelUploads(true, true, slots);
+		auto& charge = it->second;
+		if (charge.ledger->Transfer(charge.category, streaming::MemoryClass::GpuRetiring, charge.bytes)) charge.category = streaming::MemoryClass::GpuRetiring;
+		struct Retirement { Impl* owner; std::uint32_t slot; };
+		++self.callbacks;
+		WGPUQueueWorkDoneCallbackInfo done = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
+		done.mode = WGPUCallbackMode_AllowSpontaneous;
+		done.userdata1 = new Retirement{&self, slot};
+		done.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
+		{
+			auto* retirement = static_cast<Retirement*>(data);
+			auto& self = *retirement->owner;
+			self.ui.ReleaseFont(retirement->slot);
+			if (auto it = self.fontCharges.find(retirement->slot); it != self.fontCharges.end())
+			{
+				it->second.ledger->Release(it->second.category, it->second.bytes);
+				self.fontCharges.erase(it);
+			}
+			delete retirement;
+			--self.callbacks;
+			if (status != WGPUQueueWorkDoneStatus_Success) self.Fail("WEBGPU_FONT_RETIRE", message);
+			self.Release();
+		};
+		wgpuQueueOnSubmittedWorkDone(self.queue, done);
 	}
 
 	bool WebGpuDevice::HasUiShader(std::string_view stem, bool effect, bool glyph) const
@@ -605,6 +959,7 @@ namespace aether::webgpu
 	{
 		return State() == gpu::RenderState::Ready && m_impl->ui.UploadShader(m_impl->device, stem, effect, glyph, wgsl);
 	}
+
 
 	bool WebGpuDevice::UploadShader(std::uint32_t slot, std::string_view wgsl)
 	{
@@ -626,9 +981,10 @@ namespace aether::webgpu
 		return m_impl->customPasses.UploadShader(m_impl->device, stem, wgsl);
 	}
 
-	bool WebGpuDevice::UploadTexture(unsigned slot, unsigned width, unsigned height, std::span<const std::uint8_t> rgba, bool srgb, bool mipmapped)
+	bool WebGpuDevice::UploadTexture(unsigned slot, unsigned width, unsigned height, std::span<const std::uint8_t> rgba, bool srgb, bool mipmapped, std::shared_ptr<streaming::BudgetLedger> streamBudget)
 	{
 		auto& self = *m_impl;
+		self.textureUploadError.clear();
 		if (State() != gpu::RenderState::Ready || slot > 255 || !width || !height || width > 4096 || height > 4096 || rgba.size() != std::uint64_t(width) * height * 4
 		        || self.textureBytes > 256 * 1024 * 1024)
 		{
@@ -640,6 +996,57 @@ namespace aether::webgpu
 		{
 			return false;
 		}
+		if (streamBudget)
+		{
+			if (mipmapped) { self.textureUploadError = "Streamed mipmapped texture requires prepared mips"; return false; }
+			if (!streamBudget->TryReserve(streaming::MemoryClass::GpuPending, plan->totalBytes))
+			{
+				self.textureUploadError = "Streaming GPU budget exceeded"; return false;
+			}
+			if (!streamBudget->TryReserve(streaming::MemoryClass::CpuPending, rgba.size()))
+			{
+				streamBudget->Release(streaming::MemoryClass::GpuPending, plan->totalBytes);
+				self.textureUploadError = "Streaming CPU budget exceeded"; return false;
+			}
+			auto job = std::make_shared<Impl::UploadJob>();
+			job->payload.resize(rgba.size());
+			job->ledger = streamBudget;
+			std::memcpy(job->payload.data(), rgba.data(), rgba.size());
+			job->texture = true; job->slot = slot; job->levelCount = 1;
+			job->levels[0] = {0, width, height};
+			WGPUTextureDescriptor descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
+			descriptor.dimension = WGPUTextureDimension_2D;
+			descriptor.size = {width, height, 1};
+			descriptor.mipLevelCount = 1;
+			descriptor.format = srgb ? WGPUTextureFormat_RGBA8UnormSrgb : WGPUTextureFormat_RGBA8Unorm;
+			descriptor.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
+			auto texture = wgpuDeviceCreateTexture(self.device, &descriptor);
+			if (!texture) { streamBudget->Release(streaming::MemoryClass::GpuPending, plan->totalBytes); return false; }
+			if (self.textures.size() <= slot) { self.textures.resize(slot + 1); self.textureSizes.resize(slot + 1); }
+			self.textures[slot] = texture; self.textureSizes[slot] = plan->totalBytes; self.textureBytes += plan->totalBytes;
+			self.textureCharges.emplace(slot, Impl::StreamingCharge{streamBudget, plan->totalBytes});
+			self.uploadJobs.push_back(std::move(job));
+			++self.pendingStreamingUploads;
+			return true;
+		}
+		struct Reservation
+		{
+			std::shared_ptr<streaming::BudgetLedger> ledger;
+			std::uint64_t bytes;
+			bool gpu = false, staging = false;
+			~Reservation()
+			{
+				if (gpu) ledger->Release(streaming::MemoryClass::GpuPending, bytes);
+				if (staging) ledger->Release(streaming::MemoryClass::Staging, bytes);
+			}
+		} reservation{streamBudget, plan->totalBytes};
+		if (streamBudget)
+		{
+			reservation.gpu = streamBudget->TryReserve(streaming::MemoryClass::GpuPending, plan->totalBytes);
+			if (!reservation.gpu) { self.textureUploadError = "Streaming GPU budget exceeded"; return false; }
+			reservation.staging = streamBudget->TryReserve(streaming::MemoryClass::Staging, plan->totalBytes);
+			if (!reservation.staging) { self.textureUploadError = "Streaming staging budget exceeded"; return false; }
+		}
 		const auto levels = BuildRgbaTextureMips(rgba, width, height, mipmapped, budget, srgb);
 		if (!levels)
 		{
@@ -648,6 +1055,7 @@ namespace aether::webgpu
 		if (self.textures.size() <= slot)
 		{
 			self.textures.resize(slot + 1);
+			self.textureSizes.resize(slot + 1);
 		}
 		if (self.textures[slot])
 		{
@@ -674,14 +1082,32 @@ namespace aether::webgpu
 			wgpuQueueWriteTexture(self.queue, &destination, level.pixels.data(), level.pixels.size(), &layout, &extent);
 		}
 		self.textures[slot] = texture;
+		self.textureSizes[slot] = plan->totalBytes;
 		self.textureBytes += plan->totalBytes;
+		if (streamBudget)
+		{
+			self.textureCharges.emplace(slot, Impl::StreamingCharge{streamBudget, plan->totalBytes});
+			reservation.gpu = false;
+		}
+		const bool streamingUpload = static_cast<bool>(streamBudget);
+		if (streamingUpload) ++self.pendingStreamingUploads;
+		struct UploadCompletion { Impl* owner; std::uint32_t slot; bool streaming; };
 		++self.callbacks;
 		WGPUQueueWorkDoneCallbackInfo uploaded = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
 		uploaded.mode = WGPUCallbackMode_AllowSpontaneous;
-		uploaded.userdata1 = &self;
+		uploaded.userdata1 = new UploadCompletion{&self, slot, streamingUpload};
 		uploaded.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
 		{
-			auto& self = *static_cast<Impl*>(data);
+			auto* completion = static_cast<UploadCompletion*>(data);
+			auto& self = *completion->owner;
+			if (auto it = self.textureCharges.find(completion->slot); it != self.textureCharges.end() && it->second.category == streaming::MemoryClass::GpuPending)
+			{
+				auto& charge = it->second;
+				if (charge.ledger->Transfer(charge.category, streaming::MemoryClass::GpuResident, charge.bytes))
+					charge.category = streaming::MemoryClass::GpuResident;
+			}
+			if (completion->streaming) --self.pendingStreamingUploads;
+			delete completion;
 			--self.callbacks;
 			if (status != WGPUQueueWorkDoneStatus_Success)
 			{
@@ -696,6 +1122,126 @@ namespace aether::webgpu
 		wgpuQueueOnSubmittedWorkDone(self.queue, uploaded);
 
 		return true;
+	}
+
+	bool WebGpuDevice::UploadPreparedTexture(std::uint32_t slot, std::span<const std::byte> data, bool srgb, std::shared_ptr<streaming::BudgetLedger> budget)
+	{
+		auto& self = *m_impl;
+		self.textureUploadError.clear();
+		auto invalid = [&]() { self.textureUploadError = "Invalid prepared browser texture"; return false; };
+		if (State() != gpu::RenderState::Ready || slot > 255 || data.size() < 20 || std::memcmp(data.data(), "AEMI", 4) != 0)
+			return invalid();
+		auto number = [&](std::size_t offset) { std::uint32_t value; std::memcpy(&value, data.data() + offset, 4); return value; };
+		const auto version = number(4), width = number(8), height = number(12), count = number(16);
+		if (version != 1 || !width || !height || width > 4096 || height > 4096 || !count || count > 13 ||
+		        (slot < self.textures.size() && self.textures[slot])) return invalid();
+		struct Level { std::uint32_t width, height; std::span<const std::byte> pixels; };
+		std::array<Level, 13> levels{};
+		std::size_t offset = 20;
+		std::uint64_t bytes = 0;
+		for (unsigned chain = 0; chain < 2; ++chain)
+		{
+			std::uint32_t w = width, h = height;
+			for (unsigned i = 0; i < count; ++i)
+			{
+				if (offset > data.size() || data.size() - offset < 12) return invalid();
+				const auto lw = number(offset), lh = number(offset + 4), size = number(offset + 8);
+				offset += 12;
+				if (lw != w || lh != h || size != std::uint64_t(w) * h * 4 || size > data.size() - offset || (w == 1 && h == 1 && i + 1 < count)) return invalid();
+				if (chain == static_cast<unsigned>(srgb)) { levels[i] = {w, h, data.subspan(offset, size)}; bytes += size; }
+				offset += size;
+				w = std::max(1u, w / 2); h = std::max(1u, h / 2);
+			}
+		}
+		if (offset != data.size() || self.textureBytes > 256ull * 1024 * 1024 || bytes > 256ull * 1024 * 1024 - self.textureBytes) return invalid();
+		if (budget && !budget->TryReserve(streaming::MemoryClass::GpuPending, bytes))
+		{
+			self.textureUploadError = "Streaming GPU budget exceeded";
+			return false;
+		}
+		std::shared_ptr<Impl::UploadJob> job;
+		if (budget)
+		{
+			if (!budget->TryReserve(streaming::MemoryClass::CpuPending, bytes))
+			{
+				budget->Release(streaming::MemoryClass::GpuPending, bytes);
+				self.textureUploadError = "Streaming CPU budget exceeded";
+				return false;
+			}
+			job = std::make_shared<Impl::UploadJob>();
+			job->payload.resize(bytes);
+			job->ledger = budget;
+			job->texture = true;
+			job->slot = slot;
+			job->levelCount = count;
+			std::size_t target = 0;
+			for (unsigned i = 0; i < count; ++i)
+			{
+				job->levels[i] = {target, levels[i].width, levels[i].height};
+				std::memcpy(job->payload.data() + target, levels[i].pixels.data(), levels[i].pixels.size());
+				target += levels[i].pixels.size();
+			}
+		}
+		WGPUTextureDescriptor descriptor = WGPU_TEXTURE_DESCRIPTOR_INIT;
+		descriptor.dimension = WGPUTextureDimension_2D;
+		descriptor.size = {width, height, 1};
+		descriptor.mipLevelCount = count;
+		descriptor.format = srgb ? WGPUTextureFormat_RGBA8UnormSrgb : WGPUTextureFormat_RGBA8Unorm;
+		descriptor.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
+		auto texture = wgpuDeviceCreateTexture(self.device, &descriptor);
+		if (!texture)
+		{
+			if (budget) budget->Release(streaming::MemoryClass::GpuPending, bytes);
+			return false;
+		}
+		if (self.textures.size() <= slot) { self.textures.resize(slot + 1); self.textureSizes.resize(slot + 1); }
+		if (job)
+		{
+			self.textures[slot] = texture; self.textureSizes[slot] = bytes; self.textureBytes += bytes;
+			self.textureCharges.emplace(slot, Impl::StreamingCharge{budget, bytes});
+			self.uploadJobs.push_back(std::move(job));
+			++self.pendingStreamingUploads;
+			return true;
+		}
+		for (unsigned i = 0; i < count; ++i)
+		{
+			WGPUTexelCopyTextureInfo destination = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+			destination.texture = texture; destination.mipLevel = i;
+			WGPUTexelCopyBufferLayout layout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
+			layout.bytesPerRow = levels[i].width * 4; layout.rowsPerImage = levels[i].height;
+			const WGPUExtent3D extent{levels[i].width, levels[i].height, 1};
+			wgpuQueueWriteTexture(self.queue, &destination, levels[i].pixels.data(), levels[i].pixels.size(), &layout, &extent);
+		}
+		self.textures[slot] = texture; self.textureSizes[slot] = bytes; self.textureBytes += bytes;
+		const bool streamingUpload = static_cast<bool>(budget);
+		if (budget) { self.textureCharges.emplace(slot, Impl::StreamingCharge{std::move(budget), bytes}); ++self.pendingStreamingUploads; }
+		struct Completion { Impl* owner; std::uint32_t slot; bool streaming; };
+		++self.callbacks;
+		WGPUQueueWorkDoneCallbackInfo done = WGPU_QUEUE_WORK_DONE_CALLBACK_INFO_INIT;
+		done.mode = WGPUCallbackMode_AllowSpontaneous;
+		done.userdata1 = new Completion{&self, slot, streamingUpload};
+		done.callback = [](WGPUQueueWorkDoneStatus status, WGPUStringView message, void* data, void*)
+		{
+			auto* completion = static_cast<Completion*>(data);
+			auto& self = *completion->owner;
+			if (auto it = self.textureCharges.find(completion->slot); it != self.textureCharges.end() && it->second.category == streaming::MemoryClass::GpuPending)
+			{
+				auto& charge = it->second;
+				if (charge.ledger->Transfer(charge.category, streaming::MemoryClass::GpuResident, charge.bytes)) charge.category = streaming::MemoryClass::GpuResident;
+			}
+			if (completion->streaming) --self.pendingStreamingUploads;
+			delete completion;
+			--self.callbacks;
+			if (status != WGPUQueueWorkDoneStatus_Success) self.Fail("WEBGPU_UPLOAD", message);
+			self.Release();
+		};
+		wgpuQueueOnSubmittedWorkDone(self.queue, done);
+		return true;
+	}
+
+	const std::string& WebGpuDevice::TextureUploadError() const
+	{
+		return m_impl->textureUploadError;
 	}
 
 	void WebGpuDevice::Resize(unsigned width, unsigned height)
@@ -1116,6 +1662,9 @@ namespace aether::webgpu
 
 	void WebGpuDevice::Stop()
 	{
+		for (auto& job: m_impl->uploadJobs) job->cancelled = true;
+		m_impl->pendingStreamingUploads -= static_cast<unsigned>(m_impl->uploadJobs.size());
+		m_impl->uploadJobs.clear();
 		m_impl->lifecycle.Stop();
 		m_impl->Release();
 	}

@@ -300,6 +300,7 @@ namespace aether::editor
 				        if (chrome::GhostIconButton(ICON_FA_ROTATE_LEFT, "##reset", ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight())))
 				        {
 					        field = defaultValue;
+					        if (key.starts_with("streaming.")) EngineSettingsIO::Sanitize(settingsService->Values());
 					        settingsService->ApplyField(key);
 					        settingsService->MarkDirty();
 				        }
@@ -317,6 +318,7 @@ namespace aether::editor
 			        ImGui::PopID();
 			        if (changed)
 			        {
+				        if (key.starts_with("streaming.")) EngineSettingsIO::Sanitize(settingsService->Values());
 				        settingsService->ApplyField(key);
 				        settingsService->MarkDirty();
 			        }

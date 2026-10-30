@@ -38,6 +38,14 @@ namespace aether
 		{
 			m_thread.join();
 		}
+		// Stop may leave unread packets in the closed channel. Release their
+		// streamed asset leases while the engine and asset registries still live.
+		while (auto packet = m_channel.try_read_for(std::chrono::milliseconds(0)))
+		{
+			m_engine->DeferGrassStreaming(*packet);
+			m_engine->DiscardPendingFrameQueues(*packet);
+			m_engine->RecycleUiOverlayFrameData(std::move(packet->uiOverlay));
+		}
 	}
 
 	void RenderThread::SubmitFrame(RenderFramePacket packet)
@@ -62,21 +70,7 @@ namespace aether
 
 	void RenderThread::WaitIdle()
 	{
-		{
-			const std::lock_guard lock(m_reloadMutex);
-			if (!m_shutdown)
-			{
-				m_shutdown = true;
-			}
-		}
-		m_reloadCv.notify_one();
-		m_completionCv.notify_all();
-		m_channel.close();
-
-		if (m_thread.joinable())
-		{
-			m_thread.join();
-		}
+		Stop();
 	}
 
 	void RenderThread::SetReloadInProgress(bool inProgress)

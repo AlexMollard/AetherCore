@@ -190,8 +190,13 @@ pub trait Script: Properties {
         Ok(())
     }
     fn event(&mut self, _ctx: &mut Context<'_>, _event: &Event) -> Result {
-        Err(Error(AE_GAMEPLAY_UNSUPPORTED, "event unsupported".into()))
+        Ok(())
     }
+    /// Capture script-owned UTF-8 state before a streamed region is detached.
+    /// Do not serialize runtime entity handles; they are invalid after re-entry.
+    fn capture_streaming_state(&mut self, _ctx: &mut Context<'_>) -> Result<String> { Ok(String::new()) }
+    /// Restore the state captured for this instance after its region is recreated.
+    fn restore_streaming_state(&mut self, _ctx: &mut Context<'_>, _state: &str) -> Result { Ok(()) }
 }
 /// A ray hit from [`Context::raycast_3d`].
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -219,6 +224,12 @@ pub enum PhysicsEventKind {
     /// The other entity is still overlapping this one.
     Overlapping,
 }
+/// Connection lifecycle reported by a network event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetworkEventKind {
+    Connected,
+    Disconnected,
+}
 #[derive(Debug)]
 pub struct Event {
     pub kind: u32,
@@ -228,6 +239,22 @@ pub struct Event {
     pub payload: String,
 }
 impl Event {
+    /// The new owner's connection ID and whether it is this peer, for ownership events.
+    pub fn ownership(&self) -> Option<(u32, bool)> {
+        (self.kind == AE_GAMEPLAY_EVENT_OWNERSHIP).then_some((self.code, self.flags & 1 != 0))
+    }
+    /// Returns the transport lifecycle event and its peer connection ID.
+    pub fn network_kind(&self) -> Option<(NetworkEventKind, u32)> {
+        if self.kind != AE_GAMEPLAY_EVENT_NETWORK {
+            return None;
+        }
+        let kind = match self.code {
+            0 => NetworkEventKind::Connected,
+            1 => NetworkEventKind::Disconnected,
+            _ => return None,
+        };
+        Some((kind, self.flags))
+    }
     /// The contact kind of a physics event; `None` for other event kinds or unknown codes.
     pub fn physics_kind(&self) -> Option<PhysicsEventKind> {
         if self.kind != AE_GAMEPLAY_EVENT_PHYSICS {
@@ -363,6 +390,34 @@ impl<'a> Context<'a> {
             self.invoke(op, entity, vector, integer, text, text2.as_bytes(), 65536)?;
         let text = String::from_utf8(bytes).map_err(|_| Error(1, "invalid UTF-8".into()))?;
         Ok((provider::decode_value(&out, &text)?, text))
+    }
+    /// Update a streaming source in world space.
+    pub fn streaming_set_source(&mut self, id: &str, position: Vec3, load_radius: f32, prefetch_radius: f32, priority: u32) -> Result<bool> {
+        let (value, _) = self.invoke(54, Entity::NONE, [position.x, position.y, position.z, load_radius], priority as i64, id, &prefetch_radius.to_le_bytes(), 0)?;
+        Ok(value.integer != 0)
+    }
+    pub fn streaming_remove_source(&mut self, id: &str) -> Result<bool> {
+        let (value, _) = self.service(55, Entity::NONE, [0.; 4], 0, id, "")?;
+        if let Value::Bool(value) = value { Ok(value) } else { Err(Error(1, "expected bool".into())) }
+    }
+    pub fn streaming_request(&mut self, region: &str, priority: u32, activate: bool) -> Result<u64> {
+        let (value, _) = self.service(56, Entity::NONE, [if activate { 1. } else { 0. }, 0., 0., 0.], priority as i64, region, "")?;
+        if let Value::Int(value) = value { Ok(value as u64) } else { Err(Error(1, "expected request id".into())) }
+    }
+    pub fn streaming_prefetch(&mut self, region: &str, priority: u32) -> Result<u64> { self.streaming_request(region, priority, false) }
+    pub fn streaming_load(&mut self, region: &str, priority: u32) -> Result<u64> { self.streaming_request(region, priority, true) }
+    pub fn streaming_cancel(&mut self, request: u64) -> Result<bool> { self.streaming_bool_request(57, request) }
+    pub fn streaming_release(&mut self, request: u64) -> Result<bool> { self.streaming_bool_request(58, request) }
+    fn streaming_bool_request(&mut self, op: u32, request: u64) -> Result<bool> {
+        let (value, _) = self.service(op, Entity::NONE, [0.; 4], request as i64, "", "")?;
+        if let Value::Bool(value) = value { Ok(value) } else { Err(Error(1, "expected bool".into())) }
+    }
+    pub fn streaming_state(&mut self, request: u64) -> Result<u32> {
+        let (value, _) = self.service(59, Entity::NONE, [0.; 4], request as i64, "", "")?;
+        if let Value::Int(value) = value { Ok(value as u32) } else { Err(Error(1, "expected state".into())) }
+    }
+    pub fn streaming_diagnostics(&mut self) -> Result<String> {
+        Ok(self.service(60, Entity::NONE, [0.; 4], 0, "", "")?.1)
     }
     pub fn key_down(&mut self, key: i64) -> Result<bool> {
         let (v, _) = self.service(1, Entity::NONE, [0.; 4], key, "", "")?;
@@ -529,23 +584,20 @@ impl<'a> Context<'a> {
         let mut out = provider::empty_value();
         let mut bytes = vec![0u8; capacity];
         let mut required = 0;
-        let code = unsafe {
-            api.invoke
-                .ok_or(Error(4, "services invoke unavailable".into()))?(
-                api.context,
-                &req,
-                &mut out,
-                AetherGameplayUtf8Buffer {
-                    data: if capacity == 0 {
-                        std::ptr::null_mut()
-                    } else {
-                        bytes.as_mut_ptr().cast()
-                    },
-                    capacity: capacity as u32,
+        let invoke = api.invoke.ok_or(Error(4, "services invoke unavailable".into()))?;
+        let mut code;
+        loop {
+            code = unsafe {
+                invoke(api.context, &req, &mut out, AetherGameplayUtf8Buffer {
+                    data: if bytes.is_empty() { std::ptr::null_mut() } else { bytes.as_mut_ptr().cast() },
+                    capacity: bytes.len() as u32,
                     required: &mut required,
-                },
-            )
-        };
+                })
+            };
+            // Diagnostics is read-only, so it alone can safely retry a growing result.
+            if op != 60 || code != AE_GAMEPLAY_BUFFER_TOO_SMALL || required as usize <= bytes.len() { break; }
+            bytes.resize(required as usize, 0);
+        }
         status(code)?;
         if required as usize > bytes.len() {
             return Err(Error(3, "service result exceeds buffer".into()));
@@ -703,6 +755,73 @@ impl<'a> Context<'a> {
     pub fn current_animation_clip(&mut self, e: Entity) -> Result<u32> {
         let (out, _) = self.invoke(30, e, [0.; 4], 0, "", &[], 0)?;
         u32::try_from(out.integer).map_err(|_| Error(1, "clip index out of range".into()))
+    }
+    fn net_bool(&mut self, op: u32, entity: Entity, vector: [f32; 4], integer: i64, text: &str) -> Result<bool> {
+        let (out, _) = self.invoke(op, entity, vector, integer, text, &[], 0)?;
+        match provider::decode_value(&out, "")? {
+            Value::Bool(value) => Ok(value),
+            _ => Err(Error(1, "expected bool".into())),
+        }
+    }
+    /// Start a host. The connection limit counts remote clients, not the host.
+    pub fn net_host(&mut self, port: u16, max_connections: u16) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_HOST, Entity::NONE, [f32::from(max_connections), 0., 0., 0.], i64::from(port), "")
+    }
+    pub fn net_connect(&mut self, address: &str, port: u16) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_CONNECT, Entity::NONE, [0.; 4], i64::from(port), address)
+    }
+    pub fn net_disconnect(&mut self) -> Result {
+        self.invoke(AE_GAMEPLAY_SERVICE_NET_DISCONNECT, Entity::NONE, [0.; 4], 0, "", &[], 0)?;
+        Ok(())
+    }
+    pub fn net_is_host(&mut self) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_IS_HOST, Entity::NONE, [0.; 4], 0, "")
+    }
+    pub fn net_is_client(&mut self) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_IS_CLIENT, Entity::NONE, [0.; 4], 0, "")
+    }
+    pub fn net_is_connected(&mut self) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_IS_CONNECTED, Entity::NONE, [0.; 4], 0, "")
+    }
+    pub fn net_local_connection_id(&mut self) -> Result<u32> {
+        let (out, _) = self.invoke(AE_GAMEPLAY_SERVICE_NET_LOCAL_ID, Entity::NONE, [0.; 4], 0, "", &[], 0)?;
+        u32::try_from(out.integer).map_err(|_| Error(1, "connection id out of range".into()))
+    }
+    pub fn net_spawn(&mut self, prefab: &str, position: Vec3, owner: u32) -> Result<Entity> {
+        let (out, _) = self.invoke(AE_GAMEPLAY_SERVICE_NET_SPAWN, Entity::NONE, [position.x, position.y, position.z, 0.], i64::from(owner), prefab, &[], 0)?;
+        match provider::decode_value(&out, "")? {
+            Value::Entity(entity) => Ok(entity),
+            _ => Err(Error(1, "expected entity".into())),
+        }
+    }
+    pub fn net_despawn(&mut self, entity: Entity) -> Result {
+        self.invoke(AE_GAMEPLAY_SERVICE_NET_DESPAWN, entity, [0.; 4], 0, "", &[], 0)?;
+        Ok(())
+    }
+    pub fn net_has_authority(&mut self, entity: Entity) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_HAS_AUTHORITY, entity, [0.; 4], 0, "")
+    }
+    pub fn net_is_owner(&mut self, entity: Entity) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_IS_OWNER, entity, [0.; 4], 0, "")
+    }
+    /// A true result on a client means the request was sent, not yet approved.
+    pub fn net_request_ownership(&mut self, entity: Entity) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_REQUEST_OWNERSHIP, entity, [0.; 4], 0, "")
+    }
+    /// A true result on a client means the request was sent, not yet approved.
+    pub fn net_release_ownership(&mut self, entity: Entity) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_RELEASE_OWNERSHIP, entity, [0.; 4], 0, "")
+    }
+    pub fn net_set_replication_ready(&mut self, ready: bool) -> Result {
+        self.invoke(AE_GAMEPLAY_SERVICE_NET_SET_REPLICATION_READY, Entity::NONE, [0.; 4], i64::from(ready), "", &[], 0)?;
+        Ok(())
+    }
+    pub fn net_is_replication_ready(&mut self) -> Result<bool> {
+        self.net_bool(AE_GAMEPLAY_SERVICE_NET_IS_REPLICATION_READY, Entity::NONE, [0.; 4], 0, "")
+    }
+    pub fn net_disconnect_reason(&mut self) -> Result<String> {
+        let (_, text) = self.service(AE_GAMEPLAY_SERVICE_NET_DISCONNECT_REASON, Entity::NONE, [0.; 4], 0, "", "")?;
+        Ok(text)
     }
     fn entity_service(&mut self, op: u32, text: &str) -> Result<Entity> {
         let (v, _) = self.service(op, Entity::NONE, [0.; 4], 0, text, "")?;

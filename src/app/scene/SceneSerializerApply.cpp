@@ -16,6 +16,7 @@
 #include "material/EffectManager.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "material/MaterialRegistry.hpp"
+#include "material/MaterialOverrides.hpp"
 #include "material/MaterialSystem.hpp"
 #include "material/TextureRegistry.hpp"
 #include "mesh/Mesh.hpp"
@@ -29,6 +30,9 @@
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
+#include "scene/SceneStreamingDependencies.hpp"
+#include "scene/SceneStreamingReferences.hpp"
+#include "scene/WorldStreaming.hpp"
 #include "scene/reflection/Reflection.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
@@ -68,6 +72,8 @@ namespace aether::app::scene
 
 		// Scenes whose [[includes]] are being applied right now (cycle guard).
 		thread_local std::vector<std::string> g_includeStack;
+		using PendingNodeRefs = std::unordered_map<std::uint32_t, std::vector<DeferredScriptNodeRef>>;
+		thread_local std::unordered_map<const SceneDescription*, PendingNodeRefs> g_streamingNodeRefs;
 
 		void ResolveDeferredScriptNodeRefs(World& world)
 		{
@@ -76,9 +82,8 @@ namespace aether::app::scene
 			{
 				return;
 			}
-			std::unordered_map<std::uint64_t, Entity> byNode;
-			world.View<SceneNodeComponent>().each([&](entt::entity handle, const SceneNodeComponent& node) { byNode.emplace(node.id, World::FromEntt(handle)); });
 			auto& reg = world.GetRegistry();
+			const StreamingNodeIndex nodes(world);
 			for (const auto& [entityId, refs]: pending)
 			{
 				const Entity e{entityId};
@@ -99,13 +104,29 @@ namespace aether::app::scene
 					{
 						continue;
 					}
-					if (const auto it = byNode.find(ref.nodeId); it != byNode.end())
+					const auto target = nodes.Resolve(ref.nodeId);
+					if (target && target->IsValid())
 					{
-						prop->second.i64 = it->second.id;
+						prop->second.i64 = target->id;
 					}
 					else
 					{
-						AE_WARN(LogCategory::App, "Scene load: script '{}' property '{}' references node {}, which nothing in the loaded scene carries; clearing the reference", entry.path, ref.property, ref.nodeId);
+						const auto* regions = reg.ctx().find<ActiveStreamingRegions>();
+						const auto* owner = world.TryGet<SceneNodeComponent>(e);
+						if (regions != nullptr && !regions->regions.empty() && owner != nullptr && owner->id != 0)
+						{
+							auto& streamingRefs = reg.ctx().contains<StreamingScriptNodeReferences>() ?
+								reg.ctx().get<StreamingScriptNodeReferences>() : reg.ctx().emplace<StreamingScriptNodeReferences>();
+							std::erase_if(streamingRefs.entries, [&](const auto& item)
+							{
+								return item.ownerNode == owner->id && item.scriptIndex == ref.scriptIndex && item.property == ref.property;
+							});
+							streamingRefs.entries.push_back({owner->id, ref.nodeId, ref.scriptIndex, entry.path, ref.property, 0});
+						}
+						else
+						{
+							AE_WARN(LogCategory::App, "Scene load: script '{}' property '{}' references missing node {}", entry.path, ref.property, ref.nodeId);
+						}
 						prop->second.i64 = 0;
 					}
 				}
@@ -381,10 +402,11 @@ namespace aether::app::scene
 
 		void ApplySceneIncludes(const SceneDescription& host, World& world, const ApplySceneDeps& deps);
 
-		std::vector<Entity> ApplySceneToEntitiesImpl(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity> created, bool registerSceneEntities, std::vector<Entity>* outExtraRoots)
+		void ApplySceneToEntitiesImpl(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity>& created, bool registerSceneEntities, std::vector<Entity>* outExtraRoots,
+		                              std::size_t begin, std::size_t end, bool regionBatch)
 		{
 			const auto applyStart = std::chrono::steady_clock::now();
-			if (deps.assetDatabase != nullptr)
+			if (!regionBatch && deps.assetDatabase != nullptr)
 			{
 				for (const AssetManifestEntry& a: scene.assetManifest)
 				{
@@ -397,7 +419,7 @@ namespace aether::app::scene
 				}
 			}
 
-			if (deps.renderer != nullptr && scene.environment)
+			if (!regionBatch && deps.renderer != nullptr && scene.environment)
 			{
 				const EnvironmentRecord& env = *scene.environment;
 				world.GetRegistry().ctx().insert_or_assign(AppliedEnvironment{env});
@@ -420,7 +442,7 @@ namespace aether::app::scene
 			// per-entity - one entity never simulates 2D and 3D physics at once.
 			SceneFeatureFlags impliedFeatures = SceneFeatureFlags::None;
 
-			for (std::size_t i = 0; i < scene.entities.size(); ++i)
+			for (std::size_t i = begin; i < end; ++i)
 			{
 				const EntityRecord& rec = scene.entities[i];
 				const Entity e = created[i];
@@ -464,7 +486,7 @@ namespace aether::app::scene
 				// reused entity keeps the id it already has: script refs and saves name it by that id.
 				if (rec.nodeId != 0)
 				{
-					world.EmplaceOrReplace<SceneNodeComponent>(e, SceneNodeComponent{rec.nodeId});
+					world.EmplaceOrReplace<SceneNodeComponent>(e, SceneNodeComponent{rec.nodeId, rec.sourceNodeId});
 				}
 				else if (!world.Has<SceneNodeComponent>(e))
 				{
@@ -542,6 +564,19 @@ namespace aether::app::scene
 				SceneApplyContext applyCtx{world, e, deps, created, rec, scene.kind, impliedFeatures, apply2DPhysics, apply3DPhysics, behaviorCount, effectCount};
 				RunApplySerdes(applyCtx);
 			}
+			if (regionBatch)
+			{
+				for (std::size_t i = begin; i < end; ++i)
+				{
+					const int parent = scene.entities[i].parentIndex;
+					if (parent >= 0 && static_cast<std::size_t>(parent) < created.size())
+						ecs::SetParent(world, created[i], created[static_cast<std::size_t>(parent)]);
+					if (deps.sceneContext != nullptr && registerSceneEntities)
+						deps.sceneContext->sceneEntities.push_back(created[i]);
+				}
+				world.SetSceneFeatures(world.GetSceneFeatures() | impliedFeatures);
+				return;
+			}
 
 			std::vector<Entity> migratedLights;
 			for (const LightRecord& light: scene.lights)
@@ -608,6 +643,16 @@ namespace aether::app::scene
 			// ninety "1 entities" lines, burying the one line saying how much of it actually loaded.
 			if (registerSceneEntities && g_prefabInstantiateDepth == 0)
 			{
+				if (g_includeStack.empty() && (deps.sceneContext == nullptr || !deps.sceneContext->streamedModelActivation))
+				{
+					world.GetRegistry().ctx().insert_or_assign(ActiveStreamingRegions{scene.streamingRegions});
+					if (deps.sceneContext != nullptr && deps.sceneContext->streaming != nullptr)
+					{
+						const auto configured = deps.sceneContext->streaming->Configure(scene.streamingRegions);
+						if (!configured)
+							AE_ERROR(LogCategory::App, "Streaming configuration failed: {}", configured.error().message);
+					}
+				}
 				// Includes are part of every scene-level apply (load, Play restore, scene undo), so
 				// they live here in the shared core rather than in each caller.
 				if (!scene.includes.empty())
@@ -626,15 +671,61 @@ namespace aether::app::scene
 			{
 				AE_VERBOSE(LogCategory::App, "Scene apply (nested): {} entities (format v{})", created.size() + migratedLights.size(), scene.version);
 			}
-			return created;
+		}
+
+		Expected<void> ApplyStreamingFields(const SceneDescription& scene, World& world, const std::vector<Entity>& entities)
+		{
+			StreamingNodeIndex index(world);
+			// Never expose authored node IDs as runtime entity handles if resolution fails.
+			const std::unordered_map<std::uint64_t, std::uint64_t> none;
+			for (std::size_t i = 0; i < scene.entities.size() && i < entities.size(); ++i)
+			{
+				for (const auto& generic: scene.entities[i].reflected)
+				{
+					const auto* type = reflect::FindComponentType(generic.type);
+					auto* component = type && type->tryGetRaw ? type->tryGetRaw(world, entities[i]) : nullptr;
+					if (!component) continue;
+					for (const auto& [name, saved]: generic.fields)
+					{
+						const auto* field = type->FindField(name);
+						if (!field || !field->set || (field->type != reflect::FieldType::EntityRef && field->type != reflect::FieldType::List)) continue;
+						auto value = saved;
+						bool found = false;
+						StreamingMapField(value, none, true, found);
+						if (found) field->set(component, value);
+					}
+				}
+			}
+			for (std::size_t i = 0; i < scene.entities.size() && i < entities.size(); ++i)
+			{
+				for (const auto& generic: scene.entities[i].reflected)
+				{
+					const auto* type = reflect::FindComponentType(generic.type);
+					auto* component = type && type->tryGetRaw ? type->tryGetRaw(world, entities[i]) : nullptr;
+					if (!component) continue;
+					for (const auto& [name, value]: generic.fields)
+					{
+						const auto* field = type->FindField(name);
+						if (!field || (field->type != reflect::FieldType::EntityRef && field->type != reflect::FieldType::List)) continue;
+						if (auto result = ApplyStreamingFieldReference(world, entities[i], *type, *field, component, value, index); !result) return result;
+					}
+				}
+			}
+			return {};
 		}
 
 		std::vector<Entity> ApplySceneToEntities(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity> created, bool registerSceneEntities, std::vector<Entity>* outExtraRoots)
 		{
 			++g_applyDepth;
-			std::vector<Entity> result = ApplySceneToEntitiesImpl(scene, world, deps, std::move(created), registerSceneEntities, outExtraRoots);
+			ApplySceneToEntitiesImpl(scene, world, deps, created, registerSceneEntities, outExtraRoots, 0, scene.entities.size(), false);
+			std::vector<Entity> result = std::move(created);
 			if (--g_applyDepth == 0)
 			{
+				if (!scene.streamingRegions.empty())
+				{
+					if (auto fields = ApplyStreamingFields(scene, world, result); !fields)
+						AE_ERROR(LogCategory::App, "Streaming reflected references failed: {}", fields.error().message);
+				}
 				ResolveDeferredScriptNodeRefs(world);
 			}
 			return result;
@@ -947,8 +1038,120 @@ namespace aether::app::scene
 		return ApplySceneToEntities(scene, world, deps, std::move(created), true);
 	}
 
+	Expected<void> ApplyStreamingRegionBatch(const SceneDescription& scene, World& world, const ApplySceneDeps& deps,
+	                                        std::vector<Entity>& entities, std::size_t begin, std::size_t end, bool finalBatch)
+	{
+		if (begin > end || end > scene.entities.size() || entities.size() != scene.entities.size() ||
+		    !scene.includes.empty() || !scene.prefabInstances.empty() || !scene.streamingRegions.empty() || !scene.lights.empty())
+			return std::unexpected(AetherError::Engine("Streaming region must be flattened before incremental activation"));
+		for (std::size_t i = begin; i < end; ++i)
+		{
+			const int parent = scene.entities[i].parentIndex;
+			if (!world.GetRegistry().valid(World::ToEntt(entities[i])) ||
+			    (parent >= 0 && (static_cast<std::size_t>(parent) >= entities.size() ||
+			     !world.GetRegistry().valid(World::ToEntt(entities[static_cast<std::size_t>(parent)])))))
+				return std::unexpected(AetherError::Engine("Streaming region entity is missing"));
+			const auto& record = scene.entities[i];
+			if (record.material)
+			{
+				if (deps.assets == nullptr)
+					return std::unexpected(AetherError::Engine("Streaming material requires an asset manager"));
+				auto& textures = deps.assets->GetTextureRegistry();
+				const auto& material = *record.material;
+				if (!material.assetPath.empty())
+				{
+					auto preset = deps.assets->TryLoadStreamedMaterialPreset(material.assetPath);
+					if (!preset)
+						return std::unexpected(AetherError::Engine("Streaming material preset is not resident"));
+					for (const TextureHandle handle : {preset->albedoTex, preset->normalTex, preset->metallicRoughnessTex, preset->occlusionTex, preset->emissiveTex})
+						if (handle.IsValid()) textures.Release(handle);
+				}
+				const auto check = [&](std::string_view field, const std::string& path, TextureColorSpace color) -> bool
+				{
+					if (path.empty() || (!material.assetPath.empty() && !IsMaterialFieldOverridden(material.overrides, field)))
+						return true;
+					const auto handle = textures.FindAndAcquire(path, color);
+					if (!handle.IsValid() || handle.index == TextureHandle::kBrokenIndex) return false;
+					textures.Release(handle);
+					return true;
+				};
+				if (!check("albedo", material.albedoPath, TextureColorSpace::Srgb) ||
+				    !check("normal", material.normalPath, TextureColorSpace::Linear) ||
+				    !check("metallic_roughness", material.metallicRoughnessPath, TextureColorSpace::Linear) ||
+				    !check("occlusion_tex", material.occlusionPath, TextureColorSpace::Linear) ||
+				    !check("emissive_tex", material.emissivePath, TextureColorSpace::Srgb))
+					return std::unexpected(AetherError::Engine("Streaming material texture is not resident"));
+			}
+		}
+		struct ModelActivationScope
+		{
+			scripting::SceneContext* context;
+			bool previous;
+			explicit ModelActivationScope(scripting::SceneContext* value)
+			    : context(value), previous(value != nullptr && value->streamedModelActivation)
+			{
+				if (context != nullptr) context->streamedModelActivation = true;
+			}
+			~ModelActivationScope() { if (context != nullptr) context->streamedModelActivation = previous; }
+		} scope(deps.sceneContext);
+		auto& regionRefs = g_streamingNodeRefs[&scene];
+		struct DeferredRefsScope
+		{
+			PendingNodeRefs& region;
+			explicit DeferredRefsScope(PendingNodeRefs& refs) : region(refs) { DeferredScriptNodeRefs().swap(region); }
+			~DeferredRefsScope() { DeferredScriptNodeRefs().swap(region); }
+		};
+		{
+			DeferredRefsScope refs(regionRefs);
+			ApplySceneToEntitiesImpl(scene, world, deps, entities, true, nullptr, begin, end, true);
+			if (finalBatch) ResolveDeferredScriptNodeRefs(world);
+		}
+		if (finalBatch)
+		{
+			if (auto fields = ApplyStreamingFields(scene, world, entities); !fields) return fields;
+		}
+		if (finalBatch) g_streamingNodeRefs.erase(&scene);
+		return {};
+	}
+
+	void CancelStreamingRegionBatch(const SceneDescription& scene)
+	{
+		g_streamingNodeRefs.erase(&scene);
+	}
+
+	void AdoptStreamingSpawn(World& world, scripting::SceneContext& context, Entity root)
+	{
+		auto& registry = world.GetRegistry();
+		if (!registry.valid(World::ToEntt(root)) || !registry.valid(World::ToEntt(context.activeScriptEntity)))
+			return;
+		const auto* owner = world.TryGet<StreamingRegionOwner>(context.activeScriptEntity);
+		if (owner == nullptr) return;
+		const std::string region = owner->region;
+		std::vector<Entity> pending{root};
+		std::unordered_set<std::uint32_t> visited;
+		while (!pending.empty())
+		{
+			const Entity entity = pending.back();
+			pending.pop_back();
+			if (!registry.valid(World::ToEntt(entity)) || !visited.insert(entity.id).second) continue;
+			if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity))
+				pending.insert(pending.end(), hierarchy->children.begin(), hierarchy->children.end());
+			world.EmplaceOrReplace<StreamingRegionOwner>(entity, StreamingRegionOwner{region});
+			world.EmplaceOrReplace<IncludedFromComponent>(entity, IncludedFromComponent{region});
+			if (!world.Has<SceneNodeComponent>(entity))
+				world.Emplace<SceneNodeComponent>(entity, SceneNodeComponent{GenerateSceneNodeId()});
+			if (std::find(context.sceneEntities.begin(), context.sceneEntities.end(), entity) == context.sceneEntities.end())
+				context.sceneEntities.push_back(entity);
+		}
+		world.EmplaceOrReplace<SceneTransientComponent>(root);
+	}
+
 	std::vector<Entity> RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
+		if (deps.sceneContext != nullptr && deps.sceneContext->streaming != nullptr)
+			deps.sceneContext->streaming->ResetWorld();
+		world.GetRegistry().ctx().erase<StreamingScriptNodeReferences>();
+		world.GetRegistry().ctx().erase<StreamingFieldReferenceState>();
 		world.SetSceneKind(scene.kind);
 		world.SetSceneFeatures(scene.features);
 		// Whole-world restore: the snapshot's include list (re-applied by the core) replaces the old one.
@@ -1073,6 +1276,9 @@ namespace aether::app::scene
 
 	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, SceneLoadMode mode)
 	{
+		if (deps.sceneContext != nullptr && deps.sceneContext->streaming != nullptr)
+			deps.sceneContext->streaming->ResetWorld();
+		world.GetRegistry().ctx().erase<StreamingScriptNodeReferences>();
 		world.SetSceneKind(scene.kind);
 		world.SetSceneFeatures(scene.features);
 		// A new scene: its own include list (set by the apply core, if any) replaces the old one.

@@ -1551,3 +1551,31 @@ TEST_CASE("FindRemoteBuffer exposes a remote entity's interpolation buffer by ne
 	// after other entities have populated the map.
 	CHECK(client.receive.FindRemoteBuffer(99) == nullptr);
 }
+
+TEST_CASE("Application RTT correlates peer and nonce and clears on disconnect")
+{
+	using namespace aether::net;
+	using namespace std::chrono_literals;
+	Endpoint host;
+	host.BecomeHost();
+	host.context.Session().AddConnection(kPeer);
+	const auto start = NetworkContext::LatencyClock::time_point{} + 10s;
+	host.context.TickLatency(start);
+	ByteWriter first;
+	first.U32(1);
+	ByteWriter wrong;
+	wrong.U32(2);
+	host.context.HandleLatency(kPeer, NetMessage::Pong, wrong.View(), start + 20ms);
+	host.context.HandleLatency(kPeer + 1, NetMessage::Pong, first.View(), start + 20ms);
+	host.context.HandleLatency(kPeer, NetMessage::Pong, first.View().first(3), start + 20ms);
+	CHECK(host.context.RoundTripMs(kPeer) == 0);
+	host.context.HandleLatency(kPeer, NetMessage::Pong, first.View(), start + 37ms);
+	CHECK(host.context.RoundTripMs(kPeer) == 37);
+	host.context.HandleLatency(kPeer, NetMessage::Pong, first.View(), start + 100ms);
+	CHECK(host.context.RoundTripMs(kPeer) == 37);
+	host.context.TickLatency(start + 1s);
+	host.context.HandleLatency(kPeer, NetMessage::Pong, first.View(), start + 1100ms);
+	CHECK(host.context.RoundTripMs(kPeer) == 37);
+	host.context.ForgetLatency(kPeer);
+	CHECK(host.context.RoundTripMs(kPeer) == 0);
+}

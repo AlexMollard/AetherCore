@@ -61,6 +61,21 @@ TEST_CASE("Gameplay callback and structural mutation scopes reject reentrancy")
 		CHECK(nested.Status() == AE_GAMEPLAY_REENTRANT);
 		GameplayAccess::Scope mutation(access, GameplayAccess::ScopeKind::StructuralMutation);
 		CHECK(mutation.Status() == AE_GAMEPLAY_REENTRANT);
+		GameplayAccess::Scope predicted(access, GameplayAccess::ScopeKind::PredictedAttachCallback);
+		CHECK(predicted.Status() == AE_GAMEPLAY_REENTRANT);
+#if defined(__EMSCRIPTEN__)
+		{
+			GameplayAccess::PredictedAttachScope permission(access);
+			GameplayAccess::Scope create(access, GameplayAccess::ScopeKind::PredictedAttachCallback);
+			CHECK(create.Status() == AE_GAMEPLAY_OK);
+			GameplayAccess::Scope update(access, GameplayAccess::ScopeKind::Callback);
+			CHECK(update.Status() == AE_GAMEPLAY_REENTRANT);
+			GameplayAccess::Scope structural(access, GameplayAccess::ScopeKind::StructuralMutation);
+			CHECK(structural.Status() == AE_GAMEPLAY_REENTRANT);
+		}
+		GameplayAccess::Scope after(access, GameplayAccess::ScopeKind::PredictedAttachCallback);
+		CHECK(after.Status() == AE_GAMEPLAY_REENTRANT);
+#endif
 	}
 	GameplayAccess::Scope mutation(access, GameplayAccess::ScopeKind::StructuralMutation);
 	CHECK(mutation.Status() == AE_GAMEPLAY_OK);

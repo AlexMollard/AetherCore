@@ -23,7 +23,7 @@ namespace
 } // namespace
 
 AE_COMPONENT(AudioSourceComponent, "Audio Source", "Audio", ICON_FA_VOLUME_HIGH)
-AE_FIELD_T(clipPath, String, "VFS path to the clip (project:// or engine://). WAV, MP3, FLAC or Ogg. Empty = silent.")
+AE_FIELD_T(clipPath, String, "VFS path to the clip (project:// or engine://). WAV, MP3 or FLAC. Empty = silent.")
 AE_FIELD_RT(volume, Float, 0.0f, 1.0f, "Voice volume, on top of the bus and master volumes.")
 AE_FIELD_RT(pitch, Float, 0.1f, 4.0f, "Playback rate. 1 is normal.")
 AE_FIELD_T(loop, Bool, "Restart from the beginning when the clip ends.")

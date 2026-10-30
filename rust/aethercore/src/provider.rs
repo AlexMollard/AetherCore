@@ -195,7 +195,7 @@ impl Runtime {
             return Err(Error(2, "short engine API".into()));
         }
         let engine = unsafe { *engine };
-        if engine.abiMajor != 1 || engine.structSize < size_of::<AetherGameplayEngineApi>() as u32 {
+        if engine.abiMajor != AE_GAMEPLAY_ABI_MAJOR || engine.structSize < size_of::<AetherGameplayEngineApi>() as u32 {
             return Err(Error(2, "engine ABI mismatch".into()));
         }
         if engine.entityValid.is_none()
@@ -338,6 +338,27 @@ impl Runtime {
         drop(instance);
         Ok(())
     }
+    pub unsafe fn capture_streaming_state(&mut self, id: u64, buffer: AetherGameplayUtf8Buffer) -> Result {
+        self.initialized()?;
+        let instance = self.instances.get_mut(&id).ok_or(Error(5, "instance handle".into()))?;
+        if instance.failed || !instance.attached { return Err(Error(9, "instance is not active".into())); }
+        let mut ctx = unsafe { Context::from_raw(self.engine.as_ref().unwrap(), self.services.as_ref(), instance.entity) };
+        ctx.validate(instance.entity)?;
+        let state = catch_unwind(AssertUnwindSafe(|| instance.script.capture_streaming_state(&mut ctx)))
+            .unwrap_or_else(|_| Err(Error(9, "Rust script panic during streaming capture".into())))?;
+        let mut value = empty_value();
+        unsafe { write_value(Value::String(state), &mut value, buffer) }
+    }
+    pub unsafe fn restore_streaming_state(&mut self, id: u64, state: AetherGameplayUtf8) -> Result {
+        self.initialized()?;
+        let state = unsafe { read_utf8(state) }?;
+        let instance = self.instances.get_mut(&id).ok_or(Error(5, "instance handle".into()))?;
+        if instance.failed || !instance.attached { return Err(Error(9, "instance is not active".into())); }
+        let mut ctx = unsafe { Context::from_raw(self.engine.as_ref().unwrap(), self.services.as_ref(), instance.entity) };
+        ctx.validate(instance.entity)?;
+        catch_unwind(AssertUnwindSafe(|| instance.script.restore_streaming_state(&mut ctx, state)))
+            .unwrap_or_else(|_| Err(Error(9, "Rust script panic during streaming restore".into())))
+    }
     fn invoke(&mut self, id: u64, operation: u32, delta: f32, event: Option<Event>) -> Result {
         self.initialized()?;
         let i = self
@@ -406,7 +427,7 @@ impl Runtime {
         if event.structSize < size_of::<AetherGameplayEvent>() as u32 {
             return Err(Error(2, "short event".into()));
         }
-        if event.kind != AE_GAMEPLAY_EVENT_PHYSICS {
+        if event.kind != AE_GAMEPLAY_EVENT_PHYSICS && event.kind != AE_GAMEPLAY_EVENT_NETWORK && event.kind != AE_GAMEPLAY_EVENT_OWNERSHIP {
             return Err(Error(4, "event unsupported".into()));
         }
         self.invoke(
@@ -523,13 +544,15 @@ macro_rules! export_gameplay {
             unsafe extern "C" fn set(c:u64,i:u64,p:u32,v:*const AetherGameplayPropertyValue,s:AetherGameplayUtf8)->i32{call(c,|r|unsafe{r.set_property(i,p,v,s)})}
             unsafe extern "C" fn defaults(c:u64,t:u32,p:u32,o:*mut AetherGameplayPropertyValue,b:AetherGameplayUtf8Buffer)->i32{call(c,|r|unsafe{r.default_property(t,p,o,b)})}
             unsafe extern "C" fn event(c:u64,i:u64,e:*const AetherGameplayEvent)->i32{call(c,|r|unsafe{r.event(i,e)})}
+            unsafe extern "C" fn capture(c:u64,i:u64,b:AetherGameplayUtf8Buffer)->i32{call(c,|r|unsafe{r.capture_streaming_state(i,b)})}
+            unsafe extern "C" fn restore(c:u64,i:u64,s:AetherGameplayUtf8)->i32{call(c,|r|unsafe{r.restore_streaming_state(i,s)})}
             #[unsafe(no_mangle)]
             pub unsafe extern "C" fn aether_gameplay_bind_services(major:u32,size:u32,api:*const AetherGameplayServicesApi)->i32{call(1,|r|unsafe{r.bind_services(major,size,api)})}
             #[unsafe(no_mangle)]
             pub unsafe extern "C" fn aether_gameplay_query(major:u32,size:u32,out:*mut AetherGameplayModuleApi)->i32{boundary(||{
                 if out.is_null(){return Err(Error(1,"null module output".into()))}
-                if major!=1 || size<std::mem::size_of::<AetherGameplayModuleApi>() as u32{return Err(Error(2,"module ABI mismatch".into()))}
-                unsafe{*out=AetherGameplayModuleApi{structSize:std::mem::size_of::<AetherGameplayModuleApi>() as u32,abiMajor:1,capabilities:AE_GAMEPLAY_CAP_PHYSICS,context:1,initialize:Some(initialize),shutdown:Some(shutdown),getTypeCount:Some(count),getTypeInfo:Some(info),getPropertyInfo:Some(prop_info),create:Some(create),destroy:Some(destroy),attach:Some(attach),update:Some(update),detach:Some(detach),getProperty:Some(get),setProperty:Some(set),getDefaultProperty:Some(defaults),dispatchEvent:Some(event)}};Ok(())
+                if major!=AE_GAMEPLAY_ABI_MAJOR || size<std::mem::size_of::<AetherGameplayModuleApi>() as u32{return Err(Error(2,"module ABI mismatch; rebuild scripts with the current SDK".into()))}
+                unsafe{*out=AetherGameplayModuleApi{structSize:std::mem::size_of::<AetherGameplayModuleApi>() as u32,abiMajor:AE_GAMEPLAY_ABI_MAJOR,capabilities:AE_GAMEPLAY_CAP_PHYSICS | AE_GAMEPLAY_CAP_NETWORK | AE_GAMEPLAY_CAP_OWNERSHIP,context:1,initialize:Some(initialize),shutdown:Some(shutdown),getTypeCount:Some(count),getTypeInfo:Some(info),getPropertyInfo:Some(prop_info),create:Some(create),destroy:Some(destroy),attach:Some(attach),update:Some(update),detach:Some(detach),getProperty:Some(get),setProperty:Some(set),getDefaultProperty:Some(defaults),dispatchEvent:Some(event),captureStreamingState:Some(capture),restoreStreamingState:Some(restore)}};Ok(())
             })}
         }
     };

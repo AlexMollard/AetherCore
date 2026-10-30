@@ -161,6 +161,10 @@ namespace aether
 
 		void DrainAll();
 
+		void DeferDestructionCallback(std::function<void()> callback);
+		[[nodiscard]] gpu::DeviceSize GetTextureAllocationRequirement(const gpu::TextureDesc& desc) const noexcept;
+		[[nodiscard]] gpu::DeviceSize GetMappedBufferAllocationRequirement(const gpu::MappedBufferDesc& desc) const noexcept;
+
 		void Init(VkDevice device, VmaAllocator allocator) noexcept;
 
 		// Queue families that access buffers (graphics/compute/transfer). When more than

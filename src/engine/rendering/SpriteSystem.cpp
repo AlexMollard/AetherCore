@@ -64,10 +64,10 @@ namespace aether
 	{
 		if (m_textures != nullptr)
 		{
-			for (const auto& [path, handle]: m_textureCache)
+			for (const auto& [path, cached]: m_textureCache)
 			{
 				(void) path;
-				m_textures->Release(handle);
+				m_textures->Release(cached.handle);
 			}
 		}
 		m_textureCache.clear();
@@ -86,16 +86,18 @@ namespace aether
 		}
 		if (const auto it = m_textureCache.find(path); it != m_textureCache.end())
 		{
-			return it->second;
+			it->second.lastUsed = m_extractCount;
+			return it->second.handle;
 		}
 		const TextureHandle handle = m_textures->Acquire(path);
-		m_textureCache.emplace(path, handle);
+		m_textureCache.emplace(path, CachedTexture{handle, m_extractCount});
 		return handle;
 	}
 
 	void SpriteSystem::Extract(World& world, Render2DFrameData& output)
 	{
 		AE_PROFILE_ZONE();
+		++m_extractCount;
 		output.sprites.clear();
 		auto view = world.GetRegistry().view<const TransformComponent, const SpriteRendererComponent>(entt::exclude<DisabledComponent>);
 		output.sprites.reserve(view.size_hint());
@@ -182,6 +184,12 @@ namespace aether
 			        .flags = flags,
 			        .blendMode = static_cast<std::uint32_t>(sprite.blendMode),
 			});
+		}
+		for (auto it = m_textureCache.begin(); it != m_textureCache.end(); )
+		{
+			if (it->second.lastUsed == m_extractCount) { ++it; continue; }
+			if (m_textures) m_textures->Release(it->second.handle);
+			it = m_textureCache.erase(it);
 		}
 
 	}

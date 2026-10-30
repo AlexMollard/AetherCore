@@ -157,6 +157,11 @@ namespace aether::io
 
 	Expected<std::vector<std::byte>> PakBackend::Read(std::string_view relativePath) const
 	{
+		return ReadReserved(relativePath, [](std::size_t) { return true; });
+	}
+
+	Expected<std::vector<std::byte>> PakBackend::ReadReserved(std::string_view relativePath, const std::function<bool(std::size_t)>& reserve) const
+	{
 		std::string bestMatch;
 		const auto it = FindInsensitive(relativePath, &bestMatch);
 		if (it == m_index.end())
@@ -196,6 +201,8 @@ namespace aether::io
 
 		pak.seekg(static_cast<std::streamoff>(m_assetDataBase + info.offset));
 
+		if (info.size > std::numeric_limits<std::size_t>::max() || !reserve || !reserve(static_cast<std::size_t>(info.size)))
+			AE_UNEXPECTED(AetherError::FileSystem("Pak read reservation rejected: " + std::string(relativePath)));
 		std::vector<std::byte> onDisk(static_cast<std::size_t>(info.size));
 		pak.read(reinterpret_cast<char*>(onDisk.data()), static_cast<std::streamsize>(info.size));
 
@@ -231,6 +238,8 @@ namespace aether::io
 		{
 			AE_UNEXPECTED(AetherError::FileSystem("implausible decompressed size for asset: " + std::string(relativePath)));
 		}
+		if (decompSize > std::numeric_limits<std::size_t>::max() || !reserve(static_cast<std::size_t>(decompSize)))
+			AE_UNEXPECTED(AetherError::FileSystem("Pak decompression reservation rejected: " + std::string(relativePath)));
 
 		std::vector<std::byte> result(static_cast<std::size_t>(decompSize));
 		const std::size_t written = ZSTD_decompress(result.data(), result.size(), onDisk.data(), onDisk.size());

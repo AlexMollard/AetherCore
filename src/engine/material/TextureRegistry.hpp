@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -33,6 +34,32 @@ namespace aether
 		// sampler decodes sRGB on every fetch.
 		[[nodiscard]] TextureHandle Acquire(std::string_view path, TextureColorSpace colorSpace = TextureColorSpace::Srgb);
 
+		// Acquire an already resident path without performing any IO or decoding.
+		[[nodiscard]] TextureHandle FindAndAcquire(std::string_view path, TextureColorSpace colorSpace = TextureColorSpace::Srgb);
+		// Retain the canonical owner of an extracted bindless slot, if any.
+		[[nodiscard]] TextureHandle FindAndAcquireSlot(std::uint32_t slot);
+
+		// Publish an already uploaded resource under the same identity as Acquire.
+		// The returned handle owns one reference; a duplicate resource is discarded.
+		// Begin-retire runs when this resource leaves the registry (or is discarded);
+		// onTextureRetired runs after its deferred physical destruction. Callbacks
+		// belong to the supplied resource, never to an existing shared entry.
+		[[nodiscard]] TextureHandle PublishPrepared(std::string_view path, TextureColorSpace colorSpace, TextureResource texture, std::function<void()> onTextureRetired = {}, std::function<void()> onTextureBeginRetire = {});
+		static void RetirePrepared(TextureResource texture, std::function<void()> onTextureRetired, std::function<void()> onTextureBeginRetire = {});
+
+#if !defined(AETHERCORE_WEB_RUNTIME)
+		[[nodiscard]] Expected<PreparedTextureUploadSizes> GetPreparedUploadSizes(const Texture::Prepared& prepared, TextureColorSpace colorSpace) const;
+		[[nodiscard]] Expected<PreparedTextureUpload> BeginPreparedUpload(const Texture::Prepared& prepared, std::string_view path, TextureColorSpace colorSpace, std::function<void()> onStagingRetired = {}, std::function<void()> onGpuFailureRetired = {});
+		[[nodiscard]] bool IsPreparedUploadComplete(const PreparedTextureUpload& upload) const;
+		void WaitPreparedUpload(const PreparedTextureUpload& upload);
+		[[nodiscard]] Expected<std::uint64_t> GetPreparedUploadBytes(const Texture::Prepared& prepared, TextureColorSpace colorSpace) const;
+		[[nodiscard]] Expected<Texture::ChunkedUpload> BeginChunkedUpload(const Texture::Prepared& prepared, std::string_view path, TextureColorSpace colorSpace, std::function<void()> onGpuFailureRetired, std::function<void()> onGpuFailureBeginRetire = {});
+		[[nodiscard]] Expected<std::uint64_t> PumpChunkedUpload(Texture::ChunkedUpload& state, std::uint64_t maxBytes, const std::function<bool(std::uint64_t)>& reserveStaging, const std::function<void(std::uint64_t)>& retireStaging);
+		[[nodiscard]] bool IsChunkedUploadComplete(const Texture::ChunkedUpload& state) const;
+		[[nodiscard]] bool IsChunkedUploadIdle(const Texture::ChunkedUpload& state) const;
+		void WaitChunkedUpload(const Texture::ChunkedUpload& state);
+#endif
+
 		void AddRef(TextureHandle handle);
 
 		void Release(TextureHandle handle);
@@ -42,6 +69,8 @@ namespace aether
 		[[nodiscard]] std::uint32_t ResolveSlot(TextureHandle handle) const;
 
 		bool TryGetPath(TextureHandle handle, std::string& outPath) const;
+		// Logical UTF-8 byte count, excluding the terminator; same validity rules as TryGetPath.
+		bool TryGetPathSize(TextureHandle handle, std::size_t& outBytes) const;
 
 		// Retarget live path-backed entries without invalidating texture handles.
 		void RetargetPaths(std::string_view oldVfs, std::string_view newVfs);
@@ -65,10 +94,15 @@ namespace aether
 			std::uint64_t hash = 0;
 			TextureColorSpace colorSpace = TextureColorSpace::Srgb;
 			TextureResource texture;
+			std::function<void()> onTextureBeginRetire;
+			std::function<void()> onTextureRetired;
 			std::uint32_t refcount = 0;
 			std::uint32_t generation = 0;
 			bool alive = false;
 		};
+
+		[[nodiscard]] TextureHandle FindLocked(const std::string& resolved, const std::string& reference, TextureColorSpace colorSpace, std::uint64_t hash);
+		[[nodiscard]] TextureHandle InsertLocked(std::string resolved, std::string reference, TextureColorSpace colorSpace, std::uint64_t hash, TextureResource&& texture);
 
 		ITextureSlotSink& m_sink;
 		mutable std::mutex m_mutex;

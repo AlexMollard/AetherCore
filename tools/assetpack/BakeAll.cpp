@@ -106,14 +106,15 @@ namespace aether::assetpipeline
 				continue;
 			}
 			const auto processed = MeshProcessor::Process(std::span<const std::byte>(raw.data(), raw.size()), modelPath, relStr, projectRoot);
+			if (!processed.error.empty())
+			{
+				result.failures.push_back(relStr + ": " + processed.error);
+				++result.failed;
+				continue;
+			}
 			if (processed.meshData.empty())
 			{
-				// Ambiguous by design (see MeshProcessor::Process): a legitimately
-				// meshless source (an animation-only glTF) and a corrupt one both land
-				// here with no way to tell them apart. Non-fatal - failing the whole
-				// batch over an asset that was never going to contribute a mesh would be
-				// wrong; a genuinely broken file still surfaces later as the runtime's
-				// missing-mesh error.
+				// Animation-only glTFs legitimately have no mesh geometry.
 				result.skippedModels.push_back(relStr + ": no mesh geometry produced");
 				++result.skipped;
 				continue;

@@ -6,13 +6,18 @@
 #include <string>
 #include <string_view>
 
+#ifndef __EMSCRIPTEN__
 #include "net/NatRendezvous.hpp"
-#include "net/NetworkSubsystem.hpp"
 #include "net/PortMapping.hpp"
 #include "net/Signaling.hpp"
+#endif
+#include "net/NetworkSubsystem.hpp"
 
 namespace aether::net
 {
+#ifdef __EMSCRIPTEN__
+	class ISignalingChannel;
+#endif
 	// Where a punch attempt currently stands, in the order the ladder tries them. A
 	// UI renders this directly - see NetworkContext::GetTraversalState - so these
 	// names are the whole vocabulary a status line has to work with.
@@ -150,16 +155,19 @@ namespace aether::net
 
 	private:
 		void ResetForNewAttempt();
+#ifndef __EMSCRIPTEN__
 		[[nodiscard]] bool EnsureSignalingChannel(const std::string& roomCode);
 		void BeginSignalingAndPunch(std::optional<NatTraversal::Endpoint> mappedEndpoint = std::nullopt);
 		void TickMapping(float deltaSeconds);
 		void TickRendezvous(float deltaSeconds);
 		void TickRelay(float deltaSeconds);
 		void TickConnecting(float deltaSeconds);
+#endif
 		void Fail(std::string reason);
 
 		NetworkSubsystem& m_transport;
 
+#ifndef __EMSCRIPTEN__
 		PortMapping m_portMapping;
 		float m_mappingElapsed = 0.0f;
 
@@ -172,17 +180,24 @@ namespace aether::net
 		std::string m_turnPassword;
 		bool m_allowRelay = false;
 
+#endif
 		SignalingBackend m_backend = SignalingBackend::LanBroadcast;
 		// Whether a caller stated a backend explicitly, which SetRendezvousDefault
 		// must not overwrite. See its comment for the precedence order.
 		bool m_signalingChosen = false;
 		std::string m_signalingAddress;
+#ifndef __EMSCRIPTEN__
 		bool m_useInjectedChannel = false;
 		std::unique_ptr<ISignalingChannel> m_ownedSignaling;
 		ISignalingChannel* m_signaling = nullptr;
+#endif
+#ifdef __EMSCRIPTEN__
+		bool m_useInjectedChannel = false;
+#endif
 
 		bool m_isHostRole = false;
 		bool m_joinInProgress = false;
+#ifndef __EMSCRIPTEN__
 		std::uint16_t m_localPort = 0;
 
 		std::optional<NatRendezvous> m_rendezvous;
@@ -193,6 +208,7 @@ namespace aether::net
 		// while waiting for the peer to answer.
 		bool m_relayPublished = false;
 		float m_relayElapsed = 0.0f;
+#endif
 
 		TraversalState m_state = TraversalState::Idle;
 		std::string m_failure;

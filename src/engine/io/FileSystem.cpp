@@ -664,6 +664,23 @@ namespace aether::io
 		return backend->Read(relativePath);
 	}
 
+	Expected<std::vector<std::byte>> FileSystem::ReadFileReserved(std::string_view virtualPath, const std::function<bool(std::size_t)>& reserve)
+	{
+		if (s_backend == nullptr)
+			AE_ASSERT_ALWAYS(false, "FileSystem::ReadFileReserved() called before Initialize().");
+		std::string resolved;
+		if (virtualPath.starts_with("uid://"))
+		{
+			resolved = ResolveAssetPath(virtualPath);
+			if (resolved.empty()) AE_UNEXPECTED(AetherError::FileSystem("Unknown asset UID: " + std::string(virtualPath)));
+			virtualPath = resolved;
+		}
+		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
+		const auto backend = TryResolveBackend(mountPoint);
+		if (!backend) AE_UNEXPECTED(NotMounted(mountPoint, virtualPath));
+		return backend->ReadReserved(relativePath, reserve);
+	}
+
 	Expected<std::string> FileSystem::ReadFileText(std::string_view virtualPath)
 	{
 		AE_TRY(data, ReadFile(virtualPath));
@@ -801,6 +818,12 @@ namespace aether::io
 		        });
 
 		return std::move(pair.first);
+	}
+
+	void FileSystem::Submit(IOPriority priority, std::function<void()> job)
+	{
+		AE_ASSERT_ALWAYS(s_backend != nullptr, "FileSystem::Submit() called before Initialize().");
+		s_backend->ioThread->Submit(priority, std::move(job));
 	}
 
 	void FileSystem::Flush()

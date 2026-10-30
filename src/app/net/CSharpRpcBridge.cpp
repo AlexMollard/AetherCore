@@ -45,6 +45,7 @@ namespace aether::net
 			return;
 		}
 		const aether::app::scripting::ActiveContextScope scope(*sceneCtx);
+		const aether::app::scripting::ActiveScriptEntityScope entityScope(*sceneCtx, entity);
 		m_scripting.InvokeNetRpc(handle, static_cast<int>(methodIndex), args);
 	}
 } // namespace aether::net

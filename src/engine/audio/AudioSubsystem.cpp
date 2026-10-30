@@ -3,11 +3,16 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/geometric.hpp>
+#if defined(AETHERCORE_WEB_RUNTIME) && (!defined(MA_NO_DEVICE_IO) || !defined(MA_NO_THREADING))
+#error Browser audio must use the manual no-device, no-thread mixer.
+#endif
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio.h>
@@ -24,14 +29,6 @@ namespace aether::audio
 	{
 		constexpr std::size_t kMaxVoices = 64;
 
-		Bus ClampBus(std::int32_t bus)
-		{
-			if (bus < static_cast<std::int32_t>(Bus::Music) || bus > static_cast<std::int32_t>(Bus::Ambience))
-			{
-				return Bus::Sfx;
-			}
-			return static_cast<Bus>(bus);
-		}
 
 		// ── VFS bridge ─────────────────────────────────────────────────────
 		// miniaudio's resource manager asks a ma_vfs for bytes; we answer from
@@ -39,8 +36,15 @@ namespace aether::audio
 		// exactly like every other asset. Read-only: a write request is refused.
 		struct VfsFile
 		{
-			std::vector<std::byte> bytes;
+			std::shared_ptr<const std::vector<std::byte>> bytes;
 			ma_uint64 cursor = 0;
+		};
+
+		struct VfsState
+		{
+			ma_vfs_callbacks callbacks{};
+			std::mutex mutex;
+			std::unordered_map<std::string, std::shared_ptr<const std::vector<std::byte>>> clips;
 		};
 
 		ma_result VfsOpen(ma_vfs* vfs, const char* path, ma_uint32 openMode, ma_vfs_file* file)
@@ -49,13 +53,25 @@ namespace aether::audio
 			{
 				return MA_ACCESS_DENIED;
 			}
-			auto bytes = io::FileSystem::ReadFile(path);
-			if (!bytes.has_value())
+			auto& state = *reinterpret_cast<VfsState*>(vfs);
+			std::shared_ptr<const std::vector<std::byte>> clip;
 			{
-				AE_WARN(LogCategory::Audio, "Audio clip not readable: {} ({})", path, bytes.error().ToString());
-				return MA_DOES_NOT_EXIST;
+				std::lock_guard lock(state.mutex);
+				const auto key = std::string_view(path).starts_with("uid://") ? io::FileSystem::ResolveAssetPath(path) : std::string(path);
+				const auto it = state.clips.find(key);
+				if (it != state.clips.end()) clip = it->second;
 			}
-			auto* handle = new VfsFile{std::move(*bytes), 0};
+			if (!clip)
+			{
+				auto bytes = io::FileSystem::ReadFile(path);
+				if (!bytes.has_value())
+				{
+					AE_WARN(LogCategory::Audio, "Audio clip not readable: {} ({})", path, bytes.error().ToString());
+					return MA_DOES_NOT_EXIST;
+				}
+				clip = std::make_shared<const std::vector<std::byte>>(std::move(*bytes));
+			}
+			auto* handle = new VfsFile{std::move(clip), 0};
 			*file = reinterpret_cast<ma_vfs_file>(handle);
 			return MA_SUCCESS;
 		}
@@ -71,9 +87,9 @@ namespace aether::audio
 		ma_result VfsRead(ma_vfs* vfs, ma_vfs_file file, void* destination, size_t bytesToRead, size_t* bytesRead)
 		{
 			auto* f = reinterpret_cast<VfsFile*>(file);
-			const ma_uint64 remaining = f->bytes.size() - std::min<ma_uint64>(f->cursor, f->bytes.size());
+			const ma_uint64 remaining = f->bytes->size() - std::min<ma_uint64>(f->cursor, f->bytes->size());
 			const auto toRead = static_cast<std::size_t>(std::min<ma_uint64>(bytesToRead, remaining));
-			std::memcpy(destination, f->bytes.data() + f->cursor, toRead);
+			std::memcpy(destination, f->bytes->data() + f->cursor, toRead);
 			f->cursor += toRead;
 			if (bytesRead != nullptr)
 			{
@@ -98,9 +114,9 @@ namespace aether::audio
 			}
 			else
 			{
-				target = static_cast<ma_int64>(f->bytes.size()) + offset;
+				target = static_cast<ma_int64>(f->bytes->size()) + offset;
 			}
-			f->cursor = static_cast<ma_uint64>(std::clamp<ma_int64>(target, 0, static_cast<ma_int64>(f->bytes.size())));
+			f->cursor = static_cast<ma_uint64>(std::clamp<ma_int64>(target, 0, static_cast<ma_int64>(f->bytes->size())));
 			return MA_SUCCESS;
 		}
 
@@ -117,7 +133,7 @@ namespace aether::audio
 		{
 			if (info != nullptr)
 			{
-				info->sizeInBytes = reinterpret_cast<VfsFile*>(file)->bytes.size();
+				info->sizeInBytes = reinterpret_cast<VfsFile*>(file)->bytes->size();
 			}
 			return MA_SUCCESS;
 		}
@@ -137,12 +153,51 @@ namespace aether::audio
 		};
 	} // namespace
 
+	Expected<void> ValidateStreamedClip(std::span<const std::byte> bytes, const std::function<bool(std::size_t)>& reserve)
+	{
+		ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, 0);
+		config.allocationCallbacks.pUserData = const_cast<std::function<bool(std::size_t)>*>(&reserve);
+		config.allocationCallbacks.onMalloc = [](size_t size, void* user) -> void*
+		{
+			auto& limit = *static_cast<std::function<bool(std::size_t)>*>(user);
+			return (!limit || limit(size)) ? std::malloc(size) : nullptr;
+		};
+		config.allocationCallbacks.onRealloc = [](void* ptr, size_t size, void* user) -> void*
+		{
+			auto& limit = *static_cast<std::function<bool(std::size_t)>*>(user);
+			return (!limit || limit(size)) ? std::realloc(ptr, size) : nullptr;
+		};
+		config.allocationCallbacks.onFree = [](void* ptr, void*) { std::free(ptr); };
+		ma_decoder decoder{};
+		const ma_result init = ma_decoder_init_memory(bytes.data(), bytes.size(), &config, &decoder);
+		if (init != MA_SUCCESS)
+			AE_UNEXPECTED(AetherError::Asset(std::string("Invalid streamed audio: ") + ma_result_description(init)));
+		std::array<float, 2048> samples{};
+		ma_uint64 total = 0;
+		ma_uint64 expected = 0;
+		const bool hasLength = ma_decoder_get_length_in_pcm_frames(&decoder, &expected) == MA_SUCCESS;
+		ma_result result = MA_SUCCESS;
+		for (;;)
+		{
+			ma_uint64 read = 0;
+			result = ma_decoder_read_pcm_frames(&decoder, samples.data(), 1024, &read);
+			total += read;
+			if (result != MA_SUCCESS || read == 0) break;
+		}
+		ma_decoder_uninit(&decoder);
+		if ((result != MA_SUCCESS && result != MA_AT_END) || total == 0 || (hasLength && total < expected))
+			AE_UNEXPECTED(AetherError::Asset("Streamed audio is truncated or undecodable."));
+		return {};
+	}
+
 	// Everything miniaudio owns, in one place with a deterministic teardown
 	// order: sounds die before the groups they attach to, groups before the
 	// resource manager, resource manager before the engine.
 	struct AudioSubsystem::Impl
 	{
+		VfsState vfs;
 		ma_resource_manager* resourceManager = nullptr;
+		bool manualJobs = false;
 		ma_engine* engine = nullptr;
 		ma_sound_group* groups[3] = {nullptr, nullptr, nullptr}; // indexed by Bus
 
@@ -192,17 +247,52 @@ namespace aether::audio
 		Shutdown();
 	}
 
+	Expected<bool> AudioSubsystem::PublishStreamedClip(std::string path, std::vector<std::byte> bytes, std::function<void()> onRetire)
+	{
+		if (!m_impl || !m_impl->resourceManager)
+			AE_UNEXPECTED(AetherError::Asset("Audio subsystem is not initialized."));
+		std::lock_guard lock(m_impl->vfs.mutex);
+		if (m_impl->vfs.clips.contains(path)) return false;
+		auto clip = std::shared_ptr<const std::vector<std::byte>>(new std::vector<std::byte>(std::move(bytes)),
+		        [retire = std::move(onRetire)](const std::vector<std::byte>* data)
+		        {
+			        delete data;
+			        if (retire) retire();
+		        });
+		m_impl->vfs.clips.emplace(std::move(path), std::move(clip));
+		return true;
+	}
+
+	void AudioSubsystem::RetireStreamedClip(std::string_view path)
+	{
+		if (!m_impl) return;
+		std::lock_guard lock(m_impl->vfs.mutex);
+		m_impl->vfs.clips.erase(std::string(path));
+	}
+
 	Expected<void> AudioSubsystem::Init(const Config& config)
 	{
 		if (m_engine != nullptr)
 		{
 			return std::unexpected(AetherError{.category = LogCategory::Audio, .message = "AudioSubsystem already initialized"});
 		}
+		m_suspended = false;
 		m_impl = std::make_unique<Impl>();
+		m_impl->vfs.callbacks = g_vfsCallbacks;
 
 		auto* resourceManager = new ma_resource_manager{};
 		ma_resource_manager_config resourceConfig = ma_resource_manager_config_init();
-		resourceConfig.pVFS = reinterpret_cast<ma_vfs*>(&g_vfsCallbacks);
+		if (config.manualMix)
+		{
+			resourceConfig.jobThreadCount = 0;
+			resourceConfig.flags |= MA_RESOURCE_MANAGER_FLAG_NO_THREADING;
+		}
+#if defined(AETHERCORE_WEB_RUNTIME)
+		m_impl->manualJobs = true;
+#else
+		m_impl->manualJobs = config.manualMix;
+#endif
+		resourceConfig.pVFS = reinterpret_cast<ma_vfs*>(&m_impl->vfs);
 		ma_result result = ma_resource_manager_init(&resourceConfig, resourceManager);
 		if (result != MA_SUCCESS)
 		{
@@ -216,12 +306,24 @@ namespace aether::audio
 		ma_engine_config engineConfig = ma_engine_config_init();
 		engineConfig.pResourceManager = resourceManager;
 
+#if defined(AETHERCORE_WEB_RUNTIME)
+		engineConfig.noDevice = MA_TRUE;
+		engineConfig.channels = 2;
+		engineConfig.sampleRate = 48000;
+		void* context = nullptr;
+#else
 		// Headless (tests, CI, no-audio machines): restrict the context to the
 		// null backend, which always opens - the full mixing pipeline runs, the
 		// OS device does not. The context must outlive the engine, so it is
 		// owned here and freed in Shutdown.
 		ma_context* context = nullptr;
-		if (config.headless)
+		if (config.manualMix)
+		{
+			engineConfig.noDevice = MA_TRUE;
+			engineConfig.channels = 2;
+			engineConfig.sampleRate = 48000;
+		}
+		else if (config.headless)
 		{
 			context = new ma_context{};
 			constexpr ma_backend kNullBackend[1] = {ma_backend_null};
@@ -232,15 +334,18 @@ namespace aether::audio
 			}
 			engineConfig.pContext = context;
 		}
+#endif
 
 		const ma_result engineResult = ma_engine_init(&engineConfig, engine);
 		if (engineResult != MA_SUCCESS)
 		{
+#if !defined(AETHERCORE_WEB_RUNTIME)
 			if (context != nullptr)
 			{
 				ma_context_uninit(context);
 				delete context;
 			}
+#endif
 			ma_resource_manager_uninit(resourceManager);
 			delete resourceManager;
 			delete engine;
@@ -272,6 +377,7 @@ namespace aether::audio
 
 	void AudioSubsystem::Shutdown()
 	{
+		m_suspended = false;
 		if (m_impl == nullptr)
 		{
 			return;
@@ -303,13 +409,30 @@ namespace aether::audio
 			m_impl->resourceManager = nullptr;
 		}
 		m_impl.reset();
+#if !defined(AETHERCORE_WEB_RUNTIME)
 		if (m_context != nullptr)
 		{
 			ma_context_uninit(static_cast<ma_context*>(m_context));
 			delete static_cast<ma_context*>(m_context);
 			m_context = nullptr;
 		}
+#endif
 		m_engine = nullptr;
+	}
+	void AudioSubsystem::RenderFrames(float* output, std::uint32_t frames)
+	{
+		if (!m_impl || !m_impl->engine || m_suspended)
+		{
+			std::fill_n(output, static_cast<std::size_t>(frames) * 2, 0.0f);
+			return;
+		}
+		// Streaming resources enqueue jobs; without a worker, drain them here.
+		if (m_impl->manualJobs)
+			while (ma_resource_manager_process_next_job(m_impl->resourceManager) == MA_SUCCESS) {}
+		ma_uint64 read = 0;
+		if (ma_engine_read_pcm_frames(m_impl->engine, output, frames, &read) != MA_SUCCESS)
+			read = 0;
+		std::fill(output + read * 2, output + static_cast<std::size_t>(frames) * 2, 0.0f);
 	}
 
 	Expected<VoiceHandle> AudioSubsystem::PlayInternal(std::string_view clipPath, const PlayParams& params, bool spatial, const glm::vec3& position, bool stream)
@@ -319,7 +442,12 @@ namespace aether::audio
 			return std::unexpected(AetherError{.category = LogCategory::Audio, .message = "Audio subsystem not initialized"});
 		}
 		Impl& impl = *m_impl;
-		ma_sound_group* group = impl.groups[static_cast<int>(params.bus)];
+		const auto busIndex = static_cast<int>(params.bus);
+		if (busIndex < static_cast<int>(Bus::Music) || busIndex > static_cast<int>(Bus::Ambience))
+		{
+			return std::unexpected(AetherError{.category = LogCategory::Audio, .message = "Invalid audio bus"});
+		}
+		ma_sound_group* group = impl.groups[busIndex];
 		if (group == nullptr)
 		{
 			return std::unexpected(AetherError{.category = LogCategory::Audio, .message = "Audio bus not initialized"});
@@ -350,13 +478,20 @@ namespace aether::audio
 			}
 			slot = victim;
 			ma_sound_uninit(&impl.voices[slot].sound);
+			impl.voices[slot].inUse = false;
 			AE_WARN(LogCategory::Audio, "Stole oldest voice for: {}", clipPath);
 		}
 
 		Impl::Voice& voice = impl.voices[slot];
-		const std::uint32_t generation = ++voice.generation;
+		voice.generation = (voice.generation % 0x7FFFu) + 1;
+		const std::uint32_t generation = voice.generation;
 
 		std::string path(clipPath);
+		{
+			const auto key = clipPath.starts_with("uid://") ? io::FileSystem::ResolveAssetPath(clipPath) : path;
+			std::lock_guard lock(impl.vfs.mutex);
+			stream = stream || impl.vfs.clips.contains(key);
+		}
 		// Spatial sounds use miniaudio's spatializer (attenuation, panning,
 		// cone, doppler); 2D and music opt out of it.
 		const ma_uint32 spatialFlag = spatial ? 0 : MA_SOUND_FLAG_NO_SPATIALIZATION;
@@ -507,7 +642,7 @@ namespace aether::audio
 		// First acquire the new track; only a successful load retires the old
 		// one, so a typo'd path leaves the current music untouched.
 		auto* sound = new ma_sound{};
-		std::string path(clipPath);
+		std::string path = clipPath.starts_with("uid://") ? io::FileSystem::ResolveAssetPath(clipPath) : std::string(clipPath);
 		const ma_result result = ma_sound_init_from_file(impl.engine, path.c_str(), MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION, group, nullptr, sound);
 		if (result != MA_SUCCESS)
 		{
@@ -599,7 +734,11 @@ namespace aether::audio
 		}
 		m_impl->masterVolume = glm::clamp(settings.masterVolume, 0.0f, 1.0f);
 		// Agent-launched processes are always silent, whatever the user's settings say.
+#if defined(AETHERCORE_WEB_RUNTIME)
+		const bool agent = false;
+#else
 		const bool agent = io::PlatformPaths::IsAgentSession();
+#endif
 		if (agent && !m_impl->muted && !settings.muted)
 		{
 			AE_INFO(LogCategory::Audio, "Audio muted: agent session (AETHER_AGENT_SESSION or an agent-session marker).");

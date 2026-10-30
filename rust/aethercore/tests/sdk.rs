@@ -19,12 +19,12 @@ fn exported_provider_contains_panics_disables_instance_and_cleans_up() {
     unsafe {
         let mut api = std::mem::MaybeUninit::<abi::AetherGameplayModuleApi>::zeroed().assume_init();
         assert_eq!(
-            __aether_gameplay_export::aether_gameplay_query(2, size_of_val(&api) as u32, &mut api),
+            __aether_gameplay_export::aether_gameplay_query(1, size_of_val(&api) as u32, &mut api),
             2
         );
         assert!(api.create.is_none());
         assert_eq!(
-            __aether_gameplay_export::aether_gameplay_query(1, size_of_val(&api) as u32, &mut api),
+            __aether_gameplay_export::aether_gameplay_query(abi::AE_GAMEPLAY_ABI_MAJOR, size_of_val(&api) as u32, &mut api),
             0
         );
         let engine = engine();
@@ -101,7 +101,7 @@ unsafe extern "C" fn report(_: u64, _: *const abi::AetherGameplayDiagnostic) -> 
 fn engine() -> abi::AetherGameplayEngineApi {
     abi::AetherGameplayEngineApi {
         structSize: size_of::<abi::AetherGameplayEngineApi>() as u32,
-        abiMajor: 1,
+        abiMajor: abi::AE_GAMEPLAY_ABI_MAJOR,
         capabilities: 0,
         context: 0,
         entityValid: Some(valid),

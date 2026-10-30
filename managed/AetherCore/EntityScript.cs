@@ -51,6 +51,13 @@ public abstract class EntityScript
 
     public virtual void OnDetach() { }
 
+    /// <summary>Capture script-owned UTF-8 state before a streamed region unloads.
+    /// Do not persist runtime entity handles; they change on re-entry.</summary>
+    public virtual string CaptureStreamingState() => string.Empty;
+
+    /// <summary>Restore previously captured state after the script is attached again.</summary>
+    public virtual void RestoreStreamingState(string state) { }
+
     /// <summary>
     /// Fires once ownership of <see cref="Self"/> becomes knowable, and again every
     /// time it changes hands afterward - the one place to do owner-dependent setup

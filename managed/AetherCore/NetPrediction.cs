@@ -5,16 +5,10 @@ namespace AetherCore;
 
 public static partial class Net
 {
-    // Hand-off for the payload a predicted spawn's own OnAttach needs, exactly the
-    // shape Whisper's PlayerCombat/Projectile pair had to invent by hand (a static
-    // shooter/direction pair) - generalized to any one payload of any type. STATIC
-    // and not per-call state: Scene.Instantiate runs OnAttach synchronously, this
-    // engine drives one script update at a time, and a script only ever predicts
-    // its own spawns, so at most one predicted attach is ever in flight when this
-    // is read. Set immediately before Scene.Instantiate and always cleared before
-    // SpawnPredicted returns, so it can only ever be read by the OnAttach it was
-    // set for - a replicated entity attaches long after this is clear and reads
-    // nothing here.
+    // The predicted instantiate bridge attaches the new prefab synchronously.
+    // Save and restore this hand-off across nested predicted spawns so each
+    // OnAttach sees only its own pending payload; ordinary replicated attaches
+    // have no pending hand-off.
     private static object? s_predictedPayload;
     private static bool s_predictedPending;
 
@@ -67,13 +61,19 @@ public static partial class Net
         {
             return default;
         }
+        object? previousPayload = s_predictedPayload;
+        bool previousPending = s_predictedPending;
+        Entity entity;
         s_predictedPayload = payload;
         s_predictedPending = true;
-        Entity entity = Scene.Instantiate(prefab, position);
-        s_predictedPending = false; // consumed by the new entity's OnAttach; harmless if it was not
-        if (entity.IsValid)
+        try
         {
-            Native.aether_net_mark_predicted(entity.Id);
+            entity = new(Native.aether_net_instantiate_predicted(prefab, position));
+        }
+        finally
+        {
+            s_predictedPayload = previousPayload;
+            s_predictedPending = previousPending;
         }
         return entity;
     }

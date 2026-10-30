@@ -198,7 +198,7 @@ namespace
 					}
 				}
 			}
-			if (!Check(aether::scripting::QueryGameplayModule(aether_gameplay_query, 1, sizeof(module), &module), "Gameplay module ABI query failed"))
+			if (!Check(aether::scripting::QueryGameplayModule(aether_gameplay_query, AE_GAMEPLAY_ABI_MAJOR, sizeof(module), &module), "Gameplay module ABI query failed"))
 			{
 				return false;
 			}
@@ -215,7 +215,7 @@ namespace
 			AetherGameplayServicesApi services{sizeof(services),
 			        1,
 			        engine.context,
-			        reference ? ((UINT64_C(1) << (AE_GAMEPLAY_SERVICE_SET_EULER + 1)) - 2) : AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN),
+			        reference ? ((UINT64_C(1) << (AE_GAMEPLAY_SERVICE_STREAMING_DIAGNOSTICS + 1)) - 2) : AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN),
 			        [](std::uint64_t context, const AetherGameplayServiceRequest* request, AetherGameplayPropertyValue* result, AetherGameplayUtf8Buffer buffer) -> AetherGameplayStatus
 			        {
 				        auto& app = Get();
@@ -405,7 +405,7 @@ namespace
 				{
 					for (const auto& path: assets.Package()->Paths())
 					{
-						if (!path.ends_with(".wav"))
+						if (!path.ends_with(".wav") && !path.ends_with(".mp3") && !path.ends_with(".flac"))
 						{
 							continue;
 						}
@@ -416,7 +416,7 @@ namespace
 							Failure("Browser audio asset is missing or corrupt");
 							return false;
 						}
-						EM_ASM({ aetherPlatform.prepareAudio(UTF8ToString($0), HEAPU8.slice($1, $1 + $2).buffer); }, uri.c_str(), audio->data(), audio->size());
+						EM_ASM({ aetherPlatform.prepareAudio(UTF8ToString($0)); }, uri.c_str());
 					}
 					EM_ASM({ aetherPlatform.finishAudioPreparation(); });
 				}

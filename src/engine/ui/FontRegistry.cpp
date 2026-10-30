@@ -2,10 +2,11 @@
 
 #include <array>
 #include <cstring>
+#include <limits>
 
 #include "io/FileSystem.hpp"
-#include "utils/Logger.hpp"
 #include "utils/Utf8.hpp"
+#include "utils/Logger.hpp"
 
 namespace aether::ui
 {
@@ -241,43 +242,53 @@ namespace aether::ui
 			return nullptr;
 		}
 
-		const std::vector<std::byte>& bytes = *bytesResult;
-		if (bytes.size() < sizeof(FontCurveHeader))
+		auto asset = ParseBytes(curvePath, *bytesResult, {});
+		if (!asset)
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' is too small for a FontCurveHeader", curvePath);
+			AE_ERROR(LogCategory::UI, "FontRegistry: {}", asset.error().ToString());
 			return nullptr;
 		}
+		const auto key = name.starts_with("uid://") ? io::FileSystem::ResolveAssetPath(name) : std::string(name);
+		const auto [it, inserted] = m_fonts.emplace(key, std::move(*asset));
+		return &it->second;
+	}
+
+	Expected<FontAsset> FontRegistry::ParseBytes(std::string_view curvePath, std::span<const std::byte> bytes, const std::function<bool(std::size_t)>& reserve)
+	{
+		if (bytes.size() < sizeof(FontCurveHeader))
+			AE_UNEXPECTED(AetherError::Asset("Font curve header is truncated."));
 
 		FontCurveHeader header{};
 		std::memcpy(&header, bytes.data(), sizeof(FontCurveHeader));
 
 		if (header.magic != kFontCurveMagic)
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' has an unrecognised magic - corrupt or not a .fontcurves file", curvePath);
-			return nullptr;
+			AE_UNEXPECTED(AetherError::Asset("Font curve magic is invalid."));
 		}
 		if (header.version != kFontCurveVersion)
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' is format version {}, expected {} - re-bake with AssetPacker", curvePath, header.version, kFontCurveVersion);
-			return nullptr;
+			AE_UNEXPECTED(AetherError::Asset("Font curve version is unsupported."));
 		}
 
+		const std::size_t payloadBytes = bytes.size() - sizeof(FontCurveHeader);
+		if (header.glyphCount > payloadBytes / sizeof(GlyphCurve))
+			AE_UNEXPECTED(AetherError::Asset("Font curve size does not match its header."));
 		const std::size_t glyphBytes = static_cast<std::size_t>(header.glyphCount) * sizeof(GlyphCurve);
-		const std::size_t texelBytes = static_cast<std::size_t>(header.texelCount) * sizeof(glm::vec4);
-		const std::size_t expectedSize = sizeof(FontCurveHeader) + glyphBytes + texelBytes;
-		if (bytes.size() != expectedSize)
+		const std::size_t remainingBytes = payloadBytes - glyphBytes;
+		if (header.texelCount != remainingBytes / sizeof(glm::vec4) || remainingBytes % sizeof(glm::vec4) != 0)
+			AE_UNEXPECTED(AetherError::Asset("Font curve size does not match its header."));
+		const std::size_t texelBytes = remainingBytes;
+		if (static_cast<std::uint64_t>(header.textureWidth) * header.textureHeight != header.texelCount)
 		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' size {} does not match its header (expected {} for {} glyphs and {} texels)", curvePath, bytes.size(), expectedSize, header.glyphCount, header.texelCount);
-			return nullptr;
+			AE_UNEXPECTED(AetherError::Asset("Font curve texture dimensions are invalid."));
 		}
-		if (static_cast<std::size_t>(header.textureWidth) * header.textureHeight != header.texelCount)
-		{
-			AE_ERROR(LogCategory::UI, "FontRegistry: '{}' declares a {}x{} curve texture that does not hold its {} texels", curvePath, header.textureWidth, header.textureHeight, header.texelCount);
-			return nullptr;
-		}
+		constexpr std::size_t glyphBudget = sizeof(GlyphCurve) + 5 * sizeof(void*);
+		if (reserve && (header.glyphCount > (std::numeric_limits<std::size_t>::max() - texelBytes) / glyphBudget ||
+		                !reserve(texelBytes + static_cast<std::size_t>(header.glyphCount) * glyphBudget)))
+			AE_UNEXPECTED(AetherError::Asset("Font curves exceed streaming budget."));
 
 		FontAsset asset;
-		asset.curvePath = curvePath;
+		asset.curvePath = std::string(curvePath);
 		asset.textureWidth = header.textureWidth;
 		asset.textureHeight = header.textureHeight;
 		asset.ascent = header.ascent;
@@ -299,19 +310,31 @@ namespace aether::ui
 			std::memcpy(asset.texels.data(), glyphBase + glyphBytes, texelBytes);
 		}
 
-		const auto [it, inserted] = m_fonts.emplace(std::string(name), std::move(asset));
-		return &it->second;
+		return asset;
+	}
+
+	bool FontRegistry::Publish(std::string name, FontAsset asset)
+	{
+		if (name.starts_with("uid://")) name = io::FileSystem::ResolveAssetPath(name);
+		return m_fonts.emplace(std::move(name), std::move(asset)).second;
+	}
+
+	void FontRegistry::Invalidate(std::string_view name)
+	{
+		m_fonts.erase(name.starts_with("uid://") ? io::FileSystem::ResolveAssetPath(name) : std::string(name));
 	}
 
 	const FontAsset* FontRegistry::Get(std::string_view name) const
 	{
-		const auto it = m_fonts.find(std::string(name));
+		const auto key = name.starts_with("uid://") ? io::FileSystem::ResolveAssetPath(name) : std::string(name);
+		const auto it = m_fonts.find(key);
 		return it == m_fonts.end() ? nullptr : &it->second;
 	}
 
 	FontAsset* FontRegistry::GetMutable(std::string_view name)
 	{
-		const auto it = m_fonts.find(std::string(name));
+		const auto key = name.starts_with("uid://") ? io::FileSystem::ResolveAssetPath(name) : std::string(name);
+		const auto it = m_fonts.find(key);
 		return it == m_fonts.end() ? nullptr : &it->second;
 	}
 

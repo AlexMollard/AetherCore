@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -8,6 +9,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -120,7 +122,11 @@ namespace aether::net
 		// host has answered with its Welcome and given it a connection id.
 		[[nodiscard]] bool IsConnected() const
 		{
+#if defined(__EMSCRIPTEN__)
+			return (IsHost() && m_transport.WebGatewayOpen()) || (IsClient() && m_session.LocalConnection() != kInvalidConnection);
+#else
 			return IsHost() || (IsClient() && m_session.LocalConnection() != kInvalidConnection);
+#endif
 		}
 
 		[[nodiscard]] ConnectionId LocalConnectionId() const
@@ -134,30 +140,15 @@ namespace aether::net
 		}
 
 		// ── Link quality ─────────────────────────────────────────────────────
-		// Round-trip time in milliseconds over the link named by `connection`, taken
-		// from the transport's own acknowledgement timing - no probe packet exists and
-		// none is needed.
-		//
-		// A CLIENT has one link and passes kInvalidConnection for it, which is how the
-		// transport already spells "the host". A HOST names the connection it wants.
-		// Offline, and for the host's own connection, the answer is 0: there is no link,
-		// and 0 ms is the honest reading of "this peer, right here".
-		[[nodiscard]] std::uint32_t RoundTripMs(ConnectionId connection) const
-		{
-			if (!IsActive() || connection == LocalConnectionId())
-			{
-				return 0;
-			}
-			return m_transport.RoundTripMs(connection);
-		}
+		// Application-level echo measures the complete path, including both browser
+		// gateway hops. RTT stays zero until the first application echo is received.
+		[[nodiscard]] std::uint32_t RoundTripMs(ConnectionId connection) const;
+		[[nodiscard]] std::uint32_t LocalRoundTripMs() const;
 
-		// What this peer would report about ITSELF: a client's cost to reach the host,
-		// and 0 on a host or offline. This is the value the owner stamps onto its own
-		// player, which is what gives every peer a per-player ping with no extra traffic.
-		[[nodiscard]] std::uint32_t LocalRoundTripMs() const
-		{
-			return IsClient() ? m_transport.RoundTripMs(kInvalidConnection) : 0u;
-		}
+		using LatencyClock = std::chrono::steady_clock;
+		void TickLatency(LatencyClock::time_point now);
+		void HandleLatency(ConnectionId peer, NetMessage kind, std::span<const std::byte> payload, LatencyClock::time_point now);
+		void ForgetLatency(ConnectionId peer);
 
 		// ── Connection cap ───────────────────────────────────────────────────
 		// How many simultaneous client connections this host accepts. The host itself
@@ -243,6 +234,13 @@ namespace aether::net
 		{
 			return m_transport;
 		}
+#if defined(__EMSCRIPTEN__)
+		void SetWebPrefabSpawner(std::function<Entity(std::string_view, glm::vec3)> spawner)
+		{
+			m_webPrefabSpawner = std::move(spawner);
+		}
+#endif
+
 
 		[[nodiscard]] NetSession& Session()
 		{
@@ -619,6 +617,9 @@ namespace aether::net
 		void ConfigureTraversalFromSettings();
 
 		ServiceContainer& m_services;
+#if defined(__EMSCRIPTEN__)
+		std::function<Entity(std::string_view, glm::vec3)> m_webPrefabSpawner;
+#endif
 		NetworkSubsystem m_transport;
 		NetSession m_session;
 		ReplicationSchema m_schema;
@@ -628,6 +629,19 @@ namespace aether::net
 		float m_sendRateHz = 20.f;
 		bool m_replicationReady = true;
 		std::unordered_map<ConnectionId, SnapshotCache> m_caches;
+		struct LatencyPeer
+		{
+			LatencyClock::time_point sent{};
+			LatencyClock::time_point lastReply{};
+			std::uint32_t nonce = 0;
+			std::uint32_t sample = 0;
+			bool outstanding = false;
+			bool sentBefore = false;
+			bool sampled = false;
+			bool replied = false;
+		};
+		std::unordered_map<ConnectionId, LatencyPeer> m_latency;
+		std::uint32_t m_nextLatencyNonce = 0;
 
 		// Connections that have asked for the world again. Bounded by the connection
 		// count (it is a set of live connection ids), emptied by Stop, and dropped per

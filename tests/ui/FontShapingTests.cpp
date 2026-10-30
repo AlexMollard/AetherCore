@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <cstring>
+#include <limits>
 
 #include "ui/FontRegistry.hpp"
 
@@ -101,3 +103,18 @@ TEST_CASE("ShapeText decodes UTF-8 glyphs and skips missing or malformed charact
         CHECK(glyphs[i].rect.x == doctest::Approx(24.f * static_cast<float>(i)));
 }
 
+TEST_CASE("Font curve parser rejects truncated and overflowing headers") {
+    FontCurveHeader header{};
+    header.magic = kFontCurveMagic;
+    header.version = kFontCurveVersion;
+    header.glyphCount = std::numeric_limits<std::uint32_t>::max();
+    std::vector<std::byte> bytes(sizeof(header));
+    std::memcpy(bytes.data(), &header, sizeof(header));
+    CHECK_FALSE(FontRegistry::ParseBytes("test.fontcurves", bytes, {}));
+    header.glyphCount = 0;
+    header.texelCount = 1;
+    header.textureWidth = 1;
+    header.textureHeight = 1;
+    std::memcpy(bytes.data(), &header, sizeof(header));
+    CHECK_FALSE(FontRegistry::ParseBytes("test.fontcurves", bytes, {}));
+}

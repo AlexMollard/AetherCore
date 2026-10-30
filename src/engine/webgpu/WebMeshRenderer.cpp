@@ -615,6 +615,14 @@ namespace aether::webgpu
 
 	bool WebMeshRenderer::Upload(WGPUDevice device, WGPUQueue queue, std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices)
 	{
+		if (!Allocate(device, queue, slot, vertices, indices)) return false;
+		WriteSlice(queue, slot, false, 0, vertices.data(), vertices.size_bytes());
+		WriteSlice(queue, slot, true, 0, indices.data(), indices.size_bytes());
+		return true;
+	}
+
+	bool WebMeshRenderer::Allocate(WGPUDevice device, WGPUQueue queue, std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices)
+	{
 		error.clear();
 		constexpr std::size_t kBudget = 64 * 1024 * 1024;
 		if (slot >= 1024 || vertices.empty() || indices.empty() || indices.size() % 3 || vertices.size() > 262144 || indices.size() > 786432)
@@ -673,8 +681,8 @@ namespace aether::webgpu
 			m_meshes.resize(slot + 1);
 		}
 		auto& mesh = m_meshes[slot];
-		mesh.vertices = Buffer(device, queue, WGPUBufferUsage_Vertex, vertices.data(), vertices.size_bytes());
-		mesh.indices = Buffer(device, queue, WGPUBufferUsage_Index, indices.data(), indices.size_bytes());
+		mesh.vertices = Buffer(device, queue, WGPUBufferUsage_Vertex, nullptr, vertices.size_bytes());
+		mesh.indices = Buffer(device, queue, WGPUBufferUsage_Index, nullptr, indices.size_bytes());
 		mesh.indexCount = static_cast<std::uint32_t>(indices.size());
 		mesh.jointCount = jointCount;
 		mesh.boundsMin = mesh.boundsMax = vertices.front().position;
@@ -695,6 +703,12 @@ namespace aether::webgpu
 		m_bytes += bytes;
 		mesh.bytes = bytes;
 		return true;
+	}
+
+	void WebMeshRenderer::WriteSlice(WGPUQueue queue, std::uint32_t slot, bool indices, std::size_t offset, const void* data, std::size_t bytes)
+	{
+		const auto& mesh = m_meshes[slot];
+		wgpuQueueWriteBuffer(queue, indices ? mesh.indices : mesh.vertices, offset, data, bytes);
 	}
 
 	void WebMeshRenderer::Release(std::uint32_t slot)

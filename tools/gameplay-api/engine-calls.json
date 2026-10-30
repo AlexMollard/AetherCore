@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "abiMajor": 1,
+  "abiMajor": 2,
   "nativeSource": "src/app/scripting/interop/WorldExports.cpp",
   "managedSource": "managed/AetherCore/Internal/Native.cs",
   "functions": [

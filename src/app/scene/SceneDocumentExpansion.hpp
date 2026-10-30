@@ -22,6 +22,7 @@ namespace aether::app::scene
 	{
 		std::size_t maxDepth = 32;
 		std::size_t maxEntities = 100000;
+		bool preserveExternalNodeReferences = false;
 	};
 
 	// CPU-only document composition. Parent and script/joint indices in the result

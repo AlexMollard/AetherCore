@@ -321,6 +321,11 @@ b.CustomListField(
 		        stops = CameraComponent{}.gradientStops;
 	        }
         });
+b.MeasureLast([](const void* comp, std::size_t& bytes, std::size_t& rows) {
+	bytes = 0;
+	rows = static_cast<const CameraComponent*>(comp)->gradientStops.size();
+	return true;
+});
 AE_HAND_AUTHORED_CATALOG()
 AE_COMPONENT_END()
 

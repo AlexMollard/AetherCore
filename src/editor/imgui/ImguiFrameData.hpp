@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <mutex>
+#include <utility>
 #include <imgui.h>
 
 #include "rendering/IUiOverlay.hpp"
@@ -36,6 +37,7 @@ namespace aether
 		void Clear();
 		void Capture(const ImDrawData* source);
 		void CaptureSecondary(const ImDrawData* source, ImGuiID id, ImVec2 pos, ImVec2 size, ImVec2 fbScale, void* platformHandle);
+		void RetainResources(std::vector<std::shared_ptr<const void>> resources) { m_resources = std::move(resources); }
 
 		// identity - and its warm ImDrawList* pools - never moves; handing one
 		[[nodiscard]] static std::unique_ptr<ImguiFrameData> AcquirePooled();
@@ -70,6 +72,7 @@ namespace aether
 		std::vector<ImDrawList*> m_secondaryPool;
 
 		std::vector<CapturedViewport> m_secondary;
+		std::vector<std::shared_ptr<const void>> m_resources;
 	};
 
 } // namespace aether

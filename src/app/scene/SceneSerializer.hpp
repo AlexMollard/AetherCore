@@ -23,6 +23,8 @@
 #include "scene/LightComponents.hpp"
 #include "scene/ModelBakeHook.hpp"
 #include "scene/reflection/Reflection.hpp"
+#include "streaming/StreamingTypes.hpp"
+#include "utils/Expected.hpp"
 #include "scene/SceneKind.hpp"
 
 namespace aether
@@ -182,6 +184,7 @@ namespace aether::app::scene
 		// `parent` is resolved from the parent's nodeId when available, so hand-editing entity
 		// order/membership in a .scene.toml does not corrupt parenting. 0 = unassigned (legacy).
 		std::uint64_t nodeId = 0;
+		std::uint64_t sourceNodeId = 0;
 		// Transient: the parent's node id as read from `parent_node`, resolved to parentIndex after
 		// the whole entity list is parsed. 0 = not present (fall back to the positional `parent`).
 		std::uint64_t parentNodeId = 0;
@@ -312,7 +315,8 @@ namespace aether::app::scene
 	// v15 added the tile_map record and made Tilemaps a Scene2D default feature.
 	// v16 added prefab_instances (linked prefab instances).
 	// v17 records stable asset references and model primitive keys.
-	inline constexpr int kSceneFormatVersion = 17;
+	// v18 adds authored world-space streaming regions.
+	inline constexpr int kSceneFormatVersion = 18;
 
 	struct AssetManifestEntry
 	{
@@ -338,6 +342,7 @@ namespace aether::app::scene
 		// order. Their entities load SceneTransient + IncludedFromComponent and are never
 		// captured back into this scene; CaptureScene re-emits only this list.
 		std::vector<std::string> includes;
+		std::vector<streaming::Region> streamingRegions;
 	};
 
 	// Assign a fresh, stable guid to every entity that lacks one (max existing + 1).
@@ -389,6 +394,7 @@ namespace aether::app::scene
 	// free to load - the cooked runtime form. ReadSceneBinary fails closed
 	// (std::nullopt) on a bad magic/version so callers can fall back to TOML.
 	std::vector<std::byte> WriteSceneBinary(const SceneDescription& scene, bool includeSceneHeader = true);
+	Expected<SceneDescription> ReadSceneBinaryChecked(const std::byte* data, std::size_t size);
 	std::optional<SceneDescription> ReadSceneBinary(const std::byte* data, std::size_t size);
 	std::optional<SceneDescription> ReadSceneBinary(const std::vector<std::byte>& bytes);
 
@@ -433,6 +439,13 @@ std::vector<std::string> ListSceneFiles();
 	ApplySceneDeps MakeApplySceneDeps(ServiceContainer& services);
 
 	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
+	// Apply a range of an already-flattened region into pre-created entities.
+	// Call sequentially; finalBatch resolves stable cross-entity script references.
+	Expected<void> ApplyStreamingRegionBatch(const SceneDescription& scene, World& world, const ApplySceneDeps& deps,
+	                                        std::vector<Entity>& entities, std::size_t begin, std::size_t end, bool finalBatch);
+	void CancelStreamingRegionBatch(const SceneDescription& scene);
+	// Propagate the current script actor's region ownership to a runtime-spawned subtree.
+	void AdoptStreamingSpawn(World& world, scripting::SceneContext& context, Entity root);
 
 	// Persistence (SceneTransient / DontDestroyOnLoad) is a GAMEPLAY behaviour:
 	// only runtime scene switches spare marked subtrees. Authoring loads (the

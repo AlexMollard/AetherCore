@@ -151,12 +151,9 @@ AE_SCRIPT_API void aether_audio_source_play(std::uint32_t id)
 {
 	SafeExport([&] -> void
 	{
-		// "Play now" is just the play-on-start path run once: the system picks
-		// it up on its next tick, so all lifetime/position bookkeeping stays in
-		// one place.
 		ForEachSource(id, [](aether::AudioSourceComponent& source)
 		{
-			source.playOnStart = true;
+			source.playRequested = true;
 		});
 	});
 }

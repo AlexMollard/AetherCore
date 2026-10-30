@@ -387,7 +387,8 @@ namespace aether::app::scene
 			};
 			for (const auto& [arrayName, key, directory, suffix]: {
 			             std::array<std::string_view, 4>{"prefab_instances", "prefab", "project://assets/prefabs/", ".prefab.toml"},
-			             std::array<std::string_view, 4>{"includes", "scene", "project://scenes/", ".scene.toml"}})
+			             std::array<std::string_view, 4>{"includes", "scene", "project://scenes/", ".scene.toml"},
+			             std::array<std::string_view, 4>{"stream_regions", "scene", "project://scenes/", ".scene.toml"}})
 			{
 				if (auto* entries = root[arrayName].as_array())
 				{
@@ -1165,6 +1166,10 @@ namespace aether::app::scene
 			{
 				t.insert("node", static_cast<std::int64_t>(rec.nodeId));
 			}
+			if (rec.sourceNodeId != 0)
+			{
+				t.insert("source_node", static_cast<std::int64_t>(rec.sourceNodeId));
+			}
 			if (!rec.tags.empty())
 			{
 				toml::array tags;
@@ -1647,6 +1652,24 @@ namespace aether::app::scene
 			root.insert("includes", std::move(includes));
 		}
 
+		if (includeSceneHeader && !scene.streamingRegions.empty())
+		{
+			toml::array regions;
+			for (const streaming::Region& region: scene.streamingRegions)
+			{
+				toml::table entry;
+				entry.insert("id", region.id);
+				entry.insert("scene", region.scene);
+				entry.insert("bounds_min", Vec3ToToml(region.boundsMin));
+				entry.insert("bounds_max", Vec3ToToml(region.boundsMax));
+				entry.insert("unload_margin", region.unloadMargin);
+				entry.insert("priority", static_cast<std::int64_t>(region.priority));
+				entry.insert("always_loaded", region.alwaysLoaded);
+				regions.push_back(std::move(entry));
+			}
+			root.insert("stream_regions", std::move(regions));
+		}
+
 		// Normalize every float to its shortest float32 representation so both the TOML
 		// text and the cooked binary (both built from this tree) are clean and stable.
 		RewriteAssetReferences(root, true);
@@ -1817,6 +1840,7 @@ namespace aether::app::scene
 			rec.name = tv["name"].value_or(std::string{});
 			rec.guid = static_cast<std::uint64_t>(tv["guid"].value_or(std::int64_t{0}));
 			rec.nodeId = static_cast<std::uint64_t>(tv["node"].value_or(std::int64_t{0}));
+			rec.sourceNodeId = static_cast<std::uint64_t>(tv["source_node"].value_or(std::int64_t{0}));
 			rec.parentNodeId = static_cast<std::uint64_t>(tv["parent_node"].value_or(std::int64_t{0}));
 			if (const auto* tags = tv["tags"].as_array())
 			{
@@ -2162,7 +2186,8 @@ namespace aether::app::scene
 			{
 				if (scene.entities[i].nodeId != 0)
 				{
-					nodeToIndex.emplace(scene.entities[i].nodeId, static_cast<int>(i));
+					const auto [it, inserted] = nodeToIndex.emplace(scene.entities[i].nodeId, static_cast<int>(i));
+					if (!inserted) it->second = -1;
 				}
 			}
 			// `parent_node` wins over the legacy `parent` index.
@@ -2201,7 +2226,7 @@ namespace aether::app::scene
 				{
 					continue;
 				}
-				if (const auto it = nodeToIndex.find(ref.nodeId); it != nodeToIndex.end())
+				if (const auto it = nodeToIndex.find(ref.nodeId); it != nodeToIndex.end() && it->second >= 0)
 				{
 					propIt->second.i64 = it->second;
 				}
@@ -2272,6 +2297,87 @@ namespace aether::app::scene
 					}
 				}
 				scene.prefabInstances.push_back(std::move(pi));
+			}
+		}
+
+		if (root.contains("stream_regions"))
+		{
+			const auto* regions = root["stream_regions"].as_array();
+			if (!regions || !root.contains("scene"))
+				return std::nullopt;
+			std::unordered_set<std::string> ids;
+			for (const auto& node: *regions)
+			{
+				const auto* entry = node.as_table();
+				if (!entry)
+					return std::nullopt;
+				streaming::Region region;
+				const auto id = (*entry)["id"].value<std::string>();
+				const auto reference = (*entry)["scene"].value<std::string>();
+				if (!id || id->empty() || id->size() > 255 || !ids.insert(*id).second ||
+				    !reference || reference->empty() || reference->size() > 1024)
+					return std::nullopt;
+				if (std::any_of(id->begin(), id->end(), [](unsigned char c) { return c < 0x20 || c == 0x7f; }) ||
+				    std::all_of(id->begin(), id->end(), [](unsigned char c) { return std::isspace(c) != 0; }))
+					return std::nullopt;
+				region.id = *id;
+				region.scene = *reference;
+				if (!region.scene.starts_with("uid://") && !region.scene.starts_with("project://") && !IsValidAssetName(region.scene))
+					return std::nullopt;
+				if (region.scene.starts_with("uid://") || region.scene.starts_with("project://"))
+				{
+					const std::string resolved = io::FileSystem::ResolveAssetPath(region.scene);
+					if (!resolved.starts_with("project://") || !resolved.ends_with(".scene.toml"))
+						return std::nullopt;
+					const auto relative = std::filesystem::u8path(resolved.substr(10)).lexically_normal();
+					if (relative.empty() || relative.is_absolute() || *relative.begin() == "..")
+						return std::nullopt;
+				}
+				const auto readBounds = [](const toml::array* values, glm::vec3& result)
+				{
+					if (!values || values->size() != 3)
+						return false;
+					for (std::size_t i = 0; i < 3; ++i)
+					{
+						const auto value = (*values)[i].value<double>();
+						if (!value || !std::isfinite(*value))
+							return false;
+						result[static_cast<int>(i)] = static_cast<float>(*value);
+						if (!std::isfinite(result[static_cast<int>(i)]))
+							return false;
+					}
+					return true;
+				};
+				if (!readBounds((*entry)["bounds_min"].as_array(), region.boundsMin) ||
+				    !readBounds((*entry)["bounds_max"].as_array(), region.boundsMax))
+					return std::nullopt;
+				for (int i = 0; i < 3; ++i)
+					if (region.boundsMin[i] > region.boundsMax[i])
+						return std::nullopt;
+				if (entry->contains("unload_margin"))
+				{
+					const auto margin = (*entry)["unload_margin"].value<double>();
+					if (!margin || !std::isfinite(*margin) || *margin < 0.0)
+						return std::nullopt;
+					region.unloadMargin = static_cast<float>(*margin);
+					if (!std::isfinite(region.unloadMargin))
+						return std::nullopt;
+				}
+				if (entry->contains("priority"))
+				{
+					const auto priority = (*entry)["priority"].value<std::int64_t>();
+					if (!priority || *priority < 0 || *priority > 3)
+						return std::nullopt;
+					region.priority = static_cast<io::IOPriority>(*priority);
+				}
+				if (entry->contains("always_loaded"))
+				{
+					const auto alwaysLoaded = (*entry)["always_loaded"].value<bool>();
+					if (!alwaysLoaded)
+						return std::nullopt;
+					region.alwaysLoaded = *alwaysLoaded;
+				}
+				scene.streamingRegions.push_back(std::move(region));
 			}
 		}
 
@@ -2532,6 +2638,89 @@ namespace aether::app::scene
 			}
 		}
 
+		// Validate the complete encoding without constructing a tree. BinaryReader's
+		// scalar reads intentionally default on truncation, so they are safe only
+		// after this pass has checked every byte and all recursive container sizes.
+		Expected<void> ValidateSceneBinary(const std::byte* data, std::size_t size)
+		{
+			if (data == nullptr || size < sizeof(std::uint32_t) * 2 + 1)
+				return std::unexpected(AetherError::Engine("Scene binary: truncated header"));
+			BinaryReader reader(data, size);
+			auto failure = [&](const char* reason) -> Expected<void>
+			{
+				return std::unexpected(AetherError::Engine(std::string("Scene binary at byte ") +
+				        std::to_string(size - reader.Remaining()) + ": " + reason));
+			};
+			if (reader.Read<std::uint32_t>() != kSceneBinaryMagic)
+				return failure("invalid magic");
+			if (reader.Read<std::uint32_t>() != kSceneBinaryVersion)
+				return failure("unsupported binary version");
+			if (reader.Read<std::uint8_t>() != static_cast<std::uint8_t>(TomlTag::Table))
+				return failure("root must be a table");
+			std::size_t nodes = 1;
+			auto readString = [&]() -> Expected<void>
+			{
+				if (!reader.CanRead(sizeof(std::uint32_t))) return failure("truncated string length");
+				const auto length = reader.Read<std::uint32_t>();
+				if (!reader.CanRead(length)) return failure("string length exceeds remaining input");
+				reader.Advance(length);
+				return {};
+			};
+			auto body = [&](auto&& self, TomlTag type, unsigned depth) -> Expected<void>
+			{
+				if (depth > 64) return failure("tree depth exceeds 64");
+				if (!reader.CanRead(sizeof(std::uint32_t))) return failure("truncated container count");
+				const auto count = reader.Read<std::uint32_t>();
+				const std::size_t minimum = type == TomlTag::Table ? 5 : 1;
+				if (count > 1000000 - nodes || count > reader.Remaining() / minimum)
+					return failure("container count exceeds input or node limit");
+				for (std::uint32_t i = 0; i < count; ++i)
+				{
+					if (type == TomlTag::Table)
+					{
+						auto key = readString();
+						if (!key) return std::unexpected(std::move(key.error()));
+					}
+					if (nodes == 1000000) return failure("node count exceeds limit");
+					if (!reader.CanRead(1)) return failure("truncated node tag");
+					const auto tag = static_cast<TomlTag>(reader.Read<std::uint8_t>());
+					++nodes;
+					switch (tag)
+					{
+						case TomlTag::Null: break;
+						case TomlTag::Table:
+						case TomlTag::Array:
+						{
+							auto nested = self(self, tag, depth + 1);
+							if (!nested) return std::unexpected(std::move(nested.error()));
+							break;
+						}
+						case TomlTag::String:
+						{
+							auto value = readString();
+							if (!value) return std::unexpected(std::move(value.error()));
+							break;
+						}
+						case TomlTag::Int:
+						case TomlTag::Float:
+							if (!reader.CanRead(sizeof(std::uint64_t))) return failure("truncated numeric value");
+							reader.Advance(sizeof(std::uint64_t));
+							break;
+						case TomlTag::Bool:
+							if (!reader.CanRead(1)) return failure("truncated boolean");
+							if (reader.Read<std::uint8_t>() > 1) return failure("invalid boolean");
+							break;
+						default: return failure("unknown node tag");
+					}
+				}
+				return {};
+			};
+			auto valid = body(body, TomlTag::Table, 0);
+			if (!valid) return valid;
+			if (reader.Remaining() != 0) return failure("trailing bytes");
+			return {};
+		}
+
 		std::string ReadBinaryString(BinaryReader& reader)
 		{
 			const std::uint32_t length = reader.Read<std::uint32_t>();
@@ -2654,18 +2843,23 @@ namespace aether::app::scene
 		outBinary = EncodeTreeBinary(tree);
 	}
 
+	Expected<SceneDescription> ReadSceneBinaryChecked(const std::byte* data, std::size_t size)
+	{
+		auto valid = ValidateSceneBinary(data, size);
+		if (!valid) return std::unexpected(std::move(valid.error()));
+		BinaryReader reader(data, size);
+		reader.Advance(sizeof(std::uint32_t) * 2 + 1);
+		auto scene = BuildSceneFromToml(ReadTomlTableBody(reader, 0));
+		if (!scene)
+			return std::unexpected(AetherError::Engine("Scene binary contains invalid scene data or an unsupported scene version"));
+		return std::move(*scene);
+	}
+
 	std::optional<SceneDescription> ReadSceneBinary(const std::byte* data, std::size_t size)
 	{
-		BinaryReader reader(data, size);
-		if (!reader.CanRead(sizeof(std::uint32_t) * 2 + 1) || reader.Read<std::uint32_t>() != kSceneBinaryMagic || reader.Read<std::uint32_t>() != kSceneBinaryVersion)
-		{
-			return std::nullopt;
-		}
-		if (static_cast<TomlTag>(reader.Read<std::uint8_t>()) != TomlTag::Table)
-		{
-			return std::nullopt;
-		}
-		return BuildSceneFromToml(ReadTomlTableBody(reader, 0));
+		auto scene = ReadSceneBinaryChecked(data, size);
+		if (!scene) return std::nullopt;
+		return std::move(*scene);
 	}
 
 	std::optional<SceneDescription> ReadSceneBinary(const std::vector<std::byte>& bytes)

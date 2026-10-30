@@ -20,6 +20,7 @@ namespace aether::assetpipeline
 			std::vector<std::pair<std::string, ByteBuffer>> animFiles;
 			std::vector<std::pair<std::string, ByteBuffer>> materialFiles;
 			std::string skeletonHash;
+			std::string error;
 		};
 
 		[[nodiscard]] ProcessedResult Process(std::span<const std::byte> gltfData, const std::filesystem::path& sourcePath, const std::string& virtualPath, const std::filesystem::path& sourceDir);

@@ -19,6 +19,9 @@ namespace aether
 
 namespace aether::net
 {
+	// A predicted local ghost must have no replicated identity before OnAttach.
+	void MarkPredicted(World& world, Entity entity);
+
 	// Every packet starts with one of these so the receive system can dispatch
 	// without a second framing layer (NetworkReceiveSystem::OnData reads data[0] and
 	// hands data.subspan(1) to the decoder).
@@ -56,6 +59,8 @@ namespace aether::net
 		OwnershipTransfer = 11,
 		RagdollPose = 12,
 		VelocitySnapshot = 13,
+		Ping = 14,
+		Pong = 15,
 	};
 
 	// The largest value the enum defines - the direct mirror of kNetRpcTargetMax in
@@ -71,7 +76,7 @@ namespace aether::net
 	// the BUILD, which is the only version of that promise worth making - and so does
 	// REMOVING one, which is how the retired Input kind was caught. Keep this on the
 	// last enumerator.
-	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::VelocitySnapshot);
+	inline constexpr std::uint8_t kNetMessageMax = static_cast<std::uint8_t>(NetMessage::Pong);
 
 	// The longest reason string a peer is allowed to put on the wire, and the longest
 	// one this peer will keep. A reason is rendered by the game, so an unbounded

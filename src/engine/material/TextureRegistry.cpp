@@ -1,4 +1,7 @@
 #include "material/TextureRegistry.hpp"
+#if !defined(AETHERCORE_WEB_RUNTIME)
+#include "gpu/ResourceRegistry.hpp"
+#endif
 
 #include "io/FileSystem.hpp"
 #include "utils/Hash.hpp"
@@ -70,20 +73,8 @@ namespace aether
 
 		const std::scoped_lock lock(m_mutex);
 
-		auto range = m_hashToEntry.equal_range(hash);
-		for (auto it = range.first; it != range.second; ++it)
-		{
-			Entry& e = m_entries[it->second];
-			if (e.alive && e.colorSpace == colorSpace && e.resolvedPath == resolved)
-			{
-				if (reference.starts_with("uid://"))
-				{
-					e.reference = reference;
-				}
-				++e.refcount;
-				return TextureHandle{it->second, e.generation};
-			}
-		}
+		if (const TextureHandle existing = FindLocked(resolved, reference, colorSpace, hash); existing.IsValid())
+			return existing;
 
 		// it, so packing routes it through ResolveSlot -> the magenta default (a
 		auto loaded = m_sink.Load(resolved, colorSpace);
@@ -93,6 +84,124 @@ namespace aether
 			return TextureHandle::Broken();
 		}
 
+		return InsertLocked(resolved, reference, colorSpace, hash, std::move(*loaded));
+	}
+
+	TextureHandle TextureRegistry::FindAndAcquire(std::string_view path, TextureColorSpace colorSpace)
+	{
+		std::string reference = path.starts_with("uid://") ? std::string(path) : io::FileSystem::AssetReference(path);
+		const std::string source = io::FileSystem::ResolveAssetPath(reference);
+		if (source.empty())
+			return {};
+		const std::string resolved = m_sink.ResolvePath(source);
+		if (!reference.starts_with("uid://"))
+			reference = resolved;
+		const std::uint64_t hash = utils::Fnv1a(resolved) ^ (colorSpace == TextureColorSpace::Linear ? 0x9e3779b97f4a7c15ull : 0ull);
+		const std::scoped_lock lock(m_mutex);
+		return FindLocked(resolved, reference, colorSpace, hash);
+	}
+
+	void TextureRegistry::RetirePrepared(TextureResource texture, std::function<void()> onTextureRetired, std::function<void()> onTextureBeginRetire)
+	{
+		if (onTextureBeginRetire) onTextureBeginRetire();
+#if !defined(AETHERCORE_WEB_RUNTIME)
+		const std::lock_guard lock(gpu::ResourceRegistry::BufferMutex());
+		texture = TextureResource{};
+		if (onTextureRetired) gpu::ResourceRegistry::DeferDestructionCallback(std::move(onTextureRetired));
+#else
+		texture = TextureResource{};
+		if (onTextureRetired) onTextureRetired();
+#endif
+	}
+
+	TextureHandle TextureRegistry::PublishPrepared(std::string_view path, TextureColorSpace colorSpace, TextureResource texture, std::function<void()> onTextureRetired, std::function<void()> onTextureBeginRetire)
+	{
+		if (texture.GetBindlessSlot() == TextureResource::kInvalidSlot)
+		{
+			RetirePrepared(std::move(texture), std::move(onTextureRetired), std::move(onTextureBeginRetire));
+			return TextureHandle::Broken();
+		}
+		std::string reference = path.starts_with("uid://") ? std::string(path) : io::FileSystem::AssetReference(path);
+		const std::string source = io::FileSystem::ResolveAssetPath(reference);
+		if (source.empty())
+		{
+			RetirePrepared(std::move(texture), std::move(onTextureRetired), std::move(onTextureBeginRetire));
+			return TextureHandle::Broken();
+		}
+		const std::string resolved = m_sink.ResolvePath(source);
+		if (!reference.starts_with("uid://"))
+			reference = resolved;
+		const std::uint64_t hash = utils::Fnv1a(resolved) ^ (colorSpace == TextureColorSpace::Linear ? 0x9e3779b97f4a7c15ull : 0ull);
+		std::unique_lock lock(m_mutex);
+		if (const TextureHandle existing = FindLocked(resolved, reference, colorSpace, hash); existing.IsValid())
+		{
+			lock.unlock();
+			RetirePrepared(std::move(texture), std::move(onTextureRetired), std::move(onTextureBeginRetire));
+			return existing;
+		}
+		const TextureHandle result = InsertLocked(resolved, reference, colorSpace, hash, std::move(texture));
+		m_entries[result.index].onTextureBeginRetire = std::move(onTextureBeginRetire);
+		m_entries[result.index].onTextureRetired = std::move(onTextureRetired);
+		return result;
+	}
+
+#if !defined(AETHERCORE_WEB_RUNTIME)
+	Expected<PreparedTextureUploadSizes> TextureRegistry::GetPreparedUploadSizes(const Texture::Prepared& prepared, TextureColorSpace colorSpace) const
+	{
+		return m_sink.GetPreparedUploadSizes(prepared, colorSpace);
+	}
+
+	Expected<PreparedTextureUpload> TextureRegistry::BeginPreparedUpload(const Texture::Prepared& prepared, std::string_view path, TextureColorSpace colorSpace, std::function<void()> onStagingRetired, std::function<void()> onGpuFailureRetired)
+	{
+		return m_sink.BeginPreparedUpload(prepared, path, colorSpace, std::move(onStagingRetired), std::move(onGpuFailureRetired));
+	}
+
+	bool TextureRegistry::IsPreparedUploadComplete(const PreparedTextureUpload& upload) const
+	{
+		return m_sink.IsPreparedUploadComplete(upload);
+	}
+
+	void TextureRegistry::WaitPreparedUpload(const PreparedTextureUpload& upload)
+	{
+		m_sink.WaitPreparedUpload(upload);
+	}
+
+	Expected<std::uint64_t> TextureRegistry::GetPreparedUploadBytes(const Texture::Prepared& prepared, TextureColorSpace colorSpace) const
+	{
+		return Texture::PreparedUploadBytes(prepared, "streamed texture", colorSpace);
+	}
+	Expected<Texture::ChunkedUpload> TextureRegistry::BeginChunkedUpload(const Texture::Prepared& prepared, std::string_view path, TextureColorSpace colorSpace, std::function<void()> onGpuFailureRetired, std::function<void()> onGpuFailureBeginRetire)
+	{
+		return m_sink.BeginChunkedUpload(prepared, path, colorSpace, std::move(onGpuFailureRetired), std::move(onGpuFailureBeginRetire));
+	}
+	Expected<std::uint64_t> TextureRegistry::PumpChunkedUpload(Texture::ChunkedUpload& state, std::uint64_t maxBytes, const std::function<bool(std::uint64_t)>& reserveStaging, const std::function<void(std::uint64_t)>& retireStaging)
+	{
+		return m_sink.PumpChunkedUpload(state, maxBytes, reserveStaging, retireStaging);
+	}
+	bool TextureRegistry::IsChunkedUploadComplete(const Texture::ChunkedUpload& state) const { return m_sink.IsChunkedUploadComplete(state); }
+	bool TextureRegistry::IsChunkedUploadIdle(const Texture::ChunkedUpload& state) const { return m_sink.IsChunkedUploadIdle(state); }
+	void TextureRegistry::WaitChunkedUpload(const Texture::ChunkedUpload& state) { m_sink.WaitChunkedUpload(state); }
+#endif
+
+	TextureHandle TextureRegistry::FindLocked(const std::string& resolved, const std::string& reference, TextureColorSpace colorSpace, std::uint64_t hash)
+	{
+		const auto range = m_hashToEntry.equal_range(hash);
+		for (auto it = range.first; it != range.second; ++it)
+		{
+			Entry& e = m_entries[it->second];
+			if (e.alive && e.colorSpace == colorSpace && e.resolvedPath == resolved)
+			{
+				if (reference.starts_with("uid://"))
+					e.reference = reference;
+				++e.refcount;
+				return TextureHandle{it->second, e.generation};
+			}
+		}
+		return {};
+	}
+
+	TextureHandle TextureRegistry::InsertLocked(std::string resolved, std::string reference, TextureColorSpace colorSpace, std::uint64_t hash, TextureResource&& texture)
+	{
 		std::uint32_t index = 0xFFFFFFFFu;
 		for (std::uint32_t i = 0; i < m_entries.size(); ++i)
 		{
@@ -107,17 +216,32 @@ namespace aether
 			index = static_cast<std::uint32_t>(m_entries.size());
 			m_entries.emplace_back();
 		}
-
 		Entry& e = m_entries[index];
-		e.resolvedPath = resolved;
-		e.reference = reference;
+		e.resolvedPath = std::move(resolved);
+		e.reference = std::move(reference);
 		e.hash = hash;
 		e.colorSpace = colorSpace;
-		e.texture = std::move(*loaded);
+		e.texture = std::move(texture);
 		e.refcount = 1;
 		e.alive = true;
 		m_hashToEntry.emplace(hash, index);
 		return TextureHandle{index, e.generation};
+	}
+
+	TextureHandle TextureRegistry::FindAndAcquireSlot(std::uint32_t slot)
+	{
+		const std::scoped_lock lock(m_mutex);
+		if (slot == 0xFFFFFFFFu) return {};
+		for (std::uint32_t i = 0; i < m_entries.size(); ++i)
+		{
+			auto& entry = m_entries[i];
+			if (entry.alive && entry.texture.GetBindlessSlot() == slot)
+			{
+				++entry.refcount;
+				return TextureHandle{i, entry.generation};
+			}
+		}
+		return {};
 	}
 
 	void TextureRegistry::AddRef(TextureHandle handle)
@@ -136,7 +260,7 @@ namespace aether
 
 	void TextureRegistry::Release(TextureHandle handle)
 	{
-		const std::scoped_lock lock(m_mutex);
+		std::unique_lock lock(m_mutex);
 		if (!handle.IsValid() || handle.index >= m_entries.size())
 		{
 			return;
@@ -164,17 +288,25 @@ namespace aether
 		++e.generation;
 		e.resolvedPath.clear();
 		e.reference.clear();
-		e.texture = TextureResource{};
+		TextureResource texture = std::move(e.texture);
+		auto onRetired = std::move(e.onTextureRetired);
+		auto onBeginRetire = std::move(e.onTextureBeginRetire);
+		lock.unlock();
+		RetirePrepared(std::move(texture), std::move(onRetired), std::move(onBeginRetire));
 	}
 
 	void TextureRegistry::ReleaseAll()
 	{
-		const std::scoped_lock lock(m_mutex);
+		std::unique_lock lock(m_mutex);
+		auto entries = std::move(m_entries);
 		m_entries.clear();
 		m_hashToEntry.clear();
 		m_defaultHandle = TextureHandle{};
 		m_defaultSlot = 0xFFFFFFFFu;
 		m_whiteHandle = TextureHandle{};
+		lock.unlock();
+		for (auto& entry : entries)
+			RetirePrepared(std::move(entry.texture), std::move(entry.onTextureRetired), std::move(entry.onTextureBeginRetire));
 	}
 
 	std::uint32_t TextureRegistry::ResolveSlot(TextureHandle handle) const
@@ -212,6 +344,17 @@ namespace aether
 			return false;
 		}
 		outPath = e.reference.empty() ? e.resolvedPath : e.reference;
+		return true;
+	}
+
+	bool TextureRegistry::TryGetPathSize(TextureHandle handle, std::size_t& outBytes) const
+	{
+		const std::scoped_lock lock(m_mutex);
+		if (!handle.IsValid() || handle.index >= m_entries.size()) return false;
+		const Entry& entry = m_entries[handle.index];
+		if (!entry.alive || entry.generation != handle.generation ||
+		    (!entry.resolvedPath.empty() && entry.resolvedPath.front() == '\x01')) return false;
+		outBytes = (entry.reference.empty() ? entry.resolvedPath : entry.reference).size();
 		return true;
 	}
 	void TextureRegistry::RetargetPaths(std::string_view oldVfs, std::string_view newVfs)

@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <istream>
 #include <memory>
 #include <span>
@@ -22,6 +23,10 @@ namespace aether::io
 
 		[[nodiscard]] virtual bool Exists(std::string_view relativePath) const = 0;
 		[[nodiscard]] virtual Expected<std::vector<std::byte>> Read(std::string_view relativePath) const = 0;
+		[[nodiscard]] virtual Expected<std::vector<std::byte>> ReadReserved(std::string_view, const std::function<bool(std::size_t)>&) const
+		{
+			AE_UNEXPECTED(AetherError::FileSystem("Backend does not support reserved reads"));
+		}
 		[[nodiscard]] virtual Expected<std::unique_ptr<std::istream>> OpenStream(std::string_view relativePath) const = 0;
 		[[nodiscard]] virtual Expected<std::vector<std::string>> Glob(std::string_view pattern, const FileGlobOptions& options) const = 0;
 

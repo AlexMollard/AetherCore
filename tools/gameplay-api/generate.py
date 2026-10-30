@@ -15,7 +15,7 @@ TYPES = {
 
 
 def validated_functions(manifest):
-    if manifest.get("schemaVersion") != 1 or manifest.get("abiMajor") != 1:
+    if manifest.get("schemaVersion") != 1 or manifest.get("abiMajor") != 2:
         raise ValueError("Unsupported engine-call manifest version")
     names = set()
     functions = manifest.get("functions", [])

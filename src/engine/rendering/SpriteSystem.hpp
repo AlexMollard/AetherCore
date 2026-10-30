@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 
@@ -24,6 +25,8 @@ namespace aether
 
 		TextureRegistry* m_textures = nullptr;
 		SpriteAssetStore* m_assets = nullptr;
-		std::unordered_map<std::string, TextureHandle> m_textureCache;
+		struct CachedTexture { TextureHandle handle; std::uint64_t lastUsed = 0; };
+		std::unordered_map<std::string, CachedTexture> m_textureCache;
+		std::uint64_t m_extractCount = 0;
 	};
 } // namespace aether

@@ -1,12 +1,16 @@
 #include "WebScene.hpp"
+#include "scene/SceneStreamingReferences.hpp"
 
 #include <algorithm>
+#include <bit>
+#include <cstring>
 #include <cmath>
 #include <numbers>
 #include <emscripten.h>
 #include "utils/Utf8.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include "io/FileSystem.hpp"
+#include "platform/web/WebFileSystem.hpp"
 #include "physics2d/Physics2DSystem.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "animation/SpriteAnimationSystem.hpp"
@@ -21,7 +25,9 @@
 #include "ui/UiComponents.hpp"
 #include "ui/UiLayoutSystem.hpp"
 #include "WebAssetFormat.hpp"
+#include "scene/WorldStreaming.hpp"
 #include "scene/SceneDocumentExpansion.hpp"
+#include "scene/SceneStreamingDependencies.hpp"
 #include "passes/TonemapDefs.hpp"
 #include "rendering/SceneEffectExtraction.hpp"
 #include "rendering/FrameConstants.hpp"
@@ -51,6 +57,27 @@ namespace aether::app::web
 
 	namespace
 	{
+		struct StreamingModelScope
+		{
+			WebModels& models;
+			explicit StreamingModelScope(WebModels& value) : models(value) { models.SetStreamingActivation(true); }
+			~StreamingModelScope() { models.SetStreamingActivation(false); }
+		};
+
+		Expected<scene::SceneDescription> PreparedSceneRecord(std::span<const std::byte> bytes, std::size_t& offset)
+		{
+			if (offset > bytes.size() || bytes.size() - offset < sizeof(std::uint32_t))
+				AE_UNEXPECTED(AetherError::Asset("Truncated prepared browser scene record"));
+			std::uint32_t length;
+			std::memcpy(&length, bytes.data() + offset, sizeof(length));
+			offset += sizeof(length);
+			if (length > bytes.size() - offset)
+				AE_UNEXPECTED(AetherError::Asset("Invalid prepared browser scene record length"));
+			auto result = scene::ReadSceneBinaryChecked(bytes.data() + offset, length);
+			offset += length;
+			return result;
+		}
+
 
 		// Same per-entity physics-domain rule as native SceneSerializerApply: one entity never
 		// simulates 2D and 3D physics at once; the scene kind breaks the tie.
@@ -156,20 +183,51 @@ namespace aether::app::web
 
 	Expected<TextureResource> WebTextureSink::Load(std::string_view path, TextureColorSpace colorSpace)
 	{
-		auto bytes = io::FileSystem::ReadFile(path);
+		error.clear();
+		m_graphics.CollectRetiredTextures(m_free_slots);
+		const auto resolved = io::FileSystem::ResolveAssetPath(path);
+		auto bytes = aether::web::FindWebAsset(resolved);
+		const bool streamed = !bytes.empty();
+		std::vector<std::byte> bootstrap;
+		if (bytes.empty())
+		{
+			AE_TRY(loaded, io::FileSystem::ReadFile(path));
+			bootstrap = std::move(*loaded);
+			bytes = bootstrap;
+		}
 		WebTextureHeader header;
-		if (!bytes || !ReadWebTextureHeader(*bytes, header) || m_next_slot >= Capacity())
+		if (!ReadWebTextureHeader(bytes, header) || (m_free_slots.empty() && m_next_slot >= Capacity()))
 		{
 			error = "Missing, invalid or oversized browser texture, or texture capacity exceeded: " + std::string(path);
 			AE_UNEXPECTED(AetherError::Asset(error));
 		}
-		const auto* pixels = reinterpret_cast<const std::uint8_t*>(bytes->data() + sizeof(header));
-		if (!m_graphics.UploadTexture(m_next_slot, header.width, header.height, {pixels, static_cast<size_t>(header.pixelBytes)}, colorManaged && colorSpace == TextureColorSpace::Srgb, colorManaged))
+		const auto slot = m_free_slots.empty() ? m_next_slot : m_free_slots.back();
+		const auto* pixels = reinterpret_cast<const std::uint8_t*>(bytes.data() + sizeof(header));
+		const auto mipData = streamed && colorManaged ? aether::web::FindWebAsset(resolved + ".mips") : std::span<const std::byte>{};
+		if (streamed && colorManaged && mipData.empty())
+			AE_UNEXPECTED(AetherError::Asset("Streaming texture mip data was not prepared by the worker: " + resolved));
+		const bool uploaded = mipData.empty()
+		        ? m_graphics.UploadTexture(slot, header.width, header.height, {pixels, static_cast<size_t>(header.pixelBytes)}, colorManaged && colorSpace == TextureColorSpace::Srgb, colorManaged, streamed ? m_budget : nullptr)
+		        : m_graphics.UploadPreparedTexture(slot, mipData, colorSpace == TextureColorSpace::Srgb, m_budget);
+		if (!uploaded)
 		{
-			error = "WebGPU texture upload failed: " + std::string(path);
+			error = m_graphics.TextureUploadError().empty() ? "WebGPU texture upload failed: " + std::string(path) : m_graphics.TextureUploadError() + ": " + std::string(path);
 			AE_UNEXPECTED(AetherError::Asset(error));
 		}
-		return TextureResource(m_next_slot++);
+		if (m_free_slots.empty()) ++m_next_slot;
+		else m_free_slots.pop_back();
+		auto lifetime = std::shared_ptr<void>(new std::uint32_t(slot), [state = m_retirement](void* value)
+		{
+			const auto retired = *static_cast<std::uint32_t*>(value);
+			delete static_cast<std::uint32_t*>(value);
+			if (state->graphics) state->graphics->RetireTextures({retired});
+		});
+		return TextureResource(slot, std::move(lifetime));
+	}
+
+	void WebTextureSink::Retire(std::vector<std::uint32_t> slots)
+	{
+		m_graphics.RetireTextures(std::move(slots));
 	}
 
 	WebScene::WebScene(World& sourceWorld, webgpu::WebGpuDevice& graphics)
@@ -216,6 +274,7 @@ namespace aether::app::web
 		world.UnregisterSystem("AnimationSystem");
 		m_tile_system.Shutdown();
 		m_sprite_system.Shutdown();
+		m_models.ClearEntities();
 		m_textures.ReleaseAll();
 		m_model_textures.ReleaseAll();
 	}
@@ -236,8 +295,9 @@ namespace aether::app::web
 			for (const auto& generic: record.reflected)
 			{
 				if (generic.type != "Rigid Body 2D" && generic.type != "Collider 2D" && generic.type != "Tile Map" && generic.type != "Character Controller"
-				        && generic.type != "Particle Emitter"
+				        && generic.type != "Particle Emitter" && generic.type != "Audio Source"
 				        && generic.type != "Darkness Volume" && generic.type != "Grass" && generic.type != "Grass Bender"
+				        && generic.type != "Network Identity" && generic.type != "Network Transform" && generic.type != "Net Player"
 				        && generic.type != "Point Light" && generic.type != "Spot Light" && generic.type != "Sky" && generic.type != "Light 2D Settings"
 				        && (generic.type != "UI Canvas" && generic.type != "UI Rect" && generic.type != "UI Text" && generic.type != "UI Image" && generic.type != "UI Selectable" && generic.type != "UI Slider" && generic.type != "UI Toggle"
 				                && generic.type != "UI Button" && generic.type != "UI Progress Bar" && generic.type != "UI Text Box"
@@ -280,6 +340,25 @@ namespace aether::app::web
 			}
 		}
 		std::vector<Entity> created;
+		struct Rollback
+		{
+			World& world;
+			std::vector<Entity>& entities;
+			WebModels& models;
+			bool committed = false;
+			~Rollback()
+			{
+				if (!committed)
+				{
+					for (const auto entity: entities)
+					{
+						if (world.GetRegistry().valid(World::ToEntt(entity)))
+							world.Destroy(entity);
+					}
+					models.ReleaseUnused(world);
+				}
+			}
+		} rollback{world, created, m_models};
 		for (const auto& record: description.entities)
 		{
 			const auto entity = world.Create();
@@ -287,7 +366,7 @@ namespace aether::app::web
 			world.Emplace<NameComponent>(entity, NameComponent{.name = record.name});
 			if (record.nodeId)
 			{
-				world.Emplace<SceneNodeComponent>(entity, SceneNodeComponent{record.nodeId});
+				world.Emplace<SceneNodeComponent>(entity, SceneNodeComponent{record.nodeId, record.sourceNodeId});
 			}
 			for (const auto& tag: record.tags)
 			{
@@ -427,6 +506,7 @@ namespace aether::app::web
 			if (light.isSpot)
 			{
 				const auto entity = world.Create();
+				created.push_back(entity);
 				world.Emplace<NameComponent>(entity, NameComponent{.name = "Spot Light"});
 				const float directionLength = glm::dot(light.direction, light.direction);
 				if (!std::isfinite(directionLength) || directionLength < 1e-8f)
@@ -439,9 +519,10 @@ namespace aether::app::web
 			}
 			else
 			{
-				ecs::CreatePointLightEntity(world, light.position, PointLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .castsShadow = light.castsShadow});
+				created.push_back(ecs::CreatePointLightEntity(world, light.position, PointLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .castsShadow = light.castsShadow}));
 			}
 		}
+		rollback.committed = true;
 		return created;
 	}
 
@@ -546,6 +627,7 @@ namespace aether::app::web
 		{
 			AE_UNEXPECTED(AetherError::Asset("Invalid browser scene TOML"));
 		}
+		auto regions = description->streamingRegions;
 		// Headerless prefab defaults contribute feature metadata during expansion, but
 		// the primary authored scene alone chooses its default lighting policy.
 		const bool defaultLighting = description->kind == SceneKind::Scene3D && HasSceneFeature(description->features, SceneFeatureFlags::Lighting3D);
@@ -561,18 +643,43 @@ namespace aether::app::web
 		        });
 		if (!expanded) { AE_UNEXPECTED(AetherError::Asset(expanded.error())); }
 		*description = *expanded;
+		if (!regions.empty())
+		{
+			if (auto ids = scene::EnsureStreamingSceneNodeIds(*description); !ids) AE_UNEXPECTED(AetherError::Asset(ids.error()));
+		}
 		++m_scene_generation;
-		// Native ReplaceScene destroys every live entity in registry storage order, not root by root. Destroy order
-		// decides which freed Jolt body ids the next scene's bodies recycle, and body id order changes contact
-		// solving, so the browser must free them in the same order for scene transitions to stay bit-identical.
+		// Detach persistent subtrees before destroying their nonpersistent parents.
 		auto& registry = world.GetRegistry();
 		std::vector<Entity> doomed;
+		std::vector<Entity> spared;
 		for (const auto handle: registry.storage<entt::entity>())
 		{
-			if (registry.valid(handle))
+			if (!registry.valid(handle)) continue;
+			const auto entity = World::FromEntt(handle);
+			if (ecs::HasDontDestroyOnLoadAncestor(world, entity)) spared.push_back(entity);
+			else doomed.push_back(entity);
+		}
+		if (registry.ctx().contains<scene::StreamingFieldReferenceState>())
+		{
+			std::vector<Entity> detachedNodes;
+			for (const auto entity: doomed)
 			{
-				doomed.push_back(World::FromEntt(handle));
+				const auto* node = world.TryGet<SceneNodeComponent>(entity);
+				if (node && node->id) detachedNodes.push_back(entity);
 			}
+			if (!spared.empty())
+			{
+				if (auto result = scene::PrepareStreamingFieldReferencesForDetach(world, detachedNodes); !result)
+					return std::unexpected(result.error());
+			}
+			scene::ForgetStreamingFieldReferences(world, doomed);
+		}
+		for (const auto entity: spared)
+		{
+			const auto* hierarchy = world.TryGet<HierarchyComponent>(entity);
+			if (hierarchy && hierarchy->parent.IsValid() && !ecs::HasDontDestroyOnLoadAncestor(world, hierarchy->parent))
+				ecs::DetachFromParent(world, entity);
+			if (world.Has<scene::StreamingRegionOwner>(entity)) world.Remove<scene::StreamingRegionOwner>(entity);
 		}
 		for (const auto entity: doomed)
 		{
@@ -584,23 +691,381 @@ namespace aether::app::web
 		world.SetSceneKind(description->kind);
 		world.SetSceneFeatures(description->features);
 		m_tile_system.InvalidateAll();
-		m_models.ClearEntities();
+		if (spared.empty()) m_models.ClearEntities();
+		else m_models.ReleaseUnused(world);
 		m_retired_particles.clear();
 		m_environment = description->environment;
 		m_default_lighting = defaultLighting;
 		m_light_time = 0.0f;
 		AE_TRY(created, Apply(*description));
+		if (!regions.empty())
+		{
+			scene::StreamingNodeIndex index(world);
+			for (std::size_t i = 0; i < description->entities.size(); ++i)
+			{
+				for (const auto& generic: description->entities[i].reflected)
+				{
+					const auto* type = reflect::FindComponentType(generic.type);
+					auto* component = type && type->tryGetRaw ? type->tryGetRaw(world, (*created)[i]) : nullptr;
+					if (!component) continue;
+					for (const auto& [name, value]: generic.fields)
+					{
+						const auto* field = type->FindField(name);
+						if (!field || (field->type != reflect::FieldType::EntityRef && field->type != reflect::FieldType::List)) continue;
+						if (auto result = scene::ApplyStreamingFieldReference(world, (*created)[i], *type, *field, component, value, index); !result) return std::unexpected(result.error());
+					}
+				}
+			}
+		}
+		if (registry.ctx().contains<scene::StreamingFieldReferenceState>())
+		{
+			if (auto result = scene::ResolveStreamingFieldReferences(world); !result)
+				return std::unexpected(result.error());
+		}
 		AE_TRY(scripts, ResolveScripts(*description, *created));
 		static_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem"))->FlushPendingOnly(world);
 		m_physics->FlushPendingOnly(world);
+		m_regions = std::move(regions);
 		return std::move(*scripts);
 	}
 
+	Expected<WebRegionActivation> WebScene::BeginPreparedRegion(std::span<const std::byte> prepared, std::uint64_t restoreGateNode)
+	{
+		if (std::endian::native != std::endian::little || prepared.size() < 16 ||
+		        std::memcmp(prepared.data(), "AESC", 4) != 0 || prepared.size() > UINT64_MAX / 8)
+			AE_UNEXPECTED(AetherError::Asset("Invalid prepared browser scene header"));
+		std::uint32_t version, count, reserved;
+		std::memcpy(&version, prepared.data() + 4, 4);
+		std::memcpy(&count, prepared.data() + 8, 4);
+		std::memcpy(&reserved, prepared.data() + 12, 4);
+		if (version != 1 || !count || count > 65537 || reserved)
+			AE_UNEXPECTED(AetherError::Asset("Unsupported prepared browser scene"));
+		const auto charge = static_cast<std::uint64_t>(prepared.size()) * 8;
+		if (!m_streaming_budget || !m_streaming_budget->TryReserve(streaming::MemoryClass::CpuPending, charge))
+			AE_UNEXPECTED(AetherError::Asset("Browser scene activation exceeds CPU budget"));
+		struct Reservation
+		{
+			std::shared_ptr<streaming::BudgetLedger> budget;
+			std::uint64_t bytes;
+			~Reservation() { if (bytes) budget->Release(streaming::MemoryClass::CpuPending, bytes); }
+		} reservation{m_streaming_budget, charge};
+		std::size_t offset = 16;
+		AE_TRY(metadata, PreparedSceneRecord(prepared, offset));
+		if (!metadata->entities.empty() || !metadata->streamingRegions.empty() || metadata->kind != world.GetSceneKind())
+			AE_UNEXPECTED(AetherError::Asset("Invalid prepared browser scene metadata"));
+		WebRegionActivation activation;
+		activation.description = std::move(*metadata);
+		activation.description.entities.reserve(count - 1);
+		activation.region.entities.reserve(count - 1 + activation.description.lights.size());
+		activation.prepared = prepared;
+		activation.preparedOffset = offset;
+		activation.preparedEntities = count - 1;
+		activation.budget = m_streaming_budget;
+		activation.documentCharge = charge;
+		activation.restoreGateNode = restoreGateNode;
+		reservation.bytes = 0;
+		return activation;
+	}
+
+	Expected<WebRegionActivation> WebScene::BeginRegion(std::string_view sceneReference)
+	{
+		const auto path = ProjectPath("scenes", sceneReference, ".scene.toml");
+		if (path.empty())
+			AE_UNEXPECTED(AetherError::Asset("Invalid browser streaming scene reference"));
+		const auto prepared = aether::web::FindWebAsset(path + ".prepared-scene");
+		if (!prepared.empty()) return BeginPreparedRegion(prepared, 0);
+		if (!aether::web::FindWebAsset(path).empty())
+			AE_UNEXPECTED(AetherError::Asset("Streamed browser scene was not prepared by the worker"));
+		AE_TRY(text, io::FileSystem::ReadFileText(path));
+		auto description = scene::ParseToml(*text);
+		if (!description || !description->streamingRegions.empty())
+			AE_UNEXPECTED(AetherError::Asset("Invalid or nested browser streaming scene"));
+		if (description->kind != world.GetSceneKind())
+			AE_UNEXPECTED(AetherError::Asset("Browser streaming scene kind does not match the world"));
+		auto expanded = scene::ExpandSceneDocument(*description,
+		        [](std::string_view reference, scene::SceneDocumentKind kind) -> std::expected<scene::SceneDescription, std::string>
+		        {
+			        const auto resolved = kind == scene::SceneDocumentKind::Scene
+			                ? WebScene::ProjectPath("scenes", reference, ".scene.toml")
+			                : WebScene::ProjectPath("prefabs", reference, ".prefab.toml");
+			        const auto text = io::FileSystem::ReadFileText(resolved);
+			        if (!text) return std::unexpected("Missing browser streaming dependency: " + resolved);
+			        auto parsed = scene::ParseToml(*text);
+			        if (!parsed || !parsed->streamingRegions.empty())
+				        return std::unexpected("Invalid or nested browser streaming dependency: " + resolved);
+			        return std::move(*parsed);
+		        }, {.preserveExternalNodeReferences = true});
+		if (!expanded) AE_UNEXPECTED(AetherError::Asset(expanded.error()));
+		if (auto ids = scene::EnsureStreamingSceneNodeIds(*expanded); !ids) AE_UNEXPECTED(AetherError::Asset(ids.error()));
+		if (expanded->entities.size() > 65536 || !expanded->streamingRegions.empty())
+			AE_UNEXPECTED(AetherError::Asset("Invalid browser streaming region size or nesting"));
+		std::vector<unsigned char> marks(expanded->entities.size());
+		for (std::size_t i = 0; i < marks.size(); ++i)
+		{
+			if (marks[i] == 2) continue;
+			int current = static_cast<int>(i);
+			while (current >= 0 && static_cast<std::size_t>(current) < marks.size() && marks[current] == 0)
+			{
+				marks[current] = 1;
+				current = expanded->entities[current].parentIndex;
+			}
+			if (current >= 0 && (static_cast<std::size_t>(current) >= marks.size() || marks[current] == 1))
+				AE_UNEXPECTED(AetherError::Asset("Invalid browser streaming hierarchy"));
+			current = static_cast<int>(i);
+			while (current >= 0 && marks[current] == 1)
+			{
+				marks[current] = 2;
+				current = expanded->entities[current].parentIndex;
+			}
+		}
+		WebRegionActivation activation;
+		activation.description = *expanded;
+		activation.region.entities.reserve(expanded->entities.size() + expanded->lights.size());
+		return activation;
+	}
+
+	Expected<bool> WebScene::StepRegion(WebRegionActivation& activation, std::uint32_t entityBudget)
+	{
+		if (!entityBudget) AE_UNEXPECTED(AetherError::Asset("Invalid streaming activation budget"));
+		auto& description = activation.description;
+		auto& entities = activation.region.entities;
+		const auto authoredCount = activation.prepared.empty() ? description.entities.size() : static_cast<std::size_t>(activation.preparedEntities);
+		if (!activation.region.activationGate.IsValid())
+		{
+			const auto gate = world.Create();
+			world.Emplace<NameComponent>(gate, NameComponent{.name = "Streaming Region"});
+			world.Emplace<TransformComponent>(gate);
+			world.Emplace<DisabledComponent>(gate);
+			if (activation.restoreGateNode)
+			{
+				world.Emplace<SceneNodeComponent>(gate, SceneNodeComponent{activation.restoreGateNode});
+				activation.nodes.emplace(activation.restoreGateNode, gate);
+			}
+			activation.region.activationGate = gate;
+			--entityBudget;
+		}
+		while (entityBudget && activation.phase < 3)
+		{
+			if (activation.phase == 0)
+			{
+				if (activation.cursor == authoredCount + description.lights.size())
+				{
+					if (!activation.prepared.empty())
+					{
+						if (activation.preparedOffset != activation.prepared.size() || description.entities.size() != authoredCount)
+							AE_UNEXPECTED(AetherError::Asset("Invalid prepared browser scene record count"));
+						std::vector<unsigned char> marks(authoredCount);
+						for (std::size_t i = 0; i < authoredCount; ++i)
+						{
+							if (marks[i] == 2) continue;
+							int current = static_cast<int>(i);
+							while (current >= 0 && static_cast<std::size_t>(current) < authoredCount && marks[current] == 0)
+							{
+								marks[current] = 1;
+								current = description.entities[current].parentIndex;
+							}
+							if (current >= 0 && (static_cast<std::size_t>(current) >= authoredCount || marks[current] == 1))
+								AE_UNEXPECTED(AetherError::Asset("Invalid prepared browser scene hierarchy"));
+							current = static_cast<int>(i);
+							while (current >= 0 && marks[current] == 1) { marks[current] = 2; current = description.entities[current].parentIndex; }
+						}
+						if (activation.restoreGateNode)
+						{
+							if (!activation.restoredGateSeen) AE_UNEXPECTED(AetherError::Asset("Missing restored streaming gate"));
+							for (const auto& record: description.entities)
+								if (record.parentIndex < 0 && record.nodeId != activation.restoreGateNode)
+									AE_UNEXPECTED(AetherError::Asset("Restored streaming entity lies outside its gate"));
+						}
+					}
+					activation.cursor = 0;
+					activation.fieldNodes = std::make_shared<scene::StreamingNodeIndex>(world);
+					activation.phase = 1;
+					continue;
+				}
+				scene::SceneDescription slice;
+				slice.kind = description.kind;
+				slice.features = description.features;
+				if (activation.cursor < authoredCount)
+				{
+					if (!activation.prepared.empty())
+					{
+						AE_TRY(document, PreparedSceneRecord(activation.prepared, activation.preparedOffset));
+						if (document->entities.size() != 1 || !document->streamingRegions.empty())
+							AE_UNEXPECTED(AetherError::Asset("Invalid prepared browser scene entity"));
+						description.entities.push_back(std::move(document->entities.front()));
+					}
+					if (!activation.restoreGateNode)
+					{
+						auto& authored = description.entities[activation.cursor];
+						authored.nodeId = scene::StreamingNodeId(activation.region.id, authored.sourceNodeId);
+					}
+					if (activation.restoreGateNode && description.entities[activation.cursor].nodeId == activation.restoreGateNode)
+					{
+						const auto& gateRecord = description.entities[activation.cursor];
+						if (activation.restoredGateSeen || gateRecord.parentIndex >= 0 || !gateRecord.scripts.empty())
+							AE_UNEXPECTED(AetherError::Asset("Invalid restored streaming gate"));
+						activation.restoredGateSeen = true;
+						world.Destroy(activation.region.activationGate);
+						activation.nodes.erase(activation.restoreGateNode);
+						activation.region.activationGate = {};
+					}
+					auto record = description.entities[activation.cursor];
+					if (activation.restoreGateNode)
+					{
+						if (!record.nodeId) AE_UNEXPECTED(AetherError::Asset("Restored streaming entity has no stable node"));
+						const std::function<void(reflect::FieldValue&)> clear = [&](reflect::FieldValue& value)
+						{
+							if (value.type == reflect::FieldType::EntityRef) value.entity = 0;
+							for (auto& row: value.list) for (auto& child: row) clear(child);
+						};
+						for (auto& component: record.reflected) for (auto& [name, value]: component.fields) clear(value);
+					}
+					record.parentIndex = -1;
+					record.joint2D.reset();
+					record.joint.reset();
+					record.scriptJoints.clear();
+					record.disabled = true;
+					slice.entities.push_back(std::move(record));
+				}
+				else slice.lights.push_back(description.lights[activation.cursor - authoredCount]);
+				StreamingModelScope scope(m_models);
+				AE_TRY(created, Apply(slice));
+				if (created->size() != 1) AE_UNEXPECTED(AetherError::Asset("Invalid streaming entity activation"));
+				if (!world.Has<DisabledComponent>((*created)[0])) world.Emplace<DisabledComponent>((*created)[0]);
+				if (activation.cursor >= authoredCount) ecs::SetParent(world, (*created)[0], activation.region.activationGate);
+				entities.push_back((*created)[0]);
+				if (activation.restoreGateNode && activation.cursor < authoredCount &&
+				        description.entities[activation.cursor].nodeId == activation.restoreGateNode)
+					activation.region.activationGate = (*created)[0];
+				if (activation.restoreGateNode && activation.cursor < authoredCount)
+				{
+					const auto node = description.entities[activation.cursor].nodeId;
+					if (!activation.nodes.emplace(node, (*created)[0]).second)
+						AE_UNEXPECTED(AetherError::Asset("Duplicate restored streaming node"));
+				}
+				++activation.cursor;
+				--entityBudget;
+				continue;
+			}
+			if (activation.phase == 1)
+			{
+				if (activation.cursor == authoredCount)
+				{
+					activation.cursor = 0;
+					activation.phase = 2;
+					continue;
+				}
+				const auto i = activation.cursor++;
+				const auto& record = description.entities[i];
+				const auto entity = entities[i];
+				if (entity != activation.region.activationGate)
+				{
+					if (record.parentIndex >= 0) ecs::SetParent(world, entity, entities[record.parentIndex]);
+					else ecs::SetParent(world, entity, activation.region.activationGate);
+				}
+				{
+					const auto& referenceIndex = *activation.fieldNodes;
+					for (const auto& generic: record.reflected)
+					{
+						const auto* type = reflect::FindComponentType(generic.type);
+						auto* component = type && type->tryGetRaw ? type->tryGetRaw(world, entity) : nullptr;
+						if (!component) continue;
+						for (const auto& [name, saved]: generic.fields)
+						{
+							if (const auto* field = type->FindField(name))
+							{
+								if (auto result = scene::ApplyStreamingFieldReference(world, entity, *type, *field, component, saved, referenceIndex); !result)
+									return std::unexpected(result.error());
+							}
+						}
+						if (type->postSet) type->postSet(world, entity);
+					}
+				}
+				if (record.joint2D && ResolvePhysicsDomain(record, description.kind).apply2D)
+				{
+					auto joint = *record.joint2D;
+					if (record.joint2DTargetIndex >= 0 && static_cast<std::size_t>(record.joint2DTargetIndex) < authoredCount)
+						joint.target = entities[record.joint2DTargetIndex];
+					world.Emplace<Joint2DComponent>(entity, joint);
+				}
+				if (ResolvePhysicsDomain(record, description.kind).apply3D)
+				{
+					if (record.joint)
+					{
+						const auto& joint = *record.joint;
+						Entity target{};
+						if (joint.targetIndex >= 0 && static_cast<std::size_t>(joint.targetIndex) < authoredCount) target = entities[joint.targetIndex];
+						world.Emplace<JointComponent>(entity, JointComponent{.type = joint.type, .target = target, .anchor = joint.anchor,
+						        .axis = joint.axis, .minLimit = joint.minLimit, .maxLimit = joint.maxLimit, .distance = joint.distance, .collideConnected = joint.collideConnected});
+					}
+					for (const auto& joint: record.scriptJoints)
+					{
+						JointEntry entry;
+						if (joint.targetIndex >= 0 && static_cast<std::size_t>(joint.targetIndex) < authoredCount) entry.target = entities[joint.targetIndex];
+						entry.type = joint.type; entry.anchor = joint.anchor; entry.axis = joint.axis; entry.minLimit = joint.minLimit;
+						entry.maxLimit = joint.maxLimit; entry.distance = joint.distance; entry.swingLimit = joint.swingLimit; entry.collideConnected = joint.collideConnected;
+						m_physics->AddScriptJoint(world, entity, entry);
+					}
+				}
+				AE_TRY(scripts, ResolveScripts(description, entities, i, i + 1));
+				activation.region.scripts.insert(activation.region.scripts.end(), std::make_move_iterator(scripts->begin()), std::make_move_iterator(scripts->end()));
+				--entityBudget;
+				continue;
+			}
+			if (activation.cursor == entities.size())
+			{
+				world.SetSceneFeatures(world.GetSceneFeatures() | description.features);
+				static_cast<Physics2DSystem*>(world.FindSystem("Physics2DSystem"))->FlushPendingOnly(world);
+				m_physics->FlushPendingOnly(world);
+				if (!activation.restoreGateNode) entities.push_back(activation.region.activationGate);
+				activation.phase = 3;
+				break;
+			}
+			const auto i = activation.cursor++;
+			if (entities[i] != activation.region.activationGate && (i >= authoredCount || !description.entities[i].disabled)) world.Remove<DisabledComponent>(entities[i]);
+			--entityBudget;
+		}
+		if (activation.phase == 3 && activation.documentCharge)
+		{
+			activation.description = {};
+			activation.budget->Release(streaming::MemoryClass::CpuPending, activation.documentCharge);
+			activation.documentCharge = 0;
+		}
+		return activation.phase == 3;
+	}
+
+	void WebScene::CancelRegion(WebRegionActivation& activation)
+	{
+		if (activation.region.activationGate.IsValid() && world.GetRegistry().valid(World::ToEntt(activation.region.activationGate)))
+			world.Destroy(activation.region.activationGate);
+		DetachRegion(activation.region);
+		activation.description = {};
+		if (activation.documentCharge)
+		{
+			activation.budget->Release(streaming::MemoryClass::CpuPending, activation.documentCharge);
+			activation.documentCharge = 0;
+		}
+	}
+
+
+	void WebScene::DetachRegion(WebRegion& region)
+	{
+		for (const auto entity: region.entities)
+		{
+			if (world.GetRegistry().valid(World::ToEntt(entity)))
+				world.Destroy(entity);
+		}
+		m_models.ReleaseUnused(world);
+		region.entities.clear();
+		region.scripts.clear();
+	}
+
+
 	// Resolves each script's entity / authored-node references to live entities, as a scene load does.
-	Expected<std::vector<WebScriptRecord>> WebScene::ResolveScripts(const scene::SceneDescription& description, const std::vector<Entity>& created)
+	Expected<std::vector<WebScriptRecord>> WebScene::ResolveScripts(const scene::SceneDescription& description, const std::vector<Entity>& created, std::size_t begin, std::size_t end)
 	{
 		std::vector<WebScriptRecord> scripts;
-		for (size_t i = 0; i < created.size(); ++i)
+		for (size_t i = begin; i < std::min(end, description.entities.size()); ++i)
 		{
 			if (description.entities[i].scripts.empty())
 			{
@@ -612,14 +1077,26 @@ namespace aether::app::web
 			{
 				auto resolved = script;
 				resolved.properties = scene::detail::ScriptPropsFromSceneRefs(script.properties, created);
+				resolved.properties.erase("Self");
 				for (const auto& [property, node]: script.nodeRefs)
 				{
-					const auto found = std::find_if(description.entities.begin(), description.entities.end(), [node](const auto& record) { return record.nodeId == node; });
-					if (found == description.entities.end())
+					if (property == "Self")
 					{
-						AE_UNEXPECTED(AetherError::Asset("Unresolved browser script node reference"));
+						continue;
 					}
-					resolved.properties[property].i64 = created[std::distance(description.entities.begin(), found)].id;
+					const auto found = std::find_if(description.entities.begin(), description.entities.end(), [node](const auto& record) { return record.nodeId == node || record.sourceNodeId == node; });
+					if (found != description.entities.end())
+					{
+						const auto index = std::distance(description.entities.begin(), found);
+						resolved.properties[property].i64 = created[index].id;
+						resolved.nodeRefs[property] = found->nodeId;
+					}
+					else
+					{
+						AE_TRY(target, scene::ResolveSceneNodeReference(world, node));
+						resolved.properties[property].i64 = target->id;
+						if (target->IsValid()) resolved.nodeRefs[property] = world.Get<SceneNodeComponent>(*target).id;
+					}
 				}
 				const auto scriptIndex = static_cast<std::uint32_t>(component.scripts.size());
 				component.scripts.push_back(ScriptEntry{.path = resolved.type, .attached = false, .properties = resolved.properties});
@@ -704,7 +1181,7 @@ namespace aether::app::web
 			rebuild(rootEntity);
 		}
 		AE_TRY(scripts, ResolveScripts(*description, *created));
-		return WebInstantiated{rootEntity, std::move(*scripts)};
+		return WebInstantiated{rootEntity, std::move(*created), std::move(*scripts)};
 	}
 
 	std::vector<Entity> WebScene::TakeRetiredParticles()

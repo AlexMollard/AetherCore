@@ -962,6 +962,54 @@
       "tool": "capture_texture"
     },
     {
+      "description": "Live streaming regions, requests, asset residency and budgets. Render allocator and driver baseline is available separately through render.memory.",
+      "mutates": false,
+      "name": "streaming.status",
+      "paramsSchema": { "properties": {}, "type": "object" },
+      "tool": "streaming_status"
+    },
+    {
+      "description": "Set or remove a streaming source. Priority is 0 critical through 3 background.",
+      "mutates": true,
+      "name": "streaming.source",
+      "paramsSchema": {
+        "properties": {
+          "id": { "type": "string" },
+          "remove": { "type": "boolean" },
+          "position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+          "loadRadius": { "type": "number" },
+          "prefetchRadius": { "type": "number" },
+          "priority": { "type": "integer" }
+        },
+        "required": ["id"], "type": "object"
+      },
+      "tool": "streaming_source"
+    },
+    {
+      "description": "Request a region for activation or prefetch; returns the request ID and current state.",
+      "mutates": true,
+      "name": "streaming.request",
+      "paramsSchema": {
+        "properties": { "region": { "type": "string" }, "activate": { "type": "boolean" }, "priority": { "type": "integer" } },
+        "required": ["region"], "type": "object"
+      },
+      "tool": "streaming_request"
+    },
+    {
+      "description": "Cancel a streaming request.",
+      "mutates": true,
+      "name": "streaming.cancel",
+      "paramsSchema": { "properties": { "id": { "type": "integer" } }, "required": ["id"], "type": "object" },
+      "tool": "streaming_cancel"
+    },
+    {
+      "description": "Release a streaming request claim.",
+      "mutates": true,
+      "name": "streaming.release",
+      "paramsSchema": { "properties": { "id": { "type": "integer" } }, "required": ["id"], "type": "object" },
+      "tool": "streaming_release"
+    },
+    {
       "description": "GPU memory breakdown: what the driver says this process holds, what the allocator holds for it, and every texture / buffer that makes it up (largest first). Use it to find out where VRAM actually goes. 'limit' caps how many texture and buffer rows come back (default 24); pass 0 for the totals and heap figures with no rows, which is the whole answer when you only want to compare counts or watch for a leak.",
       "mutates": false,
       "name": "render.memory",

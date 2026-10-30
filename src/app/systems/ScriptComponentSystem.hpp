@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <optional>
 #include <unordered_set>
 #include <vector>
 
@@ -11,6 +12,7 @@
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/System.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether
 {
@@ -56,6 +58,19 @@ namespace aether::app
 		void PruneInstancesForSceneSwitch(World& world, scripting::GameplayHost& host, scripting::SceneContext& ctx);
 
 		[[nodiscard]] std::uint64_t GetInstanceHandle(std::uint32_t entityId, std::uint32_t scriptIndex) const;
+		// Called at the frame boundary before region entities are destroyed.
+		Expected<void> DetachStreamingEntities(const std::vector<Entity>& entities);
+		struct StreamingScriptState
+		{
+			std::uint64_t node = 0;
+			std::uint32_t scriptIndex = 0;
+			std::string state;
+		};
+		Expected<std::optional<StreamingScriptState>> CaptureStreamingScript(World& world, Entity entity, std::uint32_t scriptIndex);
+		Expected<std::vector<StreamingScriptState>> CaptureStreamingScripts(World& world, const std::vector<Entity>& entities);
+		Expected<void> RestoreStreamingScripts(World& world, const std::vector<Entity>& entities, const std::vector<StreamingScriptState>& states);
+		Expected<void> PrepareStreamingScriptReferences(World& world, const std::vector<Entity>& entities);
+		Expected<void> ResolveStreamingScriptReferences(World& world);
 
 		// Refreshes `entry.properties` (the native cache scene capture reads) from
 		// the live C# instance's CURRENT field values - the exact live read the

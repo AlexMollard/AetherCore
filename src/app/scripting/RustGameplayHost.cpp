@@ -122,7 +122,7 @@ namespace aether::app::scripting
 		const auto queried = aether::scripting::QueryGameplayModule(query, AE_GAMEPLAY_ABI_MAJOR, sizeof(session.module), &session.module);
 		if (queried != AE_GAMEPLAY_OK)
 		{
-			return Failure("RUST_ABI_MISMATCH", "Rust gameplay ABI query failed (status " + std::to_string(queried) + ")");
+			return Failure("RUST_ABI_MISMATCH", "Rust gameplay ABI query failed (status " + std::to_string(queried) + "); rebuild the project scripts with the current AetherCore SDK");
 		}
 		session.access = std::make_unique<aether::scripting::GameplayAccess>(world, Diagnostic, this);
 		m_gameplay.SetAccess(session.access.get());

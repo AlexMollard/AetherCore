@@ -8,6 +8,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <type_traits>
 
 #include <glm/glm.hpp>
 
@@ -88,6 +89,9 @@ namespace aether::reflect
 		FieldMeta meta;
 		std::function<FieldValue(const void* component)> get;
 		std::function<void(void* component, const FieldValue&)> set;
+		// Borrowed logical dynamic storage, measured without invoking get.
+		// An empty callback for a string/list means it cannot be measured safely.
+		std::function<bool(const void* component, std::size_t& stringBytes, std::size_t& listRows)> measureStorage;
 		// FieldType::List only: the schema of each element's sub-fields, used by the TOML
 		// codec, MCP JSON and the inspector to name/type the rows in FieldValue::list.
 		std::vector<ListElementDesc> elementFields;
@@ -326,6 +330,18 @@ namespace aether::reflect
 			f.type = tag;
 			f.meta = meta;
 			const bool angle = meta.isAngleDegrees;
+			f.measureStorage = [member](const void* comp, std::size_t& stringBytes, std::size_t& listRows)
+			{
+				stringBytes = 0;
+				listRows = 0;
+				if constexpr (std::is_same_v<M, std::string>)
+				{
+					const auto& value = static_cast<const C*>(comp)->*member;
+					if (value.size() == std::numeric_limits<std::size_t>::max()) return false;
+					stringBytes = value.size() + 1;
+				}
+				return true;
+			};
 			f.get = [member, tag, angle](const void* comp) -> FieldValue
 			{
 				FieldValue v = MakeValue(static_cast<const C*>(comp)->*member);
@@ -357,6 +373,8 @@ namespace aether::reflect
 			f.meta = std::move(meta);
 			f.get = std::move(get);
 			f.set = std::move(set);
+			if (tag != FieldType::String && tag != FieldType::List)
+				f.measureStorage = [](const void*, std::size_t& bytes, std::size_t& rows) { bytes = 0; rows = 0; return true; };
 			m_type.fields.push_back(std::move(f));
 			return *this;
 		}
@@ -377,6 +395,11 @@ namespace aether::reflect
 			m_type.fields.push_back(std::move(f));
 			return *this;
 		}
+		ComponentBuilder& MeasureLast(std::function<bool(const void*, std::size_t&, std::size_t&)> measure)
+		{
+			m_type.fields.back().measureStorage = std::move(measure);
+			return *this;
+		}
 
 		// the declaration file - see AE_FIELD_ENUM). Must outlive the registry (statics do).
 		template<typename C, typename E>
@@ -386,6 +409,7 @@ namespace aether::reflect
 			f.name = name;
 			f.type = FieldType::Enum;
 			f.meta.enumTable = &table;
+			f.measureStorage = [](const void*, std::size_t& bytes, std::size_t& rows) { bytes = 0; rows = 0; return true; };
 			f.get = [member](const void* comp) -> FieldValue // the table is reached via f.meta, not captured
 			{
 				FieldValue v;

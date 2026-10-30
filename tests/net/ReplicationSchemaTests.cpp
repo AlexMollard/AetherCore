@@ -84,9 +84,8 @@ TEST_CASE("The schema hash is deterministic and distinguishes catalogs")
 	retyped.fields[0].type = reflect::FieldType::String;
 	CHECK(net::BuildReplicationSchema({retyped}).hash != one.hash);
 
-	// Component order is registration order, which is fixed per binary but not
-	// per source - two link orders are two different catalogs and must not agree.
+	// Registration/link order does not change the canonical wire schema.
 	reflect::ComponentType ctB = ct;
 	ctB.name = "SyntheticB";
-	CHECK(net::BuildReplicationSchema({ct, ctB}).hash != net::BuildReplicationSchema({ctB, ct}).hash);
+	CHECK(net::BuildReplicationSchema({ct, ctB}).hash == net::BuildReplicationSchema({ctB, ct}).hash);
 }

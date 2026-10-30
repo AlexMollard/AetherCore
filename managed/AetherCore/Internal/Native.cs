@@ -14,6 +14,21 @@ internal static unsafe partial class Native
 {
     private const string Lib = "AetherHost";
 
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static partial bool aether_streaming_set_source(string id, Vector3 position, float loadRadius, float prefetchRadius, uint priority);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static partial bool aether_streaming_remove_source(string id);
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial ulong aether_streaming_request(string region, uint priority, [MarshalAs(UnmanagedType.I1)] bool activate);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.I1)]
+    internal static partial bool aether_streaming_cancel(ulong request);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.I1)]
+    internal static partial bool aether_streaming_release(ulong request);
+    [LibraryImport(Lib)] internal static partial uint aether_streaming_get_state(ulong request);
+    [LibraryImport(Lib)] internal static partial uint aether_streaming_diagnostics(byte* buffer, uint capacity);
+
 	[LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
 	internal static partial void aether_sprite_set_texture(uint id, string path);
 	[LibraryImport(Lib)] internal static partial Vector4 aether_sprite_get_tint(uint id);
@@ -1062,13 +1077,9 @@ internal static unsafe partial class Native
     [SuppressGCTransition]
     internal static partial int aether_net_is_owner(uint entityId);
 
-    // Strips a locally-instantiated entity's baked NetworkIdentity/NetworkTransform,
-    // so it reads as local/mine everywhere (aether_net_has_authority/is_owner/
-    // owner_of) and is invisible to every replication and RPC path - see
-    // Net.SpawnPredicted and the native comment on this export. Touches world
-    // state, so no SuppressGCTransition.
-    [LibraryImport(Lib)]
-    internal static partial void aether_net_mark_predicted(uint entityId);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_net_instantiate_predicted(string prefab, Vector3 position);
 
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_net_set_player_name(uint entityId, string name);

@@ -61,21 +61,23 @@ namespace
 	//   - a kind in kAllKinds classified in neither table, or in both
 	//   - a kind listed twice, or the enum renumbered off contiguous-from-1
 	//   - a self-framing kind with no actual round-trip row in the test below
-	constexpr std::array<net::NetMessage, 13> kAllKinds{
+	constexpr std::array<net::NetMessage, 15> kAllKinds{
 	        net::NetMessage::Snapshot,      net::NetMessage::Spawn,          net::NetMessage::Despawn,
 	        net::NetMessage::Rpc,           net::NetMessage::Welcome,        net::NetMessage::ScriptFields,
 	        net::NetMessage::Relevancy,     net::NetMessage::Disconnect,     net::NetMessage::ClientReady,
 	        net::NetMessage::OwnershipRequest, net::NetMessage::OwnershipTransfer,
 	        net::NetMessage::RagdollPose, net::NetMessage::VelocitySnapshot,
+	        net::NetMessage::Ping, net::NetMessage::Pong,
 	};
 	constexpr std::array<net::NetMessage, 9> kSelfFraming{
 	        net::NetMessage::Spawn, net::NetMessage::Despawn, net::NetMessage::Rpc, net::NetMessage::Welcome,
 	        net::NetMessage::Relevancy, net::NetMessage::Disconnect, net::NetMessage::ClientReady,
 	        net::NetMessage::OwnershipRequest, net::NetMessage::OwnershipTransfer,
 	};
-	constexpr std::array<net::NetMessage, 4> kWrapped{
+	constexpr std::array<net::NetMessage, 6> kWrapped{
 	        net::NetMessage::Snapshot, net::NetMessage::ScriptFields, net::NetMessage::RagdollPose,
 	        net::NetMessage::VelocitySnapshot,
+	        net::NetMessage::Ping, net::NetMessage::Pong,
 	};
 
 	// True when `kinds` names every wire value in [1, kNetMessageMax] exactly once.
@@ -163,7 +165,8 @@ TEST_CASE("Wrapped payloads are framed byte-for-byte by FrameMessage")
 	const std::vector<std::byte> body{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}};
 
 	for (const net::NetMessage kind: {net::NetMessage::Snapshot, net::NetMessage::ScriptFields,
-	             net::NetMessage::RagdollPose, net::NetMessage::VelocitySnapshot})
+	             net::NetMessage::RagdollPose, net::NetMessage::VelocitySnapshot,
+	             net::NetMessage::Ping, net::NetMessage::Pong})
 	{
 		CAPTURE(static_cast<std::uint32_t>(kind));
 		const std::vector<std::byte> framed = net::FrameMessage(kind, body);
@@ -203,7 +206,9 @@ TEST_CASE("Every NetMessage kind is covered by one of the two framing convention
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::OwnershipTransfer) == 11);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::RagdollPose) == 12);
 	CHECK(static_cast<std::uint8_t>(net::NetMessage::VelocitySnapshot) == 13);
-	CHECK(net::kNetMessageMax == 13);
+	CHECK(static_cast<std::uint8_t>(net::NetMessage::Ping) == 14);
+	CHECK(static_cast<std::uint8_t>(net::NetMessage::Pong) == 15);
+	CHECK(net::kNetMessageMax == 15);
 }
 
 TEST_CASE("A disconnect reason round-trips, and a hostile one is cut down to size")

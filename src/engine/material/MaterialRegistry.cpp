@@ -99,6 +99,15 @@ namespace aether
 		return true;
 	}
 
+	MaterialHandle MaterialRegistry::FindAndAcquireSlot(std::uint32_t slot)
+	{
+		const std::scoped_lock lock(m_mutex);
+		if (slot >= m_slots.size() || !m_slots[slot].alive) return {};
+		auto& entry = m_slots[slot];
+		++entry.refcount;
+		return MaterialHandle{slot, entry.generation};
+	}
+
 	void MaterialRegistry::Release(MaterialHandle handle)
 	{
 		const std::scoped_lock lock(m_mutex);

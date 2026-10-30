@@ -7,6 +7,7 @@
 #include "scene/SceneSerializer.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "mesh/GrassMeshData.hpp"
+#include "streaming/StreamingBudget.hpp"
 #include "webgpu/WebGpuDevice.hpp"
 
 namespace aether::app::web
@@ -18,19 +19,25 @@ namespace aether::app::web
 	{
 	public:
 		WebModels(webgpu::WebGpuDevice& graphics, TextureRegistry& textures, WebTextureSink& sink);
+		void SetStreamingBudget(std::shared_ptr<streaming::BudgetLedger> budget) { m_budget = std::move(budget); }
+		void SetStreamingActivation(bool value) { m_streaming_activation = value; }
 		// Clip names/counts of the cooked glTF animations, for the shared 3D animation ops.
 		[[nodiscard]] const ::aether::scripting::gameplay3d::ClipCatalog* Clips() const
 		{
 			return &m_catalog;
 		}
 		Expected<void> Apply(World& world, Entity entity, const scene::EntityRecord& record);
+		Expected<void> CaptureSnapshotMaterial(World& world, Entity entity, scene::EntityRecord& record) const;
+		Expected<std::uint64_t> MeasureSnapshotMaterialPaths(World& world, Entity entity) const;
 		Expected<void> Extract(World& world, RenderFramePacket& packet);
 		[[nodiscard]] bool RenderReady() const { return m_initial_ready; }
 		[[nodiscard]] bool StreamingPending() const { return m_streaming_pending || !m_pending_uploads.empty(); }
+		[[nodiscard]] bool StreamingBudgetBlocked() const { return m_budget_blocked; }
 		// AnimationSystem's duration source: the playing and fading clip lengths of a skinned
 		// entity, defined exactly like AnimationDatabase (longest channel key time).
 		[[nodiscard]] bool ClipDurations(World& world, Entity entity, const SkinnedMeshComponent& skin, float& clip, float& fade) const;
 		void ClearEntities();
+		void ReleaseUnused(World& world);
 
 	private:
 		struct Model
@@ -38,6 +45,7 @@ namespace aether::app::web
 			assets::GltfAsset data;
 			std::vector<std::uint32_t> slots;
 			std::vector<float> clipDurations;
+			std::uint64_t cpuCharge = 0;
 		};
 
 		struct Binding
@@ -64,6 +72,7 @@ namespace aether::app::web
 			MeshGen::GrassField field;
 			std::map<MeshGen::GrassChunkKey, GrassSlot> chunks;
 			std::vector<MeshGen::GrassChunkKey> desired;
+			bool streamed = false;
 		};
 
 		struct PendingUpload
@@ -72,6 +81,7 @@ namespace aether::app::web
 			std::uint32_t slot;
 			std::size_t primitive;
 			bool model;
+			bool streamed = false;
 		};
 
 		Expected<std::uint32_t> ResolveShader(std::string_view uri);
@@ -83,6 +93,7 @@ namespace aether::app::web
 		webgpu::WebGpuDevice& m_graphics;
 		TextureRegistry& m_textures;
 		WebTextureSink& m_sink;
+		std::shared_ptr<streaming::BudgetLedger> m_budget;
 		std::map<std::string, Model> m_models;
 		std::map<std::string, std::uint32_t> m_shaders;
 		std::map<std::string, std::uint32_t> m_primitives;
@@ -96,6 +107,8 @@ namespace aether::app::web
 		std::vector<MeshGen::GrassChunkKey> m_selected_grass;
 		bool m_initial_ready = false;
 		bool m_streaming_pending = false;
+		bool m_budget_blocked = false;
+		bool m_streaming_activation = false;
 
 		class Catalog final : public ::aether::scripting::gameplay3d::ClipCatalog
 		{
@@ -108,11 +121,14 @@ namespace aether::app::web
 			[[nodiscard]] std::uint32_t ClipCount(Entity animator) const override;
 			[[nodiscard]] std::string_view ClipName(Entity animator, std::uint32_t index) const override;
 			[[nodiscard]] float ClipDuration(Entity animator, std::uint32_t index) const override;
+			[[nodiscard]] std::optional<std::uint32_t> FindNode(Entity animator, std::string_view name) const override;
+			void Remap(Entity animator, assets::GltfAnimation& animation) const override;
+			void Compile(World& world, Entity entity) const override;
 
 		private:
 			const WebModels& m_owner;
 		};
-		const Model* FindModel(Entity entity) const;
+		Model* FindModel(Entity entity) const;
 		Catalog m_catalog{*this};
 	};
 } // namespace aether::app::web

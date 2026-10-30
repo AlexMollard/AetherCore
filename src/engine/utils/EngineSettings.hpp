@@ -8,6 +8,9 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <optional>
+#include <limits>
+#include "streaming/StreamingTypes.hpp"
 
 namespace aether
 {
@@ -160,6 +163,19 @@ namespace aether
 			std::string language = "csharp";
 		} scripting;
 
+		struct Streaming
+		{
+			int cpuBudgetMiB = 256;
+			int gpuBudgetMiB = 512;
+			int stagingBudgetMiB = 32;
+			int uploadBudgetKiBPerFrame = 4096;
+			int maxPendingRequests = 128;
+			int activationEntitiesPerFrame = 64;
+			float loadRadius = 128.0f;
+			float prefetchRadius = 256.0f;
+			bool defaultCameraSource = true;
+		} streaming;
+
 		struct App
 		{
 			// Capped by default because MAILBOX is: without a cap the loop renders as fast as
@@ -239,6 +255,25 @@ namespace aether
 		} network;
 	};
 
+	// Reject unsanitized input rather than wrapping during unit conversion.
+	[[nodiscard]] inline std::optional<streaming::Budgets> StreamingBudgetsFromSettings(const EngineSettings::Streaming& settings)
+	{
+		auto bytes = [](int value, std::uint64_t unit) -> std::optional<std::uint64_t>
+		{
+			if (value <= 0 || static_cast<std::uint64_t>(value) > std::numeric_limits<std::uint64_t>::max() / unit)
+				return std::nullopt;
+			return static_cast<std::uint64_t>(value) * unit;
+		};
+		const auto cpu = bytes(settings.cpuBudgetMiB, 1024ull * 1024);
+		const auto gpu = bytes(settings.gpuBudgetMiB, 1024ull * 1024);
+		const auto staging = bytes(settings.stagingBudgetMiB, 1024ull * 1024);
+		const auto upload = bytes(settings.uploadBudgetKiBPerFrame, 1024);
+		if (!cpu || !gpu || !staging || !upload || settings.maxPendingRequests <= 0 || settings.activationEntitiesPerFrame <= 0)
+			return std::nullopt;
+		return streaming::Budgets{*cpu, *gpu, *staging, *upload,
+		        static_cast<std::uint32_t>(settings.maxPendingRequests), static_cast<std::uint32_t>(settings.activationEntitiesPerFrame)};
+	}
+
 	[[nodiscard]] inline std::pair<std::string_view, std::string_view> SplitSettingKey(std::string_view key)
 	{
 		const auto dot = key.find('.');
@@ -303,6 +338,15 @@ namespace aether
 		f("app.startupScene", settings.app.startupScene);
 		f("app.autoplay", settings.app.autoplay);
 		f("app.autosaveSeconds", settings.app.autosaveSeconds);
+		f("streaming.cpuBudgetMiB", settings.streaming.cpuBudgetMiB);
+		f("streaming.gpuBudgetMiB", settings.streaming.gpuBudgetMiB);
+		f("streaming.stagingBudgetMiB", settings.streaming.stagingBudgetMiB);
+		f("streaming.uploadBudgetKiBPerFrame", settings.streaming.uploadBudgetKiBPerFrame);
+		f("streaming.maxPendingRequests", settings.streaming.maxPendingRequests);
+		f("streaming.activationEntitiesPerFrame", settings.streaming.activationEntitiesPerFrame);
+		f("streaming.loadRadius", settings.streaming.loadRadius);
+		f("streaming.prefetchRadius", settings.streaming.prefetchRadius);
+		f("streaming.defaultCameraSource", settings.streaming.defaultCameraSource);
 		f("scripting.language", settings.scripting.language);
 		f("cursor.custom", settings.cursor.custom);
 		f("cursor.texture", settings.cursor.texture);

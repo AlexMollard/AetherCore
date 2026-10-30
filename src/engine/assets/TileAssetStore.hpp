@@ -17,6 +17,9 @@ namespace aether
 	public:
 		[[nodiscard]] Expected<const TileSetAsset*> LoadTileSet(std::string_view path);
 		[[nodiscard]] Expected<const TileMapAsset*> LoadTileMap(std::string_view path);
+		[[nodiscard]] bool PublishTileSet(std::string path, TileSetAsset tileSet);
+		[[nodiscard]] bool IsTileMapDirty(std::string_view path) const;
+		[[nodiscard]] bool PublishTileMap(std::string path, TileMapAsset tileMap);
 
 		// Editor access to a loaded (or lazily loaded) map for cell edits.
 		[[nodiscard]] TileMapAsset* MutableTileMap(std::string_view path);

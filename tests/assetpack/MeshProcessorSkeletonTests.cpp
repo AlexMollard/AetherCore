@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -100,5 +101,66 @@ TEST_CASE("A skinless model's mesh under an unanimated offset node still hangs o
 	CHECK(parents.at("parts") == "attach");
 	REQUIRE(parents.count("attach") == 1);
 	CHECK(parents.at("attach") == "arm");
+	std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Animation baking rejects malformed channels instead of publishing partial output")
+{
+	const auto dir = std::filesystem::temp_directory_path() / "aether_anim_validation";
+	std::filesystem::create_directories(dir);
+	std::vector<std::byte> bin(84);
+	const float positions[9] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+	const std::uint16_t indices[3] = {0, 1, 2};
+	const float times[2] = {0, 1};
+	const float rotations[8] = {0, 0, 0, 1, 0, 0, 1, 0};
+	std::memcpy(bin.data(), positions, sizeof(positions));
+	std::memcpy(bin.data() + 36, indices, sizeof(indices));
+	std::memcpy(bin.data() + 44, times, sizeof(times));
+	std::memcpy(bin.data() + 52, rotations, sizeof(rotations));
+	const auto bake = [&](const std::string& text, const std::vector<std::byte>& data)
+	{
+		std::ofstream(dir / "arm.bin", std::ios::binary | std::ios::trunc).write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+		return assetpipeline::MeshProcessor::Process({reinterpret_cast<const std::byte*>(text.data()), text.size()}, dir / "arm.gltf", "models/arm.gltf", dir);
+	};
+	const auto replace = [](std::string& text, std::string_view from, std::string_view to)
+	{
+		const auto pos = text.find(from);
+		REQUIRE(pos != std::string::npos);
+		text.replace(pos, from.size(), to);
+	};
+	const auto good = bake(kGltf, bin);
+	REQUIRE(good.error.empty());
+	REQUIRE(good.animFiles.size() == 1);
+	for (const auto& mutation: {std::pair{"\"count\": 2, \"type\": \"VEC4\"", "\"count\": 1, \"type\": \"VEC4\""},
+	                            std::pair{"\"count\": 2, \"type\": \"SCALAR\"", "\"count\": 0, \"type\": \"SCALAR\""},
+	                            std::pair{"\"path\": \"rotation\"", "\"path\": \"weights\""},
+	                            std::pair{"\"count\": 2, \"type\": \"VEC4\"", "\"count\": 2, \"type\": \"VEC3\""}})
+	{
+		std::string text = kGltf;
+		replace(text, mutation.first, mutation.second);
+		const auto result = bake(text, bin);
+		CHECK_FALSE(result.error.empty());
+		CHECK(result.animFiles.empty());
+		CHECK(result.meshData.empty());
+	}
+	{
+		std::string cubic = kGltf;
+		replace(cubic, "\"input\": 2, \"output\": 3", "\"input\": 2, \"output\": 3, \"interpolation\": \"CUBICSPLINE\"");
+		const auto result = bake(cubic, bin);
+		CHECK_FALSE(result.error.empty());
+		CHECK(result.animFiles.empty());
+	}
+	for (float invalid: {-1.f, std::numeric_limits<float>::infinity(), 0.f})
+	{
+		auto bad = bin;
+		std::memcpy(bad.data() + 48, &invalid, sizeof(invalid));
+		const auto result = bake(kGltf, bad);
+		CHECK_FALSE(result.error.empty());
+		CHECK(result.animFiles.empty());
+	}
+	auto bad = bin;
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	std::memcpy(bad.data() + 52, &nan, sizeof(nan));
+	CHECK_FALSE(bake(kGltf, bad).error.empty());
 	std::filesystem::remove_all(dir);
 }

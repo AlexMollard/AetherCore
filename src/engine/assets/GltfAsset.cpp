@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
+#include <limits>
 #include <queue>
 #include <string>
 #include <string_view>
@@ -12,6 +13,7 @@
 #include <vector>
 
 #include <BinaryFormats.hpp>
+#include "assets/ExternalAnimation.hpp"
 
 #include "io/FileSystem.hpp"
 #include "io/FileGlobOptions.hpp"
@@ -34,8 +36,32 @@ namespace aether::assets
 		constexpr uint32_t kMaxMaterials = 1u << 11;
 		constexpr uint32_t kMaxSkinRefPathLen = 4096;
 		constexpr uint32_t kMaxBones = 4096;
-		constexpr uint32_t kMaxAnimChannels = 1u << 16;
-		constexpr uint32_t kMaxAnimKeys = 1u << 20;
+
+		struct ParseBudget
+		{
+			const std::function<bool(std::size_t)>* reserve = nullptr;
+			bool rejected = false;
+
+			bool Add(std::size_t bytes, std::size_t multiplier = 1)
+			{
+				if (!reserve) return true;
+				if (multiplier == 0) return !rejected;
+				if (bytes > std::numeric_limits<std::size_t>::max() / multiplier ||
+				    (bytes && (!*reserve || !(*reserve)(bytes * multiplier))))
+					rejected = true;
+				return !rejected;
+			}
+
+			Expected<std::vector<std::byte>> Read(std::string_view path)
+			{
+				if (!reserve) return io::FileSystem::ReadFile(path);
+				auto data = io::FileSystem::ReadFileReserved(path, [this](std::size_t bytes) { return Add(bytes); });
+				// Bound all parser-owned structures and strings derived from the file.
+				if (data && !Add(data->size(), 32))
+					AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
+				return data;
+			}
+		};
 
 		std::vector<std::string> CollectSimilarMeshPaths(std::string_view meshPath, int maxSuggestions = 3)
 		{
@@ -202,9 +228,9 @@ namespace aether::assets
 			outR = glm::quat_cast(rotMat);
 		}
 
-		bool LoadSkeleton(std::string_view skelPath, GltfAsset& asset, GltfSkin& outSkin)
+		bool LoadSkeleton(std::string_view skelPath, GltfAsset& asset, GltfSkin& outSkin, ParseBudget& budget)
 		{
-			auto data = io::FileSystem::ReadFile(std::string(skelPath));
+			auto data = budget.Read(skelPath);
 			if (!data.has_value())
 			{
 				AE_WARN(LogCategory::Engine, "Skeleton file not found: {}", skelPath);
@@ -325,171 +351,21 @@ namespace aether::assets
 			return true;
 		}
 
-		GltfAnimation LoadAnimation(std::string_view animPath)
+		GltfAnimation LoadAnimation(std::string_view animPath, ParseBudget& budget)
 		{
-			GltfAnimation anim;
-			auto data = io::FileSystem::ReadFile(std::string(animPath));
-			if (!data.has_value())
+			auto data = budget.Read(animPath);
+			if (!data)
 			{
 				AE_WARN(LogCategory::Engine, "Animation file not found: {}", animPath);
-				return anim;
+				return {};
 			}
-
-			BinaryReader reader(*data);
-
-#pragma pack(push, 1)
-
-			struct V1Header
+			auto animation = ParseExternalAnimation(*data);
+			if (!animation)
 			{
-				char magic[4];
-				uint32_t version;
-				uint32_t channelCount;
-				uint16_t nameLen;
-			};
-
-#pragma pack(pop)
-			V1Header v1Hdr{};
-			// TryRead, not Read: V1Header itself has no default member initialisers
-			// (so today's Read<T>() failure path already zero-inits it, which
-			// correctly fails the magic check below) - made explicit here to match
-			// every other header read in this file rather than relying on that being
-			// true by accident of how V1Header happens to be declared.
-			if (!reader.TryRead(v1Hdr))
-			{
-				AE_WARN(LogCategory::Engine, "Truncated animation header: {}", animPath);
-				return anim;
+				AE_WARN(LogCategory::Engine, "Invalid or truncated animation: {}", animPath);
+				return {};
 			}
-
-			AnimHeaderDisk hdr;
-			std::memcpy(hdr.magic, v1Hdr.magic, 4);
-			hdr.version = v1Hdr.version;
-			hdr.channelCount = v1Hdr.channelCount;
-			hdr.nameLen = v1Hdr.nameLen;
-
-			if (!CheckMagic(hdr) || hdr.version < 1 || hdr.version > ANIM_VERSION)
-			{
-				AE_WARN(LogCategory::Engine, "Invalid animation magic: {}", animPath);
-				return anim;
-			}
-
-			// The channel header is the smallest possible channel entry; bounding
-			// channelCount by that (and by a hard ceiling) keeps a corrupt header from
-			// driving a huge allocation or walking past a truncated file.
-			if (hdr.channelCount > kMaxAnimChannels || static_cast<uint64_t>(hdr.channelCount) * sizeof(ChannelHeaderDisk) > reader.Remaining())
-			{
-				AE_WARN(LogCategory::Engine, "Animation channel count {} out of range ({} bytes left): {}", hdr.channelCount, reader.Remaining(), animPath);
-				return anim;
-			}
-
-			AE_VERBOSE(LogCategory::Engine, "LoadAnimation '{}': version={}, channels={}, nameLen={}", animPath, hdr.version, hdr.channelCount, hdr.nameLen);
-
-			if (hdr.version >= 3)
-			{
-				hdr.flags = reader.Read<uint16_t>();
-			}
-			else
-			{
-				hdr.flags = 0;
-			}
-
-			AE_VERBOSE(LogCategory::Engine, "  flags=0x{:x}, hasBoneNames={}", hdr.flags, (hdr.version >= 3) && (hdr.flags & 1));
-
-			if (!reader.CanRead(hdr.nameLen))
-			{
-				AE_WARN(LogCategory::Engine, "Truncated animation name: {}", animPath);
-				return anim;
-			}
-			anim.name = std::string(reinterpret_cast<const char*>(reader.Data()), hdr.nameLen);
-			reader.Advance(hdr.nameLen);
-			anim.channels.reserve(hdr.channelCount);
-
-			const bool hasBoneNames = (hdr.version >= 3) && ((hdr.flags & ANIM_FLAG_HAS_BONE_NAMES) != 0);
-
-			for (uint32_t ci = 0; ci < hdr.channelCount; ++ci)
-			{
-				auto ch = reader.Read<ChannelHeaderDisk>();
-				AE_VERBOSE(LogCategory::Engine, "  Channel[{}]: node={}, path={}, interp={}, keyCount={}", ci, ch.nodeIndex, (int) ch.path, (int) ch.interp, ch.keyCount);
-				GltfAnimationChannel channel;
-				channel.nodeIndex = ch.nodeIndex;
-
-				if (hasBoneNames)
-				{
-					auto boneNameLen = reader.Read<uint16_t>();
-					if (!reader.CanRead(boneNameLen))
-					{
-						AE_WARN(LogCategory::Engine, "Truncated bone name in animation channel: {}", animPath);
-						return {};
-					}
-					if (boneNameLen > 0)
-					{
-						channel.boneName = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
-						reader.Advance(boneNameLen);
-					}
-				}
-
-				switch (static_cast<AnimPathDisk>(ch.path))
-				{
-					case AnimPathDisk::Translation:
-						channel.path = GltfAnimationPath::Translation;
-						break;
-					case AnimPathDisk::Rotation:
-						channel.path = GltfAnimationPath::Rotation;
-						break;
-					case AnimPathDisk::Scale:
-						channel.path = GltfAnimationPath::Scale;
-						break;
-					case AnimPathDisk::Weights:
-						channel.path = GltfAnimationPath::Weights;
-						break;
-				}
-
-				switch (static_cast<AnimInterpDisk>(ch.interp))
-				{
-					case AnimInterpDisk::Linear:
-						channel.interpolation = GltfInterpolation::Linear;
-						break;
-					case AnimInterpDisk::Step:
-						channel.interpolation = GltfInterpolation::Step;
-						break;
-					case AnimInterpDisk::CubicSpline:
-						channel.interpolation = GltfInterpolation::CubicSpline;
-						break;
-				}
-
-				// Every key costs one time float plus one vec4 value on disk; a valid file
-				// always has that much left for the whole channel.
-				if (ch.keyCount > kMaxAnimKeys || static_cast<uint64_t>(ch.keyCount) * (sizeof(float) + sizeof(glm::vec4)) > reader.Remaining())
-				{
-					AE_WARN(LogCategory::Engine, "Animation channel key count {} out of range ({} bytes left): {}", ch.keyCount, reader.Remaining(), animPath);
-					return {};
-				}
-				channel.times.resize(ch.keyCount);
-				reader.ReadRaw(channel.times.data(), ch.keyCount * sizeof(float));
-
-				channel.values.resize(ch.keyCount);
-				for (uint32_t k = 0; k < ch.keyCount; ++k)
-				{
-					float v4[4];
-					reader.ReadRaw(v4, sizeof(v4));
-					channel.values[k] = glm::vec4(v4[0], v4[1], v4[2], v4[3]);
-				}
-
-				anim.channels.push_back(std::move(channel));
-			}
-
-			std::string chSummary;
-			for (std::size_t ci = 0; ci < anim.channels.size(); ++ci)
-			{
-				if (ci > 0)
-				{
-					chSummary += ", ";
-				}
-				const auto& ch = anim.channels[ci];
-				const char* pathStr = ch.path == GltfAnimationPath::Translation ? "T" : ch.path == GltfAnimationPath::Rotation ? "R" : ch.path == GltfAnimationPath::Scale ? "S" : "W";
-				chSummary += std::to_string(ch.nodeIndex) + pathStr;
-			}
-			AE_VERBOSE(LogCategory::Engine, "Loaded animation '{}': {} channels, first={} keys [{}]", anim.name, hdr.channelCount, anim.channels.empty() ? 0 : anim.channels[0].times.size(), chSummary);
-			return anim;
+			return std::move(*animation);
 		}
 
 		std::unordered_map<std::string, uint32_t> BuildBoneNameMap(const GltfAsset& asset, uint32_t boneNodeOffset, uint32_t jointCount)
@@ -586,7 +462,8 @@ namespace aether::assets
 					continue;
 				}
 
-				GltfAnimation anim = LoadAnimation(animFullPath);
+				ParseBudget budget;
+				GltfAnimation anim = LoadAnimation(animFullPath, budget);
 				if (!anim.name.empty() && !anim.channels.empty())
 				{
 					GltfAnimation remapped = RemapAnimationByBoneName(anim, boneNameMap);
@@ -602,9 +479,9 @@ namespace aether::assets
 			return anyLoaded;
 		}
 
-		bool LoadMaterialBinary(std::string_view matPath, GltfMaterial& outMat)
+		bool LoadMaterialBinary(std::string_view matPath, GltfMaterial& outMat, ParseBudget& budget)
 		{
-			auto data = io::FileSystem::ReadFile(std::string(matPath));
+			auto data = budget.Read(matPath);
 			if (!data.has_value())
 			{
 				return false;
@@ -619,6 +496,8 @@ namespace aether::assets
 			{
 				return false;
 			}
+			if (!budget.Add(matPath.size(), static_cast<std::size_t>(hdr.texturePathCount) * 4 + 4))
+				return false;
 
 			outMat.baseColorFactor = glm::vec4(hdr.baseColorFactor[0], hdr.baseColorFactor[1], hdr.baseColorFactor[2], hdr.baseColorFactor[3]);
 			outMat.metallicFactor = hdr.metallicFactor;
@@ -673,7 +552,7 @@ namespace aether::assets
 			return true;
 		}
 
-		Expected<GltfAsset> LoadFromMesh(const std::vector<std::byte>& data, std::string_view meshVfsPath)
+		Expected<GltfAsset> LoadFromMesh(const std::vector<std::byte>& data, std::string_view meshVfsPath, ParseBudget& budget)
 		{
 			BinaryReader reader(data);
 			MeshHeaderDisk hdr;
@@ -704,6 +583,9 @@ namespace aether::assets
 				AE_WARN(LogCategory::Engine, "Truncated mesh '{}': needs {} vertex+index bytes, has {}", meshVfsPath, vertexBytes + indexBytes, reader.Remaining());
 				AE_UNEXPECTED(AetherError::Asset("truncated mesh data: " + std::string(meshVfsPath)));
 			}
+			if (!budget.Add(data.size(), 32) ||
+			    !budget.Add(meshVfsPath.size(), static_cast<std::size_t>(hdr.materialCount) * 16 + 16))
+				AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
 
 			AE_VERBOSE(LogCategory::Engine, "Loading mesh '{}': {} verts, {} indices, {} materials, skin={}", meshVfsPath, hdr.vertexCount, hdr.indexCount, hdr.materialCount, hdr.skinRefPathLen > 0 ? "yes" : "no");
 			AE_VERBOSE(LogCategory::Engine, "  AABB: [{}, {}, {}] -> [{}, {}, {}]", hdr.aabbMin[0], hdr.aabbMin[1], hdr.aabbMin[2], hdr.aabbMax[0], hdr.aabbMax[1], hdr.aabbMax[2]);
@@ -824,6 +706,13 @@ namespace aether::assets
 						minVert = std::min(minVert, idx);
 						maxVert = std::max(maxVert, idx);
 					}
+					if (smHdr.indexCount == 0)
+						AE_UNEXPECTED(AetherError::Asset("empty mesh submesh: " + std::string(meshVfsPath)));
+					const std::size_t range = static_cast<std::size_t>(maxVert) - minVert + 1;
+					if (!budget.Add(range, sizeof(uint32_t)) ||
+					    !budget.Add(smHdr.indexCount, sizeof(uint32_t) + sizeof(MeshVertex)) ||
+					    !budget.Add(sizeof(GltfPrimitive) * 2))
+						AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
 
 					const uint32_t vertRange = maxVert - minVert + 1;
 					std::vector<uint32_t> remap(vertRange, UINT32_MAX);
@@ -895,7 +784,7 @@ namespace aether::assets
 				if (!skelPath.empty())
 				{
 					GltfSkin skin;
-					if (LoadSkeleton(skelPath, asset, skin))
+					if (LoadSkeleton(skelPath, asset, skin, budget))
 					{
 						asset.skins.push_back(std::move(skin));
 					}
@@ -904,6 +793,8 @@ namespace aether::assets
 				{
 					AE_WARN(LogCategory::Engine, "Skeleton file not resolved for skin ref: {}", skinRefPath);
 				}
+				if (budget.rejected)
+					AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
 			}
 
 			for (uint32_t i = 0; i < hdr.materialCount; ++i)
@@ -913,7 +804,7 @@ namespace aether::assets
 
 				const std::string matFullPath = ResolveRelativeVfsPath(meshVfsPath, matPaths[i]);
 
-				if (!LoadMaterialBinary(matFullPath, mat))
+				if (!LoadMaterialBinary(matFullPath, mat, budget))
 				{
 					const std::string tomlPath = matFullPath + "/properties.toml";
 					if (io::FileSystem::Exists(tomlPath))
@@ -926,6 +817,8 @@ namespace aether::assets
 					mat.name = matPaths[i];
 					AE_VERBOSE(LogCategory::Engine, "  Material '{}' loaded (albedo={}, normal={}, orm={})", mat.name, mat.albedoPath.empty() ? "no" : "yes", mat.normalPath.empty() ? "no" : "yes", mat.metallicRoughnessPath.empty() ? "no" : "yes");
 				}
+				if (budget.rejected)
+					AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
 
 				asset.materials.push_back(std::move(mat));
 			}
@@ -934,7 +827,9 @@ namespace aether::assets
 			if (!animSetPath.empty())
 			{
 				AE_VERBOSE(LogCategory::Engine, "  AnimSet: {}", animSetPath);
-				auto animSetData = io::FileSystem::ReadFile(animSetPath);
+				auto animSetData = budget.Read(animSetPath);
+				if (budget.rejected)
+					AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
 				if (animSetData.has_value())
 				{
 					BinaryReader animSetReader(*animSetData);
@@ -958,6 +853,9 @@ namespace aether::assets
 						}
 						else
 						{
+							if (!budget.Add(mountRoot.size(), static_cast<std::size_t>(asetHdr.animCount)) ||
+							    !budget.Add(asetHdr.animCount, sizeof(GltfAnimation) * 2))
+								AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
 							// A skinless-but-animated model (no <skin> at all, so
 							// boneNodeOffset above is always 0) was baked with each
 							// channel's target NODE NAME instead of a real skeleton
@@ -987,7 +885,9 @@ namespace aether::assets
 								std::string animFullPath = mountRoot + animRelPath;
 								if (io::FileSystem::Exists(animFullPath))
 								{
-									GltfAnimation anim = LoadAnimation(animFullPath);
+									GltfAnimation anim = LoadAnimation(animFullPath, budget);
+									if (budget.rejected)
+										AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
 									if (!anim.name.empty())
 									{
 										if (boneNodeOffset > 0)
@@ -1131,7 +1031,8 @@ namespace aether::assets
 			AE_TRY(data, io::FileSystem::ReadFile(meshPath));
 			meshData = std::move(*data);
 		}
-		return LoadFromMesh(meshData, meshPath);
+		ParseBudget budget;
+		return LoadFromMesh(meshData, meshPath, budget);
 	}
 
 	Expected<GltfAsset> GltfAsset::LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath)
@@ -1141,7 +1042,19 @@ namespace aether::assets
 		{
 			AE_UNEXPECTED(AetherError::Asset("Unknown asset UID: " + std::string(debugPath)));
 		}
-		return LoadFromMesh(meshData, resolved);
+		ParseBudget budget;
+		return LoadFromMesh(meshData, resolved, budget);
+	}
+
+	Expected<GltfAsset> GltfAsset::LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath, const std::function<bool(std::size_t)>& reserve)
+	{
+		ParseBudget budget{&reserve};
+		if (!budget.Add(debugPath.size(), 8))
+			AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
+		const std::string resolved = io::FileSystem::ResolveAssetPath(debugPath);
+		if (resolved.empty() && !debugPath.empty())
+			AE_UNEXPECTED(AetherError::Asset("Unknown asset UID: " + std::string(debugPath)));
+		return LoadFromMesh(meshData, resolved, budget);
 	}
 
 	std::string GltfAsset::ResolveMeshPath(std::string_view vfsPath)

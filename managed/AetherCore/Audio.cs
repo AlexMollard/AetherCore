@@ -6,7 +6,7 @@ namespace AetherCore;
 /// with a crossfade, and drive the volume buses (master is a settings key; the
 /// per-bus levels here are for in-game mixing like a pause menu or a mute hit).
 /// Paths are VFS paths, exactly like every other asset ("project://audio/...").
-/// Files may be WAV, MP3, FLAC or Ogg.
+/// Files may be WAV, MP3 or FLAC.
 /// </summary>
 public static class Audio
 {
@@ -68,7 +68,7 @@ public static class Audio
 
     public static float GetBusVolume(Bus bus) => Native.aether_audio_get_bus_volume((int)bus);
 
-    /// <summary>Start the Audio Source component on this entity playing now
-    /// (same path as its playOnStart flag).</summary>
+    /// <summary>Start or restart this entity's Audio Source on the next audio
+    /// update without changing its authored playOnStart setting.</summary>
     public static void PlaySource(Entity entity) => Native.aether_audio_source_play(entity.Id);
 }

@@ -53,6 +53,31 @@ TEST_CASE("A valid pak opens")
 	CHECK_NOTHROW(io::PakBackend{pak});
 }
 
+TEST_CASE("Pak glob matches segments and recursive patterns without escaping the index")
+{
+	const auto src = std::filesystem::temp_directory_path() / "aepak_glob_src";
+	std::filesystem::remove_all(src);
+	std::filesystem::create_directories(src / "assets/nested");
+	std::ofstream(src / "assets/root.txt") << "root";
+	std::ofstream(src / "assets/nested/child.txt") << "child";
+	std::ofstream(src / "assets/nested/other.bin") << "other";
+	const auto pak = std::filesystem::temp_directory_path() / "aepak_glob.pak";
+	REQUIRE(assetpipeline::PackDirectory(src, pak, {}).ok);
+	const io::PakBackend backend(pak);
+	auto simple = backend.Glob("assets/*.txt", {});
+	auto recursive = backend.Glob("assets/**/*.txt", {});
+	auto missing = backend.Glob("assets/**/*.missing", {});
+	auto traversal = backend.Glob("assets/../*.txt", {});
+	REQUIRE(simple);
+	REQUIRE(recursive);
+	REQUIRE(missing);
+	REQUIRE(traversal);
+	CHECK(*simple == std::vector<std::string>{"assets/root.txt"});
+	CHECK(*recursive == std::vector<std::string>{"assets/nested/child.txt", "assets/root.txt"});
+	CHECK(missing->empty());
+	CHECK(traversal->empty());
+}
+
 TEST_CASE("A corrupted index byte is rejected")
 {
 	const auto pak = MakeValidPak("corrupt");

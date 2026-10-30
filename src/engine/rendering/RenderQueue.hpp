@@ -126,6 +126,9 @@ namespace aether
 		}
 
 		void Submit(const DrawCommand& cmd);
+		// Game-thread snapshot of the just-filled slot, before it is published
+		// to the render thread. The visitor must not mutate this queue.
+		void ForEachPendingDraw(std::uint32_t slot, const std::function<void(const DrawCommand&)>& visitor);
 
 		void SetDebugForceVisible(bool enabled)
 		{

@@ -16,8 +16,10 @@
 #include "Color.hpp"
 #include "debug/DebugPanel.hpp"
 #include "Icons.hpp"
+#include "assets/AssetSubsystem.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
+#include "material/TextureRegistry.hpp"
 #include "layers/AppLayer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "utils/FuzzyMatch.hpp"
@@ -121,13 +123,6 @@ namespace aether::editor
 		chrome::PanelHeader("TEXTURES");
 
 		const std::vector<gpu::DebugTextureInfo> textures = gpu::ResourceRegistry::ListDebugTextures();
-		if (textures.empty())
-		{
-			ImGui::TextDisabled("No registered textures");
-			ImGui::End();
-			return;
-		}
-
 		if (auto* imgui = context.TryGet<aether::ImguiSubsystem>())
 		{
 			for (auto it = m_textureInspectorTextureIds.begin(); it != m_textureInspectorTextureIds.end();)
@@ -144,6 +139,13 @@ namespace aether::editor
 				}
 			}
 		}
+		if (textures.empty())
+		{
+			ImGui::TextDisabled("No registered textures");
+			ImGui::End();
+			return;
+		}
+
 
 		const auto selectedIt = std::ranges::find_if(textures, [this](const gpu::DebugTextureInfo& texture) { return texture.handle.bits == m_selectedTextureBits; });
 		if (selectedIt == textures.end())
@@ -223,6 +225,24 @@ namespace aether::editor
 
 		const auto currentIt = std::ranges::find_if(textures, [this](const gpu::DebugTextureInfo& texture) { return texture.handle.bits == m_selectedTextureBits; });
 		const gpu::DebugTextureInfo& texture = (currentIt == textures.end()) ? textures.front() : *currentIt;
+
+		// The cached descriptor alone does not own its image view. Retain the
+		// streamed texture for every captured frame that can reference the preview.
+		if (texture.hasBindlessSampled)
+		{
+			auto* assets = context.TryGet<AssetSubsystem>();
+			auto* imgui = context.TryGet<aether::ImguiSubsystem>();
+			if (assets != nullptr && imgui != nullptr)
+			{
+				auto& registry = assets->GetTextureRegistry();
+				const TextureHandle handle = registry.FindAndAcquireSlot(texture.bindlessSampledSlot);
+				if (handle.IsValid())
+				{
+					imgui->RetainFrameResource(std::shared_ptr<const void>(
+					        &registry, [&registry, handle](const void*) { registry.Release(handle); }));
+				}
+			}
+		}
 
 		ImGui::SeparatorText("Preview");
 		const char* const channelNames[] = {"RGBA", "Red", "Green", "Blue"};

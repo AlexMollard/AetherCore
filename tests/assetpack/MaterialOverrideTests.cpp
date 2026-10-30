@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "AssetProcessor.hpp"
+#include "DDSFormat.hpp"
 
 namespace
 {
@@ -100,4 +101,32 @@ TEST_CASE("A properties.toml override still maps through the directory form")
 	        (dir / "properties.toml").string(), props, tree.sourceDir, 0);
 	REQUIRE(result.ok);
 	CHECK(result.virtualPath == (tree.sourceDir / "materials" / "m_other.material").generic_string());
+}
+
+TEST_CASE("Texture publishing supplies color and data variants independent of source name")
+{
+	const unsigned char bmp[] = {
+		'B', 'M', 62, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0,
+		40, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 24, 0,
+		0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 0, 0
+	};
+	const auto* bytes = reinterpret_cast<const std::byte*>(bmp);
+	const std::vector<std::byte> raw(bytes, bytes + sizeof(bmp));
+	const auto result = aether::assetpipeline::ProcessAsset(raw, "normal.bmp", "assets/normal.bmp", {});
+	REQUIRE_FALSE(result.data.empty());
+	REQUIRE(result.extraFiles.size() == 1);
+	CHECK(result.extraFiles[0].virtualPath == "assets/normal.linear.texture");
+	constexpr std::size_t offset = sizeof(uint32_t) + sizeof(aether::assetpipeline::DDSHeader);
+	REQUIRE(result.data.size() >= offset + sizeof(aether::assetpipeline::DDSHeaderDXT10));
+	REQUIRE(result.extraFiles[0].data.size() == result.data.size());
+	aether::assetpipeline::DDSHeaderDXT10 color{}, data{};
+	std::memcpy(&color, result.data.data() + offset, sizeof(color));
+	std::memcpy(&data, result.extraFiles[0].data.data() + offset, sizeof(data));
+	CHECK(color.dxgiFormat == aether::assetpipeline::DXGI_FORMAT_BC7_UNORM_SRGB);
+	CHECK(data.dxgiFormat == aether::assetpipeline::DXGI_FORMAT_BC7_UNORM);
+	constexpr auto headerSize = offset + sizeof(color);
+	REQUIRE(result.data.size() >= headerSize + 32);
+	CHECK_FALSE(std::equal(result.data.begin() + headerSize + 16, result.data.begin() + headerSize + 32,
+	                       result.extraFiles[0].data.begin() + headerSize + 16));
 }

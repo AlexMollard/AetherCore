@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -47,7 +48,7 @@ namespace
 		}
 	};
 
-	// A field's position in the component catalog, looked up by display name.
+	// A field's wire component index and local field index.
 	struct FieldIndices
 	{
 		std::uint16_t componentIndex = 0;
@@ -63,6 +64,7 @@ namespace
 	FieldIndices RequireCatalogField(
 	        const std::vector<reflect::ComponentType>& catalog, std::string_view componentName, std::string_view fieldName)
 	{
+		const net::ReplicationSchema schema = net::BuildReplicationSchema(catalog);
 		for (std::size_t c = 0; c < catalog.size(); ++c)
 		{
 			if (catalog[c].name != componentName)
@@ -74,7 +76,8 @@ namespace
 				if (catalog[c].fields[f].name == fieldName)
 				{
 					return FieldIndices{
-					        .componentIndex = static_cast<std::uint16_t>(c),
+					        .componentIndex = static_cast<std::uint16_t>(
+					                std::find(schema.wireToCatalog.begin(), schema.wireToCatalog.end(), c) - schema.wireToCatalog.begin()),
 					        .fieldIndex = static_cast<std::uint16_t>(f),
 					        .type = catalog[c].fields[f].type,
 					};

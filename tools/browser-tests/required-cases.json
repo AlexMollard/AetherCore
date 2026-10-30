@@ -69,7 +69,7 @@
     "invalid-font",
     "invalid-scene-version",
     "invalid-atlas-version",
-    "invalid-audio-component",
+    "audio-source",
     "browser-key-latch",
     "browser-ui-order"
   ],

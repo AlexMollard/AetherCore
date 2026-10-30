@@ -28,6 +28,7 @@
 #include "rendering/BillboardParticleRenderer.hpp"
 #include "rendering/Renderer2D.hpp"
 #include "rendering/RenderGraph.hpp"
+#include "rendering/RenderFramePacket.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
@@ -284,15 +285,11 @@ namespace aether
 
 		static constexpr std::uint32_t kTexturePreviewSize = 2048;
 
-		// (enabled=false / slot 0xFFFFFFFF disables). Read on the render thread each
+		// Producer-thread request, copied into each render packet.
 		void SetTexturePreviewRequest(std::uint32_t bindlessSlot, gpu::Extent2D srcExtent, std::uint32_t channel, float exposure, std::uint32_t flags, std::uint32_t tonemapMode, bool enabled);
+		[[nodiscard]] TexturePreviewRequest GetTexturePreviewRequest() const { return m_requestedTexturePreview; }
+		void SetFrameTexturePreview(const TexturePreviewRequest& request) { m_frameTexturePreview = request; }
 
-		// True while a host tool is asking for the GPU texture preview. The 16 MB preview
-		// target is allocated against this, not held for the life of the editor.
-		[[nodiscard]] bool IsTexturePreviewRequested() const
-		{
-			return m_previewEnabled;
-		}
 
 		[[nodiscard]] gpu::ImageView GetTexturePreviewView() const
 		{
@@ -335,6 +332,9 @@ namespace aether
 		}
 
 		void WriteResourceTable(std::uint32_t frameIndex, std::span<const ResourceEntry> entries);
+		// Visits all main, shadow, preview and render-target queues.
+		void ForEachRenderQueue(const std::function<void(RenderQueue&)>& fn);
+
 		[[nodiscard]] gpu::DeviceAddress PublishFrameResourceTable(std::uint32_t frameIndex);
 
 		[[nodiscard]] gpu::DeviceAddress GetResourceTableAddress(std::uint32_t frameIndex) const
@@ -358,8 +358,6 @@ namespace aether
 		// immediately before the render graph is rebuilt around what now exists.
 		void ApplyLazyTargetState(ServiceContainer& services);
 
-		// Visits every RenderQueue this subsystem owns, directly or through a service.
-		void ForEachRenderQueue(const std::function<void(RenderQueue&)>& fn);
 
 		struct PerFrameResourceTable
 		{
@@ -422,18 +420,13 @@ namespace aether
 		GraphicsPipeline m_volumetricPipeline;
 		GraphicsPipeline m_volumetricCompositePipeline;
 
-		// producer thread and read in the render-thread Execute (a torn read just
+		// The requested state is producer-owned; the active state is render-thread-owned.
 		GraphicsPipeline m_texturePreviewPipeline;
 		gpu::TextureHandle m_texturePreviewHandle;
 		RGImage m_texturePreview;
 		gpu::ImageView m_texturePreviewView = nullptr;
-		gpu::Extent2D m_previewSrcExtent;
-		std::uint32_t m_previewSrcSlot = 0xFFFFFFFFu;
-		std::uint32_t m_previewChannel = 0;
-		float m_previewExposure = 1.0f;
-		std::uint32_t m_previewFlags = 0;
-		std::uint32_t m_previewTonemap = 0;
-		bool m_previewEnabled = false;
+		TexturePreviewRequest m_requestedTexturePreview;
+		TexturePreviewRequest m_frameTexturePreview;
 		std::uint32_t m_texturePreviewGeneration = 0;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;

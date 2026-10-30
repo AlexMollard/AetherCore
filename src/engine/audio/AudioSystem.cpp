@@ -8,6 +8,7 @@
 #include "audio/AudioSubsystem.hpp"
 #include "camera/CameraManager.hpp"
 #include "scene/AudioComponents.hpp"
+#include "scene/CameraComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
@@ -48,6 +49,19 @@ namespace aether::audio
 		// Listener follows the main camera, with its world velocity for the
 		// doppler effect (position delta per frame). Game thread only.
 		ListenerPose pose;
+#if defined(AETHERCORE_WEB_RUNTIME)
+		for (const auto entity : world.View<CameraComponent, TransformComponent, MainCameraComponent>())
+		{
+			const auto& transform = world.GetRegistry().get<TransformComponent>(entity);
+			pose.position = glm::vec3(transform.localToWorld[3]);
+			const glm::vec3 forward = -glm::vec3(transform.localToWorld[2]);
+			if (glm::length(forward) > 1e-6f) pose.forward = glm::normalize(forward);
+			pose.up = glm::cross(glm::cross(pose.forward, glm::vec3{0.0f, 1.0f, 0.0f}), pose.forward);
+			pose.velocity = (pose.position - m_lastListenerPosition) / frameDt;
+			m_lastListenerPosition = pose.position;
+			break;
+		}
+#else
 		if (const Camera* camera = m_cameras != nullptr ? m_cameras->TryGetMainCamera() : nullptr)
 		{
 			pose.position = camera->GetPosition();
@@ -56,30 +70,45 @@ namespace aether::audio
 			pose.velocity = (pose.position - m_lastListenerPosition) / frameDt;
 			m_lastListenerPosition = pose.position;
 		}
+#endif
 		m_audio->Update(dt, pose);
 
-		// Voices that finished (or were stolen) release their entity slot, so a
-		// re-triggered playOnStart or a changed clip starts fresh.
+		// Keep an empty entry after completion so playOnStart is consumed only
+		// once. Detaching or destroying the source releases its voice and entry.
 		for (auto it = m_entityVoices.begin(); it != m_entityVoices.end();)
 		{
-			if (m_audio->IsVoiceAlive(it->second))
+			const auto entity = World::ToEntt(Entity{it->first});
+			if (!world.GetRegistry().valid(entity) || !world.GetRegistry().all_of<AudioSourceComponent>(entity))
 			{
-				++it;
+				m_audio->StopVoice(it->second);
+				m_lastEntityPositions.erase(it->first);
+				it = m_entityVoices.erase(it);
 			}
 			else
 			{
-				const std::uint32_t deadId = it->first;
-				it = m_entityVoices.erase(it);
-				m_lastEntityPositions.erase(deadId);
+				if (!m_audio->IsVoiceAlive(it->second))
+				{
+					it->second = {};
+					m_lastEntityPositions.erase(it->first);
+				}
+				++it;
 			}
 		}
 
 		for (const auto [entity, source]: world.View<AudioSourceComponent>().each())
 		{
 			const std::uint32_t id = World::FromEntt(entity).id;
-			const bool hasVoice = m_entityVoices.contains(id);
+			const auto [entry, firstSeen] = m_entityVoices.try_emplace(id);
+			const bool requested = source.playRequested;
+			source.playRequested = false;
+			if (requested && entry->second.IsValid())
+			{
+				m_audio->StopVoice(entry->second);
+				entry->second = {};
+			}
+			const bool hasVoice = entry->second.IsValid();
 			const glm::vec3 position = WorldPositionOf(world, World::FromEntt(entity));
-			if (!source.playOnStart || hasVoice || source.clipPath.empty())
+			if ((!requested && !(firstSeen && source.playOnStart)) || hasVoice || source.clipPath.empty())
 			{
 				// Already playing, not auto-started, or authored silent: still
 				// feed the spatializer the emitter's motion each frame.
@@ -138,9 +167,12 @@ namespace aether::audio
 
 	void AudioSystem::OnUnregister([[maybe_unused]] World& world)
 	{
-		// Play session ended or the scene is being torn down: the handles die
-		// with the map (StopAllVoices is PlaySession's call; this only stops the
-		// system from treating dead voices as live ones).
+		// Stop owned voices before releasing their entity bookkeeping.
+		if (m_audio != nullptr)
+		{
+			for (const auto& [id, voice]: m_entityVoices)
+				m_audio->StopVoice(voice);
+		}
 		m_entityVoices.clear();
 		m_lastEntityPositions.clear();
 	}

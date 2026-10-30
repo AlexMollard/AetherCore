@@ -114,7 +114,7 @@ namespace aether::net
 					continue;
 				}
 				body.U32(netId);
-				body.U16(field.componentIndex);
+				body.U16(field.wireComponentIndex);
 				body.U16(field.fieldIndex);
 				WriteFieldValue(body, value);
 				++count;
@@ -153,12 +153,12 @@ namespace aether::net
 			const std::uint32_t netId = r.U32();
 			const std::uint16_t componentIndex = r.U16();
 			const std::uint16_t fieldIndex = r.U16();
-			if (!r.Ok() || componentIndex >= catalog.size())
+			if (!r.Ok() || componentIndex >= schema.wireToCatalog.size())
 			{
 				return; // malformed past this point; the rest of the packet is unparseable
 			}
 
-			const reflect::ComponentType& type = catalog[componentIndex];
+			const reflect::ComponentType& type = catalog[schema.wireToCatalog[componentIndex]];
 			if (fieldIndex >= type.fields.size())
 			{
 				return;

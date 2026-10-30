@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
+#include <utility>
 #include <unordered_map>
 #include <vector>
 #include <vk_mem_alloc.h>
@@ -46,6 +48,7 @@ namespace aether
 
 		void Initialize(const VulkanContext& ctx, Desc desc);
 		void Shutdown();
+		void ShutdownDeferred(std::function<void()> onRetired = {});
 
 		void SetMemoryTracker(GpuMemoryTracker* tracker);
 
@@ -85,9 +88,9 @@ namespace aether
 		// copies signal (the frame submission waits on it; the staging buffer is
 		// reclaimed once it completes).
 		template<typename T>
-		std::uint64_t Upload(GpuSpan<T> dst, std::span<const T> src, vulkan::TransferManager& transfer)
+		std::uint64_t Upload(GpuSpan<T> dst, std::span<const T> src, vulkan::TransferManager& transfer, bool requiredForNextFrame = true, std::function<void()> onStagingRetired = {})
 		{
-			return UploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T), transfer);
+			return UploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T), transfer, requiredForNextFrame, std::move(onStagingRetired));
 		}
 
 		[[nodiscard]] VkBuffer GetBuffer() const
@@ -122,6 +125,6 @@ namespace aether
 
 		VkDeviceSize AllocBytes(VkDeviceSize bytes);
 		void FreeBytes(gpu::DeviceAddress addr);
-		std::uint64_t UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer);
+		std::uint64_t UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer, bool requiredForNextFrame, std::function<void()> onStagingRetired);
 	};
 } // namespace aether

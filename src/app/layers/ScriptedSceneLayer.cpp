@@ -35,6 +35,8 @@
 #include "PlayState.hpp"
 #include "platform/Input.hpp"
 #include "scene/SceneSerializer.hpp"
+#include "scene/SceneSerializerDetail.hpp"
+#include "scene/WorldStreaming.hpp"
 #include "rendering/Renderer.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "scene/World.hpp"
@@ -185,6 +187,9 @@ namespace aether::app
 		}
 
 		context.services.Register<scripting::SceneContext>(m_sceneCtx);
+		m_worldStreaming = std::make_unique<scene::WorldStreaming>(scene::CreateNativeStreamingBackend(m_sceneCtx, scene::MakeApplySceneDeps(context.services)));
+		m_sceneCtx.streaming = m_worldStreaming.get();
+		context.services.Register<scene::WorldStreaming>(*m_worldStreaming);
 
 		if (auto* assetDb = context.services.TryGet<AssetDatabase>())
 		{
@@ -270,6 +275,11 @@ namespace aether::app
 	void ScriptedSceneLayer::OnDetach(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
+		if (m_worldStreaming)
+			m_worldStreaming->Shutdown();
+		context.services.Unregister<scene::WorldStreaming>();
+		m_sceneCtx.streaming = nullptr;
+		m_worldStreaming.reset();
 		DestroySceneEntities(context);
 		context.services.Unregister<scripting::SceneContext>();
 
@@ -292,6 +302,29 @@ namespace aether::app
 		GrassStreamingCommands streaming;
 		auto& registry = assets.GetMaterialRegistry();
 		const auto* camera = m_sceneCtx.cameras->TryGetMainCamera();
+		if (m_sceneCtx.streaming != nullptr)
+		{
+			const auto* settings = context.TryGet<aether::SettingsService>();
+			const auto* regions = world.GetRegistry().ctx().find<scene::detail::ActiveStreamingRegions>();
+			if (settings != nullptr)
+			{
+				const auto& config = settings->Get().streaming;
+				if (const auto budgets = StreamingBudgetsFromSettings(config))
+					(void)m_sceneCtx.streaming->SetBudgets(*budgets);
+				if (config.defaultCameraSource && regions != nullptr && !regions->regions.empty() && camera != nullptr)
+				{
+					streaming::Source source;
+					source.id = "__aether_default_camera";
+					source.position = camera->GetPosition();
+					source.loadRadius = config.loadRadius;
+					source.prefetchRadius = std::max(config.loadRadius, config.prefetchRadius);
+					(void)m_sceneCtx.streaming->SetSource(std::move(source));
+				}
+				else
+					m_sceneCtx.streaming->RemoveSource("__aether_default_camera");
+			}
+			m_sceneCtx.streaming->Update();
+		}
 		auto& cameraPositions = m_sceneCtx.grassCameras;
 		cameraPositions.clear();
 		cameraPositions.push_back(camera ? camera->GetPosition() : glm::vec3(0.0f));

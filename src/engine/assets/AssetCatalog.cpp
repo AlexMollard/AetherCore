@@ -381,7 +381,7 @@ namespace aether
 					{
 						candidate = m_prefabsDirectory / (std::string(text) + ".prefab.toml");
 					}
-					else if (((field.starts_with("includes[") && field.ends_with(".scene")) || (document == "ProjectSettings.toml" && (field == "app.startupScene" || field == "app.startupscene" || field == "app.startup_scene")))
+					else if ((((field.starts_with("includes[") || field.starts_with("stream_regions[")) && field.ends_with(".scene")) || (document == "ProjectSettings.toml" && (field == "app.startupScene" || field == "app.startupscene" || field == "app.startup_scene")))
 					         && !fs::path(text).has_extension())
 					{
 						candidate = m_scenesDirectory / (std::string(text) + ".scene.toml");

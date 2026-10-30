@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -86,6 +87,9 @@ namespace aether::scripting::gameplay3d
 		[[nodiscard]] virtual std::string_view ClipName(Entity animator, std::uint32_t index) const = 0;
 		// Longest channel key time of the clip, like AnimationDatabase::GetClipDuration.
 		[[nodiscard]] virtual float ClipDuration(Entity animator, std::uint32_t index) const = 0;
+		[[nodiscard]] virtual std::optional<std::uint32_t> FindNode(Entity, std::string_view) const = 0;
+		virtual void Remap(Entity animator, assets::GltfAnimation& animation) const = 0;
+		virtual void Compile(World& world, Entity entity) const = 0;
 	};
 
 	struct Animator

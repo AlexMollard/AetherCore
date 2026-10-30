@@ -448,6 +448,40 @@ internal static unsafe class ScriptRegistry
     // ── Per-entity instance lifecycle ─────────────────────────────────────────
 
     [UnmanagedCallersOnly]
+    internal static int CaptureStreamingState(ulong handle, byte* buffer, uint capacity, uint* required)
+    {
+        if (required == null || Resolve(handle) is not { } script) return 1;
+        try
+        {
+            string state = script.CaptureStreamingState() ?? throw new InvalidOperationException("Streaming capture returned null");
+            byte[] bytes = System.Text.Encoding.UTF8.GetBytes(state);
+            *required = checked((uint)bytes.Length + 1);
+            if (buffer == null || capacity < *required)
+            {
+                if (buffer != null && capacity != 0) buffer[0] = 0;
+                return 3;
+            }
+            bytes.AsSpan().CopyTo(new Span<byte>(buffer, bytes.Length));
+            buffer[bytes.Length] = 0;
+            return 0;
+        }
+        catch (Exception ex) { Bootstrap.ReportError($"CaptureStreamingState: {ex}"); return 9; }
+    }
+
+    [UnmanagedCallersOnly]
+    internal static int RestoreStreamingState(ulong handle, byte* data, uint length)
+    {
+        if ((data == null && length != 0) || length > int.MaxValue || Resolve(handle) is not { } script) return 1;
+        try
+        {
+            string state = new System.Text.UTF8Encoding(false, true).GetString(new ReadOnlySpan<byte>(data, (int)length));
+            script.RestoreStreamingState(state);
+            return 0;
+        }
+        catch (Exception ex) { Bootstrap.ReportError($"RestoreStreamingState: {ex}"); return 9; }
+    }
+
+    [UnmanagedCallersOnly]
     internal static ulong CreateInstance(byte* typeNameUtf8, uint entityId)
     {
         try

@@ -1463,12 +1463,12 @@ namespace aether
 			        .Execute(
 			                [this, bindless = frame.bindless](PassContext& ctx)
 			                {
-				                if (!m_previewEnabled || m_previewSrcSlot == 0xFFFFFFFFu)
+				                if (!m_frameTexturePreview.enabled || m_frameTexturePreview.slot == 0xFFFFFFFFu)
 				                {
 					                return;
 				                }
-				                const std::uint32_t w = std::min(m_previewSrcExtent.width, kTexturePreviewSize);
-				                const std::uint32_t h = std::min(m_previewSrcExtent.height, kTexturePreviewSize);
+				                const std::uint32_t w = std::min(m_frameTexturePreview.extent.width, kTexturePreviewSize);
+				                const std::uint32_t h = std::min(m_frameTexturePreview.extent.height, kTexturePreviewSize);
 				                if (w == 0u || h == 0u)
 				                {
 					                return;
@@ -1489,11 +1489,11 @@ namespace aether
 					                std::uint32_t height;
 					                std::uint32_t pad;
 				                } push;
-				                push.srcSlot = m_previewSrcSlot;
-				                push.channel = m_previewChannel;
-				                push.exposure = m_previewExposure;
-				                push.flags = m_previewFlags;
-				                push.tonemapMode = m_previewTonemap;
+				                push.srcSlot = m_frameTexturePreview.slot;
+				                push.channel = m_frameTexturePreview.channel;
+				                push.exposure = m_frameTexturePreview.exposure;
+				                push.flags = m_frameTexturePreview.flags;
+				                push.tonemapMode = m_frameTexturePreview.tonemapMode;
 				                push.width = w;
 				                push.height = h;
 				                push.pad = 0u;
@@ -1506,13 +1506,15 @@ namespace aether
 
 	void RenderingSubsystem::SetTexturePreviewRequest(std::uint32_t bindlessSlot, gpu::Extent2D srcExtent, std::uint32_t channel, float exposure, std::uint32_t flags, std::uint32_t tonemapMode, bool enabled)
 	{
-		m_previewSrcSlot = bindlessSlot;
-		m_previewSrcExtent = srcExtent;
-		m_previewChannel = channel;
-		m_previewExposure = exposure;
-		m_previewFlags = flags;
-		m_previewTonemap = tonemapMode;
-		m_previewEnabled = enabled && bindlessSlot != 0xFFFFFFFFu;
+		m_requestedTexturePreview = TexturePreviewRequest{
+		        .extent = srcExtent,
+		        .slot = bindlessSlot,
+		        .channel = channel,
+		        .exposure = exposure,
+		        .flags = flags,
+		        .tonemapMode = tonemapMode,
+		        .enabled = enabled && bindlessSlot != 0xFFFFFFFFu,
+		};
 	}
 
 	void RenderingSubsystem::WriteResourceTable(std::uint32_t frameIndex, std::span<const ResourceEntry> entries)

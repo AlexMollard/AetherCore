@@ -4,11 +4,10 @@
 // ping is unmeasurable from anywhere else and has to travel like any other piece of
 // state that peer owns.
 //
-// These cases drive it over a REAL loopback connection with both ends' send and receive
-// systems running, because what is under test is what crosses the wire. ENet's own
-// round-trip estimate is what is being surfaced - no probe packet is sent by anything
-// here - so the assertions are about WHOSE number ends up WHERE, not about a specific
-// millisecond count, which is a property of the machine and not of the code.
+// These cases drive application-route probes over a real loopback connection with
+// both ends' send and receive systems running. The measured ping is replicated to
+// peers that cannot time that link themselves. Assertions cover whose number ends
+// up where, not a specific millisecond count determined by the machine.
 
 #include <doctest/doctest.h>
 
@@ -30,9 +29,8 @@ using namespace aether;
 
 namespace
 {
-	// Loopback is not seconds away from itself. ENet seeds a fresh peer at 500 ms and
-	// converges downward from there, so this is a ceiling on "a plausible reading",
-	// not a claim about the link's real speed.
+	// The application-route estimate depends on scheduling. Bound implausible
+	// readings without treating a particular loopback latency as a contract.
 	constexpr std::uint32_t kSaneCeilingMs = 2000;
 
 	struct PingNode
@@ -153,6 +151,7 @@ TEST_CASE("A host has no round trip to itself, but does to each connection")
 	// The host is not one of its own peers. Reporting anything else here would put a
 	// latency figure on the one player who has none.
 	CHECK(p.host.context.LocalRoundTripMs() == 0);
+	REQUIRE(PumpUntil(p.host, p.client, [&] { return p.host.context.RoundTripMs(p.peer) > 0; }));
 
 	const std::uint32_t toClient = p.host.context.RoundTripMs(p.peer);
 	CHECK(toClient > 0);
@@ -166,6 +165,12 @@ TEST_CASE("A host has no round trip to itself, but does to each connection")
 TEST_CASE("A connected client measures its own link to the host")
 {
 	PingPair p(24791);
+	p.client.context.ForgetLatency(aether::net::kInvalidConnection);
+	CHECK(p.client.context.Transport().RoundTripMs(aether::net::kInvalidConnection) > 0);
+	CHECK(p.client.context.LocalRoundTripMs() == 0);
+	// A deliberately forgotten in-flight ping can meet the remote reply throttle;
+	// permit the real five-second outstanding-ping retry, not a transport fallback.
+	REQUIRE(PumpUntil(p.host, p.client, [&] { return p.client.context.LocalRoundTripMs() > 0; }, 7000));
 
 	const std::uint32_t ping = p.client.context.LocalRoundTripMs();
 	CHECK(ping > 0);
@@ -225,7 +230,7 @@ TEST_CASE("A peer does not stamp its own ping onto somebody else's player")
 	REQUIRE(stranger != p.host.context.LocalConnectionId());
 	REQUIRE(stranger != p.client.context.LocalConnectionId());
 	const auto [onHost, onClient] = MakeMirroredPlayer(p, stranger);
-	REQUIRE(p.client.context.LocalRoundTripMs() > 0);
+	REQUIRE(PumpUntil(p.host, p.client, [&] { return p.client.context.LocalRoundTripMs() > 0; }));
 
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
 	while (std::chrono::steady_clock::now() < deadline)

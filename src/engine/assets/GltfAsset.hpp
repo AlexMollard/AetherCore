@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <expected>
+#include <functional>
+#include <span>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <string>
@@ -145,6 +147,8 @@ namespace aether::assets
 		[[nodiscard]] static Expected<GltfAsset> LoadFromVfsPath(std::string_view path);
 
 		[[nodiscard]] static Expected<GltfAsset> LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath);
+		[[nodiscard]] static Expected<GltfAsset> LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath, const std::function<bool(std::size_t)>& reserve);
+		[[nodiscard]] static Expected<GltfAsset> FromPrepared(std::span<const std::byte> data, std::string_view meshPath);
 
 		[[nodiscard]] static std::string ResolveMeshPath(std::string_view vfsPath);
 

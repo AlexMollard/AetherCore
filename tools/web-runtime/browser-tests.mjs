@@ -217,12 +217,15 @@ try {
 		query = '?reference=1&scene=' + effectScenes[name] + '&automation=1';
 	    if (name === 'browser-features' || name === 'browser-gamepad' || name === 'browser-ui-order')
 		query = '?reference=1&scene=BrowserFeatures';
+	    if (name === 'audio-source')
+		query = '?reference=1&scene=BrowserBadAudio';
+	    if (name === 'platform-audio-resume')
+		query = '?reference=1';
 	    if (name.startsWith('invalid-'))
 		query = '?reference=1&scene=' + ({
 			    'invalid-font' : 'BrowserBadFont',
 			    'invalid-scene-version' : 'BrowserBadVersion',
 			    'invalid-atlas-version' : 'BrowserBadAtlas',
-			    'invalid-audio-component' : 'BrowserBadAudio',
 			    'invalid-particle-rate' : 'BrowserBadParticleRate',
 			    'invalid-particle-capacity' : 'BrowserBadParticleCapacity',
 			    'invalid-custom-pass-shader' : 'BrowserBadCustomPassShader',
@@ -480,7 +483,8 @@ try {
 		};
 		nearPixel(8, 16, [128, 128, 128, 255], 'sRGB albedo 128 decodes and encodes back to 128');
 		nearPixel(24, 16, [128, 128, 128, 255], 'sRGB emissive texture contributes to a black base');
-		nearPixel(32, 32, [32, 32, 32, 255], 'Minified stripes use the shared native cooked mip filter');
+		const stripeAverage = Math.round(255 * (1.055 * Math.pow(1 / 8, 1 / 2.4) - 0.055));
+		nearPixel(32, 32, [stripeAverage, stripeAverage, stripeAverage, 255], 'Minified stripes retain one eighth of the source radiance');
 		assert.deepEqual(pixel(image, 16, 32), [255, 0, 0, 255], 'Linked cooked binary material retains its native base color');
 		assert.deepEqual(pixel(image, 37, 13).slice(0, 3), [0, 0, 255], 'Transparent alpha checker reveals the blue backing');
 		assert.deepEqual(pixel(image, 43, 13).slice(0, 3), [255, 0, 0], 'Opaque alpha checker writes the red cutout');
@@ -538,6 +542,24 @@ try {
 		assert.equal(state.customPassDraws || 0, 0, 'Over-budget custom passes never reach GPU submission');
 		assert.ok(state.diagnostics.some(d => /WEB_CUSTOM_PASS_BUDGET/.test(d.message)), JSON.stringify(state.diagnostics));
 		item.scope = 'Seventeen full-size custom-pass submissions exceed the per-frame float4 budget and fail with an explicit diagnostic before GPU submission';
+		item.status = 'passed';
+		continue;
+	    }
+	    if (name === 'audio-source') {
+		await page.waitForFunction(() => aetherRuntime.scene === 'BrowserBadAudio' || aetherRuntime.status === 'failed');
+		assert.equal(await page.evaluate(() => aetherRuntime.scene), 'BrowserBadAudio');
+		await page.locator('#start').click();
+		await page.waitForFunction(() => aetherPlatform.report.peak > 0.001 || aetherRuntime.status === 'failed');
+		assert.ok(await page.evaluate(() => aetherPlatform.report.peak > 0.001));
+		await page.evaluate(() => { globalThis.__audioContext = aetherPlatform.audio; Module._aether_web_stop(); });
+		await page.waitForFunction(() => aetherRuntime.state === 'stopped' && aetherRuntime.inFlight === 0 && __audioContext.state === 'closed');
+		assert.deepEqual(await page.evaluate(() => ({
+		    ready: aetherRuntime.audioReady,
+		    sink: aetherPlatform.sink,
+		    context: aetherPlatform.audio,
+		    buffers: aetherPlatform.freeAudioBuffers.length
+		})), {ready: false, sink: null, context: null, buffers: 0});
+		item.scope = 'Authored Audio Source produces nonzero mixed PCM and releases the worklet and AudioContext on stop';
 		item.status = 'passed';
 		continue;
 	    }
@@ -744,13 +766,14 @@ try {
 			await page.waitForFunction(() => !!aetherPlatform.audioBytes);
 			await page.locator('#start').click();
 			await page.waitForFunction(() => aetherRuntime.audioReady);
-			assert.equal(await page.evaluate(() => aetherPlatform.play('project://assets/audio/reference.wav')), true);
+			await page.locator('#canvas').click();
+			await page.keyboard.down('Space');
 			await page.waitForFunction(() => aetherPlatform.report.peak > 0.001);
-			assert.equal(await page.evaluate(() => aetherPlatform.play('project://assets/audio/secondary.wav')), true);
+			await page.keyboard.up('Space');
 			await page.evaluate(() => aetherPlatform.audio.suspend());
 			await page.locator('#start').click();
 			await page.waitForFunction(() => aetherPlatform.audio.state === 'running');
-			assert.equal(await page.evaluate(() => aetherPlatform.report.scheduledSounds), 2);
+			assert.ok(await page.evaluate(() => aetherPlatform.report.scheduledSounds >= 1));
 		    }
 		}
 		item.status = 'passed';

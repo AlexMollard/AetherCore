@@ -11,6 +11,9 @@
 #include "physics2d/Physics2DComponents.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
+#include "scene/SceneSerializerDetail.hpp"
+#include "scene/SceneStreamingDependencies.hpp"
+#include "scene/SceneStreamingReferences.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
 #include "scripting/GameplayHost.hpp"
@@ -162,6 +165,7 @@ namespace aether::app
 
 	bool ScriptComponentSystem::UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt, bool attachOnly)
 	{
+		const scripting::ActiveScriptEntityScope entityScope(ctx, entity);
 		if (!host.IsAvailable())
 		{
 			return false;
@@ -286,6 +290,20 @@ namespace aether::app
 			return fail(handle);
 		}
 
+		if ((host.Capabilities() & AE_GAMEPLAY_CAP_NETWORK) != 0)
+		{
+			if (const auto* receive = static_cast<const aether::net::NetworkReceiveSystem*>(ctx.world->FindSystem("NetworkReceiveSystem")))
+			{
+				for (const auto& event : receive->GameplayEvents())
+				{
+					if (!host.DispatchNetwork(handle, event.code, event.peer) && native)
+					{
+						return fail(handle);
+					}
+				}
+			}
+		}
+
 		// Snapshot the event lists before calling user code: callbacks may add components
 		// and invalidate ECS storage. Managed scripts retain their own event polling.
 		if ((host.Capabilities() & AE_GAMEPLAY_CAP_PHYSICS) != 0)
@@ -359,6 +377,7 @@ namespace aether::app
 		const ActiveContextScope scope(ctx);
 		for (const std::uint64_t key: stale)
 		{
+			const scripting::ActiveScriptEntityScope entityScope(ctx, Entity{InstanceEntityId(key)});
 			const std::uint64_t handle = m_instances[key].handle;
 			(void) host.Detach(handle);
 			(void) host.Destroy(handle);
@@ -377,10 +396,249 @@ namespace aether::app
 		const ActiveContextScope scope(ctx);
 		for (const auto& [key, instance]: m_instances)
 		{
+			const scripting::ActiveScriptEntityScope entityScope(ctx, Entity{InstanceEntityId(key)});
 			(void) host.Detach(instance.handle);
 			(void) host.Destroy(instance.handle);
 		}
 		m_instances.clear();
+	}
+
+	Expected<std::optional<ScriptComponentSystem::StreamingScriptState>> ScriptComponentSystem::CaptureStreamingScript(World& world, Entity entity, std::uint32_t scriptIndex)
+	{
+		auto* scripts = world.TryGet<ScriptComponent>(entity);
+		if (scripts == nullptr || scriptIndex >= scripts->scripts.size())
+			return std::unexpected(AetherError::Engine("Streaming script entry is missing"));
+		auto* ctx = m_services.TryGet<scripting::SceneContext>();
+		auto* host = m_services.TryGet<scripting::GameplayHost>();
+		if (ctx == nullptr || host == nullptr || !host->IsAvailable())
+			return std::unexpected(AetherError::Engine("Cannot capture streaming scripts without a gameplay host"));
+		auto& script = scripts->scripts[scriptIndex];
+		const auto handle = GetInstanceHandle(entity.id, scriptIndex);
+		if (handle == 0)
+		{
+			if (script.attached)
+				return std::unexpected(AetherError::Engine("Attached streaming script instance is missing"));
+			return std::optional<StreamingScriptState>{};
+		}
+		const ActiveContextScope scope(*ctx);
+		const scripting::ActiveScriptEntityScope entityScope(*ctx, entity);
+		const auto properties = host->GetScriptProperties(script.path);
+		for (std::size_t property = 0; property < properties.size(); ++property)
+		{
+			ScriptPropertyValue value;
+			value.type = properties[property].type;
+			if (!host->GetPropertyValue(handle, static_cast<int>(property), value))
+				return std::unexpected(AetherError::Engine("Failed to capture streaming script property"));
+			script.properties[properties[property].name] = value;
+		}
+		const auto* node = world.TryGet<SceneNodeComponent>(entity);
+		if (node == nullptr || node->id == 0)
+			return std::unexpected(AetherError::Engine("Streaming script has no stable scene node"));
+		const auto nodeId = node->id;
+		auto state = host->CaptureStreamingState(handle);
+		if (!state) return std::unexpected(std::move(state.error()));
+		return std::optional<StreamingScriptState>{StreamingScriptState{nodeId, scriptIndex, std::move(*state)}};
+	}
+
+	Expected<std::vector<ScriptComponentSystem::StreamingScriptState>> ScriptComponentSystem::CaptureStreamingScripts(World& world, const std::vector<Entity>& entities)
+	{
+		std::vector<StreamingScriptState> result;
+		for (const auto entity : entities)
+		{
+			const auto* scripts = world.TryGet<ScriptComponent>(entity);
+			const std::size_t count = scripts != nullptr ? scripts->scripts.size() : 0;
+			for (std::size_t i = 0; i < count; ++i)
+			{
+				auto state = CaptureStreamingScript(world, entity, static_cast<std::uint32_t>(i));
+				if (!state) return std::unexpected(std::move(state.error()));
+				if (*state) result.push_back(std::move(**state));
+			}
+		}
+		return result;
+	}
+
+	Expected<void> ScriptComponentSystem::RestoreStreamingScripts(World& world, const std::vector<Entity>& entities, const std::vector<StreamingScriptState>& states)
+	{
+		if (states.empty()) return {};
+		auto* ctx = m_services.TryGet<scripting::SceneContext>();
+		auto* host = m_services.TryGet<scripting::GameplayHost>();
+		if (ctx == nullptr || host == nullptr || !host->IsAvailable())
+			return std::unexpected(AetherError::Engine("Cannot restore streaming scripts without a gameplay host"));
+		AttachPredicted(world, entities);
+		std::unordered_map<std::uint64_t, Entity> nodes;
+		for (const auto entity : entities)
+			if (const auto* node = world.TryGet<SceneNodeComponent>(entity); node != nullptr && node->id != 0)
+				if (!nodes.emplace(node->id, entity).second)
+					return std::unexpected(AetherError::Engine("Duplicate streaming scene node"));
+		const ActiveContextScope scope(*ctx);
+		for (const auto& state : states)
+		{
+			const auto node = nodes.find(state.node);
+			if (node == nodes.end()) return std::unexpected(AetherError::Engine("Streaming script node missing"));
+			const auto handle = GetInstanceHandle(node->second.id, state.scriptIndex);
+			const scripting::ActiveScriptEntityScope entityScope(*ctx, node->second);
+			if (handle == 0) return std::unexpected(AetherError::Engine("Streaming script instance missing"));
+			auto restored = host->RestoreStreamingState(handle, state.state);
+			if (!restored) return std::unexpected(std::move(restored.error()));
+		}
+		return {};
+	}
+
+	Expected<void> ScriptComponentSystem::PrepareStreamingScriptReferences(World& world, const std::vector<Entity>& entities)
+	{
+		auto* ctx = m_services.TryGet<scripting::SceneContext>();
+		auto* host = m_services.TryGet<scripting::GameplayHost>();
+		std::unordered_set<std::uint32_t> detached;
+		for (const auto entity : entities) detached.insert(entity.id);
+		auto& registry = world.GetRegistry();
+		auto& pending = registry.ctx().contains<scene::detail::StreamingScriptNodeReferences>()
+		    ? registry.ctx().get<scene::detail::StreamingScriptNodeReferences>()
+		    : registry.ctx().emplace<scene::detail::StreamingScriptNodeReferences>();
+		struct Change { Entity owner; std::uint32_t index; std::string property; std::uint64_t ownerNode; std::uint64_t targetNode; };
+		std::vector<Change> changes;
+		bool invalid = false;
+		world.View<ScriptComponent>().each([&](entt::entity raw, ScriptComponent& component)
+		{
+			const Entity owner = World::FromEntt(raw);
+			if (detached.contains(owner.id)) return;
+			for (std::size_t index = 0; index < component.scripts.size(); ++index)
+			{
+				auto& script = component.scripts[index];
+				const auto handle = GetInstanceHandle(owner.id, static_cast<std::uint32_t>(index));
+				if (handle != 0)
+				{
+					if (!host || !ctx || !host->IsAvailable()) { invalid = true; return; }
+					const ActiveContextScope scope(*ctx);
+					const auto properties = host->GetScriptProperties(script.path);
+					for (std::size_t p = 0; p < properties.size(); ++p)
+					{
+						if (properties[p].type != ScriptPropertyValue::Type::Entity && properties[p].type != ScriptPropertyValue::Type::Component) continue;
+						ScriptPropertyValue value;
+						value.type = properties[p].type;
+						if (!host->GetPropertyValue(handle, static_cast<int>(p), value)) { invalid = true; return; }
+						script.properties[properties[p].name] = value;
+					}
+				}
+				for (const auto& [name, value] : script.properties)
+				{
+					if ((value.type != ScriptPropertyValue::Type::Entity && value.type != ScriptPropertyValue::Type::Component) ||
+					    value.i64 <= 0 || !detached.contains(static_cast<std::uint32_t>(value.i64))) continue;
+					const auto* ownerNode = world.TryGet<SceneNodeComponent>(owner);
+					const auto* targetNode = world.TryGet<SceneNodeComponent>(Entity{static_cast<std::uint32_t>(value.i64)});
+					if (!ownerNode || !ownerNode->id || !targetNode || !targetNode->id) { invalid = true; return; }
+					changes.push_back({owner, static_cast<std::uint32_t>(index), name, ownerNode->id, targetNode->id});
+				}
+			}
+		});
+		if (invalid) return std::unexpected(AetherError::Engine("Cannot preserve streaming script reference without a live host and stable nodes"));
+		for (const auto& change : changes)
+		{
+			auto* component = world.TryGet<ScriptComponent>(change.owner);
+			if (!component || change.index >= component->scripts.size()) return std::unexpected(AetherError::Engine("Streaming script owner changed during detach"));
+			auto& script = component->scripts[change.index];
+			auto found = script.properties.find(change.property);
+			if (found == script.properties.end()) return std::unexpected(AetherError::Engine("Streaming script property disappeared"));
+			auto value = found->second;
+			value.i64 = 0;
+			const auto handle = GetInstanceHandle(change.owner.id, change.index);
+			if (handle != 0)
+			{
+				const int index = host->FindPropertyIndex(script.path, change.property);
+				if (index < 0) return std::unexpected(AetherError::Engine("Streaming script property is unavailable"));
+				const ActiveContextScope scope(*ctx);
+				auto result = host->TrySetPropertyValue(handle, index, value);
+				if (!result) return std::unexpected(std::move(result.error()));
+			}
+			found->second = value;
+			std::erase_if(pending.entries, [&](const auto& ref) { return ref.ownerNode == change.ownerNode && ref.scriptIndex == change.index && ref.property == change.property; });
+			pending.entries.push_back({change.ownerNode, change.targetNode, change.index, script.path, change.property, 0});
+		}
+		return {};
+	}
+
+	Expected<void> ScriptComponentSystem::ResolveStreamingScriptReferences(World& world)
+	{
+		auto* pending = world.GetRegistry().ctx().find<scene::detail::StreamingScriptNodeReferences>();
+		if (!pending || pending->entries.empty()) return {};
+		auto* ctx = m_services.TryGet<scripting::SceneContext>();
+		auto* host = m_services.TryGet<scripting::GameplayHost>();
+		const scene::StreamingNodeIndex nodes(world);
+		if (!nodes.ambiguousExact.empty()) return std::unexpected(AetherError::Engine("Duplicate scene node while resolving streaming script references"));
+		for (auto it = pending->entries.begin(); it != pending->entries.end();)
+		{
+			const auto owner = nodes.exact.find(it->ownerNode);
+			if (owner == nodes.exact.end()) { ++it; continue; }
+			auto* component = world.TryGet<ScriptComponent>(owner->second);
+			if (!component || it->scriptIndex >= component->scripts.size() || component->scripts[it->scriptIndex].path != it->scriptType)
+			{
+				it = pending->entries.erase(it); continue;
+			}
+			auto& script = component->scripts[it->scriptIndex];
+			const auto property = script.properties.find(it->property);
+			if (property == script.properties.end()) { it = pending->entries.erase(it); continue; }
+			const auto handle = GetInstanceHandle(owner->second.id, static_cast<std::uint32_t>(it->scriptIndex));
+			const int index = handle && host ? host->FindPropertyIndex(script.path, it->property) : -1;
+			if (handle)
+			{
+				if (!ctx || !host || index < 0) return std::unexpected(AetherError::Engine("Cannot inspect live streaming script reference"));
+				ScriptPropertyValue current = property->second;
+				const ActiveContextScope scope(*ctx);
+				if (!host->GetPropertyValue(handle, index, current)) return std::unexpected(AetherError::Engine("Cannot read live streaming script reference"));
+				property->second = current;
+			}
+			if (property->second.i64 != it->expected) { it = pending->entries.erase(it); continue; }
+			const auto target = nodes.Resolve(it->targetNode);
+			if (!target) return std::unexpected(target.error());
+			if (!target->IsValid()) { ++it; continue; }
+			auto value = property->second;
+			value.i64 = target->id;
+			if (handle)
+			{
+				const ActiveContextScope scope(*ctx);
+				auto result = host->TrySetPropertyValue(handle, index, value);
+				if (!result) return std::unexpected(std::move(result.error()));
+			}
+			property->second = value;
+			it = pending->entries.erase(it);
+		}
+		return {};
+	}
+
+	Expected<void> ScriptComponentSystem::DetachStreamingEntities(const std::vector<Entity>& entities)
+	{
+		auto* ctx = m_services.TryGet<scripting::SceneContext>();
+		auto* host = m_services.TryGet<scripting::GameplayHost>();
+		std::unordered_set<std::uint32_t> ids;
+		for (const auto entity : entities) ids.insert(entity.id);
+		std::vector<std::uint64_t> keys;
+		for (const auto& [key, instance] : m_instances)
+			if (ids.contains(InstanceEntityId(key))) keys.push_back(key);
+		if (keys.empty()) return {};
+		if (ctx == nullptr || ctx->world == nullptr || host == nullptr || !host->IsAvailable())
+			return std::unexpected(AetherError::Engine("Cannot detach streaming scripts without a gameplay host"));
+		const ActiveContextScope scope(*ctx);
+		for (const auto key : keys)
+		{
+			const auto it = m_instances.find(key);
+			if (it == m_instances.end()) continue;
+			const auto handle = it->second.handle;
+			const Entity entity{InstanceEntityId(key)};
+			const scripting::ActiveScriptEntityScope entityScope(*ctx, entity);
+			auto detached = host->Detach(handle);
+			if (!detached) return std::unexpected(std::move(detached.error()));
+			auto destroyed = host->Destroy(handle);
+			if (!destroyed)
+			{
+				auto reattached = host->Attach(handle);
+				if (!reattached)
+					return std::unexpected(AetherError::Engine("Streaming script destroy failed and reattach failed: " + destroyed.error().message + "; " + reattached.error().message));
+				return std::unexpected(std::move(destroyed.error()));
+			}
+			const auto current = m_instances.find(key);
+			if (current != m_instances.end() && current->second.handle == handle) m_instances.erase(current);
+			if (auto* entry = FindScriptEntry(*ctx->world, entity, InstanceScriptIndex(key))) entry->attached = false;
+		}
+		return {};
 	}
 
 	void ScriptComponentSystem::AttachPredicted(World& world, const std::vector<Entity>& entities)
@@ -388,18 +646,14 @@ namespace aether::app
 		auto* sceneCtx = m_services.TryGet<scripting::SceneContext>();
 		auto* host = m_services.TryGet<scripting::GameplayHost>();
 		if (sceneCtx == nullptr || host == nullptr || !host->IsAvailable())
-		{
 			return;
-		}
 		for (const Entity entity: entities)
 		{
 			for (std::size_t i = 0; world.GetRegistry().valid(World::ToEntt(entity)); ++i)
 			{
 				auto* scripts = world.TryGet<ScriptComponent>(entity);
 				if (scripts == nullptr || i >= scripts->scripts.size())
-				{
 					break;
-				}
 				if (!scripts->scripts[i].path.empty())
 				{
 					const ActiveContextScope scope(*sceneCtx);
@@ -592,6 +846,7 @@ namespace aether::app
 			}
 			if (host.IsAvailable())
 			{
+				const scripting::ActiveScriptEntityScope entityScope(ctx, entity);
 				(void) host.Detach(it->second.handle);
 				(void) host.Destroy(it->second.handle);
 			}

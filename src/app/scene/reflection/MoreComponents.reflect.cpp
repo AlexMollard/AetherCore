@@ -254,6 +254,11 @@ b.CustomListField(
 		        keys.push_back(k);
 	        }
         });
+b.MeasureLast([](const void* comp, std::size_t& bytes, std::size_t& rows) {
+	bytes = 0;
+	rows = static_cast<const ParticleEmitterComponent*>(comp)->colorKeys.size();
+	return true;
+});
 // The scalar tracks share one element shape, so they go through one helper-driven lambda each.
 {
 	const auto scalarList = [](std::vector<ParticleScalarKey> ParticleEmitterComponent::* field)
@@ -295,10 +300,13 @@ b.CustomListField(
 	};
 	b.CustomListField("alpha_keys", {{"t", reflect::FieldType::Float}, {"value", reflect::FieldType::Float}},
 	        [&](const void* comp) { return scalarGet(static_cast<const ParticleEmitterComponent*>(comp)->alphaKeys); }, scalarList(&ParticleEmitterComponent::alphaKeys));
+	b.MeasureLast([](const void* comp, std::size_t& bytes, std::size_t& rows) { bytes = 0; rows = static_cast<const ParticleEmitterComponent*>(comp)->alphaKeys.size(); return true; });
 	b.CustomListField("size_keys", {{"t", reflect::FieldType::Float}, {"value", reflect::FieldType::Float}},
 	        [&](const void* comp) { return scalarGet(static_cast<const ParticleEmitterComponent*>(comp)->sizeKeys); }, scalarList(&ParticleEmitterComponent::sizeKeys));
+	b.MeasureLast([](const void* comp, std::size_t& bytes, std::size_t& rows) { bytes = 0; rows = static_cast<const ParticleEmitterComponent*>(comp)->sizeKeys.size(); return true; });
 	b.CustomListField("rotation_keys", {{"t", reflect::FieldType::Float}, {"value", reflect::FieldType::Float}},
 	        [&](const void* comp) { return scalarGet(static_cast<const ParticleEmitterComponent*>(comp)->rotationKeys); }, scalarList(&ParticleEmitterComponent::rotationKeys));
+	b.MeasureLast([](const void* comp, std::size_t& bytes, std::size_t& rows) { bytes = 0; rows = static_cast<const ParticleEmitterComponent*>(comp)->rotationKeys.size(); return true; });
 }
 b.SerializeKey("particles"); // legacy on-disk key predates the display-name derivation
 AE_GENERIC_SERIALIZE()
@@ -361,6 +369,13 @@ AE_FIELD_CUSTOM(
 	        img->texturePath = v.str;
 	        img->textureDirty = true;
         })
+b.MeasureLast([](const void* comp, std::size_t& bytes, std::size_t& rows) {
+	const auto& path = static_cast<const UiImageComponent*>(comp)->texturePath;
+	if (path.size() == std::numeric_limits<std::size_t>::max()) return false;
+	bytes = path.size() + 1;
+	rows = 0;
+	return true;
+});
 AE_FIELD_N("pixel_art", pixelArt, Bool)
 AE_COMPONENT_END()
 

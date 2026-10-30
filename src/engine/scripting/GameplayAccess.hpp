@@ -21,7 +21,8 @@ namespace aether::scripting
 		enum class ScopeKind
 		{
 			Callback,
-			StructuralMutation
+			StructuralMutation,
+			PredictedAttachCallback
 		};
 
 		class Scope
@@ -41,6 +42,20 @@ namespace aether::scripting
 			uint64_t m_context = 0;
 			AetherGameplayStatus m_status;
 		};
+#if defined(__EMSCRIPTEN__)
+		// A managed predicted prefab must attach synchronously inside its caller's
+		// callback so its one-shot payload remains available to OnAttach.
+		class PredictedAttachScope
+		{
+		public:
+			explicit PredictedAttachScope(GameplayAccess& access) noexcept;
+			~PredictedAttachScope();
+			PredictedAttachScope(const PredictedAttachScope&) = delete;
+			PredictedAttachScope& operator=(const PredictedAttachScope&) = delete;
+		private:
+			GameplayAccess& m_access;
+		};
+#endif
 
 		explicit GameplayAccess(World& world, DiagnosticSink sink = nullptr, void* sinkUser = nullptr);
 		~GameplayAccess();
@@ -69,7 +84,10 @@ namespace aether::scripting
 		std::thread::id m_owner;
 		DiagnosticSink m_sink;
 		void* m_sink_user;
-		bool m_scope_active = false;
+		unsigned m_scope_depth = 0;
+#if defined(__EMSCRIPTEN__)
+		unsigned m_predicted_attach_depth = 0;
+#endif
 		bool m_reporting = false;
 	};
 } // namespace aether::scripting

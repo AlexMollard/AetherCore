@@ -5,6 +5,7 @@
 
 #include "AppLayer.hpp"
 #include "material/EffectManager.hpp"
+#include "scene/WorldStreaming.hpp"
 #include "scripting/SceneContext.hpp"
 
 namespace aether::app::scripting
@@ -30,6 +31,7 @@ namespace aether::app
 		void LoadStartupScene(LayerContext& context);
 
 		scripting::SceneContext m_sceneCtx;
+		std::unique_ptr<scene::WorldStreaming> m_worldStreaming;
 		aether::effects::EffectManager m_effectManager;
 		scripting::CSharpScriptingSubsystem* m_csharp = nullptr;
 	};

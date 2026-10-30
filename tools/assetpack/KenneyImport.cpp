@@ -938,6 +938,11 @@ namespace aether::assetpipeline::kenney
 				return result;
 			}
 			const auto baked = MeshProcessor::Process(std::span<const std::byte>(raw.data(), raw.size()), modelDiskPath, modelRel, request.projectRoot);
+			if (!baked.error.empty())
+			{
+				result.error = baked.error;
+				return result;
+			}
 			if (baked.meshData.empty())
 			{
 				result.error = "no mesh geometry produced from '" + modelDiskPath.generic_string() + "' (animation-only or unsupported glTF)";

@@ -7,7 +7,7 @@ extern "C"
 {
 #endif
 
-#define AE_GAMEPLAY_ABI_MAJOR 1u
+#define AE_GAMEPLAY_ABI_MAJOR 2u
 #define AE_GAMEPLAY_OK 0
 #define AE_GAMEPLAY_INVALID_ARGUMENT 1
 #define AE_GAMEPLAY_ABI_MISMATCH 2
@@ -45,6 +45,10 @@ extern "C"
 // (Jolt) physics, clear for 2D (Box2D). `code` is 0 collision enter, 1 collision exit, 2 trigger
 // enter, 3 trigger exit, 4 overlapping, for both.
 #define AE_GAMEPLAY_PHYSICS_FLAG_3D 1u
+// Network event code is CONNECTED or DISCONNECTED; flags is the transport peer
+// connection ID. Events are delivered before script update on the receive frame.
+#define AE_GAMEPLAY_NETWORK_CONNECTED 0u
+#define AE_GAMEPLAY_NETWORK_DISCONNECTED 1u
 
 	typedef int32_t AetherGameplayStatus;
 	typedef uint64_t AetherGameplayInstance;
@@ -165,6 +169,10 @@ extern "C"
 		AetherGameplayStatus (*setProperty)(uint64_t context, AetherGameplayInstance instance, uint32_t propertyIndex, const AetherGameplayPropertyValue* value, AetherGameplayUtf8 stringValue);
 		AetherGameplayStatus (*getDefaultProperty)(uint64_t context, uint32_t typeIndex, uint32_t propertyIndex, AetherGameplayPropertyValue* outValue, AetherGameplayUtf8Buffer stringBuffer);
 		AetherGameplayStatus (*dispatchEvent)(uint64_t context, AetherGameplayInstance instance, const AetherGameplayEvent* event);
+		// Required streaming snapshot hooks. Capture writes UTF-8 using the usual
+		// required-size contract; restore receives the captured bytes verbatim.
+		AetherGameplayStatus (*captureStreamingState)(uint64_t context, AetherGameplayInstance instance, AetherGameplayUtf8Buffer buffer);
+		AetherGameplayStatus (*restoreStreamingState)(uint64_t context, AetherGameplayInstance instance, AetherGameplayUtf8 state);
 	} AetherGameplayModuleApi;
 
 	typedef AetherGameplayStatus (*AetherGameplayQuery)(uint32_t requestedMajor, uint32_t outSize, AetherGameplayModuleApi* outApi);

@@ -72,11 +72,12 @@ namespace aether::assets
 
 	Expected<ModelPose> EvaluateModelPose(const GltfAsset& asset, std::optional<std::uint32_t> clip, float time, bool looping, const PoseFade* fade, std::span<const JointRotationOffset> offsets)
 	{
+		const auto& animations = asset.animations;
 		if (!std::isfinite(time) || asset.nodes.size() > std::numeric_limits<std::uint32_t>::max() || asset.skins.size() > std::numeric_limits<std::uint32_t>::max())
 		{
 			AE_UNEXPECTED(AetherError::Asset("Model pose has a non-finite time or unsupported node/skin count"));
 		}
-		if ((clip && *clip >= asset.animations.size()) || (fade && fade->weight > 0.0f && (!clip || fade->clip >= asset.animations.size() || !std::isfinite(fade->time))))
+		if ((clip && *clip >= animations.size()) || (fade && fade->weight > 0.0f && (!clip || fade->clip >= animations.size() || !std::isfinite(fade->time))))
 		{
 			AE_UNEXPECTED(AetherError::Asset("Model pose animation clip index is out of range"));
 		}
@@ -119,7 +120,7 @@ namespace aether::assets
 		// over the incoming one and nodes it does not animate keep the other clip's value.
 		const auto sampleClip = [&](std::uint32_t clipIndex, float clipTime, bool clipLooping, float weight) -> Expected<void>
 		{
-			const auto& animation = asset.animations[clipIndex];
+			const auto& animation = animations[clipIndex];
 			float duration = 0.0f;
 			for (const auto& channel: animation.channels)
 			{

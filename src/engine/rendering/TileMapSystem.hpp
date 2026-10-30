@@ -79,6 +79,7 @@ namespace aether
 			// Solid tile cells as shadow occluders (quad + the tile's texture region, so the
 			// occluder mask follows the artwork's alpha rather than the whole cell).
 			std::vector<Occluder2D> occluders;
+			std::vector<std::string> texturePaths;
 			std::uint32_t builtRevision = 0;
 			glm::mat4 builtTransform{1.0f};
 			std::uint64_t lastTouchedFrame = 0;
@@ -90,7 +91,8 @@ namespace aether
 		SpriteAssetStore* m_sprites = nullptr;
 		TileAssetStore* m_tiles = nullptr;
 		std::unordered_map<ChunkCacheKey, ChunkCache, ChunkCacheKeyHash> m_chunks;
-		std::unordered_map<std::string, TextureHandle> m_textureCache;
+		struct CachedTexture { TextureHandle handle; std::uint64_t lastUsed = 0; };
+		std::unordered_map<std::string, CachedTexture> m_textureCache;
 		std::uint64_t m_rebuildCount = 0;
 		std::uint64_t m_extractCount = 0;
 	};

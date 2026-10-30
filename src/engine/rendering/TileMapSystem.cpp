@@ -65,8 +65,7 @@ namespace aether
 
 	void TileMapSystem::Shutdown()
 	{
-		m_chunks.clear();
-		m_textureCache.clear();
+		InvalidateAll();
 		m_textures = nullptr;
 		m_sprites = nullptr;
 		m_tiles = nullptr;
@@ -75,6 +74,8 @@ namespace aether
 	void TileMapSystem::InvalidateAll()
 	{
 		m_chunks.clear();
+		if (m_textures)
+			for (const auto& entry : m_textureCache) m_textures->Release(entry.second.handle);
 		m_textureCache.clear();
 	}
 
@@ -82,10 +83,11 @@ namespace aether
 	{
 		if (const auto it = m_textureCache.find(path); it != m_textureCache.end())
 		{
-			return it->second;
+			it->second.lastUsed = m_extractCount;
+			return it->second.handle;
 		}
 		const TextureHandle handle = m_textures != nullptr ? m_textures->Acquire(path) : TextureHandle{};
-		m_textureCache.emplace(path, handle);
+		m_textureCache.emplace(path, CachedTexture{handle, m_extractCount});
 		return handle;
 	}
 
@@ -162,6 +164,7 @@ namespace aether
 						cache.instances.clear();
 						cache.animated.clear();
 						cache.occluders.clear();
+						cache.texturePaths.clear();
 						cache.builtRevision = chunk.revision;
 						cache.builtTransform = entityTransform;
 
@@ -212,6 +215,8 @@ namespace aether
 								}
 
 								const TextureHandle texture = ResolveTexture(atlas.texturePath);
+								if (std::ranges::find(cache.texturePaths, atlas.texturePath) == cache.texturePaths.end())
+									cache.texturePaths.push_back(atlas.texturePath);
 								std::uint32_t textureSlot = m_textures != nullptr ? m_textures->ResolveSlot(texture) : kInvalidTextureSlot;
 								if (textureSlot == kInvalidTextureSlot && m_textures != nullptr)
 								{
@@ -264,6 +269,8 @@ namespace aether
 							}
 						}
 					}
+					for (const auto& path : cache.texturePaths)
+						if (auto it = m_textureCache.find(path); it != m_textureCache.end()) it->second.lastUsed = m_extractCount;
 
 					output.occluders.insert(output.occluders.end(), cache.occluders.begin(), cache.occluders.end());
 
@@ -298,6 +305,17 @@ namespace aether
 					}
 				}
 			}
+		}
+		for (auto it = m_chunks.begin(); it != m_chunks.end(); )
+		{
+			if (it->second.lastTouchedFrame == m_extractCount) ++it;
+			else it = m_chunks.erase(it);
+		}
+		for (auto it = m_textureCache.begin(); it != m_textureCache.end(); )
+		{
+			if (it->second.lastUsed == m_extractCount) { ++it; continue; }
+			if (m_textures) m_textures->Release(it->second.handle);
+			it = m_textureCache.erase(it);
 		}
 	}
 } // namespace aether

@@ -110,6 +110,11 @@ b.CustomListField(
 		        }
 	        }
         });
+b.MeasureLast([](const void* comp, std::size_t& bytes, std::size_t& rows) {
+	bytes = 0;
+	rows = static_cast<const Collider2DComponent*>(comp)->points.size();
+	return true;
+});
 b.PostSet(&RebuildBody2D);
 b.RequiresFeature(SceneFeatureFlags::Physics2D);
 b.ConflictsWith({"Rigid Body", "Box Collider", "Joint"});

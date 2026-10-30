@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -15,6 +16,7 @@
 
 namespace aether
 {
+	class TomlConfig;
 	enum class SpriteSliceOrigin : std::uint8_t
 	{
 		TopLeft = 0,
@@ -115,6 +117,8 @@ namespace aether
 		[[nodiscard]] const SpriteRegion* FindByPersistentKey(std::string_view key) const noexcept;
 
 		[[nodiscard]] Expected<void> Save(const std::filesystem::path& path) const;
+		[[nodiscard]] static Expected<SpriteAtlasAsset> LoadBytes(std::string_view text, const std::function<bool(std::size_t)>& reserve);
+		[[nodiscard]] static Expected<SpriteAtlasAsset> ParseConfig(const TomlConfig& config, const std::function<bool(std::size_t)>& reserve);
 		[[nodiscard]] static Expected<SpriteAtlasAsset> Load(const std::filesystem::path& path);
 	};
 

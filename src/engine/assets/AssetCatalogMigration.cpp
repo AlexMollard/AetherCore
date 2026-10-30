@@ -163,7 +163,7 @@ namespace aether
 		bool validateSchema(const toml::table& root, const fs::path& rel)
 		{
 			const auto path = rel.generic_string();
-			for (const auto& [section, key, version]: {std::tuple{"scene", "version", 17},
+			for (const auto& [section, key, version]: {std::tuple{"scene", "version", 18},
 			             std::tuple{"prefab", "version", 1},
 			             std::tuple{"atlas", "schema_version", 3},
 			             std::tuple{"animation", "schema_version", 2},
@@ -284,7 +284,7 @@ namespace aether
 			{
 				auto old = v->get();
 				std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-				const bool named = (key == "prefab" && field.starts_with("prefab_instances[")) || (key == "scene" && field.starts_with("includes[")) || ((key == "startupscene" || key == "startup_scene") && field.starts_with("app."));
+				const bool named = (key == "prefab" && field.starts_with("prefab_instances[")) || (key == "scene" && (field.starts_with("includes[") || field.starts_with("stream_regions["))) || ((key == "startupscene" || key == "startup_scene") && field.starts_with("app."));
 				const bool asset = key.find("texture") != std::string::npos || key.ends_with("_tex") || key == "atlas" || key == "tileset" || key == "tilemap" || key == "animation" || key == "mesh_source" || key == "surface_mesh"
 				                   || key == "exclusion_mesh" || key == "prefab" || key == "include" || key == "includes" || named || (key == "path" && (field.find(".mesh.") != std::string::npos || field.starts_with("assets[")))
 				                   || ((field.find("material") != std::string::npos || field.starts_with("textures."))
@@ -456,7 +456,7 @@ namespace aether
 				{
 					p = catalog.m_prefabsDirectory / (std::string(value) + ".prefab.toml");
 				}
-				else if (((field.starts_with("includes[") && field.ends_with(".scene")) || (doc == "ProjectSettings.toml" && (field == "app.startupScene" || field == "app.startupscene" || field == "app.startup_scene")))
+				else if ((((field.starts_with("includes[") || field.starts_with("stream_regions[")) && field.ends_with(".scene")) || (doc == "ProjectSettings.toml" && (field == "app.startupScene" || field == "app.startupscene" || field == "app.startup_scene")))
 				         && !fs::path(value).has_extension())
 				{
 					p = catalog.m_scenesDirectory / (std::string(value) + ".scene.toml");
@@ -639,7 +639,7 @@ namespace aether
 			}
 			if (changed)
 			{
-				for (const auto& [section, key, version]: {std::tuple{"scene", "version", 17}, std::tuple{"atlas", "schema_version", 3}, std::tuple{"animation", "schema_version", 2}, std::tuple{"tileset", "schema_version", 2}})
+				for (const auto& [section, key, version]: {std::tuple{"scene", "version", 18}, std::tuple{"atlas", "schema_version", 3}, std::tuple{"animation", "schema_version", 2}, std::tuple{"tileset", "schema_version", 2}})
 				{
 					if (auto* table = (*doc)[section].as_table())
 					{

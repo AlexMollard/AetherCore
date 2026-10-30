@@ -1,6 +1,9 @@
 #include "scripting/interop/InteropCommon.hpp"
 
 #include <string>
+#include <cstring>
+#include <limits>
+#include "scene/WorldStreaming.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -8,6 +11,8 @@
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
+#include "net/NetSpawn.hpp"
+#include "systems/ScriptComponentSystem.hpp"
 #include "utils/ServiceContainer.hpp"
 
 // foundation). Everything here runs on the producer/game thread inside a managed
@@ -141,6 +146,7 @@ AE_SCRIPT_API std::uint32_t aether_scene_create_entity(const char* name, Vec3 po
 	// Scene.Create is a runtime-only script API (no editor authoring path reaches it),
 	// so a save mid-Play must never bake it in - see Entity.MarkTransient's own doc.
 	world.Emplace<aether::SceneTransientComponent>(e);
+	aether::app::scene::AdoptStreamingSpawn(world, ActiveContext(), e);
 	return e.id;
 	});
 }
@@ -167,6 +173,90 @@ AE_SCRIPT_API std::uint32_t aether_scene_instantiate_prefab(const char* name, Ve
 	// Scene.Instantiate is a runtime-only script API (no editor authoring path reaches
 	// it), so a save mid-Play must never bake the spawn in.
 	const aether::Entity root = aether::app::scene::InstantiatePrefab(*prefab, ActiveWorld(), aether::app::scene::MakeApplySceneDeps(*services), xform, nullptr, /*markTransient=*/true);
+	aether::app::scene::AdoptStreamingSpawn(ActiveWorld(), ActiveContext(), root);
 	return root.id;
+	});
+}
+
+AE_SCRIPT_API std::uint32_t aether_net_instantiate_predicted(const char* name, Vec3 pos)
+{
+	return SafeExport([&] -> std::uint32_t
+	{
+		if (name == nullptr || ActiveContext().services == nullptr)
+			return 0;
+		auto* scripts = static_cast<aether::app::ScriptComponentSystem*>(ActiveWorld().FindSystem("ScriptComponentSystem"));
+		if (scripts == nullptr)
+			return 0;
+		const auto prefab = aether::app::scene::ReadPrefabFile(name);
+		if (!prefab)
+			return 0;
+		std::vector<aether::Entity> created;
+		const auto root = aether::app::scene::InstantiatePrefab(*prefab, ActiveWorld(),
+		        aether::app::scene::MakeApplySceneDeps(*ActiveContext().services),
+		        glm::translate(glm::mat4(1.0f), ToGlm(pos)), &created, /*markTransient=*/true);
+		aether::app::scene::AdoptStreamingSpawn(ActiveWorld(), ActiveContext(), root);
+		if (root.IsValid())
+		{
+			for (const aether::Entity entity: created)
+				aether::net::MarkPredicted(ActiveWorld(), entity);
+			scripts->AttachPredicted(ActiveWorld(), created);
+		}
+		return root.id;
+	});
+}
+
+AE_SCRIPT_API bool aether_streaming_set_source(const char* id, Vec3 position, float loadRadius, float prefetchRadius, std::uint32_t priority)
+{
+	return SafeExport([&]() -> bool
+	{
+		if (!g_activeContext || !g_activeContext->streaming || !id || priority > 3) return false;
+		aether::streaming::Source source{id, ToGlm(position), loadRadius, prefetchRadius, static_cast<aether::io::IOPriority>(priority)};
+		return static_cast<bool>(g_activeContext->streaming->SetSource(std::move(source)));
+	});
+}
+
+AE_SCRIPT_API bool aether_streaming_remove_source(const char* id)
+{
+	return SafeExport([&]() -> bool { return g_activeContext && g_activeContext->streaming && id && g_activeContext->streaming->RemoveSource(id); });
+}
+
+AE_SCRIPT_API std::uint64_t aether_streaming_request(const char* region, std::uint32_t priority, bool activate)
+{
+	return SafeExport([&]() -> std::uint64_t
+	{
+		if (!g_activeContext || !g_activeContext->streaming || !region || priority > 3) return 0;
+		return g_activeContext->streaming->Request(region, activate, static_cast<aether::io::IOPriority>(priority));
+	});
+}
+
+AE_SCRIPT_API bool aether_streaming_cancel(std::uint64_t request)
+{
+	return SafeExport([&]() -> bool { return g_activeContext && g_activeContext->streaming && g_activeContext->streaming->Cancel(request); });
+}
+
+AE_SCRIPT_API bool aether_streaming_release(std::uint64_t request)
+{
+	return SafeExport([&]() -> bool { return g_activeContext && g_activeContext->streaming && g_activeContext->streaming->Release(request); });
+}
+
+AE_SCRIPT_API std::uint32_t aether_streaming_get_state(std::uint64_t request)
+{
+	return SafeExport([&]() -> std::uint32_t
+	{
+		return g_activeContext && g_activeContext->streaming ? static_cast<std::uint32_t>(g_activeContext->streaming->GetRequestState(request)) : 0;
+	});
+}
+
+AE_SCRIPT_API std::uint32_t aether_streaming_diagnostics(char* buffer, std::uint32_t capacity)
+{
+	return SafeExport([&]() -> std::uint32_t
+	{
+		if (buffer && capacity) buffer[0] = '\0';
+		if (!g_activeContext || !g_activeContext->streaming) return 0;
+		const auto json = g_activeContext->streaming->GetDiagnosticsJson();
+		if (json.size() >= std::numeric_limits<std::uint32_t>::max()) return 0;
+		const auto required = static_cast<std::uint32_t>(json.size() + 1);
+		if (buffer && capacity >= required) std::memcpy(buffer, json.c_str(), required);
+		return required;
 	});
 }

@@ -254,6 +254,7 @@ namespace aether
 	struct SceneNodeComponent
 	{
 		std::uint64_t id = 0;
+		std::uint64_t sourceId = 0;
 	};
 
 	struct ScriptPropertyValue

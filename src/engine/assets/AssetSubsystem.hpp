@@ -12,6 +12,7 @@
 #include "material/EffectParamBuffer.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/AssetStreaming.hpp"
 #include "assets/AssetDatabase.hpp"
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/TileAssetStore.hpp"
@@ -116,6 +117,7 @@ namespace aether
 
 	private:
 		AssetManager m_assetManager;
+		AssetStreaming m_assetStreaming{m_assetManager};
 		MaterialBuffer m_materialBuffer;
 		AssetTextureSink m_textureSink;
 		TextureRegistry m_textureRegistry{m_textureSink};

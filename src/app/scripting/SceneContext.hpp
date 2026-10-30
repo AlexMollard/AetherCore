@@ -54,11 +54,21 @@ namespace aether::app
 	class DayNightSystem;
 }
 
+namespace aether::app::scene
+{
+	class WorldStreaming;
+}
+
 namespace aether::app::scripting
 {
 	struct SceneContext
 	{
 		aether::World* world = nullptr;
+		aether::app::scene::WorldStreaming* streaming = nullptr;
+		// During region activation model lookups must use the backend's live leases.
+		bool streamedModelActivation = false;
+		// The script entity whose callback is currently executing, restored on nested calls.
+		aether::Entity activeScriptEntity{};
 		aether::AssetManager* assets = nullptr;
 		aether::CameraManager* cameras = nullptr;
 		aether::Renderer* renderer = nullptr;
@@ -183,5 +193,18 @@ namespace aether::app::scripting
 
 	private:
 		SceneContext* m_previous = nullptr;
+	};
+
+	struct ActiveScriptEntityScope
+	{
+		SceneContext& context;
+		aether::Entity previous;
+		ActiveScriptEntityScope(SceneContext& ctx, aether::Entity entity) : context(ctx), previous(ctx.activeScriptEntity)
+		{
+			context.activeScriptEntity = entity;
+		}
+		~ActiveScriptEntityScope() { context.activeScriptEntity = previous; }
+		ActiveScriptEntityScope(const ActiveScriptEntityScope&) = delete;
+		ActiveScriptEntityScope& operator=(const ActiveScriptEntityScope&) = delete;
 	};
 } // namespace aether::app::scripting

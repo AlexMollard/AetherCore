@@ -22,3 +22,14 @@ asyncCompute = true
 targetFps = 120
 # Project scene file loaded at boot; empty disables.
 startupScene = ""
+
+[streaming]
+cpuBudgetMiB = 256
+gpuBudgetMiB = 512
+stagingBudgetMiB = 32
+uploadBudgetKiBPerFrame = 4096
+maxPendingRequests = 128
+activationEntitiesPerFrame = 64
+loadRadius = 128.0
+prefetchRadius = 256.0
+defaultCameraSource = true

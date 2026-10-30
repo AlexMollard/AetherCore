@@ -129,7 +129,7 @@
     "BrowserParticlesDisplayOnly": {"area": "particles", "status": "qualified", "title": "Display-only particles", "summary": "A particle burst drawn only in display space.", "lookFor": "Particles render over the scene without scene lighting."},
 
     "BrowserBadAtlas": {"area": "failures", "status": "expected-failure", "title": "Invalid sprite atlas", "summary": "A sprite atlas whose regions are invalid.", "lookFor": "Loading stops with an atlas diagnostic."},
-    "BrowserBadAudio": {"area": "failures", "status": "expected-failure", "title": "Invalid audio", "summary": "An audio asset the browser cannot decode.", "lookFor": "Loading stops with an audio diagnostic."},
+    "BrowserBadAudio": {"area": "failures", "status": "fixture", "title": "Audio source", "summary": "An authored audio source component.", "lookFor": "Start audio to play the packaged clip."},
     "BrowserBadFont": {"area": "failures", "status": "expected-failure", "title": "Invalid font", "summary": "A font asset that fails validation.", "lookFor": "Loading stops with a font diagnostic."},
     "BrowserBadLight": {"area": "failures", "status": "expected-failure", "title": "NaN light", "summary": "A light with a NaN value.", "lookFor": "The frame is rejected before GPU submission, with a diagnostic."},
     "BrowserBadParticleCapacity": {"area": "failures", "status": "expected-failure", "title": "Particle capacity", "summary": "An emitter that asks for more particles than the budget allows.", "lookFor": "Rejected with a particle budget diagnostic."},

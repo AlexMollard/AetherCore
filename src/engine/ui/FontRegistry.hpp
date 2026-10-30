@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -8,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include "ui/FontAsset.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether::ui
 {
@@ -17,6 +21,9 @@ namespace aether::ui
 	{
 	public:
 		const FontAsset* Load(std::string_view name);
+		[[nodiscard]] static Expected<FontAsset> ParseBytes(std::string_view path, std::span<const std::byte> bytes, const std::function<bool(std::size_t)>& reserve);
+		[[nodiscard]] bool Publish(std::string name, FontAsset asset);
+		void Invalidate(std::string_view name);
 
 		[[nodiscard]] const FontAsset* Get(std::string_view name) const;
 		[[nodiscard]] FontAsset* GetMutable(std::string_view name);

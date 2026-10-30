@@ -79,6 +79,8 @@ namespace aether::webgpu
 		bool Initialize(WGPUDevice device);
 		bool UploadShader(WGPUDevice device, std::uint32_t slot, std::string_view wgsl);
 		bool Upload(WGPUDevice device, WGPUQueue queue, std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices);
+		bool Allocate(WGPUDevice device, WGPUQueue queue, std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices);
+		void WriteSlice(WGPUQueue queue, std::uint32_t slot, bool indices, std::size_t offset, const void* data, std::size_t bytes);
 		void Release(std::uint32_t slot);
 		[[nodiscard]] bool HasUploadCapacity(std::size_t bytes) const { return bytes <= 64 * 1024 * 1024 - m_bytes; }
 		[[nodiscard]] std::size_t AvailableUploadBytes() const { return 64 * 1024 * 1024 - m_bytes; }

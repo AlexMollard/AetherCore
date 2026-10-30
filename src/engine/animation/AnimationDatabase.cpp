@@ -2,7 +2,13 @@
 
 #include <algorithm>
 
+#include <limits>
+#include <new>
+#include <type_traits>
+#include <exception>
+#include "utils/Assert.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -10,33 +16,52 @@
 
 namespace aether
 {
-	// Uploads go through the transfer queue as tickets; the frame submission's timeline
-	// wait orders them before any GPU consumption, so nothing here blocks. The source
-	// vector is memcpy'd into staging before Submit returns, so locals are safe.
 	template<typename T>
 	static gpu::DeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, vulkan::TransferManager& transfer)
 	{
-		if (data.empty())
-		{
-			return 0;
-		}
-		const GpuSpan<T> span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
-		assert(span.IsValid() && "GpuHeap allocation failed - heap capacity insufficient");
-		(void) heap.Upload(span, std::span<const T>(data), transfer);
+		if (data.empty()) return 0;
+		const auto span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
+		if (!span.IsValid() || heap.Upload(span, std::span<const T>(data), transfer) == 0)
+			Throw(AetherError::Asset("Animation database GPU upload failed"));
 		return span.address;
+	}
+
+	AnimationDatabase& AnimationDatabase::operator=(AnimationDatabase&& other) noexcept
+	{
+		if (this != &other)
+		{
+			this->~AnimationDatabase();
+			new (this) AnimationDatabase(std::move(other));
+		}
+		return *this;
 	}
 
 	AnimationDatabase AnimationDatabase::Create(const VulkanContext& ctx, const assets::GltfAsset& asset)
 	{
+		auto upload = BeginUpload(ctx, asset);
+		if (!upload) Throw(upload.error());
+		(*upload)->m_requiredForNextFrame = true;
+		for (;;)
+		{
+			auto progress = (*upload)->Pump(std::numeric_limits<std::size_t>::max());
+			if (!progress) Throw(progress.error());
+			if (progress->complete) break;
+		}
+		return (*upload)->Take();
+	}
+
+	Expected<std::unique_ptr<AnimationDatabaseUpload>> AnimationDatabase::BeginUpload(const VulkanContext& ctx, const assets::GltfAsset& asset)
+	{
 		AE_PROFILE_ZONE();
-		AnimationDatabase db;
+		auto upload = std::unique_ptr<AnimationDatabaseUpload>(new AnimationDatabaseUpload());
+		auto& db = upload->m_database;
 		db.m_ctx = &ctx;
 		db.m_nodeCount = static_cast<std::uint32_t>(asset.nodes.size());
 		db.m_skinCount = static_cast<std::uint32_t>(asset.skins.size());
 
 		if (asset.animations.empty())
 		{
-			return db;
+			return upload;
 		}
 		const auto numNodes = static_cast<std::uint32_t>(asset.nodes.size());
 		if (numNodes == 0)
@@ -45,7 +70,7 @@ namespace aether
 			// clamp would keep channels whose nodeIndex points past the empty
 			// bind-pose arrays the compute skinning pass reads.
 			AE_WARN(LogCategory::Engine, "AnimationDatabase: asset has {} animations but no nodes; skipping animation upload.", asset.animations.size());
-			return db;
+			return upload;
 		}
 
 		std::uint32_t clampedChannels = 0;
@@ -254,94 +279,121 @@ namespace aether
 
 		db.m_heap->Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
-		vulkan::TransferManager& transfer = ctx.GetTransferManager();
-
-		db.m_clipsAddr = UploadArray(*db.m_heap, gpuClips, transfer);
-		db.m_channelsAddr = UploadArray(*db.m_heap, gpuChannels, transfer);
-		db.m_timesAddr = UploadArray(*db.m_heap, allTimes, transfer);
-		db.m_valuesAddr = UploadArray(*db.m_heap, allValues, transfer);
-		db.m_nodeParentsAddr = UploadArray(*db.m_heap, nodeParents, transfer);
-		db.m_bindTranslationsAddr = UploadArray(*db.m_heap, bindTranslations, transfer);
-		db.m_bindRotationsAddr = UploadArray(*db.m_heap, bindRotations, transfer);
-		db.m_bindScalesAddr = UploadArray(*db.m_heap, bindScales, transfer);
+		db.m_channels = std::move(gpuChannels);
+		db.m_times = std::move(allTimes);
+		db.m_values = std::move(allValues);
 		db.m_bindTranslations = std::move(bindTranslations);
 		db.m_bindRotations = std::move(bindRotations);
 		db.m_bindScales = std::move(bindScales);
 		db.m_nodeParents = std::move(nodeParents);
 		db.m_skinMetas = std::move(skinMetas);
-		db.m_skinMetasAddr = UploadArray(*db.m_heap, db.m_skinMetas, transfer);
 		db.m_skinJoints = std::move(skinJoints);
-		db.m_skinJointsAddr = UploadArray(*db.m_heap, db.m_skinJoints, transfer);
 		db.m_skinInverseBinds = std::move(skinInverseBinds);
-		db.m_skinInverseBindsAddr = UploadArray(*db.m_heap, db.m_skinInverseBinds, transfer);
 
-		for (std::uint32_t i = 1; i < asset.nodes.size() && i < 5; ++i)
+		auto queue = [&](const auto& data, gpu::DeviceAddress& address) -> bool
 		{
-			const auto& n = asset.nodes[i];
-			AE_VERBOSE(LogCategory::Engine, "  Node[{}]: '{}' parent={}, t=({:.1f},{:.1f},{:.1f})", i, n.name, n.parentIndex, n.translation.x, n.translation.y, n.translation.z);
-		}
-		AE_VERBOSE(LogCategory::Engine, "  Skin count: {}, joints count: {}", asset.skins.size(), asset.skins.empty() ? 0 : asset.skins[0].joints.size());
-		if (!asset.skins.empty())
-		{
-			std::string jointStr;
-			for (std::size_t ji = 0; ji < asset.skins[0].joints.size() && ji < 8; ++ji)
-			{
-				jointStr += std::to_string(asset.skins[0].joints[ji]) + " ";
-			}
-			AE_VERBOSE(LogCategory::Engine, "  First {} skin joints: {}", (std::min) (asset.skins[0].joints.size(), std::size_t(8)), jointStr);
-		}
-
-		AE_VERBOSE(LogCategory::Engine,
-		        "AnimationDatabase GPU addresses: clips=0x{:x}, channels=0x{:x}, times=0x{:x}, values=0x{:x}, parents=0x{:x}, bindT=0x{:x}, bindR=0x{:x}, bindS=0x{:x}, skinMetas=0x{:x}, skinJoints=0x{:x}, skinIBMs=0x{:x}, depthNodes=0x{:x}, "
-		        "depthRanges=0x{:x}",
-		        db.m_clipsAddr,
-		        db.m_channelsAddr,
-		        db.m_timesAddr,
-		        db.m_valuesAddr,
-		        db.m_nodeParentsAddr,
-		        db.m_bindTranslationsAddr,
-		        db.m_bindRotationsAddr,
-		        db.m_bindScalesAddr,
-		        db.m_skinMetasAddr,
-		        db.m_skinJointsAddr,
-		        db.m_skinInverseBindsAddr,
-		        db.m_depthSortedNodesAddr,
-		        db.m_depthRangesAddr);
-
-		if (!db.m_depthSortedNodes.empty())
-		{
-			db.m_depthSortedNodesAddr = UploadArray(*db.m_heap, db.m_depthSortedNodes, transfer);
-			db.m_depthRangesAddr = UploadArray(*db.m_heap, db.m_depthRanges, transfer);
-		}
-
-		AE_VERBOSE(LogCategory::Engine,
-		        "AnimationDatabase GPU addresses: clips=0x{:x}, channels=0x{:x}, times=0x{:x}, values=0x{:x}, parents=0x{:x}, depthNodes=0x{:x}, depthRanges=0x{:x}",
-		        db.m_clipsAddr,
-		        db.m_channelsAddr,
-		        db.m_timesAddr,
-		        db.m_valuesAddr,
-		        db.m_nodeParentsAddr,
-		        db.m_depthSortedNodesAddr,
-		        db.m_depthRangesAddr);
-
-		if (!allStrings.empty())
-		{
-			const GpuSpan<char> span = db.m_heap->Alloc<char>(static_cast<std::uint32_t>(allStrings.size()));
-			(void) db.m_heap->Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), transfer);
-			db.m_stringsAddr = span.address;
-		}
-
-		db.m_channels = std::move(gpuChannels);
-		db.m_times = std::move(allTimes);
-		db.m_values = std::move(allValues);
-
-		return db;
+			using T = typename std::decay_t<decltype(data)>::value_type;
+			if (data.empty()) return true;
+			if (data.size() > std::numeric_limits<std::uint32_t>::max()) return false;
+			const auto span = db.m_heap->Alloc<T>(static_cast<std::uint32_t>(data.size()));
+			if (!span.IsValid()) return false;
+			address = span.address;
+			upload->m_copies.push_back({reinterpret_cast<const std::byte*>(data.data()), data.size() * sizeof(T), span.address});
+			return true;
+		};
+		if (!queue(db.m_clips, db.m_clipsAddr) || !queue(db.m_channels, db.m_channelsAddr) ||
+		    !queue(db.m_times, db.m_timesAddr) || !queue(db.m_values, db.m_valuesAddr) ||
+		    !queue(db.m_nodeParents, db.m_nodeParentsAddr) ||
+		    !queue(db.m_bindTranslations, db.m_bindTranslationsAddr) ||
+		    !queue(db.m_bindRotations, db.m_bindRotationsAddr) ||
+		    !queue(db.m_bindScales, db.m_bindScalesAddr) ||
+		    !queue(db.m_skinMetas, db.m_skinMetasAddr) ||
+		    !queue(db.m_skinJoints, db.m_skinJointsAddr) ||
+		    !queue(db.m_skinInverseBinds, db.m_skinInverseBindsAddr) ||
+		    !queue(db.m_depthSortedNodes, db.m_depthSortedNodesAddr) ||
+		    !queue(db.m_depthRanges, db.m_depthRangesAddr) ||
+		    !queue(db.m_clipNames, db.m_stringsAddr))
+			AE_UNEXPECTED(AetherError::Asset("Animation database GPU allocation failed"));
+		return upload;
 	}
 
-	void AnimationDatabase::Destroy()
+	AnimationDatabaseUpload::~AnimationDatabaseUpload()
+	{
+		if (!m_taken && m_ticket && m_database.m_ctx)
+			AE_ASSERT_ALWAYS(m_database.m_ctx->GetTransferManager().IsComplete(m_ticket),
+			        "Animation upload must be retained until its transfer ticket completes");
+	}
+
+	std::size_t AnimationDatabaseUpload::NextChunkSize(std::size_t budget) const
+	{
+		if (m_taken || m_index == m_copies.size()) return 0;
+		const auto remaining = m_copies[m_index].size - m_offset;
+		auto count = std::min({remaining, budget, static_cast<std::size_t>(UINT32_MAX)});
+		if (count < remaining) count &= ~std::size_t{3};
+		return count;
+	}
+
+	Expected<std::uint64_t> AnimationDatabaseUpload::NextStagingRequirement(std::size_t budget) const
+	{
+		if (m_taken) AE_UNEXPECTED(AetherError::Asset("Animation upload already taken"));
+		const auto count = NextChunkSize(budget);
+		if (!count) return 0;
+		gpu::MappedBufferDesc desc{};
+		desc.size = count;
+		desc.usage = gpu::BufferUsage::TransferSrc;
+		const auto requirement = gpu::ResourceRegistry::GetMappedBufferAllocationRequirement(desc);
+		if (!requirement) AE_UNEXPECTED(AetherError::Asset("Cannot query animation staging allocation"));
+		return requirement;
+	}
+
+	Expected<AnimationUploadProgress> AnimationDatabaseUpload::Pump(std::size_t budget, std::function<void()> onStagingRetired)
+	{
+		if (m_taken)
+		{
+			if (onStagingRetired) onStagingRetired();
+			AE_UNEXPECTED(AetherError::Asset("Animation upload already taken"));
+		}
+		AnimationUploadProgress result;
+		auto& transfer = m_database.m_ctx->GetTransferManager();
+		const auto count = NextChunkSize(budget);
+		if (!count && onStagingRetired) onStagingRetired();
+		if (count)
+		{
+			const auto& copy = m_copies[m_index];
+			GpuSpan<std::byte> destination{};
+			destination.address = copy.address + m_offset;
+			destination.count = static_cast<std::uint32_t>(count);
+			const auto ticket = m_database.m_heap->Upload(destination,
+			        std::span<const std::byte>(copy.data + m_offset, count), transfer, m_requiredForNextFrame, std::move(onStagingRetired));
+			if (!ticket)
+				AE_UNEXPECTED(AetherError::Asset("Animation database GPU upload failed"));
+			m_ticket = std::max(m_ticket, ticket);
+			result.bytes += count;
+			m_offset += count;
+			if (m_offset == copy.size)
+			{
+				++m_index;
+				m_offset = 0;
+			}
+		}
+		result.ticket = m_ticket;
+		result.complete = m_index == m_copies.size();
+		return result;
+	}
+
+	AnimationDatabase AnimationDatabaseUpload::Take()
+	{
+		if (m_taken || m_index != m_copies.size())
+			Throw(AetherError::Asset("Animation upload is not complete"));
+		m_taken = true;
+		return std::move(m_database);
+	}
+
+	void AnimationDatabase::Destroy(std::function<void()> onRetired)
 	{
 		AE_PROFILE_ZONE();
-		m_heap->Shutdown();
+		if (m_heap) m_heap->ShutdownDeferred(std::move(onRetired));
+		else if (onRetired) onRetired();
 		m_clipsAddr = 0;
 		m_channelsAddr = 0;
 		m_timesAddr = 0;
@@ -433,7 +485,7 @@ namespace aether
 		totalBytes += align16(m_depthRanges.size() * sizeof(DepthRange));
 		totalBytes += align16(m_clipNames.size());
 
-		m_heap->Shutdown();
+		m_heap->ShutdownDeferred();
 		m_heap->Initialize(*m_ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
 		m_clipsAddr = UploadArray(*m_heap, m_clips, transfer);

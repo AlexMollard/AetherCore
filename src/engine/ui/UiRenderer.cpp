@@ -182,6 +182,134 @@ namespace aether::ui
 		m_gpu = nullptr;
 	}
 
+	std::uint64_t UiRenderer::FontUploadBytes(const FontAsset& font) const
+	{
+		if (!font.textureWidth || !font.textureHeight || font.texels.size() != std::uint64_t(font.textureWidth) * font.textureHeight) return 0;
+		const gpu::TextureDesc desc{.format = gpu::Format::R32G32B32A32Sfloat, .extent = {font.textureWidth, font.textureHeight}, .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled, .aspect = gpu::ImageAspect::Color};
+		return gpu::ResourceRegistry::GetTextureAllocationRequirement(desc);
+	}
+
+	Expected<UiRenderer::FontUpload> UiRenderer::BeginStreamedFontUpload(const FontAsset& font)
+	{
+		if (!m_upload || !m_upload->IsValid() || !font.textureWidth || !font.textureHeight || font.texels.size() != std::uint64_t(font.textureWidth) * font.textureHeight)
+			AE_UNEXPECTED(AetherError::Asset("Invalid streamed font upload."));
+		const gpu::TextureDesc desc{.format = gpu::Format::R32G32B32A32Sfloat, .extent = {font.textureWidth, font.textureHeight}, .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled, .aspect = gpu::ImageAspect::Color, .debugName = "UI.StreamedFontCurves"};
+		FontUpload upload;
+		upload.texture = gpu::ResourceRegistry::CreateTexture(desc);
+		if (!upload.texture.IsValid()) AE_UNEXPECTED(AetherError::Asset("Failed to allocate streamed font texture."));
+		return upload;
+	}
+
+	Expected<std::uint64_t> UiRenderer::PumpStreamedFontUpload(FontUpload& upload, const FontAsset& font, std::uint64_t maxBytes,
+	        const std::function<bool(std::uint64_t)>& reserveStaging, const std::function<void(std::uint64_t)>& retireStaging)
+	{
+		if (upload.complete) return std::uint64_t{0};
+		if (!upload.texture.IsValid() || !m_upload || upload.y >= font.textureHeight || font.texels.size() != std::uint64_t(font.textureWidth) * font.textureHeight)
+			AE_UNEXPECTED(AetherError::Asset("Invalid streamed font upload state."));
+		auto count = static_cast<std::uint32_t>(std::min<std::uint64_t>(font.textureWidth - upload.x, maxBytes / sizeof(glm::vec4)));
+		if (!count) return std::uint64_t{0};
+		std::uint64_t bytes = 0;
+		std::uint64_t allocation = 0;
+		gpu::MappedBufferDesc desc{.usage = gpu::BufferUsage::TransferSrc, .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu, .debugName = "UI streamed font staging"};
+		while (count)
+		{
+			bytes = std::uint64_t(count) * sizeof(glm::vec4);
+			desc.size = bytes;
+			allocation = gpu::ResourceRegistry::GetMappedBufferAllocationRequirement(desc);
+			if (!allocation) AE_UNEXPECTED(AetherError::Asset("Failed to query font staging allocation."));
+			if (reserveStaging(allocation)) break;
+			count /= 2;
+		}
+		if (!count) return std::uint64_t{0};
+		const auto staging = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!staging.IsValid())
+		{
+			retireStaging(allocation);
+			AE_UNEXPECTED(AetherError::Asset("Failed to allocate font staging."));
+		}
+		const auto mapped = gpu::ResourceRegistry::ResolveMappedBuffer(staging);
+		if (!mapped.mappedPtr)
+		{
+			const std::lock_guard lock(gpu::ResourceRegistry::BufferMutex());
+			gpu::ResourceRegistry::Destroy(staging);
+			gpu::ResourceRegistry::DeferDestructionCallback([retireStaging, allocation] { retireStaging(allocation); });
+			AE_UNEXPECTED(AetherError::Asset("Failed to map font staging."));
+		}
+		std::memcpy(mapped.mappedPtr, font.texels.data() + std::uint64_t(upload.y) * font.textureWidth + upload.x, static_cast<std::size_t>(bytes));
+		gpu::ResourceRegistry::FlushMappedBuffer(staging, 0, bytes);
+		const gpu::ImageUploadRegion region{.width = count, .height = 1, .x = static_cast<std::int32_t>(upload.x), .y = static_cast<std::int32_t>(upload.y)};
+		const bool last = upload.y + 1 == font.textureHeight && upload.x + count == font.textureWidth;
+		const auto ticket = m_upload->CopyImageChunkAsyncOwned(staging, upload.texture, std::span(&region, 1), 1, !upload.submitted, last,
+		        [retireStaging, allocation] { retireStaging(allocation); });
+		if (!ticket) AE_UNEXPECTED(AetherError::Asset("Failed to submit font upload chunk."));
+		upload.ticket = ticket;
+		upload.submitted = true;
+		upload.x += count;
+		if (upload.x == font.textureWidth) { upload.x = 0; ++upload.y; }
+		upload.complete = last;
+		return bytes;
+	}
+
+	Expected<bool> UiRenderer::FinishStreamedFontUpload(std::string name, FontAsset asset, FontUpload& upload)
+	{
+		if (!upload.complete || !upload.texture.IsValid() || !m_upload || !m_upload->IsUploadComplete(upload.ticket))
+			AE_UNEXPECTED(AetherError::Asset("Streamed font upload is not complete."));
+		if (const auto* existing = m_fontRegistry.Get(name))
+		{
+			if (existing->curveBindlessSlot == kInvalidBindlessSlot)
+				AE_UNEXPECTED(AetherError::Asset("Existing font is not GPU-resident."));
+			return false;
+		}
+		gpu::ResourceRegistry::EnsureBindlessSampled(upload.texture, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
+		const auto slot = gpu::ResourceRegistry::GetBindlessSampledSlot(upload.texture);
+		if (slot == kInvalidBindlessSlot) AE_UNEXPECTED(AetherError::Asset("Failed to bind streamed font texture."));
+		asset.curveBindlessSlot = slot;
+		asset.texels.clear();
+		asset.texels.shrink_to_fit();
+		if (!m_fontRegistry.Publish(name, std::move(asset))) return false;
+		m_fontCurveTextures.emplace(name, upload.texture);
+		m_fontUploadFailed.erase(name);
+		upload.texture = {};
+		return true;
+	}
+
+	void UiRenderer::DiscardStreamedFontUpload(FontUpload& upload, std::function<void()> onGpuRetired)
+	{
+		if (upload.texture.IsValid())
+		{
+			if (upload.ticket && m_upload) m_upload->WaitForUpload(upload.ticket);
+			const std::lock_guard lock(gpu::ResourceRegistry::BufferMutex());
+			gpu::ResourceRegistry::Destroy(upload.texture);
+			if (onGpuRetired) gpu::ResourceRegistry::DeferDestructionCallback(std::move(onGpuRetired));
+			upload.texture = {};
+		}
+		else if (onGpuRetired) onGpuRetired();
+	}
+
+	std::uint32_t UiRenderer::StreamedFontSlot(std::string_view name) const
+	{
+		const auto* font = m_fontRegistry.Get(name);
+		return font ? font->curveBindlessSlot : kInvalidBindlessSlot;
+	}
+
+	void UiRenderer::RetireStreamedFont(std::string_view name, std::function<void()> onGpuRetired)
+	{
+		const std::string key(name);
+		if (const auto it = m_fontCurveTextures.find(key); it != m_fontCurveTextures.end())
+		{
+			if (it->second.IsValid())
+			{
+				const std::lock_guard lock(gpu::ResourceRegistry::BufferMutex());
+				gpu::ResourceRegistry::Destroy(it->second);
+				if (onGpuRetired) gpu::ResourceRegistry::DeferDestructionCallback(std::move(onGpuRetired));
+			}
+			m_fontCurveTextures.erase(it);
+		}
+		if (onGpuRetired) onGpuRetired();
+		m_fontUploadFailed.erase(key);
+		m_fontRegistry.Invalidate(name);
+	}
+
 	void UiRenderer::EnsureFontReady(std::string_view name)
 	{
 		if (name.empty())

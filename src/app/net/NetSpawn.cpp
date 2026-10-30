@@ -11,6 +11,14 @@
 
 namespace aether::net
 {
+	void MarkPredicted(World& world, Entity entity)
+	{
+		if (!entity.IsValid() || !world.GetRegistry().valid(World::ToEntt(entity)))
+			return;
+		world.Remove<NetworkIdentity>(entity);
+		world.Remove<NetworkTransform>(entity);
+	}
+
 	bool IsSafePrefabName(std::string_view name)
 	{
 		return !name.empty() && name.find("..") == std::string_view::npos

@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <limits>
 #include <unordered_map>
 #include <iostream>
 #include <string>
@@ -1129,6 +1130,8 @@ namespace aether::assetpipeline
 			{
 				std::vector<std::pair<std::string, std::vector<std::byte>>> files;
 				std::vector<std::string> paths;
+				bool valid = true;
+				std::string error;
 			};
 
 			AnimResult ProcessAnimations(cgltf_data* data, const std::vector<uint32_t>& remapTable, const std::string& sourcePath, bool nameBased = false)
@@ -1137,6 +1140,62 @@ namespace aether::assetpipeline
 				if (data->animations_count == 0)
 				{
 					return out;
+				}
+
+				const auto fail = [&](cgltf_size animation, cgltf_size channel, const char* reason)
+				{
+					std::cerr << "  MeshProcessor: " << sourcePath << " animation " << animation << " channel " << channel << ": " << reason << "\n";
+					AnimResult invalid;
+					invalid.valid = false;
+					invalid.error = "animation " + std::to_string(animation) + " channel " + std::to_string(channel) + ": " + reason;
+					return invalid;
+				};
+				if (data->nodes_count > static_cast<cgltf_size>(std::numeric_limits<int32_t>::max()))
+					return fail(0, 0, "node count exceeds supported range");
+				for (cgltf_size ai = 0; ai < data->animations_count; ++ai)
+				{
+					const auto& anim = data->animations[ai];
+					if (anim.channels_count > 65536 || SafeStr(anim.name).size() > std::numeric_limits<uint16_t>::max())
+						return fail(ai, 0, "channel count or clip name exceeds ANIM limits");
+					for (cgltf_size ci = 0; ci < anim.channels_count; ++ci)
+					{
+						const auto& ch = anim.channels[ci];
+						if (!ch.sampler || !ch.target_node || !ch.sampler->input || !ch.sampler->output)
+							return fail(ai, ci, "missing sampler, target, or accessor");
+						if (ch.target_path == cgltf_animation_path_type_weights)
+							return fail(ai, ci, "morph-weight animation is unsupported");
+						if (ch.target_path != cgltf_animation_path_type_translation && ch.target_path != cgltf_animation_path_type_rotation && ch.target_path != cgltf_animation_path_type_scale)
+							return fail(ai, ci, "unsupported animation path");
+						if (ch.sampler->interpolation != cgltf_interpolation_type_linear && ch.sampler->interpolation != cgltf_interpolation_type_step && ch.sampler->interpolation != cgltf_interpolation_type_cubic_spline)
+							return fail(ai, ci, "unsupported interpolation");
+						const auto* input = ch.sampler->input;
+						const auto* output = ch.sampler->output;
+						const cgltf_size factor = ch.sampler->interpolation == cgltf_interpolation_type_cubic_spline ? 3 : 1;
+						if (input->count == 0 || input->count > (1u << 20) || output->count != input->count * factor)
+							return fail(ai, ci, "invalid key count or input/output count mismatch");
+						const auto expected = ch.target_path == cgltf_animation_path_type_rotation ? cgltf_type_vec4 : cgltf_type_vec3;
+						if (input->type != cgltf_type_scalar || input->component_type != cgltf_component_type_r_32f || output->type != expected || output->component_type != cgltf_component_type_r_32f)
+							return fail(ai, ci, "unsupported accessor layout");
+						float previous = -1.f;
+						float value[4]{};
+						for (cgltf_size k = 0; k < input->count; ++k)
+						{
+							if (!cgltf_accessor_read_float(input, k, value, 1) || !std::isfinite(value[0]) || value[0] < 0.f || value[0] <= previous)
+								return fail(ai, ci, "unreadable or invalid key time");
+							previous = value[0];
+						}
+						const cgltf_size components = expected == cgltf_type_vec4 ? 4 : 3;
+						for (cgltf_size k = 0; k < output->count; ++k)
+						{
+							if (!cgltf_accessor_read_float(output, k, value, components))
+								return fail(ai, ci, "unreadable output value");
+							for (cgltf_size component = 0; component < components; ++component)
+								if (!std::isfinite(value[component]))
+									return fail(ai, ci, "non-finite output value");
+						}
+						if (nameBased && StripBonePrefix(SafeStr(ch.target_node->name)).size() > std::numeric_limits<uint16_t>::max())
+							return fail(ai, ci, "bone name exceeds ANIM limits");
+					}
 				}
 
 				std::vector<uint32_t> virtualRemap;
@@ -1211,11 +1270,11 @@ namespace aether::assetpipeline
 						const int32_t targetNode = ToIndex(ch.target_node, *data);
 						if (targetNode < 0 || static_cast<std::size_t>(targetNode) >= activeRemap.size())
 						{
-							continue;
+							return fail(ai, ci, "target node is outside the animation remap");
 						}
 						if (activeRemap[static_cast<std::size_t>(targetNode)] == static_cast<uint32_t>(-1))
 						{
-							continue;
+							return fail(ai, ci, "target node is not present in the skeleton");
 						}
 						++validChannels;
 					}
@@ -1280,7 +1339,8 @@ namespace aether::assetpipeline
 
 						const cgltf_accessor* inputAcc = ch.sampler->input;
 						const cgltf_accessor* outputAcc = ch.sampler->output;
-						const uint32_t keyCount = static_cast<uint32_t>(std::min(inputAcc->count, outputAcc->count));
+						const uint32_t valuesPerKey = interp == AnimInterpDisk::CubicSpline ? 3u : 1u;
+						const uint32_t keyCount = static_cast<uint32_t>(inputAcc->count);
 
 						ChannelHeaderDisk chHdr;
 						chHdr.nodeIndex = remappedNode;
@@ -1310,7 +1370,7 @@ namespace aether::assetpipeline
 
 						const bool isRotation = (path == AnimPathDisk::Rotation);
 						const uint32_t compCount = isRotation ? 4 : 3;
-						for (uint32_t k = 0; k < keyCount; ++k)
+						for (uint32_t k = 0; k < keyCount * valuesPerKey; ++k)
 						{
 							val[3] = 0.f;
 							cgltf_accessor_read_float(outputAcc, k, val.data(), compCount);
@@ -1576,7 +1636,7 @@ namespace aether::assetpipeline
 			if (cgltf_parse(&options, gltfData.data(), gltfData.size(), &data) != cgltf_result_success)
 			{
 				std::cerr << "  MeshProcessor: cgltf_parse failed for " << sourcePath << "\n";
-				return {};
+				return {.error = "cgltf_parse failed"};
 			}
 
 			const std::string srcPathStr = sourcePath.string();
@@ -1584,14 +1644,41 @@ namespace aether::assetpipeline
 			{
 				std::cerr << "  MeshProcessor: failed to load buffers for " << sourcePath << "\n";
 				cgltf_free(data);
-				return {};
+				return {.error = "failed to load glTF buffers"};
+			}
+
+			// cgltf_validate dereferences animation samplers without checking these pointers.
+			for (cgltf_size ai = 0; ai < data->animations_count; ++ai)
+			{
+				const auto& animation = data->animations[ai];
+				for (cgltf_size ci = 0; ci < animation.channels_count; ++ci)
+				{
+					const auto& channel = animation.channels[ci];
+					if (!channel.sampler || !channel.target_node || !channel.sampler->input || !channel.sampler->output)
+					{
+						cgltf_free(data);
+						return {.error = "animation " + std::to_string(ai) + " channel " + std::to_string(ci) + ": missing sampler, target, or accessor"};
+					}
+					if (channel.target_path == cgltf_animation_path_type_weights)
+					{
+						cgltf_free(data);
+						return {.error = "animation " + std::to_string(ai) + " channel " + std::to_string(ci) + ": morph-weight animation is unsupported"};
+					}
+					const auto count = channel.sampler->input->count;
+					const cgltf_size factor = channel.sampler->interpolation == cgltf_interpolation_type_cubic_spline ? 3 : 1;
+					if (count == 0 || count > (1u << 20) || channel.sampler->output->count != count * factor)
+					{
+						cgltf_free(data);
+						return {.error = "animation " + std::to_string(ai) + " channel " + std::to_string(ci) + ": invalid key count or input/output count mismatch"};
+					}
+				}
 			}
 
 			if (cgltf_validate(data) != cgltf_result_success)
 			{
 				std::cerr << "  MeshProcessor: cgltf_validate failed for " << sourcePath << "\n";
 				cgltf_free(data);
-				return {};
+				return {.error = "cgltf_validate failed"};
 			}
 
 			ProcessedResult result;
@@ -1755,8 +1842,16 @@ namespace aether::assetpipeline
 				}
 			}
 
-			const bool nameBased = !skel.valid && data->animations_count > 0;
-			auto anims = ProcessAnimations(data, skel.remapTable, sourcePath.string(), nameBased);
+			// Animation-only sources are external clips: their skeleton ordering need not
+			// match the destination rig, even when a synthetic skeleton was generated.
+			const bool nameBased = data->meshes_count == 0 && data->animations_count > 0;
+			const std::vector<uint32_t> noRemap;
+			auto anims = ProcessAnimations(data, nameBased ? noRemap : skel.remapTable, sourcePath.string(), nameBased);
+			if (!anims.valid)
+			{
+				cgltf_free(data);
+				return {.error = std::move(anims.error)};
+			}
 			if (!anims.files.empty())
 			{
 				result.animFiles = std::move(anims.files);

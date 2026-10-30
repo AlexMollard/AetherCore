@@ -399,18 +399,29 @@ namespace aether::app::scene
 							}
 							if (const auto node = script.nodeRefs.find(name); node != script.nodeRefs.end())
 							{
-								if (ambiguous.contains(node->second) || !nodes.contains(node->second))
+								if (ambiguous.contains(node->second))
 								{
-									return std::unexpected("Script reference names a missing or ambiguous scene node");
+									return std::unexpected("Script reference names an ambiguous scene node");
 								}
-								value.i64 = nodes.at(node->second);
+								if (const auto found = nodes.find(node->second); found != nodes.end())
+								{
+									value.i64 = found->second;
+									script.nodeRefs.erase(node);
+								}
+								else if (limits.preserveExternalNodeReferences || !output.streamingRegions.empty())
+								{
+									value.i64 = -1;
+								}
+								else
+								{
+									return std::unexpected("Script reference names a missing scene node");
+								}
 							}
 							else if (value.i64 >= 0)
 							{
 								value.i64 = mapping[static_cast<std::size_t>(value.i64)];
 							}
 						}
-						script.nodeRefs.clear();
 					}
 					entities.push_back(std::move(record));
 				}

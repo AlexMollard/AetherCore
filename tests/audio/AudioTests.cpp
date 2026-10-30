@@ -2,12 +2,15 @@
 
 #include <array>
 #include <cmath>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <vector>
 
 #include <glm/glm.hpp>
 
+#include "assets/AssetCatalog.hpp"
 #include "audio/AudioMath.hpp"
 #include "audio/AudioSubsystem.hpp"
 #include "audio/AudioSystem.hpp"
@@ -297,4 +300,151 @@ TEST_CASE("subsystem runs headless on the null backend: plays, tracks, stops")
 
 	audio.Shutdown();
 	io::FileSystem::Shutdown();
+}
+
+TEST_CASE("manual audio mixer enforces source and voice lifetime")
+{
+	io::FileSystem::Initialize();
+	AudioSubsystem audio;
+	REQUIRE(audio.Init({.manualMix = true}).has_value());
+	const auto wav = MakeTestWav();
+	std::atomic<int> retired{0};
+	REQUIRE(audio.PublishStreamedClip("project://audio/manual.wav", wav, [&] { ++retired; }).value());
+	std::array<float, 2048> pcm{};
+	ServiceContainer services;
+	services.Register<AudioSubsystem>(audio);
+	World world;
+	AudioSystem system(services);
+	const Entity entity = world.Create();
+	auto& source = world.Emplace<AudioSourceComponent>(entity, AudioSourceComponent{
+	        .clipPath = "project://audio/manual.wav", .spatial = false, .playOnStart = true});
+	system.Update(world, 0.016f);
+	CHECK(audio.GetStats().startedTotal == 1);
+	bool nonzero = false;
+	for (int i = 0; i < 60; ++i)
+	{
+		audio.RenderFrames(pcm.data(), 1024);
+		for (const float sample: pcm) nonzero |= std::abs(sample) > 0.001f;
+		system.Update(world, 0.016f);
+	}
+	CHECK(nonzero);
+	CHECK(audio.GetStats().activeVoices == 0);
+	CHECK(audio.GetStats().startedTotal == 1);
+	source.playRequested = true;
+	system.Update(world, 0.016f);
+	CHECK(source.playOnStart);
+	CHECK(audio.GetStats().startedTotal == 2);
+	world.Remove<AudioSourceComponent>(entity);
+	system.Update(world, 0.016f);
+	CHECK(audio.GetStats().activeVoices == 0);
+	const Entity explicitEntity = world.Create();
+	auto& explicitSource = world.Emplace<AudioSourceComponent>(explicitEntity, AudioSourceComponent{
+	        .clipPath = "project://audio/manual.wav", .spatial = false, .playOnStart = false});
+	system.Update(world, 0.016f);
+	CHECK(audio.GetStats().startedTotal == 2);
+	explicitSource.playRequested = true;
+	system.Update(world, 0.016f);
+	CHECK_FALSE(explicitSource.playOnStart);
+	CHECK(audio.GetStats().startedTotal == 3);
+	world.Destroy(explicitEntity);
+	system.Update(world, 0.016f);
+	CHECK(audio.GetStats().activeVoices == 0);
+	audio.RetireStreamedClip("project://audio/manual.wav");
+	audio.Shutdown();
+	CHECK(retired == 1);
+	io::FileSystem::Shutdown();
+}
+
+TEST_CASE("invalid buses and failed stealing leave the mixer usable")
+{
+	io::FileSystem::Initialize();
+	AudioSubsystem audio;
+	REQUIRE(audio.Init({.manualMix = true}).has_value());
+	REQUIRE(audio.PublishStreamedClip("project://audio/pool.wav", MakeTestWav(), {}).value());
+	std::array<VoiceHandle, 64> voices{};
+	for (auto& voice: voices)
+	{
+		voice = audio.Play2D("project://audio/pool.wav", {.loop = true});
+		REQUIRE(voice.IsValid());
+	}
+	for (const auto invalid: {-100, 100})
+	{
+		CHECK_FALSE(audio.Play2D("project://audio/pool.wav", {.bus = static_cast<Bus>(invalid)}).IsValid());
+		CHECK(audio.IsVoiceAlive(voices[0]));
+		CHECK(audio.GetStats().activeVoices == 64);
+	}
+	CHECK_FALSE(audio.Play2D("project://audio/missing.wav").IsValid());
+	CHECK_FALSE(audio.IsVoiceAlive(voices[0]));
+	CHECK(audio.GetStats().activeVoices == 63);
+	CHECK(audio.Play2D("project://audio/pool.wav", {.loop = true}).IsValid());
+	CHECK(audio.GetStats().activeVoices == 64);
+	audio.SetSuspended(true);
+	audio.Shutdown();
+	REQUIRE(audio.Init({.manualMix = true}).has_value());
+	REQUIRE(audio.PublishStreamedClip("project://audio/reinit.wav", MakeTestWav(), {}).value());
+	REQUIRE(audio.Play2D("project://audio/reinit.wav", {.loop = true}).IsValid());
+	std::array<float, 2048> pcm{};
+	audio.RenderFrames(pcm.data(), 1024);
+	bool nonzero = false;
+	for (const float sample: pcm) nonzero |= std::abs(sample) > 0.001f;
+	CHECK(nonzero);
+	audio.Shutdown();
+	io::FileSystem::Shutdown();
+}
+
+TEST_CASE("retired streamed music retains its decoder until stopped")
+{
+	io::FileSystem::Initialize();
+	AudioSubsystem audio;
+	REQUIRE(audio.Init({.manualMix = true}).has_value());
+	std::atomic<int> retired{0};
+	REQUIRE(audio.PublishStreamedClip("project://audio/music.wav", MakeTestWav(), [&] { ++retired; }).value());
+	audio.PlayMusic("project://audio/music.wav", 0.0f, true);
+	REQUIRE(audio.GetStats().musicPlaying);
+	audio.Update(0.016f, {});
+	audio.RetireStreamedClip("project://audio/music.wav");
+	CHECK(retired == 0);
+	std::array<float, 2048> pcm{};
+	audio.RenderFrames(pcm.data(), 1024);
+	bool nonzero = false;
+	for (const float sample: pcm) nonzero |= std::abs(sample) > 0.001f;
+	CHECK(nonzero);
+	audio.StopMusic(0.0f);
+	audio.Shutdown();
+	CHECK(retired == 1);
+	io::FileSystem::Shutdown();
+}
+
+TEST_CASE("music resolves a streamed clip through its asset UID")
+{
+	const auto root = std::filesystem::temp_directory_path() / ("aether-audio-uid-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	std::filesystem::create_directories(root / "assets/audio");
+	const auto wav = MakeTestWav();
+	{
+		std::ofstream file(root / "assets/audio/music.wav", std::ios::binary);
+		file.write(reinterpret_cast<const char*>(wav.data()), static_cast<std::streamsize>(wav.size()));
+	}
+	REQUIRE(AssetCatalog::Migrate(root, true).has_value());
+	auto catalog = AssetCatalog::Load(root);
+	REQUIRE(catalog.has_value());
+	const std::string uid = catalog->Reference("project://assets/audio/music.wav");
+	REQUIRE(uid.starts_with("uid://"));
+	io::FileSystem::Initialize();
+	io::FileSystem::Mount("project", root);
+	REQUIRE(io::FileSystem::ReloadAssetCatalog().has_value());
+	std::filesystem::remove(root / "assets/audio/music.wav");
+	AudioSubsystem audio;
+	REQUIRE(audio.Init({.manualMix = true}).has_value());
+	REQUIRE(audio.PublishStreamedClip("project://assets/audio/music.wav", wav, {}).value());
+	audio.PlayMusic(uid, 0.0f, true);
+	REQUIRE(audio.GetStats().musicPlaying);
+	audio.Update(0.016f, {});
+	std::array<float, 2048> pcm{};
+	audio.RenderFrames(pcm.data(), 1024);
+	bool nonzero = false;
+	for (const float sample: pcm) nonzero |= std::abs(sample) > 0.001f;
+	CHECK(nonzero);
+	audio.Shutdown();
+	io::FileSystem::Shutdown();
+	std::filesystem::remove_all(root);
 }

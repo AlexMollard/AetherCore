@@ -60,6 +60,7 @@ namespace aether
 		m_assetDatabase.RegisterBuiltinPrimitives();
 		m_world = &world;
 		m_assetManager.Initialize(vk, bindless, m_materialRegistry, m_materialAuthoring, m_pipelineCache, m_effectParamBuffer, m_textureRegistry, world, m_uploadContext);
+		m_assetManager.SetStreaming(m_assetStreaming);
 		EffectSystem::ConnectLifecycle(world, m_effectParamBuffer);
 		UiImageSystem::ConnectLifecycle(world, m_textureRegistry);
 	}
@@ -100,6 +101,7 @@ namespace aether
 			UiImageSystem::DisconnectLifecycle(*m_world);
 			m_world = nullptr;
 		}
+		m_assetStreaming.Shutdown();
 		m_materialAuthoring.ReleaseAll();
 		m_tileMapSystem.Shutdown();
 		m_spriteSystem.Shutdown();

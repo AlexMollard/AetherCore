@@ -124,6 +124,10 @@ else()
 endif()
 configure_file("${CMAKE_SOURCE_DIR}/resources/web/index.html" "${CMAKE_BINARY_DIR}/web/index.html" @ONLY)
 configure_file("${CMAKE_SOURCE_DIR}/resources/web/platform.js" "${CMAKE_BINARY_DIR}/web/platform.js" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/resources/web/audio-worklet.js" "${CMAKE_BINARY_DIR}/web/audio-worklet.js" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/resources/web/streaming-worker.js" "${CMAKE_BINARY_DIR}/web/streaming-worker.js" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/resources/web/streaming-model-skeleton.js" "${CMAKE_BINARY_DIR}/web/streaming-model-skeleton.js" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/resources/web/streaming-model-materials.js" "${CMAKE_BINARY_DIR}/web/streaming-model-materials.js" COPYONLY)
 configure_file("${CMAKE_SOURCE_DIR}/resources/branding/aethercore-app-icon.png" "${CMAKE_BINARY_DIR}/web/aethercore-icon.png" COPYONLY)
 
 file(WRITE "${CMAKE_BINARY_DIR}/web/project.js" "globalThis.aetherProject=null;\n")
@@ -132,7 +136,7 @@ file(MAKE_DIRECTORY "${_assets}" "${CMAKE_BINARY_DIR}/test-fixtures")
 if(NOT AETHER_WEB_PROJECT)
 add_custom_command(OUTPUT "${_assets}/reference.pak"
     COMMAND "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets" "${_assets}/reference.pak"
-    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" ${_game_sources}
+    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" ${_game_sources}
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/ProjectSettings.toml"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/audio/reference.wav"
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets/textures/reference.png"
@@ -226,7 +230,7 @@ add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/game.pak"
         "${CMAKE_BINARY_DIR}/web/game.pak"
     COMMAND "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/assets"
         "${CMAKE_BINARY_DIR}/test-fixtures/desktop-reference.pak"
-    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" ${_game_sources}
+    DEPENDS "${AETHER_WEB_ASSETPACKER}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/prepare_reference.mjs" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" "${CMAKE_SOURCE_DIR}/resources/fonts/fa-solid-900.ttf" ${_game_sources}
         "${AETHER_WEB_MATERIAL_COMPILER}" "${CMAKE_SOURCE_DIR}/tools/shaders/cook_project_materials.py" "${CMAKE_SOURCE_DIR}/tools/shaders/web_materials.py"
         ${_shared_shader_includes} ${_material_shader_sources}
         "${CMAKE_SOURCE_DIR}/projects/AgentPipelineRust/ProjectSettings.toml"
@@ -242,6 +246,7 @@ file(GLOB _font_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/resources/fonts/*
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/web/engine.pak"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${_assets}/engine-fonts/fonts"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/resources/fonts" "${_assets}/engine-fonts/fonts"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f "${_assets}/engine-fonts/Roboto-Regular.ttf"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/web-runtime/cook_fonts.py" "${AETHER_WEB_ASSETPACKER}" "${_assets}/engine-fonts/fonts"
     COMMAND "${AETHER_WEB_ASSETPACKER}" --target "${AETHER_WEB_PROFILE}"
         "${_assets}/engine-fonts" "${CMAKE_BINARY_DIR}/web/engine.pak"

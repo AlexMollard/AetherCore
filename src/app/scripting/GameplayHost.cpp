@@ -34,7 +34,7 @@ namespace aether::app::scripting
 		return it == m_nativeHandles.end() ? 0 : it->second.provider;
 	}
 
-	AetherGameplayStatus GameplayHost::Call(const std::function<AetherGameplayStatus()>& callback) const
+	AetherGameplayStatus GameplayHost::Call(const std::function<AetherGameplayStatus()>& callback, bool predictedAttachOperation) const
 	{
 #if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 		try
@@ -42,7 +42,9 @@ namespace aether::app::scripting
 		{
 			if (m_access != nullptr)
 			{
-				aether::scripting::GameplayAccess::Scope scope(*m_access, aether::scripting::GameplayAccess::ScopeKind::Callback);
+				aether::scripting::GameplayAccess::Scope scope(*m_access, predictedAttachOperation
+				        ? aether::scripting::GameplayAccess::ScopeKind::PredictedAttachCallback
+				        : aether::scripting::GameplayAccess::ScopeKind::Callback);
 				return scope.Status() == AE_GAMEPLAY_OK ? callback() : scope.Status();
 			}
 			return callback();
@@ -64,6 +66,33 @@ namespace aether::app::scripting
 	{
 		AetherGameplayEvent event{.structSize = sizeof(event), .kind = AE_GAMEPLAY_EVENT_PHYSICS, .other = EntityHandle(other), .code = kind, .flags = flags};
 		return Result(ValidInstance(handle) ? Call([&] { return aether::scripting::DispatchGameplayEvent(m_module, ProviderHandle(handle), event); }) : AE_GAMEPLAY_UNSUPPORTED, "physics event");
+	}
+
+	Expected<void> GameplayHost::DispatchNetwork(std::uint64_t handle, std::uint32_t kind, std::uint32_t peer) const
+	{
+		AetherGameplayEvent event{.structSize = sizeof(event), .kind = AE_GAMEPLAY_EVENT_NETWORK, .code = kind, .flags = peer};
+		return Result(ValidInstance(handle) ? Call([&] { return aether::scripting::DispatchGameplayEvent(m_module, ProviderHandle(handle), event); }) : AE_GAMEPLAY_UNSUPPORTED, "network event");
+	}
+
+	Expected<std::string> GameplayHost::CaptureStreamingState(std::uint64_t handle) const
+	{
+		if (!ValidInstance(handle) || !m_module.captureStreamingState)
+			return std::unexpected(AetherError::Engine("streaming capture is unavailable"));
+		std::string buffer(1024 * 1024, '\0');
+		std::uint32_t required = 0;
+		const auto status = Call([&] { return m_module.captureStreamingState(m_module.context, ProviderHandle(handle), {buffer.data(), static_cast<std::uint32_t>(buffer.size()), &required}); });
+		if (auto result = Result(status, "streaming capture"); !result) return std::unexpected(result.error());
+		if (required == 0 || required > buffer.size())
+			return std::unexpected(AetherError::Engine("invalid streaming capture size"));
+		buffer.resize(required - 1);
+		return buffer;
+	}
+
+	Expected<void> GameplayHost::RestoreStreamingState(std::uint64_t handle, const std::string& state) const
+	{
+		if (!ValidInstance(handle) || !m_module.restoreStreamingState || state.size() > std::numeric_limits<std::uint32_t>::max())
+			return std::unexpected(AetherError::Engine("streaming restore is unavailable"));
+		return Result(Call([&] { return m_module.restoreStreamingState(m_module.context, ProviderHandle(handle), {state.data(), static_cast<std::uint32_t>(state.size())}); }), "streaming restore");
 	}
 
 	Expected<void> GameplayHost::Result(AetherGameplayStatus status, const char* operation) const
@@ -155,6 +184,45 @@ namespace aether::app::scripting
 		return index < 0 ? std::vector<ScriptPropertyInfo>{} : m_properties[index];
 	}
 
+	std::span<const ScriptPropertyInfo> GameplayHost::BorrowScriptProperties(const std::string& name) const
+	{
+		const int index = FindType(name);
+		return index < 0 ? std::span<const ScriptPropertyInfo>{} : std::span<const ScriptPropertyInfo>{m_properties[index]};
+	}
+
+	Expected<std::uint32_t> GameplayHost::GetPropertyRequiredBytes(std::uint64_t handle, int index) const
+	{
+		if (!m_available || !ValidInstance(handle) || index < 0 || !m_module.getProperty)
+			return std::unexpected(AetherError::Engine("Invalid gameplay property sizing request"));
+		AetherGameplayPropertyValue value{.structSize = sizeof(value)};
+		std::uint32_t required = 0;
+		AetherGameplayUtf8Buffer buffer{nullptr, 0, &required};
+		const auto status = Call([&] { return m_module.getProperty(m_module.context, ProviderHandle(handle), index, &value, buffer); });
+		if ((status != AE_GAMEPLAY_OK && status != AE_GAMEPLAY_BUFFER_TOO_SMALL) || value.structSize != sizeof(value) ||
+		    value.type > AE_GAMEPLAY_PROPERTY_COMPONENT || (status == AE_GAMEPLAY_BUFFER_TOO_SMALL && required == 0))
+			return std::unexpected(AetherError::Engine("Gameplay property sizing failed"));
+		if (m_access != nullptr && (value.type == AE_GAMEPLAY_PROPERTY_ENTITY || value.type == AE_GAMEPLAY_PROPERTY_COMPONENT) &&
+		    value.entity.id != 0 && (value.entity.world != EntityHandle(value.entity.id).world || value.entity.reserved != 0))
+			return std::unexpected(AetherError::Engine("Invalid gameplay property entity"));
+		if (value.type == AE_GAMEPLAY_PROPERTY_COMPONENT)
+		{
+			const auto instance = m_nativeHandles.find(handle);
+			if (instance != m_nativeHandles.end() && instance->second.typeIndex >= 0 &&
+			    static_cast<std::size_t>(instance->second.typeIndex) < m_properties.size())
+			{
+				const auto& properties = m_properties[instance->second.typeIndex];
+				if (static_cast<std::size_t>(index) < properties.size())
+				{
+					const auto fallback = properties[index].componentType.size();
+					if (fallback >= std::numeric_limits<std::uint32_t>::max())
+						return std::unexpected(AetherError::Engine("Gameplay property descriptor too large"));
+					required = std::max(required, static_cast<std::uint32_t>(fallback + 1));
+				}
+			}
+		}
+		return required;
+	}
+
 	int GameplayHost::FindPropertyIndex(const std::string& typeName, const std::string& name) const
 	{
 		const int type = FindType(typeName);
@@ -184,7 +252,7 @@ namespace aether::app::scripting
 			return std::unexpected(AetherError::Engine(message));
 		}
 		AetherGameplayInstance instance = 0;
-		AE_TRY_VOID(Result(Call([&] { return m_module.create(m_module.context, type, EntityHandle(entityId), &instance); }), "create"));
+		AE_TRY_VOID(Result(Call([&] { return m_module.create(m_module.context, type, EntityHandle(entityId), &instance); }, true), "create"));
 		if (instance == 0)
 		{
 			return std::unexpected(AetherError::Engine("Gameplay module returned an empty instance"));
@@ -202,7 +270,7 @@ namespace aether::app::scripting
 
 	Expected<void> GameplayHost::Attach(std::uint64_t handle) const
 	{
-		auto result = Result(ValidInstance(handle) ? Call([&] { return m_module.attach(m_module.context, ProviderHandle(handle)); }) : AE_GAMEPLAY_UNSUPPORTED, "attach");
+		auto result = Result(ValidInstance(handle) ? Call([&] { return m_module.attach(m_module.context, ProviderHandle(handle)); }, true) : AE_GAMEPLAY_UNSUPPORTED, "attach");
 		if (result)
 		{
 			m_ownedInstances[handle] = true;
@@ -239,7 +307,7 @@ namespace aether::app::scripting
 		return Result(ValidInstance(handle) ? Call([&] { return aether::scripting::DispatchGameplayEvent(m_module, ProviderHandle(handle), event); }) : AE_GAMEPLAY_UNSUPPORTED, "ownership event");
 	}
 
-	bool GameplayHost::ReadProperty(std::uint64_t handle, int typeIndex, int index, ScriptPropertyValue& out) const
+	bool GameplayHost::ReadProperty(std::uint64_t handle, int typeIndex, int index, ScriptPropertyValue& out, std::uint32_t maxBytes) const
 	{
 		if (!m_available || (typeIndex < 0 && !ValidInstance(handle)) || index < 0)
 		{
@@ -254,6 +322,7 @@ namespace aether::app::scripting
 			return typeIndex < 0 ? m_module.getProperty(m_module.context, ProviderHandle(handle), index, &value, buffer) : m_module.getDefaultProperty(m_module.context, typeIndex, index, &value, buffer);
 		};
 		auto status = Call(read);
+		if (required > maxBytes) return false;
 		std::vector<char> storage;
 		if (status == AE_GAMEPLAY_BUFFER_TOO_SMALL && required > buffer.capacity)
 		{
@@ -262,7 +331,7 @@ namespace aether::app::scripting
 			buffer.capacity = required;
 			status = Call(read);
 		}
-		if (status != AE_GAMEPLAY_OK || value.structSize != sizeof(value) || value.type > AE_GAMEPLAY_PROPERTY_COMPONENT || required > buffer.capacity)
+		if (status != AE_GAMEPLAY_OK || value.structSize != sizeof(value) || value.type > AE_GAMEPLAY_PROPERTY_COMPONENT || required > buffer.capacity || required > maxBytes)
 		{
 			return false;
 		}
@@ -290,6 +359,7 @@ namespace aether::app::scripting
 			}
 			if (descriptorType >= 0 && static_cast<std::size_t>(descriptorType) < m_properties.size() && static_cast<std::size_t>(index) < m_properties[descriptorType].size())
 			{
+				if (m_properties[descriptorType][index].componentType.size() >= maxBytes) return false;
 				owned.str = m_properties[descriptorType][index].componentType;
 			}
 		}
@@ -300,6 +370,11 @@ namespace aether::app::scripting
 	bool GameplayHost::GetPropertyValue(std::uint64_t handle, int index, ScriptPropertyValue& out) const
 	{
 		return handle != 0 && ReadProperty(handle, -1, index, out);
+	}
+
+	bool GameplayHost::GetPropertyValueBounded(std::uint64_t handle, int index, std::uint32_t maxBytes, ScriptPropertyValue& out) const
+	{
+		return handle != 0 && ReadProperty(handle, -1, index, out, maxBytes);
 	}
 
 	bool GameplayHost::GetDefaultPropertyValue(const std::string& typeName, int index, ScriptPropertyValue& out) const
@@ -327,7 +402,7 @@ namespace aether::app::scripting
 		{
 			abi.integer = value.i64;
 		}
-		return Result(Call([&] { return m_module.setProperty(m_module.context, ProviderHandle(handle), index, &abi, {value.str.data(), static_cast<std::uint32_t>(value.str.size())}); }), "set property");
+		return Result(Call([&] { return m_module.setProperty(m_module.context, ProviderHandle(handle), index, &abi, {value.str.data(), static_cast<std::uint32_t>(value.str.size())}); }, true), "set property");
 	}
 
 	Expected<void> GameplayHost::TryApplyProperties(std::uint64_t handle, const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& props) const

@@ -88,6 +88,38 @@ extern "C"
 #define AE_GAMEPLAY_SERVICE_MOUSE_DELTA 32u
 #define AE_GAMEPLAY_SERVICE_SCROLL_DELTA 33u
 #define AE_GAMEPLAY_SERVICE_SET_EULER 34u
+// Networking: HOST uses integer=port, vector[0]=maximum connections; CONNECT uses
+// text=address, integer=port. SPAWN uses text=prefab, vector=position, integer=owner.
+// Entity operations use entity. Boolean queries and ownership requests return BOOL;
+// LOCAL_ID returns INT; SPAWN returns ENTITY; DISCONNECT_REASON returns STRING.
+// A successful ownership request may still await the host's approval.
+#define AE_GAMEPLAY_SERVICE_NET_HOST 35u
+#define AE_GAMEPLAY_SERVICE_NET_CONNECT 36u
+#define AE_GAMEPLAY_SERVICE_NET_DISCONNECT 37u
+#define AE_GAMEPLAY_SERVICE_NET_IS_HOST 38u
+#define AE_GAMEPLAY_SERVICE_NET_IS_CLIENT 39u
+#define AE_GAMEPLAY_SERVICE_NET_IS_CONNECTED 40u
+#define AE_GAMEPLAY_SERVICE_NET_LOCAL_ID 41u
+#define AE_GAMEPLAY_SERVICE_NET_SPAWN 42u
+#define AE_GAMEPLAY_SERVICE_NET_DESPAWN 43u
+#define AE_GAMEPLAY_SERVICE_NET_HAS_AUTHORITY 44u
+#define AE_GAMEPLAY_SERVICE_NET_IS_OWNER 45u
+#define AE_GAMEPLAY_SERVICE_NET_REQUEST_OWNERSHIP 46u
+#define AE_GAMEPLAY_SERVICE_NET_RELEASE_OWNERSHIP 47u
+#define AE_GAMEPLAY_SERVICE_NET_SET_REPLICATION_READY 48u
+#define AE_GAMEPLAY_SERVICE_NET_IS_REPLICATION_READY 49u
+#define AE_GAMEPLAY_SERVICE_NET_DISCONNECT_REASON 50u
+// Streaming: SET_SOURCE uses text=id, vector=xyz/load radius, integer=priority,
+// text2 contains one little-endian float32 prefetch radius. REQUEST uses text=region,
+// integer=priority, vector[0]=activate. REMOVE uses text=id. CANCEL/RELEASE/STATE
+// use integer=request id. Results are BOOL, INT, or STRING (diagnostics).
+#define AE_GAMEPLAY_SERVICE_STREAMING_SET_SOURCE 54u
+#define AE_GAMEPLAY_SERVICE_STREAMING_REMOVE_SOURCE 55u
+#define AE_GAMEPLAY_SERVICE_STREAMING_REQUEST 56u
+#define AE_GAMEPLAY_SERVICE_STREAMING_CANCEL 57u
+#define AE_GAMEPLAY_SERVICE_STREAMING_RELEASE 58u
+#define AE_GAMEPLAY_SERVICE_STREAMING_STATE 59u
+#define AE_GAMEPLAY_SERVICE_STREAMING_DIAGNOSTICS 60u
 #define AE_GAMEPLAY_RAYCAST_PAYLOAD_BYTES 28u
 #define AE_GAMEPLAY_SERVICE_CAP(operation) (UINT64_C(1) << (operation))
 

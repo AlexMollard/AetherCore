@@ -15,6 +15,13 @@
 namespace aether
 {
 	class VulkanContext;
+	class AnimationDatabaseUpload;
+	struct AnimationUploadProgress
+	{
+		std::size_t bytes = 0;
+		std::uint64_t ticket = 0;
+		bool complete = false;
+	};
 
 	class AnimationDatabase
 	{
@@ -66,6 +73,7 @@ namespace aether
 
 		~AnimationDatabase()
 		{
+			if (m_heap) m_heap->ShutdownDeferred();
 			++m_generation;
 			m_aliveSentinel = 0;
 		}
@@ -74,7 +82,7 @@ namespace aether
 		AnimationDatabase& operator=(const AnimationDatabase&) = delete;
 
 		AnimationDatabase(AnimationDatabase&&) noexcept = default;
-		AnimationDatabase& operator=(AnimationDatabase&&) noexcept = default;
+		AnimationDatabase& operator=(AnimationDatabase&& other) noexcept;
 
 		static constexpr std::uint32_t kAliveSentinel = 0xABCD1234u;
 
@@ -85,12 +93,13 @@ namespace aether
 
 		// ctx must outlive the Create call (stored for later appends).
 		static AnimationDatabase Create(const VulkanContext& ctx, const assets::GltfAsset& asset);
+		[[nodiscard]] static Expected<std::unique_ptr<AnimationDatabaseUpload>> BeginUpload(const VulkanContext& ctx, const assets::GltfAsset& asset);
 
 		// The channels must already be remapped to this skeleton's node indices.
 		Expected<std::uint32_t> AppendAnimations(
 		        std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames);
 
-		void Destroy();
+		void Destroy(std::function<void()> onRetired = {});
 
 		[[nodiscard]] gpu::DeviceAddress GetClipsAddr() const
 		{
@@ -257,6 +266,7 @@ namespace aether
 		}
 
 	private:
+		friend class AnimationDatabaseUpload;
 		const VulkanContext* m_ctx = nullptr;
 
 		std::unique_ptr<GpuHeap> m_heap = std::make_unique<GpuHeap>();
@@ -296,5 +306,38 @@ namespace aether
 		std::uint32_t m_depthCount = 0;
 		std::uint32_t m_generation{0};
 		std::uint32_t m_aliveSentinel = 0xABCD1234u;
+	};
+
+	// Owns the destination heap and all source arrays until submission completes.
+	// If discarded without Take(), retain it until LatestTicket() completes.
+	// Pump always consumes the retirement callback, including when no copy is submitted.
+	class AnimationDatabaseUpload
+	{
+	public:
+		~AnimationDatabaseUpload();
+		AnimationDatabaseUpload(const AnimationDatabaseUpload&) = delete;
+		AnimationDatabaseUpload& operator=(const AnimationDatabaseUpload&) = delete;
+		[[nodiscard]] Expected<AnimationUploadProgress> Pump(std::size_t budget, std::function<void()> onStagingRetired = {});
+		[[nodiscard]] Expected<std::uint64_t> NextStagingRequirement(std::size_t budget) const;
+		[[nodiscard]] std::uint64_t LatestTicket() const { return m_ticket; }
+		[[nodiscard]] AnimationDatabase Take();
+
+	private:
+		friend class AnimationDatabase;
+		[[nodiscard]] std::size_t NextChunkSize(std::size_t budget) const;
+		AnimationDatabaseUpload() = default;
+		struct Copy
+		{
+			const std::byte* data = nullptr;
+			std::size_t size = 0;
+			gpu::DeviceAddress address = 0;
+		};
+		AnimationDatabase m_database;
+		std::vector<Copy> m_copies;
+		std::size_t m_index = 0;
+		std::size_t m_offset = 0;
+		std::uint64_t m_ticket = 0;
+		bool m_taken = false;
+		bool m_requiredForNextFrame = false;
 	};
 } // namespace aether

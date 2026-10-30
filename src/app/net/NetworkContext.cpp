@@ -255,6 +255,9 @@ namespace aether::net
 	{
 		Stop(world);
 		m_disconnectReason.clear();
+#if defined(__EMSCRIPTEN__)
+		m_transport.SetWebGatewayRoom({});
+#endif
 		m_maxConnections = maxConnections > 0 ? maxConnections : kDefaultMaxConnections;
 		if (!m_transport.Host(port, m_maxConnections + kRefusalSlack))
 		{
@@ -323,9 +326,83 @@ namespace aether::net
 		m_transport.Disconnect();
 		m_session.Clear();
 		m_caches.clear();
+		m_latency.clear();
 		m_resyncRequests.clear();
 		m_lastResyncAt.clear();
 		m_traversalHostSetupPending = false;
+	}
+
+	std::uint32_t NetworkContext::RoundTripMs(ConnectionId connection) const
+	{
+		if (!IsActive() || connection == LocalConnectionId()) return 0;
+		const ConnectionId peer = IsClient() ? kInvalidConnection : connection;
+		const auto found = m_latency.find(peer);
+		if (found != m_latency.end() && found->second.sampled) return found->second.sample;
+		return 0; // A transport RTT may cover only the native-to-gateway hop.
+	}
+
+	std::uint32_t NetworkContext::LocalRoundTripMs() const
+	{
+		return IsClient() ? RoundTripMs(kInvalidConnection) : 0;
+	}
+
+	void NetworkContext::ForgetLatency(ConnectionId peer)
+	{
+		m_latency.erase(peer);
+	}
+
+	void NetworkContext::TickLatency(LatencyClock::time_point now)
+	{
+		if (!IsConnected()) return;
+		const auto tick = [&](ConnectionId peer)
+		{
+			auto& state = m_latency[peer];
+			const auto interval = state.outstanding ? std::chrono::seconds(5) : std::chrono::seconds(1);
+			if (state.sentBefore && now - state.sent < interval) return;
+			if (++m_nextLatencyNonce == 0) ++m_nextLatencyNonce;
+			state.nonce = m_nextLatencyNonce;
+			state.sent = now;
+			state.sentBefore = state.outstanding = true;
+			ByteWriter writer;
+			writer.U32(state.nonce);
+			m_transport.Send(peer, kChannelSnapshot, false, Frame(NetMessage::Ping, writer.View()));
+		};
+		if (IsClient()) tick(kInvalidConnection);
+		else if (IsHost()) for (const ConnectionId peer : m_session.Connections()) tick(peer);
+	}
+
+	void NetworkContext::HandleLatency(ConnectionId peer, NetMessage kind, std::span<const std::byte> payload, LatencyClock::time_point now)
+	{
+		if (!IsConnected() || payload.size() != sizeof(std::uint32_t)) return;
+		if (IsClient())
+		{
+			if (peer != kInvalidConnection) return;
+		}
+		else if (!IsHost() || std::find(m_session.Connections().begin(), m_session.Connections().end(), peer) == m_session.Connections().end())
+		{
+			return;
+		}
+		ByteReader reader(payload);
+		const std::uint32_t nonce = reader.U32();
+		if (!reader.Ok()) return;
+		auto found = m_latency.find(peer);
+		if (kind == NetMessage::Ping)
+		{
+			auto& state = m_latency[peer];
+			if (state.replied && now - state.lastReply < std::chrono::milliseconds(100)) return;
+			state.replied = true;
+			state.lastReply = now;
+			m_transport.Send(peer, kChannelSnapshot, false, Frame(NetMessage::Pong, payload));
+		}
+		else if (kind == NetMessage::Pong && found != m_latency.end())
+		{
+			auto& state = found->second;
+			if (!state.outstanding || state.nonce != nonce || now < state.sent || now - state.sent > std::chrono::seconds(5)) return;
+			const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - state.sent).count();
+			state.sample = static_cast<std::uint32_t>(elapsed);
+			state.sampled = true;
+			state.outstanding = false;
+		}
 	}
 
 	void NetworkContext::ConfigureTraversalFromSettings()
@@ -526,6 +603,9 @@ namespace aether::net
 		{
 			return {};
 		}
+#if defined(__EMSCRIPTEN__)
+		const Entity root = m_webPrefabSpawner ? m_webPrefabSpawner(prefab, position) : Entity{};
+#else
 		const auto description = aether::app::scene::ReadPrefabFile(prefab);
 		if (!description.has_value())
 		{
@@ -536,6 +616,7 @@ namespace aether::net
 		const glm::mat4 xform = glm::translate(glm::mat4(1.0f), position);
 		const Entity root = aether::app::scene::InstantiatePrefab(*description, world,
 		        aether::app::scene::MakeApplySceneDeps(m_services), xform, nullptr, /*markTransient=*/true);
+#endif
 		if (!root.IsValid())
 		{
 			return {};
@@ -672,6 +753,9 @@ namespace aether::net
 			// scenes - or a name a peer built to reach outside the prefab directory.
 			return;
 		}
+#if defined(__EMSCRIPTEN__)
+		const Entity root = m_webPrefabSpawner ? m_webPrefabSpawner(msg.prefab, msg.position) : Entity{};
+#else
 		const auto description = aether::app::scene::ReadPrefabFile(msg.prefab);
 		if (!description.has_value())
 		{
@@ -682,6 +766,7 @@ namespace aether::net
 		const glm::mat4 xform = glm::translate(glm::mat4(1.0f), msg.position);
 		const Entity root = aether::app::scene::InstantiatePrefab(*description, world,
 		        aether::app::scene::MakeApplySceneDeps(m_services), xform, nullptr, /*markTransient=*/true);
+#endif
 		if (!root.IsValid())
 		{
 			return;

@@ -110,11 +110,33 @@ namespace aether::app::scene::detail
 	// Defined in SceneSerializerApply.cpp; thread-local like the rest of the apply state.
 	std::unordered_map<std::uint32_t, std::vector<DeferredScriptNodeRef>>& DeferredScriptNodeRefs();
 
+	// Missing streamed script references remain keyed by stable node IDs, never
+	// by transient entity handles. expected is the last value applied to the script.
+	struct StreamingScriptNodeReference
+	{
+		std::uint64_t ownerNode = 0;
+		std::uint64_t targetNode = 0;
+		std::size_t scriptIndex = 0;
+		std::string scriptType;
+		std::string property;
+		std::uint32_t expected = 0;
+	};
+	struct StreamingScriptNodeReferences
+	{
+		std::vector<StreamingScriptNodeReference> entries;
+	};
+
 	// The include list of the scene currently applied to a World, kept in its registry
 	// context so CaptureScene can re-emit it (included entities themselves are transient).
 	struct ActiveSceneIncludes
 	{
 		std::vector<std::string> scenes;
+	};
+
+	// Authored root declarations survive capture independently of loaded chunks.
+	struct ActiveStreamingRegions
+	{
+		std::vector<streaming::Region> regions;
 	};
 
 	// The environment block the scene file last applied to a World, kept so CaptureScene can

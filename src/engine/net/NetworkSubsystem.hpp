@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <unordered_set>
 
 #include <memory>
 
@@ -15,6 +16,7 @@ struct _ENetPeer;
 
 namespace aether::net
 {
+	struct WebSocketState;
 	// ENet transport. Deliberately knows nothing about entities, components or
 	// replication - it moves bytes between peers and reports connection events.
 	// The replication layer in src/app/net sits on top of this.
@@ -33,6 +35,13 @@ namespace aether::net
 
 		bool Host(std::uint16_t port, int maxPeers);
 		bool Connect(std::string_view host, std::uint16_t port);
+#ifdef __EMSCRIPTEN__
+		// Configure before Host/Connect. The gateway enforces its own origin, token,
+		// room and native-target policy; the browser never opens a native socket.
+		void ConfigureWebGateway(std::string_view url, std::string_view token, std::string_view room = {}, std::string_view targetAlias = {});
+		void SetWebGatewayRoom(std::string_view room);
+		[[nodiscard]] bool WebGatewayOpen() const;
+#endif
 
 		// Connects to a peer over the socket this transport ALREADY owns, rather than
 		// binding a new one.
@@ -79,7 +88,11 @@ namespace aether::net
 		// that never asks for traversal behaves exactly as it did before.
 		[[nodiscard]] NatTraversal* Traversal() const
 		{
+#ifdef __EMSCRIPTEN__
+			return nullptr;
+#else
 			return m_traversal.get();
+#endif
 		}
 
 		[[nodiscard]] std::span<const NetEvent> Events() const
@@ -132,7 +145,16 @@ namespace aether::net
 
 		_ENetHost* m_host = nullptr;
 		_ENetPeer* m_serverPeer = nullptr; // client only
+#ifndef __EMSCRIPTEN__
 		std::unique_ptr<NatTraversal> m_traversal;
+#else
+		std::string m_gatewayUrl;
+		std::string m_gatewayToken;
+		std::string m_gatewayRoom;
+		std::string m_gatewayTargetAlias;
+		std::shared_ptr<WebSocketState> m_webSocket;
+		std::unordered_set<ConnectionId> m_webPeers;
+#endif
 		NetRole m_role = NetRole::Offline;
 		ConnectionId m_localId = kInvalidConnection;
 		ConnectionId m_nextPeerId = 1;

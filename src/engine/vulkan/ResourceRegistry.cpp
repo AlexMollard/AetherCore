@@ -293,6 +293,65 @@ namespace aether
 		return handle;
 	}
 
+	gpu::DeviceSize ResourceRegistry::GetMappedBufferAllocationRequirement(const gpu::MappedBufferDesc& desc) const noexcept
+	{
+		if (m_device == VK_NULL_HANDLE || desc.size == 0)
+		{
+			return 0;
+		}
+		const VkBufferUsageFlags2CreateInfo usageFlags2{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+		        .usage = gpu::ToVk(desc.usage),
+		};
+		VkBufferCreateInfo info{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .pNext = &usageFlags2,
+		        .size = desc.size,
+		        .usage = 0,
+		};
+		if (m_sharedBufferFamilyCount > 1)
+		{
+			info.sharingMode = VK_SHARING_MODE_CONCURRENT;
+			info.queueFamilyIndexCount = m_sharedBufferFamilyCount;
+			info.pQueueFamilyIndices = m_sharedBufferFamilies;
+		}
+		const VkDeviceBufferMemoryRequirements query{
+		        .sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS,
+		        .pCreateInfo = &info,
+		};
+		VkMemoryRequirements2 requirements{.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+		vkGetDeviceBufferMemoryRequirements(m_device, &query, &requirements);
+		return requirements.memoryRequirements.size;
+	}
+
+	gpu::DeviceSize ResourceRegistry::GetTextureAllocationRequirement(const gpu::TextureDesc& desc) const noexcept
+	{
+		if (m_device == VK_NULL_HANDLE || desc.extent.width == 0 || desc.extent.height == 0 || desc.mipLevels == 0 || desc.arrayLayers == 0)
+		{
+			return 0;
+		}
+		const VkImageCreateInfo info{
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		        .imageType = VK_IMAGE_TYPE_2D,
+		        .format = gpu::ToVk(desc.format),
+		        .extent = {.width = desc.extent.width, .height = desc.extent.height, .depth = 1u},
+		        .mipLevels = desc.mipLevels,
+		        .arrayLayers = desc.arrayLayers,
+		        .samples = VK_SAMPLE_COUNT_1_BIT,
+		        .tiling = VK_IMAGE_TILING_OPTIMAL,
+		        .usage = gpu::ToVk(desc.usage),
+		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+		const VkDeviceImageMemoryRequirements query{
+		        .sType = VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS,
+		        .pCreateInfo = &info,
+		};
+		VkMemoryRequirements2 requirements{.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+		vkGetDeviceImageMemoryRequirements(m_device, &query, &requirements);
+		return requirements.memoryRequirements.size;
+	}
+
 	gpu::BufferHandle ResourceRegistry::CreateMappedBuffer(const gpu::MappedBufferDesc& desc, std::source_location loc) noexcept
 	{
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
@@ -1410,6 +1469,14 @@ namespace aether
 		return static_cast<std::uint32_t>(total);
 	}
 
+	void ResourceRegistry::DeferDestructionCallback(std::function<void()> callback)
+	{
+		if (callback)
+		{
+			m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{.fn = std::move(callback)});
+		}
+	}
+
 	void ResourceRegistry::AdvanceFrame()
 	{
 		const std::lock_guard lock(gpu::ResourceRegistry::BufferMutex());
@@ -1522,6 +1589,30 @@ namespace aether::gpu
 	{
 		s_reg = static_cast<::aether::ResourceRegistry*>(desc.backendRegistry);
 		AE_ASSERT(s_reg != nullptr, "ResourceRegistry forwarding pointer is null.");
+	}
+
+	void ResourceRegistry::DeferDestructionCallback(std::function<void()> callback)
+	{
+		const std::lock_guard lock(BufferMutex());
+		s_reg->DeferDestructionCallback(std::move(callback));
+	}
+
+	DeviceSize ResourceRegistry::GetTextureAllocationRequirement(const TextureDesc& desc) noexcept
+	{
+		const std::lock_guard lock(BufferMutex());
+		return s_reg ? s_reg->GetTextureAllocationRequirement(desc) : 0;
+	}
+
+	DeviceSize ResourceRegistry::GetBufferAllocationRequirement(const BufferDesc& desc) noexcept
+	{
+		const std::lock_guard lock(BufferMutex());
+		return s_reg ? s_reg->GetMappedBufferAllocationRequirement(MappedBufferDesc{.size = desc.size, .usage = desc.usage}) : 0;
+	}
+
+	DeviceSize ResourceRegistry::GetMappedBufferAllocationRequirement(const MappedBufferDesc& desc) noexcept
+	{
+		const std::lock_guard lock(BufferMutex());
+		return s_reg ? s_reg->GetMappedBufferAllocationRequirement(desc) : 0;
 	}
 
 	BufferHandle ResourceRegistry::CreateBuffer(const BufferDesc& d, std::source_location loc) noexcept

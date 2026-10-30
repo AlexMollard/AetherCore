@@ -62,6 +62,17 @@ namespace aether::io
 		AE_UNEXPECTED(AetherError::FileSystem("overlay: not found: " + std::string(relativePath)));
 	}
 
+	Expected<std::vector<std::byte>> OverlayBackend::ReadReserved(std::string_view relativePath, const std::function<bool(std::size_t)>& reserve) const
+	{
+		for (const auto& layer : m_layers)
+		{
+			const auto path = ApplyPrefix(layer.prefix, relativePath);
+			if (layer.backend->Exists(path))
+				return layer.backend->ReadReserved(path, reserve);
+		}
+		AE_UNEXPECTED(AetherError::FileSystem("overlay: not found: " + std::string(relativePath)));
+	}
+
 	Expected<std::unique_ptr<std::istream>> OverlayBackend::OpenStream(std::string_view relativePath) const
 	{
 		for (const auto& layer: m_layers)

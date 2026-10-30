@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <source_location>
 #include <span>
@@ -157,6 +158,16 @@ namespace aether::gpu
 		// Serializes registry pools, resolved-state lookups and pending GPU destruction.
 		[[nodiscard]] static std::recursive_mutex& BufferMutex() noexcept;
 		static void Initialize(const ResourceRegistryInitDesc& desc) noexcept;
+
+		// Run after destructions already queued in the current ring slot. The
+		// callback runs under the registry lock and must not outlive its captures.
+		static void DeferDestructionCallback(std::function<void()> callback);
+
+		// Driver-reported allocation sizes, queried before allocating. Zero means
+		// the descriptor is invalid or the native device is unavailable.
+		[[nodiscard]] static DeviceSize GetTextureAllocationRequirement(const TextureDesc& desc) noexcept;
+		[[nodiscard]] static DeviceSize GetBufferAllocationRequirement(const BufferDesc& desc) noexcept;
+		[[nodiscard]] static DeviceSize GetMappedBufferAllocationRequirement(const MappedBufferDesc& desc) noexcept;
 
 		[[nodiscard]] static BufferHandle CreateBuffer(const BufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
 		[[nodiscard]] static BufferHandle CreateMappedBuffer(const MappedBufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;

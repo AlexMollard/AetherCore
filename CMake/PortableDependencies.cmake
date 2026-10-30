@@ -1,4 +1,25 @@
 # Shared native/browser versions. No desktop discovery or workers here.
+# ── Audio (mixing + decoding) ─────────────────────────────────────────────────
+# miniaudio: single-header, public domain, Windows/Linux (WASAPI/ALSA + null),
+# built-in decoders for WAV/MP3/FLAC. Chosen over OpenAL/SDL_mixer
+# because it needs no SDK or system library - CPM fetches one header and the
+# engine compiles its implementation into exactly one TU (AudioSubsystem.cpp).
+CPMAddPackage(
+    NAME miniaudio
+    GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+    GIT_TAG        0.11.22
+    GIT_SHALLOW    TRUE
+    DOWNLOAD_ONLY  YES
+)
+
+# Shared runtime streaming metadata and editor/control JSON use one pinned header library.
+CPMAddPackage(
+    NAME nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+    GIT_SHALLOW    TRUE
+    OPTIONS "JSON_BuildTests OFF"
+)
 CPMAddPackage(
     NAME glm
     GIT_REPOSITORY https://github.com/g-truc/glm

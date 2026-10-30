@@ -4,10 +4,12 @@
 if(AETHERCORE_WEB_RUNTIME)
     include(WebSources)
     add_library(Engine STATIC ${AETHER_WEB_ENGINE_SOURCES})
+    set_source_files_properties(audio/AudioSubsystem.cpp PROPERTIES COMPILE_DEFINITIONS "MA_NO_DEVICE_IO;MA_NO_THREADING")
     target_compile_options(Engine PRIVATE --use-port=emdawnwebgpu)
     target_include_directories(Engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
     target_include_directories(Engine PUBLIC "${CMAKE_SOURCE_DIR}/src/include" "${xxHash_SOURCE_DIR}")
-    target_link_libraries(Engine PUBLIC glm::glm EnTT::EnTT box2d zstd::libzstd_static Jolt)
+    target_include_directories(Engine SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
+    target_link_libraries(Engine PUBLIC glm::glm EnTT::EnTT box2d zstd::libzstd_static Jolt nlohmann_json::nlohmann_json)
     target_include_directories(Engine PUBLIC "${joltphysics_SOURCE_DIR}")
     target_link_libraries(Engine PUBLIC tomlplusplus::tomlplusplus)
     target_compile_definitions(Engine PUBLIC TOML_EXCEPTIONS=0 GLM_ENABLE_EXPERIMENTAL)
@@ -53,6 +55,7 @@ target_link_libraries(Engine
     PRIVATE
         box2d
         freetype
+        nlohmann_json::nlohmann_json
 )
 
 # Aftermath (dev-only GPU crash diagnostics) is delay-loaded so its DLL is never a

@@ -4,8 +4,10 @@
 
 #include <doctest/doctest.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "assets/GltfAsset.hpp"
+#include "assets/ExternalAnimation.hpp"
 #include "assets/ModelPose.hpp"
 #include "scene/Components.hpp"
 
@@ -57,6 +59,140 @@ namespace
 		return pose->nodeWorld[0][3].x;
 	}
 } // namespace
+
+TEST_CASE("external animation parser validates disk data and drives an overriding pose")
+{
+	std::vector<std::byte> bytes;
+	const auto append = [&bytes](const auto& value) {
+		const auto* first = reinterpret_cast<const std::byte*>(&value);
+		bytes.insert(bytes.end(), first, first + sizeof(value));
+	};
+	AnimHeaderDisk header;
+	header.channelCount = 1;
+	header.nameLen = 4;
+	header.flags = ANIM_FLAG_HAS_BONE_NAMES;
+	append(header);
+	for (char c : std::string_view("Walk")) append(c);
+	ChannelHeaderDisk channel;
+	channel.keyCount = 2;
+	append(channel);
+	const std::uint16_t nameLength = 4;
+	append(nameLength);
+	for (char c : std::string_view("Bone")) append(c);
+	const float t0 = 0.0f, t1 = 1.0f;
+	append(t0); append(t1);
+	const float values[] = {0, 0, 0, 0, 4, 0, 0, 0};
+	for (float value : values) append(value);
+	for (std::size_t n = 0; n < bytes.size(); ++n)
+	{
+		auto truncated = bytes;
+		truncated.resize(n);
+		CHECK_FALSE(ParseExternalAnimation(truncated).has_value());
+	}
+	auto parsed = ParseExternalAnimation(bytes);
+	REQUIRE(parsed.has_value());
+	CHECK(parsed->name == "Walk");
+	GltfAsset asset;
+	asset.nodes.resize(2);
+	asset.nodes[1].name = "mixamorig:Bone";
+	const std::vector<std::uint32_t> joints{1};
+	RemapExternalAnimation(*parsed, joints, [&](std::uint32_t node) -> std::string_view { return asset.nodes[node].name; });
+	CHECK(parsed->channels[0].nodeIndex == 1);
+	asset.animations.push_back(std::move(*parsed));
+	const auto pose = EvaluateModelPose(asset, 0u, 0.5f, false);
+	REQUIRE(pose.has_value());
+	CHECK(pose->nodeWorld[1][3].x == doctest::Approx(2.0f));
+	GltfAnimation unmatched;
+	GltfAnimationChannel missing;
+	missing.nodeIndex = 0;
+	missing.boneName = "missing";
+	unmatched.channels.push_back(missing);
+	RemapExternalAnimation(unmatched, joints, [&](std::uint32_t node) -> std::string_view { return asset.nodes[node].name; });
+	CHECK(unmatched.channels[0].nodeIndex == UINT32_MAX);
+	bytes[0] = std::byte{0};
+	CHECK_FALSE(ParseExternalAnimation(bytes).has_value());
+}
+
+TEST_CASE("external cubic clips retain tangent triples and reject truncated values")
+{
+	std::vector<std::byte> bytes;
+	const auto append = [&bytes](const auto& value)
+	{
+		const auto* first = reinterpret_cast<const std::byte*>(&value);
+		bytes.insert(bytes.end(), first, first + sizeof(value));
+	};
+	AnimHeaderDisk header;
+	header.channelCount = 1;
+	append(header);
+	ChannelHeaderDisk channel;
+	channel.keyCount = 2;
+	channel.interp = static_cast<std::uint8_t>(AnimInterpDisk::CubicSpline);
+	append(channel);
+	append(0.0f);
+	append(1.0f);
+	for (const glm::vec4 value: {glm::vec4(0), glm::vec4(0), glm::vec4(0), glm::vec4(0), glm::vec4(2, 0, 0, 0), glm::vec4(0)})
+	{
+		append(value);
+	}
+	auto clip = ParseExternalAnimation(bytes);
+	REQUIRE(clip.has_value());
+	GltfAsset asset;
+	asset.nodes.resize(1);
+	asset.animations.push_back(std::move(*clip));
+	const auto pose = EvaluateModelPose(asset, 0u, 0.25f, false);
+	REQUIRE(pose.has_value());
+	CHECK(pose->nodeWorld[0][3].x == doctest::Approx(0.3125f));
+	bytes.pop_back();
+	CHECK_FALSE(ParseExternalAnimation(bytes).has_value());
+}
+
+TEST_CASE("legacy animation versions retain their header layouts and cubic rotations match native sampling")
+{
+	for (std::uint32_t version: {1u, 2u, 3u, 4u})
+	{
+		std::vector<std::byte> bytes;
+		const auto append = [&bytes](const auto& value)
+		{
+			const auto* first = reinterpret_cast<const std::byte*>(&value);
+			bytes.insert(bytes.end(), first, first + sizeof(value));
+		};
+		AnimHeaderDisk header;
+		header.version = version;
+		header.channelCount = 1;
+		const auto* raw = reinterpret_cast<const std::byte*>(&header);
+		bytes.insert(bytes.end(), raw, raw + (version < 3 ? 14 : sizeof(header)));
+		ChannelHeaderDisk channel;
+		channel.path = static_cast<std::uint8_t>(AnimPathDisk::Rotation);
+		channel.interp = version == 4 ? 2 : 0;
+		channel.keyCount = 2;
+		append(channel);
+		append(0.f);
+		append(1.f);
+		std::vector<glm::vec4> values;
+		if (version == 4)
+			values = {{0, 0, 0, 0}, {0, 0, 0, 2}, {0, 0, 1, 0}, {0, 0, -1, 0}, {0, 0, 2, 0}, {0, 0, 0, 0}};
+		else
+			values = {{0, 0, 0, 2}, {0, 0, 2, 0}};
+		for (const auto& value: values) append(value);
+		auto parsed = ParseExternalAnimation(bytes);
+		REQUIRE(parsed.has_value());
+		GltfAsset asset;
+		asset.nodes.resize(1);
+		asset.animations.push_back(std::move(*parsed));
+		const auto pose = EvaluateModelPose(asset, 0u, 0.25f, false);
+		REQUIRE(pose.has_value());
+		float times[] = {0.f, 1.f};
+		native_sampling::GpuChannel gpu;
+		gpu.interpolation = channel.interp;
+		gpu.timesCount = 2;
+		const auto rotation = native_sampling::SampleRotation(gpu, 0.25f, times, values.data());
+		CHECK(glm::length(rotation) == doctest::Approx(1.f));
+		const auto expected = glm::mat4_cast(glm::quat(rotation.w, rotation.x, rotation.y, rotation.z));
+		for (int column = 0; column < 3; ++column)
+			for (int row = 0; row < 3; ++row)
+				CHECK(pose->nodeWorld[0][column][row] == doctest::Approx(expected[column][row]));
+	}
+}
 
 TEST_CASE("model pose composes matrix and TRS nodes in parent order")
 {

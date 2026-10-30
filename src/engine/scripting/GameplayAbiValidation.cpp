@@ -42,7 +42,7 @@ namespace aether::scripting
 			return AE_GAMEPLAY_ABI_MISMATCH;
 		}
 		if (api.initialize == nullptr || api.shutdown == nullptr || api.getTypeCount == nullptr || api.getTypeInfo == nullptr || api.getPropertyInfo == nullptr || api.create == nullptr || api.destroy == nullptr || api.attach == nullptr
-		        || api.update == nullptr || api.detach == nullptr || api.getProperty == nullptr || api.setProperty == nullptr || api.getDefaultProperty == nullptr)
+		        || api.update == nullptr || api.detach == nullptr || api.getProperty == nullptr || api.setProperty == nullptr || api.getDefaultProperty == nullptr || api.captureStreamingState == nullptr || api.restoreStreamingState == nullptr)
 		{
 			return AE_GAMEPLAY_INVALID_ARGUMENT;
 		}

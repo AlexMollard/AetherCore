@@ -12,22 +12,22 @@ TEST_CASE("Gameplay ABI rejects version and size mismatch without stale callable
 {
 	AetherGameplayModuleApi api{};
 	api.context = 88;
-	CHECK(QueryGameplayModule(nullptr, 2, sizeof(api), &api) == AE_GAMEPLAY_ABI_MISMATCH);
+	CHECK(QueryGameplayModule(nullptr, AE_GAMEPLAY_ABI_MAJOR + 1, sizeof(api), &api) == AE_GAMEPLAY_ABI_MISMATCH);
 	CHECK(api.context == 0);
 	std::array<unsigned char, sizeof(api) + 16> storage;
 	storage.fill(0xA5);
 	auto* out = reinterpret_cast<AetherGameplayModuleApi*>(storage.data());
-	CHECK(PublishGameplayModule(api, 1, 8, out) == AE_GAMEPLAY_BUFFER_TOO_SMALL);
+	CHECK(PublishGameplayModule(api, AE_GAMEPLAY_ABI_MAJOR, 8, out) == AE_GAMEPLAY_BUFFER_TOO_SMALL);
 	for (size_t i = 0; i < 8; ++i)
 	{
 		CHECK(storage[i] == 0);
 	}
 	CHECK(storage[8] == 0xA5);
-	CHECK(PublishGameplayModule(api, 1, sizeof(api) + 16, out) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(PublishGameplayModule(api, AE_GAMEPLAY_ABI_MAJOR, sizeof(api) + 16, out) == AE_GAMEPLAY_INVALID_ARGUMENT);
 	CHECK(storage[sizeof(api)] == 0xA5);
 	CHECK(ValidateGameplayModule(api) == AE_GAMEPLAY_ABI_MISMATCH);
 	api.structSize = sizeof(api);
-	api.abiMajor = 1;
+	api.abiMajor = AE_GAMEPLAY_ABI_MAJOR;
 	CHECK(ValidateGameplayModule(api) == AE_GAMEPLAY_INVALID_ARGUMENT);
 }
 
@@ -108,6 +108,14 @@ namespace
 		{
 			return AE_GAMEPLAY_OK;
 		};
+		api.captureStreamingState = [](uint64_t, AetherGameplayInstance, AetherGameplayUtf8Buffer output) -> int32_t
+		{
+			return CopyGameplayUtf8({nullptr, 0}, output);
+		};
+		api.restoreStreamingState = [](uint64_t, AetherGameplayInstance, AetherGameplayUtf8) -> int32_t
+		{
+			return AE_GAMEPLAY_OK;
+		};
 		return api;
 	}
 } // namespace
@@ -119,19 +127,19 @@ TEST_CASE("Gameplay query accepts complete tables and clears failures before exp
 	{
 		return PublishGameplayModule(CompleteModule(), major, size, out);
 	};
-	REQUIRE(QueryGameplayModule(query, 1, sizeof(api), &api) == AE_GAMEPLAY_OK);
+	REQUIRE(QueryGameplayModule(query, AE_GAMEPLAY_ABI_MAJOR, sizeof(api), &api) == AE_GAMEPLAY_OK);
 	CHECK(api.context == 123);
 	REQUIRE(api.update != nullptr);
 	auto missing = CompleteModule();
 	missing.getDefaultProperty = nullptr;
-	CHECK(PublishGameplayModule(missing, 1, sizeof(api), &api) == AE_GAMEPLAY_INVALID_ARGUMENT);
+	CHECK(PublishGameplayModule(missing, AE_GAMEPLAY_ABI_MAJOR, sizeof(api), &api) == AE_GAMEPLAY_INVALID_ARGUMENT);
 	CHECK(api.update == nullptr);
 	auto failure = +[](uint32_t, uint32_t, AetherGameplayModuleApi* out) -> int32_t
 	{
 		*out = CompleteModule();
 		return AE_GAMEPLAY_SCRIPT_ERROR;
 	};
-	CHECK(QueryGameplayModule(failure, 1, sizeof(api), &api) == AE_GAMEPLAY_SCRIPT_ERROR);
+	CHECK(QueryGameplayModule(failure, AE_GAMEPLAY_ABI_MAJOR, sizeof(api), &api) == AE_GAMEPLAY_SCRIPT_ERROR);
 	CHECK(api.context == 0);
 	CHECK(api.update == nullptr);
 }

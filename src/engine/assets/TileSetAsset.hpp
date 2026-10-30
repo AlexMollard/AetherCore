@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -13,6 +14,7 @@
 
 namespace aether
 {
+	class TomlConfig;
 	enum class TileCollisionKind : std::uint8_t
 	{
 		None = 0,
@@ -96,6 +98,8 @@ namespace aether
 		[[nodiscard]] TileDefinition* Find(AssetObjectId id) noexcept;
 
 		[[nodiscard]] Expected<void> Save(const std::filesystem::path& path) const;
+		[[nodiscard]] static Expected<TileSetAsset> LoadBytes(std::string_view text, const std::function<bool(std::size_t)>& reserve);
+		[[nodiscard]] static Expected<TileSetAsset> ParseConfig(const TomlConfig& config, const std::function<bool(std::size_t)>& reserve);
 		[[nodiscard]] static Expected<TileSetAsset> Load(const std::filesystem::path& path);
 	};
 } // namespace aether

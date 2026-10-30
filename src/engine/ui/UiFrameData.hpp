@@ -24,4 +24,4 @@ namespace aether::ui
 		std::vector<UiMaterialDraw> materials;
 		std::vector<UiEffectDraw> effects;
 	};
-}
+} // namespace aether::ui

@@ -83,16 +83,16 @@ internal static unsafe class Bootstrap
             outApi->SetEditorWindowVisible = &ScriptRegistry.SetEditorWindowVisible;
 
             // Networking
-#if !AETHERCORE_BROWSER
             outApi->GetReplicatedPropertyIndices = &ScriptRegistry.GetReplicatedPropertyIndices;
             outApi->GetNetRpcMethod = &ScriptRegistry.GetNetRpcMethod;
             outApi->InvokeNetRpc = &ScriptRegistry.InvokeNetRpc;
-#endif
         outApi->CompileScripts = &Api_CompileScripts;
 
             // Appended at the end - see Abi.cs's InvokeOwnershipChanged for why.
             outApi->InvokeOwnershipChanged = &ScriptRegistry.InvokeOwnershipChanged;
             outApi->InvokeScriptCommand = &ScriptRegistry.InvokeScriptCommand;
+            outApi->CaptureStreamingState = &ScriptRegistry.CaptureStreamingState;
+            outApi->RestoreStreamingState = &ScriptRegistry.RestoreStreamingState;
 
             Log.Info($"AetherCore bootstrap OK (.NET {Environment.Version})");
             return 0;

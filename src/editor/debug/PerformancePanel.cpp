@@ -11,10 +11,13 @@
 
 #include <imgui.h>
 #include <implot.h>
+#include <nlohmann/json.hpp>
 
 #include "Icons.hpp"
 
 #include "layers/AppLayer.hpp"
+#include "scene/WorldStreaming.hpp"
+#include "scripting/SceneContext.hpp"
 #include "utils/FrameStats.hpp"
 #include "utils/Profiler.hpp"
 
@@ -22,6 +25,35 @@ namespace aether::editor
 {
 	namespace
 	{
+		void DrawStreamingValue(const char* label, const nlohmann::json& value)
+		{
+			if (value.is_object() || value.is_array())
+			{
+				if (ImGui::TreeNode(label))
+				{
+					if (value.is_object())
+					{
+						for (auto it = value.begin(); it != value.end(); ++it)
+							DrawStreamingValue(it.key().c_str(), it.value());
+					}
+					else
+					{
+						for (std::size_t i = 0; i < value.size(); ++i)
+						{
+							const auto index = std::to_string(i);
+							DrawStreamingValue(index.c_str(), value[i]);
+						}
+					}
+					ImGui::TreePop();
+				}
+			}
+			else
+			{
+				const auto text = value.is_string() ? value.get<std::string>() : value.dump();
+				ImGui::TextWrapped("%s: %s", label, text.c_str());
+			}
+		}
+
 		ImVec4 SmoothnessColor(const Smoothness smoothness)
 		{
 			switch (smoothness)
@@ -403,6 +435,21 @@ namespace aether::editor
 		DrawPhaseBreakdown();
 		DrawLatency(context);
 		DrawSimVsReal();
+		ImGui::SeparatorText("Streaming residency and pressure");
+		if (const auto* scene = context.TryGet<app::scripting::SceneContext>(); scene && scene->streaming)
+		{
+			const auto diagnostics = nlohmann::json::parse(scene->streaming->GetDiagnosticsJson(), nullptr, false);
+			if (diagnostics.is_object())
+			{
+				for (auto it = diagnostics.begin(); it != diagnostics.end(); ++it)
+					DrawStreamingValue(it.key().c_str(), it.value());
+			}
+			else
+				ImGui::TextUnformatted("Streaming diagnostics unavailable (invalid response).");
+		}
+		else
+			ImGui::TextUnformatted("Streaming inactive.");
+		ImGui::TextDisabled("Renderer allocator and driver baseline: render.memory");
 		DrawStutterList(stats);
 		ImGui::End();
 	}

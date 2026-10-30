@@ -3,6 +3,7 @@
 #include <expected>
 #include <filesystem>
 #include <istream>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -52,6 +53,7 @@ namespace aether::io
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 
 		[[nodiscard]] static Expected<std::vector<std::byte>> ReadFile(std::string_view virtualPath);
+		[[nodiscard]] static Expected<std::vector<std::byte>> ReadFileReserved(std::string_view virtualPath, const std::function<bool(std::size_t)>& reserve);
 
 		[[nodiscard]] static Expected<std::string> ReadFileText(std::string_view virtualPath);
 
@@ -69,6 +71,9 @@ namespace aether::io
 
 		// file has been read on the background I/O thread.  The calling
 		[[nodiscard]] static coro::task<std::vector<std::byte>> ReadFileAsync(std::string_view virtualPath, IOPriority priority = IOPriority::Normal);
+
+		// Schedule immutable file/decode work on the existing priority I/O worker.
+		static void Submit(IOPriority priority, std::function<void()> job);
 
 		static void Flush();
 	};

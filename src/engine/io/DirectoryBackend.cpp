@@ -42,6 +42,11 @@ namespace aether::io
 
 	Expected<std::vector<std::byte>> DirectoryBackend::Read(std::string_view relativePath) const
 	{
+		return ReadReserved(relativePath, [](std::size_t) { return true; });
+	}
+
+	Expected<std::vector<std::byte>> DirectoryBackend::ReadReserved(std::string_view relativePath, const std::function<bool(std::size_t)>& reserve) const
+	{
 		std::string bestMatch;
 		auto fullPath = ResolveInsensitive(relativePath, &bestMatch);
 		if (!fullPath)
@@ -78,6 +83,8 @@ namespace aether::io
 		}
 
 		const auto size = file.tellg();
+		if (size < 0 || !reserve || !reserve(static_cast<std::size_t>(size)))
+			AE_UNEXPECTED(AetherError::FileSystem("File read reservation rejected: " + std::string(relativePath)));
 		file.seekg(0, std::ios::beg);
 
 		std::vector<std::byte> buffer(static_cast<std::size_t>(size));

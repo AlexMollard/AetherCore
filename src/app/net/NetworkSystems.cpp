@@ -133,6 +133,7 @@ namespace aether::net
 	void NetworkReceiveSystem::Update(World& world, float dt)
 	{
 		NetworkContext& context = m_context;
+		m_gameplayEvents.clear();
 		if (!context.IsActive())
 		{
 			// Offline is the overwhelmingly common case (every single-player game, and
@@ -145,6 +146,18 @@ namespace aether::net
 		}
 
 		context.Transport().Poll();
+#if defined(__EMSCRIPTEN__)
+		// A gateway close ends the entire transport, including every hosted peer.
+		// Handle it before traversal can clear the terminal transport event.
+		if (!context.Transport().IsActive())
+		{
+			m_gameplayEvents.push_back({1u, kInvalidConnection});
+			context.TickTraversal(world, dt);
+			context.Stop(world);
+			m_remote.clear();
+			return;
+		}
+#endif
 
 		// Real seconds, not the wall clock interpolation below reads instead: the
 		// traversal ladder's own timeouts (PortMapping's give-up window, the punch,
@@ -171,9 +184,11 @@ namespace aether::net
 			switch (event.kind)
 			{
 			case NetEvent::Kind::Connected:
+				m_gameplayEvents.push_back({0u, event.peer});
 				OnConnected(world, event.peer);
 				break;
 			case NetEvent::Kind::Disconnected:
+				m_gameplayEvents.push_back({1u, event.peer});
 				OnDisconnected(world, event.peer);
 				break;
 			case NetEvent::Kind::Data:
@@ -181,6 +196,7 @@ namespace aether::net
 				break;
 			}
 		}
+		context.TickLatency(NetworkContext::LatencyClock::now());
 
 		// After the inbound events, because a Welcome or a Spawn handled above is what
 		// establishes authority in the first place, and the entity a Spawn just created
@@ -366,6 +382,7 @@ namespace aether::net
 		}
 
 		context.Session().RemoveConnection(peer);
+		context.ForgetLatency(peer);
 		context.DropCacheFor(peer);
 		// The departed connection's RPC window goes with it: a connection id is
 		// reusable after a Stop/StartHost cycle, and the fresh peer must not inherit
@@ -393,6 +410,10 @@ namespace aether::net
 		// rather than throwing.
 		switch (kind)
 		{
+		case NetMessage::Ping:
+		case NetMessage::Pong:
+			context.HandleLatency(peer, kind, payload, NetworkContext::LatencyClock::now());
+			return;
 		// State travels in both directions under client authority, so neither of the
 		// next two can be gated by role the way the rest of this switch is. What
 		// replaces the role gate is the OWNERSHIP gate, and it is strictly stronger:

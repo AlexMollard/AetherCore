@@ -31,6 +31,41 @@ namespace aether
 		return mesh;
 	}
 
+	Mesh Mesh::CreateUninitialized(std::uint32_t vertexCount, std::uint32_t indexCount, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius)
+	{
+		Mesh mesh;
+		if (!vertexCount)
+			return mesh;
+		gpu::BufferDesc desc{};
+		desc.size = static_cast<gpu::DeviceSize>(vertexCount) * sizeof(Vertex);
+		desc.usage = gpu::BufferUsage::Vertex | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
+		desc.debugName = "Mesh.Vertex";
+		mesh.m_buffer = gpu::ResourceRegistry::CreateBuffer(desc);
+		if (!mesh.m_buffer.IsValid())
+			return {};
+		mesh.m_ownsBuffers = true;
+		mesh.m_vertexCount = vertexCount;
+		mesh.m_vertexDeviceAddress = gpu::ResourceRegistry::ResolveBuffer(mesh.m_buffer).deviceAddress;
+		if (indexCount)
+		{
+			desc.size = static_cast<gpu::DeviceSize>(indexCount) * sizeof(std::uint32_t);
+			desc.usage = gpu::BufferUsage::Index | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
+			desc.debugName = "Mesh.Index";
+			mesh.m_indexBuffer = gpu::ResourceRegistry::CreateBuffer(desc);
+			if (!mesh.m_indexBuffer.IsValid())
+				return {};
+			mesh.m_indexCount = indexCount;
+			mesh.m_indexDeviceAddress = gpu::ResourceRegistry::ResolveBuffer(mesh.m_indexBuffer).deviceAddress;
+		}
+		if (aabbMin)
+			mesh.m_aabbMin = glm::vec3(aabbMin[0], aabbMin[1], aabbMin[2]);
+		if (aabbMax)
+			mesh.m_aabbMax = glm::vec3(aabbMax[0], aabbMax[1], aabbMax[2]);
+		if (sphereCenter)
+			mesh.m_boundingSphere = glm::vec4(sphereCenter[0], sphereCenter[1], sphereCenter[2], sphereRadius);
+		return mesh;
+	}
+
 	Mesh Mesh::Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices, std::uint64_t* uploadTicket)
 	{
 		AE_PROFILE_ZONE();

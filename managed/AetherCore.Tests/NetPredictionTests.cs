@@ -12,12 +12,8 @@ namespace AetherCore.Tests;
 /// through a native P/Invoke this test host has no engine behind, and every entity here
 /// being invalid (<see cref="Entity.IsValid"/> false) means <see cref="Entity.Destroy"/>
 /// is never reached, so the queue's own bookkeeping is exercised with no native
-/// dependency. <see cref="Net.SpawnPredicted{T}"/>, <see cref="Net.TryTakePredictedSpawn{T}"/>
-/// and the native <c>aether_net_mark_predicted</c> fix-up all call straight through the
-/// SDK's public facades (see <c>Internal/EngineBackend.cs</c>'s remarks: those facades
-/// are never abstracted, even in tests) and so have no seam a headless test can reach -
-/// they are exercised instead by the C++-side authority/ownership analysis recorded in
-/// the batch report.
+/// dependency. The predicted-spawn hand-off and local ownership require a running
+/// engine and are exercised separately by native/browser gameplay probes.
 /// </summary>
 public sealed class NetPredictionTests
 {

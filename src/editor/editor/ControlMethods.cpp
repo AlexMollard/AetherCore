@@ -17,6 +17,7 @@
 #include <atomic>
 #include <chrono>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -78,6 +79,7 @@
 #include "scene/SceneSubsystem.hpp"
 #include "scene/SceneWorkflow.hpp"
 #include "scripting/SceneContext.hpp"
+#include "scene/WorldStreaming.hpp"
 #include "scene/World.hpp"
 #include "utils/LogRingBuffer.hpp"
 #include "utils/LogCategory.hpp"
@@ -2213,6 +2215,93 @@ namespace aether::editor
 			        return json{{"passes", arr}};
 		        }});
 
+		methods.push_back({"streaming.status", "streaming_status",
+		        "Live streaming regions, requests, asset residency and budgets. Render allocator and driver baseline is available separately through render.memory.",
+		        false, Obj(),
+		        [](const json&, MethodContext& ctx) -> json
+		        {
+			        auto* scene = ctx.services.TryGet<app::scripting::SceneContext>();
+			        if (!scene || !scene->streaming)
+				        return json{{"active", false}, {"regions", json::array()}, {"sources", json::array()}, {"requests", json::array()}, {"renderMemoryMethod", "render.memory"}};
+			        auto result = json::parse(scene->streaming->GetDiagnosticsJson(), nullptr, false);
+			        if (result.is_discarded() || !result.is_object())
+				        return json{{"error", "invalid streaming diagnostics"}};
+			        result["active"] = true;
+			        result["renderMemoryMethod"] = "render.memory";
+			        return result;
+		        }});
+
+		methods.push_back({"streaming.source", "streaming_source",
+		        "Set or remove a streaming source. Priority is 0 critical through 3 background.",
+		        true, Obj({{"id", StrProp()}, {"remove", BoolProp()}, {"position", kVec3}, {"loadRadius", NumProp()}, {"prefetchRadius", NumProp()}, {"priority", IntProp()}}, {"id"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scene = ctx.services.TryGet<app::scripting::SceneContext>();
+			        if (!scene || !scene->streaming) return json{{"error", "streaming inactive"}};
+			        if (!p.contains("id") || !p["id"].is_string()) return json{{"error", "id must be a string"}};
+			        const auto id = p["id"].get<std::string>();
+			        if (id.empty() || id.size() > 256) return json{{"error", "invalid source id"}};
+			        if (p.contains("remove") && !p["remove"].is_boolean()) return json{{"error", "remove must be boolean"}};
+			        if (p.value("remove", false)) return json{{"ok", scene->streaming->RemoveSource(id)}};
+			        if (!p.contains("position") || !p["position"].is_array() || p["position"].size() != 3 ||
+			                !p.contains("loadRadius") || !p["loadRadius"].is_number() || !p.contains("prefetchRadius") || !p["prefetchRadius"].is_number())
+				        return json{{"error", "position, loadRadius and prefetchRadius are required"}};
+			        if (p.contains("priority") && (!p["priority"].is_number_integer() || p["priority"].get<double>() < 0 || p["priority"].get<double>() > 3))
+				        return json{{"error", "priority must be 0..3"}};
+			        streaming::Source source;
+			        source.id = id;
+			        for (int i = 0; i < 3; ++i)
+			        {
+				        if (!p["position"][i].is_number()) return json{{"error", "position must contain numbers"}};
+				        source.position[i] = p["position"][i].get<float>();
+				        if (!std::isfinite(source.position[i])) return json{{"error", "position must be finite"}};
+			        }
+			        source.loadRadius = p["loadRadius"].get<float>();
+			        source.prefetchRadius = p["prefetchRadius"].get<float>();
+			        if (!std::isfinite(source.loadRadius) || !std::isfinite(source.prefetchRadius) || source.loadRadius < 0 || source.prefetchRadius < source.loadRadius)
+				        return json{{"error", "invalid source radii"}};
+			        source.priority = static_cast<io::IOPriority>(p.value("priority", 2));
+			        auto result = scene->streaming->SetSource(std::move(source));
+			        if (!result) return json{{"error", result.error().message}};
+			        return json{{"ok", true}};
+		        }});
+
+		methods.push_back({"streaming.request", "streaming_request",
+		        "Request a region for activation or prefetch; returns the request ID and current state.",
+		        true, Obj({{"region", StrProp()}, {"activate", BoolProp()}, {"priority", IntProp()}}, {"region"}),
+		        [](const json& p, MethodContext& ctx) -> json
+		        {
+			        auto* scene = ctx.services.TryGet<app::scripting::SceneContext>();
+			        if (!scene || !scene->streaming) return json{{"error", "streaming inactive"}};
+			        if (!p.contains("region") || !p["region"].is_string()) return json{{"error", "region must be a string"}};
+			        const auto region = p["region"].get<std::string>();
+			        if (region.empty() || region.size() > 256) return json{{"error", "invalid region id"}};
+			        if (p.contains("activate") && !p["activate"].is_boolean()) return json{{"error", "activate must be boolean"}};
+			        if (p.contains("priority") && (!p["priority"].is_number_integer() || p["priority"].get<double>() < 0 || p["priority"].get<double>() > 3))
+				        return json{{"error", "priority must be 0..3"}};
+			        const auto id = scene->streaming->Request(region, p.value("activate", true), static_cast<io::IOPriority>(p.value("priority", 2)));
+			        if (!id) return json{{"error", "request rejected"}};
+			        return json{{"id", id}, {"state", static_cast<std::uint32_t>(scene->streaming->GetRequestState(id))}};
+		        }});
+
+		for (const bool cancel : {true, false})
+		{
+			methods.push_back({cancel ? "streaming.cancel" : "streaming.release", cancel ? "streaming_cancel" : "streaming_release",
+			        cancel ? "Cancel a streaming request." : "Release a streaming request claim.",
+			        true, Obj({{"id", IntProp()}}, {"id"}),
+			        [cancel](const json& p, MethodContext& ctx) -> json
+			        {
+				        auto* scene = ctx.services.TryGet<app::scripting::SceneContext>();
+				        if (!scene || !scene->streaming) return json{{"error", "streaming inactive"}};
+				        if (!p.contains("id") || !p["id"].is_number_integer() || (!p["id"].is_number_unsigned() && p["id"].get<std::int64_t>() <= 0))
+					        return json{{"error", "id must be a positive integer"}};
+				        const auto id = p["id"].get<std::uint64_t>();
+				        if (!id) return json{{"error", "id must be a positive integer"}};
+				        const bool ok = cancel ? scene->streaming->Cancel(id) : scene->streaming->Release(id);
+				        return json{{"ok", ok}, {"id", id}, {"state", static_cast<std::uint32_t>(scene->streaming->GetRequestState(id))}};
+			        }});
+		}
+
 		methods.push_back({"render.stats",
 		        "render_stats",
 		        "Render-graph frame statistics: pass/barrier counts, transient-image cache hit/miss, and the transient GPU heap capacity vs. bytes used - the engine's per-frame allocation profile.",
@@ -2794,6 +2883,7 @@ namespace aether::editor
 				        }
 				        return json{{"error", "no setting named '" + key + "' (call settings.get with no 'key' to list every setting)"}};
 			        }
+			        if (key.starts_with("streaming.")) EngineSettingsIO::Sanitize(settings->Values());
 			        settings->ApplyField(key);
 			        settings->MarkDirty();
 			        if (p.value("save", false))

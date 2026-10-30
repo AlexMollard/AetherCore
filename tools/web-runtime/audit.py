@@ -3,6 +3,7 @@ import argparse
 import json
 import hashlib
 from pathlib import Path
+import re
 import subprocess
 
 
@@ -88,20 +89,45 @@ def wasm_imports(data):
 
 
 def audit_imports(imports):
+    websocket_imports = {
+        "emscripten_websocket_close", "emscripten_websocket_delete",
+        "emscripten_websocket_get_buffered_amount", "emscripten_websocket_is_supported",
+        "emscripten_websocket_new", "emscripten_websocket_send_binary",
+        "emscripten_websocket_send_utf8_text",
+        *(f"emscripten_websocket_set_on{event}_callback{suffix}"
+          for event in ("open", "message", "error", "close") for suffix in ("", "_on_thread")),
+    }
     forbidden = ("hostfxr", "nethost", "coreclr", "vulkan", "vkcreate", "enet_", "socket", "connect", "listen", "pthread_create", "thrd_create", "emscripten_thread_init")
     for module, name in imports:
+        if module == "env" and name in websocket_imports:
+            continue
         if any(token in (module + "." + name).lower() for token in forbidden):
             raise ValueError("Forbidden browser import: " + module + "." + name)
 
 
 def audit_sources(commands):
+    network_sources = {
+        "src/engine/net/roomcode.cpp",
+        *(f"src/app/net/{name.lower()}.cpp" for name in (
+            "NetworkContext", "NetworkSystems", "NetTraversalSessionWeb", "NetInterpolation",
+            "NetOwnership", "NetRagdoll", "NetRelevancy", "NetRewind", "NetRpc",
+            "NetRpcExports", "NetScriptFields", "NetSerialize", "NetSession",
+            "NetSnapshot", "NetSpawn", "NetVelocity", "ReplicationSchema", "BrowserScriptBridges")),
+    }
     sources = []
     for entry in commands:
         source = entry["file"].replace("\\", "/")
         lower = source.lower()
-        forbidden = ("/vulkan/", "/editor/", "/net/", "/enet", "/libplum", "iothread.cpp", "assetmanager.cpp", "/renderthread.cpp", "/logger.cpp", "dotnethost.cpp", "audio/audiosubsystem.cpp")
+        forbidden = ("/vulkan/", "/editor/", "/net/", "/enet", "/libplum", "iothread.cpp", "assetmanager.cpp", "/renderthread.cpp", "/logger.cpp", "dotnethost.cpp")
         command = entry.get("command", "") + " " + " ".join(entry.get("arguments", []))
-        if any(token in lower for token in forbidden) or "-pthread" in command:
+        allowed_network = any(lower == path or lower.endswith("/" + path) for path in network_sources)
+        audio = lower == "src/engine/audio/audiosubsystem.cpp" or lower.endswith("/src/engine/audio/audiosubsystem.cpp")
+        if "audio/audiosubsystem.cpp" in lower and not audio:
+            raise ValueError("Forbidden browser audio source: " + source)
+        if audio and not all(re.search(r"(?:^|\s)-D" + flag + r"(?:=1)?(?=\s|$)", command)
+                             for flag in ("AETHERCORE_WEB_RUNTIME", "MA_NO_DEVICE_IO", "MA_NO_THREADING")):
+            raise ValueError("Browser audio requires no-device, no-thread compilation: " + source)
+        if any(token in lower for token in forbidden if token != "/net/") or ("/net/" in lower and not allowed_network) or "-pthread" in command:
             raise ValueError("Forbidden browser source/worker: " + source)
         sources.append(source)
     if not any(source.endswith("scene/World.cpp") for source in sources):

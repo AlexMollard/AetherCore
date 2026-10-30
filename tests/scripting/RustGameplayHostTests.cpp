@@ -94,6 +94,14 @@ namespace
 				entity = value->entity;
 				return AE_GAMEPLAY_OK;
 			};
+			api.captureStreamingState = [](uint64_t, AetherGameplayInstance, AetherGameplayUtf8Buffer buffer)
+			{
+				return aether::scripting::CopyGameplayUtf8({nullptr, 0}, buffer);
+			};
+			api.restoreStreamingState = [](uint64_t, AetherGameplayInstance, AetherGameplayUtf8 state)
+			{
+				return aether::scripting::IsGameplayUtf8(state) ? AE_GAMEPLAY_OK : AE_GAMEPLAY_INVALID_ARGUMENT;
+			};
 			return api;
 		}
 	};

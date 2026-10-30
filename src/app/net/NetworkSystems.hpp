@@ -87,6 +87,15 @@ namespace aether::net
 		void OnDisconnected(World& world, ConnectionId peer);
 		void OnData(World& world, ConnectionId peer, std::span<const std::byte> data);
 
+		struct GameplayEvent
+		{
+			std::uint32_t code;
+			ConnectionId peer;
+		};
+		// Immutable snapshot for the current receive frame, including disconnects that
+		// tear the transport down. Consumers must not retain it across Update.
+		[[nodiscard]] const std::vector<GameplayEvent>& GameplayEvents() const { return m_gameplayEvents; }
+
 		// Read-only access to a remote entity's own interpolation buffer, keyed by
 		// net id - the same object ResolveTransforms samples every frame. Additive:
 		// exposes what was already private without changing Push()/Sample()'s
@@ -135,6 +144,7 @@ namespace aether::net
 		void ResolveTransforms(World& world);
 
 		NetworkContext& m_context;
+		std::vector<GameplayEvent> m_gameplayEvents;
 
 		// Last received pose per net id, kept apart from the rendered transform:
 		// a snapshot carries only the fields that changed, so reading "the transform"

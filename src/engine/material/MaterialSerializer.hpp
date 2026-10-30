@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -50,6 +53,8 @@ namespace aether
 		// Loads authored files, folder presets (properties.toml plus map aliases), and cooked binaries.
 		// Texture references remain VFS paths; callers own texture acquisition and shader interning.
 		[[nodiscard]] Expected<MaterialPresetSpec> Load(std::string_view path);
+		// Parse already-reserved file bytes without another filesystem read.
+		[[nodiscard]] Expected<MaterialPresetSpec> LoadBytes(std::string_view path, std::span<const std::byte> bytes, const std::function<bool(std::size_t)>& reserve);
 
 		// `path` is the material's own VFS path, used to resolve relative texture references.
 		// `ok` reports whether the text parsed. A malformed file yields a DEFAULT spec, and

@@ -816,6 +816,9 @@ TEST_CASE("Rust 3D clip catalog supplies clip names where the component has no a
 		{
 			return 0.0f;
 		}
+		std::optional<std::uint32_t> FindNode(Entity, std::string_view) const override { return {}; }
+		void Remap(Entity, assets::GltfAnimation&) const override {}
+		void Compile(World&, Entity) const override {}
 	} catalog;
 	World world;
 	const Entity actor = world.Create();

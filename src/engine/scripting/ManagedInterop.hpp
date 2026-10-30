@@ -115,6 +115,8 @@ namespace aether::scripting
 		// level baker). Returns 0 on success, nonzero on failure - the managed side has
 		// already reported the exception. Appended at the end, like every ABI addition.
 		std::int32_t (*InvokeScriptCommand)(const char* typeNameUtf8) = nullptr;
+		std::int32_t (*CaptureStreamingState)(std::uint64_t handle, char* buffer, std::uint32_t capacity, std::uint32_t* required) = nullptr;
+		std::int32_t (*RestoreStreamingState)(std::uint64_t handle, const char* state, std::uint32_t length) = nullptr;
 	};
 
 	// Returns 0 on success; nonzero signals an ABI/version mismatch (the sizes

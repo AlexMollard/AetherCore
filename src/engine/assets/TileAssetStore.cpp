@@ -5,18 +5,27 @@
 #include <optional>
 #include <utility>
 
+#include "io/FileSystem.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether
 {
+	namespace
+	{
+		std::string CacheKey(std::string_view path)
+		{
+			if (path.starts_with("uid://")) return io::FileSystem::ResolveAssetPath(path);
+			return std::string(path);
+		}
+	}
 	Expected<const TileSetAsset*> TileAssetStore::LoadTileSet(std::string_view path)
 	{
 		if (path.empty())
 		{
 			AE_UNEXPECTED(AetherError::Asset("Tile set path is empty."));
 		}
-		const std::string key(path);
+		const std::string key = CacheKey(path);
 		if (const auto it = m_tileSets.find(key); it != m_tileSets.end())
 		{
 			return &it->second;
@@ -33,7 +42,7 @@ namespace aether
 		{
 			AE_UNEXPECTED(AetherError::Asset("Tile map path is empty."));
 		}
-		const std::string key(path);
+		const std::string key = CacheKey(path);
 		if (const auto it = m_tileMaps.find(key); it != m_tileMaps.end())
 		{
 			return &it->second;
@@ -44,9 +53,25 @@ namespace aether
 		return &it->second;
 	}
 
+	bool TileAssetStore::PublishTileSet(std::string path, TileSetAsset tileSet)
+	{
+		return m_tileSets.emplace(std::move(path), std::move(tileSet)).second;
+	}
+
+	bool TileAssetStore::PublishTileMap(std::string path, TileMapAsset tileMap)
+	{
+		return m_tileMaps.emplace(std::move(path), std::move(tileMap)).second;
+	}
+
+	bool TileAssetStore::IsTileMapDirty(std::string_view path) const
+	{
+		const auto it = m_tileMaps.find(CacheKey(path));
+		return it != m_tileMaps.end() && it->second.dirty;
+	}
+
 	TileMapAsset* TileAssetStore::MutableTileMap(std::string_view path)
 	{
-		if (const auto it = m_tileMaps.find(std::string(path)); it != m_tileMaps.end())
+		if (const auto it = m_tileMaps.find(CacheKey(path)); it != m_tileMaps.end())
 		{
 			return &it->second;
 		}
@@ -59,7 +84,7 @@ namespace aether
 
 	TileSetAsset* TileAssetStore::MutableTileSet(std::string_view path)
 	{
-		if (const auto it = m_tileSets.find(std::string(path)); it != m_tileSets.end())
+		if (const auto it = m_tileSets.find(CacheKey(path)); it != m_tileSets.end())
 		{
 			return &it->second;
 		}
@@ -157,8 +182,8 @@ namespace aether
 
 	void TileAssetStore::Invalidate(std::string_view path)
 	{
-		m_tileSets.erase(std::string(path));
-		if (const auto it = m_tileMaps.find(std::string(path)); it != m_tileMaps.end())
+		m_tileSets.erase(CacheKey(path));
+		if (const auto it = m_tileMaps.find(CacheKey(path)); it != m_tileMaps.end())
 		{
 			if (it->second.dirty)
 			{
@@ -173,13 +198,13 @@ namespace aether
 
 	std::uint32_t TileAssetStore::TileSetGeneration(std::string_view path) const
 	{
-		const auto it = m_tileSetGenerations.find(std::string(path));
+		const auto it = m_tileSetGenerations.find(CacheKey(path));
 		return it != m_tileSetGenerations.end() ? it->second : 0;
 	}
 
 	void TileAssetStore::BumpTileSetGeneration(std::string_view path)
 	{
-		++m_tileSetGenerations[std::string(path)];
+		++m_tileSetGenerations[CacheKey(path)];
 	}
 
 	void TileAssetStore::Clear()

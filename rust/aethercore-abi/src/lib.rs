@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn generated_contract_uses_fixed_width_handles_and_nullable_callbacks() {
-        assert_eq!(AE_GAMEPLAY_ABI_MAJOR, 1);
+        assert_eq!(AE_GAMEPLAY_ABI_MAJOR, 2);
         assert_eq!(size_of::<AetherGameplayEntity>(), 16);
         assert_eq!(align_of::<AetherGameplayEntity>(), align_of::<u64>());
         assert_eq!(size_of::<AetherGameplayPropertyValue>(), 48);

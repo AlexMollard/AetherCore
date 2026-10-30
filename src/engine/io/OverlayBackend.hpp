@@ -22,6 +22,7 @@ namespace aether::io
 
 		[[nodiscard]] bool Exists(std::string_view relativePath) const override;
 		[[nodiscard]] Expected<std::vector<std::byte>> Read(std::string_view relativePath) const override;
+		[[nodiscard]] Expected<std::vector<std::byte>> ReadReserved(std::string_view relativePath, const std::function<bool(std::size_t)>& reserve) const override;
 		[[nodiscard]] Expected<std::unique_ptr<std::istream>> OpenStream(std::string_view relativePath) const override;
 		[[nodiscard]] Expected<std::vector<std::string>> Glob(std::string_view pattern, const FileGlobOptions& options) const override;
 		[[nodiscard]] std::uint64_t ContentStamp(std::string_view relativePath) const override;

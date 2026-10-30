@@ -66,7 +66,7 @@ struct DiskMeshVertex
 static_assert(sizeof(DiskMeshVertex) == 96);
 
 inline constexpr char ANIM_MAGIC[4] = {'A', 'N', 'I', 'M'};
-inline constexpr uint32_t ANIM_VERSION = 3;
+inline constexpr uint32_t ANIM_VERSION = 4;
 
 inline constexpr uint16_t ANIM_FLAG_HAS_BONE_NAMES = 1;
 
@@ -93,6 +93,7 @@ struct AnimHeaderDisk
 	uint16_t nameLen = 0;
 	uint16_t flags = 0;
 	// v1 layout: 4+4+4+2 = 14 bytes (no flags field)
+	// v4 cubic channels store in-tangent/value/out-tangent triples per key.
 };
 
 struct ChannelHeaderDisk
@@ -207,7 +208,7 @@ inline bool CheckMagic(const MeshHeaderDisk& h)
 
 inline bool CheckMagic(const AnimHeaderDisk& h)
 {
-	return h.magic[0] == 'A' && h.magic[1] == 'N' && h.magic[2] == 'I' && h.magic[3] == 'M' && (h.version == ANIM_VERSION || h.version == 2 || h.version == 1);
+	return h.magic[0] == 'A' && h.magic[1] == 'N' && h.magic[2] == 'I' && h.magic[3] == 'M' && h.version >= 1 && h.version <= ANIM_VERSION;
 }
 
 inline bool CheckMagic(const AnimSetHeaderDisk& h)

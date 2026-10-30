@@ -112,6 +112,7 @@ namespace aether
 		[[nodiscard]] Expected<void> Save(const std::filesystem::path& path) const;
 		// Writes tileSetPath verbatim for explicit migration staging.
 		[[nodiscard]] Expected<void> SaveRaw(const std::filesystem::path& path) const;
+		[[nodiscard]] static Expected<TileMapAsset> LoadBytes(std::string_view bytes, const std::function<bool(std::size_t)>& reserve);
 		[[nodiscard]] static Expected<TileMapAsset> Load(const std::filesystem::path& path);
 	private:
 		[[nodiscard]] Expected<void> SaveImpl(const std::filesystem::path& path, bool encodeReferences) const;

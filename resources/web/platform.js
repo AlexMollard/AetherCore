@@ -7,9 +7,7 @@ class AetherBrowserPlatform {
 	this.projectId = projectId;
 	this.records = new Map();
 	this.pending = new Map();
-	this.voices = new Set();
 	this.audioSources = new Map();
-	this.buffers = new Map();
 	this.started = false;
 	this.storageReady = false;
 	this.audioReady = false;
@@ -123,7 +121,7 @@ class AetherBrowserPlatform {
 	});
 	return this.flushPromise;
     }
-    prepareAudio(path, bytes) { this.audioSources.set(path, bytes); }
+    prepareAudio(path) { this.audioSources.set(path, true); }
     finishAudioPreparation() {
 	this.audioPrepared = true;
 	this.audioBytes = true;
@@ -131,16 +129,20 @@ class AetherBrowserPlatform {
     async startAudio() {
 	if (this.stopped || this.failed || !this.audioPrepared)
 	    return false;
-	if (!this.audioSources.size) {
-	    this.started = true;
-	    return true;
-	}
+	if (this.startingAudio)
+	    return this.startingAudio;
+	this.startingAudio = this.initializeAudio().finally(() => { this.startingAudio = null; });
+	return this.startingAudio;
+    }
+    async initializeAudio() {
 	try {
 	    if (!this.audio) {
-		this.audio = new AudioContext();
+		this.audio = new AudioContext({sampleRate: 48000});
+		if (this.audio.sampleRate !== 48000)
+		    throw Error('Audio device cannot create a 48000 Hz context');
+		const context = this.audio;
 		this.audio.onstatechange = () => {
-		    this.audioReady = !this.stopped && !this.failed && this.audioSources.size > 0 &&
-				      this.buffers.size === this.audioSources.size && this.audio.state === 'running';
+		    this.audioReady = !this.stopped && !this.failed && !!this.sink && context.state === 'running';
 		    aetherRuntime.audioReady = this.audioReady;
 		};
 		this.analyser = this.audio.createAnalyser();
@@ -148,17 +150,23 @@ class AetherBrowserPlatform {
 		this.analyser.connect(this.audio.destination);
 		this.samples = new Float32Array(256);
 	    }
+	    const context = this.audio;
 	    // Invoked directly by the trusted start button, before the first await.
-	    await this.audio.resume();
-	    for (const [path, bytes] of this.audioSources) {
-		if (this.buffers.has(path))
-		    continue;
-		const buffer = await this.audio.decodeAudioData(bytes.slice(0));
-		if (this.stopped || this.failed)
+	    await context.resume();
+	    if (this.stopped || this.failed || this.audio !== context)
+		return false;
+	    if (!this.sink) {
+		await context.audioWorklet.addModule('audio-worklet.js');
+		if (this.stopped || this.failed || this.audio !== context)
 		    return false;
-		if (buffer.duration > 120 || buffer.length * buffer.numberOfChannels * 4 > 64 * 1024 * 1024)
-		    throw Error('Audio clip exceeds the 120-second / 64 MiB decoded limit: ' + path);
-		this.buffers.set(path, buffer);
+		this.freeAudioBuffers = Array.from({length: 8}, () => new Float32Array(2048));
+		this.sink = new AudioWorkletNode(context, 'aether-pcm-sink', {outputChannelCount: [2]});
+		const sink = this.sink;
+		sink.port.onmessage = event => {
+		    if (!this.stopped && this.sink === sink)
+			this.freeAudioBuffers.push(event.data);
+		};
+		this.sink.connect(this.analyser);
 	    }
 	    if (this.stopped || this.failed)
 		return false;
@@ -173,25 +181,19 @@ class AetherBrowserPlatform {
 		}, 5);
 	    return this.audioReady;
 	} catch (error) {
-	    this.fail('BROWSER_AUDIO', error);
+	    if (!this.stopped)
+		this.fail('BROWSER_AUDIO', error);
 	    return false;
 	}
     }
-    play(path) {
-	if (!this.audioReady || this.audio.state !== 'running' || this.stopped || this.failed || !this.buffers.has(path) ||
-	    this.voices.size >= 32)
-	    return false;
-	const source = this.audio.createBufferSource();
-	source.buffer = this.buffers.get(path);
-	source.connect(this.analyser);
-	this.voices.add(source);
-	source.onended = () => {
-	    source.disconnect();
-	    this.voices.delete(source);
-	};
-	source.start(this.audio.currentTime + 0.01);
-	++this.report.scheduledSounds;
-	return true;
+    audioBufferAvailable() {
+	// Eight buffers bound ownership, but at most three (~64 ms) are in flight.
+	return this.audioReady && !this.stopped && !this.failed && this.freeAudioBuffers.length > 5;
+    }
+    submitAudio(samples) {
+	const buffer = this.freeAudioBuffers.pop();
+	buffer.set(samples);
+	this.sink.port.postMessage(buffer, [buffer.buffer]);
     }
     stop() {
 	if (this.stopped)
@@ -205,17 +207,33 @@ class AetherBrowserPlatform {
 	}
 	if (this.db)
 	    this.db.close();
-	if (this.meter)
+	if (this.meter) {
 	    clearInterval(this.meter);
-	for (const voice of this.voices)
-	    voice.stop();
-	this.voices.clear();
+	    this.meter = null;
+	}
 	this.audioSources.clear();
-	this.buffers.clear();
 	this.audioReady = false;
 	aetherRuntime.audioReady = false;
-	if (this.audio && this.audio.state !== 'closed')
-	    this.audio.close().catch(() => {});
+	const sink = this.sink;
+	this.sink = null;
+	if (sink) {
+	    sink.port.onmessage = null;
+	    sink.port.postMessage({stop: true});
+	    sink.disconnect();
+	    sink.port.close();
+	}
+	this.freeAudioBuffers = [];
+	if (this.analyser) {
+	    this.analyser.disconnect();
+	    this.analyser = null;
+	}
+	const context = this.audio;
+	this.audio = null;
+	if (context) {
+	    context.onstatechange = null;
+	    if (context.state !== 'closed')
+		context.close().catch(() => {});
+	}
     }
 }
 
@@ -227,10 +245,43 @@ globalThis.aetherInput = {
     dx : 0,
     dy : 0,
     scroll : 0,
+    lockRequested: false,
+    lockArmed: false,
+    lockPending: false,
     readClipboardText: async () => navigator.clipboard.readText(),
     writeClipboardText: async text => navigator.clipboard.writeText(text),
     pasteText: null,
-    typedText: ''
+    typedText: '',
+    hapticsAvailable() {
+        return Array.from(navigator.getGamepads?.() || []).some(pad =>
+            pad?.connected && typeof pad.vibrationActuator?.playEffect === 'function');
+    },
+    rumble(low, high, milliseconds) {
+        let supported = 0;
+        for (const pad of navigator.getGamepads?.() || []) {
+            const actuator = pad?.connected && pad.vibrationActuator;
+            if (!actuator || typeof actuator.playEffect !== 'function') continue;
+            ++supported;
+            const operation = milliseconds > 0
+                ? actuator.playEffect('dual-rumble', {duration: milliseconds, strongMagnitude: low, weakMagnitude: high})
+                : actuator.reset();
+            Promise.resolve(operation).then(result => {
+                if (result !== 'complete' && result !== 'preempted')
+                    console.warn('Gamepad haptics refused:', result);
+            }).catch(error => console.warn('Gamepad haptics failed:', error));
+        }
+        if (!supported && milliseconds > 0)
+            console.warn('Gamepad rumble unavailable: no supported physical actuator');
+        return supported;
+    },
+    setLockRequested(requested) {
+        if (requested !== this.lockRequested) {
+            this.lockRequested = requested;
+            this.lockArmed = requested;
+        }
+        if (!requested && document.pointerLockElement === inputCanvas)
+            document.exitPointerLock();
+    }
 };
 const inputCanvas = document.getElementById('canvas');
 inputCanvas.addEventListener('paste', event => {
@@ -250,7 +301,7 @@ const pointer = event => {
     aetherInput.buttons = (event.buttons & 1) | ((event.buttons & 2)) | ((event.buttons & 4));
 };
 inputCanvas.addEventListener('pointermove', event => {
-    if (document.activeElement === inputCanvas && aetherInput.buttons) {
+    if (document.pointerLockElement === inputCanvas || (document.activeElement === inputCanvas && aetherInput.buttons)) {
         aetherInput.dx += event.movementX;
         aetherInput.dy += event.movementY;
     }
@@ -258,11 +309,33 @@ inputCanvas.addEventListener('pointermove', event => {
 });
 inputCanvas.addEventListener('pointerdown', event => {
     inputCanvas.focus();
-    inputCanvas.setPointerCapture(event.pointerId);
+    if (aetherInput.lockRequested && aetherInput.lockArmed && !aetherInput.lockPending && event.isTrusted) {
+        aetherInput.lockArmed = false;
+        aetherInput.lockPending = true;
+        try {
+            const result = inputCanvas.requestPointerLock();
+            if (result && typeof result.catch === 'function')
+                result.catch(error => { aetherInput.lockPending = false; console.warn('Pointer lock refused:', error); });
+        } catch (error) {
+            aetherInput.lockPending = false;
+            console.warn('Pointer lock refused:', error);
+        }
+    } else if (document.pointerLockElement !== inputCanvas) {
+        inputCanvas.setPointerCapture(event.pointerId);
+    }
     pointer(event);
     aetherInput.pressed |= aetherInput.buttons
 });
 inputCanvas.addEventListener('pointerup', pointer);
+document.addEventListener('pointerlockchange', () => {
+    aetherInput.lockPending = false;
+    aetherInput.dx = aetherInput.dy = 0;
+});
+document.addEventListener('pointerlockerror', () => {
+    aetherInput.lockPending = false;
+    aetherInput.lockArmed = false;
+    console.warn('Pointer lock failed');
+});
 inputCanvas.addEventListener('wheel', event => {
     if (document.activeElement === inputCanvas && document.hasFocus() && !document.hidden) {
         aetherInput.scroll -= event.deltaY / (event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 1 : 100);

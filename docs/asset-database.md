@@ -74,7 +74,7 @@ Use UID references when authoring runtime asset loads that must survive moves.
 
 | Boundary | Current version | Compatibility |
 |---|---:|---|
-| Scene TOML | 17 | Legacy scene migrations retained; future/malformed versions rejected |
+| Scene TOML | 18 | Adds authored streaming regions; legacy scene migrations retained; future/malformed versions rejected |
 | Prefab TOML | 1 | Independent `[prefab].version`; legacy headerless prefabs accepted |
 | Component tables | 1 | `schema_version`; missing legacy versions accepted |
 | Sprite atlas | 3 | Earlier supported schemas accepted |
@@ -110,8 +110,9 @@ use the app-injected model resolver.
 
 `MeshComponent.asset` is the runtime handle, while its mesh pointer is a resolved
 cache. `ResolveWorldMeshes` uses catalog generations to refresh that cache after
-`Touch`/`TouchByPath`. Model reload retains old cache slots until scene teardown so
-existing render pointers do not dangle.
+`Touch`/`TouchByPath`. Legacy synchronous model reload retains old cache slots until
+scene teardown. Streamed models instead retain strong packet leases and defer GPU
+destruction until the consuming submissions have retired.
 
 The mesh resolve pass does not replace a skinned model's animation database after
 reload. That existing lifecycle limitation is separate from persisted asset identity.
@@ -135,9 +136,130 @@ Cross-thread loader tasks serialize completion with waiter registration and reta
 their result until ownership ends. `CoroutineTaskTests` checks exact-once result
 destruction and completion between the awaiter's readiness and suspension steps.
 
+## Authored world regions
+
+A root scene can reference independent chunk scenes without instantiating all of them.
+Scene version 18 retains the region definitions when the root is saved:
+
+```toml
+[[stream_regions]]
+id = "village"
+scene = "project://scenes/Village.scene.toml"
+bounds_min = [-128.0, -32.0, -128.0]
+bounds_max = [128.0, 96.0, 128.0]
+unload_margin = 16.0
+priority = 1
+always_loaded = false
+```
+
+Migrate the project to replace the path with its persistent UID. The reference index
+includes `stream_regions.scene`, so safe chunk-scene moves preserve the root link.
+Region IDs and authored entity node IDs identify snapshot records; changing them
+changes the identity of the corresponding region or entity.
+
+The default main-camera source loads nearby regions and prefetches a larger radius.
+Additional sources and explicit requests share the same controller. Priority values
+are Critical (0), High (1), Normal (2), and Background (3); the strongest applicable
+demand wins. `unload_margin` provides hysteresis when a source leaves a region.
+
+Prefetch makes the dependency closure available without activating region entities.
+An active request waits for dependencies and GPU uploads, then applies records over
+the shared per-frame activation allowance. Partially applied entities remain disabled.
+Cancellation invalidates pending work and prevents late results from activating it.
+Every explicit request must eventually be released or cancelled.
+
+### Budgets and observability
+
+Project overrides use the existing settings cascade:
+
+```toml
+[streaming]
+cpuBudgetMiB = 256
+gpuBudgetMiB = 512
+stagingBudgetMiB = 32
+uploadBudgetKiBPerFrame = 4096
+maxPendingRequests = 128
+activationEntitiesPerFrame = 64
+loadRadius = 128.0
+prefetchRadius = 256.0
+defaultCameraSource = true
+```
+
+Budgets are admission limits. A request that cannot fit reports `Blocked`; raising
+the relevant limit or releasing other claims permits progress. Shrinking a limit
+does not destroy currently referenced resources or forgive existing charges.
+Staging and unfinished uploads remain charged until completion or safe retirement.
+GPU uploads are split across frames; activation has a separate entity allowance.
+
+CPU figures include conservative decode, prepared-document and snapshot reservations,
+not just measured resident bytes. Pending workspace reservations can remain charged
+while their prepared payload is retained. Native GPU figures use allocation
+requirements; browser GPU figures use logical resource sizes. Worker runtime heaps,
+renderer baseline resources, allocator slack and driver overhead are not a
+whole-process memory guarantee. A region's content must fit the configured admission
+limits; moving content into a chunk does not make an oversized individual resource
+streamable.
+
+The `streaming.status` control method and gameplay diagnostics report region demand,
+state, priority and errors, asset claims, pending/resident/retiring bytes, staging and
+per-frame upload bytes. Shared asset rows are not additive. Unloading a region releases
+its claims, not another region's shared dependencies. Render packets retain CPU owners;
+GPU charges end on real completion/destruction, not simply when an entity disappears.
+
+### Runtime state and gameplay
+
+Normal region unload captures mutable component data, script public properties and
+custom script state, then removes its ECS, physics and script instances. Unloaded
+regions do not continue simulating. Snapshots are session-private storage, not a
+save-game format or an engine-upgrade persistence contract.
+
+The capture point precedes script detach cleanup. Re-entry restores that state on new
+runtime entity handles. Entity/component references use stable nodes, including
+deferred cross-region references; do not serialize raw runtime handles in custom
+state. Persistent actors leave regional ownership and retain their own dependency
+claims. Whole-scene replacement resets the old streaming session.
+
+Streamed nodes retain both a region-qualified runtime identity and their authored
+`source_node` identity. References bind exact runtime identities first; an authored
+identity binds only when it names one live instance. Once bound, a reference retains
+the qualified identity, so another instance of the same chunk cannot steal it.
+Missing external targets remain null and rebind when the target returns, including
+when the referencing region itself was snapshotted while the target was absent.
+
+Snapshot writes are asynchronous. Until durable completion, the rollback payload and
+its resource claims stay alive. A failed save restores the retained state instead of
+silently discarding it. Script callbacks can have external side effects; those are
+not a global transaction rolled back by the streaming system.
+Native snapshot admission reports `Blocked` while CPU/staging capacity is unavailable,
+retains the live region, and retries when capacity becomes available. Concurrent
+unloads therefore wait rather than discard state or permanently fail on staging
+contention. A new demand transition can retry a browser region after save rollback.
+
+The [C# Streaming API](../managed/AetherCore/Streaming.cs) provides `SetSource`,
+`Load`, `Prefetch`, `Cancel`, `Release`, `GetState` and `GetDiagnostics`.
+`EntityScript.CaptureStreamingState` / `RestoreStreamingState` preserve private state.
+The safe [Rust SDK](../rust/aethercore/src/lib.rs) exposes corresponding
+`Context::streaming_*` methods and `Script` capture/restore hooks.
+Gameplay ABI major 2 requires rebuilding existing gameplay modules; incompatible
+modules fail with a rebuild diagnostic rather than using the old callback layout.
+
+Existing scenes without regions retain their whole-scene loading behavior. Put
+large content inside regions to make it eligible for streaming ownership and budgets;
+ordinary root-scene and renderer baseline content is not automatically partitioned.
+
 ## Regression coverage
 
 `AssetCatalogTests`, `AssetReferenceLifecycleTests`, `ModelIdentityTests`, and
 `SchemaVersionTests` exercise read-only previews, backups, unchanged references across
 file/folder moves, restart/reimport identity, moved scene/prefab links, binary tilemap
 package loading, named model reimports, missing UIDs, and unsupported schemas.
+
+`WorldStreamingTests` covers independent source hysteresis, claim priority and
+cancellation, bounded admission, world reset, malformed binary documents, ambiguous
+authored aliases, canonical references across repeated instances, nested reference
+values, and script entity/component references after re-entry.
+`AssetReferenceLifecycleTests` also exercises denied decode reservations and retry.
+`StreamingBudgetTests` covers staging, retirement, budget shrinking and overflow-safe
+transfers. Browser package validation accepts
+cooked content from either the bootstrap index or integrity-checked streaming blobs;
+missing, inconsistent or escaping blob declarations fail closed.

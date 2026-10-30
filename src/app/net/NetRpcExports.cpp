@@ -9,15 +9,19 @@
 #include <string_view>
 #include <vector>
 
-#include "net/CSharpRpcBridge.hpp"
+#if !defined(__EMSCRIPTEN__)
+#	include "net/CSharpRpcBridge.hpp"
+#endif
 #include "net/NetRpc.hpp"
 #include "net/NetScriptFields.hpp"
 #include "net/NetworkContext.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/World.hpp"
-#include "scripting/CSharpScriptingSubsystem.hpp"
-#include "systems/ScriptComponentSystem.hpp"
+#if !defined(__EMSCRIPTEN__)
+#	include "scripting/CSharpScriptingSubsystem.hpp"
+#	include "systems/ScriptComponentSystem.hpp"
+#endif
 #include "utils/ServiceContainer.hpp"
 
 using namespace aether::app::scripting::interop;
@@ -146,12 +150,14 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 		{
 			return 0;
 		}
+#if !defined(__EMSCRIPTEN__)
 		auto* scripting = ctx.services->TryGet<aether::app::scripting::CSharpScriptingSubsystem>();
 		auto* instances = ctx.services->TryGet<aether::app::ScriptComponentSystem>();
 		if (scripting == nullptr || instances == nullptr)
 		{
 			return 0;
 		}
+#endif
 
 		const aether::Entity entity{entityId};
 		// Id 0 is the SDK's invalid handle, but the underlying slot 0 can hold a
@@ -180,11 +186,17 @@ AE_SCRIPT_API std::int32_t aether_net_call_rpc(std::uint32_t entityId, const cha
 		// Borrow the context's cached bridge - it holds the per-type [NetRpc] method
 		// table a per-call temporary would rebuild. A single-player build registers no
 		// NetworkContext at all, so fall back to a local one for the offline path.
+#if !defined(__EMSCRIPTEN__)
 		std::optional<aether::net::CSharpRpcBridge> ownedBridge;
+#endif
 		const aether::net::RpcBridge* bridgePtr = network != nullptr ? network->Rpcs() : nullptr;
 		if (bridgePtr == nullptr)
 		{
+#if defined(__EMSCRIPTEN__)
+			return 0;
+#else
 			bridgePtr = &ownedBridge.emplace(*scripting, *instances, *ctx.services);
+#endif
 		}
 		const aether::net::RpcBridge& bridge = *bridgePtr;
 

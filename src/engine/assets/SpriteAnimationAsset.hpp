@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,7 @@
 
 namespace aether
 {
+	class TomlConfig;
 	enum class SpriteAnimationLoopMode : std::uint8_t
 	{
 		Loop = 0,
@@ -44,6 +46,8 @@ namespace aether
 
 		[[nodiscard]] float DurationSeconds() const noexcept;
 		[[nodiscard]] Expected<void> Save(const std::filesystem::path& path) const;
+		[[nodiscard]] static Expected<SpriteAnimationAsset> LoadBytes(std::string_view text, const std::function<bool(std::size_t)>& reserve);
+		[[nodiscard]] static Expected<SpriteAnimationAsset> ParseConfig(const TomlConfig& config, const std::function<bool(std::size_t)>& reserve);
 		[[nodiscard]] static Expected<SpriteAnimationAsset> Load(const std::filesystem::path& path);
 	};
 } // namespace aether

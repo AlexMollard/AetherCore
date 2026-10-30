@@ -326,6 +326,26 @@ namespace aether::app::scripting
 				        return before == self.m_errorSerial.load(std::memory_order_relaxed) ? AE_GAMEPLAY_OK : AE_GAMEPLAY_SCRIPT_ERROR;
 			        });
 		};
+		module.captureStreamingState = [](std::uint64_t context, std::uint64_t handle, AetherGameplayUtf8Buffer buffer) -> AetherGameplayStatus
+		{
+			return Guard([&]
+			{
+				auto& self = Self(context);
+				if (!self.Has(handle)) return AE_GAMEPLAY_INVALID_HANDLE;
+				if (!self.m_api->CaptureStreamingState) return AE_GAMEPLAY_UNSUPPORTED;
+				return self.m_api->CaptureStreamingState(handle, buffer.data, buffer.capacity, buffer.required);
+			});
+		};
+		module.restoreStreamingState = [](std::uint64_t context, std::uint64_t handle, AetherGameplayUtf8 state) -> AetherGameplayStatus
+		{
+			return Guard([&]
+			{
+				auto& self = Self(context);
+				if (!self.Has(handle)) return AE_GAMEPLAY_INVALID_HANDLE;
+				if (!self.m_api->RestoreStreamingState) return AE_GAMEPLAY_UNSUPPORTED;
+				return self.m_api->RestoreStreamingState(handle, state.data, state.length);
+			});
+		};
 		return module;
 	}
 } // namespace aether::app::scripting

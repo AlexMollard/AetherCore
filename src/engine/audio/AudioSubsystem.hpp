@@ -3,11 +3,11 @@
 // The audio subsystem: a miniaudio device + resource manager routed through the
 // engine's io::FileSystem, so project:// and engine:// audio (and therefore paks)
 // just work. Game-thread only: every entry point here must be called from the
-// thread that ticks World systems; miniaudio's own device thread mixes in the
-// background, which is exactly the boundary the engine's render-thread rule wants.
+// thread that ticks World systems. Native mixes on miniaudio's device thread;
+// the browser pulls frames on its main thread for a thread-free output sink.
 //
 // Backend: miniaudio was chosen because it is a single header with built-in
-// WASAPI/ALSA/null backends and WAV/MP3/FLAC/Ogg-Vorbis decoding - no SDK, no
+// WASAPI/ALSA/null backends and WAV/MP3/FLAC decoding - no SDK, no
 // system dependency, and the null backend lets the whole stack run headless.
 //
 // 3D: spatialisation is miniaudio's own spatializer - sounds carry position,
@@ -21,8 +21,13 @@
 // `struct` versions redefines them. Storage is pimpl + void*; the cpp includes
 // miniaudio.h alone.
 #include <cstdint>
+#include <cstddef>
+#include <functional>
+#include <span>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "audio/AudioMath.hpp"
 #include "utils/EngineSettings.hpp"
@@ -81,6 +86,8 @@ namespace aether::audio
 		bool musicPlaying = false;
 	};
 
+	[[nodiscard]] Expected<void> ValidateStreamedClip(std::span<const std::byte> bytes, const std::function<bool(std::size_t)>& reserve);
+
 	class AudioSubsystem
 	{
 	public:
@@ -93,17 +100,27 @@ namespace aether::audio
 		struct Config
 		{
 			bool headless = false;
+			bool manualMix = false;
 		};
 		// Never throws: a machine with no audio device falls back to the null
 		// backend (silent but functional), which is what keeps the engine
 		// initialising on a server or CI runner.
-		[[nodiscard]] Expected<void> Init(const Config& config = {});
+		[[nodiscard]] Expected<void> Init(const Config& config);
+		[[nodiscard]] Expected<void> Init() { return Init(Config{}); }
 		void Shutdown();
+		// Pull interleaved stereo frames when initialized without a device.
+		void RenderFrames(float* output, std::uint32_t frames);
 
 		[[nodiscard]] bool IsInitialized() const noexcept
 		{
 			return m_engine != nullptr;
 		}
+		// Install already-read encoded clip bytes for the resource manager's VFS.
+		// Existing entries are retained; a true result owns the publication.
+		// Retirement removes the publication; open decoders retain the bytes
+		// and invoke onRetire only after their last VFS reference is released.
+		[[nodiscard]] Expected<bool> PublishStreamedClip(std::string path, std::vector<std::byte> bytes, std::function<void()> onRetire);
+		void RetireStreamedClip(std::string_view path);
 
 		// ── One-shot sounds ────────────────────────────────────────────────
 		// Fully decoded on start (MA_SOUND_FLAG_NO_STREAM): SFX are small and

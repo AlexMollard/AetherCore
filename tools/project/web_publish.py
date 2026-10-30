@@ -13,6 +13,7 @@ import tempfile
 import time
 import tomllib
 import uuid
+from urllib.parse import urlsplit
 import zipfile
 
 REPO = Path(__file__).resolve().parents[2]
@@ -42,6 +43,48 @@ class PreflightError(Exception):
 
 def reject(code, message):
     raise PreflightError(code, message)
+
+def audit_code(source, language):
+    """Mask comments and literals so source audits inspect code, not prose."""
+    if language == 'rust':
+        tokens = re.compile(
+            r'//[^\n]*|/\*[\s\S]*?\*/|(?:br|r)(\#*)".*?"\1|'
+            r'b?"(?:\\.|[^"\\])*"|b?\'(?:\\.|[^\'\\])\'',
+            re.DOTALL)
+    else:
+        tokens = re.compile(
+            r'//[^\n]*|/\*[\s\S]*?\*/|(?:\$@|@\$|@)"(?:[^"]|"")*"|'
+            r'\$?"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
+            re.DOTALL)
+    return tokens.sub(lambda match: ' ' * len(match.group()), source)
+
+
+def web_network_config(web):
+    network = web.get('network')
+    if network is None:
+        return None
+    if not isinstance(network, dict):
+        reject('WEB_NETWORK_CONFIG', 'publish.web.network must be a table')
+    gateway = network.get('gatewayurl')
+    target = network.get('targetalias')
+    token = network.get('authtoken', '')
+    if not isinstance(gateway, str):
+        reject('WEB_NETWORK_CONFIG', 'network.gatewayUrl must be a ws:// or wss:// URL ending in /net')
+    try:
+        url = urlsplit(gateway)
+        port = url.port
+    except ValueError:
+        reject('WEB_NETWORK_CONFIG', 'network.gatewayUrl is invalid')
+    if (url.scheme not in ('ws', 'wss') or not url.hostname or url.path != '/net'
+            or url.username is not None or url.password is not None or url.query or url.fragment
+            or any(char.isspace() or ord(char) < 32 for char in gateway)
+            or (port is not None and port == 0)):
+        reject('WEB_NETWORK_CONFIG', 'network.gatewayUrl must be a ws:// or wss:// URL ending in /net without credentials, query or fragment')
+    if not isinstance(target, str) or not target.strip():
+        reject('WEB_NETWORK_CONFIG', 'network.targetAlias must be a non-empty string')
+    if not isinstance(token, str) or not token:
+        reject('WEB_NETWORK_CONFIG', 'network.authToken must be a non-empty string; it is embedded in public project.js and is not secret')
+    return dict(gatewayUrl=gateway, targetAlias=target, authToken=token)
 
 
 def preflight(project, startup_override=None):
@@ -113,18 +156,47 @@ def preflight(project, startup_override=None):
                        and not any(part in ('obj', 'bin', 'artifacts') for part in path.relative_to(scripts).parts))
     if language == 'csharp' and re.search(r'\b(?:DllImport|LibraryImport|NativeLibrary)\b', source):
         reject('WEB_NATIVE_API_UNSUPPORTED', 'External native imports are not supported in C# Web games')
-    if is_3d and language == 'csharp' and re.search(r'\b(?:Animation\s*\.\s*(?:Add|LoadExternal|Compile|SetJointOffset)|Physics\s*\.\s*DebugEnabled)\b', source):
-        reject('WEB_FEATURE_UNSUPPORTED', 'Desktop-only Animation or Physics API is not available in browser gameplay')
-    if language == 'csharp' and re.search(r'\b(?:Net\s*\.|System\s*\.\s*Net\b|NetRpc|IEditorWindow|EditorGui)\b', source):
-        reject('WEB_CAPABILITY_UNSUPPORTED', 'Networking and editor tooling are outside the C# browser profile' if is_3d else 'Networking and editor tooling are outside the C# browser 2D profile')
-    if re.search(r'\b(?:std\s*::\s*net|TcpStream|UdpSocket|network_\w*|net_connect|enet)\b', source):
-        reject('WEB_NETWORK_UNSUPPORTED', 'Rust networking is outside ' + profile)
+    code = audit_code(source, language)
+    uses_network = False
+    if language == 'csharp':
+        if re.search(r'\b(?:IEditorWindow|EditorGui)\b', code):
+            reject('WEB_CAPABILITY_UNSUPPORTED', 'Editor tooling is outside the C# browser profile')
+        if re.search(r'\b(?:System\s*\.\s*Net\s*\.\s*(?:Sockets|WebSockets)\b|(?:Socket|TcpClient|TcpListener|UdpClient|ClientWebSocket)\b)', code):
+            reject('WEB_NETWORK_UNSUPPORTED', 'Raw sockets are outside the C# browser profile')
+        supported_net = {'Host', 'Connect', 'Disconnect', 'IsHost', 'IsClient', 'IsConnected',
+            'LocalConnectionId', 'ReplicationReady', 'DisconnectReason', 'HostWithCode', 'JoinByCode',
+            'TraversalState', 'TraversalError', 'Spawn', 'SpawnPredicted', 'TryTakePredictedSpawn',
+            'Despawn', 'HasAuthority', 'IsOwner', 'OwnerOf', 'RequestOwnership', 'ReleaseOwnership', 'Call', 'CallServer',
+            'Connections', 'ConnectionCount', 'LastError', 'NewRoomCode',
+            'SetPlayerName', 'ClaimPlayerName', 'GetPlayerName', 'Players',
+            'RoundTripMs', 'GetPlayerPing', 'TryRewind'}
+        net_code = re.sub(r'\bSystem\s*\.\s*Net\s*\.', ' ', code)
+        members = re.findall(r'\bNet\s*\.\s*([A-Za-z_]\w*)', net_code)
+        uses_network = bool(members or re.search(r'\b(?:NetRpc(?:Attribute)?|Replicated(?:Attribute)?)\b', code))
+        for member in members:
+            if member not in supported_net:
+                reject('WEB_NETWORK_UNSUPPORTED', 'Net.' + member + ' is outside the C# browser profile')
+    else:
+        if re.search(r'\b(?:std\s*::\s*net|TcpStream|TcpListener|UdpSocket|enet(?:_\w*)?\b)', code):
+            reject('WEB_NETWORK_UNSUPPORTED', 'Raw sockets are outside the Rust browser profile')
+        supported_net = {'net_host', 'net_connect', 'net_disconnect', 'net_is_host', 'net_is_client',
+            'net_is_connected', 'net_local_connection_id', 'net_spawn', 'net_despawn',
+            'net_has_authority', 'net_is_owner', 'net_request_ownership', 'net_release_ownership',
+            'net_set_replication_ready', 'net_is_replication_ready', 'net_disconnect_reason', 'network_kind'}
+        members = re.findall(r'\.\s*((?:net|network)_\w+)\s*\(', code)
+        uses_network = bool(members or re.search(r'\bNetworkEventKind\b', code))
+        for member in members:
+            if member not in supported_net:
+                reject('WEB_NETWORK_UNSUPPORTED', member + ' is outside the Rust browser profile')
+    network = web_network_config(web)
     requested = web.get('capabilities', [])
-    supported = {'sprites', 'animation', 'tilemaps', 'physics_2d', 'ui', 'audio', 'input', 'saves', 'scenes', 'prefabs'}
+    supported = {'sprites', 'animation', 'tilemaps', 'physics_2d', 'ui', 'audio', 'input', 'saves', 'scenes', 'prefabs', 'network'}
     if is_3d:
         supported |= {'meshes_3d', 'lighting_3d', 'physics_3d', 'materials', 'effects'}
     if not isinstance(requested, list) or any(item not in supported for item in requested):
         reject('WEB_CAPABILITY_UNSUPPORTED', 'Unsupported declared module capability')
+    if ('network' in requested or uses_network) and network is None:
+        reject('WEB_NETWORK_CONFIG', 'Network gameplay requires publish.web.network; authToken is public in project.js')
     declared = web.get('scenes', [])
     if not isinstance(declared, list) or any(not isinstance(item, str) for item in declared):
         reject('WEB_SCENE_DECLARATION', 'publish.web.scenes must be a list of scene names')
@@ -139,10 +211,14 @@ def preflight(project, startup_override=None):
         elif not declared:
             reject('WEB_DYNAMIC_SCENE_UNDECLARED', 'Dynamic scene loads require publish.web.scenes')
     files = set()
+    dependencies = {}
+    visiting = []
+    ui_shader_sources = {}
+    region_references = set()
     if catalog_path.is_file():
         files.add(catalog_path.resolve())
     allowed_entity_tables = {'sprite', 'sprite_animator', 'rigid_body_2d', 'collider_2d', 'joint_2d', 'camera', 'scripts',
-        'ui_canvas', 'ui_rect', 'ui_text', 'ui_image', 'ui_selectable', 'ui_button', 'ui_slider', 'ui_toggle', 'ui_progress_bar', 'tile_map'}
+        'ui_canvas', 'ui_rect', 'ui_text', 'ui_image', 'ui_selectable', 'ui_button', 'ui_slider', 'ui_toggle', 'ui_progress_bar', 'tile_map', 'audio_source'}
     if is_3d:
         # SceneSerializerToml::ComponentTomlKey lowercases display names and replaces
         # spaces with underscores; Particle Emitter has its explicit legacy key.
@@ -154,7 +230,9 @@ def preflight(project, startup_override=None):
         # EntityRecord's explicitly serialized tables, including the legacy particle override.
         allowed_entity_tables |= {'sprite', 'sprite_animator', 'mesh', 'material', 'skinned',
             'physics', 'joint', 'joint_2d', 'ui_image', 'effect', 'camera', 'scripts',
-            'script_joints', 'particles'}
+            'script_joints', 'particles', 'audio_source'}
+    network_tables = {'network_identity', 'network_transform', 'net_player'}
+    allowed_entity_tables |= network_tables | {'ui_text_box', 'ui_mask', 'ui_effect', 'ui_material'}
     features_used = set()
     if is_3d and settings.get('graphics'):
         features_used.add('effects')
@@ -174,13 +252,44 @@ def preflight(project, startup_override=None):
         if not uri.startswith('project://'):
             reject('WEB_ASSET_PATH', 'Additional assets require a project:// or uid:// path')
         path = local(uri.removeprefix('project://'))
-        unsupported = {'.spv', '.dds', '.ktx', '.fontcurves'}
+        unsupported = {'.spv', '.dds', '.ktx'}
         if not is_3d:
             unsupported |= {'.slang', '.material', '.glb', '.gltf'}
         if path.suffix.lower() in unsupported:
             reject('WEB_SHADER_UNSUPPORTED' if path.suffix.lower() in {'.slang', '.spv', '.material'} else 'WEB_FEATURE_UNSUPPORTED', 'Unsupported browser asset: ' + uri)
         visit(path)
     def visit(path):
+        path = path.resolve()
+        if visiting:
+            dependencies.setdefault(visiting[-1], set()).add(path)
+        if path in files:
+            return
+        visiting.append(path)
+        try:
+            visit_content(path)
+        finally:
+            visiting.pop()
+
+    def register_ui_shader(shader, role, owner=None):
+        shader_root = (project / 'assets/shaders').resolve()
+        shader = shader.resolve()
+        if not shader.is_relative_to(shader_root) or shader.suffix != '.slang' or not shader.is_file():
+            reject('WEB_UI_SOURCE', 'Missing or invalid UI shader: ' + str(shader))
+        ui_shader_sources.setdefault(shader, set()).add(role)
+        if owner is not None:
+            dependencies.setdefault(owner, set()).add(shader)
+        if shader in files:
+            return
+        files.add(shader)
+        for include in re.findall(r'^\s*#\s*include\s*"([^"]+)"', shader.read_text(encoding='utf-8-sig'), re.MULTILINE):
+            if include not in ('include/UiVertexOut.slangh', 'UiVertexOut.slangh', 'text_curves.slangh'):
+                visiting.append(shader)
+                try:
+                    visit(shader.parent / include)
+                finally:
+                    visiting.pop()
+
+    def visit_content(path):
         path = path.resolve()
         if not path.is_relative_to(project):
             reject('WEB_ASSET_PATH', 'Reachable content escapes project root')
@@ -189,6 +298,10 @@ def preflight(project, startup_override=None):
         if not path.is_file():
             reject('WEB_ASSET_MISSING', 'Missing reachable asset: ' + str(path))
         files.add(path)
+        if path.suffix.lower() in ('.ttf', '.otf'):
+            curves = path.with_suffix('.fontcurves')
+            if curves.is_file():
+                visit(curves)
         if is_3d and path.suffix.lower() == '.slang':
             features_used.add('custom_pass')
             sys.path.insert(0, str(REPO / 'tools/shaders'))
@@ -210,9 +323,14 @@ def preflight(project, startup_override=None):
                     visit(path.parent / uri)
         if path.name.endswith(('.scene.toml', '.prefab.toml')):
             document = tomllib.loads(path.read_text(encoding='utf-8-sig'))
+            for region in document.get('stream_regions', []):
+                reference = region.get('scene')
+                if not isinstance(reference, str) or not reference:
+                    reject('WEB_SCENE_DECLARATION', 'Streaming region requires a scene reference')
+                region_references.add(reference)
             default_kind = '3d' if path.name.endswith('.scene.toml') else '2d'
             version = document.get('scene', {}).get('version', 1)
-            if type(version) is not int or not 1 <= version <= 17 or (not is_3d and document.get('scene', {}).get('kind', default_kind) != '2d'):
+            if type(version) is not int or not 1 <= version <= 18 or (not is_3d and document.get('scene', {}).get('kind', default_kind) != '2d'):
                 reject('WEB_FEATURE_UNSUPPORTED', 'Unsupported scene format or 3D scene: ' + path.name)
             if not is_3d and any(key in document for key in ('includes', 'prefab_instances', 'lights', 'environment')):
                 reject('WEB_FEATURE_UNSUPPORTED', 'Linked scenes/3D environment are not supported: ' + path.name)
@@ -225,6 +343,15 @@ def preflight(project, startup_override=None):
                 if document.get('lights') or document.get('environment'):
                     features_used.add('lighting_3d')
             for entity in document.get('entities', []):
+                for table, role in (('ui_material', 'material'), ('ui_effect', 'effect')):
+                    name = entity.get(table, {}).get('shader', '')
+                    if not name:
+                        continue
+                    if not isinstance(name, str):
+                        reject('WEB_UI_SOURCE', 'UI shader name must be a string in ' + path.name)
+                    register_ui_shader(project / 'assets/shaders' / (name + '.slang'), role, path)
+                if network is None and network_tables.intersection(entity):
+                    reject('WEB_NETWORK_CONFIG', 'Network components require publish.web.network; authToken is public in project.js')
                 if is_3d:
                     features_used.update(key for key in entity if key in ('skinned', 'material', 'effect'))
                     if 'grass' in entity:
@@ -240,12 +367,14 @@ def preflight(project, startup_override=None):
                     reject('WEB_FEATURE_UNSUPPORTED', 'Unsupported browser entity effect in ' + path.name)
                 if not is_3d and 'camera' in entity and entity['camera'].get('projection', 'perspective') != 'orthographic':
                     reject('WEB_FEATURE_UNSUPPORTED', 'Only orthographic cameras are supported')
-                for widget in ('ui_text', 'ui_button'):
-                    value=entity.get(widget,{})
-                    if value.get('font','Roboto') != 'Roboto' or any(ord(char)>255 for char in value.get('text',value.get('label',''))):
-                        reject('WEB_FONT_UNSUPPORTED','Browser UI requires packaged Roboto and Latin-1 glyphs')
-                if not is_3d and path.name.endswith('.prefab.toml') and entity.get('scripts'):
-                    reject('WEB_FEATURE_UNSUPPORTED', 'Scripted browser prefabs are not implemented')
+                for widget in ('ui_text', 'ui_button', 'ui_text_box'):
+                    font = entity.get(widget, {}).get('font', 'Roboto')
+                    if isinstance(font, str) and not font.startswith(('project://', 'uid://', 'engine://')):
+                        for stem in (font, font + '-Regular'):
+                            for suffix in ('.fontcurves', '.ttf', '.otf'):
+                                candidate = local('assets/fonts/' + stem + suffix)
+                                if candidate.is_file():
+                                    visit(candidate)
         elif path.suffix == '.toml':
             document = tomllib.loads(path.read_text(encoding='utf-8-sig'))
         else:
@@ -255,7 +384,7 @@ def preflight(project, startup_override=None):
                 shader = document.get('material', {}).get('shader', '')
                 if shader.startswith('shaders://') and shader not in ('shaders://gltf_mesh.spv', 'shaders://plasma.spv', 'shaders://molten.spv') and 'graph' not in document:
                     visit(project / 'assets/shaders' / (Path(shader.removeprefix('shaders://')).stem + '.web.slangh'))
-            for value in strings(document):
+            for value in strings({key: value for key, value in document.items() if key != 'stream_regions'}):
                 if value.startswith(('project://', 'uid://')):
                     asset(value)
         elif path.suffix in ('.tiles', '.tilemap'):
@@ -273,9 +402,47 @@ def preflight(project, startup_override=None):
             reject('WEB_SCENE_MISSING', 'Missing declared/reachable scene: ' + scene)
         visit(path)
     prefabs = local(paths.get('prefabs', 'assets/prefabs'))
-    prefab_calls = r'\.instantiate_prefab\s*\(\s*"([^"\\]+)"' if language == 'rust' else r'\bScene\s*\.\s*Instantiate\s*\(\s*"([^"\\]+)"'
+    prefab_calls = (r'\.(?:instantiate_prefab|net_spawn)\s*\(\s*"([^"\\]+)"' if language == 'rust'
+                    else r'\b(?:Scene\s*\.\s*Instantiate|Net\s*\.\s*(?:Spawn|SpawnPredicted))\s*\(\s*"([^"\\]+)"')
     for name in re.findall(prefab_calls, source):
         visit(scene_path(name, prefabs, '.prefab.toml'))
+    if network is not None and prefabs.is_dir():
+        # Remote and dynamically named spawns need prefabs not named in local source.
+        for prefab in prefabs.rglob('*.prefab.toml'):
+            visit(prefab)
+    additional = web.get('additional_assets', [])
+    if not isinstance(additional, list):
+        reject('WEB_ASSET_PATH', 'additional_assets must be a list')
+    dynamic_ui_roles = set()
+    if language == 'csharp':
+        for match in re.finditer(r'\bUi\s*\.\s*(SetMaterial|CreateEffect)\s*\([^,\n]*,', code):
+            role = 'material' if match.group(1) == 'SetMaterial' else 'effect'
+            literal = re.match(r'\s*"([^"\\]+)"\s*[,)]', source[match.end():])
+            if literal:
+                register_ui_shader(project / 'assets/shaders' / (literal.group(1) + '.slang'), role)
+            else:
+                dynamic_ui_roles.add(role)
+    if dynamic_ui_roles and not additional:
+        reject('WEB_DYNAMIC_ASSET_UNDECLARED', 'Dynamic UI shader names require publish.web.additional_assets')
+    declared_ui_roles = set()
+    for uri in additional:
+        resolved = resolve_uri(uri) if isinstance(uri, str) else ''
+        if not resolved.startswith('project://'):
+            continue
+        candidate = local(resolved.removeprefix('project://'))
+        if candidate.suffix != '.slang' or not candidate.is_file() or not dynamic_ui_roles:
+            continue
+        text = candidate.read_text(encoding='utf-8-sig')
+        material = re.search(r'#\s*include\s*[<"](?:include/)?UiVertexOut\.slangh[>"]', text) is not None
+        effect = re.search(r'\[shader\s*\(\s*"vertex"\s*\)\]', text) is not None
+        roles = ({'material'} if material else set()) | ({'effect'} if effect else set())
+        if len(roles) != 1 or not roles <= dynamic_ui_roles:
+            reject('WEB_UI_SOURCE', 'Cannot determine dynamic UI shader role for ' + uri)
+        register_ui_shader(candidate, next(iter(roles)))
+        declared_ui_roles.update(roles)
+    for role in dynamic_ui_roles:
+        if role not in declared_ui_roles:
+            reject('WEB_DYNAMIC_ASSET_UNDECLARED', 'Declare a UI '+role+' source in publish.web.additional_assets')
     # Enumeration patterns and write destinations are not read dependencies.
     non_read_uri_spans = {
         match.span(1) for match in re.finditer(
@@ -286,30 +453,58 @@ def preflight(project, startup_override=None):
         if match.span(1) in non_read_uri_spans:
             continue
         uri = match.group(1)
-        asset(uri)
+        resolved = resolve_uri(uri)
+        if not (resolved.startswith('project://') and local(resolved.removeprefix('project://')) in ui_shader_sources):
+            asset(uri)
     if is_3d:
         # Custom-pass APIs name shaders by stem rather than project URI.
         shader_dir = project / 'assets/shaders'
         for stem in set(re.findall(r'["\']([A-Za-z0-9_/-]+)["\']', source)):
             shader = (shader_dir / (stem + '.slang')).resolve()
-            if shader.is_relative_to(shader_dir.resolve()) and shader.is_file():
+            if shader.is_relative_to(shader_dir.resolve()) and shader.is_file() and shader not in ui_shader_sources:
                 visit(shader)
         registration = (r'\.register_custom_pass\s*\(\s*"[^"]+"\s*,\s*"([^"]+)"' if language == 'rust'
                         else r'\bCustomPass\s*\.\s*Register\s*\(\s*[^,]+,\s*"([^"]+)"')
         for stem in re.findall(registration, source):
             visit(shader_dir / (stem + '.slang'))
-    additional = web.get('additional_assets', [])
-    if not isinstance(additional, list):
-        reject('WEB_ASSET_PATH', 'additional_assets must be a list')
-    asset_calls = r'\.(?:play_audio|instantiate_prefab)\s*\(([^)]*)\)' if language == 'rust' else r'\b(?:Audio\s*\.\s*Play|Scene\s*\.\s*Instantiate)\s*\(([^)]*)\)'
-    for call in re.findall(asset_calls, source):
+    asset_calls = (r'\.(?:play_audio|instantiate_prefab)\s*\(([^)]*)\)' if language == 'rust'
+                   else r'\b(?:Audio\s*\.\s*(?:Play|PlayMusic)|Scene\s*\.\s*Instantiate)\s*\(([^)]*)\)')
+    calls = re.findall(asset_calls, source)
+    if language == 'csharp':
+        for call in re.findall(r'\bAudio\s*\.\s*PlayAt\s*\(([^)]*)\)', source):
+            # PlayAt accepts either (path, position, ...) or (entity, path, ...).
+            if not re.match(r'^\s*"[^"\\]+"\s*,', call):
+                parts = call.split(',', 1)
+                call = parts[1] if len(parts) == 2 else call
+            calls.append(call)
+    for call in calls:
         if not re.match(r'^\s*"[^"\\]+"\s*(?:,|$)', call) and not additional:
             reject('WEB_DYNAMIC_ASSET_UNDECLARED', 'Dynamic asset loads require publish.web.additional_assets')
     for uri in additional:
-        asset(uri)
+        resolved = resolve_uri(uri) if isinstance(uri, str) else ''
+        if not (resolved.startswith('project://') and local(resolved.removeprefix('project://')) in ui_shader_sources):
+            asset(uri)
+    # Runtime font APIs accept family names, including dynamically constructed ones.
+    # Their native lookup probes the project font directory directly.
+    fonts_dir = project / 'assets/fonts'
+    if fonts_dir.is_dir():
+        for font in fonts_dir.iterdir():
+            if font.is_file() and font.suffix.lower() in ('.ttf', '.otf', '.fontcurves'):
+                visit(font)
+    bootstrap_files = set(files)
+    for reference in sorted(region_references):
+        visit(scene_path(reference, scene_dir, '.scene.toml'))
+    if region_references:
+        for path in files:
+            if path.name.endswith('.scene.toml') and path not in bootstrap_files:
+                document = tomllib.loads(path.read_text(encoding='utf-8-sig'))
+                if document.get('stream_regions'):
+                    reject('WEB_SCENE_DECLARATION', 'Nested streaming regions are not supported')
     return dict(project=project, settings=settings, scripts=scripts, language=language, managed_project=managed_project,
-                profile=profile, scenes=sorted(scenes), startup=startup,
-                startup_path=scene_path(startup, scene_dir, '.scene.toml'), files=files, features_used=sorted(features_used))
+                profile=profile, scenes=sorted(scenes), startup=startup, network=network, identities=identities,
+                startup_path=scene_path(startup, scene_dir, '.scene.toml'), files=files, features_used=sorted(features_used),
+                bootstrap_files=bootstrap_files, dependencies=dependencies, region_references=region_references, ui_shader_sources=ui_shader_sources,
+                scene_directory=scene_dir)
 
 
 def publish(request, directory, output=None):
@@ -398,6 +593,10 @@ def publish(request, directory, output=None):
             target = inputs / path.relative_to(project)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
+        (inputs/'.web-ui-roles.json').write_text(json.dumps([
+            dict(source=shader.relative_to(project).as_posix(), role=role)
+            for shader, roles in sorted(data['ui_shader_sources'].items()) for role in sorted(roles)
+        ]), encoding='utf-8')
         identity = hashlib.sha256(str(project).encode('utf-8')).hexdigest()[:16]
         build = REPO / 'build' / ('web-publish-' + identity)
         # Reuse only project-qualified build products. Configure always enforces bridge OFF.
@@ -415,7 +614,7 @@ def publish(request, directory, output=None):
         run('configure', configure)
         run('build', ['cmake', '--build', build, '-j6'])
         report['requiredChecks'].append(dict(name='web-compilation-and-import-audit', status='passed'))
-        names = ['index.html', 'platform.js', 'aethercore-icon.png', 'game.pak', 'engine.pak']
+        names = ['index.html', 'platform.js', 'audio-worklet.js', 'aethercore-icon.png', 'game.pak', 'engine.pak']
         if data['language'] == 'rust':
             names += ['AetherGame.js', 'AetherGame.wasm', 'AetherGame.data']
         else:
@@ -430,9 +629,28 @@ def publish(request, directory, output=None):
                 for key in ('sdk', 'runtime', 'manifest', 'mode'))
         for name in names:
             shutil.copy2(build / 'web' / name, stage / name)
+        if data['region_references']:
+            sys.path.insert(0, str(REPO / 'tools/web-runtime'))
+            try:
+                from streaming_publish import emit
+                emit(data, inputs, stage, packer, run)
+            finally:
+                sys.path.pop(0)
+            for worker in ('streaming-worker.js', 'streaming-scene-worker.js', 'streaming-model-skeleton.js', 'streaming-model-materials.js'):
+                shutil.copy2(REPO / 'resources/web' / worker, stage / worker)
+            for artifact in ('AetherSceneParser.js', 'AetherSceneParser.wasm'):
+                shutil.copy2(build / 'web' / artifact, stage / artifact)
         identifier = data['settings'].get('publish', {}).get('web', {}).get('id', product)
         config = dict(schemaVersion=1, id=identifier, name=product, language=data['language'], startupScene=data['startup'], scenes=data['scenes'], profile=data['profile'],
             paths=data['settings'].get('paths', {}), graphics=graphics_for_web(data['settings'].get('graphics', {})), instructions=data['settings'].get('publish', {}).get('web', {}).get('instructions', 'Select Play to use the keyboard.'))
+        if data['region_references']:
+            config['streamingManifest'] = 'streaming-manifest.json'
+            defaults = tomllib.loads((REPO / 'resources/config/EngineSettings.toml').read_text(encoding='utf-8-sig'))['streaming']
+            overrides = data['settings'].get('streaming', {})
+            config['streaming'] = {key: overrides.get(key.lower(), value) for key, value in defaults.items()}
+        if data['network'] is not None:
+            # project.js is public: authToken is visible to every browser client.
+            config['network'] = data['network']
         (stage / 'project.js').write_text('globalThis.aetherProject=' + json.dumps(config, ensure_ascii=True) + ';\n', encoding='utf-8')
         revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
         files = [dict(path=path.relative_to(stage).as_posix(), sizeBytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in sorted(stage.rglob('*')) if path.is_file()]

@@ -2,6 +2,7 @@
 
 #include <format>
 #include <filesystem>
+#include <limits>
 
 #include <BinaryFormats.hpp>
 
@@ -135,14 +136,13 @@ namespace aether
 			return true;
 		}
 
-		Expected<MaterialPresetSpec> LoadBinary(std::string_view path)
+		Expected<MaterialPresetSpec> LoadBinary(std::string_view path, std::span<const std::byte> bytes)
 		{
-			AE_TRY(bytes, io::FileSystem::ReadFile(path));
-			if (bytes->size() < sizeof(MaterialHeaderDisk))
+			if (bytes.size() < sizeof(MaterialHeaderDisk))
 			{
 				AE_UNEXPECTED(AetherError::Asset("Truncated material header: " + std::string(path)));
 			}
-			BinaryReader reader(*bytes);
+			BinaryReader reader(bytes.data(), bytes.size());
 			MaterialHeaderDisk hdr;
 			if (!reader.TryRead(hdr) || !CheckMagic(hdr) || hdr.version < 1 || hdr.version > MATL_VERSION)
 			{
@@ -281,7 +281,8 @@ namespace aether
 		MaterialPresetSpec spec;
 		if (presetPath.ends_with(".material"))
 		{
-			AE_TRY(loaded, LoadBinary(presetPath));
+			AE_TRY(bytes, io::FileSystem::ReadFile(presetPath));
+			AE_TRY(loaded, LoadBinary(presetPath, *bytes));
 			spec = std::move(*loaded);
 		}
 		else
@@ -309,6 +310,46 @@ namespace aether
 				AE_UNEXPECTED(AetherError::Asset("Invalid material resource path: " + presetPath));
 			}
 		}
+		return spec;
+	}
+
+	Expected<MaterialPresetSpec> LoadBytes(std::string_view path, std::span<const std::byte> bytes, const std::function<bool(std::size_t)>& reserve)
+	{
+		if (path.empty() || !IsSafePath(path))
+			AE_UNEXPECTED(AetherError::Asset("Invalid material path: " + std::string(path)));
+
+		// TOML tables, serialized nodes and nested full-key strings may expand well
+		// beyond the source. Account for nesting as well as per-node overhead before
+		// handing untrusted text to the general-purpose parser.
+		const auto max = std::numeric_limits<std::size_t>::max();
+		const std::size_t n = bytes.size();
+		const std::size_t p = path.size();
+		auto take = [&](std::size_t count, std::size_t scale)
+		{
+			return count <= max / scale && (!count || (reserve && reserve(count * scale)));
+		};
+		const bool binary = path.ends_with(".material");
+		if (!take(n, binary ? 16 : 256) ||
+		    (!binary && n && (n > max / n || !take(n * n, 4))) || !take(p, 2048))
+			AE_UNEXPECTED(AetherError::Asset("Streaming decode reservation rejected"));
+
+		MaterialPresetSpec spec;
+		if (binary)
+		{
+			AE_TRY(loaded, LoadBinary(path, bytes));
+			spec = std::move(*loaded);
+		}
+		else
+		{
+			const std::string text = bytes.empty() ? std::string{} : std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+			bool ok = false;
+			spec = Parse(path, text, &ok);
+			if (!ok)
+				AE_UNEXPECTED(AetherError::Asset("Invalid material TOML: " + std::string(path)));
+		}
+		for (const auto* reference : {&spec.albedoPath, &spec.normalPath, &spec.metallicRoughnessPath, &spec.occlusionPath, &spec.emissivePath, &spec.shaderVfsPath})
+			if (!IsSafePath(*reference))
+				AE_UNEXPECTED(AetherError::Asset("Invalid material resource path: " + std::string(path)));
 		return spec;
 	}
 

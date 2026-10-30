@@ -1,6 +1,6 @@
 // Generated from src/engine/scripting/GameplayAbi.h. Do not edit.
 #![allow(non_snake_case, dead_code)]
-pub const AE_GAMEPLAY_ABI_MAJOR: u32 = 1;
+pub const AE_GAMEPLAY_ABI_MAJOR: u32 = 2;
 pub const AE_GAMEPLAY_OK: i32 = 0;
 pub const AE_GAMEPLAY_INVALID_ARGUMENT: i32 = 1;
 pub const AE_GAMEPLAY_ABI_MISMATCH: i32 = 2;
@@ -32,6 +32,8 @@ pub const AE_GAMEPLAY_EVENT_PHYSICS: u32 = 1;
 pub const AE_GAMEPLAY_EVENT_OWNERSHIP: u32 = 2;
 pub const AE_GAMEPLAY_EVENT_NETWORK: u32 = 3;
 pub const AE_GAMEPLAY_PHYSICS_FLAG_3D: u32 = 1;
+pub const AE_GAMEPLAY_NETWORK_CONNECTED: u32 = 0;
+pub const AE_GAMEPLAY_NETWORK_DISCONNECTED: u32 = 1;
 pub type AetherGameplayStatus = i32;
 pub type AetherGameplayInstance = u64;
 #[repr(C)]
@@ -140,6 +142,8 @@ pub struct AetherGameplayModuleApi {
     pub setProperty: Option<unsafe extern "C" fn(context: u64, instance: AetherGameplayInstance, propertyIndex: u32, value: *const AetherGameplayPropertyValue, stringValue: AetherGameplayUtf8) -> AetherGameplayStatus>,
     pub getDefaultProperty: Option<unsafe extern "C" fn(context: u64, typeIndex: u32, propertyIndex: u32, outValue: *mut AetherGameplayPropertyValue, stringBuffer: AetherGameplayUtf8Buffer) -> AetherGameplayStatus>,
     pub dispatchEvent: Option<unsafe extern "C" fn(context: u64, instance: AetherGameplayInstance, event: *const AetherGameplayEvent) -> AetherGameplayStatus>,
+    pub captureStreamingState: Option<unsafe extern "C" fn(context: u64, instance: AetherGameplayInstance, buffer: AetherGameplayUtf8Buffer) -> AetherGameplayStatus>,
+    pub restoreStreamingState: Option<unsafe extern "C" fn(context: u64, instance: AetherGameplayInstance, state: AetherGameplayUtf8) -> AetherGameplayStatus>,
 }
 pub type AetherGameplayQuery = Option<unsafe extern "C" fn(requestedMajor: u32, outSize: u32, outApi: *mut AetherGameplayModuleApi) -> AetherGameplayStatus>;
 unsafe extern "C" {

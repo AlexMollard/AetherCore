@@ -2,16 +2,25 @@
 
 #include <filesystem>
 #include <utility>
+#include "io/FileSystem.hpp"
 
 namespace aether
 {
+	namespace
+	{
+		std::string CacheKey(std::string_view path)
+		{
+			if (path.starts_with("uid://")) return io::FileSystem::ResolveAssetPath(path);
+			return std::string(path);
+		}
+	}
 	Expected<const SpriteAtlasAsset*> SpriteAssetStore::LoadAtlas(std::string_view path)
 	{
 		if (path.empty())
 		{
 			AE_UNEXPECTED(AetherError::Asset("Sprite atlas path is empty."));
 		}
-		const std::string key(path);
+		const std::string key = CacheKey(path);
 		if (const auto it = m_atlases.find(key); it != m_atlases.end())
 		{
 			return &it->second;
@@ -28,7 +37,7 @@ namespace aether
 		{
 			AE_UNEXPECTED(AetherError::Asset("Sprite animation path is empty."));
 		}
-		const std::string key(path);
+		const std::string key = CacheKey(path);
 		if (const auto it = m_animations.find(key); it != m_animations.end())
 		{
 			return &it->second;
@@ -37,6 +46,16 @@ namespace aether
 		const auto [it, inserted] = m_animations.emplace(key, std::move(*loaded));
 		(void) inserted;
 		return &it->second;
+	}
+
+	bool SpriteAssetStore::PublishAtlas(std::string path, SpriteAtlasAsset atlas)
+	{
+		return m_atlases.emplace(std::move(path), std::move(atlas)).second;
+	}
+
+	bool SpriteAssetStore::PublishAnimation(std::string path, SpriteAnimationAsset animation)
+	{
+		return m_animations.emplace(std::move(path), std::move(animation)).second;
 	}
 
 	Expected<SpriteAtlasReimportDiagnostics> SpriteAssetStore::SaveAtlas(std::string path, SpriteAtlasAsset atlas)
@@ -67,8 +86,8 @@ namespace aether
 
 	void SpriteAssetStore::Invalidate(std::string_view path)
 	{
-		m_atlases.erase(std::string(path));
-		m_animations.erase(std::string(path));
+		m_atlases.erase(CacheKey(path));
+		m_animations.erase(CacheKey(path));
 	}
 
 	void SpriteAssetStore::Clear()

@@ -6,6 +6,7 @@
 #include "gpu/CommandList.hpp"
 
 #include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
@@ -140,6 +141,27 @@ namespace aether
 		m_capacityBytes = 0;
 	}
 
+	void GpuHeap::ShutdownDeferred(std::function<void()> onRetired)
+	{
+		const VkBuffer buffer = m_buffer;
+		const VmaAllocation allocation = m_bufferAllocation;
+		const VmaAllocator allocator = m_allocatorRef;
+		m_buffer = VK_NULL_HANDLE;
+		m_bufferAllocation = VK_NULL_HANDLE;
+		Shutdown();
+		if (!buffer)
+		{
+			if (onRetired) onRetired();
+			return;
+		}
+		gpu::ResourceRegistry::DeferDestructionCallback(
+		        [allocator, buffer, allocation, onRetired = std::move(onRetired)]()
+		        {
+			        vmaDestroyBuffer(allocator, buffer, allocation);
+			        if (onRetired) onRetired();
+		        });
+	}
+
 	void GpuHeap::SetMemoryTracker(GpuMemoryTracker* tracker)
 	{
 		m_memoryTracker = tracker;
@@ -180,7 +202,7 @@ namespace aether
 		m_allocations.erase(it);
 	}
 
-	std::uint64_t GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer)
+	std::uint64_t GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer, bool requiredForNextFrame, std::function<void()> onStagingRetired)
 	{
 		assert(dstAddr >= m_baseAddress);
 		const auto dstOffset = static_cast<VkDeviceSize>(dstAddr - m_baseAddress);
@@ -205,6 +227,7 @@ namespace aether
 		VmaAllocationInfo stagingVmaInfo{};
 		if (vmaCreateBuffer(m_allocatorRef, &stagingInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, &stagingVmaInfo) != VK_SUCCESS)
 		{
+			if (onStagingRetired) onStagingRetired();
 			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create staging buffer"));
 		}
 		std::memcpy(stagingVmaInfo.pMappedData, src, static_cast<std::size_t>(bytes));
@@ -215,11 +238,28 @@ namespace aether
 		// reclaimed once the ticket completes.
 		VmaAllocator allocator = m_allocatorRef;
 		VkBuffer dstBuffer = m_buffer;
-		return transfer.Submit(
-		        [stagingBuffer, dstBuffer, dstOffset, bytes](gpu::CommandList& cmdList)
-		        {
-			        cmdList.CopyBuffer(static_cast<void*>(stagingBuffer), static_cast<void*>(dstBuffer), 0, dstOffset, bytes);
-		        },
-		        [allocator, stagingBuffer, stagingAllocation]() { vmaDestroyBuffer(allocator, stagingBuffer, stagingAllocation); });
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+		try
+		{
+#endif
+			return transfer.Submit(
+			        [stagingBuffer, dstBuffer, dstOffset, bytes](gpu::CommandList& cmdList)
+			        {
+				        cmdList.CopyBuffer(static_cast<void*>(stagingBuffer), static_cast<void*>(dstBuffer), 0, dstOffset, bytes);
+			        },
+			        [allocator, stagingBuffer, stagingAllocation, onStagingRetired]()
+			        {
+				        vmaDestroyBuffer(allocator, stagingBuffer, stagingAllocation);
+				        if (onStagingRetired) onStagingRetired();
+			        }, requiredForNextFrame);
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+		}
+		catch (...)
+		{
+			vmaDestroyBuffer(allocator, stagingBuffer, stagingAllocation);
+			if (onStagingRetired) onStagingRetired();
+			throw;
+		}
+#endif
 	}
 } // namespace aether

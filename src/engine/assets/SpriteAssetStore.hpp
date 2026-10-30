@@ -14,6 +14,9 @@ namespace aether
 	public:
 		[[nodiscard]] Expected<const SpriteAtlasAsset*> LoadAtlas(std::string_view path);
 		[[nodiscard]] Expected<const SpriteAnimationAsset*> LoadAnimation(std::string_view path);
+		// Publish a worker-decoded asset without replacing an existing canonical entry.
+		[[nodiscard]] bool PublishAtlas(std::string path, SpriteAtlasAsset atlas);
+		[[nodiscard]] bool PublishAnimation(std::string path, SpriteAnimationAsset animation);
 
 		[[nodiscard]] Expected<SpriteAtlasReimportDiagnostics> SaveAtlas(std::string path, SpriteAtlasAsset atlas);
 		[[nodiscard]] Expected<void> SaveAnimation(std::string path, SpriteAnimationAsset animation);

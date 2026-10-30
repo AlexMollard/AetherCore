@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using System.Text;
+using System.Runtime.InteropServices.JavaScript;
 
 namespace AetherCore;
 
@@ -68,7 +69,7 @@ public enum GamepadTrigger { Left = 0, Right = 1 }
 /// bool jump  = Gamepad.IsPressed(GamepadButton.A) || Input.IsKeyPressed(Key.Space);
 /// </code>
 /// </example>
-public static class Gamepad
+public static partial class Gamepad
 {
     /// <summary>The first connected controller, whichever slot it landed in.</summary>
     public const int Any = -1;
@@ -180,11 +181,19 @@ public static class Gamepad
     /// Buzz the controller: <paramref name="low"/> drives the heavy left motor and
     /// <paramref name="high"/> the light right one (each 0..1) for <paramref name="seconds"/>,
     /// then the motors switch themselves off. A new call replaces a pulse still running.
-    /// Reaches every connected XInput pad; with none connected (or off Windows) it does
-    /// nothing. Stopping or pausing play stops it too.
+    /// Reaches every connected XInput pad on Windows. In a browser, throws when no physical
+    /// gamepad exposes a supported haptic actuator; browser/device failures are reported to
+    /// the console. Stopping or pausing play stops it too.
     /// </summary>
     public static void Rumble(float low, float high, float seconds)
-        => Native.aether_input_gamepad_rumble(low, high, seconds);
+    {
+        if (OperatingSystem.IsBrowser() && seconds > 0 && !BrowserHapticsAvailable())
+            throw new PlatformNotSupportedException("No connected browser gamepad supports haptic rumble.");
+        Native.aether_input_gamepad_rumble(low, high, seconds);
+    }
+
+    [JSImport("globalThis.aetherInput.hapticsAvailable")]
+    private static partial bool BrowserHapticsAvailable();
 
     /// <summary>Stop a <see cref="Rumble"/> pulse early (a game's own pause menu, a cutscene).</summary>
     public static void StopRumble() => Native.aether_input_gamepad_stop_rumble();

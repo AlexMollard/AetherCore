@@ -153,6 +153,21 @@ unsafe extern "C" fn default_property(_: u64, index: u32, property: u32, out: *m
         copy_string(TEXT.as_ptr(), TEXT.len() as u32, buffer)
     }
 }
+unsafe extern "C" fn capture(_: u64, instance: u64, buffer: AetherGameplayUtf8Buffer) -> i32 {
+    unsafe {
+        if instance != 17 || STATE != 2 { return AE_GAMEPLAY_INVALID_HANDLE; }
+        copy_string(ptr::addr_of!(PROPERTY).cast(), PROPERTY_LENGTH, buffer)
+    }
+}
+unsafe extern "C" fn restore(_: u64, instance: u64, state: AetherGameplayUtf8) -> i32 {
+    unsafe {
+        if instance != 17 || STATE != 2 { return AE_GAMEPLAY_INVALID_HANDLE; }
+        if state.length > 128 || (state.length != 0 && state.data.is_null()) { return AE_GAMEPLAY_INVALID_ARGUMENT; }
+        if state.length != 0 { ptr::copy_nonoverlapping(state.data.cast::<u8>(), ptr::addr_of_mut!(PROPERTY).cast::<u8>(), state.length as usize); }
+        PROPERTY_LENGTH = state.length;
+    }
+    AE_GAMEPLAY_OK
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn aether_gameplay_query(major: u32, out_size: u32, out: *mut AetherGameplayModuleApi) -> i32 {
     unsafe {
@@ -165,7 +180,8 @@ pub unsafe extern "C" fn aether_gameplay_query(major: u32, out_size: u32, out: *
             structSize: size_of::<AetherGameplayModuleApi>() as u32, abiMajor: AE_GAMEPLAY_ABI_MAJOR, capabilities: 0, context: 5,
             initialize: Some(initialize), shutdown: Some(shutdown), getTypeCount: Some(type_count), getTypeInfo: Some(type_info),
             getPropertyInfo: Some(property_info), create: Some(create), destroy: Some(destroy), attach: Some(attach), update: Some(update), detach: Some(detach),
-            getProperty: Some(get_property), setProperty: Some(set_property), getDefaultProperty: Some(default_property), dispatchEvent: None
+            getProperty: Some(get_property), setProperty: Some(set_property), getDefaultProperty: Some(default_property), dispatchEvent: None,
+            captureStreamingState: Some(capture), restoreStreamingState: Some(restore)
         };
     }
     AE_GAMEPLAY_OK
@@ -256,6 +272,8 @@ pub extern "C" fn fixture_layout(index: u32) -> usize {
         core::mem::offset_of!(AetherGameplayModuleApi, getProperty),
         core::mem::offset_of!(AetherGameplayModuleApi, setProperty),
         core::mem::offset_of!(AetherGameplayModuleApi, getDefaultProperty),
-        core::mem::offset_of!(AetherGameplayModuleApi, dispatchEvent)];
+        core::mem::offset_of!(AetherGameplayModuleApi, dispatchEvent),
+        core::mem::offset_of!(AetherGameplayModuleApi, captureStreamingState),
+        core::mem::offset_of!(AetherGameplayModuleApi, restoreStreamingState)];
     values.get(index as usize).copied().unwrap_or(usize::MAX)
 }

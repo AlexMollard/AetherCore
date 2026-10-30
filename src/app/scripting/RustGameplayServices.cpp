@@ -24,11 +24,14 @@
 #include "scripting/GameplayAccess.hpp"
 #include "scripting/GameplayCustomPass.hpp"
 #include "scripting/Gameplay3D.hpp"
+#include "net/GameplayNetworkServices.hpp"
 #include "net/NetworkContext.hpp"
 #include "scripting/GameplaySaveStore.hpp"
 #include "scripting/GameplayAbiValidation.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "scripting/SceneContext.hpp"
+#include "scene/WorldStreaming.hpp"
+#include <cstring>
 #include "ui/UiComponents.hpp"
 
 namespace aether::app::scripting
@@ -75,10 +78,12 @@ namespace aether::app::scripting
 	AetherGameplayServicesApi RustGameplayServices::EngineApi() const noexcept
 	{
 		uint64_t capabilities = 0;
-		for (uint32_t operation = 1; operation <= AE_GAMEPLAY_SERVICE_SET_EULER; ++operation)
+		for (uint32_t operation = 1; operation <= AE_GAMEPLAY_SERVICE_NET_DISCONNECT_REASON; ++operation)
 		{
 			capabilities |= AE_GAMEPLAY_SERVICE_CAP(operation);
 		}
+		for (uint32_t operation = AE_GAMEPLAY_SERVICE_STREAMING_SET_SOURCE; operation <= AE_GAMEPLAY_SERVICE_STREAMING_DIAGNOSTICS; ++operation)
+			capabilities |= AE_GAMEPLAY_SERVICE_CAP(operation);
 		if (m_context.input == nullptr)
 		{
 			capabilities &= ~(AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_KEY_DOWN) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_MOUSE_DOWN) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_MOUSE_DELTA) | AE_GAMEPLAY_SERVICE_CAP(AE_GAMEPLAY_SERVICE_SCROLL_DELTA));
@@ -139,8 +144,8 @@ namespace aether::app::scripting
 			}
 			*outValue = {.structSize = sizeof(*outValue)};
 			// SUBMIT_CUSTOM_PASS and RAYCAST_3D carry a raw float payload in text2, which is not UTF-8.
-			const bool rawText2 = aether::scripting::gameplay3d::HasRawText2(request->operation);
-			if (!aether::scripting::IsGameplayUtf8(request->text) || (!rawText2 && !aether::scripting::IsGameplayUtf8(request->text2)))
+			const bool rawText2 = aether::scripting::gameplay3d::HasRawText2(request->operation) || request->operation == AE_GAMEPLAY_SERVICE_STREAMING_SET_SOURCE;
+			if (!aether::scripting::IsGameplayUtf8(request->text) || (request->text2.length != 0 && request->text2.data == nullptr) || (!rawText2 && !aether::scripting::IsGameplayUtf8(request->text2)))
 			{
 				return AE_GAMEPLAY_INVALID_ARGUMENT;
 			}
@@ -195,7 +200,8 @@ namespace aether::app::scripting
 			return AE_GAMEPLAY_WRONG_WORLD;
 		}
 		const bool entityOperation = request.operation == AE_GAMEPLAY_SERVICE_SET_SPRITE_COLOR || request.operation == AE_GAMEPLAY_SERVICE_GET_VELOCITY_2D || request.operation == AE_GAMEPLAY_SERVICE_SET_VELOCITY_2D
-		                             || request.operation == AE_GAMEPLAY_SERVICE_SET_UI_TEXT || request.operation == AE_GAMEPLAY_SERVICE_DESTROY_ENTITY || request.operation == AE_GAMEPLAY_SERVICE_SET_EULER || aether::scripting::gameplay3d::IsGameplay3DEntityOperation(request.operation);
+		                             || request.operation == AE_GAMEPLAY_SERVICE_SET_UI_TEXT || request.operation == AE_GAMEPLAY_SERVICE_DESTROY_ENTITY || request.operation == AE_GAMEPLAY_SERVICE_SET_EULER || aether::scripting::gameplay3d::IsGameplay3DEntityOperation(request.operation)
+		                             || (request.operation >= AE_GAMEPLAY_SERVICE_NET_DESPAWN && request.operation <= AE_GAMEPLAY_SERVICE_NET_RELEASE_OWNERSHIP);
 		if (entityOperation)
 		{
 			const auto status = access.entityValid(access.context, request.entity, &valid);
@@ -209,6 +215,46 @@ namespace aether::app::scripting
 		const auto text = Text(request.text);
 		switch (request.operation)
 		{
+			case AE_GAMEPLAY_SERVICE_STREAMING_SET_SOURCE:
+			{
+				if (!m_context.streaming) return AE_GAMEPLAY_UNSUPPORTED;
+				if (request.integer < 0 || request.integer > 3 || request.text2.length != sizeof(float)) return AE_GAMEPLAY_INVALID_ARGUMENT;
+				float prefetch;
+				std::memcpy(&prefetch, request.text2.data, sizeof(prefetch));
+				aether::streaming::Source source{text, {request.vector[0], request.vector[1], request.vector[2]}, request.vector[3], prefetch, static_cast<aether::io::IOPriority>(request.integer)};
+				value.type = AE_GAMEPLAY_PROPERTY_BOOL;
+				value.integer = m_context.streaming->SetSource(std::move(source)) ? 1 : 0;
+				return AE_GAMEPLAY_OK;
+			}
+			case AE_GAMEPLAY_SERVICE_STREAMING_REMOVE_SOURCE:
+			case AE_GAMEPLAY_SERVICE_STREAMING_CANCEL:
+			case AE_GAMEPLAY_SERVICE_STREAMING_RELEASE:
+			{
+				if (!m_context.streaming) return AE_GAMEPLAY_UNSUPPORTED;
+				value.type = AE_GAMEPLAY_PROPERTY_BOOL;
+				if (request.operation == AE_GAMEPLAY_SERVICE_STREAMING_REMOVE_SOURCE) value.integer = m_context.streaming->RemoveSource(text);
+				else if (request.operation == AE_GAMEPLAY_SERVICE_STREAMING_CANCEL) value.integer = m_context.streaming->Cancel(static_cast<uint64_t>(request.integer));
+				else value.integer = m_context.streaming->Release(static_cast<uint64_t>(request.integer));
+				return AE_GAMEPLAY_OK;
+			}
+			case AE_GAMEPLAY_SERVICE_STREAMING_REQUEST:
+				if (!m_context.streaming) return AE_GAMEPLAY_UNSUPPORTED;
+				if (request.integer < 0 || request.integer > 3) return AE_GAMEPLAY_INVALID_ARGUMENT;
+				value.type = AE_GAMEPLAY_PROPERTY_INT;
+				value.integer = static_cast<int64_t>(m_context.streaming->Request(text, request.vector[0] != 0, static_cast<aether::io::IOPriority>(request.integer)));
+				return AE_GAMEPLAY_OK;
+			case AE_GAMEPLAY_SERVICE_STREAMING_STATE:
+				if (!m_context.streaming) return AE_GAMEPLAY_UNSUPPORTED;
+				value.type = AE_GAMEPLAY_PROPERTY_INT;
+				value.integer = static_cast<int64_t>(m_context.streaming->GetRequestState(static_cast<uint64_t>(request.integer)));
+				return AE_GAMEPLAY_OK;
+			case AE_GAMEPLAY_SERVICE_STREAMING_DIAGNOSTICS:
+			{
+				if (!m_context.streaming) return AE_GAMEPLAY_UNSUPPORTED;
+				const auto json = m_context.streaming->GetDiagnosticsJson();
+				value.type = AE_GAMEPLAY_PROPERTY_STRING;
+				return aether::scripting::CopyGameplayUtf8({json.data(), static_cast<uint32_t>(json.size())}, stringBuffer);
+			}
 			case AE_GAMEPLAY_SERVICE_KEY_DOWN:
 				if (request.integer < 0 || request.integer > 348)
 				{
@@ -332,6 +378,7 @@ namespace aether::app::scripting
 				{
 					return AE_GAMEPLAY_SCRIPT_ERROR;
 				}
+				scene::AdoptStreamingSpawn(world, m_context, created);
 				value.type = AE_GAMEPLAY_PROPERTY_ENTITY;
 				value.entity = m_access.Handle(created);
 				return AE_GAMEPLAY_OK;
@@ -378,6 +425,7 @@ namespace aether::app::scripting
 				world.Emplace<NameComponent>(created, NameComponent{.name = text.empty() ? "Entity" : text});
 				world.Emplace<TransformComponent>(created, TransformComponent{.localToWorld = glm::translate(glm::mat4(1.0f), glm::vec3(request.vector[0], request.vector[1], request.vector[2]))});
 				world.Emplace<SceneTransientComponent>(created);
+				scene::AdoptStreamingSpawn(world, m_context, created);
 				value.type = AE_GAMEPLAY_PROPERTY_ENTITY;
 				value.entity = m_access.Handle(created);
 				return AE_GAMEPLAY_OK;
@@ -398,6 +446,26 @@ namespace aether::app::scripting
 					return AE_GAMEPLAY_UNSUPPORTED;
 				}
 				return aether::scripting::ExecuteCustomPassOperation(*registry, request);
+			}
+			case AE_GAMEPLAY_SERVICE_NET_HOST:
+			case AE_GAMEPLAY_SERVICE_NET_CONNECT:
+			case AE_GAMEPLAY_SERVICE_NET_DISCONNECT:
+			case AE_GAMEPLAY_SERVICE_NET_IS_HOST:
+			case AE_GAMEPLAY_SERVICE_NET_IS_CLIENT:
+			case AE_GAMEPLAY_SERVICE_NET_IS_CONNECTED:
+			case AE_GAMEPLAY_SERVICE_NET_LOCAL_ID:
+			case AE_GAMEPLAY_SERVICE_NET_SPAWN:
+			case AE_GAMEPLAY_SERVICE_NET_DESPAWN:
+			case AE_GAMEPLAY_SERVICE_NET_HAS_AUTHORITY:
+			case AE_GAMEPLAY_SERVICE_NET_IS_OWNER:
+			case AE_GAMEPLAY_SERVICE_NET_REQUEST_OWNERSHIP:
+			case AE_GAMEPLAY_SERVICE_NET_RELEASE_OWNERSHIP:
+			case AE_GAMEPLAY_SERVICE_NET_SET_REPLICATION_READY:
+			case AE_GAMEPLAY_SERVICE_NET_IS_REPLICATION_READY:
+			case AE_GAMEPLAY_SERVICE_NET_DISCONNECT_REASON:
+			{
+				auto* network = m_context.services ? m_context.services->TryGet<aether::net::NetworkContext>() : nullptr;
+				return ExecuteGameplayNetworkService(network, world, m_access, request, value, stringBuffer, m_context.pendingDestroys);
 			}
 			default:
 			{

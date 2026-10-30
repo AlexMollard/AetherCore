@@ -111,4 +111,6 @@ internal unsafe struct ManagedScriptApi
     // or the method threw - the exception goes to ReportError). Appended at the end,
     // like every ABI addition here.
     public delegate* unmanaged<byte*, int> InvokeScriptCommand;
+    public delegate* unmanaged<ulong, byte*, uint, uint*, int> CaptureStreamingState;
+    public delegate* unmanaged<ulong, byte*, uint, int> RestoreStreamingState;
 }

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <optional>
 #include <format>
 #include <string>
@@ -93,6 +94,15 @@ namespace aether
 		        {"scripting.language", {.description = "Gameplay language for this project. Reopen the project after changing it.", .choices = kGameplayLanguages, .restartRequired = true}},
 		        {"app.autoplay", {.description = "Start the game straight away instead of opening the editor.", .restartRequired = true}},
 		        {"app.autosaveSeconds", {.description = "How often the editor writes a recovery copy of unsaved scene edits, beside the project and never over the scene itself. 0 disables it.", .minValue = 0.0, .maxValue = 3600.0}},
+		        {"streaming.cpuBudgetMiB", {.description = "Streaming CPU budget in MiB, including staging.", .minValue = 1.0, .maxValue = 1048576.0}},
+		        {"streaming.gpuBudgetMiB", {.description = "Streaming GPU budget in MiB; separate from the renderer baseline.", .minValue = 1.0, .maxValue = 1048576.0}},
+		        {"streaming.stagingBudgetMiB", {.description = "Streaming staging budget in MiB.", .minValue = 1.0, .maxValue = 1048576.0}},
+		        {"streaming.uploadBudgetKiBPerFrame", {.description = "Streaming upload budget per frame in KiB.", .minValue = 1.0, .maxValue = 1048576.0}},
+		        {"streaming.maxPendingRequests", {.description = "Maximum pending streaming requests.", .minValue = 1.0, .maxValue = 65536.0}},
+		        {"streaming.activationEntitiesPerFrame", {.description = "Maximum entities activated per frame.", .minValue = 1.0, .maxValue = 65536.0}},
+		        {"streaming.loadRadius", {.description = "Default camera source load radius in world units.", .minValue = 0.0, .maxValue = 1000000.0}},
+		        {"streaming.prefetchRadius", {.description = "Default camera prefetch radius; its effective value is at least the load radius.", .minValue = 0.0, .maxValue = 1000000.0}},
+		        {"streaming.defaultCameraSource", {.description = "Use the active camera as a streaming source when regions are configured."}},
 		        {"cursor.custom", {.description = "Draw the mouse pointer from a texture instead of using the OS pointer."}},
 		        {"cursor.texture", {.description = "VFS path to the pointer art. Empty draws nothing."}},
 		        {"cursor.size", {.description = "On-screen pointer size, in pixels.", .minValue = 4.0, .maxValue = 256.0}},
@@ -208,6 +218,17 @@ namespace aether
 		{
 			settings.window.height = defaults.window.height;
 		}
+		auto& streaming = settings.streaming;
+		streaming.cpuBudgetMiB = std::clamp(streaming.cpuBudgetMiB, 1, 1048576);
+		streaming.gpuBudgetMiB = std::clamp(streaming.gpuBudgetMiB, 1, 1048576);
+		streaming.stagingBudgetMiB = std::clamp(streaming.stagingBudgetMiB, 1, 1048576);
+		streaming.uploadBudgetKiBPerFrame = std::clamp(streaming.uploadBudgetKiBPerFrame, 1, 1048576);
+		streaming.maxPendingRequests = std::clamp(streaming.maxPendingRequests, 1, 65536);
+		streaming.activationEntitiesPerFrame = std::clamp(streaming.activationEntitiesPerFrame, 1, 65536);
+		if (!std::isfinite(streaming.loadRadius)) streaming.loadRadius = defaults.streaming.loadRadius;
+		if (!std::isfinite(streaming.prefetchRadius)) streaming.prefetchRadius = defaults.streaming.prefetchRadius;
+		streaming.loadRadius = std::clamp(streaming.loadRadius, 0.0f, 1000000.0f);
+		streaming.prefetchRadius = std::clamp(streaming.prefetchRadius, 0.0f, 1000000.0f);
 		settings.app.targetFps = std::max(0.0f, settings.app.targetFps);
 		settings.graphics.framesInFlight = std::clamp(settings.graphics.framesInFlight, 1, 3);
 		settings.graphics.mipLodBias = std::clamp(settings.graphics.mipLodBias, -4.0f, 4.0f);

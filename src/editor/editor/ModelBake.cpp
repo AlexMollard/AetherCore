@@ -109,6 +109,11 @@ namespace aether::editor
 
 
 		const auto result = assetpipeline::MeshProcessor::Process(std::span<const std::byte>(raw->data(), raw->size()), diskPath, rel, projectRoot);
+		if (!result.error.empty())
+		{
+			error = result.error;
+			return false;
+		}
 
 		if (result.meshData.empty())
 		{

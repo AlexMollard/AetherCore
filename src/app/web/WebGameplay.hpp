@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <map>
 #include <string>
 #include <unordered_set>
 #include "platform/Input.hpp"
@@ -9,9 +10,18 @@
 #include "scripting/GameplayAccess.hpp"
 #include "scripting/GameplayServices.h"
 #include "rendering/CustomPassRegistry.hpp"
+#include "scene/WorldStreaming.hpp"
+
+namespace aether
+{
+	class ServiceContainer;
+	namespace audio { class AudioSubsystem; }
+	namespace net { class NetworkContext; }
+}
 
 namespace aether::app::web
 {
+	struct StreamingScriptRestoreCursor;
 	class WebGameplay
 	{
 	public:
@@ -22,6 +32,8 @@ namespace aether::app::web
 		AetherGameplayStatus Invoke(const AetherGameplayServiceRequest& request, AetherGameplayPropertyValue& result, AetherGameplayUtf8Buffer buffer);
 		void Stop();
 		std::uint64_t GetInstanceHandle(Entity entity, std::uint32_t scriptIndex) const;
+		scripting::GameplayHost& Host() { return m_host; }
+
 
 		void ResetTiming()
 		{
@@ -36,12 +48,26 @@ namespace aether::app::web
 			std::uint64_t handle;
 			std::string type;
 			std::uint32_t scriptIndex = 0;
+			bool ownershipKnown = false;
+			bool ownershipSettled = false;
+			bool isOwner = false;
+			std::uint32_t owner = 0;
 		};
 
 		Expected<void> Load(const std::string& name, bool deferScripts = false);
 		Expected<void> RunScripts(float dt);
 		Expected<void> ProcessPendingDestroys();
 		Expected<void> StartSpawnedScripts();
+		Expected<void> StartScripts(const std::vector<WebScriptRecord>& records);
+		Expected<bool> StepRegionScripts(WebRegion& region);
+		Expected<std::string> CaptureRegion(const WebRegion& region);
+		Expected<void> RestoreRegion(WebRegion& region, std::string_view snapshot);
+		Expected<bool> StepRegionScriptRestore(WebRegion& region, std::string_view snapshot, std::size_t& remaining);
+		Expected<void> DetachRegion(WebRegion& region);
+		void RetainStreamingScriptReferences(const WebScriptRecord& record);
+		Expected<void> PrepareStreamingScriptReferences(const std::vector<Entity>& entities);
+		Expected<void> ResolveStreamingScriptReferences();
+		void AdoptRegionSpawn(Entity root);
 		void EnablePhysicsEvents(Entity entity);
 		std::vector<WebScriptRecord> m_spawned_scripts;
 		Expected<void> m_script_status;
@@ -58,6 +84,19 @@ namespace aether::app::web
 		scripting::GameplayHost m_host;
 		Input m_input;
 		glm::vec2 m_mouse_delta{}, m_scroll_delta{};
+		std::unique_ptr<ServiceContainer> m_services;
+		std::unique_ptr<net::NetworkContext> m_network;
+		std::unique_ptr<audio::AudioSubsystem> m_audio;
+		std::unique_ptr<scene::WorldStreaming> m_streaming;
+		bool m_host_ready = false;
+		std::shared_ptr<streaming::BudgetLedger> m_streaming_budget;
+		Entity m_callback_entity{};
+		std::map<std::string, WebRegionActivation> m_activating_regions;
+		struct RegionScriptStart { std::size_t cursor = 0; bool attaching = false; };
+		std::map<std::string, RegionScriptStart> m_starting_regions;
+		std::map<std::string, std::unique_ptr<StreamingScriptRestoreCursor>> m_script_restores;
+		std::uint32_t m_activation_budget = 64;
+		std::uint32_t m_activation_remaining = 0;
 		std::unique_ptr<WebScene> m_scene;
 		std::vector<Instance> m_instances;
 		aether::CustomPassRegistry m_custom_passes;

@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cerrno>
 #include <cctype>
+#include <cmath>
 #include <sstream>
 
 #ifdef _WIN32
@@ -155,7 +156,7 @@ namespace aether
 	Input::~Input()
 	{
 #if defined(AETHERCORE_WEB_RUNTIME)
-
+		StopRumble();
 #else
 		if (m_window)
 		{
@@ -174,12 +175,20 @@ namespace aether
 	void Input::Rumble(float low, float high, float seconds)
 	{
 		m_rumble.Start(low, high, seconds, std::chrono::duration<double>(std::chrono::steady_clock::now() - m_rumbleEpoch).count());
+#if defined(AETHERCORE_WEB_RUNTIME)
+		const auto motors = GetRumble();
+		EM_ASM({ aetherInput.rumble($0, $1, $2); }, motors.low, motors.high,
+		        seconds > 0.0f && std::isfinite(seconds) ? seconds * 1000.0f : 0.0f);
+#endif
 		ApplyRumble();
 	}
 
 	void Input::StopRumble()
 	{
 		m_rumble.Stop();
+#if defined(AETHERCORE_WEB_RUNTIME)
+		EM_ASM({ aetherInput.rumble(0, 0, 0); });
+#endif
 		ApplyRumble();
 	}
 
@@ -776,10 +785,7 @@ namespace aether
 	{
 #if defined(AETHERCORE_WEB_RUNTIME)
 		const int bytes = EM_ASM_INT({ return aetherInput.pasteText === null ? 0 : lengthBytesUTF8(aetherInput.pasteText) + 1; });
-		if (bytes == 0)
-		{
-			return {};
-		}
+		if (bytes == 0) return {};
 		std::string text(static_cast<std::size_t>(bytes), '\0');
 		EM_ASM({ stringToUTF8(aetherInput.pasteText, $0, $1); aetherInput.pasteText = null; }, text.data(), bytes);
 		text.resize(static_cast<std::size_t>(bytes - 1));
@@ -914,6 +920,10 @@ namespace aether
 	void Input::SetCursorLocked(bool locked)
 	{
 		locked = locked && !m_editorModalReclaimRequired;
+#if defined(AETHERCORE_WEB_RUNTIME)
+		EM_ASM({ aetherInput.setLockRequested(!!$0); }, locked);
+		locked = EM_ASM_INT({ return document.pointerLockElement === Module.canvas; }) != 0;
+#endif
 		if (locked == m_cursorLocked)
 		{
 			return;
@@ -935,7 +945,6 @@ namespace aether
 	void Input::ApplyCursorMode()
 	{
 #if defined(AETHERCORE_WEB_RUNTIME)
-		m_cursorLocked = false;
 		EM_ASM({ Module.canvas.style.cursor = $0 ? "auto" : "none"; }, m_osCursorVisible);
 #else
 		if (m_window == nullptr)

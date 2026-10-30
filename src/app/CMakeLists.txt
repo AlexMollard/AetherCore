@@ -1,11 +1,36 @@
 if(AETHERCORE_WEB_RUNTIME)
     set(_web_app_sources
         scene/SceneSerializerToml.cpp
+        scene/SceneSerializerIdentity.cpp
         scene/SceneDocumentExpansion.cpp
+        scene/SceneStreamingDependencies.cpp
+        scene/WorldStreaming.cpp
         web/WebScene.cpp
         web/WebModels.cpp
         web/WebSceneUi.cpp
         web/WebGameplay.cpp
+        web/WebStreamingBackend.cpp
+        web/WebStreamingSnapshot.cpp
+        web/WebGameplaySnapshot.cpp
+        web/WebSceneSnapshot.cpp
+        web/WebModelSnapshot.cpp
+        web/WebPersistentAssets.cpp
+        net/NetworkContext.cpp
+        net/NetworkSystems.cpp
+        net/NetTraversalSessionWeb.cpp
+        net/NetInterpolation.cpp
+        net/NetOwnership.cpp
+        net/NetRagdoll.cpp
+        net/NetRelevancy.cpp
+        net/NetRewind.cpp
+        net/NetRpc.cpp
+        net/NetScriptFields.cpp
+        net/NetSerialize.cpp
+        net/NetSession.cpp
+        net/NetSnapshot.cpp
+        net/NetSpawn.cpp
+        net/NetVelocity.cpp
+        net/ReplicationSchema.cpp
         scripting/GameplayHost.cpp
         scripting/modules/TagSlots.cpp
         scene/reflection/Audio.reflect.cpp
@@ -23,7 +48,7 @@ if(AETHERCORE_WEB_RUNTIME)
     target_link_libraries(GameRuntime PRIVATE Engine)
     target_compile_options(GameRuntime PRIVATE -fno-exceptions --use-port=emdawnwebgpu)
     target_link_options(GameRuntime PRIVATE -fno-exceptions --use-port=emdawnwebgpu -sASSERTIONS=2 -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576
-        -sEXIT_RUNTIME=0 -sENVIRONMENT=web,node -sFETCH=1)
+        -sEXIT_RUNTIME=0 -sENVIRONMENT=web,node -sFETCH=1 -lwebsocket.js)
     set_target_properties(GameRuntime PROPERTIES OUTPUT_NAME AetherGame SUFFIX ".js"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/web")
     endif()
@@ -41,7 +66,11 @@ if(AETHERCORE_WEB_RUNTIME)
             # The same 3D exports native C# uses (Gameplay3D logic, SceneContext-addressed world).
             scripting/SceneContext.cpp
             scripting/interop/PhysicsExports.cpp scripting/interop/CharacterExports.cpp
+            scripting/interop/AssetsExports.cpp
+            scripting/interop/AudioExports.cpp
+            scripting/interop/InputExports.cpp
             scripting/interop/RagdollExports.cpp scripting/interop/AnimationExports.cpp
+            scripting/interop/NetExports.cpp net/NetRpcExports.cpp net/BrowserScriptBridges.cpp
             ${_managed_sources})
         add_dependencies(WebManagedRuntime WebManagedRegistrations)
         target_include_directories(WebManagedRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/src/include")
@@ -58,11 +87,31 @@ if(AETHERCORE_WEB_RUNTIME)
                 --project "${AETHER_WEB_MANAGED_PROJECT}" --build "${CMAKE_BINARY_DIR}"
             DEPENDS WebManagedRuntime VERBATIM)
     endif()
+    # A separate worker-owned WASM instance performs scene parsing and expansion.
+    add_executable(SceneStreamingParser
+        web/WebStreamingParser.cpp
+        scene/SceneSerializerToml.cpp scene/SceneSerializerIdentity.cpp scene/SceneDocumentExpansion.cpp scene/SceneStreamingDependencies.cpp
+        scene/reflection/Audio.reflect.cpp scene/reflection/CoreComponents.reflect.cpp
+        scene/reflection/Reflection.cpp scene/reflection/Physics2D.reflect.cpp
+        scene/reflection/Physics.reflect.cpp scene/reflection/CharacterController.reflect.cpp
+        scene/reflection/MoreComponents.reflect.cpp)
+    target_include_directories(SceneStreamingParser PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/src/include")
+    target_link_libraries(SceneStreamingParser PRIVATE Engine)
+    target_compile_options(SceneStreamingParser PRIVATE -fno-exceptions --use-port=emdawnwebgpu)
+    target_link_options(SceneStreamingParser PRIVATE -fno-exceptions --use-port=emdawnwebgpu --no-entry
+        -sMODULARIZE=1 -sEXPORT_NAME=createAetherSceneParser -sENVIRONMENT=worker
+        -sINITIAL_MEMORY=16777216 -sMAXIMUM_MEMORY=134217728 -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576
+        "-sEXPORTED_FUNCTIONS=['_malloc','_free','_stream_parser_reset','_stream_parser_mount','_stream_parser_alias','_stream_parser_prepare','_stream_parser_prepare_snapshot','_stream_parser_build_mips','_stream_parser_data','_stream_parser_size','_stream_parser_dependencies_data','_stream_parser_dependencies_size','_stream_parser_error']"
+        "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','stringToUTF8','lengthBytesUTF8','HEAPU8']")
+    set_target_properties(SceneStreamingParser PROPERTIES OUTPUT_NAME AetherSceneParser SUFFIX ".js"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/web")
+    add_dependencies(GameRuntime SceneStreamingParser)
     return()
 endif()
 
 file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER APP_SOURCES EXCLUDE REGEX "[/\\\\]web[/\\\\]")
+list(FILTER APP_SOURCES EXCLUDE REGEX "[/\\\\]net[/\\\\](NetTraversalSessionWeb|BrowserScriptBridges)\\.cpp$")
 file(GLOB_RECURSE APP_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 
 # ── Editor-side sources (src/editor) ────────────────────────────────────────
@@ -267,6 +316,7 @@ set_target_properties(GameRuntime PROPERTIES
 # GameRuntime shares a conventional `main` entry point with Editor. Preserve that
 # entry point while selecting the Windows GUI subsystem above.
 if(MSVC)
+    target_compile_options(RuntimeFramework PRIVATE /bigobj)
     if(AETHERCORE_BUILD_EDITOR)
         target_compile_options(Editor PRIVATE /bigobj)
     endif()
@@ -317,7 +367,6 @@ target_compile_definitions(GameRuntime PRIVATE
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
     AETHER_MANAGED_SDK_PROJECT="${CMAKE_SOURCE_DIR}/managed/AetherCore/AetherCore.csproj"
-    target_compile_options(RuntimeFramework PRIVATE /bigobj)
 )
 
 # ── Managed (C#) assemblies ────────────────────────────────────────────────

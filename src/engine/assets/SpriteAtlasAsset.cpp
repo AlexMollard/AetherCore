@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cmath>
 #include <format>
+#include <limits>
 #include <sstream>
 #include <unordered_set>
 
@@ -303,6 +304,21 @@ namespace aether
 		{
 			AE_UNEXPECTED(AetherError::Asset("Failed to load sprite atlas '" + path.string() + "'."));
 		}
+		return ParseConfig(config, {});
+	}
+
+	Expected<SpriteAtlasAsset> SpriteAtlasAsset::LoadBytes(std::string_view text, const std::function<bool(std::size_t)>& reserve)
+	{
+		if (text.size() > std::numeric_limits<std::size_t>::max() / 256 || (reserve && !reserve(text.size() * 256)))
+			AE_UNEXPECTED(AetherError::Asset("Sprite atlas parse exceeds streaming budget."));
+		TomlConfig config;
+		if (!config.Load(text))
+			AE_UNEXPECTED(AetherError::Asset("Failed to parse sprite atlas."));
+		return ParseConfig(config, reserve);
+	}
+
+	Expected<SpriteAtlasAsset> SpriteAtlasAsset::ParseConfig(const TomlConfig& config, const std::function<bool(std::size_t)>& reserve)
+	{
 		SpriteAtlasAsset atlas;
 		AE_TRY(schemaVersion, ReadAssetVersion(config, "atlas.schema_version", SpriteAtlasAsset::kSchemaVersion));
 		atlas.schemaVersion = *schemaVersion;
@@ -330,6 +346,8 @@ namespace aether
 		atlas.sliceSettings.alphaThreshold = static_cast<std::uint8_t>(std::clamp(config.GetFloat("slice.alpha_threshold", 1.0f), 0.0f, 255.0f));
 		AE_TRY(spriteCountValue, ReadAssetCount(config, "atlas.sprite_count", 65536));
 		const auto spriteCount = *spriteCountValue;
+		if (reserve && !reserve(spriteCount * (sizeof(SpriteRegion) + 128)))
+			AE_UNEXPECTED(AetherError::Asset("Sprite atlas exceeds streaming budget."));
 		std::size_t totalCollisionPoints = 0;
 		atlas.sprites.reserve(spriteCount);
 		for (std::size_t index = 0; index < spriteCount; ++index)
@@ -362,6 +380,8 @@ namespace aether
 			{
 				AE_UNEXPECTED(AetherError::Asset("Atlas collision point budget exceeded"));
 			}
+			if (reserve && !reserve(collisionCount * sizeof(glm::vec2)))
+				AE_UNEXPECTED(AetherError::Asset("Sprite atlas collision data exceeds streaming budget."));
 			sprite.collisionOutline.reserve(collisionCount);
 			for (std::size_t pointIndex = 0; pointIndex < collisionCount; ++pointIndex)
 			{

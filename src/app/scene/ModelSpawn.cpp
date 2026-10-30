@@ -6,6 +6,7 @@
 #include "assets/AssetDatabase.hpp"
 #include "assets/GltfAsset.hpp"
 #include "assets/AssetManager.hpp"
+#include "assets/AssetStreaming.hpp"
 #include "assets/AssetTypes.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "io/FileSystem.hpp"
@@ -26,6 +27,13 @@ namespace aether::app::scene
 	// alive in ctx.loadedModels so live MeshComponent.mesh pointers never dangle.
 	LoadedModel* LoadCachedModel(AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
 	{
+		if (auto* streamed = assets.GetStreaming().FindModel(path))
+			return streamed;
+		if (ctx.streamedModelActivation)
+		{
+			// A region owns the lease; never synchronously duplicate a missing model.
+			return nullptr;
+		}
 		const std::string resolved = io::FileSystem::ResolveAssetPath(path);
 		if (resolved.empty())
 			return nullptr;
@@ -316,6 +324,12 @@ namespace aether::app::scene
 
 	bool ReloadModelAssets(AssetDatabase& db, AssetManager& assets, scripting::SceneContext& ctx, const std::string& path)
 	{
+		if (assets.GetStreaming().FindModel(path))
+		{
+			RegisterModelAssets(db, assets, ctx, path);
+			db.TouchByPath(path);
+			return true;
+		}
 		// live MeshComponent.mesh pointers into the old slot never dangle.
 		auto result = assets.LoadModel(path);
 		if (!result)

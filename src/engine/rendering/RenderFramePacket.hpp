@@ -70,10 +70,25 @@ namespace aether
 		std::vector<CustomPassDraw> passes;
 	};
 
+	struct TexturePreviewRequest
+	{
+		gpu::Extent2D extent{};
+		std::uint32_t slot = 0xFFFFFFFFu;
+		std::uint32_t channel = 0;
+		float exposure = 1.0f;
+		std::uint32_t flags = 0;
+		std::uint32_t tonemapMode = 0;
+		bool enabled = false;
+	};
+
 	// Per-frame render data snapshot produced by the game thread and consumed by
 	// the render thread. All dynamic arrays are packet-owned.
 	struct RenderFramePacket
 	{
+		// Keeps streamed C++ mesh/animation owners alive until every queue in
+		// this packet has finished CPU-side command recording.
+		std::vector<std::shared_ptr<const void>> assetLeases;
+		TexturePreviewRequest texturePreview;
 		glm::mat4 view{1.0f};
 		glm::mat4 proj{1.0f};
 		glm::vec4 cameraWorldPos{0.0f};

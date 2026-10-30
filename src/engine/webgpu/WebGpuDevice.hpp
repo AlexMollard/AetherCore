@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <span>
 #include <cstdint>
@@ -13,7 +14,10 @@ namespace aether
 {
 	struct RenderFramePacket;
 }
-
+namespace aether::streaming
+{
+	class BudgetLedger;
+}
 namespace aether::ui { struct FontAsset; }
 
 namespace aether::webgpu
@@ -29,8 +33,16 @@ namespace aether::webgpu
 		void Initialize();
 		[[nodiscard]] gpu::RenderState State() const;
 		[[nodiscard]] bool Draw(const RenderFramePacket& packet, bool capture = false);
-		[[nodiscard]] bool UploadTexture(std::uint32_t slot, std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba, bool srgb = false, bool mipmapped = false);
-		[[nodiscard]] bool UploadMesh(std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices);
+		[[nodiscard]] bool UploadTexture(std::uint32_t slot, std::uint32_t width, std::uint32_t height, std::span<const std::uint8_t> rgba, bool srgb = false, bool mipmapped = false, std::shared_ptr<streaming::BudgetLedger> budget = {});
+		[[nodiscard]] bool UploadPreparedTexture(std::uint32_t slot, std::span<const std::byte> data, bool srgb, std::shared_ptr<streaming::BudgetLedger> budget);
+		[[nodiscard]] const std::string& TextureUploadError() const;
+		void RetireTextures(std::vector<std::uint32_t> slots);
+		[[nodiscard]] bool TextureRetirementPending() const;
+		[[nodiscard]] bool StreamingUploadsPending() const;
+		void PumpStreamingUploads();
+		[[nodiscard]] bool StreamingUploadBlocked() const;
+		void CollectRetiredTextures(std::vector<std::uint32_t>& slots);
+		[[nodiscard]] bool UploadMesh(std::uint32_t slot, std::span<const MeshVertex> vertices, std::span<const std::uint32_t> indices, std::shared_ptr<streaming::BudgetLedger> budget = {});
 		// Retire slots after all previously submitted queue work has completed.
 		void RetireMeshes(std::vector<std::uint32_t> slots);
 		[[nodiscard]] bool MeshRetirementPending() const;
@@ -41,7 +53,9 @@ namespace aether::webgpu
 		[[nodiscard]] bool UploadShader(std::uint32_t slot, std::string_view wgsl);
 		[[nodiscard]] const std::string& MeshUploadError() const;
 		[[nodiscard]] bool UploadCustomPassShader(std::string_view stem, std::string_view wgsl);
-		[[nodiscard]] bool UploadUiFont(ui::FontAsset& font);
+		[[nodiscard]] bool UploadUiFont(ui::FontAsset& font, std::shared_ptr<streaming::BudgetLedger> budget = {});
+		[[nodiscard]] bool UiFontReady(std::uint32_t slot) const;
+		void RetireUiFont(ui::FontAsset& font);
 		[[nodiscard]] bool HasUiShader(std::string_view stem, bool effect, bool glyph) const;
 		[[nodiscard]] bool UploadUiShader(std::string_view stem, bool effect, bool glyph, std::string_view wgsl);
 		[[nodiscard]] const std::string& CustomPassError() const;

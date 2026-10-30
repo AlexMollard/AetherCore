@@ -413,6 +413,16 @@ namespace aether
 		}
 	}
 
+	void RenderQueue::ForEachPendingDraw(std::uint32_t slot, const std::function<void(const DrawCommand&)>& visitor)
+	{
+		const auto idx = slot % kFramesInFlight;
+		const std::lock_guard lock(m_slotMutexes[idx]);
+		for (const auto& command: m_commandSlots[idx])
+		{
+			visitor(command);
+		}
+	}
+
 	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, gpu::PipelineView computePipeline, std::uint32_t frameIndex)
 	{
 		AE_PROFILE_ZONE();

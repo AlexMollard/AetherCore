@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <format>
+#include <limits>
 #include <sstream>
 
 #include "io/FileSystem.hpp"
@@ -203,6 +204,21 @@ namespace aether
 		{
 			AE_UNEXPECTED(AetherError::Asset("Failed to load tile set '" + path.string() + "'."));
 		}
+		return ParseConfig(config, {});
+	}
+
+	Expected<TileSetAsset> TileSetAsset::LoadBytes(std::string_view text, const std::function<bool(std::size_t)>& reserve)
+	{
+		if (text.size() > std::numeric_limits<std::size_t>::max() / 256 || (reserve && !reserve(text.size() * 256)))
+			AE_UNEXPECTED(AetherError::Asset("Tile set parse exceeds streaming budget."));
+		TomlConfig config;
+		if (!config.Load(text))
+			AE_UNEXPECTED(AetherError::Asset("Failed to parse tile set."));
+		return ParseConfig(config, reserve);
+	}
+
+	Expected<TileSetAsset> TileSetAsset::ParseConfig(const TomlConfig& config, const std::function<bool(std::size_t)>& reserve)
+	{
 
 		TileSetAsset tileSet;
 		AE_TRY(schemaVersion, ReadAssetVersion(config, "tileset.schema_version", TileSetAsset::kSchemaVersion));
@@ -211,6 +227,8 @@ namespace aether
 		tileSet.cellSize = std::max(config.GetFloat("tileset.cell_size", 1.0f), 0.001f);
 		AE_TRY(tileCountValue, ReadAssetCount(config, "tileset.tile_count", 65536));
 		const auto tileCount = *tileCountValue;
+		if (reserve && !reserve(tileCount * sizeof(TileDefinition)))
+			AE_UNEXPECTED(AetherError::Asset("Tile set exceeds streaming budget."));
 		std::size_t totalMetadata = 0;
 		tileSet.tiles.reserve(tileCount);
 		for (std::size_t index = 0; index < tileCount; ++index)
@@ -238,6 +256,8 @@ namespace aether
 			{
 				AE_UNEXPECTED(AetherError::Asset("Tile set metadata budget exceeded"));
 			}
+			if (reserve && !reserve(frameCount * sizeof(AssetObjectId)))
+				AE_UNEXPECTED(AetherError::Asset("Tile animation exceeds streaming budget."));
 			tile.animationFrames.reserve(frameCount);
 			for (std::size_t frameIndex = 0; frameIndex < frameCount; ++frameIndex)
 			{
@@ -250,6 +270,8 @@ namespace aether
 			{
 				AE_UNEXPECTED(AetherError::Asset("Tile set metadata budget exceeded"));
 			}
+			if (reserve && !reserve(propertyCount * (sizeof(std::pair<const std::string, std::string>) + 4 * sizeof(void*))))
+				AE_UNEXPECTED(AetherError::Asset("Tile properties exceed streaming budget."));
 			for (std::size_t propertyIndex = 0; propertyIndex < propertyCount; ++propertyIndex)
 			{
 				tile.properties.emplace(config.GetString(PropertyKey(index, propertyIndex, "key")), config.GetString(PropertyKey(index, propertyIndex, "value")));

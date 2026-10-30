@@ -317,6 +317,7 @@ namespace aether
 		ImDrawData* mainDrawData = ImGui::GetDrawData();
 		ProcessBackendTextureUpdates(mainDrawData);
 		frame.Capture(mainDrawData);
+		frame.RetainResources(std::move(m_frameResources));
 
 		if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
 		{

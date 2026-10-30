@@ -2,18 +2,22 @@
 
 #include "WebScene.hpp"
 #include "assets/ModelPose.hpp"
+#include "assets/ExternalAnimation.hpp"
 #include "io/FileSystem.hpp"
+#include "platform/web/WebFileSystem.hpp"
 #include "material/MaterialSerializer.hpp"
 #include "material/MaterialOverrides.hpp"
 #include "mesh/PrimitiveMeshData.hpp"
 #include "mesh/GrassMeshData.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include "scene/SceneSerializerDetail.hpp"
+#include "scene/WorldStreaming.hpp"
 #include "scene/Hierarchy.hpp"
 #include "gpu/WebMaterialShader.hpp"
 #include "rendering/SceneEffectExtraction.hpp"
 #include "scene/GrassBenderExtraction.hpp"
 #include <set>
+#include <cctype>
 
 namespace aether::app::web
 {
@@ -93,7 +97,7 @@ namespace aether::app::web
 				m_sink.colorManaged = false;
 				if (!handle.IsValid() || handle.index == TextureHandle::kBrokenIndex)
 				{
-					AE_UNEXPECTED(AetherError::Asset("Browser model texture failed: " + paths[i]));
+					AE_UNEXPECTED(AetherError::Asset(m_sink.error.empty() ? "Browser model texture failed: " + paths[i] : m_sink.error));
 				}
 				m_texture_cache.emplace(key, handle);
 			}
@@ -178,7 +182,7 @@ namespace aether::app::web
 				}
 				const auto slot = TakeSlot();
 				m_primitives.emplace(name, slot);
-				m_pending_uploads.push_back({name, slot, 0, false});
+				m_pending_uploads.push_back({name, slot, 0, false, m_streaming_activation});
 			}
 			binding.slot = m_primitives.at(name);
 			const auto primitive = *scene::detail::PrimitiveFromName(name);
@@ -189,9 +193,25 @@ namespace aether::app::web
 			const auto& path = record.mesh->path;
 			if (!m_models.contains(path))
 			{
-				AE_TRY(data, assets::GltfAsset::LoadFromVfsPath(path));
+				const auto resolved = io::FileSystem::ResolveAssetPath(path);
+				const auto meshPath = resolved.ends_with(".mesh") ? resolved : assets::GltfAsset::ResolveMeshPath(resolved);
+				const auto prepared = aether::web::FindWebAsset(meshPath + ".prepared");
+				if (prepared.empty() && !aether::web::FindWebAsset(meshPath).empty())
+					AE_UNEXPECTED(AetherError::Asset("Browser streaming model was not prepared by the worker: " + meshPath));
+				if (prepared.size() > UINT64_MAX / 8) AE_UNEXPECTED(AetherError::Asset("Browser streaming model size overflow"));
+				const std::uint64_t charge = prepared.empty() ? 0 : static_cast<std::uint64_t>(prepared.size()) * 8;
+				if (charge && (!m_budget || charge / 8 != prepared.size() || !m_budget->TryReserve(streaming::MemoryClass::CpuPending, charge)))
+					AE_UNEXPECTED(AetherError::Asset("Browser streaming model exceeds CPU budget: " + meshPath));
+				struct Reservation
+				{
+					std::shared_ptr<streaming::BudgetLedger> ledger;
+					std::uint64_t bytes;
+					streaming::MemoryClass category = streaming::MemoryClass::CpuPending;
+					~Reservation() { if (ledger && bytes) ledger->Release(category, bytes); }
+				} reservation{m_budget, charge};
+				AE_TRY(data, prepared.empty() ? assets::GltfAsset::LoadFromVfsPath(path) : assets::GltfAsset::FromPrepared(prepared, meshPath));
 				AE_TRY(pose, assets::EvaluateModelPose(*data));
-				Model model{std::move(*data), {}, {}};
+				Model model{std::move(*data), {}, {}, charge};
 				for (const auto& animation: model.data.animations)
 				{
 					float duration = 0.0f;
@@ -208,9 +228,13 @@ namespace aether::app::web
 				{
 					const auto slot = TakeSlot();
 					model.slots.push_back(slot);
-					m_pending_uploads.push_back({path, slot, i, true});
+					m_pending_uploads.push_back({path, slot, i, true, m_streaming_activation});
 				}
+				if (charge && !m_budget->Transfer(streaming::MemoryClass::CpuPending, streaming::MemoryClass::CpuResident, charge))
+					AE_UNEXPECTED(AetherError::Asset("Browser streaming model cannot become resident: " + meshPath));
+				reservation.category = streaming::MemoryClass::CpuResident;
 				m_models.emplace(path, std::move(model));
+				reservation.bytes = 0;
 			}
 			auto& model = m_models.at(path);
 			if (!record.mesh->primitiveKey.empty())
@@ -388,7 +412,7 @@ namespace aether::app::web
 			if (it == m_grass.end())
 			{
 				AE_TRY(field, MeshGen::GrassField::Load(grass));
-				it = m_grass.emplace(key, GrassResident{std::move(*field), {}, {}}).first;
+				it = m_grass.emplace(key, GrassResident{std::move(*field), {}, {}, world.Has<scene::StreamingRegionOwner>(entity)}).first;
 			}
 			const auto& worldMatrix = grassView.get<const TransformComponent>(raw).localToWorld;
 			const auto determinant = glm::determinant(glm::mat3(worldMatrix));
@@ -457,9 +481,14 @@ namespace aether::app::web
 						AE_UNEXPECTED(AetherError::Asset("Browser grass desired residency exceeds the 1024 mesh slot limit"));
 					}
 					const auto slot = TakeSlot();
-					if (!m_graphics.UploadMesh(slot, chunk->mesh.vertices, chunk->mesh.indices))
+					if (!m_graphics.UploadMesh(slot, chunk->mesh.vertices, chunk->mesh.indices, resident.streamed ? m_budget : nullptr))
 					{
 						m_free_grass_slots.push_back(slot);
+						if (resident.streamed && (m_graphics.MeshUploadError() == "Streaming GPU budget exceeded" || m_graphics.MeshUploadError() == "Streaming CPU budget exceeded"))
+						{
+							m_budget_blocked = true;
+							break;
+						}
 						AE_UNEXPECTED(AetherError::Asset("Browser grass upload failed: " + m_graphics.MeshUploadError()));
 					}
 					resident.chunks.emplace(chunkKey, GrassSlot{slot, chunk->origin, bytes});
@@ -577,13 +606,16 @@ namespace aether::app::web
 				float time = 0;
 				bool loop = true;
 				assets::PoseFade fade;
+				const auto& animations = binding.model->data.animations;
+				std::span<const JointRotationOffset> offsets;
 				if (const auto* skin = world.TryGet<SkinnedMeshComponent>(entity))
 				{
-					if (!binding.model->data.animations.empty())
+					offsets = skin->jointOffsets;
+					if (!animations.empty())
 					{
 						clip = skin->clipIndex;
 						// Native: the outgoing clip is sampled only while its index is a real clip.
-						if (skin->fadeWeight > 0.0f && skin->fadeClipIndex < binding.model->data.animations.size())
+						if (skin->fadeWeight > 0.0f && skin->fadeClipIndex < animations.size())
 						{
 							fade = {skin->fadeClipIndex, skin->fadeTime, skin->fadeLooping, skin->fadeWeight};
 						}
@@ -591,7 +623,7 @@ namespace aether::app::web
 					time = skin->animTime;
 					loop = skin->looping;
 				}
-				AE_TRY(pose, assets::EvaluateModelPose(binding.model->data, clip, time, loop, &fade));
+				AE_TRY(pose, assets::EvaluateModelPose(binding.model->data, clip, time, loop, &fade, offsets));
 				draw.skinMatrices = pose->skins[binding.skin];
 			}
 			packet.render3D.meshes.push_back(std::move(draw));
@@ -601,7 +633,7 @@ namespace aether::app::web
 		return {};
 	}
 
-	const WebModels::Model* WebModels::FindModel(Entity entity) const
+	WebModels::Model* WebModels::FindModel(Entity entity) const
 	{
 		for (const auto& binding: m_bindings)
 		{
@@ -631,6 +663,65 @@ namespace aether::app::web
 		return model && index < model->clipDurations.size() ? model->clipDurations[index] : 0.0f;
 	}
 
+	std::optional<std::uint32_t> WebModels::Catalog::FindNode(Entity animator, std::string_view target) const
+	{
+		const auto* model = m_owner.FindModel(animator);
+		if (!model) { return {}; }
+		const auto equals = [](std::string_view a, std::string_view b) {
+			return std::ranges::equal(a, b, [](unsigned char x, unsigned char y) { return std::tolower(x) == std::tolower(y); });
+		};
+		std::optional<std::uint32_t> localMatch;
+		for (std::size_t i = 0; i < model->data.nodes.size(); ++i)
+		{
+			const std::string_view name = model->data.nodes[i].name;
+			if (equals(name, target)) { return static_cast<std::uint32_t>(i); }
+			const auto separator = name.find_last_of("_:");
+			if (!localMatch && equals(separator == name.npos ? name : name.substr(separator + 1), target))
+			{
+				localMatch = static_cast<std::uint32_t>(i);
+			}
+		}
+		return localMatch;
+	}
+
+	void WebModels::Catalog::Remap(Entity animator, assets::GltfAnimation& animation) const
+	{
+		const auto* model = m_owner.FindModel(animator);
+		if (!model || model->data.skins.empty()) return;
+		assets::RemapExternalAnimation(animation, model->data.skins[0].joints, [model](std::uint32_t node) -> std::string_view {
+			return node < model->data.nodes.size() ? std::string_view(model->data.nodes[node].name) : std::string_view{};
+		});
+	}
+
+	void WebModels::Catalog::Compile(World& world, Entity entity) const
+	{
+		const auto compile = [&](Entity target) {
+			auto* skin = world.TryGet<SkinnedMeshComponent>(target);
+			auto* model = m_owner.FindModel(target);
+			if (!skin || skin->pendingExternalAnims.empty() || !model || model->data.nodes.empty()) return;
+			for (auto& animation : skin->pendingExternalAnims)
+			{
+				std::erase_if(animation.channels, [&](const auto& channel) {
+					return channel.nodeIndex >= model->data.nodes.size() || (animation.rootLocked && channel.path == assets::GltfAnimationPath::Translation && model->data.nodes[channel.nodeIndex].parentIndex == 0);
+				});
+				float duration = 0.0f;
+				for (const auto& channel: animation.channels)
+				{
+					if (!channel.times.empty())
+					{
+						duration = std::max(duration, channel.times.back());
+					}
+				}
+				model->clipDurations.push_back(duration);
+				model->data.animations.push_back(std::move(animation));
+			}
+			skin->pendingExternalAnims.clear();
+		};
+		compile(entity);
+		if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity))
+			for (const auto child : hierarchy->children) compile(child);
+	}
+
 	bool WebModels::ClipDurations(World& world, Entity entity, const SkinnedMeshComponent& skin, float& clip, float& fade) const
 	{
 		for (const auto& binding: m_bindings)
@@ -639,13 +730,9 @@ namespace aether::app::web
 			{
 				continue;
 			}
-			if (!binding.model || binding.model->clipDurations.empty())
-			{
-				return false;
-			}
-			const auto& durations = binding.model->clipDurations;
-			clip = skin.clipIndex < durations.size() ? durations[skin.clipIndex] : 0.0f;
-			fade = skin.fadeClipIndex < durations.size() ? durations[skin.fadeClipIndex] : 0.0f;
+			if (!binding.model || m_catalog.ClipCount(entity) == 0) return false;
+			clip = m_catalog.ClipDuration(entity, skin.clipIndex);
+			fade = m_catalog.ClipDuration(entity, skin.fadeClipIndex);
 			return true;
 		}
 		(void) world;
@@ -680,25 +767,41 @@ namespace aether::app::web
 				for (auto& slot: model.slots) { if (slot == oldSlot) { slot = pending.slot; } }
 			}
 		}
-		for (const auto& pending: m_pending_uploads)
+		std::size_t completed = 0;
+		for (; completed < m_pending_uploads.size(); ++completed)
 		{
+			const auto& pending = m_pending_uploads[completed];
 			if (pending.model)
 			{
-				const auto& primitive = m_models.at(pending.source).data.primitives[pending.primitive];
-				if (!m_graphics.UploadMesh(pending.slot, primitive.vertices, primitive.indices))
+				const auto& model = m_models.at(pending.source);
+				const auto& primitive = model.data.primitives[pending.primitive];
+				if (!m_graphics.UploadMesh(pending.slot, primitive.vertices, primitive.indices, pending.streamed ? m_budget : nullptr))
 				{
+					if (m_graphics.MeshUploadError() == "Streaming GPU budget exceeded" || m_graphics.MeshUploadError() == "Streaming CPU budget exceeded")
+					{
+						m_budget_blocked = true;
+						m_pending_uploads.erase(m_pending_uploads.begin(), m_pending_uploads.begin() + completed);
+						return {};
+					}
 					AE_UNEXPECTED(AetherError::Asset("Browser model upload failed: " + pending.source + ": " + m_graphics.MeshUploadError()));
 				}
 			}
 			else
 			{
 				const auto mesh = GeneratePrimitiveMesh(*scene::detail::PrimitiveFromName(pending.source));
-				if (!mesh || !m_graphics.UploadMesh(pending.slot, mesh->vertices, mesh->indices))
+				if (!mesh || !m_graphics.UploadMesh(pending.slot, mesh->vertices, mesh->indices, pending.streamed ? m_budget : nullptr))
 				{
+					if (mesh && pending.streamed && (m_graphics.MeshUploadError() == "Streaming GPU budget exceeded" || m_graphics.MeshUploadError() == "Streaming CPU budget exceeded"))
+					{
+						m_budget_blocked = true;
+						m_pending_uploads.erase(m_pending_uploads.begin(), m_pending_uploads.begin() + completed);
+						return {};
+					}
 					AE_UNEXPECTED(AetherError::Asset("Browser primitive upload failed: " + pending.source + ": " + m_graphics.MeshUploadError()));
 				}
 			}
 		}
+		m_budget_blocked = false;
 		m_pending_uploads.clear();
 		return {};
 	}
@@ -706,6 +809,76 @@ namespace aether::app::web
 	{
 		if (slots.empty()) { return; }
 		m_graphics.RetireMeshes(std::move(slots));
+	}
+
+	void WebModels::ReleaseUnused(World& world)
+	{
+		std::erase_if(m_bindings, [&world](const auto& binding) {
+			return !world.GetRegistry().valid(World::ToEntt(binding.entity));
+		});
+		std::vector<std::uint32_t> retired;
+		auto releaseSlots = [&](const std::vector<std::uint32_t>& slots)
+		{
+			for (const auto slot: slots)
+			{
+				const auto pending = std::find_if(m_pending_uploads.begin(), m_pending_uploads.end(),
+				        [slot](const auto& upload) { return upload.slot == slot; });
+				if (pending != m_pending_uploads.end())
+				{
+					if (slot < 1024) m_free_grass_slots.push_back(slot);
+					m_pending_uploads.erase(pending);
+				}
+				else
+					retired.push_back(slot);
+			}
+		};
+		for (auto it = m_models.begin(); it != m_models.end();)
+		{
+			const auto* model = &it->second;
+			if (std::any_of(m_bindings.begin(), m_bindings.end(), [model](const auto& binding) { return binding.model == model; }))
+			{
+				++it;
+				continue;
+			}
+			releaseSlots(it->second.slots);
+			if (m_budget && it->second.cpuCharge) m_budget->Release(streaming::MemoryClass::CpuResident, it->second.cpuCharge);
+			it = m_models.erase(it);
+		}
+		for (auto it = m_primitives.begin(); it != m_primitives.end();)
+		{
+			const auto slot = it->second;
+			if (std::any_of(m_bindings.begin(), m_bindings.end(), [slot](const auto& binding) { return binding.slot == slot; }))
+			{
+				++it;
+				continue;
+			}
+			releaseSlots({slot});
+			it = m_primitives.erase(it);
+		}
+		for (auto it = m_texture_cache.begin(); it != m_texture_cache.end();)
+		{
+			const auto handle = it->second;
+			bool used = false;
+			const auto materials = world.GetRegistry().view<MaterialInstanceComponent>();
+			for (const auto entity: materials)
+			{
+				const auto& asset = materials.get<MaterialInstanceComponent>(entity).asset;
+				if (asset.albedoTex == handle || asset.normalTex == handle || asset.metallicRoughnessTex == handle ||
+				        asset.occlusionTex == handle || asset.emissiveTex == handle)
+				{
+					used = true;
+					break;
+				}
+			}
+			if (used)
+			{
+				++it;
+				continue;
+			}
+			m_textures.Release(handle);
+			it = m_texture_cache.erase(it);
+		}
+		RetireGrass(std::move(retired));
 	}
 
 	void WebModels::ClearEntities()
@@ -721,6 +894,7 @@ namespace aether::app::web
 			if (pending.slot < 1024) { m_free_grass_slots.push_back(pending.slot); }
 		}
 		m_pending_uploads.clear();
+		m_budget_blocked = false;
 		for (const auto& [path, model]: m_models)
 		{
 			for (const auto slot: model.slots)
@@ -732,6 +906,9 @@ namespace aether::app::web
 		{
 			if (!pendingSlots.contains(slot)) { slots.push_back(slot); }
 		}
+		if (m_budget)
+			for (const auto& [path, model]: m_models)
+				if (model.cpuCharge) m_budget->Release(streaming::MemoryClass::CpuResident, model.cpuCharge);
 		m_models.clear();
 		m_primitives.clear();
 		for (const auto& [key, resident]: m_grass)

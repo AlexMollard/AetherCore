@@ -13,6 +13,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
@@ -66,6 +67,23 @@
 
 namespace aether
 {
+	namespace
+	{
+		struct PacketMaterialRefs
+		{
+			MaterialRegistry* registry;
+			std::vector<MaterialHandle> handles;
+			~PacketMaterialRefs() { for (auto handle: handles) registry->Release(handle); }
+		};
+
+		struct PacketTextureRefs
+		{
+			TextureRegistry* registry;
+			std::vector<TextureHandle> handles;
+			~PacketTextureRefs() { for (auto handle: handles) registry->Release(handle); }
+		};
+	}
+
 	AetherCore::AetherCore(const Config& config)
 	      : AetherCore(config, EngineSettingsIO::LoadOrCreate(config.settingsFile))
 	{
@@ -212,6 +230,7 @@ namespace aether
 				m_services.Register<audio::AudioSubsystem>(*m_audio);
 			}
 		}
+		assetsSub.GetAssetManager().GetStreaming().SetDocumentStores(&assetsSub.GetSpriteAssetStore(), &assetsSub.GetTileAssetStore(), &m_rendering->GetUiRenderer(), m_audio.get());
 
 		// Referencing the anchor is what pulls the override translation unit out of
 		// Engine.lib. Without it the linker discards an object file nothing names, and every
@@ -234,6 +253,7 @@ namespace aether
 
 		// Ensure the render thread is joined before we tear anything down. Stop()
 		m_renderThread.Stop();
+		m_services.Get<AssetSubsystem>().GetAssetManager().GetStreaming().Shutdown();
 
 		m_gpu->WaitIdle();
 		m_screenshotService.Shutdown();
@@ -735,6 +755,43 @@ namespace aether
 				// command buffers per slot, so a rebuild never lands on memory still being read.
 				// If anything else ever writes GPU memory from this thread, it needs the same.
 				uiRenderer.BuildFrame({static_cast<float>(packet.uiExtent.width), static_cast<float>(packet.uiExtent.height)}, packet.drawSlot);
+				auto& assets = m_services.Get<AssetSubsystem>();
+				auto& textures = assets.GetTextureRegistry();
+				auto& streaming = assets.GetAssetManager().GetStreaming();
+				std::shared_ptr<PacketTextureRefs> textureRefs;
+				std::unordered_set<std::uint32_t> seenTextures;
+				const auto retainTexture = [&](std::uint32_t slot)
+				{
+					if (!seenTextures.insert(slot).second) return;
+					auto handle = textures.FindAndAcquireSlot(slot);
+					if (!handle.IsValid()) return;
+					if (!textureRefs)
+					{
+						textureRefs = std::make_shared<PacketTextureRefs>();
+						textureRefs->registry = &textures;
+						packet.assetLeases.push_back(textureRefs);
+					}
+					textureRefs->handles.push_back(handle);
+				};
+				if (packet.texturePreview.enabled) retainTexture(packet.texturePreview.slot);
+				for (const auto& sprite: packet.render2D.sprites) retainTexture(sprite.textureIndex);
+				for (const auto& particle: packet.render2D.billboards) retainTexture(particle.textureIndex);
+				for (const auto& occluder: packet.render2D.occluders)
+				{
+					if ((occluder.flags & kOccluder2DCapsule) == 0) retainTexture(occluder.textureIndex);
+				}
+				std::unordered_set<std::uint32_t> seenFonts;
+				for (const auto& command: uiRenderer.BuiltCommands())
+				{
+					if (command.type == ui::kShapeTexturedRect) retainTexture(command.textureSlot);
+					else if (command.type == ui::kShapeGlyph && seenFonts.insert(command.textureSlot).second)
+					{
+						if (auto lease = streaming.AcquireFontLeaseBySlot(command.textureSlot))
+						{
+							packet.assetLeases.push_back(std::move(lease));
+						}
+					}
+				}
 			}
 
 			m_renderThread.SubmitFrame(std::move(packet));
@@ -962,6 +1019,10 @@ namespace aether
 		AE_PROFILE_ZONE();
 		// the producer (main) thread via NeedsSwapchainOrViewportRecreate() +
 		m_gpu->BeginSwapchainFrame();
+		// BeginSwapchainFrame has waited the next swapchain slot's GPU fence,
+		// even when image acquisition fails. Recycle one destruction ring slot
+		// only here, once per distinct successive fence wait, before recording.
+		m_gpu->AdvanceResourceRegistryFrame();
 		m_currentCmdList = gpu::CommandList(m_gpu->GetSwapchain().GetCurrentCommandBuffer());
 	}
 
@@ -1336,6 +1397,50 @@ namespace aether
 		m_rendering->GetMaterialThumbnailBaker().PrepareQueue(drawSlot);
 
 		RenderFramePacket packet;
+		packet.texturePreview = m_rendering->GetTexturePreviewRequest();
+		// The queued draws borrow CPU wrappers. Keep only the streamed owners
+		// actually referenced by this packet until render-side recording ends.
+		auto& streaming = assetsSub.GetAssetManager().GetStreaming();
+		std::unordered_set<const Mesh*> seenMeshes;
+		std::unordered_set<const AnimationDatabase*> seenAnimations;
+		std::unordered_set<std::uint32_t> seenMaterials;
+		std::shared_ptr<PacketMaterialRefs> materialRefs;
+		const auto keepLease = [&packet](std::shared_ptr<const void> lease)
+		{
+			if (lease && std::find(packet.assetLeases.begin(), packet.assetLeases.end(), lease) == packet.assetLeases.end())
+			{
+				packet.assetLeases.push_back(std::move(lease));
+			}
+		};
+		m_rendering->ForEachRenderQueue([&](RenderQueue& queue)
+		{
+			queue.ForEachPendingDraw(drawSlot, [&](const DrawCommand& draw)
+			{
+				if (draw.mesh && seenMeshes.insert(draw.mesh).second)
+				{
+					keepLease(streaming.AcquireMeshLease(draw.mesh));
+				}
+				if (draw.animDb && seenAnimations.insert(draw.animDb).second)
+				{
+					keepLease(streaming.AcquireAnimationLease(draw.animDb));
+				}
+				if (draw.materialIndex != 0xFFFFFFFFu && seenMaterials.insert(draw.materialIndex).second)
+				{
+					auto& registry = assetsSub.GetMaterialRegistry();
+					auto handle = registry.FindAndAcquireSlot(draw.materialIndex);
+					if (handle.IsValid())
+					{
+						if (!materialRefs)
+						{
+							materialRefs = std::make_shared<PacketMaterialRefs>();
+							materialRefs->registry = &registry;
+							packet.assetLeases.push_back(materialRefs);
+						}
+						materialRefs->handles.push_back(handle);
+					}
+				}
+			});
+		});
 		packet.grassStreaming = std::move(m_pendingGrassStreaming);
 		packet.frameIndex = frameIndex;
 		packet.drawSlot = drawSlot;
@@ -1511,7 +1616,7 @@ namespace aether
 		        .shadowCasterDraws = directionalShadowCasters || localShadowCasters,
 		        .directionalLight = directionalShadowEnabled,
 		        .localShadowLights = anyCastsShadow(packet.pointLights) || anyCastsShadow(packet.spotLights),
-		        .texturePreview = m_rendering->IsTexturePreviewRequested(),
+		        .texturePreview = packet.texturePreview.enabled,
 		        // Asked after every queue for this slot has been filled - the main flush, the
 		        // two shadow services, both previews and the render-to-texture targets above.
 		        .skinnedDraws = m_rendering->HasSkinnedDrawsQueued(drawSlot),
@@ -1538,6 +1643,7 @@ namespace aether
 		{
 			m_rendering->SetSceneFeatures(packet.sceneFeatures);
 			m_rendering->SetFrameSceneDraws(packet.hasSceneDraws);
+			m_rendering->SetFrameTexturePreview(packet.texturePreview);
 			m_rendering->SetBackgroundParams(packet.backgroundMode, packet.backgroundAngleRadians, packet.backgroundStopCount, packet.backgroundStops);
 			m_rendering->SetDepthOfFieldParams(packet.dofParams);
 			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
@@ -1626,7 +1732,6 @@ namespace aether
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 			m_services.Get<AssetSubsystem>().AdvanceFrame(m_frameIndex);
-			m_gpu->AdvanceResourceRegistryFrame();
 			return;
 		}
 
@@ -1763,7 +1868,6 @@ namespace aether
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 		m_services.Get<AssetSubsystem>().AdvanceFrame(m_frameIndex);
-		m_gpu->AdvanceResourceRegistryFrame();
 	}
 
 	GpuFormat AetherCore::GetForwardColorFormat()

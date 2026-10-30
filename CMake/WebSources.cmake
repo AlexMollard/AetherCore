@@ -1,5 +1,7 @@
 # Explicit portable closure. No glob may add native services to this target.
 set(AETHER_WEB_ENGINE_SOURCES
+    audio/AudioSubsystem.cpp
+    audio/AudioSystem.cpp
     scene/World.cpp
     scene/System.cpp
     io/MemoryPak.cpp
@@ -20,6 +22,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     assets/SpriteAtlasAsset.cpp
     assets/SpriteAnimationAsset.cpp
     assets/GltfAsset.cpp
+    assets/GltfPreparedAsset.cpp
     assets/ModelPose.cpp
     animation/SpriteAnimationSystem.cpp
     particles/ParticleSystem.cpp
@@ -39,10 +42,14 @@ set(AETHER_WEB_ENGINE_SOURCES
     utils/TomlConfig.cpp
     utils/TextIni.cpp
     scripting/GameplayAccess.cpp
+    streaming/StreamingBudget.cpp
     scripting/GameplayAbiValidation.cpp
     platform/web/WebLog.cpp
+    platform/web/NetworkSubsystemWeb.cpp
+    net/RoomCode.cpp
     platform/web/WebAssetLoader.cpp
     platform/web/WebFileSystem.cpp
+    platform/web/WebStreamingTransport.cpp
     webgpu/WebGpuDevice.cpp
     webgpu/WebUiRenderer.cpp
     webgpu/WebMeshRenderer.cpp

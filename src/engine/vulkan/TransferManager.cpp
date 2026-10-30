@@ -86,6 +86,10 @@ namespace aether::vulkan
 
 		const std::lock_guard<std::mutex> lock(m_mutex);
 		CollectCompleted();
+		// Allocate bookkeeping before submission: after vkQueueSubmit2 succeeds the
+		// callback and destination must remain owned until the ticket completes.
+		if (m_inFlight.size() == m_inFlight.capacity())
+			m_inFlight.reserve(m_inFlight.capacity() ? m_inFlight.capacity() * 2 : 8);
 
 		const VkCommandBufferAllocateInfo allocInfo{
 		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,

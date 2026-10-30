@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <format>
+#include <limits>
 #include <sstream>
 
 #include "io/FileSystem.hpp"
@@ -129,6 +130,21 @@ namespace aether
 		{
 			AE_UNEXPECTED(AetherError::Asset("Failed to load sprite animation '" + path.string() + "'."));
 		}
+		return ParseConfig(config, {});
+	}
+
+	Expected<SpriteAnimationAsset> SpriteAnimationAsset::LoadBytes(std::string_view text, const std::function<bool(std::size_t)>& reserve)
+	{
+		if (text.size() > std::numeric_limits<std::size_t>::max() / 256 || (reserve && !reserve(text.size() * 256)))
+			AE_UNEXPECTED(AetherError::Asset("Sprite animation parse exceeds streaming budget."));
+		TomlConfig config;
+		if (!config.Load(text))
+			AE_UNEXPECTED(AetherError::Asset("Failed to parse sprite animation."));
+		return ParseConfig(config, reserve);
+	}
+
+	Expected<SpriteAnimationAsset> SpriteAnimationAsset::ParseConfig(const TomlConfig& config, const std::function<bool(std::size_t)>& reserve)
+	{
 		SpriteAnimationAsset animation;
 		AE_TRY(schemaVersion, ReadAssetVersion(config, "animation.schema_version", SpriteAnimationAsset::kSchemaVersion));
 		animation.schemaVersion = *schemaVersion;
@@ -138,6 +154,8 @@ namespace aether
 		animation.loopMode = ParseLoopMode(config.GetString("animation.loop_mode", "loop"));
 		AE_TRY(frameCountValue, ReadAssetCount(config, "animation.frame_count", 65536));
 		const auto frameCount = *frameCountValue;
+		if (reserve && !reserve(frameCount * sizeof(SpriteAnimationFrame)))
+			AE_UNEXPECTED(AetherError::Asset("Sprite animation frames exceed streaming budget."));
 		animation.frames.reserve(frameCount);
 		for (std::size_t index = 0; index < frameCount; ++index)
 		{
@@ -148,6 +166,8 @@ namespace aether
 		}
 		AE_TRY(eventCountValue, ReadAssetCount(config, "animation.event_count", 65536));
 		const auto eventCount = *eventCountValue;
+		if (reserve && !reserve(eventCount * sizeof(SpriteAnimationEvent)))
+			AE_UNEXPECTED(AetherError::Asset("Sprite animation events exceed streaming budget."));
 		animation.events.reserve(eventCount);
 		for (std::size_t index = 0; index < eventCount; ++index)
 		{

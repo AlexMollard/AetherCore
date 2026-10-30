@@ -209,19 +209,27 @@ namespace aether::scripting
 
 	GameplayAccess::Scope::Scope(GameplayAccess& access, ScopeKind kind) noexcept
 	{
-		(void) kind; // Both kinds are exclusive; engine getters/setters remain available inside callbacks.
+		// Structural mutation remains exclusive, including during predicted attach.
+#if !defined(__EMSCRIPTEN__)
+		(void) kind;
+#endif
 		std::lock_guard lock(s_access_mutex);
 		auto* resolved = Resolve(access.m_context, m_status);
 		if (resolved == nullptr)
 		{
 			return;
 		}
-		if (resolved->m_scope_active)
+		if (resolved->m_scope_depth != 0)
 		{
-			m_status = AE_GAMEPLAY_REENTRANT;
-			return;
+#if defined(__EMSCRIPTEN__)
+			if (kind != ScopeKind::PredictedAttachCallback || resolved->m_predicted_attach_depth == 0)
+#endif
+			{
+				m_status = AE_GAMEPLAY_REENTRANT;
+				return;
+			}
 		}
-		resolved->m_scope_active = true;
+		++resolved->m_scope_depth;
 		m_context = access.m_context;
 	}
 
@@ -233,8 +241,20 @@ namespace aether::scripting
 			const auto entry = s_access.find(m_context);
 			if (entry != s_access.end())
 			{
-				entry->second->m_scope_active = false;
+				--entry->second->m_scope_depth;
 			}
 		}
 	}
+
+#if defined(__EMSCRIPTEN__)
+	GameplayAccess::PredictedAttachScope::PredictedAttachScope(GameplayAccess& access) noexcept : m_access(access)
+	{
+		++m_access.m_predicted_attach_depth;
+	}
+
+	GameplayAccess::PredictedAttachScope::~PredictedAttachScope()
+	{
+		--m_access.m_predicted_attach_depth;
+	}
+#endif
 } // namespace aether::scripting

@@ -78,6 +78,30 @@ Native and browser peers must use matching application wire schemas/builds. The 
 The default listener is loopback-only at `http://127.0.0.1:8788`; UDP hosting is limited to ports 27000–27100. `Gateway:AllowPublic=true` is an explicit opt-in for non-loopback listening/UDP hosting. Public sites need WSS/TLS and an exact origin allowlist. `authToken` is embedded in public `project.js`: it is an admission key, not a secret or player authentication. The gateway is bounded to 128 sessions and 64 peers per hosted session. Qualification covers localhost peers in both directions, not public deployment, LAN discovery, TURN or rendezvous services.
 
 
+## Streaming worlds
+
+Root scenes with `[[stream_regions]]` use a small bootstrap `game.pak` plus a
+versioned `streaming-manifest.json` and content-addressed `streaming/` blobs.
+The manifest maps persistent UIDs and project paths to dependency closures, byte sizes
+and SHA-256 hashes. Shared dependencies have shared residency claims rather than one
+copy per region. Keep chunk scenes out of `publish.web.scenes`: that list declares
+whole-scene entry points that must be available in the bootstrap.
+
+Dedicated workers fetch and prepare regional content, expand scene/prefab documents
+with the same C++ serializer in `AetherSceneParser.wasm`, and prepare model/image
+payloads. Cancellation invalidates worker results and aborts unneeded fetches.
+The main runtime applies records incrementally and pumps bounded GPU upload slices.
+All workers, the parser and blobs are packaged relative to the export; no additional
+content service is required. Serve them with the same origin and MIME rules as the
+rest of the package.
+
+Region state is stored asynchronously in session-private IndexedDB records.
+Admission includes conservative snapshot/copy workspace; failed writes retain
+rollback state rather than silently discarding a region. This is not a save-game
+format. See [authored regions, budgets and gameplay hooks](asset-database.md#authored-world-regions)
+for the native/browser contract and the distinction between charged payload,
+worker/renderer baseline memory and driver overhead.
+
 ## Package and evidence
 
 Output is `Builds/Web/<product>/<product>.zip`, with `index.html` at the ZIP root. It includes the relative loader, Wasm/data, target PAKs, project configuration and manifest v1. The manifest records file byte counts/SHA-256, selected project/startup/scenes, engine Git checkpoint and pinned toolchains. The checkpoint identifies HEAD at build time; it is not an attestation that the source checkout was clean.

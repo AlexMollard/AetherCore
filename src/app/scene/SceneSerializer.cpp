@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <mutex>
-#include <random>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -303,16 +302,6 @@ namespace aether::app::scene
 		}
 	}
 
-	std::uint64_t GenerateSceneNodeId()
-	{
-		static std::mt19937_64 rng{std::random_device{}()};
-		std::uint64_t id = 0;
-		while (id == 0) // 0 is the "unassigned" sentinel
-		{
-			id = rng();
-		}
-		return id;
-	}
 
 	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefabIn)
 	{
@@ -456,27 +445,6 @@ namespace aether::app::scene
 		return names;
 	}
 
-	bool IsValidAssetName(std::string_view assetName)
-	{
-		if (assetName.empty())
-		{
-			return false;
-		}
-		// A name is pasted into a filename, so anything the filesystem treats specially has to
-		// go. A colon was the one that mattered: "bad:name" wrote the scene into an NTFS
-		// alternate data stream, left a 0-byte file called "bad", and reported success - the
-		// scene simply was not where the user was told it was.
-		constexpr std::string_view kForbidden = "<>:\"/\\|?*";
-		for (const char c: assetName)
-		{
-			if (kForbidden.find(c) != std::string_view::npos || static_cast<unsigned char>(c) < 0x20)
-			{
-				return false;
-			}
-		}
-		// "." and ".." name a directory, not a scene.
-		return assetName.find_first_not_of('.') != std::string_view::npos;
-	}
 
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene)
 	{

@@ -19,7 +19,7 @@ namespace aether::app::scene
 		// positional index came back -1) but has a stable scene-node id: a prefab-instance
 		// root or a top-level scene entity. Prefab children are skipped - their node ids are
 		// re-minted on every expansion, so persisting one would only produce a dangling ref.
-		std::map<std::string, std::uint64_t> CaptureNodeRefs(const SceneCaptureContext& c, const std::map<std::string, ScriptPropertyValue>& live)
+		std::map<std::string, std::uint64_t> CaptureNodeRefs(const SceneCaptureContext& c, const std::map<std::string, ScriptPropertyValue>& live, std::size_t scriptIndex)
 		{
 			std::map<std::string, std::uint64_t> out;
 			for (const auto& [name, value]: live)
@@ -38,6 +38,17 @@ namespace aether::app::scene
 				{
 					out.emplace(name, node->id);
 				}
+			}
+			if (const auto* owner = c.world.TryGet<SceneNodeComponent>(c.entity))
+			{
+				if (const auto* pending = c.world.GetRegistry().ctx().find<StreamingScriptNodeReferences>())
+					for (const auto& ref : pending->entries)
+					{
+						const auto value = live.find(ref.property);
+						if (ref.ownerNode == owner->id && ref.scriptIndex == scriptIndex &&
+						    value != live.end() && value->second.i64 == ref.expected)
+							out.insert_or_assign(ref.property, ref.targetNode);
+					}
 			}
 			return out;
 		}
@@ -78,7 +89,7 @@ namespace aether::app::scene
 				// that fix landed) directly - not just from the copy below - so a resave
 				// permanently drops it instead of re-writing a stale/wrong index forever.
 				entry.properties.erase("Self");
-				c.rec.scripts.push_back(ScriptRecord{.type = entry.path, .properties = ScriptPropsToSceneRefs(entry.properties, c.indexOf), .nodeRefs = CaptureNodeRefs(c, entry.properties)});
+				c.rec.scripts.push_back(ScriptRecord{.type = entry.path, .properties = ScriptPropsToSceneRefs(entry.properties, c.indexOf), .nodeRefs = CaptureNodeRefs(c, entry.properties, i)});
 			}
 		}
 

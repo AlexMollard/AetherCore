@@ -46,6 +46,8 @@ namespace aether
 		        const float* aabbMax = nullptr,
 		        const float* sphereCenter = nullptr,
 		        float sphereRadius = 0.0f, std::uint64_t* uploadTicket = nullptr);
+		// Allocate destination buffers without submitting data; used by bounded streaming.
+		static Mesh CreateUninitialized(std::uint32_t vertexCount, std::uint32_t indexCount, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius);
 
 		static Mesh CreateView(gpu::BufferHandle vertexBuffer,
 		        gpu::BufferHandle indexBuffer,

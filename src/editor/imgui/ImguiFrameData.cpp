@@ -57,6 +57,7 @@ namespace aether
 		}
 
 		m_secondary.clear();
+		m_resources.clear();
 	}
 
 	void ImguiFrameData::CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& pool, std::size_t poolOffset, bool copyTextures)

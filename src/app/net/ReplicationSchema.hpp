@@ -16,13 +16,11 @@ namespace aether::net
 		return (static_cast<std::uint32_t>(componentIndex) << 16) | fieldIndex;
 	}
 
-	// One replicated field, addressed by its position in the component catalog.
-	// Both ends run the same binary's static registration, so the indices agree
-	// without a handshake - an assumption the snapshot header's schema hash now
-	// verifies at runtime rather than trusting.
+	// Local catalog position plus its stable, name-sorted wire position.
 	struct ReplicatedField
 	{
 		std::uint16_t componentIndex = 0;
+		std::uint16_t wireComponentIndex = 0;
 		std::uint16_t fieldIndex = 0;
 		reflect::FieldType type = reflect::FieldType::Float;
 	};
@@ -32,6 +30,8 @@ namespace aether::net
 	struct ReplicationSchema
 	{
 		std::vector<ReplicatedField> fields;
+		// Maps a wire component index to this process's reflection catalog index.
+		std::vector<std::uint16_t> wireToCatalog;
 		// Identity of `fields` (positions AND types), hashed once at build time.
 		// Snapshot packets carry it so a peer whose catalog differs refuses them
 	// instead of decoding field indices against the wrong table and writing

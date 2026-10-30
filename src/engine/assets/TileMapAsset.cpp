@@ -253,6 +253,14 @@ namespace aether
 			}
 			bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 		}
+		return LoadBytes(bytes, {});
+	}
+
+	Expected<TileMapAsset> TileMapAsset::LoadBytes(std::string_view bytes, const std::function<bool(std::size_t)>& reserve)
+	{
+		const std::filesystem::path path{"<streamed tile map>"};
+		if (reserve && !reserve(bytes.size()))
+			AE_UNEXPECTED(AetherError::Asset("Tile map strings exceed streaming budget."));
 
 		Reader reader{bytes.data(), bytes.size()};
 		std::array<char, 4> magic{};
@@ -281,6 +289,8 @@ namespace aether
 				AE_UNEXPECTED(AetherError::Asset("Tile map '" + path.string() + "' references an unresolved tileset UID."));
 			}
 		}
+		if (reserve && !reserve(static_cast<std::size_t>(paletteCount) * sizeof(AssetObjectId)))
+			AE_UNEXPECTED(AetherError::Asset("Tile map palette exceeds streaming budget."));
 		map.tilePalette.resize(paletteCount);
 		for (AssetObjectId& id: map.tilePalette)
 		{
@@ -293,6 +303,8 @@ namespace aether
 		{
 			AE_UNEXPECTED(AetherError::Asset("Tile map '" + path.string() + "' is truncated (layers)."));
 		}
+		if (reserve && !reserve(static_cast<std::size_t>(layerCount) * sizeof(TileMapLayer)))
+			AE_UNEXPECTED(AetherError::Asset("Tile map layers exceed streaming budget."));
 		map.layers.resize(layerCount);
 		for (TileMapLayer& layer: map.layers)
 		{
@@ -306,6 +318,8 @@ namespace aether
 			}
 			layer.visible = visible != 0;
 			layer.collision = collision != 0;
+			if (reserve && !reserve(static_cast<std::size_t>(chunkCount) * (sizeof(std::pair<const TileChunkKey, TileChunk>) + 4 * sizeof(void*))))
+				AE_UNEXPECTED(AetherError::Asset("Tile map chunks exceed streaming budget."));
 			layer.chunks.reserve(chunkCount);
 			for (std::uint32_t i = 0; i < chunkCount; ++i)
 			{

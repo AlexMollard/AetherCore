@@ -11,6 +11,9 @@
 #include "scene/World.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "scripting/SceneContext.hpp"
+#include "scripting/interop/InteropCommon.hpp"
+#include "scene/WorldStreaming.hpp"
+#include <limits>
 
 namespace
 {
@@ -88,6 +91,21 @@ namespace aether::app::web
 		}
 	}
 
+	void BindManagedBrowserServices(ServiceContainer* services)
+	{
+		s_context.services = services;
+	}
+
+	const aether::scripting::ManagedScriptApi& ManagedBrowserApi()
+	{
+		return s_api;
+	}
+
+	aether::app::scripting::SceneContext& ManagedBrowserSceneContext()
+	{
+		return s_context;
+	}
+
 	void BindManagedBrowserSimulation(PhysicsSystem* physics, const aether::scripting::gameplay3d::ClipCatalog* clips)
 	{
 		s_context.physics = physics;
@@ -97,6 +115,42 @@ namespace aether::app::web
 
 extern "C"
 {
+	EMSCRIPTEN_KEEPALIVE bool aether_streaming_set_source(const char* id, aether::app::scripting::interop::Vec3 position, float loadRadius, float prefetchRadius, std::uint32_t priority)
+	{
+		if (!id || !s_context.streaming || priority > 3) return false;
+		return static_cast<bool>(s_context.streaming->SetSource({id, {position.x, position.y, position.z}, loadRadius, prefetchRadius, static_cast<aether::io::IOPriority>(priority)}));
+	}
+	EMSCRIPTEN_KEEPALIVE bool aether_streaming_remove_source(const char* id)
+	{
+		return id && s_context.streaming && s_context.streaming->RemoveSource(id);
+	}
+	EMSCRIPTEN_KEEPALIVE std::uint64_t aether_streaming_request(const char* region, std::uint32_t priority, bool activate)
+	{
+		return region && s_context.streaming && priority <= 3 ? s_context.streaming->Request(region, activate, static_cast<aether::io::IOPriority>(priority)) : 0;
+	}
+	EMSCRIPTEN_KEEPALIVE bool aether_streaming_cancel(std::uint64_t request)
+	{
+		return s_context.streaming && s_context.streaming->Cancel(request);
+	}
+	EMSCRIPTEN_KEEPALIVE bool aether_streaming_release(std::uint64_t request)
+	{
+		return s_context.streaming && s_context.streaming->Release(request);
+	}
+	EMSCRIPTEN_KEEPALIVE std::uint32_t aether_streaming_get_state(std::uint64_t request)
+	{
+		return s_context.streaming ? static_cast<std::uint32_t>(s_context.streaming->GetRequestState(request)) : 0;
+	}
+	EMSCRIPTEN_KEEPALIVE std::uint32_t aether_streaming_diagnostics(char* buffer, std::uint32_t capacity)
+	{
+		if (buffer && capacity) buffer[0] = '\0';
+		if (!s_context.streaming) return 0;
+		const auto json = s_context.streaming->GetDiagnosticsJson();
+		if (json.size() >= std::numeric_limits<std::uint32_t>::max()) return 0;
+		const auto required = static_cast<std::uint32_t>(json.size() + 1);
+		if (buffer && capacity >= required) std::memcpy(buffer, json.c_str(), required);
+		return required;
+	}
+
 	EMSCRIPTEN_KEEPALIVE int aether_managed_start(int (*bootstrap)(aether::scripting::NativeHostCallbacks*, int, aether::scripting::ManagedScriptApi*, int))
 	{
 		EM_ASM({ globalThis.Module = Module; });
@@ -146,7 +200,8 @@ extern "C"
 		output->getProperty = [](std::uint64_t context, std::uint64_t instance, std::uint32_t index, AetherGameplayPropertyValue* value, AetherGameplayUtf8Buffer buffer)
 		{
 			const auto status = s_raw.getProperty(context, instance, index, value, buffer);
-			if (status == AE_GAMEPLAY_OK && (value->type == AE_GAMEPLAY_PROPERTY_ENTITY || value->type == AE_GAMEPLAY_PROPERTY_COMPONENT))
+			if ((status == AE_GAMEPLAY_OK || status == AE_GAMEPLAY_BUFFER_TOO_SMALL)
+			    && (value->type == AE_GAMEPLAY_PROPERTY_ENTITY || value->type == AE_GAMEPLAY_PROPERTY_COMPONENT))
 			{
 				value->entity = Handle(value->entity.id);
 			}
@@ -181,12 +236,6 @@ extern "C"
 	{
 		Require(s_engine.setPosition ? s_engine.setPosition(s_engine.context, Handle(id), position) : AE_GAMEPLAY_UNSUPPORTED);
 	}
-	int aether_input_key_down(int key)
-	{
-		AetherGameplayPropertyValue value{};
-		Require(Invoke({.operation = AE_GAMEPLAY_SERVICE_KEY_DOWN, .integer = key}, value));
-		return static_cast<int>(value.integer);
-	}
 	std::uint32_t aether_scene_find_by_name(const char* name)
 	{
 		AetherGameplayPropertyValue value{};
@@ -207,6 +256,14 @@ extern "C"
 		}
 		return value.entity.id;
 	}
+	std::uint32_t aether_net_instantiate_predicted(const char* name, AetherGameplayVec3 position)
+	{
+		AetherGameplayPropertyValue value{};
+		const auto status = Invoke({.operation = AE_GAMEPLAY_SERVICE_INSTANTIATE_PREFAB,
+		        .vector = {position.x, position.y, position.z}, .integer = 1, .text = View(name)}, value);
+		Require(status);
+		return status == AE_GAMEPLAY_OK ? value.entity.id : 0;
+	}
 	void aether_ui_set_text(std::uint32_t id, const char* text)
 	{
 		AetherGameplayPropertyValue value{};
@@ -217,16 +274,6 @@ extern "C"
 	{
 		AetherGameplayPropertyValue value{};
 		Require(Invoke({.operation = AE_GAMEPLAY_SERVICE_SET_VELOCITY_2D, .entity = Handle(id), .vector = {velocity.x, velocity.y}}, value));
-	}
-	std::uint32_t aether_audio_play_2d(const char* path, float volume, float pitch, int loop, int bus)
-	{
-		if (volume != 1 || pitch != 1 || loop || bus != 1)
-		{
-			Error("WEB_AUDIO_UNSUPPORTED: this Web profile currently supports one-shot default-bus audio");
-			return 0;
-		}
-		AetherGameplayPropertyValue value{};
-		return Invoke({.operation = AE_GAMEPLAY_SERVICE_PLAY_AUDIO, .text = View(path)}, value) == AE_GAMEPLAY_OK ? 1 : 0;
 	}
 	int aether_save_read(const char* key, char* output, int capacity)
 	{

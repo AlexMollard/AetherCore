@@ -4,6 +4,7 @@
 #include "io/FileSystem.hpp"
 #include "gpu/WebMaterialShader.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/WorldStreaming.hpp"
 #include "ui/UiComponents.hpp"
 #include "ui/UiDrawBuilder.hpp"
 
@@ -11,100 +12,88 @@ namespace aether::app::web
 {
 	Expected<void> WebScene::ExtractUi(RenderFramePacket& packet, unsigned width, unsigned height)
 	{
-		if (!width || !height)
+		if (!width || !height) return {};
+		std::vector<std::pair<std::string, bool>> used;
+		const auto collect = [&](entt::entity entity, std::string_view name)
 		{
-			return {};
-		}
-		const auto loadFont = [&](std::string_view name) -> Expected<void>
-		{
-			if (!m_fonts.Load(name))
-			{
-				AE_UNEXPECTED(AetherError::Asset("WEB_UI_FONT: missing font curves for " + std::string(name)));
-			}
-			auto* font = m_fonts.GetMutable(name);
-			if (!font || !m_graphics.UploadUiFont(*font))
-			{
-				AE_UNEXPECTED(AetherError::Asset("WEB_UI_FONT: upload failed for " + std::string(name)));
-			}
-			return {};
+			const bool streamed = world.Has<scene::StreamingRegionOwner>(World::FromEntt(entity));
+			const std::string key = name.starts_with("uid://") ? io::FileSystem::ResolveAssetPath(name) : std::string(name);
+			const auto it = std::find_if(used.begin(), used.end(), [&](const auto& entry) { return entry.first == key; });
+			if (it == used.end()) used.emplace_back(key, !streamed);
+			else it->second = it->second || !streamed;
 		};
-		for (const auto& [entity, text]: world.View<ui::UIText>().each())
+		for (const auto& [entity, text]: world.View<ui::UIText>().each()) collect(entity, text.fontName);
+		for (const auto& [entity, button]: world.View<ui::UIButton>().each()) collect(entity, button.fontName);
+		for (const auto& [entity, box]: world.View<ui::UITextBox>().each()) collect(entity, box.fontName);
+		for (auto it = m_streaming_fonts.begin(); it != m_streaming_fonts.end();)
 		{
-			AE_TRY_VOID(loadFont(text.fontName));
+			const bool live = std::any_of(used.begin(), used.end(), [&](const auto& entry) { return entry.first == it->first; });
+			if (it->second || live) { ++it; continue; }
+			if (auto* font = m_fonts.GetMutable(it->first)) m_graphics.RetireUiFont(*font);
+			m_fonts.Invalidate(it->first);
+			it = m_streaming_fonts.erase(it);
 		}
-		for (const auto& [entity, button]: world.View<ui::UIButton>().each())
+		m_font_budget_blocked = false;
+		for (const auto& [name, baseline]: used)
 		{
-			AE_TRY_VOID(loadFont(button.fontName));
-		}
-		for (const auto& [entity, box]: world.View<ui::UITextBox>().each())
-		{
-			AE_TRY_VOID(loadFont(box.fontName));
+			if (!m_fonts.Load(name)) AE_UNEXPECTED(AetherError::Asset("WEB_UI_FONT: missing font curves for " + std::string(name)));
+			auto* font = m_fonts.GetMutable(name);
+			if (!font) AE_UNEXPECTED(AetherError::Asset("WEB_UI_FONT: missing font " + std::string(name)));
+			const bool streamed = !baseline && !font->curvePath.starts_with("engine://") && m_streaming_budget;
+			if (streamed) m_streaming_fonts.try_emplace(std::string(name), false);
+			else if (auto it = m_streaming_fonts.find(std::string(name)); it != m_streaming_fonts.end()) it->second = true;
+			if (!m_graphics.UploadUiFont(*font, streamed ? m_streaming_budget : nullptr))
+			{
+				const auto& error = m_graphics.TextureUploadError();
+				if (streamed && (error == "Streaming GPU budget exceeded" || error == "Streaming CPU budget exceeded"))
+				{
+					m_font_budget_blocked = true;
+					continue;
+				}
+				AE_UNEXPECTED(AetherError::Asset("WEB_UI_FONT: upload failed for " + std::string(name) + ": " + error));
+			}
 		}
 		// UI textures share the color-managed registry, not the legacy unorm sprite registry:
 		// the native UI fragment expects sRGB decoding before its explicit display re-encode.
 		m_sink.colorManaged = true;
 		ui::BuildDrawCommands(world, packet.renderUi.commands, packet.renderUi.materials, &m_fonts, &m_model_textures);
+		std::erase_if(packet.renderUi.commands, [&](const auto& command) {
+			return command.type == ui::kShapeGlyph && !m_graphics.UiFontReady(command.textureSlot);
+		});
 		m_sink.colorManaged = false;
 		for (const auto& [entity, effect, rect]: world.View<ui::UIEffect, ui::UIRect>().each())
 		{
 			if (!ecs::HasDisabledAncestor(world, World::FromEntt(entity)))
-			{
 				packet.renderUi.effects.push_back({effect.shader, rect.resolvedRect, effect.params, effect.color0, effect.color1, effect.background, effect.sortOrder});
-			}
 		}
-		std::stable_sort(packet.renderUi.effects.begin(), packet.renderUi.effects.end(), [](const auto& a, const auto& b) { return a.sortOrder < b.sortOrder; });
+		std::stable_sort(packet.renderUi.effects.begin(), packet.renderUi.effects.end(),
+		        [](const auto& a, const auto& b) { return a.sortOrder < b.sortOrder; });
 		const auto shader = [&](std::string_view name, bool effect, bool glyph) -> Expected<void>
 		{
 			if (name.empty() || name.find_first_of("\\:") != std::string_view::npos || name.find('\0') != std::string_view::npos)
-			{
 				AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: invalid shader name"));
-			}
 			for (std::size_t start = 0; start <= name.size();)
 			{
 				const auto end = name.find('/', start);
 				const auto part = name.substr(start, end == std::string_view::npos ? end : end - start);
-				if (part.empty() || part == "." || part == "..")
-				{
-					AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: invalid shader path"));
-				}
-				if (end == std::string_view::npos)
-				{
-					break;
-				}
+				if (part.empty() || part == "." || part == "..") AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: invalid shader path"));
+				if (end == std::string_view::npos) break;
 				start = end + 1;
 			}
-			if (m_graphics.HasUiShader(name, effect, glyph))
-			{
-				return {};
-			}
+			if (m_graphics.HasUiShader(name, effect, glyph)) return {};
 			const auto source = io::FileSystem::ReadFile("project://assets/shaders/" + std::string(name) + (effect ? ".ui-effect.wshader" : glyph ? ".ui-material-glyph.wshader" : ".ui-material.wshader"));
-			if (!source)
-			{
-				AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: missing cooked original source for " + std::string(name)));
-			}
+			if (!source) AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: missing cooked original source for " + std::string(name)));
 			const auto decoded = gpu::DecodeWebMaterialShader(*source);
-			if (!decoded)
-			{
-				AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: " + decoded.error()));
-			}
-			if (!m_graphics.UploadUiShader(name, effect, glyph, *decoded))
-			{
-				AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: pipeline creation failed for " + std::string(name)));
-			}
+			if (!decoded) AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: " + decoded.error()));
+			if (!m_graphics.UploadUiShader(name, effect, glyph, *decoded)) AE_UNEXPECTED(AetherError::Asset("WEB_UI_SHADER: pipeline creation failed for " + std::string(name)));
 			return {};
 		};
-		for (const auto& effect: packet.renderUi.effects)
-		{
-			AE_TRY_VOID(shader(effect.shader, true, false));
-		}
+		for (const auto& effect: packet.renderUi.effects) { AE_TRY_VOID(shader(effect.shader, true, false)); }
 		for (const auto& command: packet.renderUi.commands)
 		{
 			const auto id = ui::UiFlagsShaderId(command.flags);
-			if (id && id <= packet.renderUi.materials.size())
-			{
-				AE_TRY_VOID(shader(packet.renderUi.materials[id - 1].shader, false, command.type == ui::kShapeGlyph));
-			}
+			if (id && id <= packet.renderUi.materials.size()) AE_TRY_VOID(shader(packet.renderUi.materials[id - 1].shader, false, command.type == ui::kShapeGlyph));
 		}
 		return {};
 	}
-} // namespace aether::app::web
+}
