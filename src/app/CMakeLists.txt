@@ -66,6 +66,7 @@ if(AETHERCORE_WEB_RUNTIME)
             # The same 3D exports native C# uses (Gameplay3D logic, SceneContext-addressed world).
             scripting/SceneContext.cpp
             scripting/interop/PhysicsExports.cpp scripting/interop/CharacterExports.cpp
+            scripting/interop/DebugExports.cpp
             scripting/interop/AssetsExports.cpp
             scripting/interop/AudioExports.cpp
             scripting/interop/InputExports.cpp

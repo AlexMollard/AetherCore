@@ -6,6 +6,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     scene/System.cpp
     io/MemoryPak.cpp
     physics2d/Physics2DSystem.cpp
+    physics2d/Physics2DDebugDraw.cpp
     physics2d/PhysicsDomainGate.cpp
     physics/PhysicsSystem.cpp
     physics/PhysicsDebugShared.cpp
@@ -52,6 +53,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     platform/web/WebStreamingTransport.cpp
     webgpu/WebGpuDevice.cpp
     webgpu/WebUiRenderer.cpp
+    webgpu/WebDebugRenderer.cpp
     webgpu/WebMeshRenderer.cpp
 	webgpu/WebHdrRenderer.cpp
 	webgpu/WebLight2DRenderer.cpp

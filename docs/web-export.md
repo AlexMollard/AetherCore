@@ -47,6 +47,20 @@ The `webgpu-2d-v1` profile supports authored sprites, animation, tilemaps, Box2D
 
 The `webgpu-3d-v1` profile also accepts perspective cameras, meshes, lighting, authored materials/effects, and the implemented 3D physics and animation components. Reachable models are baked with the native asset packer; material graphs and portable custom passes are cooked before packing. Custom passes use `include/CustomPass.slangh`; UI materials/effects use their native fixed-layout ABI and current-element resources. Original shader sources are required; arbitrary global bindless indexing and raw SPIR-V are not portable. Declare dynamically named UI shaders in `additional_assets`. The report identifies bounded or unqualified coverage rather than claiming every parameter range or combination is qualified. See the [effect parity ledger](architecture/webgpu-effect-parity.md).
 
+Browser cursor lock requires a focused canvas, `Input.CursorLockRequested = true`,
+and a subsequent trusted canvas click. Escape releases the actual lock without
+automatically recapturing it. To re-arm after Escape, hold the request false for
+an update, then request it again and click the canvas. Check `Input.IsCursorLocked`
+before using relative `Input.MouseDelta`. Browser rumble reports unavailable
+hardware through `PlatformNotSupportedException`; API admission does not prove
+physical motor output.
+
+Physics debug drawing uses the shared 3D shapes and 2D lines extracted into the
+render packet, including colliders without render meshes. Enable both
+`Debug.DrawEnabled` and `Physics.DebugDrawEnabled`. The native editor additionally
+owns its Dev Tools debug wish and suppresses editor gizmos during Play by default;
+do not mistake that editor gate for a standalone runtime or browser drawing failure.
+
 Specific failures include `WEB_SCENE_MISSING`, `WEB_DYNAMIC_SCENE_UNDECLARED`, `WEB_DYNAMIC_ASSET_UNDECLARED`, `WEB_ASSET_PATH`, `WEB_ASSET_MISSING`, `WEB_ASSET_FORMAT`, `WEB_CAPABILITY_UNSUPPORTED`, `WEB_NETWORK_UNSUPPORTED`, `WEB_SHADER_UNSUPPORTED`, `WEB_FEATURE_UNSUPPORTED`, `WEB_FONT_UNSUPPORTED` and `WEB_TOOLCHAIN_MISSING`. Build/verification failures include paths to their logs. Never interpret a failed or missing required check as a usable release.
 
 ## Native networking through the gateway

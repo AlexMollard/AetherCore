@@ -13,6 +13,12 @@
 #include "platform/web/WebFileSystem.hpp"
 #include "physics2d/Physics2DSystem.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsDebugShared.hpp"
+#include "physics2d/Physics2DDebugDraw.hpp"
+#if defined(AE_WEB_MANAGED)
+#include "web/BrowserManaged.hpp"
+#include "scripting/SceneContext.hpp"
+#endif
 #include "animation/SpriteAnimationSystem.hpp"
 #include "animation/AnimationSystem.hpp"
 #include "scene/Hierarchy.hpp"
@@ -233,6 +239,9 @@ namespace aether::app::web
 	WebScene::WebScene(World& sourceWorld, webgpu::WebGpuDevice& graphics)
 	      : world(sourceWorld), m_sink(graphics), m_textures(m_sink), m_model_textures(m_sink), m_models(graphics, m_model_textures, m_sink), m_graphics(graphics)
 	{
+#if defined(AE_WEB_MANAGED)
+		ManagedBrowserSceneContext().debugVertices = &m_debug_vertices;
+#endif
 		m_textures.InitializeDefault(TextureResource(0));
 		m_textures.InitializeWhite(TextureResource(1));
 		m_model_textures.InitializeDefault(TextureResource(0));
@@ -265,6 +274,9 @@ namespace aether::app::web
 
 	WebScene::~WebScene()
 	{
+#if defined(AE_WEB_MANAGED)
+		ManagedBrowserSceneContext().debugVertices = nullptr;
+#endif
 		UiImageSystem::DisconnectLifecycle(world);
 		world.UnregisterSystem("ParticleSystem");
 		world.UnregisterSystem("WebScriptSystem");
@@ -1440,6 +1452,14 @@ namespace aether::app::web
 			break;
 		}
 		packet.proj[1][1] *= -1;
+		packet.debugRenderingEnabled = IsDebugRenderingEnabled();
+		packet.debugVertices = std::move(m_debug_vertices);
+		m_debug_vertices.clear();
+		if (IsPhysicsDebugShapesEnabled())
+		{
+			ExtractPhysicsDebugShapes(world, packet.physicsDebugShapes, PhysicsDebugColorMode::ByMotionType);
+			ExtractPhysics2DDebugLines(world, packet.debugVertices);
+		}
 		AE_TRY_VOID(ExtractLighting(packet));
 		packet.shadingParams.x = packet.postEffects.specularFilter;
 		packet.shadingParams.w = packet.postEffects.foliageSkyLook;

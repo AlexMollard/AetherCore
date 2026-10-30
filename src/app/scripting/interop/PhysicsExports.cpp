@@ -1,9 +1,7 @@
 #include "scripting/interop/InteropCommon.hpp"
 
 #include "physics/PhysicsComponents.hpp"
-#if !defined(__EMSCRIPTEN__)
-#	include "physics/PhysicsDebugShared.hpp"
-#endif
+#include "physics/PhysicsDebugShared.hpp"
 #include "scripting/Gameplay3D.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "scene/World.hpp"
@@ -155,25 +153,13 @@ AE_SCRIPT_API void aether_physics_set_debug_enabled(std::int32_t enabled)
 {
 	SafeExport([&] -> void
 	{
-#if defined(__EMSCRIPTEN__)
-	// The Vulkan debug-shape overlay does not exist in the browser: turning it on is an explicit error, off is already the state.
-	if (enabled != 0)
-	{
-		AE_ERROR(aether::LogCategory::App, "WEB_FEATURE_UNSUPPORTED: Physics.DebugEnabled: the physics debug overlay is not available in the browser");
-	}
-#else
 	aether::SetPhysicsDebugShapesEnabled(enabled != 0);
-#endif
 	});
 }
 
 AE_SCRIPT_API std::int32_t aether_physics_is_debug_enabled()
 {
-#if defined(__EMSCRIPTEN__)
-	return 0;
-#else
 	return SafeExport([&] -> std::int32_t { return aether::IsPhysicsDebugShapesEnabled() ? 1 : 0; });
-#endif
 }
 
 AE_SCRIPT_API void aether_physics_set_angular_velocity(std::uint32_t id, Vec3 velocity)

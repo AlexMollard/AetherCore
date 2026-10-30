@@ -6,6 +6,7 @@
 #include "WebPostRenderer.hpp"
 #include "WebBillboardRenderer.hpp"
 #include "WebCustomPassRenderer.hpp"
+#include "WebDebugRenderer.hpp"
 #include "WebUiRenderer.hpp"
 
 #include <algorithm>
@@ -77,6 +78,7 @@ namespace aether::webgpu
 		WebPostRenderer post;
 		WebBillboardRenderer billboards;
 		WebCustomPassRenderer customPasses;
+		WebDebugRenderer debug;
 		WebUiRenderer ui;
 		unsigned width = 0, height = 0;
 		bool released = false;
@@ -145,6 +147,7 @@ namespace aether::webgpu
 				post.Shutdown();
 				billboards.Shutdown();
 				customPasses.Shutdown();
+				debug.Shutdown();
 				ui.Shutdown();
 				for (auto& [slot, charge]: meshCharges) charge.ledger->Release(charge.category, charge.bytes);
 				for (auto& [slot, charge]: textureCharges) charge.ledger->Release(charge.category, charge.bytes);
@@ -294,6 +297,10 @@ namespace aether::webgpu
 			{
 				Fail("WEBGPU_CUSTOM_PASS_SHADER", Text(customPasses.error.c_str()));
 			}
+			if (!debug.Initialize(device))
+			{
+				Fail("WEBGPU_DEBUG_SHADER", Text(debug.error.c_str()));
+			}
 			if (!ui.Initialize(device, queue))
 			{
 				Fail("WEBGPU_UI_SHADER", Text(ui.error.c_str()));
@@ -355,6 +362,7 @@ namespace aether::webgpu
 			std::unique_ptr<WebPostFrame> post;
 			std::unique_ptr<WebBillboardFrame> billboards;
 			std::unique_ptr<WebCustomPassFrame> customPasses;
+			std::unique_ptr<WebDebugFrame> debug;
 			std::unique_ptr<WebUiFrame> ui;
 			unsigned width, height, row;
 			unsigned renderWidth = 0, renderHeight = 0;
@@ -364,6 +372,7 @@ namespace aether::webgpu
 
 			void Finish()
 			{
+				debug.reset();
 				ui.reset();
 				post.reset();
 				billboards.reset();
@@ -1549,6 +1558,12 @@ namespace aether::webgpu
 		{
 			self.customPasses.Encode(self.device, self.queue, encoder, sceneView, sceneWidth, sceneHeight, packet, CustomPassStage::EmissiveOverLight2D, false, false, frame->customPasses);
 		}
+		const auto drawDebug = [&]()
+		{
+			const auto depth = frame->post ? frame->post->depthAttachment->view : (frame->meshes ? frame->meshes->depthView : nullptr);
+			return self.debug.Encode(self.device, self.queue, encoder, view, self.width, self.height, packet, depth, frame->post != nullptr, frame->debug);
+		};
+		bool debugOk = true;
 		if (frame->hdr)
 		{
 			if (light2DActive)
@@ -1563,12 +1578,26 @@ namespace aether::webgpu
 				        self.billboards.Encode(self.device, self.queue, encoder, displayTarget, displayWidth, displayHeight, packet, self.textures,
 				                frame->post->depth->view, frame->billboards, true);
 			        });
+			debugOk = drawDebug();
 			color.view = view;
 			color.loadOp = WGPULoadOp_Load;
 			pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
 			drawSprites(pass, true);
 			wgpuRenderPassEncoderEnd(pass);
 			wgpuRenderPassEncoderRelease(pass);
+		}
+		else
+		{
+			debugOk = drawDebug();
+		}
+		if (!debugOk)
+		{
+			self.Fail("WEBGPU_DEBUG", Text(self.debug.error.c_str()));
+			wgpuCommandEncoderRelease(encoder);
+			wgpuTextureViewRelease(view);
+			wgpuTextureRelease(current.texture);
+			frame->Finish();
+			return false;
 		}
 		if (!self.billboards.error.empty())
 		{

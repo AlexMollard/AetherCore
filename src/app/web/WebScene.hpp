@@ -8,6 +8,7 @@
 #include "scene/World.hpp"
 #include "animation/AnimationSystem.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "physics/PhysicsDebugData.hpp"
 #include "assets/SpriteAssetStore.hpp"
 #include "assets/TileAssetStore.hpp"
 #include "material/TextureRegistry.hpp"
@@ -205,6 +206,7 @@ namespace aether::app::web
 		float m_light_time = 0.0f;
 		Expected<void> ExtractLighting(RenderFramePacket& packet);
 		std::vector<Entity> m_retired_particles;
+		std::vector<DebugVertex> m_debug_vertices;
 		std::uint64_t m_scene_generation = 0;
 		Expected<void> ExtractUi(RenderFramePacket& packet, unsigned width, unsigned height);
 	};
