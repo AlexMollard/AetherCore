@@ -7,6 +7,7 @@
 
 #include "assets/GltfAsset.hpp"
 #include "assets/ModelPose.hpp"
+#include "scene/Components.hpp"
 
 using namespace aether::assets;
 
@@ -90,6 +91,21 @@ TEST_CASE("model pose builds all global-joint inverse-bind skin palettes")
 	CHECK(position.x == doctest::Approx(3.0f));
 	CHECK(position.y == doctest::Approx(2.0f));
 	CHECK(pose->skins[1][0][3].x == doctest::Approx(2.0f));
+}
+
+TEST_CASE("joint offsets apply after animation and propagate to child skin matrices")
+{
+	auto asset = AnimatedTranslation();
+	asset.nodes.resize(2);
+	asset.nodes[1].parentIndex = 0;
+	asset.nodes[1].translation = {1.0f, 0.0f, 0.0f};
+	asset.skins.push_back({.joints = {1}});
+	const std::vector<aether::JointRotationOffset> offsets{{.node = 0, .rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3{0.0f, 0.0f, 1.0f})}};
+	const auto pose = EvaluateModelPose(asset, 0u, 0.5f, false, nullptr, offsets);
+	REQUIRE(pose.has_value());
+	CHECK(pose->nodeWorld[1][3].x == doctest::Approx(1.0f));
+	CHECK(pose->nodeWorld[1][3].y == doctest::Approx(1.0f));
+	CHECK(pose->skins[0][0][3].y == doctest::Approx(1.0f));
 }
 
 TEST_CASE("model pose translation loops and clamps across clip bounds")

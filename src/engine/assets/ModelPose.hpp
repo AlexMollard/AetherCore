@@ -2,11 +2,14 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <glm/glm.hpp>
 
 #include "utils/Expected.hpp"
+
+namespace aether { struct JointRotationOffset; }
 
 namespace aether::assets
 {
@@ -28,5 +31,5 @@ namespace aether::assets
 	};
 
 	// Model-space node transforms and global-joint * inverse-bind skin palettes.
-	[[nodiscard]] Expected<ModelPose> EvaluateModelPose(const GltfAsset& asset, std::optional<std::uint32_t> clip = {}, float time = 0.0f, bool looping = true, const PoseFade* fade = nullptr);
+	[[nodiscard]] Expected<ModelPose> EvaluateModelPose(const GltfAsset& asset, std::optional<std::uint32_t> clip = {}, float time = 0.0f, bool looping = true, const PoseFade* fade = nullptr, std::span<const JointRotationOffset> offsets = {});
 } // namespace aether::assets

@@ -8,6 +8,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "assets/GltfAsset.hpp"
+#include "scene/Components.hpp"
 
 namespace aether::assets
 {
@@ -69,7 +70,7 @@ namespace aether::assets
 		}
 	} // namespace
 
-	Expected<ModelPose> EvaluateModelPose(const GltfAsset& asset, std::optional<std::uint32_t> clip, float time, bool looping, const PoseFade* fade)
+	Expected<ModelPose> EvaluateModelPose(const GltfAsset& asset, std::optional<std::uint32_t> clip, float time, bool looping, const PoseFade* fade, std::span<const JointRotationOffset> offsets)
 	{
 		if (!std::isfinite(time) || asset.nodes.size() > std::numeric_limits<std::uint32_t>::max() || asset.skins.size() > std::numeric_limits<std::uint32_t>::max())
 		{
@@ -226,6 +227,13 @@ namespace aether::assets
 			{
 				const auto& q = rotations[node];
 				locals[node] = glm::translate(glm::mat4{1.0f}, translations[node]) * glm::mat4_cast(glm::quat{q.w, q.x, q.y, q.z}) * glm::scale(glm::mat4{1.0f}, scales[node]);
+			}
+		}
+		for (const auto& offset: offsets)
+		{
+			if (offset.node < locals.size())
+			{
+				locals[offset.node] *= glm::mat4_cast(offset.rotation);
 			}
 		}
 		for (std::size_t node = 0; node < asset.nodes.size(); ++node)
