@@ -1,6 +1,8 @@
 using System;
 using System.Numerics;
 using System.Text;
+using System.Threading.Tasks;
+using System.Runtime.InteropServices.JavaScript;
 
 namespace AetherCore;
 
@@ -8,7 +10,7 @@ namespace AetherCore;
 public enum MouseButton { Left = 0, Right = 1, Middle = 2 }
 
 /// <summary>Keyboard and mouse state for the current frame.</summary>
-public static class Input
+public static partial class Input
 {
     // ── Keyboard ────────────────────────────────────────────────────────────────
     public static bool IsKeyDown(Key key) => Native.aether_input_key_down((int)key) != 0;
@@ -87,13 +89,45 @@ public static class Input
     {
         get
         {
+            if (OperatingSystem.IsBrowser())
+                throw new PlatformNotSupportedException("Synchronous browser clipboard access is unavailable; use ReadClipboardTextAsync.");
             Span<byte> buffer = stackalloc byte[1024];
-            fixed (byte* ptr = buffer)
+            while (true)
             {
-                int written = Native.aether_input_get_clipboard(ptr, buffer.Length);
-                return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+                fixed (byte* ptr = buffer)
+                {
+                    int written = Native.aether_input_get_clipboard(ptr, buffer.Length);
+                    if (written < buffer.Length)
+                        return written > 0 ? Encoding.UTF8.GetString(ptr, written) : string.Empty;
+                }
+                buffer = new byte[checked(buffer.Length * 2)];
             }
         }
-        set => Native.aether_input_set_clipboard(value ?? string.Empty);
+        set
+        {
+            if (OperatingSystem.IsBrowser())
+                throw new PlatformNotSupportedException("Synchronous browser clipboard access is unavailable; use WriteClipboardTextAsync.");
+            Native.aether_input_set_clipboard(value ?? string.Empty);
+        }
     }
+
+    /// <summary>Read the system clipboard. Browsers require a secure context and may require permission or user activation.</summary>
+    public static Task<string> ReadClipboardTextAsync() =>
+        OperatingSystem.IsBrowser() ? BrowserReadClipboardText() : Task.FromResult(Clipboard);
+
+    /// <summary>Write the system clipboard. Browser permission and user activation rules apply.</summary>
+    public static Task WriteClipboardTextAsync(string text) =>
+        OperatingSystem.IsBrowser() ? BrowserWriteClipboardText(text ?? string.Empty) : WriteNativeClipboardText(text);
+
+    private static Task WriteNativeClipboardText(string text)
+    {
+        Clipboard = text;
+        return Task.CompletedTask;
+    }
+
+    [JSImport("globalThis.aetherInput.readClipboardText")]
+    private static partial Task<string> BrowserReadClipboardText();
+
+    [JSImport("globalThis.aetherInput.writeClipboardText")]
+    private static partial Task BrowserWriteClipboardText(string text);
 }
