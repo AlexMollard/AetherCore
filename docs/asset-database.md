@@ -83,12 +83,22 @@ Use UID references when authoring runtime asset loads that must survive moves.
 | Binary tilemap | 2 | Legacy v1 accepted |
 | Authored material | 1 | Missing legacy version accepted |
 | Cooked mesh | 4 | Explicit v3 decoder retained |
+| Cooked animation | 4 | Explicit v1-v3 readers retained; v4 preserves cubic tangents and name-based external channels |
 | Asset catalog | 1 | Unsupported catalog schemas rejected |
 
 Cooked scenes retain their independent binary envelope version. Skeleton, animation,
 animation-set, material, font, and package readers validate their own format headers;
 package pipeline version 8 invalidates old caches for stable mesh keys and unique outputs.
 Migration refuses newer schemas rather than silently downgrading them.
+
+ANIM-v4 stores cubic translation, rotation, and scale tangents instead of reducing
+them to linear keys. External clips can bind channels by joint name, including
+animation-only source files. The cooker rejects malformed key layouts, non-finite
+values, invalid time sequences, and unsupported morph-weight channels; callers
+propagate the failure instead of publishing partial model outputs. Native and
+browser runtime qualification exercises both indexed and name-remapped external
+clips at distinct frozen times, including rendered cubic rotation. This bounded
+coverage is not a claim that every animation graph or authoring tool is qualified.
 
 Cooked v4 meshes carry logical submesh keys from identifiable source node/mesh/material
 names. Keys survive geometry edits and named submesh reordering. Removed, duplicate,
