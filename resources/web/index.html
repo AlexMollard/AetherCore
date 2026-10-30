@@ -107,6 +107,25 @@ byId('capture').onclick=()=>Module._aether_web_capture?.();
 byId('stop').onclick=()=>Module._aether_web_stop?.();
 byId('reload').onclick=byId('retry').onclick=()=>location.reload();
 byId('fullscreen').onclick=async()=>{try{if(document.fullscreenElement){await document.exitFullscreen();}else{await byId('stage').requestFullscreen();}}catch{byId('result').textContent='Fullscreen is not available in this embed.';}};
+document.addEventListener('fullscreenchange',async()=>{
+ if(document.fullscreenElement!==byId('stage')){
+  navigator.keyboard?.unlock?.();
+  return;
+ }
+ Module.canvas.focus();
+ if(!navigator.keyboard?.lock){return;}
+ try{
+  // Capture only Escape; the browser keeps its hold-Escape exit gesture.
+  await navigator.keyboard.lock(['Escape']);
+  if(document.fullscreenElement===byId('stage')){
+   Module.canvas.focus();
+  }else{
+   navigator.keyboard.unlock();
+  }
+ }catch(error){
+  console.warn('Fullscreen Escape capture is unavailable; Escape will exit fullscreen.',error);
+ }
+});
 function updatePlayer(){
  const runtime=aetherRuntime,platform=globalThis.aetherPlatform;
  const fileLaunch=location.protocol==='file:';

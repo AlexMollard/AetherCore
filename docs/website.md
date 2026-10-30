@@ -133,6 +133,8 @@ Build updates with the normal publisher described in [Web export](web-export.md)
 
 The player heading omits gallery category and qualification badges; those belong in the gallery, not above the game. Live `?scene=` previews read the source template immediately. `/projects/` links serve existing exported packages unchanged, so those pages receive layout updates only after re-exporting.
 
+The fullscreen player focuses the canvas and requests Keyboard Lock for `Escape` only. With browser permission, a short Escape press reaches the game without leaving fullscreen; Chrome retains its roughly two-second held-Escape exit gesture. Unsupported or denied capture leaves the browser's normal Escape behavior intact. This applies to JavaScript fullscreen, not the browser's F11 mode. Keyboard Lock support in embedded players is browser-limited. See Chrome's [Keyboard Lock behavior](https://developer.chrome.com/docs/capabilities/web-apis/keyboard-lock) and [permission requirements](https://developer.chrome.com/blog/keyboard-lock-pointer-lock-permission).
+
 Layout verification exercised the source shell against the existing Ember Run standalone payload using a temporary browser document override, without rewriting that package or its manifest. Play, canvas focus, fullscreen, Stop, Restart and missing-WebGPU guidance were exercised. Responsive checks covered 1920, 1440, 768 and 390 pixels plus an 844 × 390 landscape viewport. This verifies the player shell, not a newly published FoxShowcase build.
 
 ### Hard requirement: free playable games and tests
