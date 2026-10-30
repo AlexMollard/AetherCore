@@ -17,6 +17,7 @@
 #include "ui/UiLayoutSystem.hpp"
 #include "ui/UiNavigationSystem.hpp"
 #include "ui/UiWidgetSystem.hpp"
+#include "ui/UiTextBoxSystem.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scripting/GameplayRotation.hpp"
 #if defined(AE_WEB_MANAGED)
@@ -515,7 +516,17 @@ namespace aether::app::web
 		{
 			m_mouse_delta = m_scroll_delta = {};
 		}
+		const int textBytes = EM_ASM_INT({ return lengthBytesUTF8(aetherInput.typedText); });
+		if (textBytes > 0)
+		{
+			std::string text(static_cast<std::size_t>(textBytes) + 1, '\0');
+			EM_ASM({ stringToUTF8(aetherInput.typedText, $0, $1); aetherInput.typedText = ""; }, text.data(), text.size());
+			text.resize(static_cast<std::size_t>(textBytes));
+			m_input.SetSyntheticChars(text);
+		}
 		m_input.Update();
+		m_input.SetBrowserMouseDelta(m_mouse_delta);
+		m_input.SetBrowserScrollDelta(m_scroll_delta);
 		EM_ASM(
 		        {
 			        aetherRuntime.gamepadConnected = !!$0;
@@ -530,6 +541,8 @@ namespace aether::app::web
 		ui::ResolveCanvases(m_world, {uiWidth, uiHeight});
 		ui::UiNavigationSystem::Update(m_world, m_input);
 		ui::UiWidgetSystem::Update(m_world, m_input, static_cast<float>(now / 1000.0));
+		ui::UiTextBoxSystem::Update(m_world, m_input, &m_scene->Fonts(), static_cast<float>(now / 1000.0));
+		EM_ASM({ aetherInput.pasteText = null; });
 		const bool paused = EM_ASM_INT({
 			return document.hidden || !document.hasFocus() || !aetherPlatform.storageReady || !aetherPlatform.started || (aetherPlatform.audioSources.size > 0 && !aetherPlatform.audioReady) || aetherPlatform.busy || aetherPlatform.pending.size > 0;
 		});

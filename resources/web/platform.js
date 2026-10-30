@@ -226,9 +226,22 @@ globalThis.aetherInput = {
     pressed : 0,
     dx : 0,
     dy : 0,
-    scroll : 0
+    scroll : 0,
+    readClipboardText: async () => navigator.clipboard.readText(),
+    writeClipboardText: async text => navigator.clipboard.writeText(text),
+    pasteText: null,
+    typedText: ''
 };
 const inputCanvas = document.getElementById('canvas');
+inputCanvas.addEventListener('paste', event => {
+    aetherInput.pasteText = event.clipboardData.getData('text/plain');
+    event.preventDefault();
+});
+inputCanvas.addEventListener('keydown', event => {
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing &&
+        Array.from(event.key).length === 1)
+        aetherInput.typedText += event.key;
+});
 const pointer = event => {
     const rect = inputCanvas.getBoundingClientRect();
     aetherInput.x = (event.clientX - rect.left) * inputCanvas.width / Math.max(rect.width, 1);

@@ -512,6 +512,11 @@ namespace aether
 			m_hasSyntheticMousePos = true;
 		}
 
+#if defined(AETHERCORE_WEB_RUNTIME)
+		void SetBrowserMouseDelta(glm::vec2 delta) { m_browserMouseDelta = delta; }
+		void SetBrowserScrollDelta(glm::vec2 delta) { m_scrollDelta = delta; }
+#endif
+
 		void ClearSyntheticMouse()
 		{
 			m_syntheticMouseButtons.fill(false);
@@ -757,6 +762,9 @@ namespace aether
 		std::array<bool, kMaxKeys> m_syntheticKeys{};
 		std::array<bool, kMaxMouseButtons> m_syntheticMouseButtons{};
 		glm::vec2 m_syntheticMousePos{0.0f};
+#if defined(AETHERCORE_WEB_RUNTIME)
+		glm::vec2 m_browserMouseDelta{};
+#endif
 		bool m_hasSyntheticMousePos = false;
 		std::array<bool, kMaxMouseButtons> m_currMouseButtons{};
 		std::array<bool, kMaxMouseButtons> m_prevMouseButtons{};

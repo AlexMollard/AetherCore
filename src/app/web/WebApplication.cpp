@@ -277,6 +277,13 @@ namespace
 					{
 						app.pressedKeys[mapped] = true;
 					}
+					// Clipboard shortcuts must retain their browser default so the trusted
+					// paste event can carry actual system text into the UI.
+					if ((event->ctrlKey || event->metaKey) &&
+					        (mapped == static_cast<int>(aether::Key::C) ||
+					         mapped == static_cast<int>(aether::Key::X) ||
+					         mapped == static_cast<int>(aether::Key::V)))
+						return false;
 					return true;
 				}
 				return false;

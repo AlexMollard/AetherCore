@@ -551,6 +551,11 @@ namespace aether
 			m_mousePos = m_prevMousePos;
 		}
 
+#else
+		if (m_hasSyntheticMousePos)
+		{
+			m_mousePos = m_syntheticMousePos;
+		}
 #endif
 
 		if (m_firstUpdate || m_mouseNeedsResync)
@@ -708,6 +713,12 @@ namespace aether
 		{
 			return {};
 		}
+#if defined(AETHERCORE_WEB_RUNTIME)
+		if (m_cursorLocked)
+		{
+			return m_browserMouseDelta;
+		}
+#endif
 		if (m_cursorLocked)
 		{
 			// GLFW_CURSOR_DISABLED reports an unbounded virtual position built exactly for
@@ -764,7 +775,15 @@ namespace aether
 	std::string Input::GetClipboardText() const
 	{
 #if defined(AETHERCORE_WEB_RUNTIME)
-		return m_clipboardFallback;
+		const int bytes = EM_ASM_INT({ return aetherInput.pasteText === null ? 0 : lengthBytesUTF8(aetherInput.pasteText) + 1; });
+		if (bytes == 0)
+		{
+			return {};
+		}
+		std::string text(static_cast<std::size_t>(bytes), '\0');
+		EM_ASM({ stringToUTF8(aetherInput.pasteText, $0, $1); aetherInput.pasteText = null; }, text.data(), bytes);
+		text.resize(static_cast<std::size_t>(bytes - 1));
+		return text;
 #else
 		if (m_window != nullptr)
 		{
@@ -778,7 +797,10 @@ namespace aether
 	void Input::SetClipboardText(std::string_view text)
 	{
 #if defined(AETHERCORE_WEB_RUNTIME)
-		m_clipboardFallback = text;
+		const std::string owned{text};
+		EM_ASM({
+			aetherInput.writeClipboardText(UTF8ToString($0)).catch(error => console.warn('Clipboard write failed:', error));
+		}, owned.c_str());
 #else
 		const std::string owned{text};
 		if (m_window != nullptr)
