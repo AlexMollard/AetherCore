@@ -120,7 +120,8 @@ namespace aether::net
 		void Tick(float deltaSeconds);
 
 		// The addresses this socket has on its own network interfaces, as candidates to
-		// offer alongside the public one.
+		// offer alongside the public one. Safe before creating a transport: owns a
+		// temporary ENet/platform reference and releases it before returning.
 		[[nodiscard]] static std::vector<Endpoint> LocalCandidates(std::uint16_t port);
 
 		// Starts a TURN allocation (RFC 5766), fronted by a TurnRelaySocket - the

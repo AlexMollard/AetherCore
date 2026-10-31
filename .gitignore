@@ -117,6 +117,9 @@ __pycache__/
 # Generated per-project launcher preview thumbnails (editor writes these on save)
 **/.aether/preview.png
 
+# Model bake fingerprints and output inventories are derived from project sources.
+**/.aether/model-bakes/
+
 # twinsanity.convert's manifest and drift reports: regenerated on every run, machine-local.
 **/.aether/convert/
 
@@ -148,8 +151,7 @@ projects/Twinsanity/reference/
 *.scene.bin
 *.prefab.bin
 
-# ImGui window layout state - written next to whatever the working directory is
-# when the editor runs, so it turns up at the repo root and under projects/
+# Legacy ImGui layout artifacts from older builds; current builds use user data.
 imgui.ini
 
 # Release packaging output (cmake --install staging, installer + zip).

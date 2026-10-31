@@ -31,11 +31,15 @@ namespace aether::assetpipeline
 		// these must be as stale-triggering as editing the model file itself - a grafted
 		// animation clip or a root-motion fix living only in an external `.bin` is otherwise
 		// invisible until someone deletes the stale bake by hand. Resolution is a plain path
-		// join against `modelPath`'s directory (no percent-decoding), matching this file's
-		// own image-URI handling - every asset in this project uses plain ASCII filenames.
+		// join against `modelPath`'s directory. Buffer URIs are percent-decoded to match
+		// cgltf_load_buffers; image URIs follow this importer's image-path handling.
 		// Best-effort: a parse failure returns an empty list rather than erroring: Process()
 		// surfaces a proper error if the model is actually (re)baked.
 		[[nodiscard]] std::vector<std::filesystem::path> CollectExternalSourceFiles(const std::filesystem::path& modelPath);
+
+		// Includes absent override candidates so adding/removing an authored override
+		// invalidates a bake even when the glTF and its external buffers are unchanged.
+		[[nodiscard]] std::vector<std::filesystem::path> CollectMaterialOverrideFiles(const std::filesystem::path& modelPath, const std::filesystem::path& projectRoot);
 
 		// One submesh for ComputeFoliageSway: its index range, and whether its material is
 		// scenery foliage (foliage + baked_lighting, not sky - Foliage.slangh's IsSceneryFoliage).

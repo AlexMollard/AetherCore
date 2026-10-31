@@ -2,6 +2,11 @@
 
 #include "ProjectCli.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 using aether::app::ParseProjectArg;
 using aether::app::ResolveValidationEnabled;
 
@@ -19,6 +24,31 @@ TEST_CASE("ParseProjectArg returns empty when the flag is absent or has no value
 	const char* noValue[] = {"Editor", "--project"};
 	CHECK(ParseProjectArg(2, const_cast<char**>(noValue)).empty());
 }
+
+TEST_CASE("Native wide project arguments preserve non-ACP paths on ordinary launches")
+{
+	// No --agent flag: this is the normal Launcher -> Editor command line. Omega
+	// and CJK cannot round trip through Windows ACP 1252's narrow argv spelling.
+	const wchar_t* argv[] = {L"Editor", L"--project", L"C:/Projects/Reference \u03a9 \u5305", L"--validation"};
+	CHECK(ParseProjectArg(4, const_cast<wchar_t**>(argv)) == L"C:/Projects/Reference \u03a9 \u5305");
+	const wchar_t* missing[] = {L"Editor", L"--project"};
+	CHECK(ParseProjectArg(2, const_cast<wchar_t**>(missing)).empty());
+	const wchar_t* none[] = {L"Editor"};
+	CHECK(ParseProjectArg(1, const_cast<wchar_t**>(none)).empty());
+}
+
+#ifdef _WIN32
+TEST_CASE("Quoted normal Windows launcher project paths remain native Unicode")
+{
+	int argc = 0;
+	wchar_t** argv = CommandLineToArgvW(L"Editor.exe --project \"C:\\Projects\\Reference \u03a9 \u5305\" --validation", &argc);
+	REQUIRE(argv != nullptr);
+	const auto project = ParseProjectArg(argc, argv);
+	LocalFree(argv);
+	CHECK(argc == 4);
+	CHECK(project == L"C:\\Projects\\Reference \u03a9 \u5305");
+}
+#endif
 
 // Whether the Vulkan validation layer is on is now build-config dependent: Debug defaults
 // on, RelWithDebInfo defaults off. Both defaults are passed in rather than baked in here,

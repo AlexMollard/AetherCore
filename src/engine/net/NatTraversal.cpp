@@ -8,6 +8,7 @@
 
 #include "net/Signaling.hpp"
 #include "net/TurnRelaySocket.hpp"
+#include "net/EnetInit.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether::net
@@ -439,6 +440,18 @@ namespace aether::net
 	std::vector<NatTraversal::Endpoint> NatTraversal::LocalCandidates(std::uint16_t port)
 	{
 		std::vector<Endpoint> out;
+		// This public static query can run before any transport/channel exists.
+		// Own platform socket initialization instead of relying on unrelated users
+		// (such as a development profiler) to have initialized Winsock first.
+		if (!AcquireEnet())
+		{
+			AE_WARN(LogCategory::App, "Cannot discover local candidates: ENet platform initialization failed");
+			return out;
+		}
+		struct ReleasePlatform
+		{
+			~ReleasePlatform() { ReleaseEnet(); }
+		} releasePlatform;
 		const auto add = [&out, port](std::uint32_t host) {
 			if (host == 0)
 			{

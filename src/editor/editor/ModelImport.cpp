@@ -4,6 +4,7 @@
 #include "assets/AssetManager.hpp"
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ModelBake.hpp"
+#include "editor/ModelImportPath.hpp"
 #include "scene/Components.hpp"
 #include "scene/ModelSpawn.hpp"
 #include "scene/World.hpp"
@@ -13,7 +14,7 @@
 
 namespace aether::editor
 {
-	Entity ImportModelIntoScene(World& world, ServiceContainer& services, const std::string& vfsModelPath, const glm::mat4& localToWorld, const std::string& name, std::string& error)
+	Entity ImportModelIntoScene(World& world, ServiceContainer& services, const std::string& inputPath, const glm::mat4& localToWorld, const std::string& name, std::string& error)
 	{
 		auto* assets = services.TryGet<AssetManager>();
 		auto* sceneCtx = services.TryGet<app::scripting::SceneContext>();
@@ -28,7 +29,14 @@ namespace aether::editor
 			return {};
 		}
 
-		if (const auto* project = services.TryGet<app::EditorProjectContext>(); project != nullptr && project->IsLoaded())
+		const auto* project = services.TryGet<app::EditorProjectContext>();
+		std::string vfsModelPath;
+		if (!NormalizeModelImportPath(inputPath, project && project->IsLoaded() ? project->root : std::filesystem::path{}, vfsModelPath, error))
+		{
+			return {};
+		}
+
+		if (project != nullptr && project->IsLoaded())
 		{
 			if (!EnsureModelBaked(vfsModelPath, *project, error))
 			{

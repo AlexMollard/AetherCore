@@ -85,6 +85,28 @@ TEST_CASE("A staged assembly the project never built is flagged")
 	CHECK(ProjectScriptsCannotBeLoaded(In(layout)));
 }
 
+TEST_CASE("Isolated managed discovery requires delivered assemblies and rejects working directory fallback")
+{
+	const Layout layout("isolated-managed");
+	const auto developer = layout.root / "developer";
+	const auto loose = developer / "data/scripts/managed";
+	Layout::Write(loose / "AetherCore.Interop.dll", "developer assembly");
+	CHECK(ResolveRuntimeManagedDirectory(layout.ExeDir(), developer, false) == loose);
+	CHECK_FALSE(ResolveRuntimeManagedDirectory(layout.ExeDir(), developer, true));
+	Layout::Write(layout.Staged() / "AetherCore.Interop.dll", "delivered assembly");
+	Layout::Write(layout.Staged() / "AetherCore.Interop.runtimeconfig.json", "{}");
+	const auto delivered = ResolveRuntimeManagedDirectory(layout.ExeDir(), developer, true);
+	REQUIRE(delivered);
+	CHECK(*delivered == std::filesystem::canonical(layout.Staged()));
+	const auto unicodeExe = layout.root / std::filesystem::path(u8"package-包-é");
+	const auto unicodeManaged = unicodeExe / "data/scripts/managed";
+	Layout::Write(unicodeManaged / "AetherCore.Interop.dll", "delivered assembly");
+	Layout::Write(unicodeManaged / "AetherCore.Interop.runtimeconfig.json", "{}");
+	const auto unicode = ResolveRuntimeManagedDirectory(unicodeExe, developer, true);
+	REQUIRE(unicode);
+	CHECK(*unicode == std::filesystem::canonical(unicodeManaged));
+}
+
 TEST_CASE("A staged assembly this project built is not flagged")
 {
 	const Layout layout("match");

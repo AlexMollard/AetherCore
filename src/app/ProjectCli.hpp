@@ -23,6 +23,17 @@ namespace aether::app
 		return ParseOptionArg(argc, argv, "--project");
 	}
 
+	// Windows launchers pass native UTF-16 paths. Never round trip project paths
+	// through the process ANSI code page, which can replace characters with '?'.
+	[[nodiscard]] inline std::wstring ParseProjectArg(int argc, wchar_t** argv)
+	{
+		for (int i = 1; i + 1 < argc; ++i)
+		{
+			if (std::wstring_view(argv[i]) == L"--project") { return argv[i + 1]; }
+		}
+		return {};
+	}
+
 	// A valueless boolean flag, e.g. --no-validation.
 	[[nodiscard]] inline bool HasFlagArg(int argc, char** argv, std::string_view flag)
 	{

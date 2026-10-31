@@ -3,8 +3,10 @@
 #include <filesystem>
 #include <string>
 #include <system_error>
+#include <cstdlib>
 
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "RuntimeProjectSettings.hpp"
 #include "project/ProjectStartupScene.hpp"
 
@@ -46,6 +48,29 @@ namespace
 		}
 	};
 } // namespace
+
+TEST_CASE("Editor script assemblies stay in per-project per-process intermediates")
+{
+	const TempProject first("script_output_first");
+	const TempProject second("script_output_second");
+	const auto firstArtifacts = first.root / "Builds" / "Intermediate" / "managed";
+	const auto secondArtifacts = second.root / "Builds" / "Intermediate" / "managed";
+	const auto firstOutput = app::ResolveEditorScriptBuildDirectory(firstArtifacts, 41);
+	CHECK(firstOutput == firstArtifacts / "bin" / "AetherGame" / "debug-41");
+	CHECK(firstOutput != app::ResolveEditorScriptBuildDirectory(firstArtifacts, 42));
+	CHECK(firstOutput != app::ResolveEditorScriptBuildDirectory(secondArtifacts, 41));
+	CHECK(app::ResolveEditorScriptBuildDirectory({}, 41).empty());
+	CHECK(app::ResolveEditorScriptBuildDirectory("relative-artifacts", 41).empty());
+	CHECK(app::ResolveEditorScriptBuildDirectory(firstArtifacts, 0).empty());
+	REQUIRE(io::file_util::CreateDirectories(firstOutput).has_value());
+	REQUIRE(io::file_util::WriteText(firstOutput / "AetherGame.dll", "first project").has_value());
+	const auto otherOutput = app::ResolveEditorScriptBuildDirectory(secondArtifacts, 41);
+	REQUIRE(io::file_util::CreateDirectories(otherOutput).has_value());
+	REQUIRE(io::file_util::WriteText(otherOutput / "AetherGame.dll", "second project").has_value());
+	const auto firstBytes = io::file_util::ReadText(firstOutput / "AetherGame.dll");
+	REQUIRE(firstBytes.has_value());
+	CHECK(*firstBytes == "first project");
+}
 
 TEST_CASE("WriteProjectStartupScene records the scene in the project file") {
     const TempProject project("write");
@@ -153,6 +178,53 @@ TEST_CASE("AETHER_PROJECT_DIR overrides even a published package") {
     inputs.exeDir = package.root;
 
     CHECK(app::ResolveRuntimeProjectSettings(inputs) == devProject.projectFile);
+}
+
+TEST_CASE("Isolated runtime settings reject developer and inherited project defaults")
+{
+	const auto previousMode = io::PlatformPaths::ReadEnvironmentVariable("AETHER_ISOLATED_PRODUCT");
+	const auto previousExplicit = io::PlatformPaths::GetExplicitProjectDirectory();
+	struct Restore
+	{
+		std::string mode;
+		std::filesystem::path explicitProject;
+		~Restore()
+		{
+#ifdef _WIN32
+			_putenv_s("AETHER_ISOLATED_PRODUCT", mode.c_str());
+#else
+			if (mode.empty()) { unsetenv("AETHER_ISOLATED_PRODUCT"); }
+			else { setenv("AETHER_ISOLATED_PRODUCT", mode.c_str(), 1); }
+#endif
+			io::PlatformPaths::SetExplicitProjectDirectory(explicitProject);
+		}
+	} restore{previousMode, previousExplicit};
+#ifdef _WIN32
+	REQUIRE(_putenv_s("AETHER_ISOLATED_PRODUCT", "1") == 0);
+#else
+	REQUIRE(setenv("AETHER_ISOLATED_PRODUCT", "1", 1) == 0);
+#endif
+	io::PlatformPaths::SetExplicitProjectDirectory({});
+	const TempProject developer("isolated_developer");
+	REQUIRE(io::file_util::WriteText(developer.projectFile, "[app]\nstartupscene = \"Developer\"\n").has_value());
+	const TempProject package("isolated_package");
+	app::RuntimeProjectSettingsInputs inputs;
+	inputs.exeDir = package.root;
+	inputs.envProjectDir = developer.root;
+	inputs.compiledDefaultDir = developer.root;
+	CHECK(app::ResolveRuntimeProjectSettings(inputs).empty());
+	REQUIRE(io::file_util::CreateDirectories(package.root / "data/config").has_value());
+	const auto shipped = package.root / "data/config/ProjectSettings.toml";
+	REQUIRE(io::file_util::WriteText(shipped, "[app]\nstartupscene = \"Delivered\"\n").has_value());
+	CHECK(app::ResolveRuntimeProjectSettings(inputs) == shipped);
+	const TempProject reference("isolated_explicit_reference");
+	REQUIRE(io::file_util::WriteText(reference.projectFile, "[app]\nstartupscene = \"Explicit\"\n").has_value());
+	io::PlatformPaths::SetExplicitProjectDirectory(reference.root);
+	CHECK(app::ResolveRuntimeProjectSettings(inputs) == reference.projectFile);
+	io::PlatformPaths::SetExplicitProjectDirectory(reference.root / "missing-project");
+	CHECK(app::ResolveRuntimeProjectSettings(inputs).empty());
+	REQUIRE(io::file_util::WriteText(package.root / "data/config/EngineSettings.toml", "[scripting]\nlanguage = \"csharp\"\n").has_value());
+	CHECK_FALSE(app::ResolveRuntimeGameplaySettings(inputs).has_value());
 }
 
 // [publish] was build-machine configuration - including an absolute output path - living

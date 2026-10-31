@@ -1,4 +1,5 @@
 #include "AetherCore.hpp"
+#include "rendering/ExclusiveMutation.hpp"
 #include "scene/GrassBenderExtraction.hpp"
 
 #include <algorithm>
@@ -312,20 +313,26 @@ namespace aether
 			m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - 1);
 		}
 
-		// (B) PARK the render thread outside ExecuteRenderFrame.
-		m_renderThread.SetReloadInProgress(true);
-		m_renderThread.WaitPaused();
-
-		//     thread's identically-named join method.
-		WaitIdle();
-
-		// (D) Mutation runs single-threaded, GPU idle, render thread parked. Any
-		if (mutation)
+		RunPausedMutation(m_renderThread, [this]
 		{
-			mutation();
-		}
-
-		m_renderThread.SetReloadInProgress(false);
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+			try
+			{
+#endif
+				WaitIdle();
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+			}
+			catch (...)
+			{
+				// Device-idle failure cannot establish safe resource lifetimes. Do not
+				// return through a script exception barrier and continue rendering.
+				AE_ASSERT_ALWAYS(false, "RunExclusive: GPU idle failed; safe mutation/resume is impossible");
+			}
+#endif
+		}, [&]
+		{
+			if (mutation) { mutation(); }
+		});
 	}
 
 	void AetherCore::QueueGrassStreaming(GrassStreamingCommands commands)

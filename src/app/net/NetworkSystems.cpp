@@ -174,13 +174,23 @@ namespace aether::net
 		// interpolation afterwards. Under host authority only a client did.
 		CaptureRenderedTransforms(world);
 
-		// Copied, not iterated in place: a client losing its link tears the session
-		// down inside the handler, and Disconnect() clears the transport's event
-		// vector - iterating that span while a handler can free it is a use-after-free
-		// waiting for the first dropped connection.
-		const std::vector<NetEvent> events(context.Transport().Events().begin(), context.Transport().Events().end());
+		// Retain the immutable batch while handlers can disconnect the transport.
+		// Other observers still see Events() until the next Poll or Disconnect.
+		const auto events = context.Transport().RetainEvents();
+		OnEvents(world, *events);
+		if (!context.IsActive()) { return; }
+		context.TickLatency(NetworkContext::LatencyClock::now());
+
+		// Authority is established by inbound Welcome/Spawn before downstream physics.
+		context.SyncSimulationAuthority(world);
+		ResolveTransforms(world);
+	}
+
+	void NetworkReceiveSystem::OnEvents(World& world, std::span<const NetEvent> events)
+	{
 		for (const NetEvent& event: events)
 		{
+			if (!m_context.IsActive()) { return; }
 			switch (event.kind)
 			{
 			case NetEvent::Kind::Connected:
@@ -196,17 +206,6 @@ namespace aether::net
 				break;
 			}
 		}
-		context.TickLatency(NetworkContext::LatencyClock::now());
-
-		// After the inbound events, because a Welcome or a Spawn handled above is what
-		// establishes authority in the first place, and the entity a Spawn just created
-		// must be handed over on the frame it appears - Physics2DSystem runs later in
-		// this same frame and would otherwise integrate it once before anything
-		// noticed. Before ResolveTransforms only for readability; the two are
-		// independent. Both are role-agnostic now: the host defers to a client's
-		// ownership exactly as a client defers to the host's.
-		context.SyncSimulationAuthority(world);
-		ResolveTransforms(world);
 	}
 
 	void NetworkReceiveSystem::PruneDeadBindings(World& world)

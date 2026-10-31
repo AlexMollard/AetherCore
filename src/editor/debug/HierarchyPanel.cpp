@@ -228,6 +228,7 @@ namespace aether::editor
 				case dragdrop::FileKind::Script:
 				case dragdrop::FileKind::Scene:
 				case dragdrop::FileKind::Shader:
+				case dragdrop::FileKind::MaterialGraph:
 				default:
 					return false;
 			}

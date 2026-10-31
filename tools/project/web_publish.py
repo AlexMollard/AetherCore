@@ -20,6 +20,19 @@ REPO = Path(__file__).resolve().parents[2]
 PROFILE = 'webgpu-2d-v1'
 
 
+def stage_distribution_notices(build, stage, distribution=None):
+    """Fail closed on absent build inventory; copied notices enter ZIP hash manifest."""
+    source = Path(build) / 'data' / 'THIRD_PARTY_NOTICES.txt'
+    terms = Path(distribution) if distribution is not None else REPO / 'docs/DISTRIBUTION.md'
+    for path in (source, terms):
+        if not path.is_file() or not path.stat().st_size:
+            reject('WEB_NOTICES_MISSING', f'Distribution notice input missing or empty: {path}')
+        shutil.copy2(path, Path(stage) / path.name)
+    notice_dir = Path(build) / 'data' / 'notices'
+    if notice_dir.is_dir():
+        shutil.copytree(notice_dir, Path(stage) / 'notices', dirs_exist_ok=True)
+
+
 def graphics_for_web(graphics):
     # Native TOML lookup folds keys; the browser graphics manifest uses these
     # case-sensitive field names (WebScene::ExtractPostSettings).
@@ -629,6 +642,7 @@ def publish(request, directory, output=None):
                 for key in ('sdk', 'runtime', 'manifest', 'mode'))
         for name in names:
             shutil.copy2(build / 'web' / name, stage / name)
+        stage_distribution_notices(build, stage)
         if data['region_references']:
             sys.path.insert(0, str(REPO / 'tools/web-runtime'))
             try:

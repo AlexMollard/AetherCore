@@ -7,7 +7,6 @@
 # would otherwise renumber it and make the guard report it as new.
 #
 # Regenerate with: pwsh scripts/check-gpu-abstraction.ps1 -UpdateBaseline
-src/engine/material/Texture.cpp: if (vkutil::HostTransitionImage(static_cast<VkDevice>(device), static_cast<VkImage>(image), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, mipLevels) != VK_SUCCESS)
 src/engine/rendering/RenderGraph.cpp: const uint32_t idx = m_storage->AddTransientBufferSlot(static_cast<VkDeviceSize>(size), static_cast<VkBufferUsageFlags2>(usage));
 src/engine/rendering/RenderGraph.cpp: m_diagnosticEngine->WriteBreadcrumb(reinterpret_cast<VkCommandBuffer>(cmd), breadcrumbValue);
 src/engine/rendering/ScreenshotService.cpp
@@ -46,5 +45,4 @@ src/engine/rendering/ScreenshotService.cpp: VkImageLayout ToVkLayout(gpu::ImageL
 src/engine/rendering/ScreenshotService.cpp: VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 src/engine/rendering/ScreenshotService.cpp: vkQueueWaitIdle(static_cast<VkQueue>(m_queue));
 src/engine/rendering/ScreenshotService.hpp: bool Capture(void* image, std::uint32_t width, std::uint32_t height, gpu::Format format, gpu::ImageAspect aspect, std::int32_t vkSrcLayout, const std::string& path);
-src/engine/ui/UiRenderer.cpp: AE_ERROR(LogCategory::UI, "UiRenderer: HostCopyToImage failed for the curves of '{}' (VkResult={})", name, copyResult);
 src/engine/rendering/ScreenshotService.cpp: vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);

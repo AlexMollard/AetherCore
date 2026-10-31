@@ -6,8 +6,20 @@ the per-project convention (e.g. `projects/Sandbox/assets/CREDITS.md`) at the
 engine-resources level - this file did not exist before; created for the first
 asset under `resources/` that needed one.
 
-All assets below are CC0 / Public Domain. Attribution is not legally required by
-this licence but is recorded here per project convention.
+The prototype textures below are CC0. Fonts have their own licenses and are
+included in the generated package notices.
+
+## Fonts
+
+- `fonts/Roboto-Regular.ttf`: embedded metadata identifies Google font data,
+  copyright 2011, version 1.00000. Apache 2.0 text is retained in
+  `licenses/Roboto-Apache-2.0.txt`, from the upstream Roboto repository:
+  https://github.com/googlefonts/roboto-2/blob/main/LICENSE.
+- `fonts/fa-regular-400.ttf` and `fonts/fa-solid-900.ttf`: embedded metadata
+  identifies Font Awesome 6.7.2. Its upstream license is retained in
+  `licenses/Font-Awesome-6.7.2.txt`, from
+  https://github.com/FortAwesome/Font-Awesome/blob/6.7.2/LICENSE.txt.
+  The fonts are covered by SIL OFL 1.1, with the Font Awesome reserved name.
 
 ## Kenney — Prototype Textures (v1.0)
 - Source: https://kenney.nl/assets/prototype-textures

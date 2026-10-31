@@ -35,6 +35,9 @@ jobs:
         shell: pwsh
         run: ./scripts/check-gpu-abstraction.ps1
 
+      - name: Manual-only workflow trigger guard
+        run: python3 scripts/check_manual_workflows.py
+
   build-and-test:
     name: Build and unit tests (Windows)
     runs-on: windows-latest
@@ -44,6 +47,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       # Chocolatey ships on windows-latest, so this avoids depending on a
       # third-party action for the one step the whole build rests on. Choco sets
@@ -108,10 +115,19 @@ jobs:
         shell: pwsh
         run: ./scripts/Run-DebugGauntlet.ps1 -CI -BuildDir build/ci-windows -Config RelWithDebInfo -SkipBuild
 
+      - name: Qualification harness regressions
+        shell: pwsh
+        run: |
+          ./scripts/Test-Qualification.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Qualification harness regression failed' }
+          python scripts/test_release_identity.py
+
       - name: Upload the gauntlet report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gauntlet-report
-          path: build/ci-windows/gauntlet-report.json
+          path: |
+            build/ci-windows/gauntlet-report.json
+            build/ci-windows/ctest-qualification.*
           if-no-files-found: ignore

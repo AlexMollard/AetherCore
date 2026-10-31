@@ -12,6 +12,8 @@
 #include <span>
 #include "Color.hpp"
 #include "io/FileSystem.hpp"
+#include "io/PlatformPaths.hpp"
+#include "io/FileUtil.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "gpu/FrameTarget.hpp"
 #include "imgui/ImguiFrameData.hpp"
@@ -109,6 +111,22 @@ namespace aether
 			g->TestEngineHookItems = true;
 		}
 		ImGuiIO& io = ImGui::GetIO();
+		const auto layoutPath = io::PlatformPaths::ResolveUserUiLayoutPath(io::PlatformPaths::GetUserConfigDir(), io::PlatformPaths::GetExecutableName());
+		// Dear ImGui defaults to imgui.ini relative to CWD, which is the installed
+		// bundle for ordinary launches. Its retained filename must outlive the context.
+		io.IniFilename = nullptr;
+		if (!layoutPath.empty())
+		{
+			if (const auto created = io::file_util::CreateDirectories(layoutPath.parent_path()); created)
+			{
+				m_iniFilename = io::PlatformPaths::PathToUtf8(layoutPath);
+				io.IniFilename = m_iniFilename.c_str();
+			}
+			else
+			{
+				AE_WARN(LogCategory::App, "UI layout persistence disabled: {}", created.error().message);
+			}
+		}
 
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;

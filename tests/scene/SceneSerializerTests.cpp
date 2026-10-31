@@ -15,6 +15,7 @@
 #include "material/PipelineCache.hpp"
 #include "material/TextureRegistry.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
@@ -2107,6 +2108,136 @@ TEST_CASE("Script joints round-trip through capture, TOML and parse") {
     CHECK(welded.scriptJoints[0].type == JointType::Fixed);
     CHECK(welded.scriptJoints[0].targetIndex == IndexOf(*parsed, "Anchor"));
     CHECK(welded.scriptJoints[0].collideConnected);
+}
+
+TEST_CASE("Every 3D joint type and swing limit round trips through both TOML records")
+{
+	for (const auto type: {JointType::Fixed, JointType::Point, JointType::Hinge, JointType::Distance, JointType::Slider, JointType::SwingTwist})
+	{
+		CAPTURE(type);
+		SceneDescription scene;
+		EntityRecord entity;
+		entity.name = "Joint";
+		entity.joint = JointRecord{.type = type, .swingLimit = 0.65f};
+		entity.scriptJoints.push_back(ScriptJointRecord{.type = type, .swingLimit = 0.85f});
+		scene.entities.push_back(entity);
+		const auto parsed = ParseToml(WriteToml(scene));
+		REQUIRE(parsed.has_value());
+		REQUIRE(parsed->entities.size() == 1);
+		REQUIRE(parsed->entities[0].joint.has_value());
+		CHECK(parsed->entities[0].joint->type == type);
+		CHECK(parsed->entities[0].joint->swingLimit == doctest::Approx(0.65f));
+		REQUIRE(parsed->entities[0].scriptJoints.size() == 1);
+		CHECK(parsed->entities[0].scriptJoints[0].type == type);
+		CHECK(parsed->entities[0].scriptJoints[0].swingLimit == doctest::Approx(0.85f));
+	}
+}
+
+TEST_CASE("Swing twist capture and apply preserve authored and script joint limits")
+{
+	FakeSlotSink sink(8);
+	FakeTextureSink tsink;
+	TextureRegistry treg(tsink);
+	MaterialRegistry mreg(sink, treg);
+	World world;
+	world.SetSceneKind(SceneKind::Scene3D);
+	world.SetSceneFeatures(DefaultSceneFeatures(SceneKind::Scene3D));
+	const auto owner = world.Create();
+	world.Emplace<NameComponent>(owner, NameComponent{.name = "JointOwner"});
+	const auto target = world.Create();
+	world.Emplace<NameComponent>(target, NameComponent{.name = "JointTarget"});
+	world.Emplace<JointComponent>(owner, JointComponent{.type = JointType::SwingTwist, .target = target,
+	        .minLimit = -0.2f, .maxLimit = 0.4f, .swingLimit = 0.65f});
+	JointEntry scriptJoint{.type = JointType::SwingTwist, .target = target,
+	        .minLimit = -0.3f, .maxLimit = 0.5f, .swingLimit = 0.85f};
+	world.Emplace<ScriptJointsComponent>(owner, ScriptJointsComponent{.joints = {scriptJoint}});
+	const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+	REQUIRE(parsed.has_value());
+	World loaded;
+	loaded.SetSceneKind(SceneKind::Scene3D);
+	loaded.SetSceneFeatures(DefaultSceneFeatures(SceneKind::Scene3D));
+	loaded.RegisterSystem(std::make_unique<PhysicsSystem>());
+	const auto created = ApplyScene(*parsed, loaded, ApplySceneDeps{});
+	const auto loadedOwner = AppliedOf(*parsed, created, "JointOwner");
+	const auto loadedTarget = AppliedOf(*parsed, created, "JointTarget");
+	REQUIRE(loaded.TryGet<JointComponent>(loadedOwner));
+	const auto& joint = loaded.Get<JointComponent>(loadedOwner);
+	CHECK(joint.type == JointType::SwingTwist);
+	CHECK(joint.target == loadedTarget);
+	CHECK(joint.minLimit == doctest::Approx(-0.2f));
+	CHECK(joint.maxLimit == doctest::Approx(0.4f));
+	CHECK(joint.swingLimit == doctest::Approx(0.65f));
+	REQUIRE(loaded.TryGet<ScriptJointsComponent>(loadedOwner));
+	const auto& scripts = loaded.Get<ScriptJointsComponent>(loadedOwner).joints;
+	REQUIRE(scripts.size() == 1);
+	CHECK(scripts[0].type == JointType::SwingTwist);
+	CHECK(scripts[0].target == loadedTarget);
+	CHECK(scripts[0].minLimit == doctest::Approx(-0.3f));
+	CHECK(scripts[0].maxLimit == doctest::Approx(0.5f));
+	CHECK(scripts[0].swingLimit == doctest::Approx(0.85f));
+}
+
+TEST_CASE("Script-only 3D joint records apply while a 2D physics conflict retains its domain")
+{
+	for (const auto kind: {SceneKind::Scene3D, SceneKind::Scene2D})
+	{
+		CAPTURE(kind);
+		SceneDescription scene;
+		scene.kind = kind;
+		EntityRecord owner;
+		owner.name = "ScriptOnly";
+		owner.scriptJoints.push_back(ScriptJointRecord{.type = JointType::SwingTwist, .targetIndex = 1, .swingLimit = 0.45f});
+		if (kind == SceneKind::Scene2D)
+		{
+			owner.joint2D = Joint2DComponent{};
+		}
+		scene.entities.push_back(owner);
+		EntityRecord target;
+		target.name = "Target";
+		scene.entities.push_back(target);
+		World loaded;
+		loaded.SetSceneKind(kind);
+		loaded.SetSceneFeatures(DefaultSceneFeatures(kind));
+		loaded.RegisterSystem(std::make_unique<PhysicsSystem>());
+		const auto created = ApplyScene(scene, loaded, ApplySceneDeps{});
+		REQUIRE(created.size() == 2);
+		const auto* scripts = loaded.TryGet<ScriptJointsComponent>(created[0]);
+		if (kind == SceneKind::Scene2D)
+		{
+			CHECK(scripts == nullptr);
+			CHECK(loaded.Has<Joint2DComponent>(created[0]));
+		}
+		else
+		{
+			REQUIRE(scripts != nullptr);
+			REQUIRE(scripts->joints.size() == 1);
+			CHECK(scripts->joints[0].type == JointType::SwingTwist);
+			CHECK(scripts->joints[0].target == created[1]);
+			CHECK(scripts->joints[0].swingLimit == doctest::Approx(0.45f));
+		}
+	}
+}
+
+TEST_CASE("Legacy joint tables without swing limits retain the zero default")
+{
+	SceneDescription scene;
+	EntityRecord entity;
+	entity.joint = JointRecord{};
+	entity.scriptJoints.push_back(ScriptJointRecord{});
+	scene.entities.push_back(entity);
+	auto text = WriteToml(scene);
+	for (auto start = text.find("swing_limit"); start != std::string::npos; start = text.find("swing_limit"))
+	{
+		const auto end = text.find('\n', start);
+		text.erase(start, end == std::string::npos ? text.size() - start : end - start + 1);
+	}
+	const auto parsed = ParseToml(text);
+	REQUIRE(parsed.has_value());
+	REQUIRE(parsed->entities.size() == 1);
+	REQUIRE(parsed->entities[0].joint.has_value());
+	CHECK(parsed->entities[0].joint->swingLimit == 0.0f);
+	REQUIRE(parsed->entities[0].scriptJoints.size() == 1);
+	CHECK(parsed->entities[0].scriptJoints[0].swingLimit == 0.0f);
 }
 
 TEST_CASE("Script properties survive capture with no ScriptComponentSystem registered at all") {

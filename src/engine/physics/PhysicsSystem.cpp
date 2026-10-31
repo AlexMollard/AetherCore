@@ -11,6 +11,7 @@
 #endif
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/EPhysicsUpdateError.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
@@ -76,6 +77,7 @@
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "utils/Assert.hpp"
 
 namespace aether
 {
@@ -355,13 +357,90 @@ namespace aether
 		std::vector<Removed> m_removed;
 	};
 
+	// Keep the fast stack arena, but permit a bounded amount of temporary heap
+	// spill rather than aborting at the first arena miss. Jolt cannot recover from
+	// a nullptr scratch allocation mid-step; exhausting both limits is fatal.
+	class BoundedPhysicsTempAllocator final: public JPH::TempAllocator
+	{
+	public:
+		BoundedPhysicsTempAllocator(std::size_t arenaBytes, std::size_t fallbackBytes)
+		      : m_arena(arenaBytes), m_fallback_budget(fallbackBytes), m_fallback_capacity(fallbackBytes)
+		{
+			void* probe = m_arena.Allocate(1);
+			AE_ASSERT_ALWAYS(probe != nullptr, "Physics scratch arena host allocation failed");
+			m_arena.Free(probe, 1);
+		}
+
+		void* Allocate(JPH::uint bytes) override
+		{
+			if (!bytes) { return nullptr; }
+			void* address = nullptr;
+			if (m_arena.CanAllocate(bytes))
+			{
+				address = m_arena.Allocate(bytes);
+			}
+			else
+			{
+				const auto aligned = AlignedSize(bytes);
+				if (!m_fallback_budget.TryAcquire(aligned))
+				{
+					AE_ERROR(LogCategory::Engine, "Physics scratch exhausted: request={} arenaUsage={}/{} fallbackUsage={}/{} highWater={}. Terminating: Jolt cannot roll back a partially executed step.",
+					        bytes, m_arena.GetUsage(), m_arena.GetSize(), m_fallback_budget.LiveBytes(), m_fallback_capacity, m_high_water);
+					AE_ASSERT_ALWAYS(false, "Physics scratch limit exceeded; increase physics scratch budgets or reduce scene complexity");
+				}
+				address = m_fallback.Allocate(bytes);
+				++m_fallback_allocations;
+			}
+			AE_ASSERT_ALWAYS(address != nullptr, "Physics scratch host allocation failed");
+			m_high_water = std::max(m_high_water, m_arena.GetUsage() + m_fallback_budget.LiveBytes());
+			return address;
+		}
+
+		void Free(void* address, JPH::uint bytes) override
+		{
+			if (!address) { return; }
+			if (m_arena.OwnsMemory(address))
+			{
+				m_arena.Free(address, bytes);
+			}
+			else
+			{
+				m_fallback.Free(address, bytes);
+				m_fallback_budget.Release(AlignedSize(bytes));
+			}
+		}
+
+		void ReadStats(PhysicsResourceStats& stats) const
+		{
+			stats.scratchHighWaterBytes = m_high_water;
+			stats.scratchFallbackHighWaterBytes = m_fallback_budget.HighWaterBytes();
+			stats.scratchFallbackLiveBytes = m_fallback_budget.LiveBytes();
+			stats.scratchFallbackAllocations = m_fallback_allocations;
+			stats.scratchArenaCapacityBytes = m_arena.GetSize();
+			stats.scratchFallbackCapacityBytes = m_fallback_capacity;
+		}
+	private:
+		static std::size_t AlignedSize(JPH::uint bytes)
+		{
+			return (static_cast<std::size_t>(bytes) + JPH_RVECTOR_ALIGNMENT - 1) & ~(static_cast<std::size_t>(JPH_RVECTOR_ALIGNMENT) - 1);
+		}
+		JPH::TempAllocatorImpl m_arena;
+		JPH::TempAllocatorMalloc m_fallback;
+		PhysicsScratchBudget m_fallback_budget;
+		std::size_t m_fallback_capacity;
+		std::size_t m_high_water = 0;
+		std::uint64_t m_fallback_allocations = 0;
+	};
+
 	struct PhysicsSystem::Impl
 	{
 		std::unique_ptr<JoltRuntime> runtime;
 		std::unique_ptr<BPLayerInterface> bpLayerInterface;
 		std::unique_ptr<ObjVsBPLayerFilter> objVsBPFilter;
 		std::unique_ptr<ObjVsObjLayerFilter> objVsObjFilter;
-		std::unique_ptr<JPH::TempAllocatorImpl> tempAllocator;
+		std::unique_ptr<BoundedPhysicsTempAllocator> tempAllocator;
+		PhysicsSaturationStats saturation;
+		bool fallbackReported = false;
 #if AE_PHYSICS_THREADED
 		std::unique_ptr<JPH::JobSystemThreadPool> jobSystem;
 #else
@@ -429,8 +508,32 @@ namespace aether
 	};
 
 	PhysicsSystem::PhysicsSystem()
-	      : m_impl(std::make_unique<Impl>())
+	      : PhysicsSystem(EngineSettings::Physics{})
 	{
+	}
+
+	PhysicsSystem::PhysicsSystem(EngineSettings::Physics settings)
+	      : m_impl(std::make_unique<Impl>())
+	      , m_resource_settings(SanitizePhysicsResourceSettings(settings))
+	{
+	}
+
+	PhysicsResourceStats PhysicsSystem::GetResourceStats()
+	{
+		WaitForStep();
+		PhysicsResourceStats stats;
+		stats.saturation = m_impl->saturation;
+		if (m_impl->tempAllocator) { m_impl->tempAllocator->ReadStats(stats); }
+		return stats;
+	}
+
+	bool PhysicsSystem::SupportsRecoverableSaturation()
+	{
+#if defined(JPH_ENABLE_ASSERTS)
+		return false; // Pinned Jolt asserts before returning a saturated Update result.
+#else
+		return true;
+#endif
 	}
 
 	PhysicsSystem::~PhysicsSystem()
@@ -551,7 +654,11 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_impl->runtime = std::make_unique<JoltRuntime>();
 
-		m_impl->tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(10u * 1024u * 1024u);
+		m_impl->tempAllocator = std::make_unique<BoundedPhysicsTempAllocator>(
+		        static_cast<std::size_t>(m_resource_settings.scratchArenaKiB) * 1024,
+		        static_cast<std::size_t>(m_resource_settings.scratchFallbackKiB) * 1024);
+		m_impl->saturation = {};
+		m_impl->fallbackReported = false;
 
 #if AE_PHYSICS_THREADED
 		// One worker thread per logical CPU minus the calling thread and the
@@ -568,26 +675,19 @@ namespace aether
 		m_impl->objVsObjFilter = std::make_unique<ObjVsObjLayerFilter>();
 
 		m_impl->physics = std::make_unique<JPH::PhysicsSystem>();
-#if AE_PHYSICS_THREADED
-		constexpr JPH::uint kMaxBodies = 64'536;
-		constexpr JPH::uint kMaxBodyPairs = 64'536;
-#else
-		// Explicit browser budget: Jolt sizes its body table and broadphase for these maxima up
-		// front, and 64k bodies cost hundreds of MB of wasm heap. Results below the cap are
-		// identical; exceeding it fails body creation with Jolt's own diagnostic.
-		constexpr JPH::uint kMaxBodies = 8'192;
-		constexpr JPH::uint kMaxBodyPairs = 16'384;
-#endif
 		m_impl->physics->Init(
-		        kMaxBodies,
+		        static_cast<JPH::uint>(m_resource_settings.maxBodies),
 		        /*numBodyMutexes*/ 0,
-		        kMaxBodyPairs,
-		        /*maxContactConstraints*/ 10'240,
+		        static_cast<JPH::uint>(m_resource_settings.maxBodyPairs),
+		        static_cast<JPH::uint>(m_resource_settings.maxContactConstraints),
 		        *m_impl->bpLayerInterface,
 		        *m_impl->objVsBPFilter,
 		        *m_impl->objVsObjFilter);
 
 		m_impl->physics->SetGravity(JPH::Vec3(0.f, -9.81f, 0.f));
+		AE_INFO(LogCategory::Engine, "Physics limits: bodies={} bodyPairs={} contactConstraints={} scratchArenaKiB={} scratchFallbackKiB={} (restart required to change)",
+		        m_resource_settings.maxBodies, m_resource_settings.maxBodyPairs, m_resource_settings.maxContactConstraints,
+		        m_resource_settings.scratchArenaKiB, m_resource_settings.scratchFallbackKiB);
 
 		m_impl->contactCollector = std::make_unique<ContactCollector>();
 		m_impl->physics->SetContactListener(m_impl->contactCollector.get());
@@ -710,7 +810,27 @@ namespace aether
 		StepCharacters(kFixedTimestep);
 		AE_PROFILE_PLOT("Phys.TotalBodies", static_cast<int64_t>(m_impl->physics->GetNumBodies()));
 		AE_PROFILE_PLOT("Phys.ActiveBodies", static_cast<int64_t>(m_impl->physics->GetNumActiveBodies(JPH::EBodyType::RigidBody)));
-		m_impl->physics->Update(kFixedTimestep, /*collision_steps*/ 1, m_impl->tempAllocator.get(), m_impl->jobSystem.get());
+		static_assert(static_cast<std::uint32_t>(JPH::EPhysicsUpdateError::ManifoldCacheFull) == 1);
+		static_assert(static_cast<std::uint32_t>(JPH::EPhysicsUpdateError::BodyPairCacheFull) == 2);
+		static_assert(static_cast<std::uint32_t>(JPH::EPhysicsUpdateError::ContactConstraintsFull) == 4);
+		const auto errors = m_impl->physics->Update(kFixedTimestep, /*collision_steps*/ 1, m_impl->tempAllocator.get(), m_impl->jobSystem.get());
+		const auto flags = static_cast<std::uint32_t>(errors);
+		if (RecordPhysicsSaturation(m_impl->saturation, flags))
+		{
+			AE_WARN(LogCategory::Engine, "Physics capacity exceeded: manifoldCacheFull={} bodyPairCacheFull={} contactConstraintsFull={}; contacts were dropped. Continuing with degraded collision results; reduce scene density or increase physics limits (saturated steps={}).",
+			        (flags & 1u) != 0, (flags & 2u) != 0, (flags & 4u) != 0, m_impl->saturation.saturatedSteps);
+		}
+		PhysicsResourceStats resourceStats;
+		m_impl->tempAllocator->ReadStats(resourceStats);
+		if (resourceStats.scratchFallbackAllocations && !m_impl->fallbackReported)
+		{
+			m_impl->fallbackReported = true;
+			AE_WARN(LogCategory::Engine, "Physics scratch arena exceeded; bounded fallback in use (arena={} fallbackHighWater={}/{} bytes). Increase arena for this workload after qualification.",
+			        resourceStats.scratchArenaCapacityBytes, resourceStats.scratchFallbackHighWaterBytes, resourceStats.scratchFallbackCapacityBytes);
+		}
+		AE_PROFILE_PLOT("Phys.ScratchHighWaterBytes", static_cast<int64_t>(resourceStats.scratchHighWaterBytes));
+		AE_PROFILE_PLOT("Phys.ScratchFallbackHighWaterBytes", static_cast<int64_t>(resourceStats.scratchFallbackHighWaterBytes));
+		AE_PROFILE_PLOT("Phys.SaturationFlags", static_cast<int64_t>(flags));
 	}
 
 	void PhysicsSystem::SyncTransforms(World& world, float alpha)

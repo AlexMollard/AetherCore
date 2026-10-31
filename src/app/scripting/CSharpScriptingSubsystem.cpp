@@ -37,21 +37,10 @@ namespace aether::app::scripting
 
 		std::filesystem::path ResolveManagedDir()
 		{
-			const auto cwd = std::filesystem::current_path();
-			const std::array<std::filesystem::path, 4> candidates = {
-			        io::PlatformPaths::GetExecutableDir() / "data" / "scripts" / "managed",
-			        cwd / "data" / "scripts" / "managed",
-			        cwd / ".." / "data" / "scripts" / "managed",
-			        cwd / ".." / ".." / "data" / "scripts" / "managed",
-			};
-			for (const auto& dir: candidates)
-			{
-				if (io::file_util::Exists(dir / "AetherCore.Interop.dll"))
-				{
-					return dir;
-				}
-			}
-			return candidates[0];
+			auto resolved = ResolveRuntimeManagedDirectory(io::PlatformPaths::GetExecutableDir(),
+			        std::filesystem::current_path(), io::PlatformPaths::IsIsolatedProduct());
+			if (!resolved) { Throw(resolved.error()); }
+			return *resolved;
 		}
 
 	} // namespace
@@ -89,12 +78,9 @@ namespace aether::app::scripting
 				        io::PlatformPaths::ReadEnvironmentVariable("AETHER_PROJECT_DIR"));
 			}
 #else
-			// The editor does not. m_managedDir is one directory shared by every project, and
-			// at this point no project is open - so the AetherGame.dll sitting there belongs
-			// to whichever project was opened last. Loading it would publish another game's
-			// script types to the Add Script palette until the real build lands seconds later,
-			// and a type picked from that window binds to a class that then disappears.
-			// EditorProjectManager loads scripts once the open project has built its own.
+			// The editor loads its open project's process-specific build output, never a
+			// game assembly beside the shared installed SDK. Project setup selects that path
+			// before EditorProjectManager builds and loads the project's scripts.
 			AE_VERBOSE(LogCategory::App, "C# host ready; deferring script load until a project is open.");
 #endif
 		}
@@ -187,10 +173,8 @@ namespace aether::app::scripting
 			return time;
 		}
 
-		// A cheap identity fingerprint (size + mtime) for a deployed assembly. Used to detect when the
-		// staged AetherGame.dll / AetherCore.dll we built has been replaced out from under us - notably
-		// when an editor rebuild re-stages the default stub AetherGame.dll and a fresh SDK dll over the
-		// project's deployed build. mtime alone is not enough (the editor stages all dlls at one time).
+		// A cheap identity fingerprint (size + mtime) for project output and the installed
+		// SDK input. Replacing either invalidates this process's cached script build.
 		std::string DeployedDllFingerprint(const std::filesystem::path& path)
 		{
 			std::error_code ec;
@@ -204,9 +188,9 @@ namespace aether::app::scripting
 			return std::to_string(size) + ":" + std::to_string(ticks);
 		}
 
-		std::string BuildProfileStamp(const std::filesystem::path& managedDir)
+		std::string BuildProfileStamp(const std::filesystem::path& managedDir, const std::filesystem::path& outputDir)
 		{
-			return std::string(kEditorScriptBuildProfile) + "\n" + "game=" + DeployedDllFingerprint(managedDir / "AetherGame.dll") + "\n" + "sdk=" + DeployedDllFingerprint(managedDir / "AetherCore.dll") + "\n";
+			return std::string(kEditorScriptBuildProfile) + "\n" + "game=" + DeployedDllFingerprint(outputDir / "AetherGame.dll") + "\n" + "sdk=" + DeployedDllFingerprint(managedDir / "AetherCore.dll") + "\n";
 		}
 
 		constexpr std::string_view kScriptInputSignatureFile = ".aethercore-script-inputs";
@@ -313,19 +297,17 @@ namespace aether::app::scripting
 			return !ec;
 		}
 
-		bool IsScriptBuildRequired(const std::filesystem::path& gameProject, const std::filesystem::path& managedDir, const std::filesystem::path& artifactsDir)
+		bool IsScriptBuildRequired(const std::filesystem::path& gameProject, const std::filesystem::path& managedDir, const std::filesystem::path& outputDir)
 		{
-			// Rebuild if the profile is missing/for a different config, OR if the deployed AetherGame.dll
-			// / SDK dll no longer match what we last built (they were clobbered by an editor rebuild, or
-			// the SDK changed). Comparing the recorded stamp against the current one catches both.
-			const auto profile = io::file_util::ReadText(artifactsDir / kEditorScriptBuildProfileFile);
-			if (!profile || *profile != BuildProfileStamp(managedDir))
+			// Compare project/process output and read-only SDK input against this build's stamp.
+			const auto profile = io::file_util::ReadText(outputDir / kEditorScriptBuildProfileFile);
+			if (!profile || *profile != BuildProfileStamp(managedDir, outputDir))
 			{
 				return true;
 			}
 
-			const std::filesystem::path deployedAssembly = managedDir / "AetherGame.dll";
-			if (!std::filesystem::exists(managedDir / "AetherGame.deps.json"))
+			const std::filesystem::path deployedAssembly = outputDir / "AetherGame.dll";
+			if (!std::filesystem::exists(outputDir / "AetherGame.deps.json"))
 			{
 				return true;
 			}
@@ -348,7 +330,7 @@ namespace aether::app::scripting
 			// The set of inputs changing counts as much as any one of them being newer.
 			// Deleting a script moves no surviving mtime, so the timestamp test alone
 			// reported "current" and left the deleted type live in the stale assembly.
-			if (ReadRecordedInputSignature(artifactsDir) != inputSignature)
+			if (ReadRecordedInputSignature(outputDir) != inputSignature)
 			{
 				return true;
 			}
@@ -360,7 +342,13 @@ namespace aether::app::scripting
 		bool PerformScriptBuild(const ::aether::scripting::ManagedScriptApi* api, const std::filesystem::path& managedDir, const std::filesystem::path& gameProject, const std::filesystem::path& artifactsDir, std::string& error)
 		{
 			namespace fs = std::filesystem;
-			if (!IsScriptBuildRequired(gameProject, managedDir, artifactsDir))
+			const fs::path buildOut = ResolveEditorScriptBuildDirectory(artifactsDir, static_cast<std::uint32_t>(CurrentProcessId()));
+			if (buildOut.empty())
+			{
+				error = "C# source compilation requires an absolute project intermediate directory.";
+				return false;
+			}
+			if (!IsScriptBuildRequired(gameProject, managedDir, buildOut))
 			{
 				AE_VERBOSE(LogCategory::App, "C# scripts are current; skipping the compile.");
 				return true;
@@ -379,7 +367,6 @@ namespace aether::app::scripting
 			// One output folder per editor process: several editors on one project (a user plus
 			// test editors) compiled into the same file, and whichever wrote second failed with a
 			// sharing violation - Play then ran the previous scripts.
-			const fs::path buildOut = artifactsDir / "bin" / "AetherGame" / ("debug-" + std::to_string(CurrentProcessId()));
 			const fs::path outputPath = buildOut / "AetherGame.dll";
 
 			// Big enough for a wall of compiler errors; the managed side truncates to fit.
@@ -404,7 +391,6 @@ namespace aether::app::scripting
 				AE_WARN(LogCategory::App, "C# compile warnings: {}", diagnostics);
 			}
 
-			// on-disk dll mid-run is safe.
 			// A zero exit with no assembly behind it is not a success. It happened with a
 			// runtime-only .NET, where the muxer failed to find a compiler rather than the
 			// compiler failing - the loop below would then copy nothing, report success, and
@@ -414,37 +400,12 @@ namespace aether::app::scripting
 				error = "The script build reported success but produced no AetherGame.dll in '" + buildOut.string() + "'.";
 				return false;
 			}
-			for (const char* name: {"AetherGame.dll", "AetherGame.pdb", "AetherGame.deps.json"})
-			{
-				const fs::path src = buildOut / name;
-				if (!fs::exists(src))
-				{
-					continue;
-				}
-				// Another editor sharing this managed folder may be deploying or reading the
-				// same file this instant; the clash lasts milliseconds, so retry briefly.
-				std::error_code ec;
-				for (int attempt = 0; attempt < 20; ++attempt)
-				{
-					fs::copy_file(src, managedDir / name, fs::copy_options::overwrite_existing, ec);
-					if (!ec)
-					{
-						break;
-					}
-					std::this_thread::sleep_for(std::chrono::milliseconds(50));
-				}
-				if (ec)
-				{
-					error = std::string("failed to deploy ") + name + ": " + ec.message();
-					return false;
-				}
-			}
-			std::error_code cleanup;
-			fs::remove_all(buildOut, cleanup);
+			// Load this retained project/process output directly. The engine's managed
+			// directory contains immutable SDK/compiler input, never a project's output.
 
-			// Record the fingerprints of the dlls we just deployed, so a later editor rebuild that
-			// re-stages a stub AetherGame.dll (or a new SDK) is detected and triggers a rebuild.
-			if (auto result = io::file_util::WriteText(artifactsDir / kEditorScriptBuildProfileFile, BuildProfileStamp(managedDir)); !result)
+			// Cache metadata belongs beside this process's output, not in the bundle or
+			// another editor process's shared project intermediate root.
+			if (auto result = io::file_util::WriteText(buildOut / kEditorScriptBuildProfileFile, BuildProfileStamp(managedDir, buildOut)); !result)
 			{
 				AE_WARN(LogCategory::App, "Could not record the C# script build profile: {}", result.error().message);
 			}
@@ -453,7 +414,7 @@ namespace aether::app::scripting
 				std::uint64_t builtSignature = 1469598103934665603ULL;
 				(void) AccumulateLatestScriptInputTime(gameProject.parent_path(), builtInput, builtSignature);
 				(void) AccumulateLatestScriptInputTime(ManagedDirectoryBuildProps(), builtInput, builtSignature);
-				if (auto written = io::file_util::WriteText(artifactsDir / kScriptInputSignatureFile, std::to_string(builtSignature)); !written)
+				if (auto written = io::file_util::WriteText(buildOut / kScriptInputSignatureFile, std::to_string(builtSignature)); !written)
 				{
 					AE_WARN(LogCategory::App, "Could not record the C# script input signature: {}", written.error().message);
 				}
@@ -476,6 +437,8 @@ namespace aether::app::scripting
 	{
 		m_scriptProject = std::move(scriptsProject);
 		m_scriptArtifactsDir = std::move(artifactsDir);
+		const auto outputDir = ResolveEditorScriptBuildDirectory(m_scriptArtifactsDir, static_cast<std::uint32_t>(CurrentProcessId()));
+		m_scriptsAssemblyPath = m_scriptProject.empty() || outputDir.empty() ? std::string{} : io::PlatformPaths::PathToUtf8(outputDir / "AetherGame.dll");
 	}
 
 	bool CSharpScriptingSubsystem::RebuildFromSource(std::string& error)

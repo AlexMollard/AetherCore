@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scene/System.hpp"
+#include "audio/AudioSubsystem.hpp"
 
 #include <glm/glm.hpp>
 #include <unordered_map>
@@ -13,7 +14,6 @@ namespace aether
 	namespace audio
 	{
 		class AudioSubsystem;
-		struct VoiceHandle;
 		struct ListenerPose;
 	}
 

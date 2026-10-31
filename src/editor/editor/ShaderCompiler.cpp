@@ -10,6 +10,7 @@
 
 #include "io/FileUtil.hpp"
 #include "io/Process.hpp"
+#include "io/PlatformPaths.hpp"
 #include "materialgraph/MaterialGraph.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
@@ -19,6 +20,36 @@ namespace aether::editor
 	namespace
 	{
 		namespace fs = std::filesystem;
+
+		fs::path ShaderCompilerExecutable()
+		{
+			if (io::PlatformPaths::IsIsolatedProduct())
+			{
+#ifdef _WIN32
+				return io::PlatformPaths::GetExecutableDir() / "slangc.exe";
+#else
+				return io::PlatformPaths::GetExecutableDir() / "slangc";
+#endif
+			}
+#ifdef AETHER_SLANGC_EXE
+			return fs::path(AETHER_SLANGC_EXE);
+#else
+			return {};
+#endif
+		}
+
+		fs::path ShaderIncludeDirectory()
+		{
+			if (io::PlatformPaths::IsIsolatedProduct())
+			{
+				return io::PlatformPaths::GetExecutableDir() / "data/sdk/shaders";
+			}
+#ifdef AETHER_SHADER_INCLUDE_DIR
+			return fs::path(AETHER_SHADER_INCLUDE_DIR);
+#else
+			return {};
+#endif
+		}
 
 		std::optional<fs::file_time_type> LatestWriteTime(const fs::path& path)
 		{
@@ -313,6 +344,15 @@ namespace aether::editor
 
 	bool CanCompileShaders()
 	{
+		if (io::PlatformPaths::IsIsolatedProduct())
+		{
+#ifdef AETHER_SLANGC_EXE
+			std::error_code ec;
+			return fs::is_regular_file(ShaderCompilerExecutable(), ec) && fs::is_directory(ShaderIncludeDirectory() / "include", ec);
+#else
+			return false;
+#endif
+		}
 #ifdef AETHER_SLANGC_EXE
 		return true;
 #else
@@ -335,15 +375,17 @@ namespace aether::editor
 		{
 			const std::unordered_set<std::string> included = IncludedShaderNames(sourceDir);
 			auto newest = NewestShaderSourceMTime(sourceDir, &included);
-#ifdef AETHER_SHADER_INCLUDE_DIR
 			// A change to an engine header has to invalidate every project shader built
 			// against it, or the skip below ships a binary compiled against a header that no
 			// longer exists in that form.
-			if (const auto engineHeaders = NewestShaderSourceMTime(fs::path(AETHER_SHADER_INCLUDE_DIR)); engineHeaders && (!newest || *engineHeaders > *newest))
+			const auto includeDirectory = ShaderIncludeDirectory();
+			if (!includeDirectory.empty())
 			{
-				newest = engineHeaders;
+				if (const auto engineHeaders = NewestShaderSourceMTime(includeDirectory); engineHeaders && (!newest || *engineHeaders > *newest))
+				{
+					newest = engineHeaders;
+				}
 			}
-#endif
 			return newest;
 		}
 
@@ -381,6 +423,11 @@ namespace aether::editor
 
 	bool CompileOne(const fs::path& slangFile, const fs::path& outDir, std::string& error, const fs::path& sourceDir)
 	{
+		if (io::PlatformPaths::IsIsolatedProduct() && !CanCompileShaders())
+		{
+			error = "Project shader compilation requires bundled slangc and data/sdk/shaders/include. This installed package does not include that prerequisite; install a shader-authoring package or use precompiled built-in shaders.";
+			return false;
+		}
 #ifdef AETHER_SLANGC_EXE
 		const std::lock_guard<std::recursive_mutex> compileLock(CompileMutex());
 		const fs::path outFile = ShaderOutputFile(slangFile, outDir, sourceDir);
@@ -410,11 +457,9 @@ namespace aether::editor
 
 		// Let project shaders #include the engine's shared shader headers (DevicePointer,
 		// FrameConstants, ...) by adding the engine shader dir to slangc's include search path.
-		std::string includeArg;
-#ifdef AETHER_SHADER_INCLUDE_DIR
-		includeArg = " -I " + Quoted(AETHER_SHADER_INCLUDE_DIR);
-#endif
-		const std::string command = Quoted(AETHER_SLANGC_EXE) + " " AETHER_SLANG_ARGS + includeArg + " -o " + Quoted(tmpFile) + " " + Quoted(slangFile);
+		const auto includeDirectory = ShaderIncludeDirectory();
+		const std::string includeArg = includeDirectory.empty() ? "" : " -I " + Quoted(includeDirectory);
+		const std::string command = Quoted(ShaderCompilerExecutable()) + " " AETHER_SLANG_ARGS + includeArg + " -o " + Quoted(tmpFile) + " " + Quoted(slangFile);
 		fs::path logFile = outFile;
 		logFile.replace_extension(".slangc.log");
 		const int rc = io::RunProcessToLog(command, logFile);
@@ -457,6 +502,24 @@ namespace aether::editor
 
 		if (!CanCompileShaders())
 		{
+			if (io::PlatformPaths::IsIsolatedProduct())
+			{
+				std::error_code ec;
+				const auto shaderDir = projectRoot / "assets/shaders";
+				if (fs::is_directory(shaderDir, ec))
+				{
+					for (const auto& entry: fs::recursive_directory_iterator(shaderDir, ec))
+					{
+						if (entry.path().extension() == ".slang")
+						{
+							result.ok = false;
+							result.failed = 1;
+							result.message = "Project shader compilation requires bundled slangc and data/sdk/shaders/include; this package lacks shader-authoring prerequisites.";
+							return result;
+						}
+					}
+				}
+			}
 			result.message = "Shader compilation is unavailable in this build (no slangc found by CMake); skipping.";
 			return result;
 		}

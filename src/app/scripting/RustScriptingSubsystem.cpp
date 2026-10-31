@@ -33,7 +33,8 @@ namespace aether::app::scripting
 	Expected<void> RustScriptingSubsystem::Initialize(SceneContext& context)
 	{
 		m_context = &context;
-		const auto root = m_projectRoot.empty() ? io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR") : m_projectRoot;
+		const auto root = io::PlatformPaths::IsIsolatedProduct() ? io::PlatformPaths::GetExplicitProjectDirectory()
+		        : (m_projectRoot.empty() ? io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR") : m_projectRoot);
 		if (!root.empty())
 		{
 			AE_TRY(descriptor, project::ReadProjectDescriptor(root));
@@ -50,6 +51,12 @@ namespace aether::app::scripting
 		else
 		{
 			m_result.module = ResolveRuntimeGameplayModule(io::PlatformPaths::GetExecutableDir(), GameplayLanguage::Rust);
+			if (io::PlatformPaths::IsIsolatedProduct())
+			{
+				const auto relative = m_result.module.lexically_relative(io::PlatformPaths::GetExecutableDir());
+				m_result.module = io::PlatformPaths::ResolveBundlePath({}, {}, io::PlatformPaths::PathToUtf8(relative));
+				if (m_result.module.empty()) { return StageFailure("Isolated Rust product requires its delivered gameplay module; source-project fallback is disabled"); }
+			}
 			m_result.report = {.jobId = "rust-module-load", .status = aether::scripting::AgentJobStatus::Passed, .phase = "load", .target = "desktop", .language = "rust", .profile = "desktop-rust-v1"};
 		}
 		return LoadBuiltModule();

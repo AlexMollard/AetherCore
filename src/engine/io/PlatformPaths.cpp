@@ -30,6 +30,8 @@ namespace aether::io
 {
 	namespace
 	{
+		std::filesystem::path s_explicitProjectDirectory;
+
 		std::string EnvironmentString(std::string_view name)
 		{
 #ifdef _MSC_VER
@@ -68,6 +70,39 @@ namespace aether::io
 			return dir;
 		}
 
+		std::filesystem::path ResolveIsolatedBundlePath(std::string_view relative)
+		{
+			const auto path = std::filesystem::u8path(relative);
+			if (path.empty() || path.is_absolute() || path.has_root_path())
+			{
+				return {};
+			}
+			std::error_code ec;
+			const auto root = std::filesystem::canonical(PlatformPaths::GetExecutableDir(), ec);
+			if (ec)
+			{
+				return {};
+			}
+			const auto bundled = std::filesystem::canonical(root / path, ec);
+			if (ec)
+			{
+				return {};
+			}
+			const auto descendant = bundled.lexically_relative(root);
+			if (descendant.empty() || descendant.is_absolute())
+			{
+				return {};
+			}
+			for (const auto& part : descendant)
+			{
+				if (part == "..")
+				{
+					return {};
+				}
+			}
+			return bundled;
+		}
+
 		std::filesystem::path ResolveExecutablePath()
 		{
 #if defined(_WIN32)
@@ -102,6 +137,41 @@ namespace aether::io
 	std::string PlatformPaths::ReadEnvironmentVariable(std::string_view name)
 	{
 		return EnvironmentString(name);
+	}
+
+	bool PlatformPaths::IsIsolatedProduct()
+	{
+		return IsIsolatedProduct(GetExecutableDir(), EnvironmentString("AETHER_ISOLATED_PRODUCT"));
+	}
+
+	bool PlatformPaths::IsIsolatedProduct(const std::filesystem::path& executableDir, std::string_view forceFlag)
+	{
+		if (forceFlag == "1")
+		{
+			return true;
+		}
+		if (executableDir.empty())
+		{
+			return false;
+		}
+		std::error_code ec;
+		return std::filesystem::is_regular_file(executableDir / "BUILD_PROVENANCE.json", ec)
+		    || std::filesystem::is_regular_file(executableDir / "aether-product", ec);
+	}
+
+	void PlatformPaths::SetExplicitProjectDirectory(const std::filesystem::path& directory)
+	{
+		std::error_code ec;
+		s_explicitProjectDirectory = directory.empty() ? std::filesystem::path{} : std::filesystem::absolute(directory, ec).lexically_normal();
+		if (ec)
+		{
+			s_explicitProjectDirectory.clear();
+		}
+	}
+
+	std::filesystem::path PlatformPaths::GetExplicitProjectDirectory()
+	{
+		return s_explicitProjectDirectory;
 	}
 
 	std::filesystem::path PlatformPaths::ReadEnvironmentPath(std::string_view name)
@@ -226,6 +296,11 @@ namespace aether::io
 	std::filesystem::path PlatformPaths::ResolveToolExecutable(std::string_view envVar, std::string_view devHint, std::string_view fileName)
 	{
 		std::error_code ec;
+		if (IsIsolatedProduct())
+		{
+			const auto bundled = ResolveIsolatedBundlePath(fileName);
+			return std::filesystem::is_regular_file(bundled, ec) ? bundled : std::filesystem::path{};
+		}
 		if (!envVar.empty())
 		{
 			if (const std::string envValue = EnvironmentString(envVar); !envValue.empty() && std::filesystem::exists(envValue, ec))
@@ -246,6 +321,10 @@ namespace aether::io
 	std::filesystem::path PlatformPaths::ResolveBundlePath(std::string_view envVar, std::string_view devHint, std::string_view bundleRelative)
 	{
 		std::error_code ec;
+		if (IsIsolatedProduct())
+		{
+			return ResolveIsolatedBundlePath(bundleRelative);
+		}
 		if (!envVar.empty())
 		{
 			if (const std::string envValue = EnvironmentString(envVar); !envValue.empty() && std::filesystem::exists(envValue, ec))
@@ -270,8 +349,34 @@ namespace aether::io
 		return {};
 	}
 
+	std::filesystem::path PlatformPaths::ResolveUserUiLayoutPath(const std::filesystem::path& userConfigDir, const std::string_view executableName)
+	{
+		const auto name = std::filesystem::u8path(executableName);
+		if (userConfigDir.empty() || !userConfigDir.is_absolute() || name.empty() || name.has_parent_path() || name.has_root_path() || name == "." || name == "..")
+		{
+			return {};
+		}
+		return userConfigDir / "ui" / (name.native() + std::filesystem::path(".ini").native());
+	}
+
 	std::filesystem::path PlatformPaths::GetUserConfigDir()
 	{
+		if (const auto overridePath = ReadEnvironmentPath("AETHER_USER_DATA_DIR"); !overridePath.empty())
+		{
+			if (!overridePath.is_absolute())
+			{
+				AE_ERROR(LogCategory::FileSystem, "AETHER_USER_DATA_DIR must be absolute; user settings disabled.");
+				return {};
+			}
+			std::error_code ec;
+			std::filesystem::create_directories(overridePath, ec);
+			if (ec || !std::filesystem::is_directory(overridePath, ec))
+			{
+				AE_ERROR(LogCategory::FileSystem, "Cannot use AETHER_USER_DATA_DIR '{}'; user settings disabled.", PathToUtf8(overridePath));
+				return {};
+			}
+			return overridePath;
+		}
 		std::filesystem::path root;
 
 #if defined(_WIN32)

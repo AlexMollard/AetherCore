@@ -17,12 +17,15 @@
 namespace aether
 {
 	template<typename T>
-	static gpu::DeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, vulkan::TransferManager& transfer)
+	static Expected<gpu::DeviceAddress> UploadArray(GpuHeap& heap, const std::vector<T>& data, vulkan::TransferManager& transfer)
 	{
 		if (data.empty()) return 0;
 		const auto span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
-		if (!span.IsValid() || heap.Upload(span, std::span<const T>(data), transfer) == 0)
-			Throw(AetherError::Asset("Animation database GPU upload failed"));
+		if (!span.IsValid())
+			AE_UNEXPECTED(AetherError::Asset("Animation database GPU allocation failed"));
+		AE_TRY(ticket, heap.TryUpload(span, std::span<const T>(data), transfer));
+		if (*ticket == 0)
+			AE_UNEXPECTED(AetherError::Asset("Animation database GPU upload failed"));
 		return span.address;
 	}
 
@@ -436,82 +439,171 @@ namespace aether
 			return static_cast<std::uint32_t>(m_clips.size());
 		}
 
-		const auto firstClipIdx = static_cast<std::uint32_t>(m_clips.size());
+		// Build privately: allocation failure must not change CPU counts or published addresses.
+		AnimationDatabase replacement;
+		replacement.m_clips = m_clips;
+		replacement.m_channels = m_channels;
+		replacement.m_times = m_times;
+		replacement.m_values = m_values;
+		replacement.m_skinMetas = m_skinMetas;
+		replacement.m_bindTranslations = m_bindTranslations;
+		replacement.m_bindRotations = m_bindRotations;
+		replacement.m_bindScales = m_bindScales;
+		replacement.m_nodeParents = m_nodeParents;
+		replacement.m_skinInverseBinds = m_skinInverseBinds;
+		replacement.m_skinJoints = m_skinJoints;
+		replacement.m_clipNames = m_clipNames;
+		replacement.m_nodeNames = m_nodeNames;
+		replacement.m_depthSortedNodes = m_depthSortedNodes;
+		replacement.m_depthRanges = m_depthRanges;
+		replacement.m_nodeCount = m_nodeCount;
+		replacement.m_skinCount = m_skinCount;
+		replacement.m_depthCount = m_depthCount;
+		replacement.m_generation = m_generation;
+		replacement.m_aliveSentinel = m_aliveSentinel;
+		replacement.m_ctx = m_ctx;
+		auto& transfer = m_ctx->GetTransferManager();
+		struct RetireReplacement
+		{
+			GpuHeap& heap;
+			vulkan::TransferManager& transfer;
+			bool active = true;
+			~RetireReplacement()
+			{
+				if (!active) { return; }
+				// Some earlier copies may already have been submitted when a later staging
+				// allocation fails. Never destroy their destination while DMA still uses it.
+				// WaitFor fails fatally on device loss rather than resuming with unsafe memory.
+				transfer.WaitFor(transfer.LastSubmitted());
+				heap.Shutdown();
+			}
+		} retire{*replacement.m_heap, transfer};
+		const auto firstClipIdx = static_cast<std::uint32_t>(replacement.m_clips.size());
 
-		const auto channelBase = static_cast<std::uint32_t>(m_channels.size());
-		const auto timesBase = static_cast<std::uint32_t>(m_times.size());
-		const auto valuesBase = static_cast<std::uint32_t>(m_values.size());
-		const auto nameBase = static_cast<std::uint32_t>(m_clipNames.size());
+		const auto channelBase = static_cast<std::uint32_t>(replacement.m_channels.size());
+		const auto timesBase = static_cast<std::uint32_t>(replacement.m_times.size());
+		const auto valuesBase = static_cast<std::uint32_t>(replacement.m_values.size());
+		const auto nameBase = static_cast<std::uint32_t>(replacement.m_clipNames.size());
 
-		m_clips.reserve(m_clips.size() + newClips.size());
+		replacement.m_clips.reserve(replacement.m_clips.size() + newClips.size());
 		for (auto clip: newClips)
 		{
 			clip.channelOffset += channelBase;
 			clip.nameOffset += nameBase;
-			m_clips.push_back(clip);
+			replacement.m_clips.push_back(clip);
 		}
 
-		m_channels.reserve(m_channels.size() + newChannels.size());
+		replacement.m_channels.reserve(replacement.m_channels.size() + newChannels.size());
 		for (const auto& ch: newChannels)
 		{
 			auto gpuCh = ch;
 			gpuCh.timesOffset += timesBase * sizeof(float);
 			gpuCh.valuesOffset += valuesBase * sizeof(glm::vec4);
-			m_channels.push_back(gpuCh);
+			replacement.m_channels.push_back(gpuCh);
 		}
 
-		m_times.insert(m_times.end(), newTimes.begin(), newTimes.end());
-		m_values.insert(m_values.end(), newValues.begin(), newValues.end());
-		m_clipNames += newClipNames;
+		replacement.m_times.insert(replacement.m_times.end(), newTimes.begin(), newTimes.end());
+		replacement.m_values.insert(replacement.m_values.end(), newValues.begin(), newValues.end());
+		replacement.m_clipNames += newClipNames;
 
-		vulkan::TransferManager& transfer = m_ctx->GetTransferManager();
 
 		const auto align16 = [](gpu::DeviceSize v) -> gpu::DeviceSize
 		{
 			return (v + 15) & ~static_cast<gpu::DeviceSize>(15);
 		};
-		gpu::DeviceSize totalBytes = align16(m_clips.size() * sizeof(GpuClip));
-		totalBytes += align16(m_channels.size() * sizeof(GpuChannel));
-		totalBytes += align16(m_times.size() * sizeof(float));
-		totalBytes += align16(m_values.size() * sizeof(glm::vec4));
-		totalBytes += align16(m_nodeParents.size() * sizeof(std::int32_t));
-		totalBytes += align16(m_bindTranslations.size() * sizeof(glm::vec4));
-		totalBytes += align16(m_bindRotations.size() * sizeof(glm::vec4));
-		totalBytes += align16(m_bindScales.size() * sizeof(glm::vec4));
-		totalBytes += align16(m_skinMetas.size() * sizeof(GpuSkinMeta));
-		totalBytes += align16(m_skinJoints.size() * sizeof(std::uint32_t));
-		totalBytes += align16(m_skinInverseBinds.size() * sizeof(glm::mat4));
-		totalBytes += align16(m_depthSortedNodes.size() * sizeof(std::uint32_t));
-		totalBytes += align16(m_depthRanges.size() * sizeof(DepthRange));
-		totalBytes += align16(m_clipNames.size());
+		gpu::DeviceSize totalBytes = align16(replacement.m_clips.size() * sizeof(GpuClip));
+		totalBytes += align16(replacement.m_channels.size() * sizeof(GpuChannel));
+		totalBytes += align16(replacement.m_times.size() * sizeof(float));
+		totalBytes += align16(replacement.m_values.size() * sizeof(glm::vec4));
+		totalBytes += align16(replacement.m_nodeParents.size() * sizeof(std::int32_t));
+		totalBytes += align16(replacement.m_bindTranslations.size() * sizeof(glm::vec4));
+		totalBytes += align16(replacement.m_bindRotations.size() * sizeof(glm::vec4));
+		totalBytes += align16(replacement.m_bindScales.size() * sizeof(glm::vec4));
+		totalBytes += align16(replacement.m_skinMetas.size() * sizeof(GpuSkinMeta));
+		totalBytes += align16(replacement.m_skinJoints.size() * sizeof(std::uint32_t));
+		totalBytes += align16(replacement.m_skinInverseBinds.size() * sizeof(glm::mat4));
+		totalBytes += align16(replacement.m_depthSortedNodes.size() * sizeof(std::uint32_t));
+		totalBytes += align16(replacement.m_depthRanges.size() * sizeof(DepthRange));
+		totalBytes += align16(replacement.m_clipNames.size());
 
-		m_heap->ShutdownDeferred();
-		m_heap->Initialize(*m_ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
+		auto initialized = replacement.m_heap->TryInitialize(*replacement.m_ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
+		if (!initialized) { return std::unexpected(initialized.error()); }
 
-		m_clipsAddr = UploadArray(*m_heap, m_clips, transfer);
-		m_channelsAddr = UploadArray(*m_heap, m_channels, transfer);
-		m_timesAddr = UploadArray(*m_heap, m_times, transfer);
-		m_valuesAddr = UploadArray(*m_heap, m_values, transfer);
-		m_nodeParentsAddr = UploadArray(*m_heap, m_nodeParents, transfer);
-		m_bindTranslationsAddr = UploadArray(*m_heap, m_bindTranslations, transfer);
-		m_bindRotationsAddr = UploadArray(*m_heap, m_bindRotations, transfer);
-		m_bindScalesAddr = UploadArray(*m_heap, m_bindScales, transfer);
-		m_skinMetasAddr = UploadArray(*m_heap, m_skinMetas, transfer);
-		m_skinJointsAddr = UploadArray(*m_heap, m_skinJoints, transfer);
-		m_skinInverseBindsAddr = UploadArray(*m_heap, m_skinInverseBinds, transfer);
+		AE_TRY(clipsAddr, UploadArray(*replacement.m_heap, replacement.m_clips, transfer));
+		replacement.m_clipsAddr = *clipsAddr;
+		AE_TRY(channelsAddr, UploadArray(*replacement.m_heap, replacement.m_channels, transfer));
+		replacement.m_channelsAddr = *channelsAddr;
+		AE_TRY(timesAddr, UploadArray(*replacement.m_heap, replacement.m_times, transfer));
+		replacement.m_timesAddr = *timesAddr;
+		AE_TRY(valuesAddr, UploadArray(*replacement.m_heap, replacement.m_values, transfer));
+		replacement.m_valuesAddr = *valuesAddr;
+		AE_TRY(nodeParentsAddr, UploadArray(*replacement.m_heap, replacement.m_nodeParents, transfer));
+		replacement.m_nodeParentsAddr = *nodeParentsAddr;
+		AE_TRY(bindTranslationsAddr, UploadArray(*replacement.m_heap, replacement.m_bindTranslations, transfer));
+		replacement.m_bindTranslationsAddr = *bindTranslationsAddr;
+		AE_TRY(bindRotationsAddr, UploadArray(*replacement.m_heap, replacement.m_bindRotations, transfer));
+		replacement.m_bindRotationsAddr = *bindRotationsAddr;
+		AE_TRY(bindScalesAddr, UploadArray(*replacement.m_heap, replacement.m_bindScales, transfer));
+		replacement.m_bindScalesAddr = *bindScalesAddr;
+		AE_TRY(skinMetasAddr, UploadArray(*replacement.m_heap, replacement.m_skinMetas, transfer));
+		replacement.m_skinMetasAddr = *skinMetasAddr;
+		AE_TRY(skinJointsAddr, UploadArray(*replacement.m_heap, replacement.m_skinJoints, transfer));
+		replacement.m_skinJointsAddr = *skinJointsAddr;
+		AE_TRY(skinInverseBindsAddr, UploadArray(*replacement.m_heap, replacement.m_skinInverseBinds, transfer));
+		replacement.m_skinInverseBindsAddr = *skinInverseBindsAddr;
 
-		if (!m_depthSortedNodes.empty())
+		if (!replacement.m_depthSortedNodes.empty())
 		{
-			m_depthSortedNodesAddr = UploadArray(*m_heap, m_depthSortedNodes, transfer);
-			m_depthRangesAddr = UploadArray(*m_heap, m_depthRanges, transfer);
+			AE_TRY(depthSortedNodesAddr, UploadArray(*replacement.m_heap, replacement.m_depthSortedNodes, transfer));
+			replacement.m_depthSortedNodesAddr = *depthSortedNodesAddr;
+			AE_TRY(depthRangesAddr, UploadArray(*replacement.m_heap, replacement.m_depthRanges, transfer));
+			replacement.m_depthRangesAddr = *depthRangesAddr;
 		}
 
-		if (!m_clipNames.empty())
+		if (!replacement.m_clipNames.empty())
 		{
-			const GpuSpan<char> span = m_heap->Alloc<char>(static_cast<std::uint32_t>(m_clipNames.size()));
-			(void) m_heap->Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), transfer);
-			m_stringsAddr = span.address;
+			const GpuSpan<char> span = replacement.m_heap->Alloc<char>(static_cast<std::uint32_t>(replacement.m_clipNames.size()));
+			if (!span.IsValid()) { AE_UNEXPECTED(AetherError::Asset("Animation strings GPU allocation failed")); }
+			AE_TRY(ticket, replacement.m_heap->TryUpload(span, std::span<const char>(replacement.m_clipNames.data(), replacement.m_clipNames.size()), transfer));
+			if (*ticket == 0) { AE_UNEXPECTED(AetherError::Asset("Animation strings GPU upload failed")); }
+			replacement.m_stringsAddr = span.address;
 		}
+
+		// All fallible work is complete before publishing. The exclusive caller drained
+		// old frames and waited for GPU idle, so the old heap can be released directly.
+		transfer.WaitFor(transfer.LastSubmitted());
+		retire.active = false;
+		m_heap->Shutdown();
+		m_heap.swap(replacement.m_heap);
+		m_clips.swap(replacement.m_clips);
+		m_channels.swap(replacement.m_channels);
+		m_times.swap(replacement.m_times);
+		m_values.swap(replacement.m_values);
+		m_skinMetas.swap(replacement.m_skinMetas);
+		m_bindTranslations.swap(replacement.m_bindTranslations);
+		m_bindRotations.swap(replacement.m_bindRotations);
+		m_bindScales.swap(replacement.m_bindScales);
+		m_nodeParents.swap(replacement.m_nodeParents);
+		m_skinInverseBinds.swap(replacement.m_skinInverseBinds);
+		m_skinJoints.swap(replacement.m_skinJoints);
+		m_clipNames.swap(replacement.m_clipNames);
+		m_nodeNames.swap(replacement.m_nodeNames);
+		m_depthSortedNodes.swap(replacement.m_depthSortedNodes);
+		m_depthRanges.swap(replacement.m_depthRanges);
+		m_clipsAddr = replacement.m_clipsAddr;
+		m_channelsAddr = replacement.m_channelsAddr;
+		m_timesAddr = replacement.m_timesAddr;
+		m_valuesAddr = replacement.m_valuesAddr;
+		m_stringsAddr = replacement.m_stringsAddr;
+		m_nodeParentsAddr = replacement.m_nodeParentsAddr;
+		m_bindTranslationsAddr = replacement.m_bindTranslationsAddr;
+		m_bindRotationsAddr = replacement.m_bindRotationsAddr;
+		m_bindScalesAddr = replacement.m_bindScalesAddr;
+		m_skinMetasAddr = replacement.m_skinMetasAddr;
+		m_skinJointsAddr = replacement.m_skinJointsAddr;
+		m_skinInverseBindsAddr = replacement.m_skinInverseBindsAddr;
+		m_depthSortedNodesAddr = replacement.m_depthSortedNodesAddr;
+		m_depthRangesAddr = replacement.m_depthRangesAddr;
 
 		return firstClipIdx;
 	}

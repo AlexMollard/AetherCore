@@ -164,6 +164,21 @@ namespace aether
 			std::string language = "csharp";
 		} scripting;
 
+		// Allocator/table limits are applied when the physics system is created.
+		struct Physics
+		{
+			int scratchArenaKiB = 10240;
+			int scratchFallbackKiB = 55296;
+#if defined(__EMSCRIPTEN__)
+			int maxBodies = 8192;
+			int maxBodyPairs = 16384;
+#else
+			int maxBodies = 64536;
+			int maxBodyPairs = 64536;
+#endif
+			int maxContactConstraints = 10240;
+		} physics;
+
 		struct Streaming
 		{
 			int cpuBudgetMiB = 256;
@@ -256,6 +271,16 @@ namespace aether
 		} network;
 	};
 
+	inline EngineSettings::Physics SanitizePhysicsResourceSettings(EngineSettings::Physics settings)
+	{
+		settings.scratchArenaKiB = std::clamp(settings.scratchArenaKiB, 1, 1024 * 1024);
+		settings.scratchFallbackKiB = std::clamp(settings.scratchFallbackKiB, 0, 1024 * 1024);
+		settings.maxBodies = std::clamp(settings.maxBodies, 1, 64536);
+		settings.maxBodyPairs = std::clamp(settings.maxBodyPairs, 1, 1024 * 1024);
+		settings.maxContactConstraints = std::clamp(settings.maxContactConstraints, 1, 1024 * 1024);
+		return settings;
+	}
+
 	// Reject unsanitized input rather than wrapping during unit conversion.
 	[[nodiscard]] inline std::optional<streaming::Budgets> StreamingBudgetsFromSettings(const EngineSettings::Streaming& settings)
 	{
@@ -339,6 +364,11 @@ namespace aether
 		f("app.startupScene", settings.app.startupScene);
 		f("app.autoplay", settings.app.autoplay);
 		f("app.autosaveSeconds", settings.app.autosaveSeconds);
+		f("physics.scratchArenaKiB", settings.physics.scratchArenaKiB);
+		f("physics.scratchFallbackKiB", settings.physics.scratchFallbackKiB);
+		f("physics.maxBodies", settings.physics.maxBodies);
+		f("physics.maxBodyPairs", settings.physics.maxBodyPairs);
+		f("physics.maxContactConstraints", settings.physics.maxContactConstraints);
 		f("streaming.cpuBudgetMiB", settings.streaming.cpuBudgetMiB);
 		f("streaming.gpuBudgetMiB", settings.streaming.gpuBudgetMiB);
 		f("streaming.stagingBudgetMiB", settings.streaming.stagingBudgetMiB);

@@ -4,9 +4,8 @@
 #include <vector>
 
 // Walks every `.glb`/`.gltf` under `<projectRoot>/assets/models/` and (re)bakes whichever
-// is missing its `.mesh` output or is newer than it - source freshness includes external
-// buffer/image dependencies (MeshProcessor::CollectExternalSourceFiles), so a `.gltf`'s
-// EXTERNAL `.bin`/texture edit is exactly as stale-triggering as editing the `.gltf` itself.
+// has no valid content receipt. Source/dependency/override fingerprints and complete
+// output inventory are shared with editor import and the Web 3D packer shortcut.
 //
 // The one shared definition of "what needs baking", used by both the `AssetPacker bake-all`
 // CLI subcommand (main.cpp) and `PublishSteps.cpp`'s publish-time bake step. Those two used

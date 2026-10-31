@@ -1862,6 +1862,26 @@ namespace aether::assetpipeline
 			return result;
 		}
 
+		std::vector<std::filesystem::path> CollectMaterialOverrideFiles(const std::filesystem::path& modelPath, const std::filesystem::path& projectRoot)
+		{
+			std::vector<fs::path> out;
+			cgltf_options options{};
+			cgltf_data* data = nullptr;
+			const std::string pathStr = modelPath.string();
+			if (cgltf_parse_file(&options, pathStr.c_str(), &data) != cgltf_result_success)
+			{
+				return out;
+			}
+			for (cgltf_size i = 0; i < data->materials_count; ++i)
+			{
+				const std::string name = GetMaterialName(*data, static_cast<int32_t>(i));
+				out.push_back(projectRoot / "materials" / (name + ".material") / "properties.toml");
+				out.push_back(projectRoot / "materials" / (name + ".material.override.toml"));
+			}
+			cgltf_free(data);
+			return out;
+		}
+
 		std::vector<std::filesystem::path> CollectExternalSourceFiles(const std::filesystem::path& modelPath)
 		{
 			std::vector<fs::path> out;
@@ -1875,21 +1895,26 @@ namespace aether::assetpipeline
 			}
 
 			const fs::path dir = modelPath.parent_path();
-			const auto addUri = [&](const char* uri)
+			const auto addUri = [&](const char* uri, bool decode)
 			{
 				if (uri == nullptr || uri[0] == '\0' || std::string_view(uri).rfind("data:", 0) == 0)
 				{
 					return; // embedded (GLB binary chunk) or inline base64 - no external file
 				}
-				out.push_back((dir / uri).lexically_normal());
+				std::string diskUri = uri;
+				if (decode)
+				{
+					diskUri.resize(cgltf_decode_uri(diskUri.data()));
+				}
+				out.push_back((dir / diskUri).lexically_normal());
 			};
 			for (cgltf_size i = 0; i < data->buffers_count; ++i)
 			{
-				addUri(data->buffers[i].uri);
+				addUri(data->buffers[i].uri, true); // cgltf_load_buffers decodes escaped paths.
 			}
 			for (cgltf_size i = 0; i < data->images_count; ++i)
 			{
-				addUri(data->images[i].uri);
+				addUri(data->images[i].uri, false); // Match GenerateGlTFMaterialData's image path handling.
 			}
 
 			cgltf_free(data);

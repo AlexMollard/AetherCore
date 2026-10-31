@@ -86,6 +86,8 @@ namespace aether::net
 		void OnConnected(World& world, ConnectionId peer);
 		void OnDisconnected(World& world, ConnectionId peer);
 		void OnData(World& world, ConnectionId peer, std::span<const std::byte> data);
+		// Dispatch one published transport batch, stopping if a handler ends the session.
+		void OnEvents(World& world, std::span<const NetEvent> events);
 
 		struct GameplayEvent
 		{

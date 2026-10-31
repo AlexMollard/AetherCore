@@ -4,8 +4,10 @@
 #include <filesystem>
 #include <string>
 #include <system_error>
+#include <chrono>
 
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "AetherCore.hpp" // ParseWindowMode
 #include "utils/EngineSettings.hpp"
 
@@ -223,6 +225,28 @@ TEST_CASE("LoadLayered applies the project file as a layer and includes it in ba
 
     std::error_code ec;
     std::filesystem::remove(projectPath, ec);
+}
+
+TEST_CASE("Startup settings load and diagnostics preserve Unicode package paths")
+{
+	auto root = std::filesystem::temp_directory_path() / std::filesystem::path(u8"aether-settings-\u03a9-\u5305-");
+	root += std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+	struct Cleanup
+	{
+		std::filesystem::path root;
+		~Cleanup() { std::error_code ec; std::filesystem::remove_all(root, ec); }
+	} cleanup{root};
+	const auto shipped = root / "data/config/EngineSettings.toml";
+	REQUIRE(io::file_util::CreateDirectories(shipped.parent_path()));
+	REQUIRE(io::file_util::WriteText(shipped, "[window]\nwidth = 1820\n"));
+	const auto utf8 = io::PlatformPaths::PathToUtf8(shipped);
+	CHECK(EngineSettingsIO::ResolvePath(utf8) == shipped);
+	LoadedEngineSettings loaded;
+	CHECK_NOTHROW(loaded = EngineSettingsIO::LoadLayered(utf8, {}, "nonexistent_user_unicode_test.toml"));
+	CHECK(loaded.shipped.window.width == 1820);
+	CHECK(loaded.values.window.width == 1820);
+	// The missing-shipped-file diagnostic must also preserve the same native path.
+	CHECK_NOTHROW(EngineSettingsIO::LoadLayered(io::PlatformPaths::PathToUtf8(root / "missing.toml"), {}, "nonexistent_user_unicode_test.toml"));
 }
 
 // MAILBOX does not block the producer, so an uncapped loop renders as fast as the hardware

@@ -12,6 +12,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "vulkan/GpuSpan.hpp"
 #include "vulkan/volk.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether::vulkan
 {
@@ -47,6 +48,11 @@ namespace aether
 		GpuHeap& operator=(GpuHeap&&) = delete;
 
 		void Initialize(const VulkanContext& ctx, Desc desc);
+		[[nodiscard]] Expected<void> TryInitialize(const VulkanContext& ctx, Desc desc);
+
+		// One-shot, calling-thread fault injection for GPU regression tests.
+		enum class FailurePoint { None, DeviceAllocation, VirtualBlock, Suballocation, StagingAllocation, FlushAllocation, HostBookkeeping };
+		static void InjectFailureForTesting(FailurePoint point, std::uint32_t successfulCallsBeforeFailure = 0);
 		void Shutdown();
 		void ShutdownDeferred(std::function<void()> onRetired = {});
 
@@ -93,6 +99,12 @@ namespace aether
 			return UploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T), transfer, requiredForNextFrame, std::move(onStagingRetired));
 		}
 
+		template<typename T>
+		Expected<std::uint64_t> TryUpload(GpuSpan<T> dst, std::span<const T> src, vulkan::TransferManager& transfer)
+		{
+			return TryUploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T), transfer, true, {});
+		}
+
 		[[nodiscard]] VkBuffer GetBuffer() const
 		{
 			return m_buffer;
@@ -126,5 +138,6 @@ namespace aether
 		VkDeviceSize AllocBytes(VkDeviceSize bytes);
 		void FreeBytes(gpu::DeviceAddress addr);
 		std::uint64_t UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer, bool requiredForNextFrame, std::function<void()> onStagingRetired);
+		Expected<std::uint64_t> TryUploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer, bool requiredForNextFrame, std::function<void()> onStagingRetired);
 	};
 } // namespace aether

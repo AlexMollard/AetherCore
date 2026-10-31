@@ -1,16 +1,12 @@
 name: Release
 
-# Builds the redistributable editor and attaches it to a GitHub Release.
+# Builds private redistributable artifacts. This workflow never publishes a release.
 #
-# The point of this workflow is that the machine it runs on has never seen this repository
-# before. That is not incidental - it is the only environment that actually proves the
-# package is self-contained, because a developer's machine will happily satisfy a missing
-# file from the source tree the binaries were built from. If the editor works here, it
-# works for someone who only downloaded it.
+# Hosted build/staging checks do not qualify GUI/GPU behavior or a clean standard-user
+# installation. Run the relocated product and VM gates separately and retain evidence.
 #
 # MANUAL ONLY - pushing a tag does NOT start a build. Run it from the Actions tab and
-# select the tag as the ref to publish that release; run it from a branch to build the
-# artifacts without publishing anything.
+# select the source ref to build private artifacts without publishing anything.
 on:
   workflow_dispatch:
     inputs:
@@ -20,7 +16,7 @@ on:
         default: "0.0.0-dev"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   windows:
@@ -51,6 +47,10 @@ jobs:
         with:
           global-json-file: global.json
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       # Same approach as ci.yml: choco ships on the runner, and VULKAN_SDK is set as a
       # machine variable that a later step does not inherit, so export it explicitly.
       - name: Install the Vulkan SDK
@@ -79,7 +79,7 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Configure
-        run: cmake --preset ci-windows-release -DAETHERCORE_BUILD_EDITOR=ON -DAETHERCORE_BUILD_LAUNCHER=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        run: cmake --preset ci-windows-release -DAETHERCORE_BUILD_EDITOR=ON -DAETHERCORE_BUILD_LAUNCHER=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache '-DCMAKE_CXX_FLAGS_RELEASE=/O2 /DNDEBUG /Zi' '-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL /OPT:REF /OPT:ICF'
         env:
           CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm-cache
           SCCACHE_GHA_ENABLED: "true"
@@ -101,7 +101,17 @@ jobs:
       # display the runner does not have, so this is the unit suite only - the same
       # boundary ci.yml draws.
       - name: Unit tests
-        run: build/ci-windows-release/tests/EngineTests.exe
+        shell: pwsh
+        run: ./scripts/Invoke-CTestQualification.ps1 -BuildDir build/ci-windows-release -Config Release -ReportPath logs/release-ctest.json
+
+      - name: Qualification harness regressions
+        shell: pwsh
+        run: |
+          ./scripts/Test-Qualification.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Qualification harness regression failed' }
+          python scripts/test_release_identity.py
+          if ($LASTEXITCODE -ne 0) { throw 'Release identity regression failed' }
+          python scripts/check_manual_workflows.py
 
       - name: Stage the redistributable
         run: cmake --install build/ci-windows-release --component Runtime --prefix "${{ github.workspace }}/staging"
@@ -122,9 +132,24 @@ jobs:
           if (-not $runtimes) { throw 'No runtime was staged into staging/dotnet' }
           Write-Host "Bundled runtime: $($runtimes.Name -join ', ')"
 
-      - name: Verify the package is self-contained
+      - name: Preserve bundled runtime and Roslyn notices
         shell: pwsh
-        run: ./scripts/Verify-Package.ps1 -PayloadDir "${{ github.workspace }}/staging" -RequireBundledRuntime
+        run: ./scripts/Add-ManagedPackageNotices.ps1 -PayloadDir staging
+
+      - name: Bind staged bytes to source and retained symbols
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force symbols | Out-Null
+          foreach ($name in @('Editor', 'Launcher', 'AetherGame')) {
+            # Never flatten managed AetherGame.pdb over the native runtime PDB.
+            Copy-Item -LiteralPath "build/ci-windows-release/src/app/$name.pdb" -Destination symbols
+          }
+          python scripts/Write-ReleaseIdentity.py --payload staging --symbols symbols --build-dir build/ci-windows-release --stage-only --report staging/BUILD_PROVENANCE.json
+          if ($LASTEXITCODE -ne 0) { throw 'Staged source/byte/symbol provenance failed' }
+
+      - name: Verify the staged payload inventory
+        shell: pwsh
+        run: ./scripts/Verify-Package.ps1 -PayloadDir "${{ github.workspace }}/staging" -RequireBundledRuntime -RequireBuildProvenance
 
       - name: Build the installer
         shell: pwsh
@@ -145,20 +170,25 @@ jobs:
           Compress-Archive -Path "${{ github.workspace }}\staging\*" `
                            -DestinationPath "${{ github.workspace }}\dist\AetherCore-${{ steps.version.outputs.version }}-win-x64.zip"
 
+      - name: Retain symbols and release identity
+        shell: pwsh
+        run: |
+          Compress-Archive -Path symbols/* -DestinationPath dist/AetherCore-symbols.zip
+          python scripts/Write-ReleaseIdentity.py --payload staging --artifacts dist --symbols symbols --build-dir build/ci-windows-release --report dist/release-identity.json
+          if ($LASTEXITCODE -ne 0) { throw 'Release provenance or matching symbol identity failed' }
+          Get-ChildItem dist -File | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
+            Set-Content dist/SHA256SUMS.txt -Encoding utf8
+
       - name: Upload the artifacts
         uses: actions/upload-artifact@v4
         with:
           name: aethercore-win-x64
           path: dist/*
 
-      # `gh` ships on the runner and only needs GITHUB_TOKEN, so publishing costs no
-      # third-party action with write access to the repository.
-      - name: Publish the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${{ github.ref_name }}" (Get-ChildItem dist | ForEach-Object { $_.FullName }) `
-            --title "AetherCore ${{ steps.version.outputs.version }}" `
-            --generate-notes
+      - name: Retain qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-qualification-evidence
+          path: logs/release-ctest.*

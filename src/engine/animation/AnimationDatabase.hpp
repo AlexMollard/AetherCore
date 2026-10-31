@@ -96,6 +96,8 @@ namespace aether
 		[[nodiscard]] static Expected<std::unique_ptr<AnimationDatabaseUpload>> BeginUpload(const VulkanContext& ctx, const assets::GltfAsset& asset);
 
 		// The channels must already be remapped to this skeleton's node indices.
+		// Caller must drain old frames and wait for GPU idle (RunExclusive). Published
+		// CPU/GPU state is retained on failure; replacement uploads finish before commit.
 		Expected<std::uint32_t> AppendAnimations(
 		        std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames);
 

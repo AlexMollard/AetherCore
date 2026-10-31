@@ -11,6 +11,7 @@ CPMAddPackage(
     GIT_SHALLOW    TRUE
     DOWNLOAD_ONLY  YES
 )
+include(MiniaudioFailureCleanup)
 
 # Shared runtime streaming metadata and editor/control JSON use one pinned header library.
 CPMAddPackage(

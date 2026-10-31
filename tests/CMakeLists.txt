@@ -2,6 +2,12 @@
 # the build; the app-side TUs below live in src/app and src/editor and are listed
 # explicitly since they can't be globbed from here.
 file(GLOB_RECURSE ENGINE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+# The intentional fault is a separate child executable, never a unit-test TU.
+list(REMOVE_ITEM ENGINE_TEST_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/probes/AsanHeapProbe.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/probes/AsanLiteralNarrow.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/probes/AsanLiteralWide.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/probes/AsanLiteralMain.cpp")
 
 add_executable(EngineTests
     ${ENGINE_TEST_SOURCES}
@@ -88,10 +94,34 @@ if(MSVC)
     target_link_options(EngineTests PRIVATE /INCREMENTAL:NO)
 endif()
 set_target_properties(EngineTests PROPERTIES FOLDER "Tests")
-add_test(NAME EngineTests COMMAND EngineTests)
+# A separate reporter stream cannot be corrupted by concurrent logger stderr.
+# Qualification discovers this exact output path from CTest's command inventory.
+add_test(NAME EngineTests COMMAND EngineTests
+    --reporters=xml
+    "--out=${CMAKE_BINARY_DIR}/EngineTests-$<CONFIG>.doctest.xml")
 
 # The manifest keeps the additive raw declarations aligned with the existing C# exports.
 find_package(Python3 COMPONENTS Interpreter QUIET)
+if(AETHERCORE_ENABLE_ASAN)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_executable(ASANHeapProbe probes/AsanHeapProbe.cpp)
+    target_link_libraries(ASANHeapProbe PRIVATE Engine)
+    aethercore_target_defaults(ASANHeapProbe)
+    add_dependencies(EngineTests ASANHeapProbe)
+    add_test(NAME ASANHeapRedzones
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/verify_asan_heap.py"
+            --probe "$<TARGET_FILE:ASANHeapProbe>"
+            --report "${CMAKE_BINARY_DIR}/asan-heap-probe-$<CONFIG>.json")
+    set_tests_properties(ASANHeapRedzones PROPERTIES TIMEOUT 90)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32)
+        add_executable(ASANLiteralProbe probes/AsanLiteralNarrow.cpp probes/AsanLiteralWide.cpp probes/AsanLiteralMain.cpp)
+        aethercore_target_defaults(ASANLiteralProbe)
+        add_dependencies(EngineTests ASANLiteralProbe)
+        add_test(NAME ASANLiteralRegistration COMMAND ASANLiteralProbe)
+        set_tests_properties(ASANLiteralRegistration PROPERTIES TIMEOUT 30
+            ENVIRONMENT "ASAN_OPTIONS=detect_odr_violation=2:halt_on_error=1:detect_leaks=0")
+    endif()
+endif()
 if(Python3_Interpreter_FOUND)
     add_test(NAME GameplayApiParity
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/gameplay-api/generate.py" --check)

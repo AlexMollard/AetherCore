@@ -4,6 +4,7 @@
 #include <new>
 #include <vector>
 
+#include "Defines.hpp"
 #include "memory/MemoryBackend.hpp"
 
 using namespace aether;
@@ -12,7 +13,12 @@ using namespace aether;
 // a static library is only linked in if something pulls its object file out of the archive,
 // so this can fail while the build succeeds and every allocation quietly goes to the CRT.
 TEST_CASE("The mimalloc operator new replacement is actually in effect") {
+#if AE_ADDRESS_SANITIZER
+    // The sanitizer owns global new/delete so it can instrument heap boundaries.
+    CHECK_FALSE(memory::IsMimallocActive());
+#else
     CHECK(memory::IsMimallocActive());
+#endif
 }
 
 // Over-aligned types were served by the CRT before this replacement existed, because the

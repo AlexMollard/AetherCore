@@ -12,12 +12,25 @@
 #include "net/NatTraversal.hpp"
 #include "net/RendezvousChannel.hpp"
 #include "net/Signaling.hpp"
+#include "net/EnetInit.hpp"
 
 using namespace aether;
 using Endpoint = net::NatTraversal::Endpoint;
 
 namespace
 {
+	struct EnetReference
+	{
+		EnetReference()
+		{
+			const bool acquired = net::AcquireEnet();
+			REQUIRE(acquired);
+		}
+		~EnetReference() { net::ReleaseEnet(); }
+		EnetReference(const EnetReference&) = delete;
+		EnetReference& operator=(const EnetReference&) = delete;
+	};
+
 	Endpoint At(const char* address, std::uint16_t port)
 	{
 		const auto endpoint = net::NatTraversal::ParseEndpoint(address, port);
@@ -82,10 +95,22 @@ namespace
 		}
 
 	private:
+		// Raw ENet sockets require platform startup even before a channel exists.
+		EnetReference m_enet;
 		ENetSocket m_socket = ENET_SOCKET_NULL;
 		std::uint16_t m_port = 0;
 	};
 } // namespace
+
+TEST_CASE("A raw rendezvous fixture owns platform startup for its complete socket lifetime")
+{
+	const int before = net::EnetReferenceCount();
+	{
+		RawPeer peer(0); // Bind an ephemeral loopback-test port, without another channel.
+		CHECK(net::EnetReferenceCount() == before + 1);
+	}
+	CHECK(net::EnetReferenceCount() == before);
+}
 
 TEST_CASE("A well-formed server datagram parses into room, token, and body")
 {

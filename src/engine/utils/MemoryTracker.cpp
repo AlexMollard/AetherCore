@@ -15,6 +15,25 @@
 // them is the classic way to get a block allocated by mimalloc and released by the CRT.
 
 #include "memory/MemoryBackend.hpp"
+#include "Defines.hpp"
+
+#if AE_ADDRESS_SANITIZER
+// ASAN must own every global allocation/deallocation pair so its interceptors
+// create and poison heap redzones. No mimalloc override, tag-counter hook or
+// global-new Tracy allocation event is installed in this build. Explicit GPU
+// pools and direct MemoryStats accounting remain available independently.
+extern "C" void aether_memory_force_link() noexcept
+{
+}
+
+namespace aether::memory
+{
+	bool IsMimallocActive() noexcept
+	{
+		return false;
+	}
+}
+#else
 
 #include "memory/MemoryScope.hpp"
 #include "memory/MemoryStats.hpp"
@@ -284,3 +303,4 @@ void operator delete[](void* ptr, const std::align_val_t alignment, const std::n
 	TrackFree(ptr);
 	mi_free_aligned(ptr, static_cast<std::size_t>(alignment));
 }
+#endif

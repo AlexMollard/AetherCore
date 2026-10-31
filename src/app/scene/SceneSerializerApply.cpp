@@ -448,7 +448,7 @@ namespace aether::app::scene
 				const Entity e = created[i];
 
 				bool apply2DPhysics = RecordHas2DPhysics(rec);
-				bool apply3DPhysics = rec.physics.has_value() || rec.joint.has_value();
+				bool apply3DPhysics = rec.physics.has_value() || rec.joint.has_value() || !rec.scriptJoints.empty();
 				if (apply2DPhysics && apply3DPhysics)
 				{
 					// One domain per entity; keep the one matching the scene kind.

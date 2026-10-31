@@ -340,6 +340,13 @@ namespace aether::editor::twinsanity
 			{
 				case ScriptPropertyValue::Type::String: return "'" + v.str + "'";
 				case ScriptPropertyValue::Type::Bool: return v.i64 != 0 ? "true" : "false";
+				case ScriptPropertyValue::Type::None:
+				case ScriptPropertyValue::Type::Float:
+				case ScriptPropertyValue::Type::Int:
+				case ScriptPropertyValue::Type::Vector3:
+				case ScriptPropertyValue::Type::Enum:
+				case ScriptPropertyValue::Type::Entity:
+				case ScriptPropertyValue::Type::Component:
 				default: return std::to_string(v.i64);
 			}
 		}

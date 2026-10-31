@@ -290,6 +290,56 @@ namespace aether::io
 	{
 		Initialize();
 
+		if (PlatformPaths::IsIsolatedProduct())
+		{
+			const auto enginePak = PlatformPaths::ResolveBundlePath({}, {}, "data/engine.pak");
+			AE_ASSERT_ALWAYS(!enginePak.empty() && MountEnginePak({enginePak}), "Isolated product requires a delivered data/engine.pak; developer fallback is disabled.");
+			const auto project = PlatformPaths::GetExplicitProjectDirectory();
+			bool projectUsesPak = false;
+			if (!project.empty())
+			{
+				MountProjectDirectory(project);
+			}
+			else
+			{
+				const auto projectPak = PlatformPaths::ResolveBundlePath({}, {}, "data/project.pak");
+				projectUsesPak = !projectPak.empty() && MountProjectPak({projectPak});
+				if (!projectUsesPak)
+				{
+					const std::scoped_lock lock(s_backend->mountsMutex);
+					s_backend->mounts.erase("project");
+				}
+			}
+			s_backend->engineShaderLayer = OverlayBackend::Layer{ResolveBackend("engine"), "shaders/"};
+			if (projectUsesPak)
+			{
+				MountShaderOverlay(OverlayBackend::Layer{ResolveBackend("project"), "shaders/"});
+			}
+			else if (!project.empty())
+			{
+				MountShaderOverlay(OverlayBackend::Layer{ResolveBackend("project"), "Builds/Intermediate/shaders/"});
+			}
+			else
+			{
+				MountShaderOverlay(std::nullopt);
+			}
+			for (const auto& [mount, relative] : {std::pair{"config", "data/config"}, std::pair{"data", "data/data"}, std::pair{"scripts", "data/scripts"}})
+			{
+				const auto bundled = PlatformPaths::ResolveBundlePath({}, {}, relative);
+				if (!bundled.empty())
+				{
+					Mount(mount, bundled);
+				}
+				else
+				{
+					const std::scoped_lock lock(s_backend->mountsMutex);
+					s_backend->mounts.erase(mount);
+				}
+			}
+			Mount("logs", PlatformPaths::GetUserConfigDir() / "logs");
+			return;
+		}
+
 		const auto workingDirectory = std::filesystem::current_path();
 
 		// Default pak candidates are run-directory data/ first (ship layout),

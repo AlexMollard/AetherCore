@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 #include <imgui.h>
@@ -111,6 +112,7 @@ namespace aether
 		void ClampWindowsToMainViewport();
 
 		bool m_initialized = false;
+		std::string m_iniFilename;
 		bool m_backendsInitialized = false;
 		bool m_wantsInputCapture = false;
 		std::uint64_t m_frameIndex = 0;

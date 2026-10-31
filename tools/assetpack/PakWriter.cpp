@@ -1,6 +1,7 @@
 #include "PakWriter.hpp"
 
 #include "AssetProcessor.hpp"
+#include "BakeOutputs.hpp"
 #include "PakLog.hpp"
 #include "PakManifest.hpp"
 #include "ThreadPool.hpp"
@@ -91,11 +92,9 @@ namespace aether::assetpipeline
 			}
 			if (m_target == "webgpu-3d-v1" && (entry.path().extension() == ".gltf" || entry.path().extension() == ".glb"))
 			{
-				auto baked = entry.path();
-				baked.replace_extension(".mesh");
-				if (fs::is_regular_file(baked))
+				if (HasCurrentModelBake(entry.path(), sourceDir))
 				{
-					continue; // bake-all already wrote the mesh, skeleton, animations and materials.
+					continue; // Source, settings, dependencies and ALL output bytes verified.
 				}
 			}
 			if (!entry.is_regular_file())
@@ -140,7 +139,15 @@ namespace aether::assetpipeline
 		const auto logPath = fs::path(outPath.string() + ".log");
 
 		const ManifestMap manifest = LoadManifest(manifestPath, m_target);
-		if (IsUpToDate(outPath, manifest, m_files))
+		// Model cooking/receipts use content identity. The legacy package shortcut only
+		// compares whole-second mtimes and must not bypass those stronger checks (even
+		// an ordinary edit/rebake can happen within one timestamp bucket).
+		const bool hasModels = std::any_of(m_files.begin(), m_files.end(), [](const FileRecord& file)
+		{
+			const auto extension = file.diskPath.extension();
+			return extension == ".gltf" || extension == ".glb" || extension == ".mesh";
+		});
+		if (!hasModels && IsUpToDate(outPath, manifest, m_files))
 		{
 			std::cout << "AssetPacker: " << outPath.filename().string() << " is up to date, skipping.\n";
 			return true;

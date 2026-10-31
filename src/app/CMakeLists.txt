@@ -152,6 +152,9 @@ list(FILTER APP_RUNTIME_HEADERS EXCLUDE REGEX "[/\\\\]layers[/\\\\]DebugLayer\\.
 # serialization - it runs on a UiShell engine and only spawns Editor. From debug/ it keeps
 # only ProjectLauncherWindow (its other deps are header-only).
 set(APP_LAUNCHER_SOURCES ${APP_SOURCES} ${EDITOR_TREE_SOURCES})
+# Authored-scene inspection belongs to the project CLI, not the UiShell hub.
+# Its full scene parser is intentionally absent from the Launcher dependency set.
+list(REMOVE_ITEM APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/project/ProjectInspection.cpp")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]main\\.cpp$")
 list(FILTER APP_LAUNCHER_SOURCES EXCLUDE REGEX "[/\\\\]PlaySession\\.cpp$")
 # NB: these two are anchored to the src/editor tree root. A bare "[/\\]editor[/\\]"
@@ -181,6 +184,9 @@ list(APPEND APP_LAUNCHER_SOURCES "${AETHERCORE_EDITOR_TREE_DIR}/editor/ControlSe
 list(APPEND APP_LAUNCHER_SOURCES "${AETHERCORE_EDITOR_TREE_DIR}/editor/ControlDiagnostics.cpp")
 # Shared report serialization is runtime-safe and also serves Launcher preflight.
 list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/scripting/AgentDiagnostics.cpp")
+# Startup-scene name validation only: this TU contains pure identity/string helpers,
+# with no world, rendering, scripting or full scene-parser implementation dependency.
+list(APPEND APP_LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/scene/SceneSerializerIdentity.cpp")
 
 # ── RuntimeFramework ────────────────────────────────────────────────────────
 # The runtime source set, compiled ONCE and consumed by Editor, GameRuntime and EngineTests.
@@ -512,7 +518,10 @@ endif()
 #
 # Each entry is "<kind>|<source>|<destination relative to the executable>", where kind is
 # `file` for one file or `dir` for a directory's contents.
+include("${CMAKE_SOURCE_DIR}/CMake/ThirdPartyNotices.cmake")
 set(_aether_payload
+    "file|${CMAKE_BINARY_DIR}/data/THIRD_PARTY_NOTICES.txt|THIRD_PARTY_NOTICES.txt"
+    "file|${CMAKE_SOURCE_DIR}/docs/DISTRIBUTION.md|DISTRIBUTION.md"
     "file|${CMAKE_BINARY_DIR}/data/engine.pak|data/engine.pak"
     "file|${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml|data/config/EngineSettings.toml"
 

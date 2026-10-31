@@ -108,6 +108,7 @@ namespace aether::app::scene
 			jr.minLimit = j->minLimit;
 			jr.maxLimit = j->maxLimit;
 			jr.distance = j->distance;
+			jr.swingLimit = j->swingLimit;
 			jr.collideConnected = j->collideConnected;
 			c.rec.joint = jr;
 		}
@@ -133,6 +134,7 @@ namespace aether::app::scene
 			                .minLimit = jr.minLimit,
 			                .maxLimit = jr.maxLimit,
 			                .distance = jr.distance,
+			                .swingLimit = jr.swingLimit,
 			                .collideConnected = jr.collideConnected,
 			        });
 		}

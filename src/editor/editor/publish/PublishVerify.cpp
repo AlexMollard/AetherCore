@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <exception>
+#include <initializer_list>
 #include <system_error>
 #include <vector>
 
@@ -120,12 +121,94 @@ namespace aether::editor
 		}
 	} // namespace
 
+	std::optional<PublishIssue> StagePublishedNotices(const std::filesystem::path& bundleDir, const std::filesystem::path& packageDir)
+	{
+		std::error_code ec;
+		std::filesystem::create_directories(packageDir, ec);
+		for (const char* file: {"THIRD_PARTY_NOTICES.txt", "DISTRIBUTION.md"})
+		{
+			if (ec || !std::filesystem::copy_file(bundleDir / file, packageDir / file, std::filesystem::copy_options::overwrite_existing, ec))
+			{
+				return PublishIssue{.message = "Could not stage distribution notice " + std::string(file) + ": " + ec.message(), .remediation = "Rebuild the editor so its bundle includes distribution notices."};
+			}
+		}
+		if (std::filesystem::exists(bundleDir / "notices", ec))
+		{
+			std::filesystem::copy(bundleDir / "notices", packageDir / "notices", std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+		}
+		if (ec)
+		{
+			return PublishIssue{.message = "Could not stage dependency notice files: " + ec.message(), .remediation = "Check the editor bundle notices folder and output permissions."};
+		}
+		if (auto written = io::file_util::WriteTextAtomic(packageDir / "aether-product", "AetherCore delivered product v1\n"); !written)
+		{
+			return PublishIssue{.message = "Could not write the delivered-product marker: " + written.error().message, .remediation = "Check output permissions and publish again."};
+		}
+		return std::nullopt;
+	}
+
+	std::optional<PublishIssue> VerifyBundledManagedRuntime(const std::filesystem::path& bundleDir)
+	{
+		const auto hasVersion = [](const std::filesystem::path& directory, const std::initializer_list<std::string_view> requiredFiles)
+		{
+			std::error_code ec;
+			if (!std::filesystem::is_directory(directory, ec))
+			{
+				return false;
+			}
+			const std::filesystem::directory_iterator end;
+			for (std::filesystem::directory_iterator it(directory, ec); !ec && it != end; it.increment(ec))
+			{
+				std::error_code entryEc;
+				if (!it->is_directory(entryEc))
+				{
+					continue;
+				}
+				bool complete = true;
+				for (const auto fileName: requiredFiles)
+				{
+					std::error_code fileEc;
+					if (!std::filesystem::is_regular_file(it->path() / fileName, fileEc))
+					{
+						complete = false;
+						break;
+					}
+				}
+				if (complete)
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+#ifdef _WIN32
+		constexpr std::string_view kHostFxr = "hostfxr.dll";
+		constexpr std::string_view kCoreClr = "coreclr.dll";
+		constexpr std::string_view kHostPolicy = "hostpolicy.dll";
+#elif defined(__APPLE__)
+		constexpr std::string_view kHostFxr = "libhostfxr.dylib";
+		constexpr std::string_view kCoreClr = "libcoreclr.dylib";
+		constexpr std::string_view kHostPolicy = "libhostpolicy.dylib";
+#else
+		constexpr std::string_view kHostFxr = "libhostfxr.so";
+		constexpr std::string_view kCoreClr = "libcoreclr.so";
+		constexpr std::string_view kHostPolicy = "libhostpolicy.so";
+#endif
+		const auto runtime = bundleDir / "dotnet/shared/Microsoft.NETCore.App";
+		if (!hasVersion(bundleDir / "dotnet/host/fxr", {kHostFxr}) || !hasVersion(runtime, {kCoreClr, kHostPolicy, "System.Private.CoreLib.dll"}))
+		{
+			return PublishIssue{.message = "C# delivered products require a complete bundled .NET runtime under dotnet/host/fxr and dotnet/shared/Microsoft.NETCore.App; system runtime fallback is unavailable.",
+			        .remediation = "Use an engine distribution with its bundled runtime, or stage the supported runtime and its notices in the editor bundle before publishing."};
+		}
+		return std::nullopt;
+	}
+
 	bool IsPrunablePublishedFile(const std::filesystem::path& path)
 	{
 		// The C# compiler. The editor ships it so that a machine with no .NET SDK can build
 		// a project's scripts, but a game only ever LOADS the assembly it was given - it has
 		// nothing to compile, and Roslyn is ten megabytes in every copy that goes out.
-		if (LowerAscii(path.stem().generic_string()).starts_with("microsoft.codeanalysis"))
+		if (LowerAscii(path.stem().generic_string()).starts_with("microsoft.codeanalysis") && LowerAscii(path.extension().generic_string()) == ".dll")
 		{
 			return true;
 		}
@@ -154,7 +237,13 @@ namespace aether::editor
 
 	std::optional<PublishIssue> VerifyPublishedPackage(const std::filesystem::path& packageDir, const std::string_view runtimeExeName)
 	{
-		const std::vector<std::filesystem::path> commonFiles{std::filesystem::path(runtimeExeName), "data/config/EngineSettings.toml", "data/engine.pak", "data/project.pak"};
+		std::vector<std::filesystem::path> commonFiles{std::filesystem::path(runtimeExeName), "data/config/EngineSettings.toml", "data/engine.pak", "data/project.pak", "THIRD_PARTY_NOTICES.txt", "DISTRIBUTION.md", "aether-product"};
+		if (io::file_util::Exists(packageDir / "dotnet"))
+		{
+			commonFiles.emplace_back("notices/managed-inventory.json");
+			commonFiles.emplace_back("dotnet/LICENSE.txt");
+			commonFiles.emplace_back("dotnet/ThirdPartyNotices.txt");
+		}
 		for (const std::filesystem::path& rel: commonFiles)
 		{
 			if (!io::file_util::Exists(packageDir / rel))
@@ -167,6 +256,13 @@ namespace aether::editor
 		if (!scripting)
 		{
 			return PublishIssue{.message = "The published scripting settings are invalid: " + scripting.error().message, .remediation = "Select a supported project scripting language, then publish again."};
+		}
+		if (scripting->language == app::GameplayLanguage::CSharp)
+		{
+			if (auto issue = VerifyBundledManagedRuntime(packageDir))
+			{
+				return issue;
+			}
 		}
 		for (const auto& rel: RequiredGameplayFiles(scripting->language))
 		{

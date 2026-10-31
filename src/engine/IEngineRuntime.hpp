@@ -18,6 +18,9 @@ namespace aether
 		virtual ~IEngineRuntime() = default;
 
 		// Quiesce the frame pipeline (optionally drain, park the render thread,
+		// wait for GPU idle). A throwing mutation must leave published resources usable;
+		// rendering resumes on unwind. Irrecoverable mutations must terminate instead
+		// of throwing into a recoverable script/export barrier.
 		virtual void RunExclusive(QuiesceMode mode, std::function<void()> mutation) = 0;
 
 		// Real (wall-clock) seconds since the frame loop started, unaffected by the play-speed /

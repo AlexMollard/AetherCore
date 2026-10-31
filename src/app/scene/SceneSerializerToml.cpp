@@ -458,6 +458,8 @@ namespace aether::app::scene
 					return "distance";
 				case JointType::Slider:
 					return "slider";
+				case JointType::SwingTwist:
+					return "swing_twist";
 				case JointType::Fixed:
 				default:
 					return "fixed";
@@ -481,6 +483,10 @@ namespace aether::app::scene
 			if (s == "slider")
 			{
 				return JointType::Slider;
+			}
+			if (s == "swing_twist")
+			{
+				return JointType::SwingTwist;
 			}
 			return JointType::Fixed;
 		}
@@ -1412,6 +1418,7 @@ namespace aether::app::scene
 				j.insert("min_limit", rec.joint->minLimit);
 				j.insert("max_limit", rec.joint->maxLimit);
 				j.insert("distance", rec.joint->distance);
+				j.insert("swing_limit", rec.joint->swingLimit);
 				j.insert("collide_connected", rec.joint->collideConnected);
 				t.insert("joint", std::move(j));
 			}
@@ -2019,6 +2026,7 @@ namespace aether::app::scene
 				        .minLimit = static_cast<float>(jv["min_limit"].value_or(0.0)),
 				        .maxLimit = static_cast<float>(jv["max_limit"].value_or(0.0)),
 				        .distance = static_cast<float>(jv["distance"].value_or(-1.0)),
+				        .swingLimit = static_cast<float>(jv["swing_limit"].value_or(0.0)),
 				        .collideConnected = jv["collide_connected"].value_or(false),
 				};
 			}

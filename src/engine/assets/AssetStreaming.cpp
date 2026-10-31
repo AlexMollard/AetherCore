@@ -353,6 +353,8 @@ namespace aether
 			ReleaseDependencies(asset);
 			switch (asset.document)
 			{
+				case Asset::Document::None:
+					break;
 				case Asset::Document::Atlas:
 				case Asset::Document::Animation:
 					if (sprites)

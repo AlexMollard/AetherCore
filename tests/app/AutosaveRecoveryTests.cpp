@@ -9,6 +9,12 @@
 #include "editor/EditorProjectContext.hpp"
 #include "io/FileUtil.hpp"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 namespace
 {
 	using namespace aether;
@@ -94,6 +100,32 @@ TEST_CASE("Restore promotes the recovery copy over the scene file")
 	REQUIRE(text.has_value());
 	CHECK(text->find("Recovered") != std::string::npos);
 }
+
+#ifdef _WIN32
+TEST_CASE("Restore replacement failure preserves saved scene and discoverable recovery")
+{
+	const TempProject p("locked_restore");
+	const auto original = SceneText("Saved");
+	const auto recovery = SceneText("Unsaved");
+	Touch(p.Scene("Level"), original);
+	Touch(p.Recovery("Level"), recovery);
+	const auto savedTime = std::filesystem::last_write_time(p.Scene("Level"));
+	std::filesystem::last_write_time(p.Recovery("Level"), savedTime + std::chrono::seconds(2));
+	const HANDLE handle = CreateFileW(p.Scene("Level").c_str(), GENERIC_READ,
+		FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	REQUIRE(handle != INVALID_HANDLE_VALUE);
+	std::string error;
+	const bool restored = editor::AutosaveService::Restore(p.ctx, "Level", error);
+	CloseHandle(handle);
+	CHECK_FALSE(restored);
+	CHECK_FALSE(error.empty());
+	REQUIRE(io::file_util::ReadText(p.Scene("Level")).has_value());
+	CHECK(*io::file_util::ReadText(p.Scene("Level")) == original);
+	CHECK(std::filesystem::last_write_time(p.Scene("Level")) == savedTime);
+	CHECK(*io::file_util::ReadText(p.Recovery("Level")) == recovery);
+	CHECK(editor::AutosaveService::FindRecoverable(p.ctx).size() == 1);
+}
+#endif
 
 // The property that must never regress. A recovery copy is written by a process that
 // may have died mid-write; promoting an unparseable one over a merely-out-of-date scene

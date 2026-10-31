@@ -259,10 +259,31 @@ TEST_CASE("subsystem runs headless on the null backend: plays, tracks, stops")
 
 		// A missing clip fails gracefully with an invalid handle, not a crash.
 		CHECK_FALSE(audio.Play2D("project://audio/does-not-exist.wav").IsValid());
+		CHECK(audio.IsVoiceAlive(handle));
+		CHECK(audio.GetStats().startedTotal == 1);
 		// Stopping twice, or a bogus id, is a no-op.
 		audio.StopVoice(handle);
 		audio.StopVoice(handle);
 		audio.StopVoice(VoiceHandle{0xDEADBEEF});
+	}
+
+	SUBCASE("failed clip initialization can be retried without corrupting the resource manager")
+	{
+		const std::vector<std::byte> invalidClip{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}};
+		REQUIRE(io::FileSystem::WriteFile("project://audio/invalid.wav", invalidClip).has_value());
+		for (int attempt = 0; attempt < 4; ++attempt)
+		{
+			CHECK_FALSE(audio.Play2D("project://audio/does-not-exist.wav").IsValid());
+			CHECK_FALSE(audio.Play2D("project://audio/invalid.wav").IsValid());
+			CHECK(audio.GetStats().startedTotal == 0);
+		}
+		// A previously failed key must load normally after its bytes are repaired.
+		REQUIRE(io::FileSystem::WriteFile("project://audio/invalid.wav", wavBytes).has_value());
+		const VoiceHandle repaired = audio.Play2D("project://audio/invalid.wav");
+		REQUIRE(repaired.IsValid());
+		CHECK(audio.IsVoiceAlive(repaired));
+		CHECK(audio.GetStats().startedTotal == 1);
+		audio.StopVoice(repaired);
 	}
 
 	SUBCASE("stop-all clears every voice including music")

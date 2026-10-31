@@ -56,6 +56,7 @@ if(EMSCRIPTEN)
 endif()
 if(AETHERCORE_WEB_RUNTIME)
     include(WebRuntime)
+    include(ThirdPartyNotices)
     return()
 endif()
 

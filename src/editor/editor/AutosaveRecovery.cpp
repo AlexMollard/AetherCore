@@ -221,7 +221,7 @@ namespace aether::editor
 			return false;
 		}
 
-		if (auto written = io::file_util::WriteText(SceneFileFor(project, sceneName), *text); !written)
+		if (auto written = io::file_util::WriteTextAtomic(SceneFileFor(project, sceneName), *text); !written)
 		{
 			error = "could not write the scene file: " + written.error().message;
 			return false;

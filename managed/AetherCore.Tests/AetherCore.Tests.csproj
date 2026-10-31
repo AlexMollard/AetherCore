@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../AetherCore/AetherCore.csproj" />
+    <ProjectReference Include="../AetherCore.Interop/AetherCore.Interop.csproj" />
   </ItemGroup>
 
 </Project>

@@ -48,7 +48,14 @@ TEST_CASE("An allocation under a scope is counted against that tag") {
         AE_MEM_SCOPE(memory::MemTag::Particles);
         auto* block = new std::byte[4096];
         Touch(block);
-        CHECK(memory::GlobalStats().Get(memory::MemTag::Particles).currentBytes >= before + 4096);
+        if constexpr (memory::kMaxTrackingLevel >= memory::TrackingLevel::Counters)
+        {
+            CHECK(memory::GlobalStats().Get(memory::MemTag::Particles).currentBytes >= before + 4096);
+        }
+        else
+        {
+            CHECK(memory::GlobalStats().Get(memory::MemTag::Particles).currentBytes == before);
+        }
         delete[] block;
     }
 
@@ -69,7 +76,14 @@ TEST_CASE("A free attributes to the allocating tag, not the freeing one") {
         block = new std::byte[8192];
         Touch(block);
     }
-    CHECK(memory::GlobalStats().Get(memory::MemTag::Mesh).currentBytes >= meshBefore + 8192);
+    if constexpr (memory::kMaxTrackingLevel >= memory::TrackingLevel::Counters)
+    {
+        CHECK(memory::GlobalStats().Get(memory::MemTag::Mesh).currentBytes >= meshBefore + 8192);
+    }
+    else
+    {
+        CHECK(memory::GlobalStats().Get(memory::MemTag::Mesh).currentBytes == meshBefore);
+    }
 
     {
         AE_MEM_SCOPE(memory::MemTag::Audio);
@@ -107,7 +121,14 @@ TEST_CASE("A block outlives a tracking-level change without stranding bytes") {
         block = new std::byte[4096];
         Touch(block);
     }
-    CHECK(memory::GlobalStats().Get(memory::MemTag::Tilemap).currentBytes >= before + 4096);
+    if constexpr (memory::kMaxTrackingLevel >= memory::TrackingLevel::Counters)
+    {
+        CHECK(memory::GlobalStats().Get(memory::MemTag::Tilemap).currentBytes >= before + 4096);
+    }
+    else
+    {
+        CHECK(memory::GlobalStats().Get(memory::MemTag::Tilemap).currentBytes == before);
+    }
 
     memory::SetTrackingLevel(memory::TrackingLevel::Disabled);
     delete[] block;
@@ -120,6 +141,7 @@ TEST_CASE("A block outlives a tracking-level change without stranding bytes") {
 TEST_CASE("Heavy tagged allocation does not recurse or deadlock") {
     const TrackingGuard guard(memory::TrackingLevel::Counters);
     AE_MEM_SCOPE(memory::MemTag::Temp);
+    const auto allocationsBefore = memory::GlobalStats().Get(memory::MemTag::Temp).totalAllocations;
 
     std::vector<std::unique_ptr<std::byte[]>> blocks;
     for (int i = 0; i < 2000; ++i)
@@ -129,5 +151,12 @@ TEST_CASE("Heavy tagged allocation does not recurse or deadlock") {
     CHECK(blocks.size() == 2000);
     blocks.clear();
 
-    CHECK(memory::GlobalStats().Get(memory::MemTag::Temp).totalAllocations > 0);
+    if constexpr (memory::kMaxTrackingLevel >= memory::TrackingLevel::Counters)
+    {
+        CHECK(memory::GlobalStats().Get(memory::MemTag::Temp).totalAllocations > 0);
+    }
+    else
+    {
+        CHECK(memory::GlobalStats().Get(memory::MemTag::Temp).totalAllocations == allocationsBefore);
+    }
 }

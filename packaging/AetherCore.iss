@@ -5,11 +5,9 @@
 ; that staging directory it does not ship, which keeps "what is installed" answerable from
 ; the payload list in src/app/CMakeLists.txt alone.
 ;
-; Per-user by default, and deliberately so. A Program Files install needs elevation and is
-; read-only afterwards, and the editor writes next to its own SDK copy when MSBuild
-; restores a project's scripts - so an admin install trades a UAC prompt for a class of
-; permission failures further down. Installing under LocalAppData is what VS Code and
-; similar developer tools do for the same reason.
+; Per-user by default, so installation needs no elevation. Runtime/editor execution
+; must keep the installed payload immutable: generated scripts belong to the project
+; intermediates, while settings and UI state belong to the user-data directory.
 
 #ifndef PayloadDir
   #error PayloadDir must be passed with /DPayloadDir=<path to the staged payload>
@@ -32,6 +30,8 @@ DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+; The UTF-8 process manifest requires Windows 10 version 1903 or later.
+MinVersion=10.0.18362
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputBaseFilename=AetherCoreSetup-{#AppVersion}

@@ -1,5 +1,18 @@
 #pragma once
 
+// Detect actual compiler instrumentation, not merely a configure-time request.
+#if defined(__SANITIZE_ADDRESS__)
+#	define AE_ADDRESS_SANITIZER 1
+#elif defined(__has_feature)
+#	if __has_feature(address_sanitizer)
+#		define AE_ADDRESS_SANITIZER 1
+#	else
+#		define AE_ADDRESS_SANITIZER 0
+#	endif
+#else
+#	define AE_ADDRESS_SANITIZER 0
+#endif
+
 // they require dev SDKs, add heavy overhead, and must never reach players.
 #if defined(AE_CONFIG_DEBUG) || defined(AE_CONFIG_DEV)
 #	define AE_DEV_TOOLING 1

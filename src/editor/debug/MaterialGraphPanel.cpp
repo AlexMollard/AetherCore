@@ -141,6 +141,7 @@ namespace aether::editor
 				case MaterialValueType::Float4:
 					return "4";
 				case MaterialValueType::Float:
+				case MaterialValueType::Any:
 				default:
 					return "1";
 			}

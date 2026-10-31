@@ -9,6 +9,8 @@ namespace aether::memory
 	// link mimalloc successfully and still route every allocation through the CRT. This
 	// answers the real question by allocating and asking mimalloc whether it owns the block,
 	// rather than by checking that the library is present.
+	// ASAN builds deliberately return false and retain the sanitizer runtime's
+	// global allocators. Global-new tag/Tracy allocation hooks are unavailable there.
 	[[nodiscard]] bool IsMimallocActive() noexcept;
 } // namespace aether::memory
 

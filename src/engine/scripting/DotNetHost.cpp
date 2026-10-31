@@ -188,9 +188,16 @@ namespace aether::scripting
 		//
 		// Absent - a development build, or an install that relies on a system-wide .NET -
 		// nullptr keeps the default global resolution.
-		const std::filesystem::path bundledRoot = io::PlatformPaths::GetExecutableDir() / "dotnet";
+		const std::filesystem::path bundledRoot = io::PlatformPaths::IsIsolatedProduct()
+			? io::PlatformPaths::ResolveBundlePath({}, {}, "dotnet")
+			: io::PlatformPaths::GetExecutableDir() / "dotnet";
 		std::error_code bundledEc;
 		const bool hasBundledRuntime = std::filesystem::is_directory(bundledRoot, bundledEc);
+		if (io::PlatformPaths::IsIsolatedProduct() && !hasBundledRuntime)
+		{
+			AE_WARN(LogCategory::App, "Isolated product requires its bundled dotnet runtime; global .NET fallback disabled");
+			return false;
+		}
 		const string_t bundledRootStr = hasBundledRuntime ? ToCharT(bundledRoot) : string_t{};
 
 		get_hostfxr_parameters hostfxrParams{};
@@ -235,7 +242,11 @@ namespace aether::scripting
 
 		const string_t configPath = ToCharT(managedDir / "AetherCore.Interop.runtimeconfig.json");
 		hostfxr_handle ctx = nullptr;
-		const int initRc = initForConfig(configPath.c_str(), nullptr, &ctx);
+		hostfxr_initialize_parameters initParams{};
+		initParams.size = sizeof(initParams);
+		initParams.host_path = nullptr;
+		initParams.dotnet_root = hasBundledRuntime ? bundledRootStr.c_str() : nullptr;
+		const int initRc = initForConfig(configPath.c_str(), hasBundledRuntime ? &initParams : nullptr, &ctx);
 		if (initRc < 0 || ctx == nullptr)
 		{
 			AE_WARN(LogCategory::App, "hostfxr_initialize_for_runtime_config failed (0x{:08X}) for '{}' - C# scripting disabled", static_cast<unsigned>(initRc), (managedDir / "AetherCore.Interop.runtimeconfig.json").string());

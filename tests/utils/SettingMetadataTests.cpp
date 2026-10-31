@@ -163,6 +163,7 @@ TEST_CASE("The set of restart-only settings is exactly what the engine reads onc
 	//   app.startupScene     read by the boot path / bake
 	//   app.autoplay         read by the boot path
 	//   scripting.language   selects the gameplay backend before CoreCLR boots
+	//   physics.* limits     allocate physics tables/scratch budgets when registered
 	//
 	// Deliberately NOT here, and each for a reason worth keeping straight:
 	//   framesInFlight, latencyPacing  - re-read inside the frame loop
@@ -183,6 +184,11 @@ TEST_CASE("The set of restart-only settings is exactly what the engine reads onc
 	const std::vector<std::string> expected{
 	        "app.autoplay",
 	        "app.startupScene",
+	        "physics.maxBodies",
+	        "physics.maxBodyPairs",
+	        "physics.maxContactConstraints",
+	        "physics.scratchArenaKiB",
+	        "physics.scratchFallbackKiB",
 	        "scripting.language",
 	};
 	CHECK(restartOnly == expected);

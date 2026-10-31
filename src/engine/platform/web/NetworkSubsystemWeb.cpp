@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <deque>
+#include <chrono>
 #include <emscripten/websocket.h>
 
 namespace aether::net
@@ -320,7 +321,7 @@ namespace aether::net
 		}
 		m_webSocket.reset();
 		m_webPeers.clear();
-		m_events.clear();
+		m_events.reset();
 		m_role = NetRole::Offline;
 		m_localId = kInvalidConnection;
 	}
@@ -365,14 +366,19 @@ namespace aether::net
 
 	void NetworkSubsystem::Poll()
 	{
-		m_events.clear();
+		m_events = std::make_shared<std::vector<NetEvent>>();
 		if (!m_webSocket)
 		{
 			return;
 		}
 		auto& state = *m_webSocket;
-		while (!state.received.empty())
+		std::size_t serviced = 0;
+		std::size_t bytes = 0;
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(2);
+		while (!state.received.empty() && serviced < kMaxPollEvents &&
+			bytes + kMaxPacketBytes <= kMaxPollBytes && std::chrono::steady_clock::now() < deadline)
 		{
+			++serviced;
 			Frame frame = std::move(state.received.front());
 			state.received.pop_front();
 			state.receivedBytes -= frame.size();
@@ -386,21 +392,22 @@ namespace aether::net
 			{
 				if (m_webPeers.insert(peer).second)
 				{
-					m_events.push_back(NetEvent{.kind = NetEvent::Kind::Connected, .peer = peer});
+					m_events->push_back(NetEvent{.kind = NetEvent::Kind::Connected, .peer = peer});
 				}
 			}
 			else if (p[1] == 2)
 			{
 				if (m_webPeers.erase(peer))
 				{
-					m_events.push_back(NetEvent{.kind = NetEvent::Kind::Disconnected, .peer = peer});
+					m_events->push_back(NetEvent{.kind = NetEvent::Kind::Disconnected, .peer = peer});
 				}
 			}
 			else if (p[1] == 3 && m_webPeers.contains(peer))
 			{
+				bytes += frame.size() - 8;
 				NetEvent event{.kind = NetEvent::Kind::Data, .peer = peer, .channel = p[2]};
 				event.data.assign(frame.begin() + 8, frame.end());
-				m_events.push_back(std::move(event));
+				m_events->push_back(std::move(event));
 			}
 		}
 		if (state.closed)
@@ -408,8 +415,8 @@ namespace aether::net
 			// The gateway owns the whole transport, not just one peer. Once it
 			// closes, stop the session even if it failed before any peer connected.
 			// Do not dispatch earlier frames under the now-offline role.
-			m_events.clear();
-			m_events.push_back(NetEvent{.kind = NetEvent::Kind::Disconnected, .peer = kInvalidConnection});
+			m_events->clear(); // This Poll's new batch has not been published to callers yet.
+			m_events->push_back(NetEvent{.kind = NetEvent::Kind::Disconnected, .peer = kInvalidConnection});
 			m_webPeers.clear();
 			m_lastError = state.error;
 			m_webSocket.reset();

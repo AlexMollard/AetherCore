@@ -115,6 +115,7 @@ namespace aether
 				throw WindowError(err.message);
 			case LogCategory::Engine:
 			case LogCategory::Animation:
+			case LogCategory::Audio:
 			case LogCategory::Validation:
 			case LogCategory::App:
 			case LogCategory::Std:

@@ -3,9 +3,12 @@
 #include <filesystem>
 #include <string>
 #include <system_error>
+#include <cstdlib>
 
 #include "editor/publish/PublishVerify.hpp"
+#include "editor/ShaderCompiler.hpp"
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "RuntimeProjectSettings.hpp"
 #include "AssetPipeline.hpp"
 #include "io/PakBackend.hpp"
@@ -15,6 +18,40 @@ using namespace aether;
 
 namespace
 {
+#ifdef _WIN32
+	constexpr const char* kFixtureHostFxr = "hostfxr.dll";
+	constexpr const char* kFixtureCoreClr = "coreclr.dll";
+	constexpr const char* kFixtureHostPolicy = "hostpolicy.dll";
+#elif defined(__APPLE__)
+	constexpr const char* kFixtureHostFxr = "libhostfxr.dylib";
+	constexpr const char* kFixtureCoreClr = "libcoreclr.dylib";
+	constexpr const char* kFixtureHostPolicy = "libhostpolicy.dylib";
+#else
+	constexpr const char* kFixtureHostFxr = "libhostfxr.so";
+	constexpr const char* kFixtureCoreClr = "libcoreclr.so";
+	constexpr const char* kFixtureHostPolicy = "libhostpolicy.so";
+#endif
+	struct ScopedProductIsolation
+	{
+		std::string previous = io::PlatformPaths::ReadEnvironmentVariable("AETHER_ISOLATED_PRODUCT");
+		ScopedProductIsolation()
+		{
+#ifdef _WIN32
+			_putenv_s("AETHER_ISOLATED_PRODUCT", "1");
+#else
+			setenv("AETHER_ISOLATED_PRODUCT", "1", 1);
+#endif
+		}
+		~ScopedProductIsolation()
+		{
+#ifdef _WIN32
+			_putenv_s("AETHER_ISOLATED_PRODUCT", previous.c_str());
+#else
+			if (previous.empty()) { unsetenv("AETHER_ISOLATED_PRODUCT"); }
+			else { setenv("AETHER_ISOLATED_PRODUCT", previous.c_str(), 1); }
+#endif
+		}
+	};
 	// A package that satisfies the file-presence invariants, so a test only has to break the
 	// one thing it is about. The pak-content checks run last and cannot be satisfied by stub
 	// files; tests that reach them assert on what they can.
@@ -28,6 +65,13 @@ namespace
 			std::error_code ec;
 			std::filesystem::remove_all(root, ec);
 			for (const char* rel: {"AetherGame.exe",
+			             "aether-product",
+			             "THIRD_PARTY_NOTICES.txt",
+			             "DISTRIBUTION.md",
+			             "dotnet/LICENSE.txt",
+			             "dotnet/ThirdPartyNotices.txt",
+			             "notices/managed-inventory.json",
+			             "dotnet/shared/Microsoft.NETCore.App/10.0.0/System.Private.CoreLib.dll",
 			             "data/config/EngineSettings.toml",
 			             "data/engine.pak",
 			             "data/project.pak",
@@ -40,6 +84,9 @@ namespace
 			{
 				Write(rel, std::string_view(rel) == "data/config/EngineSettings.toml" ? "[app]\nstartupScene = \"main\"\nautoplay = true\n" : "x");
 			}
+			Write(std::string("dotnet/host/fxr/10.0.0/") + kFixtureHostFxr, "runtime fixture");
+			Write(std::string("dotnet/shared/Microsoft.NETCore.App/10.0.0/") + kFixtureCoreClr, "runtime fixture");
+			Write(std::string("dotnet/shared/Microsoft.NETCore.App/10.0.0/") + kFixtureHostPolicy, "runtime fixture");
 		}
 
 		~FakePackage()
@@ -73,6 +120,90 @@ TEST_CASE("VerifyPublishedPackage names the missing file")
 	REQUIRE(issue.has_value());
 	CHECK(issue->message.find("AetherGame.dll") != std::string::npos);
 	CHECK_FALSE(issue->remediation.empty());
+}
+
+TEST_CASE("Published notices preserve managed metadata and fail closed on missing terms")
+{
+	const FakePackage bundle("notice_source");
+	const FakePackage package("notice_destination");
+	bundle.Remove("aether-product"); // A raw development editor has no delivery marker.
+	package.Remove("aether-product");
+	bundle.Write("notices/managed/Microsoft.CodeAnalysis.Common/1.0/microsoft.codeanalysis.common.nuspec", "exact restored metadata");
+	bundle.Write("notices/managed/Microsoft.CodeAnalysis.Common/1.0/ThirdPartyNotices.rtf", "exact RTF notices");
+	REQUIRE_FALSE(editor::StagePublishedNotices(bundle.root, package.root).has_value());
+	const auto marker = io::file_util::ReadText(package.root / "aether-product");
+	REQUIRE(marker.has_value());
+	CHECK(*marker == "AetherCore delivered product v1\n");
+	const auto metadata = package.root / "notices/managed/Microsoft.CodeAnalysis.Common/1.0/microsoft.codeanalysis.common.nuspec";
+	REQUIRE(io::file_util::ReadText(metadata).has_value());
+	CHECK(*io::file_util::ReadText(metadata) == "exact restored metadata");
+	CHECK_FALSE(editor::IsPrunablePublishedFile(metadata));
+	CHECK(editor::IsPrunablePublishedFile("Microsoft.CodeAnalysis.dll"));
+	bundle.Remove("DISTRIBUTION.md");
+	CHECK(editor::StagePublishedNotices(bundle.root, package.root).has_value());
+	package.Remove("THIRD_PARTY_NOTICES.txt");
+	const auto issue = editor::VerifyPublishedPackage(package.root, "AetherGame.exe");
+	REQUIRE(issue.has_value());
+	CHECK(issue->message.find("THIRD_PARTY_NOTICES.txt") != std::string::npos);
+}
+
+TEST_CASE("Published CSharp products require a delivered runtime rather than system fallback")
+{
+	const FakePackage package("required_managed_runtime");
+	REQUIRE_FALSE(editor::VerifyBundledManagedRuntime(package.root).has_value());
+	package.Remove(std::string("dotnet/host/fxr/10.0.0/") + kFixtureHostFxr);
+	const auto issue = editor::VerifyPublishedPackage(package.root, "AetherGame.exe");
+	REQUIRE(issue.has_value());
+	CHECK(issue->message.find("bundled .NET runtime") != std::string::npos);
+	CHECK(issue->message.find("system runtime fallback is unavailable") != std::string::npos);
+	CHECK_FALSE(issue->remediation.empty());
+}
+
+TEST_CASE("Published marker is required and a Rust game needs no managed runtime")
+{
+	const FakePackage package("required_marker");
+	package.Remove("aether-product");
+	const auto issue = editor::VerifyPublishedPackage(package.root, "AetherGame.exe");
+	REQUIRE(issue.has_value());
+	CHECK(issue->message.find("aether-product") != std::string::npos);
+	package.Write("aether-product", "AetherCore delivered product v1\n");
+	package.Write("data/config/EngineSettings.toml", "[scripting]\nlanguage = \"rust\"\n");
+	std::filesystem::remove_all(package.root / "dotnet");
+	package.Write(app::ResolveRuntimeGameplayModule({}, app::GameplayLanguage::Rust).generic_string(), "module");
+	const auto rustIssue = editor::VerifyPublishedPackage(package.root, "AetherGame.exe");
+	REQUIRE(rustIssue.has_value());
+	CHECK(rustIssue->message.find("engine.pak") != std::string::npos);
+}
+
+TEST_CASE("Published runtime admission rejects files split between incomplete framework versions")
+{
+	const FakePackage package("split_managed_versions");
+	package.Write(std::string("dotnet/shared/Microsoft.NETCore.App/10.0.1/") + kFixtureCoreClr, "runtime fixture");
+	package.Remove(std::string("dotnet/shared/Microsoft.NETCore.App/10.0.0/") + kFixtureCoreClr);
+	package.Write(std::string("dotnet/shared/Microsoft.NETCore.App/10.0.2/") + kFixtureHostPolicy, "runtime fixture");
+	package.Remove(std::string("dotnet/shared/Microsoft.NETCore.App/10.0.0/") + kFixtureHostPolicy);
+	CHECK(editor::VerifyBundledManagedRuntime(package.root).has_value());
+	package.Write(std::string("dotnet/shared/Microsoft.NETCore.App/10.0.3/") + kFixtureCoreClr, "runtime fixture");
+	package.Write(std::string("dotnet/shared/Microsoft.NETCore.App/10.0.3/") + kFixtureHostPolicy, "runtime fixture");
+	package.Write("dotnet/shared/Microsoft.NETCore.App/10.0.3/System.Private.CoreLib.dll", "runtime fixture");
+	CHECK_FALSE(editor::VerifyBundledManagedRuntime(package.root).has_value());
+}
+
+TEST_CASE("Isolated shader compilation rejects developer compiler and include fallbacks")
+{
+	const ScopedProductIsolation isolation;
+	const FakePackage project("isolated_shader_prerequisites");
+	project.Write("assets/shaders/Custom.slang", "[shader(\"compute\")] [numthreads(1,1,1)] void main() {}\n");
+	// EngineTests is not a shader-authoring bundle. Compile-time developer tools may
+	// exist, but they must not make this isolated capability query succeed.
+	REQUIRE_FALSE(editor::CanCompileShaders());
+	std::string error;
+	CHECK_FALSE(editor::CompileOne(project.root / "assets/shaders/Custom.slang", project.root / "Builds/shaders", error));
+	CHECK(error.find("bundled slangc") != std::string::npos);
+	const auto result = editor::CompileProject(project.root);
+	CHECK_FALSE(result.ok);
+	CHECK(result.failed == 1);
+	CHECK(result.message.find("prerequisites") != std::string::npos);
 }
 
 TEST_CASE("VerifyPublishedPackage rejects unreadable startup scene content")

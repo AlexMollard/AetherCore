@@ -8,7 +8,7 @@ if(AETHERCORE_WEB_RUNTIME)
     target_compile_options(Engine PRIVATE --use-port=emdawnwebgpu)
     target_include_directories(Engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
     target_include_directories(Engine PUBLIC "${CMAKE_SOURCE_DIR}/src/include" "${xxHash_SOURCE_DIR}")
-    target_include_directories(Engine SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
+    target_include_directories(Engine SYSTEM PRIVATE "${AETHER_MINIAUDIO_INCLUDE_DIR}")
     target_link_libraries(Engine PUBLIC glm::glm EnTT::EnTT box2d zstd::libzstd_static Jolt nlohmann_json::nlohmann_json)
     target_include_directories(Engine PUBLIC "${joltphysics_SOURCE_DIR}")
     target_link_libraries(Engine PUBLIC tomlplusplus::tomlplusplus)
@@ -134,7 +134,7 @@ if(WIN32)
 endif()
 
 # miniaudio is header-only; the MINIAUDIO_IMPLEMENTATION TU lives in audio/.
-target_include_directories(Engine SYSTEM PRIVATE "${miniaudio_SOURCE_DIR}")
+target_include_directories(Engine SYSTEM PRIVATE "${AETHER_MINIAUDIO_INCLUDE_DIR}")
 
 # VMA + stb are header-only; SYSTEM on VMA silences its header warnings. Jolt's include is
 # explicit because EXCLUDE_FROM_ALL can block propagation through target_link_libraries.

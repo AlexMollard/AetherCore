@@ -203,6 +203,8 @@ namespace aether::assets
 					case GltfAnimationPath::Scale:
 						scales[node] = overwrite ? glm::vec3(sample) : glm::mix(scales[node], glm::vec3(sample), weight);
 						break;
+					case GltfAnimationPath::Weights:
+						AE_UNEXPECTED(AetherError::Asset("Model pose morph-weight animation is unsupported"));
 					default:
 						break;
 				}

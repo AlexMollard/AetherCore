@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
@@ -8,6 +9,10 @@
 
 namespace aether::app
 {
+	// Source compilation belongs to the open project and this editor process; the
+	// installed managed directory is read-only SDK/runtime input shared by projects.
+	[[nodiscard]] std::filesystem::path ResolveEditorScriptBuildDirectory(const std::filesystem::path& artifactsDir, std::uint32_t processId);
+
 	// The three inputs that decide which project file a game runtime layers over its own
 	// EngineSettings.toml. Split out from the environment so the rule can be tested - it is
 	// otherwise invisible until a published build boots the wrong scene on a dev machine.
@@ -32,6 +37,10 @@ namespace aether::app
 	// the executable, never the process working directory or the build machine's source.
 	[[nodiscard]] Expected<ProjectScriptingSettings> ResolveRuntimeGameplaySettings(const RuntimeProjectSettingsInputs& inputs);
 	[[nodiscard]] std::filesystem::path ResolveRuntimeGameplayModule(const std::filesystem::path& exeDir, GameplayLanguage language);
+	// Development retains its working-directory search. Isolation requires the
+	// interop assembly/config to resolve inside the executable's delivered tree.
+	[[nodiscard]] Expected<std::filesystem::path> ResolveRuntimeManagedDirectory(
+	        const std::filesystem::path& exeDir, const std::filesystem::path& workingDir, bool isolated);
 	// Revalidate authored state at a gameplay operation boundary. A changed language
 	// requires a new process; it must never run through the backend selected at boot.
 	[[nodiscard]] Expected<void> ValidateProjectGameplaySelection(const std::filesystem::path& projectRoot, GameplayLanguage activeLanguage, std::optional<std::string_view> configuredLanguage = std::nullopt);

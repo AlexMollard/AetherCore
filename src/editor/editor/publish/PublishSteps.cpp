@@ -22,6 +22,7 @@
 #include "editor/publish/PublishReport.hpp"
 #include "editor/publish/PublishVerify.hpp"
 #include "io/Process.hpp"
+#include "io/PlatformPaths.hpp"
 #include "project/ProjectStartupScene.hpp"
 #include "scene/SceneWorkflow.hpp"
 #include "utils/EngineSettings.hpp"
@@ -200,7 +201,7 @@ namespace aether::editor
 		StepResult PackProjectAssets(const PublishPlan& plan, PublishContext& context, const PublishToolchain&)
 		{
 			std::filesystem::path shaderSpirvDir;
-			if (CanCompileShaders())
+			if (CanCompileShaders() || io::PlatformPaths::IsIsolatedProduct())
 			{
 				const std::filesystem::path intermediateShaderDir = ProjectShaderIntermediateDir(plan.projectRoot);
 				std::error_code ec;
@@ -240,6 +241,17 @@ namespace aether::editor
 		StepResult StageRuntime(const PublishPlan& plan, PublishContext&, const PublishToolchain&)
 		{
 			std::string error;
+			if (plan.language == app::GameplayLanguage::CSharp)
+			{
+				if (auto issue = VerifyBundledManagedRuntime(plan.bundleDir))
+				{
+					return Failed(std::move(issue->message), std::move(issue->remediation));
+				}
+			}
+			if (auto issue = StagePublishedNotices(plan.bundleDir, plan.outputDir))
+			{
+				return Failed(std::move(issue->message), std::move(issue->remediation));
+			}
 			if (!CopyOne(plan.bundleDir / plan.runtimeExeName, plan.outputDir / plan.runtimeExeName, error))
 			{
 				return Failed("Could not stage the game runtime: " + error, "Rebuild the editor - CMake builds the runtime alongside it.");
@@ -275,6 +287,11 @@ namespace aether::editor
 
 			const std::filesystem::path bundleData = plan.bundleDir / "data";
 			const std::filesystem::path packageData = plan.outputDir / "data";
+			if (plan.language == app::GameplayLanguage::CSharp && io::file_util::Exists(plan.bundleDir / "dotnet")
+			        && !CopyTree(plan.bundleDir / "dotnet", plan.outputDir / "dotnet", error))
+			{
+				return Failed("Could not stage the bundled .NET runtime: " + error, "Check the bundled runtime and output permissions, then publish again.");
+			}
 			if (!CopyOne(bundleData / "engine.pak", packageData / "engine.pak", error)
 			        || !CopyOne(bundleData / "config" / "EngineSettings.toml", packageData / "config" / "EngineSettings.toml", error)
 			        || (plan.language == app::GameplayLanguage::CSharp && !CopyTree(bundleData / "scripts" / "managed", packageData / "scripts" / "managed", error)))

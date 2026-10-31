@@ -19,6 +19,18 @@ class WebPreflightTests(unittest.TestCase):
   self.assertEqual(error.exception.code,code)
  def test_default_scene_and_target_profile(self):
   result=self.api.preflight(self.root);self.assertEqual(result['profile'],'webgpu-2d-v1');self.assertIn('Start',result['scenes'])
+ def test_distribution_notices_copy_exact_bytes_and_reject_missing_input(self):
+  build=self.root/'build';stage=self.root/'stage';stage.mkdir()
+  (build/'data/notices/runtime').mkdir(parents=True)
+  notice=build/'data/THIRD_PARTY_NOTICES.txt';notice.write_bytes(b'exact dependency notice\r\n')
+  terms=self.root/'DISTRIBUTION.md';terms.write_bytes(b'private distribution terms\n')
+  (build/'data/notices/runtime/LICENSE.txt').write_bytes(b'exact runtime license')
+  self.api.stage_distribution_notices(build,stage,terms)
+  self.assertEqual((stage/'THIRD_PARTY_NOTICES.txt').read_bytes(),notice.read_bytes())
+  self.assertEqual((stage/'notices/runtime/LICENSE.txt').read_bytes(),b'exact runtime license')
+  notice.unlink()
+  with self.assertRaises(self.api.PreflightError) as error:self.api.stage_distribution_notices(build,stage,terms)
+  self.assertEqual(error.exception.code,'WEB_NOTICES_MISSING')
  def test_dynamic_font_families_and_existing_curves_are_packaged(self):
   fonts=self.root/'assets/fonts';fonts.mkdir()
   source=fonts/'Custom-Regular.ttf';source.write_bytes(b'font')

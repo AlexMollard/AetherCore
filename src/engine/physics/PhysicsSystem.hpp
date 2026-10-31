@@ -22,6 +22,8 @@
 #include "scene/System.hpp"
 #include "scene/Entity.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsResourcePolicy.hpp"
+#include "utils/EngineSettings.hpp"
 
 namespace aether
 {
@@ -32,6 +34,10 @@ namespace aether
 	{
 	public:
 		PhysicsSystem();
+		explicit PhysicsSystem(EngineSettings::Physics settings);
+		// Game-thread query: joins any pending step before reading worker-owned stats.
+		[[nodiscard]] PhysicsResourceStats GetResourceStats();
+		[[nodiscard]] static bool SupportsRecoverableSaturation();
 		~PhysicsSystem() override;
 		PhysicsSystem(const PhysicsSystem&) = delete;
 		PhysicsSystem& operator=(const PhysicsSystem&) = delete;
@@ -209,6 +215,7 @@ namespace aether
 
 		struct Impl;
 		std::unique_ptr<Impl> m_impl;
+		EngineSettings::Physics m_resource_settings;
 
 		float m_accumulator = 0.0f;
 

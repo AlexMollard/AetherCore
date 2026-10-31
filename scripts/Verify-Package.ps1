@@ -29,6 +29,7 @@ nethost.dll, data/) is required. Default (all-targets) behaviour is unchanged.
 param(
     [Parameter(Mandatory = $true)][string]$PayloadDir,
     [switch]$RequireBundledRuntime,
+    [switch]$RequireBuildProvenance,
     [switch]$RuntimeOnly
 )
 
@@ -38,6 +39,8 @@ if (-not (Test-Path -LiteralPath $PayloadDir)) {
     throw "Payload directory not found: $PayloadDir"
 }
 $root = (Resolve-Path -LiteralPath $PayloadDir).Path
+$exeSuffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
+$netHost = if ($env:OS -eq 'Windows_NT') { 'nethost.dll' } else { 'libnethost.so' }
 Write-Host "Verifying package at $root"
 
 $problems = [System.Collections.Generic.List[string]]::new()
@@ -63,11 +66,13 @@ function Require-Dir([string]$relative, [string]$why) {
 # The applications themselves. A runtime-only package (AETHERCORE_BUILD_EDITOR=OFF)
 # ships only the game runtime, so the editor-side exes are checked unless -RuntimeOnly.
 if (-not $RuntimeOnly) {
-    Require-File 'Launcher.exe' 'the project hub is the entry point users start from'
-    Require-File 'Editor.exe'   'the editor'
+    Require-File "Launcher$exeSuffix" 'the project hub is the entry point users start from'
+    Require-File "Editor$exeSuffix"   'the editor'
 }
-Require-File 'AetherGame.exe' 'the runtime the editor copies when publishing a game'
-Require-File 'nethost.dll'  'CoreCLR cannot be bootstrapped without it'
+Require-File "AetherGame$exeSuffix" 'the runtime the editor copies when publishing a game'
+Require-File $netHost 'CoreCLR cannot be bootstrapped without it'
+Require-File 'THIRD_PARTY_NOTICES.txt' 'private redistribution dependency notices'
+Require-File 'DISTRIBUTION.md' 'private distribution terms and qualification limits'
 
 # Engine content. engine.pak carries the compiled SPIR-V, so a truncated or placeholder
 # pak fails at pipeline creation rather than at load, well away from the cause.
@@ -96,6 +101,23 @@ Require-File 'data/sdk/managed/Directory.Build.props' 'without it the SDK projec
 if ($RequireBundledRuntime) {
     Require-Dir 'dotnet/host/fxr' 'hostfxr is resolved from the bundled runtime'
     Require-Dir 'dotnet/shared/Microsoft.NETCore.App' 'the runtime itself'
+    Require-File 'notices/managed-inventory.json' 'exact bundled runtime and Roslyn notice inventory'
+    Require-File 'notices/managed/dotnet/LICENSE.txt' 'bundled runtime license'
+    Require-File 'notices/managed/dotnet/ThirdPartyNotices.txt' 'bundled runtime notices'
+}
+
+if ($RequireBuildProvenance) {
+    Require-File 'BUILD_PROVENANCE.json' 'bind delivered bytes to source, tools and retained symbol identities'
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+        $problems.Add('Python is required to verify the staged provenance inventory')
+    }
+    else {
+        try {
+            $verification = & python (Join-Path $PSScriptRoot 'Write-ReleaseIdentity.py') --payload $root --verify-stage 2>&1
+            if ($LASTEXITCODE -ne 0) { $problems.Add("staged build provenance verification failed: $($verification -join ' ')") }
+        }
+        catch { $problems.Add("staged build provenance verification failed: $($_.Exception.Message)") }
+    }
 }
 
 # Development leftovers. Scoped to the root directory on purpose: the managed .pdb files

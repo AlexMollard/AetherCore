@@ -97,9 +97,6 @@ int main(int argc, char** argv)
 		std::println(stderr, "{}", agentLaunch.error);
 		return 2;
 	}
-#ifdef _WIN32
-	std::wstring agentProject;
-#endif
 	if (agentLaunch.enabled)
 	{
 		// Establish the session before cached PlatformPaths queries, window creation,
@@ -107,7 +104,6 @@ int main(int argc, char** argv)
 #ifdef _WIN32
 		// GLFW and the control protocol consume UTF-8. Windows' narrow argv uses
 		// the active code page, so take the display name from the native command line.
-		// Project overrides keep their native wide spelling through the environment.
 		int wideCount = 0;
 		wchar_t** wideArgs = CommandLineToArgvW(GetCommandLineW(), &wideCount);
 		if (wideArgs == nullptr)
@@ -117,10 +113,6 @@ int main(int argc, char** argv)
 		}
 		for (int i = 1; i + 1 < wideCount; ++i)
 		{
-			if (std::wstring_view(wideArgs[i]) == L"--project")
-			{
-				agentProject = wideArgs[i + 1];
-			}
 			if (std::wstring_view(wideArgs[i]) == L"--agent-name")
 			{
 				const int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wideArgs[i + 1], -1, nullptr, 0, nullptr, nullptr);
@@ -151,7 +143,20 @@ int main(int argc, char** argv)
 #endif
 	}
 	// mount already read - so nothing has to thread through the engine config.
+#ifdef _WIN32
+	// Normal Launcher children need the same Unicode path fidelity as agent launches.
+	int projectArgCount = 0;
+	wchar_t** projectArgs = CommandLineToArgvW(GetCommandLineW(), &projectArgCount);
+	if (projectArgs == nullptr)
+	{
+		std::println(stderr, "Cannot read the project path from the Windows command line.");
+		return 2;
+	}
+	const std::wstring project = aether::app::ParseProjectArg(projectArgCount, projectArgs);
+	LocalFree(projectArgs);
+#else
 	const std::string project = aether::app::ParseProjectArg(argc, argv);
+#endif
 	const std::string readyEvent = aether::app::ParseOptionArg(argc, argv, "--ready-event");
 	// The Vulkan validation layer defaults to on for Debug and off for RelWithDebInfo.
 	// --validation turns it on, --no-validation turns it off, and --no-validation wins if
@@ -160,17 +165,11 @@ int main(int argc, char** argv)
 	if (!project.empty())
 	{
 #ifdef _WIN32
-		if (agentLaunch.enabled && !agentProject.empty())
-		{
-			_wputenv_s(L"AETHER_PROJECT_DIR", agentProject.c_str());
-		}
-		else
-		{
-			_putenv_s("AETHER_PROJECT_DIR", project.c_str());
-		}
+		_wputenv_s(L"AETHER_PROJECT_DIR", project.c_str());
 #else
 		setenv("AETHER_PROJECT_DIR", project.c_str(), 1);
 #endif
+		aether::io::PlatformPaths::SetExplicitProjectDirectory(aether::io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR"));
 	}
 	if (!readyEvent.empty())
 	{
@@ -265,7 +264,8 @@ int main(int argc, char** argv)
 		}
 		else
 		{
-			auto sourceRoot = scriptingInputs.envProjectDir;
+			auto sourceRoot = aether::io::PlatformPaths::IsIsolatedProduct()
+			        ? aether::io::PlatformPaths::GetExplicitProjectDirectory() : scriptingInputs.envProjectDir;
 			if (sourceRoot.empty() && !scriptingInputs.compiledDefaultDir.empty()
 			        && aether::app::ResolveRuntimeProjectSettings(scriptingInputs).lexically_normal() == (scriptingInputs.compiledDefaultDir / "ProjectSettings.toml").lexically_normal())
 			{

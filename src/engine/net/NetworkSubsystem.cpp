@@ -1,6 +1,7 @@
 #include "net/NetworkSubsystem.hpp"
 
 #include <cstring>
+#include <chrono>
 
 #include <enet/enet.h>
 
@@ -61,6 +62,8 @@ namespace aether::net
 			m_enetAcquired = false;
 			return false;
 		}
+		m_host->maximumWaitingData = kMaxPeerWaitingBytes;
+		m_host->maximumPacketSize = kMaxPacketBytes;
 		m_traversal = std::make_unique<NatTraversal>(m_host);
 		m_role = NetRole::Host;
 		m_localId = kInvalidConnection;
@@ -90,6 +93,8 @@ namespace aether::net
 
 		ENetAddress address{};
 		const std::string hostStr{host};
+		m_host->maximumWaitingData = kMaxPeerWaitingBytes;
+		m_host->maximumPacketSize = kMaxPacketBytes;
 		if (enet_address_set_host(&address, hostStr.c_str()) != 0)
 		{
 			m_lastError = "could not resolve '" + hostStr + "'";
@@ -185,7 +190,7 @@ namespace aether::net
 		}
 		m_role = NetRole::Offline;
 		m_localId = kInvalidConnection;
-		m_events.clear();
+		m_events.reset();
 	}
 
 	void NetworkSubsystem::DisconnectPeer(ConnectionId peer)
@@ -287,15 +292,23 @@ namespace aether::net
 
 	void NetworkSubsystem::Poll()
 	{
-		m_events.clear();
+		m_events = std::make_shared<std::vector<NetEvent>>();
 		if (m_host == nullptr)
 		{
 			return;
 		}
 
 		ENetEvent event{};
-		while (enet_host_service(m_host, &event, 0) > 0)
+		std::size_t serviced = 0;
+		std::size_t bytes = 0;
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(2);
+		// Reserve room for the largest accepted packet before consuming an event.
+		// Remaining reliable events stay in ENet in their original order. The time
+		// budget is cooperative: one ENet service call can finish past the deadline.
+		while (serviced < kMaxPollEvents && bytes + kMaxPacketBytes <= kMaxPollBytes &&
+			std::chrono::steady_clock::now() < deadline && enet_host_service(m_host, &event, 0) > 0)
 		{
+			++serviced;
 			switch (event.type)
 			{
 			case ENET_EVENT_TYPE_NONE:
@@ -306,7 +319,7 @@ namespace aether::net
 				// peer is the server and never needs one.
 				const ConnectionId id = m_role == NetRole::Host ? m_nextPeerId++ : kInvalidConnection;
 				event.peer->data = reinterpret_cast<void*>(static_cast<std::uintptr_t>(id));
-				m_events.push_back(NetEvent{.kind = NetEvent::Kind::Connected, .peer = id});
+				m_events->push_back(NetEvent{.kind = NetEvent::Kind::Connected, .peer = id});
 				break;
 			}
 			case ENET_EVENT_TYPE_DISCONNECT:
@@ -322,7 +335,7 @@ namespace aether::net
 				}
 				const auto id = static_cast<ConnectionId>(reinterpret_cast<std::uintptr_t>(event.peer->data));
 				event.peer->data = nullptr;
-				m_events.push_back(NetEvent{.kind = NetEvent::Kind::Disconnected, .peer = id});
+				m_events->push_back(NetEvent{.kind = NetEvent::Kind::Disconnected, .peer = id});
 				break;
 			}
 			case ENET_EVENT_TYPE_RECEIVE:
@@ -332,11 +345,12 @@ namespace aether::net
 				// m_events. See kMaxPacketBytes above.
 				if (event.packet->dataLength <= kMaxPacketBytes)
 				{
+					bytes += event.packet->dataLength;
 					const auto id = static_cast<ConnectionId>(reinterpret_cast<std::uintptr_t>(event.peer->data));
 					NetEvent e{.kind = NetEvent::Kind::Data, .peer = id, .channel = event.channelID};
 					e.data.resize(event.packet->dataLength);
 					std::memcpy(e.data.data(), event.packet->data, event.packet->dataLength);
-					m_events.push_back(std::move(e));
+					m_events->push_back(std::move(e));
 				}
 				enet_packet_destroy(event.packet);
 				break;

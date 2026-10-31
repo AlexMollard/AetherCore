@@ -4,6 +4,8 @@
 add_executable(aether-ctl main.cpp)
 
 target_link_libraries(aether-ctl PRIVATE enet nlohmann_json::nlohmann_json)
+aethercore_enable_utf8_process(aether-ctl)
+aethercore_enable_sanitizers(aether-ctl)
 if(WIN32)
     target_link_libraries(aether-ctl PRIVATE ws2_32 winmm)
 endif()

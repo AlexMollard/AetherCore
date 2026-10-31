@@ -69,7 +69,7 @@ param(
     [string]$BuildDir = "",
     [ValidateSet("Debug", "RelWithDebInfo", "Release")]
     [string]$Config = "",
-    [string[]]$Targets = @("Editor", "GameRuntime", "EngineTests"),
+    [string[]]$Targets = @("Editor", "GameRuntime", "EngineTests", "aether-ctl"),
     [int]$RunSeconds = 12,
     [int]$ReadyTimeoutSeconds = 60,
     [switch]$Repack,
@@ -84,6 +84,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+. "$PSScriptRoot/Qualification.Common.ps1"
 
 # -Fast picks the dev tree; an explicit -BuildDir/-Config still wins over both.
 if (-not $BuildDir) { $BuildDir = if ($Fast) { "build/default" } else { "build/vs2022-msvc" } }
@@ -131,7 +132,14 @@ if ($EditorDisabled -and $Targets -contains "Editor") {
 # -CI is explicit on purpose; see the .PARAMETER note. Do not re-add $env:CI sniffing.
 if ($CI) { $SkipEditor = $true; $SkipRuntime = $true }
 
-$LogDir = Join-Path $env:LOCALAPPDATA "AetherCore/logs"
+# Fresh per-run user state prevents stale log evidence and leaves real preferences alone.
+$UserState = Join-Path $RepoRoot "logs/gauntlet-state/$([guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory -Force $UserState | Out-Null
+$LogDir = Join-Path $UserState 'logs'
+$ExecutableSuffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
+$portProbe = [Net.Sockets.UdpClient]::new(0)
+$SmokePort = $portProbe.Client.LocalEndPoint.Port
+$portProbe.Dispose()
 
 # --- Console helpers -----------------------------------------------------
 function Write-Head($text) { Write-Host "`n=== $text ===" -ForegroundColor Cyan }
@@ -237,24 +245,7 @@ function Get-CrashStack([string]$Exe, [string]$WorkDir) {
 # best-practice). Benign non-validation warnings (e.g. the scene-format
 # migration note) are reported but do not fail.
 function Measure-Findings([string[]]$logLines) {
-    # Vulkan loader diagnostics about machine-installed implicit overlays do not
-    # describe application validation failures. Keep the patterns narrow so
-    # synchronization, best-practice, and resource warnings still fail the smoke.
-    $loaderNoise = "Validation: General: (Removing layer .* because it is a duplicate|Layer .* uses API version .* older than the application specified API version|Layer .* forced disabled because name matches filter of env var)"
-    $benignValidation = @($logLines | Where-Object { $_ -match "\bWARN\b.*Validation:" -and $_ -match $loaderNoise })
-    $errors     = @($logLines | Where-Object { $_ -match "\bERRO\b" })
-    $valWarn    = @($logLines | Where-Object { $_ -match "\bWARN\b.*Validation:" -and $_ -notmatch $loaderNoise })
-    $valInfo    = @($logLines | Where-Object { $_ -match "\bINFO\b.*Validation:" })
-    $otherWarn  = @($logLines | Where-Object { $_ -match "\bWARN\b" -and $_ -notmatch "Validation:" }) + $benignValidation
-    $tierLine   = @($logLines | Where-Object { $_ -match "validation layer enabled" }) | Select-Object -First 1
-    return [pscustomobject]@{
-        Errors     = $errors
-        ValWarn    = $valWarn
-        ValInfo    = $valInfo
-        OtherWarn  = $otherWarn
-        Tier       = if ($tierLine) { ($tierLine -replace "^.*validation layer enabled", "validation layer enabled").Trim() } else { "unknown" }
-        Failing    = $errors.Count + $valWarn.Count + $valInfo.Count
-    }
+    return Measure-ValidationFindings $logLines
 }
 
 # --- Phase 0: Static guards ----------------------------------------------
@@ -315,31 +306,11 @@ function Invoke-Build {
 
 # --- Phase 2: Unit tests -------------------------------------------------
 function Invoke-UnitTests {
-    Write-Head "Phase 2: Unit tests"
-    $exe = Join-BuildPath "tests/{config}/EngineTests.exe"
-    if (-not (Test-Path $exe)) {
-        Write-Bad "EngineTests.exe not found at $exe"
-        Add-Phase @{ name = "unit"; status = "fail"; detail = "EngineTests.exe missing" }
-        return $false
-    }
-    # Same NativeCommandError trap as Invoke-Build: the exe logs to stderr and
-    # $ErrorActionPreference="Stop" would terminate on the merge.
-    $ErrorActionPreference = "Continue"
-    $output = & $exe 2>&1
-    $ErrorActionPreference = "Stop"
-    $exit = $LASTEXITCODE
-    $summary = ($output | Where-Object { $_ -match "test cases:" }) | Select-Object -First 1
-    $cases = 0; $passed = 0; $failed = 0
-    if ($summary -match "test cases:\s*(\d+)\s*\|\s*(\d+)\s*passed\s*\|\s*(\d+)\s*failed") {
-        $cases = [int]$Matches[1]; $passed = [int]$Matches[2]; $failed = [int]$Matches[3]
-    }
-    $ok = ($exit -eq 0) -and ($failed -eq 0) -and ($cases -gt 0)
-    if ($ok) { Write-Ok "$passed/$cases test cases passed" }
-    else {
-        Write-Bad "Tests failed ($failed failed / $cases cases, exit $exit)"
-        $output | Where-Object { $_ -match "ERROR|FAILED|\.cpp:\d" } | Select-Object -First 15 | ForEach-Object { Write-Note $_ }
-    }
-    Add-Phase @{ name = "unit"; status = if ($ok) { "pass" } else { "fail" }; testCases = $cases; passed = $passed; failed = $failed }
+    $suiteReport = Join-Path (Split-Path ([IO.Path]::GetFullPath($ReportPath))) 'ctest-qualification.json'
+    & pwsh -NoProfile -File "$PSScriptRoot/Invoke-CTestQualification.ps1" -BuildDir $BuildRoot -Config $Config -ReportPath $suiteReport
+    $ok = $LASTEXITCODE -eq 0
+    $detail = Get-Content -LiteralPath $suiteReport -Raw | ConvertFrom-Json
+    Add-Phase @{ name = 'unit'; status = if ($ok) { 'pass' } else { 'fail' }; testCases = $detail.testCases; passed = $detail.passed; failed = $detail.failed; suites = $detail.suites; report = $suiteReport }
     return $ok
 }
 
@@ -361,7 +332,10 @@ function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string
     # only defaults on in Debug - so without this the same harness pointed at a
     # RelWithDebInfo tree runs with no validation at all and still reports a clean pass.
     $ExeArgs = ("$ExeArgs --validation").Trim()
-    $proc = Start-Process -FilePath $exe -ArgumentList $ExeArgs -WorkingDirectory $BuildRoot -PassThru
+    $start = @{ FilePath = $exe; ArgumentList = $ExeArgs; WorkingDirectory = $BuildRoot; PassThru = $true }
+    $start.Environment = @{ AETHER_USER_DATA_DIR = $UserState; AETHER_CONTROL_PORT = 'off' }
+    if ($env:OS -eq 'Windows_NT') { $start.WindowStyle = 'Hidden' }
+    $proc = Start-Process @start
 
     # Condition-based readiness: poll the log for the startup-scene marker rather
     # than sleeping a fixed amount. Fail fast if the process dies first.
@@ -406,7 +380,8 @@ function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string
     Start-Sleep -Seconds $RunSeconds
     $liveCrash = $proc.HasExited
     $liveExit = if ($liveCrash) { "0x{0:X8}" -f ($proc.ExitCode -band 0xFFFFFFFF) } else { $null }
-    if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+    $client = Join-BuildPath "tools/control-client/{config}/aether-ctl$ExecutableSuffix"
+    $shutdown = if ($Name -eq 'editor' -and (Test-Path -LiteralPath $client)) { Stop-QualifiedProcess $proc $client $SmokePort 30 } else { Stop-QualifiedProcess -Process $proc -TimeoutSeconds 30 }
     Start-Sleep -Milliseconds 500
 
     $logLines = Remove-Ansi (Get-Content $log -ErrorAction SilentlyContinue)
@@ -427,7 +402,9 @@ function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string
         Write-Bad "$Name ran without the validation layer (tier: unknown) - findings from this run mean nothing."
     }
 
-    $ok = (-not $liveCrash) -and ($f.Failing -eq 0) -and (-not $tierUnknown)
+    $shutdownLogOk = $true
+    try { Assert-ShutdownLog $logLines } catch { $shutdownLogOk = $false; Write-Bad $_.Exception.Message }
+    $ok = (-not $liveCrash) -and ($f.Failing -eq 0) -and (-not $tierUnknown) -and ($shutdown.status -eq 'pass') -and $shutdownLogOk
     if ($ok) {
         Write-Ok "$Name clean - tier: $($f.Tier); 0 validation findings"
         if ($f.OtherWarn.Count -gt 0) { Write-Note "($($f.OtherWarn.Count) benign non-validation warning(s), e.g. scene-format migration)" }
@@ -439,6 +416,7 @@ function Invoke-Smoke([string]$Name, [string]$ExePath, [string]$LogName, [string
     }
     Add-Phase @{
         name = $Name; status = if ($ok) { "pass" } else { "fail" }; reachedReady = $true
+        shutdown = $shutdown; shutdownLogVerified = $shutdownLogOk
         validationTier = $f.Tier
         findings = @{ errors = $f.Errors.Count; warnings = $f.ValWarn.Count; advisories = $f.ValInfo.Count; benignWarnings = $f.OtherWarn.Count }
         messages = @($f.Errors + $f.ValWarn + $f.ValInfo | Select-Object -First 30)
@@ -481,7 +459,7 @@ else {
     # smoke can't track, so drive the Editor directly.)
     # Editor.exe's OUTPUT dir follows the CMakeLists location (src/app), not the
     # source tree move - only the sources live in src/editor.
-    else { $results.editor = Invoke-Smoke -Name "editor" -ExePath "src/app/{config}/Editor.exe" -LogName "Editor.log" -ExeArgs "--project `"$RepoRoot\projects\TestingProject`""; if (-not $results.editor) { $overall = $false } }
+    else { $results.editor = Invoke-Smoke -Name "editor" -ExePath "src/app/{config}/Editor$ExecutableSuffix" -LogName "Editor.log" -ExeArgs "--project `"$(Join-Path $RepoRoot 'projects/TestingProject')`" --agent --background --agent-name gauntlet --control-port $SmokePort"; if (-not $results.editor) { $overall = $false } }
 
     if ($SkipRuntime) { Write-Head "Phase: runtime smoke"; Write-Skip $(if ($CI) { "skipped (CI: no GPU/display)" } else { "skipped" }); Add-Phase @{ name = "runtime"; status = "skip" } }
     # Point the runtime at the same project the editor smoke uses. Without this it resolves
@@ -491,8 +469,8 @@ else {
     # smoke reports a hang for a process that is perfectly healthy. AETHER_PROJECT_DIR is the
     # documented override and beats that check.
     else {
-        $env:AETHER_PROJECT_DIR = "$RepoRoot\projects\TestingProject"
-        try { $results.runtime = Invoke-Smoke -Name "runtime" -ExePath "src/app/{config}/AetherGame.exe" -LogName "AetherGame.log" }
+        $env:AETHER_PROJECT_DIR = Join-Path $RepoRoot 'projects/TestingProject'
+        try { $results.runtime = Invoke-Smoke -Name "runtime" -ExePath "src/app/{config}/AetherGame$ExecutableSuffix" -LogName "AetherGame.log" }
         finally { Remove-Item Env:\AETHER_PROJECT_DIR -ErrorAction SilentlyContinue }
         if (-not $results.runtime) { $overall = $false }
     }
@@ -503,9 +481,11 @@ $report = [pscustomobject]@{
     timestamp = (Get-Date).ToString("o")
     repoRoot  = $RepoRoot
     buildDir  = $BuildRoot
+    userState = $UserState
     config    = $Config
     mode      = if ($CI) { "ci" } else { "full" }
-    overall   = if ($overall) { "PASS" } else { "FAIL" }
+    overall   = if (-not $overall) { 'FAIL' } elseif (@($phases | Where-Object { $_.status -ne 'pass' }).Count) { 'PARTIAL' } else { 'PASS' }
+    qualification = Get-QualificationStatus $phases @('guard','build','unit','editor','runtime')
     phases    = $phases
 }
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ReportPath) | Out-Null
@@ -517,5 +497,5 @@ foreach ($p in $phases) {
     Write-Host ("  {0,-9} {1}" -f $p.name, $p.status.ToUpper()) -ForegroundColor $colour
 }
 Write-Host "`n  report: $ReportPath" -ForegroundColor DarkGray
-if ($overall) { Write-Host "`nGAUNTLET PASSED`n" -ForegroundColor Green; exit 0 }
+if ($overall) { Write-Host "`nGAUNTLET EXECUTED SUCCESSFULLY (qualification: $($report.qualification))`n" -ForegroundColor Green; exit 0 }
 else { Write-Host "`nGAUNTLET FAILED`n" -ForegroundColor Red; exit 1 }

@@ -136,6 +136,7 @@ namespace aether::editor
 					return ICON_FA_CODE;
 				case dragdrop::FileKind::Shader:
 					return ICON_FA_WAND_MAGIC_SPARKLES;
+				case dragdrop::FileKind::MaterialGraph:
 				case dragdrop::FileKind::Unknown:
 				default:
 					return ICON_FA_FILE;
@@ -164,6 +165,7 @@ namespace aether::editor
 					return chrome::kAccentHi;
 				case dragdrop::FileKind::Shader:
 					return ImVec4(0.48f, 0.80f, 0.96f, 1.0f);
+				case dragdrop::FileKind::MaterialGraph:
 				case dragdrop::FileKind::Unknown:
 				default:
 					return chrome::kFaint;
@@ -195,6 +197,7 @@ namespace aether::editor
 					return "MATERIAL";
 				case dragdrop::FileKind::Shader:
 					return "SHADER";
+				case dragdrop::FileKind::MaterialGraph:
 				case dragdrop::FileKind::Unknown:
 				default:
 					return "FILE";

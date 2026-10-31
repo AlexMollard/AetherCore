@@ -339,7 +339,7 @@ namespace aether::app
 				attachContext.Get<World>().RegisterSystem(std::move(spriteAnimationSystem));
 				services.Register<aether::SpriteAnimationSystem>(*spriteAnimationPtr);
 
-				auto physicsSystem = std::make_unique<aether::PhysicsSystem>();
+				auto physicsSystem = std::make_unique<aether::PhysicsSystem>(m_settingsService.Get().physics);
 				auto* physicsPtr = physicsSystem.get();
 				attachContext.Get<World>().RegisterSystem(std::move(physicsSystem));
 				services.Register<aether::PhysicsSystem>(*physicsPtr);

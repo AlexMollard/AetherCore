@@ -5,6 +5,8 @@
 #include <span>
 #include <thread>
 
+#include <enet/enet.h>
+
 #include "net/EnetInit.hpp"
 #include "net/NetComponents.hpp"
 #include "net/NetSession.hpp"
@@ -127,6 +129,272 @@ TEST_CASE("A client connects to a host over loopback and exchanges a payload")
 	client.Disconnect();
 	host.Disconnect();
 	CHECK(host.Role() == net::NetRole::Offline);
+}
+
+TEST_CASE("Transport poll bounds a flood and preserves reliable ordering across frames")
+{
+	net::NetworkSubsystem host;
+	net::NetworkSubsystem client;
+	REQUIRE(host.Host(24719, 2));
+	REQUIRE(client.Connect("127.0.0.1", 24719));
+	REQUIRE(PumpUntil(host, client, [&] { return !host.Events().empty(); }));
+	constexpr unsigned count = 192;
+	std::vector<std::byte> payload(4096);
+	for (unsigned i = 0; i < count; ++i)
+	{
+		payload[0] = static_cast<std::byte>(i);
+		client.Send(0, net::kChannelReliable, true, payload);
+	}
+	client.Flush();
+	unsigned received = 0;
+	bool sawBoundedBatch = false;
+	// Loopback still uses real UDP fragmentation/retransmission; heavily loaded
+	// qualification machines may lose the initial burst. The delivery deadline
+	// allows retransmission while every Poll remains independently bounded below.
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+	while (received < count && std::chrono::steady_clock::now() < deadline)
+	{
+		client.Poll();
+		host.Poll();
+		CHECK(host.Events().size() <= 64);
+		std::size_t bytes = 0;
+		for (const auto& event: host.Events())
+		{
+			if (event.kind == net::NetEvent::Kind::Data)
+			{
+				REQUIRE(event.data.size() == payload.size());
+				CHECK(std::to_integer<unsigned>(event.data[0]) == received);
+				++received;
+				bytes += event.data.size();
+			}
+		}
+		CHECK(bytes <= 256 * 1024);
+		sawBoundedBatch = sawBoundedBatch || (bytes > 0 && received < count);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	CHECK(received == count);
+	CHECK(sawBoundedBatch);
+	// Retaining shares the published batch without consuming the public Events view.
+	auto batch = host.RetainEvents();
+	REQUIRE_FALSE(batch->empty());
+	CHECK(host.Events().data() == batch->data());
+	const auto retainedSize = batch->size();
+	host.Poll();
+	CHECK(batch->size() == retainedSize);
+	CHECK(host.RetainEvents().get() != batch.get());
+	host.Disconnect();
+	CHECK(host.Events().empty());
+	CHECK(batch->size() == retainedSize);
+	for (const auto& event: *batch)
+	{
+		CHECK(event.data.size() == payload.size());
+	}
+}
+
+TEST_CASE("Oversized fragmented network input cannot poison later reliable delivery")
+{
+	// The transport owns ENet's process lifetime. A raw peer deliberately bypasses
+	// the sender's engine packet ceiling to exercise receiver-side admission.
+	net::NetworkSubsystem host;
+	REQUIRE(host.Host(24721, 2));
+	struct RawHost
+	{
+		ENetHost* value = nullptr;
+		~RawHost()
+		{
+			if (value != nullptr)
+			{
+				enet_host_destroy(value);
+			}
+		}
+	} sender{enet_host_create(nullptr, 1, net::kChannelCount, 0, 0)};
+	REQUIRE(sender.value != nullptr);
+	ENetAddress address{};
+	REQUIRE(enet_address_set_host(&address, "127.0.0.1") == 0);
+	address.port = 24721;
+	ENetPeer* peer = enet_host_connect(sender.value, &address, net::kChannelCount, 0);
+	REQUIRE(peer != nullptr);
+	bool senderConnected = false;
+	bool receiverConnected = false;
+	auto pumpSender = [&]
+	{
+		ENetEvent event{};
+		for (unsigned i = 0; i < 64 && enet_host_service(sender.value, &event, 0) > 0; ++i)
+		{
+			if (event.type == ENET_EVENT_TYPE_CONNECT)
+			{
+				senderConnected = true;
+			}
+			if (event.type == ENET_EVENT_TYPE_RECEIVE)
+			{
+				enet_packet_destroy(event.packet);
+			}
+		}
+	};
+	const auto connectDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	while ((!senderConnected || !receiverConnected) && std::chrono::steady_clock::now() < connectDeadline)
+	{
+		pumpSender();
+		host.Poll();
+		for (const auto& event : host.Events())
+		{
+			receiverConnected = receiverConnected || event.kind == net::NetEvent::Kind::Connected;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	REQUIRE(senderConnected);
+	REQUIRE(receiverConnected);
+	const std::vector<std::byte> oversized(96 * 1024, std::byte{0x7f});
+	ENetPacket* largePacket = enet_packet_create(oversized.data(), oversized.size(), ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
+	REQUIRE(largePacket != nullptr);
+	const int largeSent = enet_peer_send(peer, net::kChannelSnapshot, largePacket);
+	if (largeSent != 0)
+	{
+		enet_packet_destroy(largePacket);
+	}
+	REQUIRE(largeSent == 0);
+	enet_host_flush(sender.value);
+	const std::vector<std::byte> expected{std::byte{0x21}, std::byte{0x43}, std::byte{0x65}};
+	ENetPacket* smallPacket = enet_packet_create(expected.data(), expected.size(), ENET_PACKET_FLAG_RELIABLE);
+	REQUIRE(smallPacket != nullptr);
+	const int smallSent = enet_peer_send(peer, net::kChannelReliable, smallPacket);
+	if (smallSent != 0)
+	{
+		enet_packet_destroy(smallPacket);
+	}
+	REQUIRE(smallSent == 0);
+	enet_host_flush(sender.value);
+	bool received = false;
+	const auto receiveDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	while (!received && std::chrono::steady_clock::now() < receiveDeadline)
+	{
+		pumpSender();
+		host.Poll();
+		for (const auto& event : host.Events())
+		{
+			if (event.kind == net::NetEvent::Kind::Data)
+			{
+				CHECK(event.channel == net::kChannelReliable);
+				CHECK(event.data == expected);
+				received = received || event.data == expected;
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	CHECK(received);
+}
+
+TEST_CASE("Network control events progress during a reliable flood and extracted batches survive teardown")
+{
+	net::NetworkSubsystem host;
+	net::NetworkSubsystem flooding;
+	net::NetworkSubsystem control;
+	REQUIRE(host.Host(24722, 3));
+	REQUIRE(flooding.Connect("127.0.0.1", 24722));
+	net::ConnectionId floodPeer = 0;
+	REQUIRE(PumpUntil(host, flooding, [&]
+	{
+		for (const auto& event : host.Events())
+		{
+			if (event.kind == net::NetEvent::Kind::Connected)
+			{
+				floodPeer = event.peer;
+			}
+		}
+		return floodPeer != 0;
+	}));
+	std::uint32_t produced = 0;
+	std::uint32_t received = 0;
+	auto sendFlood = [&](unsigned count)
+	{
+		std::vector<std::byte> payload(1024, std::byte{0x6a});
+		for (unsigned i = 0; i < count; ++i)
+		{
+			for (unsigned byte = 0; byte < 4; ++byte)
+			{
+				payload[byte] = static_cast<std::byte>((produced >> (byte * 8)) & 0xff);
+			}
+			flooding.Send(0, net::kChannelReliable, true, payload);
+			++produced;
+		}
+		flooding.Flush();
+	};
+	sendFlood(192);
+	REQUIRE(control.Connect("127.0.0.1", 24722));
+	bool connectedUnderLoad = false;
+	bool disconnectedUnderLoad = false;
+	net::ConnectionId controlPeer = 0;
+	std::shared_ptr<const std::vector<net::NetEvent>> retained;
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+	while (std::chrono::steady_clock::now() < deadline && (!disconnectedUnderLoad || received < produced))
+	{
+		// Keep a finite window queued until the control peer has disconnected;
+		// replenishing only consumed messages avoids an unbounded sender queue.
+		if (!disconnectedUnderLoad && produced - received < 192)
+		{
+			sendFlood(192 - (produced - received));
+		}
+		flooding.Poll();
+		control.Poll();
+		host.Poll();
+		auto events = host.RetainEvents();
+		CHECK(host.Events().data() == events->data());
+		CHECK(events->size() <= 64);
+		std::size_t deliveredBytes = 0;
+		bool hasData = false;
+		for (const auto& event : *events)
+		{
+			if (event.kind == net::NetEvent::Kind::Connected && event.peer != floodPeer)
+			{
+				controlPeer = event.peer;
+				connectedUnderLoad = produced > received;
+				host.DisconnectPeer(controlPeer);
+				host.Flush();
+			}
+			else if (event.kind == net::NetEvent::Kind::Disconnected && event.peer == controlPeer)
+			{
+				disconnectedUnderLoad = produced > received;
+			}
+			else if (event.kind == net::NetEvent::Kind::Data)
+			{
+				REQUIRE(event.peer == floodPeer);
+				REQUIRE(event.data.size() == 1024);
+				std::uint32_t sequence = 0;
+				for (unsigned byte = 0; byte < 4; ++byte)
+				{
+					sequence |= std::to_integer<std::uint32_t>(event.data[byte]) << (byte * 8);
+				}
+				CHECK(sequence == received);
+				++received;
+				deliveredBytes += event.data.size();
+				hasData = true;
+			}
+		}
+		CHECK(deliveredBytes <= 256 * 1024);
+		if (hasData)
+		{
+			retained = std::move(events);
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	CHECK(connectedUnderLoad);
+	CHECK(disconnectedUnderLoad);
+	CHECK(received == produced);
+	REQUIRE(retained);
+	REQUIRE_FALSE(retained->empty());
+	host.Disconnect();
+	CHECK(host.Events().empty());
+	unsigned retainedPayloads = 0;
+	for (const auto& event : *retained)
+	{
+		if (event.kind == net::NetEvent::Kind::Data)
+		{
+			REQUIRE(event.data.size() == 1024);
+			CHECK(event.data[4] == std::byte{0x6a});
+			++retainedPayloads;
+		}
+	}
+	CHECK(retainedPayloads > 0);
 }
 
 TEST_CASE("Two subsystems can coexist and outlive each other")

@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <new>
 
 #include "gpu/CommandList.hpp"
 
@@ -17,7 +18,32 @@
 
 namespace aether
 {
+	namespace
+	{
+		thread_local GpuHeap::FailurePoint s_failurePoint = GpuHeap::FailurePoint::None;
+		thread_local std::uint32_t s_failureCountdown = 0;
+		bool InjectedFailure(GpuHeap::FailurePoint point)
+		{
+			if (s_failurePoint != point) { return false; }
+			if (s_failureCountdown) { --s_failureCountdown; return false; }
+			s_failurePoint = GpuHeap::FailurePoint::None;
+			return true;
+		}
+	}
+
+	void GpuHeap::InjectFailureForTesting(FailurePoint point, std::uint32_t successfulCallsBeforeFailure)
+	{
+		s_failurePoint = point;
+		s_failureCountdown = successfulCallsBeforeFailure;
+	}
+
 	void GpuHeap::Initialize(const VulkanContext& ctx, Desc desc)
+	{
+		auto result = TryInitialize(ctx, desc);
+		if (!result) { Throw(result.error()); }
+	}
+
+	Expected<void> GpuHeap::TryInitialize(const VulkanContext& ctx, Desc desc)
 	{
 		AE_PROFILE_ZONE();
 		m_allocatorRef = ctx.GetAllocator();
@@ -68,9 +94,9 @@ namespace aether
 		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
 		VmaAllocationInfo vmaInfo{};
-		if (vmaCreateBuffer(m_allocatorRef, &bufferInfo, &allocInfo, &m_buffer, &m_bufferAllocation, &vmaInfo) != VK_SUCCESS)
+		if (InjectedFailure(FailurePoint::DeviceAllocation) || vmaCreateBuffer(m_allocatorRef, &bufferInfo, &allocInfo, &m_buffer, &m_bufferAllocation, &vmaInfo) != VK_SUCCESS)
 		{
-			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create device-local buffer"));
+			AE_UNEXPECTED(AetherError::Vulkan(0, "GpuHeap: failed to create device-local buffer"));
 		}
 
 		const VkBufferDeviceAddressInfo addrInfo{
@@ -97,13 +123,12 @@ namespace aether
 		const VmaVirtualBlockCreateInfo blockInfo{
 		        .size = desc.capacityBytes,
 		};
-		if (vmaCreateVirtualBlock(&blockInfo, &m_virtualBlock) != VK_SUCCESS)
+		if (InjectedFailure(FailurePoint::VirtualBlock) || vmaCreateVirtualBlock(&blockInfo, &m_virtualBlock) != VK_SUCCESS)
 		{
-			vmaDestroyBuffer(m_allocatorRef, m_buffer, m_bufferAllocation);
-			m_buffer = VK_NULL_HANDLE;
-			m_bufferAllocation = VK_NULL_HANDLE;
-			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create VmaVirtualBlock"));
+			Shutdown();
+			AE_UNEXPECTED(AetherError::Vulkan(0, "GpuHeap: failed to create VmaVirtualBlock"));
 		}
+		return {};
 	}
 
 	void GpuHeap::Shutdown()
@@ -173,6 +198,7 @@ namespace aether
 
 	VkDeviceSize GpuHeap::AllocBytes(VkDeviceSize bytes)
 	{
+		if (InjectedFailure(FailurePoint::Suballocation)) { return kInvalidOffset; }
 		constexpr VkDeviceSize kMinAlignment = 16;
 		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
 
@@ -187,7 +213,20 @@ namespace aether
 			return kInvalidOffset;
 		}
 		const gpu::DeviceAddress addr = m_baseAddress + offset;
-		m_allocations[addr] = handle;
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+		try
+		{
+			if (InjectedFailure(FailurePoint::HostBookkeeping)) { throw std::bad_alloc(); }
+#endif
+			m_allocations.emplace(addr, handle);
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
+		}
+		catch (...)
+		{
+			vmaVirtualFree(m_virtualBlock, handle);
+			throw;
+		}
+#endif
 		return offset;
 	}
 
@@ -203,6 +242,13 @@ namespace aether
 	}
 
 	std::uint64_t GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer, bool requiredForNextFrame, std::function<void()> onStagingRetired)
+	{
+		auto result = TryUploadBytes(dstAddr, src, bytes, transfer, requiredForNextFrame, std::move(onStagingRetired));
+		if (!result) { Throw(result.error()); }
+		return *result;
+	}
+
+	Expected<std::uint64_t> GpuHeap::TryUploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, vulkan::TransferManager& transfer, bool requiredForNextFrame, std::function<void()> onStagingRetired)
 	{
 		assert(dstAddr >= m_baseAddress);
 		const auto dstOffset = static_cast<VkDeviceSize>(dstAddr - m_baseAddress);
@@ -225,13 +271,20 @@ namespace aether
 		VkBuffer stagingBuffer = VK_NULL_HANDLE;
 		VmaAllocation stagingAllocation = VK_NULL_HANDLE;
 		VmaAllocationInfo stagingVmaInfo{};
-		if (vmaCreateBuffer(m_allocatorRef, &stagingInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, &stagingVmaInfo) != VK_SUCCESS)
+		if (InjectedFailure(FailurePoint::StagingAllocation) || vmaCreateBuffer(m_allocatorRef, &stagingInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, &stagingVmaInfo) != VK_SUCCESS)
 		{
 			if (onStagingRetired) onStagingRetired();
-			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create staging buffer"));
+			AE_UNEXPECTED(AetherError::Vulkan(0, "GpuHeap: failed to create staging buffer"));
 		}
 		std::memcpy(stagingVmaInfo.pMappedData, src, static_cast<std::size_t>(bytes));
-		vmaFlushAllocation(m_allocatorRef, stagingAllocation, 0, bytes);
+		const auto flushResult = InjectedFailure(FailurePoint::FlushAllocation)
+		        ? VK_ERROR_MEMORY_MAP_FAILED : vmaFlushAllocation(m_allocatorRef, stagingAllocation, 0, bytes);
+		if (flushResult != VK_SUCCESS)
+		{
+			vmaDestroyBuffer(m_allocatorRef, stagingBuffer, stagingAllocation);
+			if (onStagingRetired) { onStagingRetired(); }
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<std::int32_t>(flushResult), "GpuHeap: failed to flush staging allocation"));
+		}
 
 		// Non-blocking: the copy runs on the transfer queue; the frame submission's
 		// timeline wait orders it before any GPU consumption, and the staging buffer is

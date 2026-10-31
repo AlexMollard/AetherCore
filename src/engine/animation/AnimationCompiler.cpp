@@ -133,7 +133,8 @@ namespace aether
 			}
 			else
 			{
-				AE_ERROR(LogCategory::Animation, "CompileAnimations: AppendAnimations failed");
+				AE_ERROR(LogCategory::Animation, "CompileAnimations: AppendAnimations failed: {}", result.error().message);
+				return; // Preserve pending clips so the caller can retry after pressure subsides.
 			}
 
 			smc.pendingExternalAnims.clear();

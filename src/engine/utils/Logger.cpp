@@ -142,6 +142,8 @@ namespace aether
 					return "Std";
 				case LogCategory::Animation:
 					return "Animation";
+				case LogCategory::Audio:
+					return "Audio";
 				case LogCategory::Render:
 					return "Render";
 				case LogCategory::Scene:

@@ -701,6 +701,9 @@ TEST_CASE("A client periodically resends its full state to the host reliably")
 		clientSend.Update(client.world, 0.f);
 		host.receive.Update(host.world, 0.f);
 		client.receive.Update(client.world, 0.f);
+		const auto retained = host.context.Transport().RetainEvents();
+		CHECK(retained->size() == host.context.Transport().Events().size());
+		CHECK(retained->data() == host.context.Transport().Events().data());
 		for (const aether::net::NetEvent& event: host.context.Transport().Events())
 		{
 			if (event.kind == aether::net::NetEvent::Kind::Data && event.channel == aether::net::kChannelReliable

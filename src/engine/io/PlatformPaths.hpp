@@ -16,6 +16,17 @@ namespace aether::io
 
 		[[nodiscard]] static std::string GetExecutableName();
 
+		// Delivered products (BUILD_PROVENANCE.json or aether-product beside the exe)
+		// and AETHER_ISOLATED_PRODUCT=1 ignore developer/environment bundle redirects.
+		// A raw development build has no marker and keeps its usual development paths.
+		[[nodiscard]] static bool IsIsolatedProduct();
+		[[nodiscard]] static bool IsIsolatedProduct(const std::filesystem::path& executableDir, std::string_view forceFlag);
+
+		// Established from an explicit --project argument before engine startup;
+		// isolated mode never treats inherited project environment as this authority.
+		static void SetExplicitProjectDirectory(const std::filesystem::path& directory);
+		[[nodiscard]] static std::filesystem::path GetExplicitProjectDirectory();
+
 		// True for a process an automated agent launched: AETHER_AGENT_SESSION is set to a
 		// non-empty value other than "0", or an `agent-session` marker file sits next to the
 		// executable (agent snapshots carry one). Such a process is muted and, in the editor,
@@ -53,7 +64,12 @@ namespace aether::io
 		[[nodiscard]] static std::filesystem::path ReadEnvironmentPath(std::string_view name);
 		[[nodiscard]] static std::string PathToUtf8(const std::filesystem::path& path);
 
+		// AETHER_USER_DATA_DIR selects an absolute isolated directory, including on
+		// Windows. An invalid override disables persistence without using real user data.
 		[[nodiscard]] static std::filesystem::path GetUserConfigDir();
+
+		// Empty disables ImGui persistence; never fall back to imgui.ini in CWD.
+		[[nodiscard]] static std::filesystem::path ResolveUserUiLayoutPath(const std::filesystem::path& userConfigDir, std::string_view executableName);
 
 		// Where the user's own documents live, for content they author and keep - not the
 		// config dir, which is machine state. Used as the default parent for new projects,

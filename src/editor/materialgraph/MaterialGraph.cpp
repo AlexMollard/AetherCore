@@ -257,7 +257,30 @@ namespace aether::editor
 				node.value[2] = 0.0f;
 				node.value[3] = 1.0f;
 				break;
-			default:
+			case MaterialNodeType::Output:
+			case MaterialNodeType::ConstantColor:
+			case MaterialNodeType::ConstantFloat:
+			case MaterialNodeType::TextureSample:
+			case MaterialNodeType::Uv:
+			case MaterialNodeType::Time:
+			case MaterialNodeType::Fresnel:
+			case MaterialNodeType::Multiply:
+			case MaterialNodeType::Add:
+			case MaterialNodeType::Lerp:
+			case MaterialNodeType::Step:
+			case MaterialNodeType::Subtract:
+			case MaterialNodeType::Divide:
+			case MaterialNodeType::OneMinus:
+			case MaterialNodeType::Power:
+			case MaterialNodeType::Saturate:
+			case MaterialNodeType::Dot:
+			case MaterialNodeType::Smoothstep:
+			case MaterialNodeType::Sine:
+			case MaterialNodeType::Channel:
+			case MaterialNodeType::WorldPosition:
+			case MaterialNodeType::VertexColor:
+			case MaterialNodeType::ViewDirection:
+				// These nodes retain MaterialNode's shared initial values and texture slot.
 				break;
 		}
 		return node;

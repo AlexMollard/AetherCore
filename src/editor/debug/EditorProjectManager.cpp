@@ -265,7 +265,11 @@ namespace aether::editor
 		std::snprintf(m_launcherState.newName.data(), m_launcherState.newName.size(), "%s", "AetherProject");
 
 		std::filesystem::path bootProject;
-		if (const std::filesystem::path env = io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR"); !env.empty())
+		if (io::PlatformPaths::IsIsolatedProduct())
+		{
+			bootProject = io::PlatformPaths::GetExplicitProjectDirectory();
+		}
+		else if (const std::filesystem::path env = io::PlatformPaths::ReadEnvironmentPath("AETHER_PROJECT_DIR"); !env.empty())
 		{
 			bootProject = NormalizePath(env);
 		}

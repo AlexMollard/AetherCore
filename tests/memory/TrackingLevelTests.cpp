@@ -33,7 +33,9 @@ TEST_CASE("Levels are ordered from cheapest to most expensive") {
 // Asserting the dev ceiling unconditionally made these tests fail in Release for the one
 // reason that is not a defect: the gate working exactly as intended.
 TEST_CASE("The ceiling matches what this build is allowed to pay for") {
-#if AE_DEV_TOOLING
+#if AE_ADDRESS_SANITIZER
+    CHECK(kMaxTrackingLevel == TrackingLevel::Disabled);
+#elif AE_DEV_TOOLING
     CHECK(kMaxTrackingLevel == TrackingLevel::Callstacks);
 #else
     CHECK(kMaxTrackingLevel == TrackingLevel::Counters);
@@ -48,7 +50,7 @@ TEST_CASE("Setting a level takes effect and LevelAtLeast follows it") {
     constexpr TrackingLevel target = kMaxTrackingLevel;
     SetTrackingLevel(target);
     CHECK(CurrentLevel() == target);
-    CHECK(LevelAtLeast(TrackingLevel::Counters));
+    CHECK(LevelAtLeast(TrackingLevel::Counters) == (target >= TrackingLevel::Counters));
     CHECK(LevelAtLeast(target));
 
     SetTrackingLevel(TrackingLevel::Disabled);

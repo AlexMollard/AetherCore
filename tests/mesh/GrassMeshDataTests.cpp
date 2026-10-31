@@ -9,6 +9,13 @@ using namespace aether;
 
 namespace
 {
+	bool ContainsChunk(const std::vector<MeshGen::GrassChunkKey>& chunks, MeshGen::GrassChunkKey wanted)
+	{
+		// Predicate search avoids an MSVC STL/Clang vectorized-find dispatch that
+		// selects an unsupported 12-byte element size for this aggregate key.
+		return std::ranges::any_of(chunks, [wanted](const auto& key) { return key == wanted; });
+	}
+
 	MeshGen::MeshData Rectangle(float x0, float z0, float x1, float z1)
 	{
 		MeshGen::MeshData mesh;
@@ -123,12 +130,12 @@ TEST_CASE("Grass camera planner stays bounded and deterministic in huge regions"
 	CHECK(b.size() > a.size());
 	for (const auto& key: a)
 	{
-		CHECK(std::ranges::find(b, key) != b.end());
+		CHECK(ContainsChunk(b, key));
 	}
-	CHECK(std::ranges::find(b, MeshGen::GrassChunkKey{20, 0, 2}) != b.end());
-	CHECK(std::ranges::find(a, MeshGen::GrassChunkKey{20, 0, 2}) == a.end());
+	CHECK(ContainsChunk(b, MeshGen::GrassChunkKey{20, 0, 2}));
+	CHECK_FALSE(ContainsChunk(a, MeshGen::GrassChunkKey{20, 0, 2}));
 	REQUIRE(field->SelectChunks({3.99f, 0}, b, 0.01f).has_value());
-	CHECK(std::ranges::find(b, MeshGen::GrassChunkKey{1, 0, 2}) != b.end());
+	CHECK(ContainsChunk(b, MeshGen::GrassChunkKey{1, 0, 2}));
 	CHECK_FALSE(field->SelectChunks({0, 0}, b, 0).has_value());
 	CHECK(b.empty());
 	CHECK_FALSE(field->SelectChunks({0, 0}, b, std::numeric_limits<float>::infinity()).has_value());

@@ -149,6 +149,12 @@ namespace aether::app::scripting
 		{
 			switch (property.type)
 			{
+				case ScriptPropertyValue::Type::None:
+				case ScriptPropertyValue::Type::Int:
+				case ScriptPropertyValue::Type::Enum:
+					// Keep the existing integer evidence representation, including the
+					// default None sentinel, without hiding enum additions in default.
+					return property.i64;
 				case ScriptPropertyValue::Type::Float:
 					Require(std::isfinite(property.f4[0]), "Script returned a nonfinite property");
 					return property.f4[0];

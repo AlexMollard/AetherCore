@@ -5,6 +5,8 @@
 add_executable(aether-rendezvous main.cpp)
 
 target_link_libraries(aether-rendezvous PRIVATE enet)
+aethercore_enable_utf8_process(aether-rendezvous)
+aethercore_enable_sanitizers(aether-rendezvous)
 if(WIN32)
     target_link_libraries(aether-rendezvous PRIVATE ws2_32 winmm)
 endif()

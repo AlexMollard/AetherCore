@@ -274,6 +274,9 @@ namespace aether::editor
 					}
 					return true;
 				}
+				case FieldType::Float:
+				case FieldType::Int:
+				case FieldType::UInt:
 				default:
 					return a.num == b.num; // Float / Int / UInt
 			}

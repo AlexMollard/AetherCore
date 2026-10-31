@@ -1079,6 +1079,37 @@ TEST_CASE("A Spawn inbound on the host is dropped")
 	}
 }
 
+TEST_CASE("A disconnect ends dispatch of the current event batch")
+{
+	using namespace aether::net;
+	const PrefabFixture prefabs;
+	const std::vector<NetEvent> trailing{
+	        {.kind = NetEvent::Kind::Data, .peer = kPeer, .data = EncodeSpawn(60, 0, "net_test_prefab", {1.f, 2.f, 3.f})},
+	        {.kind = NetEvent::Kind::Data, .peer = kPeer, .data = NetworkContext::EncodeWelcome(9)}};
+	// Positive control: Welcome establishes the session before Spawn. Reversing
+	// them would let Welcome's new-session reset discard the just-created binding.
+	{
+		Endpoint client;
+		client.BecomeClient();
+		const std::vector<NetEvent> liveBatch{trailing[1], trailing[0]};
+		client.receive.OnEvents(client.world, liveBatch);
+		REQUIRE(client.context.Session().EntityFor(60).IsValid());
+		CHECK(client.context.LocalConnectionId() == 9);
+	}
+	{
+		Endpoint client;
+		client.BecomeClient();
+		std::vector<NetEvent> batch{
+		        {.kind = NetEvent::Kind::Data, .peer = kPeer, .data = EncodeDisconnect("batch ended")}};
+		batch.insert(batch.end(), trailing.begin(), trailing.end());
+		client.receive.OnEvents(client.world, batch);
+		CHECK_FALSE(client.context.IsActive());
+		CHECK(client.context.LocalConnectionId() == kInvalidConnection);
+		CHECK_FALSE(client.context.Session().EntityFor(60).IsValid());
+		CHECK(CountIdentities(client.world) == 0);
+	}
+}
+
 TEST_CASE("Join, leave and re-join replays spawns without growing the world")
 {
 	// The regression this file exists for. Stop() once left session-spawned entities

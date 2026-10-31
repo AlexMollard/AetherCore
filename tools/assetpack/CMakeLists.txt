@@ -50,6 +50,7 @@ target_include_directories(AssetPipeline SYSTEM PRIVATE
 )
 
 target_link_libraries(AssetPipeline PUBLIC AssetIdentity PRIVATE zstd::libzstd_static freetype)
+aethercore_enable_sanitizers(AssetPipeline)
 
 if(TARGET tomlplusplus::tomlplusplus)
     target_link_libraries(AssetPipeline PRIVATE tomlplusplus::tomlplusplus)
@@ -65,6 +66,8 @@ add_executable(AssetPacker
     StbImageImpl.cpp
 )
 target_link_libraries(AssetPacker PRIVATE AssetPipeline nlohmann_json::nlohmann_json)
+aethercore_enable_utf8_process(AssetPacker)
+aethercore_enable_sanitizers(AssetPacker)
 target_include_directories(AssetPacker SYSTEM PRIVATE "${stb_SOURCE_DIR}" "${glm_SOURCE_DIR}")
 
 # main.cpp includes PakWriter.hpp -> PakFormat.hpp, which is PRIVATE on AssetPipeline, so

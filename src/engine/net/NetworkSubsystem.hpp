@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include <memory>
+#include <utility>
 
 #include "net/NatTraversal.hpp"
 #include "net/NetTypes.hpp"
@@ -74,9 +75,21 @@ namespace aether::net
 		void Send(ConnectionId peer, int channel, bool reliable, std::span<const std::byte> bytes);
 		void Broadcast(int channel, bool reliable, std::span<const std::byte> bytes);
 
-		// Drains ENet into Events(). Call once per frame before reading events;
-		// each call clears the previous frame's events.
+		// Publishes a bounded batch into Events(). Call once per frame before reading;
+		// each call replaces the current view without mutating any retained batch.
 		void Poll();
+		static constexpr std::size_t kMaxPollEvents = 64;
+		static constexpr std::size_t kMaxPollBytes = 256 * 1024;
+		static constexpr std::size_t kMaxPeerWaitingBytes = 1024 * 1024;
+
+		// Share an immutable batch before handlers that may poll/disconnect transport.
+		// Events() remains observable for the rest of this Poll; no payload copy occurs.
+		[[nodiscard]] std::shared_ptr<const std::vector<NetEvent>> RetainEvents() const
+		{
+			if (m_events) { return m_events; }
+			static const auto kEmpty = std::make_shared<const std::vector<NetEvent>>();
+			return kEmpty;
+		}
 
 		// NAT traversal over this host's own socket, valid once Host or Connect has
 		// succeeded. It lives here because it has to share the socket: the hole a punch
@@ -97,7 +110,7 @@ namespace aether::net
 
 		[[nodiscard]] std::span<const NetEvent> Events() const
 		{
-			return m_events;
+			return m_events ? std::span<const NetEvent>(*m_events) : std::span<const NetEvent>{};
 		}
 
 		[[nodiscard]] NetRole Role() const
@@ -158,7 +171,7 @@ namespace aether::net
 		NetRole m_role = NetRole::Offline;
 		ConnectionId m_localId = kInvalidConnection;
 		ConnectionId m_nextPeerId = 1;
-		std::vector<NetEvent> m_events;
+		std::shared_ptr<std::vector<NetEvent>> m_events;
 		std::string m_lastError;
 		bool m_enetAcquired = false;
 	};

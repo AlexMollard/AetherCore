@@ -1,6 +1,8 @@
 #include "RuntimeProjectSettings.hpp"
 
 #include <system_error>
+#include <array>
+#include <algorithm>
 
 #include "project/ProjectCommon.hpp"
 #include "io/PlatformPaths.hpp"
@@ -9,6 +11,15 @@
 
 namespace aether::app
 {
+	std::filesystem::path ResolveEditorScriptBuildDirectory(const std::filesystem::path& artifactsDir, const std::uint32_t processId)
+	{
+		if (artifactsDir.empty() || !artifactsDir.is_absolute() || processId == 0)
+		{
+			return {};
+		}
+		return artifactsDir / "bin" / "AetherGame" / ("debug-" + std::to_string(processId));
+	}
+
 	namespace
 	{
 		std::filesystem::path SettingsIn(const std::filesystem::path& root)
@@ -25,9 +36,17 @@ namespace aether::app
 
 	std::filesystem::path ResolveRuntimeProjectSettings(const RuntimeProjectSettingsInputs& inputs)
 	{
+		const bool isolated = io::PlatformPaths::IsIsolatedProduct();
+		if (isolated)
+		{
+			if (const auto explicitProject = io::PlatformPaths::GetExplicitProjectDirectory(); !explicitProject.empty())
+			{
+				return SettingsIn(explicitProject);
+			}
+		}
 		// An explicit override always wins - this is how a dev runs the runtime against a
 		// project that is not the one compiled in.
-		if (!inputs.envProjectDir.empty())
+		if (!isolated && !inputs.envProjectDir.empty())
 		{
 			AE_INFO(LogCategory::App, "Runtime project settings: AETHER_PROJECT_DIR override -> {}", io::PlatformPaths::PathToUtf8(inputs.envProjectDir));
 			return SettingsIn(inputs.envProjectDir);
@@ -58,17 +77,31 @@ namespace aether::app
 			return {};
 		}
 
-		const std::filesystem::path compiled = SettingsIn(inputs.compiledDefaultDir);
+		const std::filesystem::path compiled = isolated ? std::filesystem::path{} : SettingsIn(inputs.compiledDefaultDir);
 		AE_INFO(LogCategory::App, "Runtime project settings: {}", compiled.empty() ? std::string{"none found; using the settings beside the executable"} : io::PlatformPaths::PathToUtf8(compiled));
 		return compiled;
 	}
 
 	Expected<ProjectScriptingSettings> ResolveRuntimeGameplaySettings(const RuntimeProjectSettingsInputs& inputs)
 	{
+		if (io::PlatformPaths::IsIsolatedProduct())
+		{
+			if (const auto explicitProject = io::PlatformPaths::GetExplicitProjectDirectory(); !explicitProject.empty())
+			{
+				// An explicit but missing/malformed project is an error, never permission
+				// to select a different backend from the product's baked defaults.
+				auto descriptor = project::ReadProjectDescriptor(explicitProject);
+				if (!descriptor)
+				{
+					return std::unexpected(descriptor.error());
+				}
+				return ProjectScriptingSettings{descriptor->language};
+			}
+		}
 		const auto projectFile = ResolveRuntimeProjectSettings(inputs);
 		if (!projectFile.empty())
 		{
-			const auto sourceRoot = !inputs.envProjectDir.empty() ? inputs.envProjectDir : inputs.compiledDefaultDir;
+			const auto sourceRoot = io::PlatformPaths::IsIsolatedProduct() ? io::PlatformPaths::GetExplicitProjectDirectory() : (!inputs.envProjectDir.empty() ? inputs.envProjectDir : inputs.compiledDefaultDir);
 			if (!sourceRoot.empty() && projectFile.lexically_normal() == (sourceRoot / "ProjectSettings.toml").lexically_normal())
 			{
 				// Use the same descriptor/path validation as the editor, including paths.scripts.
@@ -136,6 +169,39 @@ namespace aether::app
 		constexpr const char* kModuleName = "libaether_gameplay.so";
 #endif
 		return exeDir / "data" / "scripts" / "rust" / kModuleName;
+	}
+
+	Expected<std::filesystem::path> ResolveRuntimeManagedDirectory(
+	        const std::filesystem::path& exeDir, const std::filesystem::path& workingDir, bool isolated)
+	{
+		const auto delivered = exeDir / "data/scripts/managed";
+		if (isolated)
+		{
+			std::error_code ec;
+			const auto root = std::filesystem::canonical(exeDir, ec);
+			if (ec) { AE_UNEXPECTED(AetherError::Engine("Cannot resolve isolated managed bundle root")); }
+			for (const auto* name: {"AetherCore.Interop.dll", "AetherCore.Interop.runtimeconfig.json"})
+			{
+				const auto file = std::filesystem::canonical(delivered / name, ec);
+				const auto relative = file.lexically_relative(root);
+				if (ec || !std::filesystem::is_regular_file(file, ec) || relative.empty() || relative.is_absolute()
+				        || std::any_of(relative.begin(), relative.end(), [](const auto& part) { return part == ".."; }))
+				{
+					AE_UNEXPECTED(AetherError::Engine("Isolated product requires delivered data/scripts/managed interop assemblies and runtime configuration; working-directory fallback is disabled"));
+				}
+			}
+			const auto directory = std::filesystem::canonical(delivered, ec);
+			if (ec) { AE_UNEXPECTED(AetherError::Engine("Cannot resolve isolated managed directory")); }
+			return directory;
+		}
+		const std::array<std::filesystem::path, 4> candidates{delivered,
+		        workingDir / "data/scripts/managed", workingDir / "../data/scripts/managed", workingDir / "../../data/scripts/managed"};
+		for (const auto& candidate: candidates)
+		{
+			std::error_code ec;
+			if (std::filesystem::exists(candidate / "AetherCore.Interop.dll", ec)) { return candidate; }
+		}
+		return delivered;
 	}
 
 	bool ProjectScriptsCannotBeLoaded(const RuntimeScriptAssemblyInputs& inputs)

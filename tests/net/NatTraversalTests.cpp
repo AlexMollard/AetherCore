@@ -13,6 +13,7 @@
 #include "net/NatTraversal.hpp"
 #include "net/NetworkSubsystem.hpp"
 #include "net/Signaling.hpp"
+#include "net/EnetInit.hpp"
 
 using namespace aether;
 using Endpoint = net::NatTraversal::Endpoint;
@@ -191,7 +192,9 @@ TEST_CASE("Discovery works against a real STUN server" * doctest::skip())
 
 TEST_CASE("Local candidates name real interfaces, without repeating one")
 {
+	const int referencesBefore = net::EnetReferenceCount();
 	const auto candidates = net::NatTraversal::LocalCandidates(24709);
+	CHECK(net::EnetReferenceCount() == referencesBefore);
 	REQUIRE_FALSE(candidates.empty());
 
 	for (const Endpoint& candidate: candidates)

@@ -116,6 +116,7 @@ namespace aether::app::scene
 		float minLimit = 0.0f;
 		float maxLimit = 0.0f;
 		float distance = -1.0f;
+		float swingLimit = 0.0f;
 		bool collideConnected = false;
 	};
 

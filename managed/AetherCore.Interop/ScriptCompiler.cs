@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Text;
+using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
@@ -114,8 +117,11 @@ internal static class ScriptCompiler
                 // if it were the build's real output.
                 TryDelete(outputPath);
                 TryDelete(pdbPath);
+                TryDelete(Path.ChangeExtension(outputPath, ".deps.json"));
                 return 2;
             }
+
+            WriteRuntimeDependencies(outputPath, referenceDir);
 
             // Warnings are worth surfacing even when the build worked.
             string warnings = Format(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Warning));
@@ -127,9 +133,79 @@ internal static class ScriptCompiler
         }
         catch (Exception ex)
         {
+            TryDelete(outputPath);
+            TryDelete(Path.ChangeExtension(outputPath, ".pdb"));
+            TryDelete(Path.ChangeExtension(outputPath, ".deps.json"));
             diagnostics = ex.ToString();
             return 3;
         }
+    }
+
+    private static void WriteRuntimeDependencies(string outputPath, string referenceDir)
+    {
+        // Roslyn emits PE/PDB files, not MSBuild's .deps.json. Record the emitted PE's
+        // actual local references (recursively), rather than all compilation references:
+        // those also include unused editor/compiler assemblies that do not ship in games.
+        // Framework references are supplied by the host runtime, and the load context
+        // shares AetherCore by identity. Local entries use only bundle-relative filenames.
+        Dictionary<string, object> target = new(StringComparer.Ordinal);
+        Dictionary<string, object> libraries = new(StringComparer.Ordinal);
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+        void AddAssembly(string path)
+        {
+            using FileStream stream = File.OpenRead(path);
+            using PEReader pe = new(stream);
+            MetadataReader metadata = pe.GetMetadataReader();
+            AssemblyDefinition definition = metadata.GetAssemblyDefinition();
+            string name = metadata.GetString(definition.Name);
+            string version = definition.Version.ToString();
+            string key = name + "/" + version;
+            if (!visited.Add(name)) { return; }
+            Dictionary<string, string> dependencies = new(StringComparer.Ordinal);
+            foreach (AssemblyReferenceHandle handle in metadata.AssemblyReferences)
+            {
+                AssemblyReference reference = metadata.GetAssemblyReference(handle);
+                string referenceName = metadata.GetString(reference.Name);
+                string localPath = Path.Combine(referenceDir, referenceName + ".dll");
+                if (File.Exists(localPath))
+                {
+                    AssemblyName identity = AssemblyName.GetAssemblyName(localPath);
+                    dependencies[referenceName] = identity.Version!.ToString();
+                    AddAssembly(localPath);
+                }
+            }
+            target[key] = new
+            {
+                dependencies,
+                runtime = new Dictionary<string, object> { [Path.GetFileName(path)] = new { } }
+            };
+            libraries[key] = new { type = "project", serviceable = false, sha512 = "" };
+            // Editor game output lives in project intermediates, apart from immutable
+            // installed SDK/compiler bytes. Keep its actual local dependency closure
+            // beside the game so its resolver works there and after relocation.
+            string destination = Path.Combine(Path.GetDirectoryName(outputPath)!, Path.GetFileName(path));
+            if (!Path.GetFullPath(path).Equals(Path.GetFullPath(destination),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            {
+                File.Copy(path, destination, overwrite: true);
+            }
+        }
+        AddAssembly(outputPath);
+        string framework = ".NETCoreApp,Version=v" + Environment.Version.Major + ".0";
+        string manifest = Path.ChangeExtension(outputPath, ".deps.json");
+        string pending = manifest + ".tmp";
+        try
+        {
+            File.WriteAllText(pending, JsonSerializer.Serialize(new
+            {
+                runtimeTarget = new { name = framework, signature = "" },
+                compilationOptions = new { },
+                targets = new Dictionary<string, object> { [framework] = target },
+                libraries
+            }, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(pending, manifest, overwrite: true);
+        }
+        finally { TryDelete(pending); }
     }
 
     private static IEnumerable<string> EnumerateSources(string scriptDir)

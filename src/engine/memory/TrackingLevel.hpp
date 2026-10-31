@@ -14,7 +14,7 @@ namespace aether::memory
 	// append instead.
 	enum class TrackingLevel : std::uint8_t
 	{
-		Disabled,   // nothing; the allocation path is a straight call into mimalloc
+		Disabled,   // no tag bookkeeping; ASAN builds retain their runtime allocator
 		Counters,   // per-tag totals only. Cheap enough to leave on in a shipped build
 		Ledger,     // plus a pointer -> record map, so individual live blocks can be listed
 		Callstacks, // plus a captured stack per allocation. Expensive; a debugging tool
@@ -25,7 +25,9 @@ namespace aether::memory
 	// A shipped build has no business paying for a ledger or capturing stacks, and gating it
 	// at compile time means the code to do so is not merely unreachable but absent. Retail
 	// and ship builds stop at Counters.
-#if AE_DEV_TOOLING
+#if AE_ADDRESS_SANITIZER
+	inline constexpr TrackingLevel kMaxTrackingLevel = TrackingLevel::Disabled;
+#elif AE_DEV_TOOLING
 	inline constexpr TrackingLevel kMaxTrackingLevel = TrackingLevel::Callstacks;
 #else
 	inline constexpr TrackingLevel kMaxTrackingLevel = TrackingLevel::Counters;
@@ -38,7 +40,7 @@ namespace aether::memory
 		//
 		// Relaxed ordering - it gates statistics, and no reader depends on it being ordered
 		// against anything. A stronger ordering would put a barrier on every allocation.
-		inline constinit std::atomic<TrackingLevel> t_level{TrackingLevel::Counters};
+		inline constinit std::atomic<TrackingLevel> t_level{kMaxTrackingLevel < TrackingLevel::Counters ? kMaxTrackingLevel : TrackingLevel::Counters};
 	} // namespace detail
 
 	[[nodiscard]] inline TrackingLevel CurrentLevel() noexcept

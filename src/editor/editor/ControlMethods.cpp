@@ -55,6 +55,7 @@
 #include "editor/EditorProjectContext.hpp"
 #include "editor/EditorProjectPublisher.hpp"
 #include "editor/ModelImport.hpp"
+#include "editor/ModelImportPath.hpp"
 #include "editor/ReflectionJson.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "io/FileUtil.hpp"
@@ -994,7 +995,7 @@ namespace aether::editor
 		methods.push_back({"scene.add_model",
 		        "add_model",
 		        "Add a model file to the live scene as one operation - the seamless equivalent of dragging a glTF into the editor. Bakes the raw glTF if it hasn't been imported yet, then spawns the correct layout: a lone static mesh sits on a "
-		        "single entity, while a multi-primitive or skinned model becomes a root with one child per primitive (each carrying its own material and skin). 'path' is a project:// or absolute model path; optional 'name', 'position', "
+		        "single entity, while a multi-primitive or skinned model becomes a root with one child per primitive (each carrying its own material and skin). 'path' is a project:// URI or an absolute model path inside the open project; optional 'name', 'position', "
 		        "'rotationEuler' (degrees) and 'scale' place it (skinned models authored in centimetres usually want scale ~0.01). Returns the root id and primitive count.",
 		        true,
 		        Obj({{"path", StrProp()}, {"name", StrProp()}, {"position", kVec3}, {"rotationEuler", kVec3}, {"scale", kVec3}}, {"path"}),
@@ -1018,7 +1019,13 @@ namespace aether::editor
 			        const glm::mat4 m = aether::ComposeTransform(pos, euler, scl);
 
 			        std::string error;
-			        const Entity root = editor::ImportModelIntoScene(world, ctx.services, path, m, p.value("name", std::string{}), error);
+			        const auto* project = ctx.services.TryGet<app::EditorProjectContext>();
+			        std::string normalizedPath;
+			        if (!editor::NormalizeModelImportPath(path, project && project->IsLoaded() ? project->root : std::filesystem::path{}, normalizedPath, error))
+			        {
+				        return json{{"error", error}};
+			        }
+			        const Entity root = editor::ImportModelIntoScene(world, ctx.services, normalizedPath, m, p.value("name", std::string{}), error);
 			        if (!root.IsValid())
 			        {
 				        return json{{"error", error.empty() ? std::string("model import failed") : error}};
@@ -1034,7 +1041,7 @@ namespace aether::editor
 			        {
 				        if (auto* sc = ctx.services.TryGet<app::scripting::SceneContext>())
 				        {
-					        prims = app::scene::ModelPrimitiveCount(*assets, *sc, path);
+					        prims = app::scene::ModelPrimitiveCount(*assets, *sc, normalizedPath);
 				        }
 			        }
 			        if (auto* undo = ctx.services.TryGet<UndoStack>())
@@ -1652,6 +1659,15 @@ namespace aether::editor
 				        // specific cause - unwritable directory, failed write - is in the log.
 				        const std::string path = io::PlatformPaths::PathToUtf8(std::filesystem::u8path(app::scene::ScenesDirectory()) / (name + ".scene.toml"));
 				        return json{{"saved", false}, {"scene", name}, {"error", "could not write '" + path + "' - see the log for the reason"}};
+			        }
+			        // A copy saved under another name does not save the current document.
+			        // Match the UI save baseline only after this document's write succeeds.
+			        if (name == scenes->GetCurrentScene())
+			        {
+				        if (auto* undo = ctx.services.TryGet<UndoStack>())
+				        {
+					        undo->MarkSaved();
+				        }
 			        }
 			        return json{{"saved", ok}, {"scene", name}};
 		        }});

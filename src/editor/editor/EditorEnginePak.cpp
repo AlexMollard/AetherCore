@@ -11,6 +11,7 @@
 
 #include "AssetPipeline.hpp"
 #include "io/FileUtil.hpp"
+#include "io/PlatformPaths.hpp"
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 
@@ -37,6 +38,10 @@ namespace aether::editor
 
 		std::optional<std::filesystem::path> EngineShaderDir()
 		{
+			if (io::PlatformPaths::IsIsolatedProduct())
+			{
+				return std::nullopt;
+			}
 #ifdef AETHER_SHADER_BUILD_DIR
 			std::error_code ec;
 			std::filesystem::path dir = AETHER_SHADER_BUILD_DIR;
@@ -51,6 +56,10 @@ namespace aether::editor
 
 	bool CanBakeEnginePak()
 	{
+		if (io::PlatformPaths::IsIsolatedProduct())
+		{
+			return false;
+		}
 		if (!EngineResourcesDir().has_value())
 		{
 			return false;
@@ -68,6 +77,10 @@ namespace aether::editor
 
 	std::optional<std::filesystem::path> EngineResourcesDir()
 	{
+		if (io::PlatformPaths::IsIsolatedProduct())
+		{
+			return std::nullopt;
+		}
 #ifdef AETHER_ENGINE_RESOURCES_DIR
 		std::error_code ec;
 		std::filesystem::path dir = AETHER_ENGINE_RESOURCES_DIR;
@@ -81,6 +94,10 @@ namespace aether::editor
 
 	EditorProjectActionResult BakeEnginePak(const std::filesystem::path& outputEnginePak)
 	{
+		if (io::PlatformPaths::IsIsolatedProduct())
+		{
+			return {.succeeded = false, .message = "Installed products use their shipped data/engine.pak; source-tree engine repacking is unavailable. Repair or reinstall the engine package if it is missing."};
+		}
 		struct StagingCleanup
 		{
 			std::filesystem::path dir;

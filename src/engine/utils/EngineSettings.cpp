@@ -94,6 +94,11 @@ namespace aether
 		        {"scripting.language", {.description = "Gameplay language for this project. Reopen the project after changing it.", .choices = kGameplayLanguages, .restartRequired = true}},
 		        {"app.autoplay", {.description = "Start the game straight away instead of opening the editor.", .restartRequired = true}},
 		        {"app.autosaveSeconds", {.description = "How often the editor writes a recovery copy of unsaved scene edits, beside the project and never over the scene itself. 0 disables it.", .minValue = 0.0, .maxValue = 3600.0}},
+		        {"physics.scratchArenaKiB", {.description = "Preallocated physics scratch arena in KiB.", .minValue = 1.0, .maxValue = 1048576.0, .restartRequired = true}},
+		        {"physics.scratchFallbackKiB", {.description = "Maximum live fallback scratch payload in KiB; exhausting arena and fallback terminates the process.", .minValue = 0.0, .maxValue = 1048576.0, .restartRequired = true}},
+		        {"physics.maxBodies", {.description = "Maximum admitted 3D physics bodies.", .minValue = 1.0, .maxValue = 64536.0, .restartRequired = true}},
+		        {"physics.maxBodyPairs", {.description = "Body pair cache capacity; saturation drops contacts.", .minValue = 1.0, .maxValue = 1048576.0, .restartRequired = true}},
+		        {"physics.maxContactConstraints", {.description = "Contact constraint/manifold capacity; saturation drops contacts.", .minValue = 1.0, .maxValue = 1048576.0, .restartRequired = true}},
 		        {"streaming.cpuBudgetMiB", {.description = "Streaming CPU budget in MiB, including staging.", .minValue = 1.0, .maxValue = 1048576.0}},
 		        {"streaming.gpuBudgetMiB", {.description = "Streaming GPU budget in MiB; separate from the renderer baseline.", .minValue = 1.0, .maxValue = 1048576.0}},
 		        {"streaming.stagingBudgetMiB", {.description = "Streaming staging budget in MiB.", .minValue = 1.0, .maxValue = 1048576.0}},
@@ -218,6 +223,7 @@ namespace aether
 		{
 			settings.window.height = defaults.window.height;
 		}
+		settings.physics = SanitizePhysicsResourceSettings(settings.physics);
 		auto& streaming = settings.streaming;
 		streaming.cpuBudgetMiB = std::clamp(streaming.cpuBudgetMiB, 1, 1048576);
 		streaming.gpuBudgetMiB = std::clamp(streaming.gpuBudgetMiB, 1, 1048576);
@@ -408,7 +414,7 @@ namespace aether
 
 	std::filesystem::path EngineSettingsIO::ResolvePath(std::string_view fileName)
 	{
-		std::filesystem::path requested(fileName);
+		std::filesystem::path requested(std::u8string(fileName.begin(), fileName.end()));
 		if (requested.is_absolute())
 		{
 			return requested;
@@ -455,11 +461,11 @@ namespace aether
 		if (auto text = io::file_util::ReadText(shippedPath))
 		{
 			Apply(*text, result.values);
-			AE_INFO(LogCategory::Engine, "Shipped settings loaded from {}", shippedPath.string());
+			AE_INFO(LogCategory::Engine, "Shipped settings loaded from {}", io::PlatformPaths::PathToUtf8(shippedPath));
 		}
 		else
 		{
-			AE_INFO(LogCategory::Engine, "No shipped settings file at {}; using compiled-in defaults.", shippedPath.string());
+			AE_INFO(LogCategory::Engine, "No shipped settings file at {}; using compiled-in defaults.", io::PlatformPaths::PathToUtf8(shippedPath));
 		}
 
 		// Snapshot before the project layer: a project override is measured against the
@@ -485,7 +491,7 @@ namespace aether
 			if (auto text = io::file_util::ReadText(userPath))
 			{
 				Apply(*text, result.values, SettingsScope::UserOverridable);
-				AE_INFO(LogCategory::Engine, "User settings overrides loaded from {}", userPath.string());
+				AE_INFO(LogCategory::Engine, "User settings overrides loaded from {}", io::PlatformPaths::PathToUtf8(userPath));
 			}
 		}
 		Sanitize(result.values);
@@ -523,7 +529,7 @@ namespace aether
 		{
 			return result;
 		}
-		AE_INFO(LogCategory::Engine, "User settings saved to {}", path.string());
+		AE_INFO(LogCategory::Engine, "User settings saved to {}", io::PlatformPaths::PathToUtf8(path));
 		return {};
 	}
 	const SettingInfo& SettingMetadata(const std::string_view key)

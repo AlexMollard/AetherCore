@@ -15,6 +15,10 @@ namespace aether::editor
 		std::string remediation;
 	};
 
+	// Preserve distribution terms and exact bundled dependency notices during publish.
+	[[nodiscard]] std::optional<PublishIssue> StagePublishedNotices(const std::filesystem::path& bundleDir, const std::filesystem::path& packageDir);
+	[[nodiscard]] std::optional<PublishIssue> VerifyBundledManagedRuntime(const std::filesystem::path& bundleDir);
+
 	// Build leftovers that are safe to delete from a package (the prune step removes them).
 	[[nodiscard]] bool IsPrunablePublishedFile(const std::filesystem::path& path);
 
