@@ -144,6 +144,9 @@ function(aethercore_target_defaults target)
             $<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>
             $<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>
             $<$<CONFIG:Debug>:/DEBUG:FULL>
+            # Incremental MSVC links have emitted a virtual-destructor thunk
+            # absent from the CFG target table, causing a fail-fast at shutdown.
+            $<$<CONFIG:Debug>:/INCREMENTAL:NO>
         )
 
         target_compile_options(${target} PRIVATE /guard:cf)   # Control Flow Guard
@@ -188,6 +191,9 @@ function(aethercore_target_defaults target)
             # explicit so every first-party target links without LNK4075.
             $<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>
             $<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>
+            # Keep CFG targets consistent after iterative Debug builds; an
+            # incremental link left a destructor thunk out of the guard table.
+            $<$<CONFIG:Debug>:/INCREMENTAL:NO>
         )
 
         if(AETHERCORE_FAST_MSVC_DEBUG_INFO)
