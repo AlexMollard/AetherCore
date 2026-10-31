@@ -167,6 +167,7 @@ namespace aether
 			}
 			glfwSetScrollCallback(m_window, nullptr);
 			glfwSetCharCallback(m_window, nullptr);
+			glfwSetWindowFocusCallback(m_window, nullptr);
 			glfwSetWindowUserPointer(m_window, nullptr);
 		}
 #endif
@@ -221,6 +222,7 @@ namespace aether
 		glfwSetWindowUserPointer(window, this);
 		glfwSetScrollCallback(window, &Input::OnScroll);
 		glfwSetCharCallback(window, &Input::OnChar);
+		glfwSetWindowFocusCallback(window, &Input::OnWindowFocus);
 #endif
 	}
 
@@ -482,6 +484,50 @@ namespace aether
 		}
 	}
 
+	void Input::ApplyNativeFocusEvent(bool focused)
+	{
+		// Loss and regain can both arrive before the next sampled frame.
+		if (!focused)
+		{
+			m_mouseNeedsResync = true;
+		}
+	}
+
+	void Input::OnWindowFocus(GLFWwindow* window, int focused)
+	{
+#if defined(AETHERCORE_WEB_RUNTIME)
+		(void) window;
+		(void) focused;
+#else
+		auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
+		if (self != nullptr)
+		{
+			self->ApplyNativeFocusEvent(focused != GLFW_FALSE);
+		}
+#endif
+	}
+
+	void Input::ApplyNativeMouseSample(glm::vec2 position, bool focused)
+	{
+		m_prevMousePos = m_mousePos;
+		if (!focused)
+		{
+			// Freeze while unfocused and retain the resync until a focused sample.
+			// Desktop movement must not become gameplay delta on focus return, before
+			// the app has had a chance to restore cursor lock after the gameplay step.
+			m_mouseNeedsResync = true;
+			return;
+		}
+		m_mousePos = position;
+
+		if (m_firstUpdate || m_mouseNeedsResync)
+		{
+			m_prevMousePos = m_mousePos;
+			m_firstUpdate = false;
+			m_mouseNeedsResync = false;
+		}
+	}
+
 	void Input::Update()
 	{
 		AE_PROFILE_ZONE();
@@ -496,12 +542,9 @@ namespace aether
 		// back, and a consumer that dies mid-frame cannot leave a key muted forever.
 		m_consumedKeys.fill(false);
 
-		// GLFW does not synthesise release events when the window loses focus: a
-		// key or mouse button held at the moment of an alt-tab keeps reporting
-		// PRESS from the stale pre-focus-loss state, so IsKeyDown sticks forever
-		// and HadActivityThisFrame pins the editor awake. Real device state is
-		// therefore only trusted while the window has focus; synthetic injection
-		// is unaffected.
+		// GLFW synthesizes held key/button releases after its focus-loss callback.
+		// Also gate physical polling on focus so background frames cannot report
+		// real device holds as gameplay input. Synthetic injection remains independent.
 		// GLFW asserts on a null window, and Input is legitimately constructed without
 		// one in tests and headless runtimes - treat a missing window as unfocused and
 		// rely on synthetic injection (see the key loop below).
@@ -533,40 +576,21 @@ namespace aether
 			m_modalSuppressedMouseButtons[i] = m_editorModalInputBlocked ? m_currMouseButtons[i] : m_modalSuppressedMouseButtons[i] && (m_currMouseButtons[i] || m_prevMouseButtons[i]);
 		}
 
-		m_prevMousePos = m_mousePos;
 #if !defined(AETHERCORE_WEB_RUNTIME)
+		glm::vec2 position = m_mousePos;
 		if (focused)
 		{
 			double cx = 0.0, cy = 0.0;
 			glfwGetCursorPos(m_window, &cx, &cy);
-			m_mousePos = {static_cast<float>(cx), static_cast<float>(cy)};
+			position = {static_cast<float>(cx), static_cast<float>(cy)};
 		}
-		else
-		{
-			// GLFW keeps reporting the REAL OS cursor position for an unfocused
-			// window - unlike glfwGetKey/glfwGetMouseButton above, there is no
-			// per-call focus check built in. Left ungated, any unrelated cursor
-			// movement on the desktop (another window, another automated agent)
-			// accumulates into m_mousePos while this window sits idle, and the
-			// next real Update() call - however much later - computes ONE huge
-			// delta between that stale m_prevMousePos and wherever the cursor
-			// has since wandered to. GetMouseDelta() feeds that straight into
-			// FirstPersonPlayer.ApplyLook()'s Pitch += delta.Y * sensitivity,
-			// clamped to +-89 deg - which is exactly what "player spawns looking
-			// straight at the floor" turned out to be: not a spawn-rotation bug,
-			// a one-frame mouse-delta spike consumed the instant OnAttach's
-			// Pitch = 0 first got a chance to run. Freezing m_mousePos here,
-			// mirroring the keys/buttons gate above, makes that delta exactly
-			// zero instead of merely small.
-			m_mousePos = m_prevMousePos;
-		}
-
+		ApplyNativeMouseSample(position, focused);
 #else
+		m_prevMousePos = m_mousePos;
 		if (m_hasSyntheticMousePos)
 		{
 			m_mousePos = m_syntheticMousePos;
 		}
-#endif
 
 		if (m_firstUpdate || m_mouseNeedsResync)
 		{
@@ -574,6 +598,8 @@ namespace aether
 			m_firstUpdate = false;
 			m_mouseNeedsResync = false;
 		}
+
+#endif
 
 		m_scrollDelta = m_pendingScroll;
 		m_pendingScroll = {};

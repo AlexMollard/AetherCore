@@ -62,6 +62,8 @@ namespace aether::audio
 
 	struct VoiceHandle
 	{
+		// Slot generations survive subsystem/object lifetimes within this process.
+		// The 15-bit generation wraps after 32767 issuances of a given pool slot.
 		std::uint32_t id = 0; // 0 = invalid
 
 		[[nodiscard]] bool IsValid() const noexcept

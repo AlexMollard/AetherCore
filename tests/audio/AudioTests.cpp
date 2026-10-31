@@ -413,6 +413,94 @@ TEST_CASE("invalid buses and failed stealing leave the mixer usable")
 	io::FileSystem::Shutdown();
 }
 
+TEST_CASE("audio voice handles do not revive across subsystem sessions")
+{
+	io::FileSystem::Initialize();
+	AudioSubsystem original;
+	AudioSubsystem other;
+	REQUIRE(original.Init({.manualMix = true}).has_value());
+	REQUIRE(original.PublishStreamedClip("project://audio/old-session.wav", MakeTestWav(), {}).value());
+	const auto oldVoice = original.Play2D("project://audio/old-session.wav", {.loop = true});
+	REQUIRE(original.IsVoiceAlive(oldVoice));
+	AudioSubsystem* current = &original;
+	SUBCASE("same object after shutdown and initialization") { original.Shutdown(); }
+	SUBCASE("another object after shutdown")
+	{
+		original.Shutdown();
+		current = &other;
+	}
+	SUBCASE("another concurrently initialized object") { current = &other; }
+	REQUIRE(current->Init({.manualMix = true}).has_value());
+	REQUIRE(current->PublishStreamedClip("project://audio/new-session.wav", MakeTestWav(), {}).value());
+	const auto newVoice = current->Play2D("project://audio/new-session.wav", {.loop = true});
+	REQUIRE(current->IsVoiceAlive(newVoice));
+	std::array<float, 2048> pcm{};
+	const auto hasSignal = [&]()
+	{
+		current->RenderFrames(pcm.data(), 1024);
+		for (const auto sample: pcm)
+		{
+			if (std::abs(sample) > 0.001f) { return true; }
+		}
+		return false;
+	};
+	REQUIRE(hasSignal());
+	CHECK_FALSE(current->IsVoiceAlive(oldVoice));
+	current->StopVoice(oldVoice);
+	CHECK(current->IsVoiceAlive(newVoice));
+	CHECK(hasSignal());
+	current->StopVoice(newVoice);
+	CHECK_FALSE(current->IsVoiceAlive(newVoice));
+	original.Shutdown();
+	other.Shutdown();
+	io::FileSystem::Shutdown();
+}
+
+TEST_CASE("immediate music stop silences outgoing crossfades and releases their decoders")
+{
+	io::FileSystem::Initialize();
+	std::atomic<int> retired{0};
+	AudioSubsystem audio;
+	REQUIRE(audio.Init({.manualMix = true}).has_value());
+	REQUIRE(audio.PublishStreamedClip("project://audio/first-track.wav", MakeTestWav(), [&] { ++retired; }).value());
+	REQUIRE(audio.PublishStreamedClip("project://audio/second-track.wav", MakeTestWav(), [&] { ++retired; }).value());
+	std::array<float, 2048> pcm{};
+	const auto hasSignal = [&]()
+	{
+		audio.RenderFrames(pcm.data(), 1024);
+		for (const auto sample: pcm)
+		{
+			if (std::abs(sample) > 0.001f) { return true; }
+		}
+		return false;
+	};
+	audio.PlayMusic("project://audio/first-track.wav", 0, true);
+	audio.Update(0.1f, {});
+	REQUIRE(hasSignal());
+	audio.PlayMusic("project://audio/second-track.wav", 1, true);
+	audio.Update(0.25f, {});
+	REQUIRE(hasSignal());
+	SUBCASE("current and outgoing tracks are both present") {}
+	SUBCASE("a fade stop has moved the current track into outgoing")
+	{
+		audio.StopMusic(1);
+		audio.Update(0.1f, {});
+		REQUIRE(hasSignal());
+	}
+	// Remove publications so releasing the decoder's last VFS reference is
+	// observable independently of subsystem shutdown.
+	audio.RetireStreamedClip("project://audio/first-track.wav");
+	audio.RetireStreamedClip("project://audio/second-track.wav");
+	CHECK(retired < 2);
+	audio.StopMusic(0);
+	CHECK_FALSE(audio.GetStats().musicPlaying);
+	CHECK_FALSE(hasSignal());
+	CHECK(retired == 2);
+	audio.Shutdown();
+	CHECK(retired == 2);
+	io::FileSystem::Shutdown();
+}
+
 TEST_CASE("retired streamed music retains its decoder until stopped")
 {
 	io::FileSystem::Initialize();

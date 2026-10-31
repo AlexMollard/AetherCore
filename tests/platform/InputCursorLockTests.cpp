@@ -10,6 +10,95 @@
 
 using namespace aether;
 
+namespace aether
+{
+	// Replays the native sampling math used by Input::Update without changing OS focus.
+	struct InputFocusTestAccess
+	{
+		static void Sample(Input& input, glm::vec2 position, bool focused)
+		{
+			input.ApplyNativeMouseSample(position, focused);
+		}
+		static void Focus(Input& input, bool focused)
+		{
+			input.ApplyNativeFocusEvent(focused);
+		}
+	};
+}
+
+TEST_CASE("Native mouse sampling discards desktop movement on the first focused frame")
+{
+	Input input;
+	InputFocusTestAccess::Sample(input, {10, 20}, true);
+	CHECK(input.GetMouseDelta() == glm::vec2{});
+	InputFocusTestAccess::Sample(input, {13, 18}, true);
+	CHECK(input.GetMouseDelta() == glm::vec2(3, -2));
+
+	bool requestedLock = false;
+	SUBCASE("an unlocked cursor") {}
+	SUBCASE("a cursor unlocked by focus loss")
+	{
+		requestedLock = true;
+		input.RequestCursorLock(true);
+		input.UpdateCursorLock(true);
+		InputFocusTestAccess::Sample(input, {13, 18}, true);
+		input.UpdateCursorLock(false);
+		CHECK_FALSE(input.IsCursorLocked());
+	}
+	for (int frame = 0; frame < 3; ++frame)
+	{
+		InputFocusTestAccess::Sample(input, {1000 + float(frame), 2000}, false);
+		CHECK(input.GetMousePos() == glm::vec2(13, 18));
+		CHECK(input.GetMouseDelta() == glm::vec2{});
+	}
+
+	// Gameplay reads this sample before the application's UpdateCursorLock call.
+	InputFocusTestAccess::Sample(input, {700, 800}, true);
+	CHECK(input.GetMousePos() == glm::vec2(700, 800));
+	CHECK(input.GetMouseDelta() == glm::vec2{});
+	input.UpdateCursorLock(true);
+	CHECK(input.IsCursorLocked() == requestedLock);
+	if (requestedLock)
+	{
+		// Switching back into GLFW's virtual coordinate space needs its own resync.
+		InputFocusTestAccess::Sample(input, {900, 900}, true);
+		CHECK(input.GetMouseDelta() == glm::vec2{});
+	}
+	const glm::vec2 previous = input.GetMousePos();
+	InputFocusTestAccess::Sample(input, previous + glm::vec2(4, -3), true);
+	CHECK(input.GetMouseDelta() == glm::vec2(4, -3));
+}
+
+TEST_CASE("Native mouse sampling resyncs a focus cycle delivered within one event pump")
+{
+	Input input;
+	InputFocusTestAccess::Sample(input, {10, 20}, true);
+	CHECK(input.GetMouseDelta() == glm::vec2{});
+	InputFocusTestAccess::Sample(input, {13, 18}, true);
+	CHECK(input.GetMouseDelta() == glm::vec2(3, -2));
+
+	bool requestedLock = false;
+	SUBCASE("an unlocked cursor") {}
+	SUBCASE("a requested cursor lock")
+	{
+		requestedLock = true;
+		input.RequestCursorLock(true);
+		input.UpdateCursorLock(true);
+		InputFocusTestAccess::Sample(input, {13, 18}, true);
+	}
+	// The production GLFW callback forwards both events to this handler, but Update
+	// may only see the final focused state after glfwPollEvents drains the queue.
+	InputFocusTestAccess::Focus(input, false);
+	InputFocusTestAccess::Focus(input, true);
+	InputFocusTestAccess::Sample(input, {700, 800}, true);
+	CHECK(input.GetMousePos() == glm::vec2(700, 800));
+	CHECK(input.GetMouseDelta() == glm::vec2{});
+	input.UpdateCursorLock(true);
+	CHECK(input.IsCursorLocked() == requestedLock);
+	InputFocusTestAccess::Sample(input, {704, 797}, true);
+	CHECK(input.GetMouseDelta() == glm::vec2(4, -3));
+}
+
 TEST_CASE("A game that never requests cursor lock is never locked")
 {
 	Input input;

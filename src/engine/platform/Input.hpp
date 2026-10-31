@@ -704,11 +704,15 @@ namespace aether
 		}
 
 	private:
+		friend struct InputFocusTestAccess;
+		void ApplyNativeMouseSample(glm::vec2 position, bool focused);
+		void ApplyNativeFocusEvent(bool focused);
 		void TickInputSequence();
 		void CentreSequenceStick();
 
 		static void OnScroll(GLFWwindow* window, double xOffset, double yOffset);
 		static void OnChar(GLFWwindow* window, unsigned int codepoint);
+		static void OnWindowFocus(GLFWwindow* window, int focused);
 
 		static constexpr int kMaxKeys = 349;
 		static constexpr int kMaxMouseButtons = 8;

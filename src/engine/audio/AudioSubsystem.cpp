@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -28,6 +29,24 @@ namespace aether::audio
 	namespace
 	{
 		constexpr std::size_t kMaxVoices = 64;
+
+		// Retain generations across subsystem shutdown/reinitialization and distinct
+		// subsystem objects. The public handle keeps its existing 15-bit generation:
+		// stale protection wraps after 32767 issuances of the same slot in a process.
+		std::array<std::atomic<std::uint32_t>, kMaxVoices> g_voiceGenerations{};
+		std::uint32_t NextVoiceGeneration(std::size_t slot)
+		{
+			auto& issuer = g_voiceGenerations[slot];
+			auto previous = issuer.load(std::memory_order_relaxed);
+			for (;;)
+			{
+				const auto next = (previous % 0x7FFFu) + 1;
+				if (issuer.compare_exchange_weak(previous, next, std::memory_order_relaxed))
+				{
+					return next;
+				}
+			}
+		}
 
 
 		// ── VFS bridge ─────────────────────────────────────────────────────
@@ -483,7 +502,7 @@ namespace aether::audio
 		}
 
 		Impl::Voice& voice = impl.voices[slot];
-		voice.generation = (voice.generation % 0x7FFFu) + 1;
+		voice.generation = NextVoiceGeneration(static_cast<std::size_t>(slot));
 		const std::uint32_t generation = voice.generation;
 
 		std::string path(clipPath);
@@ -674,20 +693,30 @@ namespace aether::audio
 
 	void AudioSubsystem::StopMusic(float fadeSeconds)
 	{
-		if (m_impl == nullptr || m_impl->current.sound == nullptr)
+		if (m_impl == nullptr)
 		{
 			return;
 		}
 		Impl& impl = *m_impl;
 		if (fadeSeconds <= 0.0f)
 		{
-			ma_sound_stop(impl.current.sound);
-			ma_sound_uninit(impl.current.sound);
-			delete impl.current.sound;
-			impl.current = {};
+			for (Impl::MusicTrack* track: {&impl.current, &impl.outgoing})
+			{
+				if (track->sound != nullptr)
+				{
+					ma_sound_stop(track->sound);
+					ma_sound_uninit(track->sound);
+					delete track->sound;
+					*track = {};
+				}
+			}
 		}
 		else
 		{
+			if (impl.current.sound == nullptr)
+			{
+				return;
+			}
 			if (impl.outgoing.sound != nullptr)
 			{
 				ma_sound_stop(impl.outgoing.sound);
