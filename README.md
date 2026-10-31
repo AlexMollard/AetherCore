@@ -41,9 +41,11 @@ AetherCore brings scene authoring, gameplay, materials, physics and rendering in
 > [!NOTE]
 > Under active development. APIs and asset formats may change. Browser support is profile-based, not universal desktop parity; see [Web exports](docs/web-export.md) and [C# browser limitations](docs/csharp-web.md).
 
+Distribution is currently private; engine licensing is deferred. See [distribution terms](docs/DISTRIBUTION.md) and [desktop support and qualification policy](docs/support-policy.md).
+
 ## Quick start
 
-For a Windows source build, install Visual Studio 2022 or newer with the C++ desktop workload, CMake 3.21+, the Vulkan SDK and .NET 10 SDK for C# gameplay.
+For a Windows source build, install Visual Studio 2022 or newer with the C++ desktop workload, CMake 4.0+, the Vulkan SDK and .NET 10 SDK for C# gameplay.
 
 ```powershell
 cmake --preset default

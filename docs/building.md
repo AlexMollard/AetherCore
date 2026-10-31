@@ -11,7 +11,7 @@ Build commands assume the repository root unless stated otherwise.
 Requirements:
 
 - Visual Studio 2022 or newer with the Desktop development with C++ workload
-- CMake 3.21+
+- CMake 4.0+
 - Vulkan SDK
 - .NET 10 SDK for managed gameplay scripting
 
@@ -64,8 +64,11 @@ Requires the Vulkan loader and driver, Clang, Ninja, and GLFW's platform develop
 
 ## Releases
 
-A release is a self-contained editor: someone downloads one file, installs it, and builds
-games without a compiler, the Vulkan SDK, or this repository.
+A private Release package includes the editor, runtime, native dependencies, managed
+SDK/compiler and a bundled .NET runtime. Native C# gameplay compilation uses bundled
+Roslyn without a system .NET SDK. Rust, custom Slang authoring and Web export retain
+their [per-action prerequisites](production-qualification.md). Clean-machine execution
+must be qualified separately before promising that an artifact is self-contained.
 
 No workflow in this repository runs automatically - not on push, not on a pull request,
 and not on a tag. Hosted Windows minutes are billed, the build is long, and the same
@@ -73,16 +76,12 @@ build already happens locally. Verification is
 [`scripts/Run-DebugGauntlet.ps1`](../scripts/Run-DebugGauntlet.ps1); GitHub Actions is a
 manual, deliberate button.
 
-To publish, tag the commit, push the tag, then dispatch
-[`.github/workflows/release.yml`](../.github/workflows/release.yml) from the Actions tab
-**with that tag selected as the ref**. It builds `Release`, stages the payload, bundles a
-.NET runtime, verifies the result, and attaches an installer plus a portable zip to the
-GitHub Release. Dispatched from a branch instead, it builds the same artifacts and
-publishes nothing.
-
-```bash
-git tag v0.1.0 && git push origin v0.1.0   # publishes nothing on its own
-```
+Dispatch [`.github/workflows/release.yml`](../.github/workflows/release.yml) manually
+from the Actions tab with the intended ref selected. It builds `Release`, stages the
+payload, bundles a .NET runtime, verifies the result, and retains installer, portable
+ZIP, symbols and provenance as private workflow artifacts. It does not create or
+publish a GitHub Release, including when a tag is selected. Engine redistribution
+terms remain deferred; see [distribution policy](DISTRIBUTION.md).
 
 What ships is declared in one place - the `_aether_payload` list in
 [`src/app/CMakeLists.txt`](../src/app/CMakeLists.txt) - which drives both the build-tree
@@ -101,14 +100,35 @@ file that every developer's machine happens to have anyway, from a source tree o
 system-wide install, and which is therefore invisible until a stranger tries to use it.
 
 The installer is per-user (`%LOCALAPPDATA%\Programs\AetherCore`), so it needs no
-elevation and stays writable afterwards - MSBuild writes build artifacts beside the
-bundled SDK when a project's scripts are first compiled.
+elevation. Projects and their generated build artifacts belong in the user's project
+directory, outside the install directory.
 
-**The .NET split.** The runtime is bundled, so the editor starts on a machine with no .NET
-at all. The **SDK** is not - it is much larger, and it is only needed to *compile* a
-project's C# scripts. The editor resolves `dotnet` at runtime and reports its absence
-rather than failing a build opaquely, so an install without the SDK is a working editor
-that cannot yet build scripts.
+**The .NET split.** A complete release package bundles the runtime and Roslyn compiler.
+The editor compiles desktop C# gameplay in process for Play without an installed .NET
+SDK. Source builds still need the .NET 10 SDK to build the engine's managed assemblies.
+External IDE/MSBuild workflows also need that SDK; Visual Studio 2026 or a compatible
+IDE is needed for the checked-in `net10.0` solution. C# browser exports have separate
+SDK/workload requirements in [C# Web](csharp-web.md). Native Rust gameplay requires
+the Rust toolchain, and browser Rust requires its WebAssembly target and the export
+tools in [Web exports](web-export.md). These are separate actions: launching a complete
+desktop package does not prove that an external toolchain or browser export is installed.
+
+The current distribution is private. See [support and release policy](support-policy.md)
+for target platforms, qualification gates and version/migration rules. A package should
+only be described as SDK-free after its isolated delivered-product test passes.
+
+**Model cache upgrades.** Model bake receipts now fingerprint source/dependency
+contents and every derived output. A missing legacy receipt causes a rebuild.
+Generated material names shared by different models must have identical contents;
+conflicts stop the bake before replacing another model's material. For ambiguous
+legacy ownership or intentional edits, use a uniquely named material or an authored
+material override. Keep the previous project copy when resolving a conflict. Failed
+writes retain ownership evidence so a corrected I/O failure can be retried.
+
+**Packaged shader authoring.** Strict delivered-product mode requires a bundled
+`slangc` and shader headers under `data/sdk/shaders` for custom Slang sources. A
+package without these prerequisites reports the missing tools; it cannot silently
+use the build machine's Vulkan SDK. Built-in compiled shaders do not need this tool.
 
 ## Build targets
 
