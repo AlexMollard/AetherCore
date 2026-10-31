@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -329,6 +330,10 @@ namespace aether
 		[[nodiscard]] std::string GetClipboardText() const;
 		void SetClipboardText(std::string_view text);
 
+		// A delivered paste event carries text independently of the shortcut that requested it.
+		void SetPendingPasteText(std::string_view text) { m_pendingPasteText = text; }
+		[[nodiscard]] std::optional<std::string> TakePendingPasteText();
+
 		void SetMouseCaptured(bool captured)
 		{
 			m_mouseCaptured = captured;
@@ -512,10 +517,18 @@ namespace aether
 			m_hasSyntheticMousePos = true;
 		}
 
-#if defined(AETHERCORE_WEB_RUNTIME)
-		void SetBrowserMouseDelta(glm::vec2 delta) { m_browserMouseDelta = delta; }
+		// Explicit browser samples also support windowless tests. Native polling never enables this override.
+		void SetBrowserMouseDelta(glm::vec2 delta)
+		{
+			m_browserMouseDelta = delta;
+			m_hasBrowserMouseDelta = true;
+		}
 		void SetBrowserScrollDelta(glm::vec2 delta) { m_scrollDelta = delta; }
-#endif
+		void ClearBrowserDeltas()
+		{
+			SetBrowserMouseDelta({});
+			SetBrowserScrollDelta({});
+		}
 
 		void ClearSyntheticMouse()
 		{
@@ -762,9 +775,8 @@ namespace aether
 		std::array<bool, kMaxKeys> m_syntheticKeys{};
 		std::array<bool, kMaxMouseButtons> m_syntheticMouseButtons{};
 		glm::vec2 m_syntheticMousePos{0.0f};
-#if defined(AETHERCORE_WEB_RUNTIME)
 		glm::vec2 m_browserMouseDelta{};
-#endif
+		bool m_hasBrowserMouseDelta = false;
 		bool m_hasSyntheticMousePos = false;
 		std::array<bool, kMaxMouseButtons> m_currMouseButtons{};
 		std::array<bool, kMaxMouseButtons> m_prevMouseButtons{};
@@ -782,6 +794,7 @@ namespace aether
 		std::string m_typedChars;
 		std::string m_pendingChars;
 		std::string m_clipboardFallback;
+		std::optional<std::string> m_pendingPasteText;
 
 		bool m_firstUpdate = true;
 		// Set whenever SetCursorLocked actually flips the lock state (see its own

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 
 #include "assets/AssetCatalog.hpp"
 #include "assets/SpriteAtlasAsset.hpp"
@@ -108,6 +109,99 @@ TEST_CASE("Migrated project references survive file and folder moves restart and
 	REQUIRE(restored.has_value());
 	REQUIRE(restored->entities[0].uiImage.has_value());
 	CHECK(restored->entities[0].uiImage->texturePath == reference);
+}
+
+TEST_CASE("Non-asset project files can be renamed and moved without changing asset identities")
+{
+	CatalogProject project;
+	std::filesystem::create_directories(project.root / "scripts/src");
+	std::filesystem::create_directories(project.root / "scripts/nested");
+	std::ofstream(project.root / "scripts/Player.cs") << "class Player {}";
+	std::ofstream(project.root / "scripts/src/player.rs") << "struct Player;";
+	std::ofstream(project.root / "notes.txt") << "project notes";
+	REQUIRE(AssetCatalog::Migrate(project.root, true).has_value());
+	const auto persisted = CatalogText(project.root / "asset-catalog.toml");
+	auto catalog = AssetCatalog::Load(project.root);
+	REQUIRE(catalog.has_value());
+	for (const auto& [source, target]: {std::pair{"scripts/Player.cs", "scripts/Hero.cs"}, std::pair{"scripts/Hero.cs", "scripts/nested/Hero.cs"},
+	             std::pair{"scripts/src/player.rs", "scripts/src/hero.rs"}, std::pair{"notes.txt", "scripts/nested/notes.txt"}})
+	{
+		const auto before = CatalogText(project.root / source);
+		const auto moved = catalog->Move(source, target);
+		REQUIRE_MESSAGE(moved.has_value(), (moved ? "" : moved.error().message));
+		CHECK_FALSE(std::filesystem::exists(project.root / source));
+		CHECK(CatalogText(project.root / target) == before);
+		CHECK_FALSE(std::filesystem::exists(project.root / (std::string(target) + ".uid")));
+	}
+	CHECK(CatalogText(project.root / "asset-catalog.toml") == persisted);
+	REQUIRE(AssetCatalog::Load(project.root).has_value());
+}
+
+TEST_CASE("Empty and script-only project folders can be renamed and moved")
+{
+	CatalogProject project;
+	std::filesystem::create_directories(project.root / "empty");
+	std::filesystem::create_directories(project.root / "scripts/src");
+	std::filesystem::create_directories(project.root / "destination");
+	std::ofstream(project.root / "scripts/src/player.rs") << "struct Player;";
+	REQUIRE(AssetCatalog::Migrate(project.root, true).has_value());
+	const auto persisted = CatalogText(project.root / "asset-catalog.toml");
+	auto catalog = AssetCatalog::Load(project.root);
+	REQUIRE(catalog.has_value());
+	REQUIRE(catalog->Move("empty", "renamed").has_value());
+	REQUIRE(catalog->Move("renamed", "destination/renamed").has_value());
+	CHECK(std::filesystem::is_empty(project.root / "destination/renamed"));
+	CHECK_FALSE(std::filesystem::exists(project.root / "empty"));
+	REQUIRE(catalog->Move("scripts/src", "scripts/gameplay").has_value());
+	CHECK(CatalogText(project.root / "scripts/gameplay/player.rs") == "struct Player;");
+	CHECK_FALSE(std::filesystem::exists(project.root / "scripts/src"));
+	CHECK(CatalogText(project.root / "asset-catalog.toml") == persisted);
+}
+
+TEST_CASE("Non-asset moves preserve path collision and catalog metadata protections")
+{
+	CatalogProject project;
+	std::ofstream(project.root / "notes.txt") << "project notes";
+	std::ofstream(project.root / "occupied.txt") << "occupied";
+	std::filesystem::create_directories(project.root / "empty/nested");
+	REQUIRE(AssetCatalog::Migrate(project.root, true).has_value());
+	std::ofstream(project.root / "assets/unindexed.png") << "unindexed image";
+	std::filesystem::create_directories(project.root / "unindexed");
+	std::ofstream(project.root / "unindexed/hero.png") << "unindexed image";
+	const auto persisted = CatalogText(project.root / "asset-catalog.toml");
+	auto catalog = AssetCatalog::Load(project.root);
+	REQUIRE(catalog.has_value());
+	CHECK_FALSE(catalog->Move("missing.txt", "renamed.txt").has_value());
+	CHECK_FALSE(catalog->Move("notes.txt", "../escape.txt").has_value());
+	CHECK_FALSE(catalog->Move("notes.txt", "occupied.txt").has_value());
+	CHECK_FALSE(catalog->Move("notes.txt", "notes.uid").has_value());
+	CHECK_FALSE(catalog->Move("empty", "empty/nested/moved").has_value());
+	CHECK_FALSE(catalog->Move("assets/unindexed.png", "assets/renamed.png").has_value());
+	CHECK_FALSE(catalog->Move("unindexed", "renamed").has_value());
+	CHECK_FALSE(catalog->Move("asset-catalog.toml", "catalog.txt").has_value());
+	CHECK_FALSE(catalog->Move("assets/textures/hero.png.uid", "identity.txt").has_value());
+	CHECK(CatalogText(project.root / "notes.txt") == "project notes");
+	CHECK(CatalogText(project.root / "occupied.txt") == "occupied");
+	CHECK(CatalogText(project.root / "asset-catalog.toml") == persisted);
+}
+
+TEST_CASE("Asset moves protect metadata with alternate filename casing")
+{
+	CatalogProject project;
+	std::ofstream(project.root / "notes.txt") << "project notes";
+	REQUIRE(AssetCatalog::Migrate(project.root, true).has_value());
+	auto catalog = AssetCatalog::Load(project.root);
+	REQUIRE(catalog.has_value());
+	const auto persisted = CatalogText(project.root / "asset-catalog.toml");
+	const auto identity = CatalogText(project.root / "assets/textures/hero.png.uid");
+	CHECK_FALSE(catalog->Move("notes.txt", "notes.UID").has_value());
+#ifdef _WIN32
+	CHECK_FALSE(catalog->Move("assets/textures/hero.png.UID", "identity.txt").has_value());
+	CHECK_FALSE(catalog->Move("ASSET-CATALOG.TOML", "catalog.txt").has_value());
+#endif
+	CHECK(CatalogText(project.root / "notes.txt") == "project notes");
+	CHECK(CatalogText(project.root / "assets/textures/hero.png.uid") == identity);
+	CHECK(CatalogText(project.root / "asset-catalog.toml") == persisted);
 }
 
 TEST_CASE("Unsafe asset moves leave source metadata and catalog unchanged")

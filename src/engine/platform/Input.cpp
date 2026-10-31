@@ -485,6 +485,7 @@ namespace aether
 	void Input::Update()
 	{
 		AE_PROFILE_ZONE();
+		m_hasBrowserMouseDelta = false;
 		// Apply any due auto-test sequence events before sampling key state so this
 		// frame reflects them (they OR into m_currKeys below via m_syntheticKeys).
 		TickInputSequence();
@@ -722,12 +723,10 @@ namespace aether
 		{
 			return {};
 		}
-#if defined(AETHERCORE_WEB_RUNTIME)
-		if (m_cursorLocked)
+		if (m_hasBrowserMouseDelta)
 		{
 			return m_browserMouseDelta;
 		}
-#endif
 		if (m_cursorLocked)
 		{
 			// GLFW_CURSOR_DISABLED reports an unbounded virtual position built exactly for
@@ -779,6 +778,13 @@ namespace aether
 	{
 		static const std::string empty;
 		return m_editorModalInputBlocked ? empty : m_typedChars;
+	}
+
+	std::optional<std::string> Input::TakePendingPasteText()
+	{
+		auto text = std::move(m_pendingPasteText);
+		m_pendingPasteText.reset();
+		return m_editorModalInputBlocked ? std::nullopt : std::move(text);
 	}
 
 	std::string Input::GetClipboardText() const

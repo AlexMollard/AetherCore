@@ -47,7 +47,101 @@ namespace
 		Input idle;
 		Tick(w, idle, time);
 	}
+
+	template <typename T>
+	bool DeliverPaste(T& input, std::string_view text)
+	{
+		if constexpr (requires { input.SetPendingPasteText(text); })
+		{
+			input.SetPendingPasteText(text);
+			return true;
+		}
+		else
+		{
+			FAIL_CHECK("Input must accept a delivered paste event independently of keyboard state");
+			return false;
+		}
+	}
 } // namespace
+
+TEST_CASE("Delivered paste reaches an editing textbox once without Ctrl")
+{
+	World w;
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "old";
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	Sel(w, e).activated = false;
+	Input input;
+	SUBCASE("Context menu") {}
+	SUBCASE("Command shortcut")
+	{
+		input.SetSyntheticKey(static_cast<int>(Key::LeftSuper), true);
+		input.SetSyntheticKey(static_cast<int>(Key::V), true);
+	}
+	SUBCASE("Password accepts paste") { Box(w, e).password = true; }
+	SUBCASE("Delivered Ctrl V wins over synchronous clipboard")
+	{
+		input.SetClipboardText("wrong");
+		input.SetSyntheticKey(static_cast<int>(Key::LeftCtrl), true);
+		input.SetSyntheticKey(static_cast<int>(Key::V), true);
+	}
+	REQUIRE(DeliverPaste(input, "pasted"));
+	Tick(w, input, 0.016f);
+	CHECK(Box(w, e).text == "pasted");
+	CHECK(Box(w, e).changed);
+	// Windowless SetSyntheticKey(false) only changes the pending state; its live seed ORs
+	// into the existing frame. Clear keys explicitly while retaining the same paste-event state.
+	input.ClearSyntheticKeys();
+	REQUIRE_FALSE(input.IsKeyPressed(Key::V));
+	Tick(w, input, 0.032f);
+	CHECK(Box(w, e).text == "pasted");
+	CHECK_FALSE(Box(w, e).changed);
+}
+
+TEST_CASE("Delivered paste cannot outlive textbox activation or focus")
+{
+	World w;
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "old";
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	Input input;
+	SUBCASE("Activation frame") {}
+	SUBCASE("Lost focus")
+	{
+		TickIdle(w, 0.f);
+		Sel(w, e).activated = false;
+		Sel(w, e).focused = false;
+	}
+	REQUIRE(DeliverPaste(input, "stale"));
+	Tick(w, input, 0.016f);
+	CHECK(Box(w, e).text == "old");
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = !Box(w, e).editing;
+	Tick(w, input, 0.032f);
+	Sel(w, e).activated = false;
+	Tick(w, input, 0.048f);
+	CHECK(Box(w, e).text == "old");
+}
+
+TEST_CASE("Native Ctrl V clipboard paste still replaces the selection")
+{
+	World w;
+	const Entity e = MakeTextBox(w);
+	Box(w, e).text = "old";
+	Sel(w, e).focused = true;
+	Sel(w, e).activated = true;
+	TickIdle(w, 0.f);
+	Sel(w, e).activated = false;
+	Input input;
+	input.SetClipboardText("native");
+	input.SetSyntheticKey(static_cast<int>(Key::LeftCtrl), true);
+	input.SetSyntheticKey(static_cast<int>(Key::V), true);
+	Tick(w, input, 0.016f);
+	CHECK(Box(w, e).text == "native");
+}
 
 TEST_CASE("Enter activation enters editing without submitting")
 {

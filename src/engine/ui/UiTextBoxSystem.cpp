@@ -115,6 +115,8 @@ namespace aether::ui
 		const bool mousePressed = input.IsMouseButtonPressed(MouseButton::Left);
 		const bool shift = input.IsKeyDown(Key::LeftShift) || input.IsKeyDown(Key::RightShift);
 		const bool ctrl = input.IsKeyDown(Key::LeftCtrl) || input.IsKeyDown(Key::RightCtrl);
+		// Drain once per UI pass, including when no field can accept it, so paste cannot be banked across focus changes.
+		auto pendingPaste = input.TakePendingPasteText();
 
 		world.View<UITextBox, UIRect>().each(
 		        [&](entt::entity ent, UITextBox& box, UIRect& rect)
@@ -234,7 +236,15 @@ namespace aether::ui
 				        }
 				        textChanged = DeleteSelection(s) || textChanged;
 			        }
-			        if (ctrl && input.IsKeyPressed(Key::V))
+			        if (pendingPaste)
+			        {
+				        if (!justActivated)
+				        {
+					        textChanged = InsertText(s, LimitsOf(box), *pendingPaste) || textChanged;
+				        }
+				        pendingPaste.reset();
+			        }
+			        else if (ctrl && input.IsKeyPressed(Key::V))
 			        {
 				        textChanged = InsertText(s, LimitsOf(box), input.GetClipboardText()) || textChanged;
 			        }

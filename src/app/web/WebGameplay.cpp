@@ -1100,7 +1100,7 @@ namespace aether::app::web
 			m_input.SetSyntheticMouseButton(button, canvasFocused && (buttons & (1 << button)));
 		}
 		m_input.SetSyntheticMousePos({EM_ASM_DOUBLE({ return aetherInput.x; }), EM_ASM_DOUBLE({ return aetherInput.y; })});
-		m_mouse_delta += glm::vec2{static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.dx; aetherInput.dx = 0; return v; })),
+		const glm::vec2 relativeMouseDelta{static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.dx; aetherInput.dx = 0; return v; })),
 		        static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.dy; aetherInput.dy = 0; return v; }))};
 		m_scroll_delta.y += static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.scroll; aetherInput.scroll = 0; return v; }));
 		if (!canvasFocused)
@@ -1116,9 +1116,18 @@ namespace aether::app::web
 			m_input.SetSyntheticChars(text);
 		}
 		m_input.Update();
+		m_input.UpdateCursorLock(canvasFocused);
+		if (canvasFocused)
+		{
+			// Unlocked motion is in canvas pixels; locked motion uses the browser's unbounded relative sample.
+			m_mouse_delta += m_input.IsCursorLocked() ? relativeMouseDelta : m_input.GetMouseDelta();
+		}
 		m_input.SetBrowserMouseDelta(m_mouse_delta);
 		m_input.SetBrowserScrollDelta(m_scroll_delta);
-		m_input.UpdateCursorLock(canvasFocused);
+		if (EM_ASM_INT({ return aetherInput.pasteText !== null; }))
+		{
+			m_input.SetPendingPasteText(m_input.GetClipboardText());
+		}
 		EM_ASM(
 		        {
 			        aetherRuntime.gamepadConnected = !!$0;
@@ -1188,6 +1197,7 @@ namespace aether::app::web
 #endif
 				m_world.UpdateSystems(1.0f / 60.0f);
 				m_mouse_delta = m_scroll_delta = {};
+				m_input.ClearBrowserDeltas();
 				AE_TRY_VOID(std::exchange(m_script_status, {}));
 				for (const auto entity: m_scene->TakeRetiredParticles())
 				{

@@ -741,6 +741,27 @@ namespace aether::editor
 		auto catalog = AssetCatalog::Load(m_root);
 		if (!catalog)
 		{
+			// Gameplay source files do not participate in asset identities, including in
+			// legacy projects that have not migrated their assets yet.
+			const auto isScript = [](const std::filesystem::path& path)
+			{
+				return path.extension() == ".cs" || path.extension() == ".rs";
+			};
+			std::error_code ec;
+			const auto root = std::filesystem::weakly_canonical(m_root, ec);
+			const auto source = ec ? std::filesystem::path{} : std::filesystem::weakly_canonical(oldPath, ec);
+			const auto target = ec ? std::filesystem::path{} : std::filesystem::weakly_canonical(newPath, ec);
+			if (!ec && isScript(oldPath) && isScript(newPath) && IsSubpath(source.lexically_relative(root)) && IsSubpath(target.lexically_relative(root))
+			        && !std::filesystem::is_symlink(oldPath, ec) && !ec && std::filesystem::is_regular_file(source, ec) && !ec && !std::filesystem::exists(target, ec) && !ec)
+			{
+				std::filesystem::rename(source, target, ec);
+				if (!ec)
+				{
+					return true;
+				}
+				m_opError = "Could not move script: " + ec.message();
+				return false;
+			}
 			m_opError = "Migrate this project's asset identities before moving assets: " + catalog.error().message;
 			return false;
 		}

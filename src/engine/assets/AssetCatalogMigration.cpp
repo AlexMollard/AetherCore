@@ -785,6 +785,16 @@ namespace aether
 		{
 			return std::unexpected(AetherError::Asset("Move requires a loaded catalog and relative paths"));
 		}
+		const auto isMetadata = [](const fs::path& path)
+		{
+			auto name = path.generic_string();
+			std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return name == "asset-catalog.toml" || fs::path(name).extension() == ".uid";
+		};
+		if (isMetadata(source) || isMetadata(target))
+		{
+			return std::unexpected(AetherError::Asset("Catalog metadata cannot be moved independently"));
+		}
 		std::error_code ec;
 		auto src = m_root / source, dst = m_root / target;
 		auto real = fs::weakly_canonical(src, ec);
@@ -948,9 +958,32 @@ namespace aether
 				return std::unexpected(AetherError::Asset("Catalog collision"));
 			}
 		}
+		// Scripts, notes and empty folders have no asset identity. They still use the
+		// validated move transaction, while authored assets must be migrated first.
 		if (!found)
 		{
-			return std::unexpected(AetherError::Asset("Source is not indexed"));
+			if (!fs::is_directory(src, ec) && authored(src))
+			{
+				return std::unexpected(AetherError::Asset("Source is not indexed"));
+			}
+			if (fs::is_directory(src, ec) && !excluded(src.filename().string()))
+			{
+				for (fs::recursive_directory_iterator it(src, ec), end; it != end && !ec; it.increment(ec))
+				{
+					if (it->is_directory(ec) && excluded(it->path().filename().string()))
+					{
+						it.disable_recursion_pending();
+					}
+					else if (it->is_regular_file(ec) && authored(it->path()))
+					{
+						return std::unexpected(AetherError::Asset("Folder contains an unindexed asset"));
+					}
+				}
+			}
+			if (ec)
+			{
+				return std::unexpected(AetherError::Asset("Cannot inspect move"));
+			}
 		}
 		for (auto& ref: updated.m_references)
 		{

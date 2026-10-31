@@ -506,8 +506,16 @@ namespace aether
 			std::size_t pending = 0;
 			for (const auto& [id, claim]: impl.requests)
 			{
-				if (claim.terminal == State::Unknown && claim.asset->state != State::Loaded
-				        && !(claim.asset->decoded && !claim.asset->dependenciesScheduled))
+				const auto& asset = *claim.asset;
+				// A decoded parent waiting on children must leave admission room
+				// for the rest of its dependency chain, even after scheduling them.
+				const bool waitingForDependencies = asset.decoded && (!asset.dependenciesScheduled || std::any_of(asset.dependencies.begin(), asset.dependencies.end(),
+				        [&](auto dependencyId)
+				        {
+					        const auto dependency = impl.requests.find(dependencyId);
+					        return dependency != impl.requests.end() && dependency->second.asset->state != State::Loaded;
+				        }));
+				if (claim.terminal == State::Unknown && asset.state != State::Loaded && !waitingForDependencies)
 				{
 					++pending;
 				}
@@ -1095,6 +1103,10 @@ namespace aether
 								}
 								else if (!impl.budget->TryReserve(MemoryClass::GpuPending, bytes))
 								{
+									if (impl.Required(asset))
+									{
+										impl.EvictPrefetch(asset);
+									}
 									asset.error = "Font exceeds GPU streaming budget";
 									asset.state = State::Blocked;
 								}
