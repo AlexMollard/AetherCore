@@ -93,6 +93,51 @@ baseline payloads. They do not establish long-running qualification of these lat
 physics changes. Linux, actual write/flush failure, power interruption and larger
 workload campaigns remain separate gates.
 
+## Continued input, audio and Debug-link qualification
+
+Further native regressions reproduced three lifecycle defects: cursor movement on
+focus return becoming a gameplay delta, stale voice handles matching voices in a
+new audio subsystem session, and immediate music stop leaving an outgoing
+crossfade audible. An additional focus regression delivers loss and gain between
+two samples, as can happen within one event pump. The original three cases failed
+15 of 80 assertions; the batched focus case failed two of 12. The corrected four
+cases pass all 92 assertions, including subsequent real movement, audible PCM
+controls, silence and decoder retirement.
+
+Native input retains a resync latch until the first focused sample; the GLFW focus
+callback also latches intervening focus loss. Browser sampling and cursor relock
+policy retain their existing behavior. Voice generations now survive subsystem
+and object replacement through a process-lifetime per-slot issuer. The existing
+32-bit handle ABI still has a finite 15-bit generation: stale protection wraps
+after 32,767 issuances of the same slot. Immediate music stop retires both tracks,
+including an outgoing-only fade.
+
+The first full gate caught an Editor shutdown fail-fast (`0xC0000409`) before the
+physics destructor. Three debugger captures reproduced it: the valid vtable's
+deleting-destructor jump thunk was absent from the executable's CFG target table.
+A full relink of unchanged source exited normally through complete shutdown.
+Debug Windows targets now use `/INCREMENTAL:NO` in both compiler branches while
+retaining `/guard:cf` and `/CETCOMPAT`. This is a workaround for the observed
+incremental-link artifact; it does not attribute memory corruption to physics or
+disable the guard. Evidence includes `editor-failed-cfg-table.txt` and the
+`editor-exit-triage-*` debugger records. Microsoft's
+[/INCREMENTAL documentation](https://learn.microsoft.com/en-us/cpp/build/reference/incremental-link-incrementally)
+describes the generated jump thunks and full-link option.
+
+After the link-policy change, all five local configurations pass 1,715 native
+cases and every expected CTest suite (six with ASAN, four otherwise), including
+171 managed tests. ASAN instrumentation covers 816 native compilation units.
+The full forced-off Debug GPU gate passes with zero validation findings and
+graceful Editor/runtime exit code 0. `production-focus-events-retry-final.json`
+binds seven source inputs, all five reports and retained native XML/JUnit evidence;
+`production-focus-events-retry-debug-gauntlet.json` records the complete GPU gate.
+The earlier failed report remains available for the shutdown investigation.
+
+Focus tests replay the production sampling/event handlers; they do not establish actual OS focus
+delivery, physical audio output, device unplug or default-device switching.
+Earlier installed-product, lifecycle and hour-long runs remain tied to their
+recorded baseline bytes.
+
 ## Repeating local checks
 
 Run the full gate from the repository root:

@@ -143,3 +143,25 @@ expected CTest suites (six with ASAN), the full forced-off Debug GPU gauntlet an
 seven focused Debug cases / 2,853 assertions. See the qualification record and
 `logs/production-continuation-final.json`. Earlier package/lifecycle/hour-long soak
 evidence remains tied to the baseline bytes; no new distribution claim is inferred.
+
+## Continued local input and audio lifecycle qualification
+
+After committing the verified physics, filesystem and evidence changes as
+`360435f2`, `cf73a5f2` and `13430e17`, the user requested continued work. This batch
+uses native sampling replay and manual PCM mixing; it does not move desktop focus,
+play audible output or qualify physical device unplug/default-device behavior.
+
+- [x] Reproduce focus-return cursor delta discontinuity through the production native sampling path, including loss/gain in one event pump; preserve browser/synthetic input and existing cursor auto-relock policy.
+- [x] Reproduce stale voice handles reviving after subsystem/object replacement; preserve the opaque 32-bit ABI and document finite generation wrap.
+- [x] Reproduce immediate music stop retaining outgoing crossfade audio; verify silence and decoder retirement, including outgoing-only state.
+- [x] Apply minimal fixes after native failures, review independently and run affected configurations plus the full forced-off Debug GPU gate.
+
+The full Debug run exposed a missing CFG entry for an incremental-link destructor
+thunk. Three debugger captures reproduced it; a full relink of unchanged source
+completed shutdown. Debug Windows targets now use `/INCREMENTAL:NO`, retaining
+CFG/CET. All five configurations pass 1,715 native cases and every expected suite
+(six with ASAN, four otherwise); 816 ASAN compilation units are instrumented.
+The fresh full forced-off Debug GPU gate passes with zero validation findings
+and clean Editor/runtime shutdown. `logs/production-focus-events-retry-final.json`
+binds source hashes and retained reports. See the qualification record for scope;
+the previous package/lifecycle/hour-long evidence still describes baseline bytes.
