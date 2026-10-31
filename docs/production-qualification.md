@@ -51,6 +51,48 @@ clips and successful playback after repairing a failed clip. The rebuilt focused
 audio run passes five cases / 150 assertions, and the final six-suite ASAN gate
 passes with the corrected cleanup.
 
+## Continued physics and recovery qualification
+
+Further work after `41b2fd95` reproduced and fixed two joint-lifetime bugs:
+
+- Removing one of several collision-suppressing joints between the same bodies
+  enabled collisions too early. Authored and script joints now share a symmetric
+  pair reference count; only the final suppressing joint releases the pair.
+- Static-to-dynamic or static-to-kinematic replacement destroyed the old body while
+  joints still referenced it. The transition now retires touching joints before
+  destruction, matching collider rebuild behavior: authored declarations rebuild
+  on the next flush, while touching script handles retire.
+
+Both bugs have failing native regressions recorded before their fixes. Passing
+controls cover reversed endpoints, mixed authored/script ownership, nonsuppressing
+joints, repeated destruction, final release and actual body-index reuse.
+
+`production-continuation-debug-gauntlet.json` passes the full forced-off GPU gate.
+`production-continuation-{asan,release,retail,clang}-ctest.json` passes every expected
+suite; each configuration runs 1,711 native cases. ASAN passes all six suites and
+instrumentation covers 816 native compilation units. Seven focused cases pass
+2,853 assertions in Debug. `production-continuation-final.json` binds the reports,
+source inputs and separately retained native XML evidence.
+
+The mixed ECS fixture exercises 74 bodies including eight character inner bodies,
+16 joints and 240 fixed steps. It checks zero-gravity weld coupling, distance joints,
+240 m/s projectiles blocked by thin walls against unobstructed controls, actual
+floor/sensor contact identities, and character landing, walking, jumping and
+grounding. With a 1 KiB arena and 16 MiB fallback budget, the first Debug run measured
+9,030,736 bytes total scratch high water and 9,029,728 fallback bytes. Every sampled
+step released live fallback bytes and recorded no saturation flags. This measures
+the fixture's correctness and scratch use, not production capacity or latency.
+
+New shared atomic-writer tests exercise successful complete/empty replacement,
+parent creation blocked by a file, and a real Windows temporary-open failure at the
+volume's filename-component limit. Failure preserves existing bytes, modification
+time and directory inventory. No production fault-injection API was added.
+
+The earlier lifecycle, hour-long soak and archive results describe their retained
+baseline payloads. They do not establish long-running qualification of these later
+physics changes. Linux, actual write/flush failure, power interruption and larger
+workload campaigns remain separate gates.
+
 ## Repeating local checks
 
 Run the full gate from the repository root:
@@ -101,7 +143,7 @@ release artifacts for a committed ref must be staged from that ref separately.
 | Clean Windows/Linux machine | Standard-user installer and portable ZIP; no development tree, SDK/cache or undeclared global dependency; upgrade/uninstall preserve user projects and settings |
 | GPU/driver breadth | Explicit OS/driver/device matrix, integrated/discrete AMD, NVIDIA and Intel; mandatory-feature rejection diagnostics, resize/minimize/DPI/multimonitor, repeated swapchain recreation |
 | Failure handling | Device loss and allocation pressure; documented controlled termination where rollback is impossible; retained crash diagnostics and recovery evidence |
-| Physics/load | Extend the isolated saturation evidence to joint/CCD/character, mixed-contact and large-scene envelopes; the manifold fixture is a pinned-Jolt sensor/compound case. Scratch fallback is bounded, and exhausting both limits remains fatal |
+| Physics/load | Extend the bounded 74-body joint/CCD/character/contact fixture to larger realistic scenes, varied limits and sustained workloads; the manifold fixture is a pinned-Jolt sensor/compound case. Scratch fallback is bounded, and exhausting both limits remains fatal |
 | Audio/input | Device unplug/default-device changes, mute and teardown; focus loss, key/button release, capture cancellation, keyboard navigation and accessibility |
 | Editor/recovery | Create/import/delete/duplicate/reparent/transform/component edits, undo/redo, play/stop, autosave/recovery under write/replace failure, project migration and extension failure behavior |
 | Public multiplayer | Authentication, abuse/load, fairness and operational ownership; bounded local transport tests do not qualify Internet hosting |
@@ -111,8 +153,9 @@ release artifacts for a committed ref must be staged from that ref separately.
 The animation failure fixture uses real Vulkan operations and the production native
 export/exclusive-mutation path in a lightweight runtime. It does not establish full
 Editor/CoreCLR scheduling or visual animation continuity under injected failures.
-Recovery tests exercise atomic replacement failure; open/write/flush failure and
-power-interruption campaigns remain separate. Model receipts and collision tests do
+Recovery tests exercise atomic replacement failure; shared atomic-writer tests also
+cover parent creation and Windows temporary-open failure. Actual write/flush failure
+and power-interruption campaigns remain separate. Model receipts and collision tests do
 not establish concurrent-writer, Linux filesystem or actual browser presentation
 behavior. Receive limits are cooperative between transport calls and do not promise
 a hard wall-clock limit for an individual OS/ENet call.

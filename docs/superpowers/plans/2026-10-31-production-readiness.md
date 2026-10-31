@@ -121,3 +121,25 @@
 - Release, Retail and strict Clang pass all four suites; ASAN passes all six, including actual heap-redzone and literal-registration probes. Dedicated native XML avoids interleaved logger output in qualification reports.
 - Relocated product workflows, 19 editor mutation phases and 101 cycles per Full/UiShell/runtime profile pass with unchanged bundle inventories. These are local Windows results, not clean-machine or Linux qualification.
 - The fresh-state runtime soak passes 3,601 seconds after readiness, graceful exit 0, log checks and unchanged bundle inventory. The user confirmed manually closing the earlier windows; those interrupted runs remain incomplete duration gates. Local private archive readback, checksums and source/native-symbol identity checks pass. Retained provenance describes the frozen qualification snapshot before subsequent documentation and commit metadata updates. Unchecked external gates are not waived.
+
+## Continued local failure and workload qualification
+
+The user requested continued work after `ef24dbb5` and `41b2fd95` were pushed.
+This batch extends the existing recovery and physics acceptance gates. Changes were
+initially kept uncommitted; the user subsequently requested commits and continued
+work. It does not infer unavailable Linux/VM/hardware results.
+
+- [x] Reproduce the candidate collision-suppression lifetime bug with two joints between one pair, including keep-both and remove-last controls; fix only after a failing native regression.
+- [x] Reproduce and fix static motion replacement retaining joints against the destroyed body; check authored/script ownership and Dynamic/Kinematic behavior.
+- [x] Exercise a bounded mixed ECS workload with joints, discriminating thin-wall CCD/control lanes, character grounding/jumping and real contacts. Record actual behavior and scratch/error metrics without claiming a capacity maximum.
+- [x] Add real filesystem parent-creation and temporary-open failure regressions, preserving existing bytes, modification time and temporary-file inventory. Avoid test-only production APIs; write/flush/power-loss campaigns remain separate.
+- [x] Review the changes independently, run affected native configurations and the full GPU gauntlet where engine code changes, synchronize LSP and update the qualification scope.
+
+Only the root runs native builds, test executables and applications. Workers own
+separate source areas; all full CTest suites run serially across configurations.
+
+The continuation passes 1,711 native cases in all five local configurations, all
+expected CTest suites (six with ASAN), the full forced-off Debug GPU gauntlet and
+seven focused Debug cases / 2,853 assertions. See the qualification record and
+`logs/production-continuation-final.json`. Earlier package/lifecycle/hour-long soak
+evidence remains tied to the baseline bytes; no new distribution claim is inferred.
