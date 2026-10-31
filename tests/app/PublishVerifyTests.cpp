@@ -7,6 +7,9 @@
 #include "editor/publish/PublishVerify.hpp"
 #include "io/FileUtil.hpp"
 #include "RuntimeProjectSettings.hpp"
+#include "AssetPipeline.hpp"
+#include "io/PakBackend.hpp"
+#include <fstream>
 
 using namespace aether;
 
@@ -70,6 +73,53 @@ TEST_CASE("VerifyPublishedPackage names the missing file")
 	REQUIRE(issue.has_value());
 	CHECK(issue->message.find("AetherGame.dll") != std::string::npos);
 	CHECK_FALSE(issue->remediation.empty());
+}
+
+TEST_CASE("VerifyPublishedPackage rejects unreadable startup scene content")
+{
+	const FakePackage package("unreadable_scene");
+	const auto source = package.root / "pak_source";
+	REQUIRE(io::file_util::CreateDirectories(source / "shaders").has_value());
+	REQUIRE(io::file_util::WriteText(source / "shaders/test.spv", "shader bytes").has_value());
+	REQUIRE(assetpipeline::PackDirectory(source, package.root / "data/engine.pak", {}).ok);
+	std::filesystem::remove(package.root / "data/engine.pak.log");
+	std::filesystem::remove(package.root / "data/engine.pak.manifest");
+	std::filesystem::remove_all(source);
+	REQUIRE(io::file_util::CreateDirectories(source / "scenes").has_value());
+	REQUIRE(io::file_util::WriteText(source / "scenes/main.scene.toml", "[scene]\nname='main'\n").has_value());
+	REQUIRE(assetpipeline::PackDirectory(source, package.root / "data/project.pak", {}).ok);
+	std::filesystem::remove(package.root / "data/project.pak.log");
+	std::filesystem::remove(package.root / "data/project.pak.manifest");
+	std::filesystem::remove_all(source);
+	REQUIRE_FALSE(editor::VerifyPublishedPackage(package.root, "AetherGame.exe").has_value());
+
+	// Corrupt payload bytes while preserving the index and its validated file bounds.
+	std::fstream pak(package.root / "data/project.pak", std::ios::binary | std::ios::in | std::ios::out);
+	PakHeader header{};
+	pak.read(reinterpret_cast<char*>(&header), sizeof(header));
+	std::vector<PakEntry> entries(header.numEntries);
+	pak.read(reinterpret_cast<char*>(entries.data()), static_cast<std::streamsize>(entries.size() * sizeof(PakEntry)));
+	std::string paths(static_cast<std::size_t>(header.pathDataSize), '\0');
+	pak.seekg(static_cast<std::streamoff>(header.pathDataOffset));
+	pak.read(paths.data(), static_cast<std::streamsize>(paths.size()));
+	bool corrupted = false;
+	for (const auto& entry: entries)
+	{
+		if (paths.substr(entry.pathOffset, entry.pathLen) == "scenes/main.scene.toml")
+		{
+			pak.seekp(static_cast<std::streamoff>(header.assetDataOffset + entry.dataOffset));
+			pak.put('!');
+			corrupted = true;
+			break;
+		}
+	}
+	pak.close();
+	REQUIRE(corrupted);
+	const io::PakBackend backend(package.root / "data/project.pak");
+	REQUIRE_FALSE(backend.Read("scenes/main.scene.toml").has_value());
+	const auto issue = editor::VerifyPublishedPackage(package.root, "AetherGame.exe");
+	REQUIRE(issue.has_value());
+	CHECK(issue->message.find("main") != std::string::npos);
 }
 
 TEST_CASE("VerifyPublishedPackage rejects source files in the package")

@@ -26,12 +26,7 @@ namespace aether
 
 	void RenderThread::Stop()
 	{
-		{
-			const std::lock_guard lock(m_reloadMutex);
-			m_shutdown = true;
-		}
-		m_reloadCv.notify_one();
-		m_completionCv.notify_all();
+		m_state.Shutdown();
 		m_channel.close();
 
 		if (m_thread.joinable())
@@ -59,13 +54,7 @@ namespace aether
 	void RenderThread::WaitUntilFrameCompleted(const std::uint64_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
-		std::unique_lock lock(m_completionMutex);
-		m_completionCv.wait(lock,
-		        [this, frameIndex]
-		        {
-			        const std::uint64_t completed = m_lastCompletedFrameIndex.load(std::memory_order_acquire);
-			        return m_shutdown.load(std::memory_order_acquire) || (completed != std::numeric_limits<std::uint64_t>::max() && completed >= frameIndex);
-		        });
+		m_state.WaitUntilFrameCompleted(frameIndex);
 	}
 
 	void RenderThread::WaitIdle()
@@ -75,19 +64,17 @@ namespace aether
 
 	void RenderThread::SetReloadInProgress(bool inProgress)
 	{
-		m_reloadInProgress.store(inProgress, std::memory_order_release);
-		m_reloadCv.notify_all();
+		m_state.SetReloadInProgress(inProgress);
 	}
 
 	void RenderThread::WaitPaused()
 	{
-		std::unique_lock lock(m_reloadMutex);
-		m_reloadCv.wait(lock, [this] { return m_shutdown || m_isIdle.load(std::memory_order_acquire); });
+		m_state.WaitPaused();
 	}
 
 	bool RenderThread::IsReloadInProgress() const
 	{
-		return m_reloadInProgress.load(std::memory_order_acquire);
+		return m_state.IsReloadInProgress();
 	}
 
 	void RenderThread::ConfigureThisThread()
@@ -110,41 +97,26 @@ namespace aether
 
 		ConfigureThisThread();
 
-		while (!m_shutdown)
+		while (!m_state.IsShutdown())
 		{
-			if (IsReloadInProgress())
+			m_state.WaitForReload();
+			if (m_state.IsShutdown())
 			{
-				// This prevents threading errors when main thread calls WaitIdle().
-				if (!m_isIdle.load(std::memory_order_acquire))
-				{
-					m_engine->WaitIdle();
-					m_isIdle.store(true, std::memory_order_release);
-					m_reloadCv.notify_all();
-				}
-
-				{
-					std::unique_lock lock(m_reloadMutex);
-					m_reloadCv.wait(lock, [this] { return !IsReloadInProgress() || m_shutdown; });
-				}
+				break;
 			}
 
 			RenderFramePacket packet;
 
 			try
 			{
-				m_isIdle.store(true, std::memory_order_release);
-				m_reloadCv.notify_all();
 				packet = m_channel.read();
-				if (IsReloadInProgress())
+				if (!m_state.BeginFrame())
 				{
 					m_engine->DeferGrassStreaming(packet);
 					m_engine->DiscardPendingFrameQueues(packet);
 					m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
-					m_isIdle.store(true, std::memory_order_release);
-					m_reloadCv.notify_all();
 					continue;
 				}
-				m_isIdle.store(false, std::memory_order_release);
 			}
 			catch (const std::runtime_error&)
 			{
@@ -160,22 +132,14 @@ namespace aether
 				AE_ERROR(LogCategory::Render, "RenderThread: ExecuteRenderFrame failed: {}", e.what());
 				m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
 				m_engine->DiscardAllPendingFrameQueues();
-				{
-					const std::lock_guard lock(m_reloadMutex);
-					m_shutdown = true;
-				}
-				m_reloadCv.notify_one();
-				m_completionCv.notify_all();
+				m_state.Shutdown();
 				m_channel.close();
 				break;
 			}
 
 			m_engine->RecycleUiOverlayFrameData(std::move(packet.uiOverlay));
 
-			m_lastCompletedFrameIndex.store(packet.frameIndex, std::memory_order_release);
-			m_completionCv.notify_all();
-			m_isIdle.store(true, std::memory_order_release);
-			m_reloadCv.notify_all();
+			m_state.CompleteFrame(packet.frameIndex);
 		}
 	}
 

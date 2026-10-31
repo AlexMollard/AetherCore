@@ -1808,7 +1808,16 @@ namespace aether::gpu
 		out.extent = gpu::Extent2D{entry->extent.width, entry->extent.height};
 		out.mipLevels = entry->mipLevels;
 		out.arrayLayers = entry->arrayLayers;
-		out.usage = static_cast<ImageUsage>(entry->usage);
+		// Engine usage bits are not the native Vulkan bit values (notably
+		// HostTransfer). Resolve each supported usage through the forward mapping.
+		for (const auto usage: {ImageUsage::TransferSrc, ImageUsage::TransferDst, ImageUsage::Sampled, ImageUsage::Storage,
+		             ImageUsage::ColorAttachment, ImageUsage::DepthStencilAttachment, ImageUsage::HostTransfer})
+		{
+			if ((entry->usage & gpu::ToVk(usage)) != 0)
+			{
+				out.usage = out.usage | usage;
+			}
+		}
 		return out;
 	}
 

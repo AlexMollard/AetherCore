@@ -14,6 +14,7 @@
 #include <memory>
 #include <string_view>
 #include <tuple>
+#include <iterator>
 
 #include "assets/GltfAsset.hpp"
 #include "io/FileSystem.hpp"
@@ -33,6 +34,16 @@
 #include "scripting/SceneContext.hpp"
 #include "scripting/GameplaySaveStore.hpp"
 #include "ui/UiComponents.hpp"
+
+#if defined(_WIN32)
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	include <windows.h>
+#endif
 
 // These assertions mirror rust/aethercore-abi/src/services.rs without changing ABI v1.
 static_assert(sizeof(void*) == 4 || sizeof(void*) == 8);
@@ -76,6 +87,34 @@ TEST_CASE("Shared gameplay saves preserve bytes, enforce keys, and honor read is
 	std::filesystem::remove(directory, error);
 	CHECK_FALSE(error);
 }
+
+#if defined(_WIN32)
+TEST_CASE("Gameplay saves preserve the previous value when replacement is denied")
+{
+	const auto directory = std::filesystem::temp_directory_path() / ("aether-save-replace-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	GameplaySaveStore store(directory);
+	REQUIRE(store.Write("score", "previous") == AE_GAMEPLAY_OK);
+	const auto path = directory / "score.txt";
+	// Allow in-place writes but deny replacement. A truncating writer silently destroys
+	// the old save; an atomic writer reports the failure and leaves it intact.
+	const HANDLE held = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	REQUIRE(held != INVALID_HANDLE_VALUE);
+	CHECK(store.Write("score", "replacement") == AE_GAMEPLAY_SCRIPT_ERROR);
+	CHECK(CloseHandle(held));
+	std::string output;
+	REQUIRE(store.Read("score", output, true) == AE_GAMEPLAY_OK);
+	CHECK(output == "previous");
+	CHECK(store.Write("score", "replacement") == AE_GAMEPLAY_OK);
+	REQUIRE(store.Read("score", output, true) == AE_GAMEPLAY_OK);
+	CHECK(output == "replacement");
+	CHECK(std::distance(std::filesystem::directory_iterator(directory), std::filesystem::directory_iterator{}) == 1);
+	std::error_code error;
+	std::filesystem::remove(path, error);
+	CHECK_FALSE(error);
+	std::filesystem::remove(directory, error);
+	CHECK_FALSE(error);
+}
+#endif
 
 namespace
 {

@@ -15,6 +15,10 @@ namespace aether::io::file_util
 
 	[[nodiscard]] Expected<void> WriteText(const std::filesystem::path& path, std::string_view text);
 
+	// Flushes a unique sibling file before replacing the destination. Write/flush/replace
+	// failures leave the previous destination intact; concurrent writers never share a temp.
+	[[nodiscard]] Expected<void> WriteTextAtomic(const std::filesystem::path& path, std::string_view text);
+
 	[[nodiscard]] Expected<std::vector<std::byte>> ReadBinary(const std::filesystem::path& path);
 
 	[[nodiscard]] Expected<void> WriteBinary(const std::filesystem::path& path, std::span<const std::byte> data);

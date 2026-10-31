@@ -351,6 +351,12 @@ namespace aether
 			AE_WARN(LogCategory::Vulkan, "Swapchain suboptimal - will recreate after present.");
 			m_needsRecreation.store(true, std::memory_order_release);
 		}
+		else if (acquireResult != VK_SUCCESS)
+		{
+			// No image was acquired and imageAvailable was not signaled. Leave the
+			// in-flight fence signaled and prevent recording/submission for this frame.
+			Throw(AetherError::Vulkan(acquireResult, std::format("Failed to acquire swapchain image (VkResult {}).", static_cast<int>(acquireResult))));
+		}
 
 		if (vkResetFences(device, 1, &frame.inFlight) != VK_SUCCESS)
 		{

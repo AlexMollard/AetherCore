@@ -232,9 +232,7 @@ namespace aether::io
 		// corrupt or hostile frame cannot drive an unbounded allocation - an
 		// uncaught bad_alloc would abort the app straight out of this
 		// Expected-returning function.
-		constexpr uint64_t kMaxCompressionRatio = 256;
-		constexpr uint64_t kMaxDecompressedBytes = 4ull * 1024ull * 1024ull * 1024ull;
-		if (decompSize > info.size * kMaxCompressionRatio || decompSize > kMaxDecompressedBytes)
+		if (!IsPakCompressedSizeAllowed(decompSize, info.size))
 		{
 			AE_UNEXPECTED(AetherError::FileSystem("implausible decompressed size for asset: " + std::string(relativePath)));
 		}

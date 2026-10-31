@@ -5,6 +5,10 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <atomic>
+#include <cerrno>
+#include <cstdint>
+#include <system_error>
 
 #include "utils/Expected.hpp"
 #include "utils/LogCategory.hpp"
@@ -19,6 +23,9 @@
 // windows.h defines CopyFile as a macro that expands to CopyFileA/W, which silently renames
 // this file's own file_util::CopyFile and leaves every caller unresolved at link time.
 #	undef CopyFile
+#else
+#	include <fcntl.h>
+#	include <unistd.h>
 #endif
 
 namespace aether::io::file_util
@@ -236,6 +243,158 @@ namespace aether::io::file_util
 			return std::unexpected(AetherError::FileSystem(std::format("Failed to write file: {}", PlatformPaths::PathToUtf8(path))));
 		}
 
+		return {};
+	}
+
+	Expected<void> WriteTextAtomic(const std::filesystem::path& path, std::string_view text)
+	{
+		if (const auto parent = path.parent_path(); !parent.empty())
+		{
+			AE_TRY_VOID(CreateDirectories(parent));
+		}
+
+		struct PendingWrite
+		{
+			std::filesystem::path path;
+#if defined(_WIN32)
+			HANDLE handle = INVALID_HANDLE_VALUE;
+#else
+			int handle = -1;
+#endif
+			~PendingWrite()
+			{
+#if defined(_WIN32)
+				if (handle != INVALID_HANDLE_VALUE)
+				{
+					CloseHandle(handle);
+				}
+#else
+				if (handle != -1)
+				{
+					close(handle);
+				}
+#endif
+				std::error_code ignored;
+				std::filesystem::remove(path, ignored);
+			}
+		};
+		PendingWrite pending;
+		static std::atomic<uint64_t> s_nextTemporaryId{0};
+		const auto failure = [&path](std::string_view action, const std::error_code& error) -> Expected<void>
+		{
+			return std::unexpected(AetherError::FileSystem(std::format("Failed to {} '{}': {}", action, PlatformPaths::PathToUtf8(path), error.message())));
+		};
+#if defined(_WIN32)
+		for (int attempt = 0; attempt < 64; ++attempt)
+		{
+			pending.path = path;
+			pending.path += std::format(".tmp.{}.{}", GetCurrentProcessId(), s_nextTemporaryId.fetch_add(1, std::memory_order_relaxed));
+			pending.handle = CreateFileW(pending.path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+			if (pending.handle != INVALID_HANDLE_VALUE)
+			{
+				break;
+			}
+			const DWORD error = GetLastError();
+			// A collision belongs to another writer, so the cleanup guard must not remove it.
+			pending.path.clear();
+			if (error != ERROR_FILE_EXISTS && error != ERROR_ALREADY_EXISTS)
+			{
+				return failure("create temporary file for", {static_cast<int>(error), std::system_category()});
+			}
+		}
+		if (pending.handle == INVALID_HANDLE_VALUE)
+		{
+			return failure("reserve temporary file for", std::make_error_code(std::errc::file_exists));
+		}
+		std::size_t offset = 0;
+		while (offset < text.size())
+		{
+			const auto remaining = text.size() - offset;
+			const DWORD count = static_cast<DWORD>(remaining > (1u << 30) ? (1u << 30) : remaining);
+			DWORD written = 0;
+			if (!WriteFile(pending.handle, text.data() + offset, count, &written, nullptr))
+			{
+				return failure("write temporary file for", {static_cast<int>(GetLastError()), std::system_category()});
+			}
+			if (written == 0)
+			{
+				return failure("write temporary file for", std::make_error_code(std::errc::io_error));
+			}
+			offset += written;
+		}
+		if (!FlushFileBuffers(pending.handle))
+		{
+			return failure("flush temporary file for", {static_cast<int>(GetLastError()), std::system_category()});
+		}
+		const BOOL closed = CloseHandle(pending.handle);
+		pending.handle = INVALID_HANDLE_VALUE;
+		if (!closed)
+		{
+			return failure("close temporary file for", {static_cast<int>(GetLastError()), std::system_category()});
+		}
+		if (!MoveFileExW(pending.path.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+		{
+			return failure("replace", {static_cast<int>(GetLastError()), std::system_category()});
+		}
+#else
+		for (int attempt = 0; attempt < 64; ++attempt)
+		{
+			pending.path = path;
+			pending.path += std::format(".tmp.{}.{}", getpid(), s_nextTemporaryId.fetch_add(1, std::memory_order_relaxed));
+			pending.handle = open(pending.path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
+			if (pending.handle != -1)
+			{
+				break;
+			}
+			const int error = errno;
+			pending.path.clear();
+			if (error != EEXIST)
+			{
+				return failure("create temporary file for", {error, std::generic_category()});
+			}
+		}
+		if (pending.handle == -1)
+		{
+			return failure("reserve temporary file for", std::make_error_code(std::errc::file_exists));
+		}
+		std::size_t offset = 0;
+		while (offset < text.size())
+		{
+			const auto remaining = text.size() - offset;
+			const auto count = remaining > (1u << 30) ? (1u << 30) : remaining;
+			const ssize_t written = write(pending.handle, text.data() + offset, count);
+			if (written < 0 && errno == EINTR)
+			{
+				continue;
+			}
+			if (written <= 0)
+			{
+				return failure("write temporary file for", {written < 0 ? errno : EIO, std::generic_category()});
+			}
+			offset += static_cast<std::size_t>(written);
+		}
+		int synced;
+		do
+		{
+			synced = fsync(pending.handle);
+		} while (synced != 0 && errno == EINTR);
+		if (synced != 0)
+		{
+			return failure("flush temporary file for", {errno, std::generic_category()});
+		}
+		const int closed = close(pending.handle);
+		pending.handle = -1;
+		if (closed != 0)
+		{
+			return failure("close temporary file for", {errno, std::generic_category()});
+		}
+		std::error_code error;
+		std::filesystem::rename(pending.path, path, error);
+		if (error)
+		{
+			return failure("replace", error);
+		}
+#endif
 		return {};
 	}
 

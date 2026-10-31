@@ -113,6 +113,7 @@ namespace aether
 		VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 		std::optional<vkb::Device> m_device;
 		bool m_presentTimingSupported = false;
+		bool m_hostImageCopySupported = false;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
 		// (never CWD/exe-dir-relative -- see ResolveGpuCacheDir in VulkanContext.cpp).

@@ -398,7 +398,7 @@ namespace aether
 
 		std::ostringstream buffer;
 		config.Save(buffer, "AetherCore project file.");
-		if (auto result = io::file_util::WriteText(projectFile, buffer.str()); !result)
+		if (auto result = io::file_util::WriteTextAtomic(projectFile, buffer.str()); !result)
 		{
 			error = "Could not write project settings: " + result.error().message;
 			return false;
@@ -507,25 +507,24 @@ namespace aether
 		return LoadLayered(shippedFile, projectFile, userFile).values;
 	}
 
-	void EngineSettingsIO::SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile)
+	Expected<void> EngineSettingsIO::SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile)
 	{
 		AE_PROFILE_ZONE();
 		const auto userDir = io::PlatformPaths::GetUserConfigDir();
 		if (userDir.empty())
 		{
-			AE_WARN(LogCategory::Engine, "No user config directory available; settings not saved.");
-			return;
+			return std::unexpected(AetherError::FileSystem("No user config directory available; settings not saved."));
 		}
 
 		const auto path = userDir / userFile;
 		const std::string text = SerializeOverrides(settings, base);
 
-		if (auto result = io::file_util::WriteText(path, text); !result)
+		if (auto result = io::file_util::WriteTextAtomic(path, text); !result)
 		{
-			AE_WARN(LogCategory::Engine, "Failed to write user settings file: {} - {}", path.string(), result.error().message);
-			return;
+			return result;
 		}
 		AE_INFO(LogCategory::Engine, "User settings saved to {}", path.string());
+		return {};
 	}
 	const SettingInfo& SettingMetadata(const std::string_view key)
 	{

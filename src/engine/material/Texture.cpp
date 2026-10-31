@@ -11,9 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "gpu/OneShotCmd.hpp"
-#include "gpu/CommandList.hpp"
-#include "vulkan/VulkanUtils.hpp"
+#include "gpu/TextureUpload.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "gpu/UploadContext.hpp"
 
@@ -70,115 +68,64 @@ namespace aether
 
 		gpu::TextureHandle UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, TextureColorSpace colorSpace, const char* debugName = nullptr)
 		{
-			// Without a mip chain a pixel that covers many texels reads exactly one of
-			// them, so a surface picks a different texel every frame as the camera moves
-			// and minified detail turns into crawling noise. This is not something
-			// post-process antialiasing can recover: by the time the frame exists the
-			// information that the other texels ever existed is gone.
 			const std::uint32_t mipLevels = MipCountFor(width, height);
-
+			const auto format = colorSpace == TextureColorSpace::Srgb ? gpu::Format::R8G8B8A8Srgb : gpu::Format::R8G8B8A8Unorm;
+			const gpu::Extent2D extent{static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
+			const bool hostCopy = gpu::CanUseHostImageCopy(format, extent, mipLevels);
 			const gpu::TextureDesc desc{
-			        .format = colorSpace == TextureColorSpace::Srgb ? gpu::Format::R8G8B8A8Srgb : gpu::Format::R8G8B8A8Unorm,
-			        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
-			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
+			        .format = format,
+			        .extent = extent,
+			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | (hostCopy ? gpu::ImageUsage::HostTransfer : gpu::ImageUsage::None),
 			        .aspect = gpu::ImageAspect::Color,
 			        .mipLevels = mipLevels,
 			        .debugName = debugName,
 			};
-			gpu::TextureHandle handle = gpu::ResourceRegistry::CreateTexture(desc);
+			const gpu::TextureHandle handle = gpu::ResourceRegistry::CreateTexture(desc);
 			if (!handle.IsValid())
 			{
 				Throw(AetherError::Engine("Texture: CreateTexture failed"));
 			}
-			ScopedTexture lease{handle}; // any Throw below releases the image
+			ScopedTexture lease{handle};
 
-			const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(handle);
-
+			std::vector<gpu::ImageUploadRegion> regions;
+			std::size_t totalBytes = 0;
+			for (std::uint32_t level = 0; level < mipLevels; ++level)
 			{
-				// One transition covers every level, then each is filled in turn. Each
-				// level is filtered from the one above rather than from the original, so
-				// the whole chain costs a third of the base image instead of a copy of it
-				// per level.
-				if (vkutil::HostTransitionImage(static_cast<VkDevice>(device), static_cast<VkImage>(image), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, mipLevels) != VK_SUCCESS)
-				{
-					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: host transition to GENERAL failed"));
-				}
-
-				// Colour cut-outs dilate transparent RGB; data-map alpha is an independent channel.
-				std::vector<stbi_uc> base;
-				const stbi_uc* source = pixels;
+				const auto levelWidth = std::max(1u, extent.width >> level);
+				const auto levelHeight = std::max(1u, extent.height >> level);
+				regions.push_back({.offset = totalBytes, .width = levelWidth, .height = levelHeight, .mipLevel = level});
+				totalBytes += std::size_t(levelWidth) * levelHeight * 4u;
+			}
+			std::vector<std::byte> data(totalBytes);
+			std::memcpy(data.data(), pixels, std::size_t(width) * height * 4u);
+			auto* base = reinterpret_cast<stbi_uc*>(data.data());
+			if (colorSpace == TextureColorSpace::Srgb)
+			{
+				DilateTransparentRgb(base, width, height, 4);
+			}
+			// Preserve colour-space filtering and transparent RGB dilation identically
+			// for both upload mechanisms. Every mip filters the previous one.
+			for (std::uint32_t level = 1; level < mipLevels; ++level)
+			{
+				const auto& parent = regions[level - 1];
+				const auto& next = regions[level];
+				const auto* source = reinterpret_cast<const stbi_uc*>(data.data() + parent.offset);
+				auto* target = reinterpret_cast<stbi_uc*>(data.data() + next.offset);
+				DownsampleBox2x2(source, static_cast<int>(parent.width), static_cast<int>(parent.height), 4, target, colorSpace == TextureColorSpace::Srgb);
 				if (colorSpace == TextureColorSpace::Srgb)
 				{
-					base.assign(pixels, pixels + static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
-					DilateTransparentRgb(base.data(), width, height, 4);
-					source = base.data();
-				}
-				const std::int32_t copyResult = vkutil::HostCopyMipToImage(device, image, source, static_cast<uint32_t>(width), static_cast<uint32_t>(height), 0u);
-				if (copyResult != 0)
-				{
-					Throw(AetherError::Vulkan(copyResult, "UploadRgbaToGpuImage: HostCopyMipToImage failed"));
-				}
-
-				const stbi_uc* parent = source;
-				std::vector<stbi_uc> parentOwned;
-				int parentWidth = width;
-				int parentHeight = height;
-				for (std::uint32_t level = 1; level < mipLevels; ++level)
-				{
-					const int levelWidth = std::max(1, parentWidth / 2);
-					const int levelHeight = std::max(1, parentHeight / 2);
-
-					std::vector<stbi_uc> levelPixels(static_cast<std::size_t>(levelWidth) * static_cast<std::size_t>(levelHeight) * 4u);
-					DownsampleBox2x2(parent, parentWidth, parentHeight, 4, levelPixels.data(), colorSpace == TextureColorSpace::Srgb);
-					if (colorSpace == TextureColorSpace::Srgb)
-					{
-						DilateTransparentRgb(levelPixels.data(), levelWidth, levelHeight, 4);
-					}
-					const std::int32_t levelResult =
-					        vkutil::HostCopyMipToImage(device, image, levelPixels.data(), static_cast<uint32_t>(levelWidth), static_cast<uint32_t>(levelHeight), level);
-					if (levelResult != 0)
-					{
-						Throw(AetherError::Vulkan(levelResult, "UploadRgbaToGpuImage: HostCopyMipToImage failed for a mip level"));
-					}
-
-					parentOwned = std::move(levelPixels);
-					parent = parentOwned.data();
-					parentWidth = levelWidth;
-					parentHeight = levelHeight;
+					DilateTransparentRgb(target, static_cast<int>(next.width), static_cast<int>(next.height), 4);
 				}
 			}
-
-			// Finish on the host when the device allows it: a host layout transition
-			// needs no queue, no fence, and no cross-thread submit. The one-shot
-			// barrier below only remains for devices whose host-image-copy layout
-			// list omits SHADER_READ_ONLY_OPTIMAL.
-			if (vkutil::SupportsHostImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+			if (const auto result = gpu::UploadTexture(device, uploadQueue, uploadPool, handle, data, regions, hostCopy); !result)
 			{
-				if (vkutil::HostTransitionImageToShaderRead(device, image, mipLevels) != 0)
-				{
-					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: host layout transition failed"));
-				}
+				Throw(result.error());
 			}
-			else
-			{
-				gpu::OneShotCmd cmd;
-				if (!cmd.Begin(device, uploadPool))
-				{
-					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to begin OneShotCmd"));
-				}
-				cmd.CmdList().ImageMemoryBarrier(
-				        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
-				if (!cmd.EndAndSubmit(uploadQueue))
-				{
-					Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to submit OneShotCmd"));
-				}
-			}
-
 			RegisterTextureBindless(handle, gpu::ImageLayout::ShaderReadOnly);
-
 			lease.released = true;
 			return handle;
 		}
+
 	} // namespace
 
 	namespace
@@ -283,62 +230,35 @@ namespace aether
 				mipHeight = std::max(1u, mipHeight / 2);
 			}
 			const std::string ddsName(debugPath);
+			const bool hostCopy = gpu::CanUseHostImageCopy(*gpuFmt, {width, height}, mipLevels);
 			const gpu::TextureDesc desc{
 			        .format = *gpuFmt,
 			        .extent = {width, height},
-			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
+			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | (hostCopy ? gpu::ImageUsage::HostTransfer : gpu::ImageUsage::None),
 			        .aspect = gpu::ImageAspect::Color,
 			        .mipLevels = mipLevels,
 			        .debugName = ddsName.c_str(),
 			};
-			gpu::TextureHandle handle = gpu::ResourceRegistry::CreateTexture(desc);
+			const gpu::TextureHandle handle = gpu::ResourceRegistry::CreateTexture(desc);
 			if (!handle.IsValid())
 			{
 				Throw(AetherError::Engine("Texture: CreateTexture failed (DDS)"));
 			}
 			ScopedTexture lease{handle};
-
-			const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(handle);
-
-			if (vkutil::HostTransitionImage(static_cast<VkDevice>(device), static_cast<VkImage>(image), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, mipLevels) != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(0, "UploadBcnDds: host transition to GENERAL failed"));
-			}
+			std::vector<gpu::ImageUploadRegion> regions;
+			std::size_t offset = 0;
 			mipWidth = width;
 			mipHeight = height;
-			for (uint32_t level = 0; level < mipLevels; ++level)
+			for (std::uint32_t level = 0; level < mipLevels; ++level)
 			{
-				const std::int32_t copyResult = vkutil::HostCopyMipToImage(device, image, p, mipWidth, mipHeight, level);
-				if (copyResult != 0)
-				{
-					Throw(AetherError::Vulkan(copyResult, "UploadBcnDds: HostCopyMipToImage failed"));
-				}
-				p += ((std::size_t(mipWidth) + 3) / 4) * ((std::size_t(mipHeight) + 3) / 4) * blockBytes;
+				regions.push_back({.offset = offset, .width = mipWidth, .height = mipHeight, .mipLevel = level});
+				offset += ((std::size_t(mipWidth) + 3) / 4) * ((std::size_t(mipHeight) + 3) / 4) * blockBytes;
 				mipWidth = std::max(1u, mipWidth / 2);
 				mipHeight = std::max(1u, mipHeight / 2);
 			}
-
-			// Same host-side finish as UploadRgbaToGpuImage (see comment there).
-			if (vkutil::SupportsHostImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+			if (const auto result = gpu::UploadTexture(device, uploadQueue, uploadPool, handle, fileData.subspan(kMinSize, offset), regions, hostCopy); !result)
 			{
-				if (vkutil::HostTransitionImageToShaderRead(device, image, mipLevels) != 0)
-				{
-					Throw(AetherError::Vulkan(0, "UploadBcnDds: host layout transition failed"));
-				}
-			}
-			else
-			{
-				gpu::OneShotCmd cmd;
-				if (!cmd.Begin(device, uploadPool))
-				{
-					Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to begin OneShotCmd"));
-				}
-				cmd.CmdList().ImageMemoryBarrier(
-				        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
-				if (!cmd.EndAndSubmit(uploadQueue))
-				{
-					Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to submit OneShotCmd"));
-				}
+				Throw(result.error());
 			}
 
 			RegisterTextureBindless(handle, gpu::ImageLayout::ShaderReadOnly);

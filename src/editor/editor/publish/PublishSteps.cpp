@@ -157,21 +157,6 @@ namespace aether::editor
 			return {};
 		}
 
-		StepResult CleanOutput(const PublishPlan& plan, PublishContext&, const PublishToolchain&)
-		{
-			std::error_code ec;
-			std::filesystem::remove_all(plan.outputDir, ec);
-			if (ec)
-			{
-				return Failed("Could not clear the output folder: " + ec.message(), "Close anything using " + Utf8(plan.outputDir) + " and publish again.");
-			}
-			if (auto dirResult = io::file_util::CreateDirectories(plan.outputDir); !dirResult)
-			{
-				return Failed("Could not create the output folder: " + dirResult.error().message, "Check write permissions on " + Utf8(plan.outputDir) + ".");
-			}
-			return {};
-		}
-
 		// Every model under the project's assets/models/ tree, baked so the pak carries the
 		// .mesh the runtime actually reads. This used to scan scene/prefab .toml files for
 		// "project://...glb" references (EnsureModelBaked, existence-only) - blind to
@@ -451,7 +436,6 @@ namespace aether::editor
 	{
 		static constexpr PublishStep kSteps[] = {
 		        {"Validating project", &ValidateProject},
-		        {"Cleaning output", &CleanOutput},
 		        {"Baking models", &BakeReferencedModels},
 		        {"Packing project assets", &PackProjectAssets},
 		        {"Staging game runtime", &StageRuntime},

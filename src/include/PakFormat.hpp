@@ -6,8 +6,19 @@
 
 inline constexpr uint32_t PAK_VERSION = 2;
 inline constexpr uint32_t PAK_FLAG_ZSTD = 1u << 0;
-inline constexpr uint32_t PAK_PIPELINE_VERSION = 8;
+inline constexpr uint32_t PAK_PIPELINE_VERSION = 9;
 inline constexpr const char* PAK_MANIFEST_PATH = "__aetherpak/manifest.txt";
+
+// Shared writer/reader admission contract. Excessively compressible assets are
+// stored raw, preserving the runtime's defense against hostile declared sizes.
+inline constexpr uint64_t kPakMaxCompressionRatio = 256;
+inline constexpr uint64_t kPakMaxDecompressedBytes = 4ull * 1024ull * 1024ull * 1024ull;
+
+[[nodiscard]] inline constexpr bool IsPakCompressedSizeAllowed(uint64_t rawSize, uint64_t storedSize)
+{
+	return storedSize != 0 && rawSize <= kPakMaxDecompressedBytes
+	        && storedSize >= rawSize / kPakMaxCompressionRatio + (rawSize % kPakMaxCompressionRatio != 0 ? 1 : 0);
+}
 
 #pragma pack(push, 1)
 

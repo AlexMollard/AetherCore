@@ -11,6 +11,7 @@
 #include <optional>
 #include <limits>
 #include "streaming/StreamingTypes.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether
 {
@@ -583,7 +584,7 @@ namespace aether
 		[[nodiscard]] static EngineSettings LoadOrCreate(std::string_view shippedFile = "EngineSettings.toml", const std::filesystem::path& projectFile = {}, std::string_view userFile = "UserSettings.toml");
 
 		// settings file (io::PlatformPaths::GetUserConfigDir()/userFile). Never
-		static void SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile = "UserSettings.toml");
+		[[nodiscard]] static Expected<void> SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile = "UserSettings.toml");
 
 		// Merges the project-homed settings that differ from the shipped baseline into an
 		// existing ProjectSettings.toml, leaving its other sections untouched. Refuses to

@@ -6,6 +6,7 @@
 #include "SpirvProcessor.hpp"
 #include "TextureProcessor.hpp"
 #include "WebAssetFormat.hpp"
+#include "PakFormat.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -346,7 +347,7 @@ namespace aether::assetpipeline
 				const std::size_t bound = ZSTD_compressBound(extra.rawSize);
 				std::vector<std::byte> compressed(bound);
 				const std::size_t compressedSize = ZSTD_compressCCtx(cctx.get(), compressed.data(), bound, extra.data.data(), extra.rawSize, compressionLevel);
-				if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < extra.rawSize)
+				if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < extra.rawSize && IsPakCompressedSizeAllowed(extra.rawSize, compressedSize))
 				{
 					compressed.resize(compressedSize);
 					extra.data = std::move(compressed);
@@ -369,7 +370,7 @@ namespace aether::assetpipeline
 
 			const std::size_t compressedSize = ZSTD_compressCCtx(cctx.get(), compressed.data(), bound, rawData.data(), processedSize, compressionLevel);
 
-			if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < rawSize)
+			if ((ZSTD_isError(compressedSize) == 0u) && compressedSize < processedSize && IsPakCompressedSizeAllowed(processedSize, compressedSize))
 			{
 				compressed.resize(compressedSize);
 				result.data = std::move(compressed);

@@ -8,7 +8,7 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuDevice.hpp"
-#include "gpu/OneShotCmd.hpp"
+#include "gpu/TextureUpload.hpp"
 #include "gpu/PushConstantsBytes.hpp"
 #include "gpu/UploadContext.hpp"
 #include "io/FileSystem.hpp"
@@ -22,7 +22,6 @@
 #include "ui/UiLayoutSystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
-#include "vulkan/VulkanUtils.hpp"
 
 namespace aether::ui
 {
@@ -368,10 +367,12 @@ namespace aether::ui
 		// command already addresses - a glyph names its font in the same field a textured
 		// rect names its image, and nothing about the command layout has to change.
 		const std::string debugName = "UI.FontCurves." + std::string(name);
+		const gpu::Extent2D extent{font->textureWidth, font->textureHeight};
+		const bool useHostCopy = gpu::CanUseHostImageCopy(gpu::Format::R32G32B32A32Sfloat, extent, 1);
 		const gpu::TextureDesc desc{
 		        .format = gpu::Format::R32G32B32A32Sfloat,
-		        .extent = {font->textureWidth, font->textureHeight},
-		        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
+		        .extent = extent,
+		        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | (useHostCopy ? gpu::ImageUsage::HostTransfer : gpu::ImageUsage::None),
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = debugName.c_str(),
 		};
@@ -382,43 +383,14 @@ namespace aether::ui
 			return false;
 		}
 
-		const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(curves);
-		const std::int32_t copyResult = vkutil::HostCopyToImage(m_gpu->GetDevice(), image, font->texels.data(), font->textureWidth, font->textureHeight);
-		if (copyResult != 0)
+		const gpu::ImageUploadRegion region{.width = extent.width, .height = extent.height};
+		const auto uploadResult = gpu::UploadTexture(m_gpu->GetDevice(), m_gpu->GetGraphicsQueue(),
+		        m_upload != nullptr ? m_upload->GetCommandPool() : nullptr, curves, std::as_bytes(std::span(font->texels)), std::span(&region, 1), useHostCopy);
+		if (!uploadResult)
 		{
 			gpu::ResourceRegistry::Destroy(curves);
-			AE_ERROR(LogCategory::UI, "UiRenderer: HostCopyToImage failed for the curves of '{}' (VkResult={})", name, copyResult);
+			AE_ERROR(LogCategory::UI, "UiRenderer: curve texture upload failed for '{}': {}", name, uploadResult.error().message);
 			return false;
-		}
-
-		// Finish on the host when supported (no queue submit / fence); fall back to the
-		// one-shot barrier on devices without SHADER_READ_ONLY in the host-copy layouts.
-		if (vkutil::SupportsHostImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
-		{
-			if (vkutil::HostTransitionImageToShaderRead(m_gpu->GetDevice(), image) != 0)
-			{
-				gpu::ResourceRegistry::Destroy(curves);
-				AE_ERROR(LogCategory::UI, "UiRenderer: host layout transition failed for the curves of '{}'", name);
-				return false;
-			}
-		}
-		else
-		{
-			gpu::OneShotCmd cmd;
-			if (m_upload == nullptr || !m_upload->IsValid() || !cmd.Begin(m_gpu->GetDevice(), m_upload->GetCommandPool()))
-			{
-				gpu::ResourceRegistry::Destroy(curves);
-				AE_ERROR(LogCategory::UI, "UiRenderer: failed to begin the curve upload barrier command for '{}'", name);
-				return false;
-			}
-			cmd.CmdList().ImageMemoryBarrier(
-			        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
-			if (!cmd.EndAndSubmit(m_gpu->GetGraphicsQueue()))
-			{
-				gpu::ResourceRegistry::Destroy(curves);
-				AE_ERROR(LogCategory::UI, "UiRenderer: failed to submit the curve upload barrier command for '{}'", name);
-				return false;
-			}
 		}
 
 		gpu::ResourceRegistry::EnsureBindlessSampled(curves, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);

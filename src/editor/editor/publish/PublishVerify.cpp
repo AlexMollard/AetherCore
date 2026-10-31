@@ -99,14 +99,17 @@ namespace aether::editor
 				{
 					return PublishIssue{.message = "Startup scene '" + settings.app.startupScene + "' is not in the published project.pak.", .remediation = "Confirm the scene exists in the project's scenes folder, then publish again."};
 				}
-				if (const auto bytes = pak.Read(sceneVirtualPath); bytes.has_value())
+				const auto bytes = pak.Read(sceneVirtualPath);
+				if (!bytes)
 				{
-					const std::string_view sceneToml(reinterpret_cast<const char*>(bytes->data()), bytes->size());
-					if (app::scene::SceneTextHasNoCameraSource(sceneToml))
-					{
-						// Non-fatal: a script may create a camera at runtime.
-						AE_WARN(LogCategory::App, "Published startup scene '{}' has no main camera.", settings.app.startupScene);
-					}
+					return PublishIssue{.message = "Could not read startup scene '" + settings.app.startupScene + "' from the published project.pak: " + bytes.error().message,
+					        .remediation = "Publish again to rebuild the package; check its source assets if the error persists."};
+				}
+				const std::string_view sceneToml(reinterpret_cast<const char*>(bytes->data()), bytes->size());
+				if (app::scene::SceneTextHasNoCameraSource(sceneToml))
+				{
+					// Non-fatal: a script may create a camera at runtime.
+					AE_WARN(LogCategory::App, "Published startup scene '{}' has no main camera.", settings.app.startupScene);
 				}
 			}
 			catch (const std::exception& ex)

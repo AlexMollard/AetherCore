@@ -5,8 +5,9 @@
 namespace aether::io
 {
 	IoExecutor::IoExecutor()
-	      : m_thread(&IoExecutor::WorkerLoop, this)
 	{
+		// Every member used by WorkerLoop must exist before it can run.
+		m_thread = std::thread(&IoExecutor::WorkerLoop, this);
 	}
 
 	IoExecutor::~IoExecutor()

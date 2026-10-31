@@ -37,6 +37,7 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishPlan.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishReport.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishVerify.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor/publish/PublishTransaction.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/imgui/UiInputScript.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/imgui/UiAutomation.cpp"
     # Editor undo/redo command logic under test. The typed component commands

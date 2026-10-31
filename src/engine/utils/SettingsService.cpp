@@ -344,7 +344,7 @@ namespace aether
 		ForEachSettingField(m_values, [this](std::string_view key, const auto&) { ApplyLive(key); });
 	}
 
-	void SettingsService::Save()
+	void SettingsService::Save(std::string_view userFile)
 	{
 		// Two files, because a setting belongs to one of two owners. Authored ones - the
 		// tonemap, the grade, the startup scene - go beside the scenes in the project so they
@@ -355,13 +355,20 @@ namespace aether
 		{
 			if (!EngineSettingsIO::SaveProjectOverrides(m_values, m_shipped, m_projectFile, m_lastSaveError))
 			{
-				// Reported rather than thrown away: the per-user file is still written below,
-				// so nothing is lost, but the author needs to know the project did not take
-				// the change or they will publish without it.
+				// Still try the independent per-user file below. Keep this error and the
+				// dirty state so authored edits can be retried instead of silently lost.
 				AE_WARN(LogCategory::Engine, "Project settings not saved: {}", m_lastSaveError);
 			}
 		}
-		EngineSettingsIO::SaveUserOverrides(m_values, m_base);
-		m_dirty = false;
+		if (const auto result = EngineSettingsIO::SaveUserOverrides(m_values, m_base, userFile); !result)
+		{
+			if (!m_lastSaveError.empty())
+			{
+				m_lastSaveError += '\n';
+			}
+			m_lastSaveError += "User settings not saved: " + result.error().message;
+			AE_WARN(LogCategory::Engine, "User settings not saved: {}", result.error().message);
+		}
+		m_dirty = !m_lastSaveError.empty();
 	}
 } // namespace aether

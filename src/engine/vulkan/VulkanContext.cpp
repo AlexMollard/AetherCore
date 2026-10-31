@@ -26,6 +26,7 @@
 
 #include "utils/AetherExceptions.hpp"
 #include "vulkan/DeviceFaultQuery.hpp"
+#include "vulkan/HostImageCopy.hpp"
 #include "vulkan/TransferManager.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "gpu/CommandList.hpp"
@@ -499,7 +500,6 @@ namespace aether
 		selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13);
 		const VkPhysicalDeviceVulkan14Features requiredFeatures14{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
-		        .hostImageCopy = VK_TRUE,
 		        .pushDescriptor = VK_TRUE,
 		};
 		selector.set_required_features_14(requiredFeatures14);
@@ -539,6 +539,17 @@ namespace aether
 			                                      physicalDeviceResult.error().value(),
 			                                      DescribeDeviceSelectionFailure(m_instance->instance, requiredExtensions, requiredFeatures10, requiredFeatures11, requiredFeatures12, requiredFeatures13, requiredFeatures14))));
 		}
+
+		// Host image copy is optional even in Vulkan 1.4. The selected device is
+		// accepted without it; synchronous uploads then use staging buffers.
+		const bool hostImageCopyForcedOff = vulkan::HostImageCopyDisabledByEnvironment();
+		const VkPhysicalDeviceVulkan14Features optionalHostCopy{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+		        .hostImageCopy = VK_TRUE,
+		};
+		m_hostImageCopySupported = !hostImageCopyForcedOff && physicalDeviceResult.value().enable_extension_features_if_present(optionalHostCopy);
+		AE_INFO(LogCategory::Vulkan, "Host image copy: {} ({}).", m_hostImageCopySupported ? "enabled" : "disabled",
+		        hostImageCopyForcedOff ? "forced off by AETHER_DISABLE_HOST_IMAGE_COPY=1; using staging uploads" : (m_hostImageCopySupported ? "supported; checked per image format" : "unsupported; using staging uploads"));
 
 		// gated on two independent conditions, both required:
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
@@ -879,6 +890,8 @@ namespace aether
 		// Host image copy: cache which layouts the implementation lets the host
 		// transition to, so texture uploads can finish entirely on the CPU (no queue
 		// submission) when SHADER_READ_ONLY_OPTIMAL is supported.
+		vkutil::SetHostImageCopyDstLayouts({});
+		if (m_hostImageCopySupported)
 		{
 			VkPhysicalDeviceHostImageCopyProperties hostCopyProps{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_PROPERTIES};
 			VkPhysicalDeviceProperties2 props2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &hostCopyProps};
@@ -890,6 +903,7 @@ namespace aether
 			vkGetPhysicalDeviceProperties2(m_device->physical_device, &props2);
 			vkutil::SetHostImageCopyDstLayouts(std::move(dstLayouts));
 		}
+		vulkan::SetHostImageCopySupport(m_device->physical_device, m_hostImageCopySupported);
 
 		m_transferManager = std::make_unique<vulkan::TransferManager>();
 		m_transferManager->Initialize(m_device->device, m_transferQueue, m_transferQueueFamily, m_graphicsQueueFamily);
@@ -1053,6 +1067,7 @@ namespace aether
 			m_transferManager.reset();
 		}
 		vkutil::SetHostImageCopyDstLayouts({});
+		vulkan::SetHostImageCopySupport(VK_NULL_HANDLE, false);
 
 		if (m_pipelineCache != VK_NULL_HANDLE && m_device.has_value())
 		{

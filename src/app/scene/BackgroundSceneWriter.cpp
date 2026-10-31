@@ -7,8 +7,9 @@
 namespace aether::app::scene
 {
 	BackgroundSceneWriter::BackgroundSceneWriter()
-	      : m_thread([this]() { Run(); })
 	{
+		// Start only after the mutex, queues and stop flag have been initialized.
+		m_thread = std::thread([this]() { Run(); });
 	}
 
 	BackgroundSceneWriter::~BackgroundSceneWriter()

@@ -58,6 +58,6 @@ namespace aether::app::scripting
 		if (m_directory.empty()) { return AE_GAMEPLAY_UNSUPPORTED; }
 		if (!SafeKey(key)) { return AE_GAMEPLAY_INVALID_ARGUMENT; }
 		if (!io::file_util::CreateDirectories(m_directory)) { return AE_GAMEPLAY_SCRIPT_ERROR; }
-		return io::file_util::WriteText(m_directory / (std::string(key) + ".txt"), value) ? AE_GAMEPLAY_OK : AE_GAMEPLAY_SCRIPT_ERROR;
+		return io::file_util::WriteTextAtomic(m_directory / (std::string(key) + ".txt"), value) ? AE_GAMEPLAY_OK : AE_GAMEPLAY_SCRIPT_ERROR;
 	}
 }

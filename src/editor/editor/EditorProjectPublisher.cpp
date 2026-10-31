@@ -19,6 +19,7 @@
 #include "editor/EditorProjectContext.hpp"
 #include "editor/ShaderCompiler.hpp"
 #include "editor/publish/PublishSteps.hpp"
+#include "editor/publish/PublishTransaction.hpp"
 #include "editor/publish/WebPublish.hpp"
 #include "io/FileUtil.hpp"
 #include "io/PlatformPaths.hpp"
@@ -134,19 +135,10 @@ namespace aether::editor
 		const PublishToolchain toolchain = MakePublishToolchain();
 		PublishContext context;
 
-		const std::span<const PublishStep> steps = PublishStepList();
-		for (std::size_t i = 0; i < steps.size(); ++i)
+		const StepResult result = RunNativePublishSteps(plan, PublishStepList(), context, toolchain, progress);
+		if (!result.ok)
 		{
-			if (progress)
-			{
-				progress(static_cast<float>(i) / static_cast<float>(steps.size()), steps[i].name);
-			}
-			const StepResult result = steps[i].run(plan, context, toolchain);
-			if (!result.ok)
-			{
-				AE_ERROR(LogCategory::App, "Publish failed at '{}': {}", steps[i].name, result.message);
-				return {.succeeded = false, .message = result.message, .remediation = result.remediation, .outputPath = plan.outputDir};
-			}
+			return {.succeeded = false, .message = result.message, .remediation = result.remediation, .outputPath = plan.outputDir};
 		}
 
 		if (progress)

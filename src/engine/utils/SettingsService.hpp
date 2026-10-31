@@ -44,7 +44,7 @@ namespace aether
 			return m_projectFile;
 		}
 
-		// Populated by Save() when the project file could not be written, so the editor can
+		// Populated by Save() when either settings file could not be written, so the editor can
 		// say so instead of silently losing the edit.
 		[[nodiscard]] const std::string& LastSaveError() const noexcept
 		{
@@ -75,7 +75,7 @@ namespace aether
 			return m_dirty;
 		}
 
-		void Save();
+		void Save(std::string_view userFile = "UserSettings.toml");
 
 	private:
 		void ApplyLive(std::string_view key);

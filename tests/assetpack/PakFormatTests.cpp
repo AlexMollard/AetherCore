@@ -53,6 +53,23 @@ TEST_CASE("A valid pak opens")
 	CHECK_NOTHROW(io::PakBackend{pak});
 }
 
+TEST_CASE("Highly compressible packed content round trips through the runtime reader")
+{
+	const auto src = std::filesystem::temp_directory_path() / "aepak_high_ratio_src";
+	std::filesystem::remove_all(src);
+	std::filesystem::create_directories(src / "scenes");
+	const std::string content = "[scene]\nversion = 18\nname = 'Start'\n#" + std::string(1024 * 1024, 'x');
+	std::ofstream(src / "scenes/Start.scene.toml", std::ios::binary) << content;
+	const auto pak = std::filesystem::temp_directory_path() / "aepak_high_ratio.pak";
+	REQUIRE(assetpipeline::PackDirectory(src, pak, {}).ok);
+	const io::PakBackend backend(pak);
+	const auto bytes = backend.Read("scenes/Start.scene.toml");
+	REQUIRE(bytes.has_value());
+	CHECK(std::string(reinterpret_cast<const char*>(bytes->data()), bytes->size()) == content);
+	std::filesystem::remove_all(src);
+	std::filesystem::remove(pak);
+}
+
 TEST_CASE("Pak glob matches segments and recursive patterns without escaping the index")
 {
 	const auto src = std::filesystem::temp_directory_path() / "aepak_glob_src";
