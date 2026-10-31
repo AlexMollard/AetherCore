@@ -464,6 +464,37 @@ namespace aether
 		};
 
 		std::unordered_map<std::uint32_t, LiveConstraint> constraints;
+		// Authored and script joints share suppression. Reversed endpoints name the
+		// same pair, and removing one joint must not release another joint's claim.
+		std::unordered_map<std::uint64_t, std::uint32_t> collisionPairReferences;
+		static std::uint64_t CollisionPairKey(std::uint32_t bodyA, std::uint32_t bodyB)
+		{
+			return (std::uint64_t(std::min(bodyA, bodyB)) << 32) | std::max(bodyA, bodyB);
+		}
+		void AddConstraint(std::uint32_t id, LiveConstraint live)
+		{
+			const auto [stored, inserted] = constraints.emplace(id, std::move(live));
+			AE_ASSERT_ALWAYS(inserted, "Physics constraint handle is already registered");
+			if (stored->second.collisionDisabled)
+			{
+				// Finish allocating bookkeeping before changing the filter or handing
+				// the constraint to Jolt. A failed pair insertion leaves neither behind.
+				try
+				{
+					const auto pair = collisionPairReferences.try_emplace(CollisionPairKey(stored->second.bodyA, stored->second.bodyB), 0).first;
+					if (pair->second++ == 0)
+					{
+						groupFilter->DisableCollision(stored->second.bodyA, stored->second.bodyB);
+					}
+				}
+				catch (...)
+				{
+					constraints.erase(stored);
+					throw;
+				}
+			}
+			physics->AddConstraint(stored->second.constraint.GetPtr());
+		}
 		std::uint32_t nextConstraintId = 1;
 
 		// Which entity's ScriptJointsComponent a given handle's JointEntry lives on -
@@ -714,6 +745,7 @@ namespace aether
 		StopPhysicsThread();
 
 		m_impl->constraints.clear();
+		m_impl->collisionPairReferences.clear();
 		m_impl->characters.clear();
 		m_impl->groupFilter = nullptr;
 		m_impl->physics.reset();
@@ -1791,7 +1823,7 @@ namespace aether
 				}
 			};
 
-			JPH::Constraint* created = nullptr;
+			JPH::Ref<JPH::Constraint> created;
 			bool collisionDisabled = false;
 			if (otherId.IsInvalid())
 			{
@@ -1814,7 +1846,6 @@ namespace aether
 					{
 						joinGroup(*b1);
 						joinGroup(*b2);
-						m_impl->groupFilter->DisableCollision(b1->GetID().GetIndex(), b2->GetID().GetIndex());
 						collisionDisabled = true;
 					}
 				}
@@ -1825,14 +1856,13 @@ namespace aether
 			}
 			created->SetEnabled(true);
 
-			physics.AddConstraint(created);
 			const std::uint32_t id = m_impl->nextConstraintId++;
 			Impl::LiveConstraint live;
 			live.constraint = created;
 			live.bodyA = selfId.GetIndex();
 			live.bodyB = otherId.IsInvalid() ? 0u : otherId.GetIndex();
 			live.collisionDisabled = collisionDisabled;
-			m_impl->constraints.emplace(id, std::move(live));
+			m_impl->AddConstraint(id, std::move(live));
 			joint.constraintId = id;
 		}
 	}
@@ -1883,7 +1913,7 @@ namespace aether
 					}
 				};
 
-				JPH::Constraint* created = nullptr;
+				JPH::Ref<JPH::Constraint> created;
 				bool collisionDisabled = false;
 				if (otherId.IsInvalid())
 				{
@@ -1906,7 +1936,6 @@ namespace aether
 						{
 							joinGroup(*b1);
 							joinGroup(*b2);
-							m_impl->groupFilter->DisableCollision(b1->GetID().GetIndex(), b2->GetID().GetIndex());
 							collisionDisabled = true;
 						}
 					}
@@ -1917,13 +1946,12 @@ namespace aether
 				}
 				created->SetEnabled(true);
 
-				physics.AddConstraint(created);
 				Impl::LiveConstraint live;
 				live.constraint = created;
 				live.bodyA = selfId.GetIndex();
 				live.bodyB = otherId.IsInvalid() ? 0u : otherId.GetIndex();
 				live.collisionDisabled = collisionDisabled;
-				m_impl->constraints.emplace(entry.handle, std::move(live));
+				m_impl->AddConstraint(entry.handle, std::move(live));
 				entry.created = true;
 			}
 		}
@@ -2021,7 +2049,13 @@ namespace aether
 		m_impl->physics->RemoveConstraint(it->second.constraint.GetPtr());
 		if (it->second.collisionDisabled && m_impl->groupFilter != nullptr)
 		{
-			m_impl->groupFilter->EnableCollision(it->second.bodyA, it->second.bodyB);
+			const auto pair = m_impl->collisionPairReferences.find(Impl::CollisionPairKey(it->second.bodyA, it->second.bodyB));
+			AE_ASSERT_ALWAYS(pair != m_impl->collisionPairReferences.end() && pair->second > 0, "Physics constraint collision suppression is unbalanced");
+			if (--pair->second == 0)
+			{
+				m_impl->groupFilter->EnableCollision(it->second.bodyA, it->second.bodyB);
+				m_impl->collisionPairReferences.erase(pair);
+			}
 		}
 		m_impl->constraints.erase(it);
 	}
@@ -2519,6 +2553,9 @@ namespace aether
 			// rb->motionType is already the requested one, so the next
 			// FlushPendingBodies bakes a fresh body with real motion properties in the
 			// requested state - the same mechanism a collider-field edit already uses.
+			// Match RebuildBody: retire all constraints before their endpoint is freed.
+			// Authored joints rebuild on the next flush; script joints are removed.
+			DestroyJointsTouching(world.GetRegistry(), World::ToEntt(entity));
 			bodyInterface.RemoveBody(id);
 			bodyInterface.DestroyBody(id);
 			rb->body = {};
