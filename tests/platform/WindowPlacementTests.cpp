@@ -6,6 +6,11 @@
 //     a 1080p screen with the title bar above the top of it.
 #include <doctest/doctest.h>
 
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+
+#include "platform/Input.hpp"
+#include "platform/Window.hpp"
 #include "platform/WindowPlacement.hpp"
 
 using aether::FitWindowToWorkArea;
@@ -17,6 +22,40 @@ namespace
 	constexpr int kChromeW = 16;
 	constexpr int kChromeH = 39;
 } // namespace
+
+// Requires a window system, but no Vulkan device. Opt in with --no-skip and this test name.
+TEST_CASE("Window resize callbacks survive input initialization and teardown" * doctest::skip())
+{
+	aether::Window window("Callback ownership regression", 640, 480, aether::Window::Mode::Windowed, true);
+	GLFWwindow* handle = window.GetHandle();
+	const auto resize = glfwSetFramebufferSizeCallback(handle, nullptr);
+	REQUIRE(resize != nullptr);
+	glfwSetFramebufferSizeCallback(handle, resize);
+	(void) window.ConsumeFramebufferResized();
+	{
+		aether::Input input;
+		input.Init(handle);
+		// Exercise the installed callback directly: delivery must not depend on an OS event arriving.
+		resize(handle, 800, 600);
+		CHECK(window.ConsumeFramebufferResized());
+		CHECK_FALSE(window.PeekFramebufferResized());
+
+		const auto scroll = glfwSetScrollCallback(handle, nullptr);
+		const auto character = glfwSetCharCallback(handle, nullptr);
+		REQUIRE(scroll != nullptr);
+		REQUIRE(character != nullptr);
+		glfwSetScrollCallback(handle, scroll);
+		glfwSetCharCallback(handle, character);
+		scroll(handle, 1.0, 2.0);
+		character(handle, 0x00e9);
+		input.Update();
+		CHECK(input.GetScrollDelta() == glm::vec2(1.0f, 2.0f));
+		CHECK(input.GetTypedChars() == "\xc3\xa9");
+	}
+	// Input unregisters its own callbacks; the live Window must still receive resize events.
+	resize(handle, 960, 720);
+	CHECK(window.ConsumeFramebufferResized());
+}
 
 TEST_CASE("A window that fits is left at the size it asked for")
 {

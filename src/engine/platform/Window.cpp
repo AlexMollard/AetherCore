@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include <cmath>
+#include <unordered_map>
 
 #include "utils/AetherExceptions.hpp"
 #include "utils/Logger.hpp"
@@ -27,6 +28,17 @@
 
 namespace aether
 {
+	namespace
+	{
+		// Input owns GLFW's single user pointer. Route Window callbacks independently;
+		// registration, dispatch and removal all run on the GLFW event thread.
+		std::unordered_map<GLFWwindow*, Window*>& WindowCallbackOwners()
+		{
+			static std::unordered_map<GLFWwindow*, Window*> owners;
+			return owners;
+		}
+	} // namespace
+
 	void Window::EnableHighDpiAwareness()
 	{
 #ifdef _WIN32
@@ -130,7 +142,7 @@ namespace aether
 			FitToPrimaryWorkArea();
 		}
 
-		glfwSetWindowUserPointer(m_window, this);
+		WindowCallbackOwners().emplace(m_window, this);
 		glfwSetFramebufferSizeCallback(m_window, &Window::FramebufferSizeCallback);
 
 		float xScale = 1.0f;
@@ -149,9 +161,10 @@ namespace aether
 
 	void Window::FramebufferSizeCallback(GLFWwindow* window, int /*width*/, int /*height*/)
 	{
-		if (auto* self = static_cast<Window*>(glfwGetWindowUserPointer(window)))
+		const auto owner = WindowCallbackOwners().find(window);
+		if (owner != WindowCallbackOwners().end())
 		{
-			self->m_framebufferResized.store(true, std::memory_order_release);
+			owner->second->m_framebufferResized.store(true, std::memory_order_release);
 		}
 	}
 
@@ -162,6 +175,7 @@ namespace aether
 
 		if (m_window != nullptr)
 		{
+			WindowCallbackOwners().erase(m_window);
 			glfwDestroyWindow(m_window);
 		}
 
