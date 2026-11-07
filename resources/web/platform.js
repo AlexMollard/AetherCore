@@ -252,6 +252,14 @@ globalThis.aetherInput = {
     writeClipboardText: async text => navigator.clipboard.writeText(text),
     pasteText: null,
     typedText: '',
+    takeTick() {
+        const sample = {x:this.x,y:this.y,buttons:this.buttons|this.pressed,
+            dx:this.dx,dy:this.dy,scroll:this.scroll,typedText:this.typedText.slice(0,4096)};
+        this.pressed = 0;
+        this.dx = this.dy = this.scroll = 0;
+        this.typedText = '';
+        return sample;
+    },
     hapticsAvailable() {
         return Array.from(navigator.getGamepads?.() || []).some(pad =>
             pad?.connected && typeof pad.vibrationActuator?.playEffect === 'function');
@@ -285,13 +293,13 @@ globalThis.aetherInput = {
 };
 const inputCanvas = document.getElementById('canvas');
 inputCanvas.addEventListener('paste', event => {
-    aetherInput.pasteText = event.clipboardData.getData('text/plain');
+    aetherInput.pasteText = event.clipboardData.getData('text/plain').slice(0,65536);
     event.preventDefault();
 });
 inputCanvas.addEventListener('keydown', event => {
     if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing &&
         Array.from(event.key).length === 1)
-        aetherInput.typedText += event.key;
+        aetherInput.typedText = (aetherInput.typedText + event.key).slice(0,4096);
 });
 const pointer = event => {
     const rect = inputCanvas.getBoundingClientRect();
@@ -302,8 +310,8 @@ const pointer = event => {
 };
 inputCanvas.addEventListener('pointermove', event => {
     if (document.pointerLockElement === inputCanvas || (document.activeElement === inputCanvas && aetherInput.buttons)) {
-        aetherInput.dx += event.movementX;
-        aetherInput.dy += event.movementY;
+        aetherInput.dx = Math.max(-1000000,Math.min(1000000,aetherInput.dx + event.movementX));
+        aetherInput.dy = Math.max(-1000000,Math.min(1000000,aetherInput.dy + event.movementY));
     }
     pointer(event);
 });
@@ -338,7 +346,7 @@ document.addEventListener('pointerlockerror', () => {
 });
 inputCanvas.addEventListener('wheel', event => {
     if (document.activeElement === inputCanvas && document.hasFocus() && !document.hidden) {
-        aetherInput.scroll -= event.deltaY / (event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 1 : 100);
+        aetherInput.scroll = Math.max(-1000000,Math.min(1000000,aetherInput.scroll - event.deltaY / (event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 1 : 100)));
         event.preventDefault();
     }
 }, {passive: false});

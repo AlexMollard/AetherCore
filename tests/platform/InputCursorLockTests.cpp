@@ -26,6 +26,23 @@ namespace aether
 	};
 }
 
+TEST_CASE("Browser discard requests mouse resync after advancing the discarded input frame")
+{
+	Input input;
+	InputFocusTestAccess::Sample(input, {10, 20}, true);
+	InputFocusTestAccess::Sample(input, {14, 18}, true);
+	CHECK(input.GetMouseDelta() == glm::vec2(4, -2));
+	input.ClearSyntheticMouse();
+	input.Update();
+	// A discarded browser Update can consume its pending resync; request it afterward.
+	InputFocusTestAccess::Sample(input, {14, 18}, true);
+	input.RequestMouseResync();
+	InputFocusTestAccess::Sample(input, {700, 800}, true);
+	CHECK(input.GetMouseDelta() == glm::vec2(0));
+	InputFocusTestAccess::Sample(input, {704, 797}, true);
+	CHECK(input.GetMouseDelta() == glm::vec2(4, -3));
+}
+
 TEST_CASE("Native mouse sampling discards desktop movement on the first focused frame")
 {
 	Input input;

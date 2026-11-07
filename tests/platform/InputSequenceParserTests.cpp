@@ -12,6 +12,16 @@
 
 using namespace aether;
 
+TEST_CASE("ParseInputSequence: Home camera reset produces a real key edge")
+{
+	std::string error;
+	const auto events = Input::ParseInputSequence("0.0 press home", error);
+	CHECK(error.empty());
+	REQUIRE(events.size() == 2);
+	CHECK(events.front().down);
+	CHECK_FALSE(events.back().down);
+}
+
 TEST_CASE("ParseInputSequence: press schedules a real down-then-up pair, not a permanent hold")
 {
 	std::string error;

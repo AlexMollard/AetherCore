@@ -16,6 +16,7 @@ if(AETHERCORE_WEB_RUNTIME)
         web/WebModelSnapshot.cpp
         web/WebPersistentAssets.cpp
         net/NetworkContext.cpp
+        net/ServerConnection.cpp
         net/NetworkSystems.cpp
         net/NetTraversalSessionWeb.cpp
         net/NetInterpolation.cpp
@@ -70,8 +71,12 @@ if(AETHERCORE_WEB_RUNTIME)
             scripting/interop/AssetsExports.cpp
             scripting/interop/AudioExports.cpp
             scripting/interop/InputExports.cpp
+            scripting/interop/CameraExports.cpp
+            scripting/interop/UiExports.cpp
+            scripting/interop/WorldExports.cpp
             scripting/interop/RagdollExports.cpp scripting/interop/AnimationExports.cpp
             scripting/interop/NetExports.cpp net/NetRpcExports.cpp net/BrowserScriptBridges.cpp
+            scripting/interop/ServerConnectionExports.cpp
             ${_managed_sources})
         add_dependencies(WebManagedRuntime WebManagedRegistrations)
         target_include_directories(WebManagedRuntime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/src/include")

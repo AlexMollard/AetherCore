@@ -112,7 +112,7 @@ def audit_sources(commands):
             "NetworkContext", "NetworkSystems", "NetTraversalSessionWeb", "NetInterpolation",
             "NetOwnership", "NetRagdoll", "NetRelevancy", "NetRewind", "NetRpc",
             "NetRpcExports", "NetScriptFields", "NetSerialize", "NetSession",
-            "NetSnapshot", "NetSpawn", "NetVelocity", "ReplicationSchema", "BrowserScriptBridges")),
+            "NetSnapshot", "NetSpawn", "NetVelocity", "ReplicationSchema", "BrowserScriptBridges", "ServerConnection")),
     }
     sources = []
     for entry in commands:

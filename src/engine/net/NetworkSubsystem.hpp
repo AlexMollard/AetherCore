@@ -73,6 +73,8 @@ namespace aether::net
 		void Flush();
 
 		void Send(ConnectionId peer, int channel, bool reliable, std::span<const std::byte> bytes);
+		// Payload and command bytes queued locally, including unacknowledged reliable fragments.
+		[[nodiscard]] std::size_t QueuedSendBytes(ConnectionId peer) const;
 		void Broadcast(int channel, bool reliable, std::span<const std::byte> bytes);
 
 		// Publishes a bounded batch into Events(). Call once per frame before reading;

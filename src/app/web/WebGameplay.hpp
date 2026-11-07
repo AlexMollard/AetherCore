@@ -56,6 +56,7 @@ namespace aether::app::web
 
 		Expected<void> Load(const std::string& name, bool deferScripts = false);
 		Expected<void> RunScripts(float dt);
+		void SampleInputTick(double now);
 		Expected<void> ProcessPendingDestroys();
 		Expected<void> StartSpawnedScripts();
 		Expected<void> StartScripts(const std::vector<WebScriptRecord>& records);

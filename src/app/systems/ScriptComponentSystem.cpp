@@ -6,6 +6,7 @@
 #include "IEngineRuntime.hpp"
 #include "net/NetworkContext.hpp"
 #include "net/NetworkSystems.hpp"
+#include "net/ServerConnection.hpp"
 #include "scene/Components.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics2d/Physics2DComponents.hpp"
@@ -166,6 +167,7 @@ namespace aether::app
 	bool ScriptComponentSystem::UpdateScriptEntity(scripting::GameplayHost& host, scripting::SceneContext& ctx, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt, bool attachOnly)
 	{
 		const scripting::ActiveScriptEntityScope entityScope(ctx, entity);
+		const scripting::ServerConnectionOwnerScope constructingOwner(ctx, 0);
 		if (!host.IsAvailable())
 		{
 			return false;
@@ -192,6 +194,10 @@ namespace aether::app
 		{
 			(void) host.Detach(failedHandle);
 			(void) host.Destroy(failedHandle);
+			if (ctx.serverConnections)
+			{
+				ctx.serverConnections->ReleaseOwner(key);
+			}
 			m_instances.erase(key);
 			m_failedInstances.insert(key);
 			if (auto* current = FindScriptEntry(*ctx.world, entity, scriptIndex))
@@ -210,6 +216,10 @@ namespace aether::app
 		{
 			(void) host.Detach(handle);
 			(void) host.Destroy(handle);
+			if (ctx.serverConnections)
+			{
+				ctx.serverConnections->ReleaseOwner(key);
+			}
 			m_instances.erase(key);
 			handle = 0;
 			entry = FindScriptEntry(*ctx.world, entity, scriptIndex);
@@ -267,6 +277,7 @@ namespace aether::app
 			entry->attached = false; // a freshly created instance must attach
 		}
 
+		const scripting::ServerConnectionOwnerScope callbackOwner(ctx, key);
 		if (!entry->attached)
 		{
 			entry->attached = true;
@@ -381,15 +392,25 @@ namespace aether::app
 			const std::uint64_t handle = m_instances[key].handle;
 			(void) host.Detach(handle);
 			(void) host.Destroy(handle);
+			if (ctx.serverConnections)
+			{
+				ctx.serverConnections->ReleaseOwner(key);
+			}
 			m_instances.erase(key);
 		}
 	}
 
 	void ScriptComponentSystem::DestroyAllInstances(scripting::GameplayHost& host, scripting::SceneContext& ctx)
 	{
+		const scripting::ServerConnectionOwnerScope teardownOwner(ctx, 0);
 		if (!host.IsAvailable() || m_instances.empty())
 		{
 			m_instances.clear();
+			if (ctx.serverConnections)
+			{
+				ctx.serverConnections->Clear();
+			}
+			ctx.serverConnections.reset();
 			return;
 		}
 
@@ -401,6 +422,11 @@ namespace aether::app
 			(void) host.Destroy(instance.handle);
 		}
 		m_instances.clear();
+		if (ctx.serverConnections)
+		{
+			ctx.serverConnections->Clear();
+		}
+		ctx.serverConnections.reset();
 	}
 
 	Expected<std::optional<ScriptComponentSystem::StreamingScriptState>> ScriptComponentSystem::CaptureStreamingScript(World& world, Entity entity, std::uint32_t scriptIndex)
@@ -635,6 +661,10 @@ namespace aether::app
 				return std::unexpected(std::move(destroyed.error()));
 			}
 			const auto current = m_instances.find(key);
+			if (ctx->serverConnections)
+			{
+				ctx->serverConnections->ReleaseOwner(key);
+			}
 			if (current != m_instances.end() && current->second.handle == handle) m_instances.erase(current);
 			if (auto* entry = FindScriptEntry(*ctx->world, entity, InstanceScriptIndex(key))) entry->attached = false;
 		}
@@ -791,6 +821,10 @@ namespace aether::app
 							const auto handle = found->second.handle;
 							(void) host->Detach(handle);
 							(void) host->Destroy(handle);
+							if (sceneCtx->serverConnections)
+							{
+								sceneCtx->serverConnections->ReleaseOwner(key);
+							}
 							m_instances.erase(key);
 						}
 					}
@@ -849,6 +883,10 @@ namespace aether::app
 				const scripting::ActiveScriptEntityScope entityScope(ctx, entity);
 				(void) host.Detach(it->second.handle);
 				(void) host.Destroy(it->second.handle);
+			}
+			if (ctx.serverConnections)
+			{
+				ctx.serverConnections->ReleaseOwner(it->first);
 			}
 			it = m_instances.erase(it);
 		}

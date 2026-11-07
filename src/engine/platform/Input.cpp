@@ -302,6 +302,10 @@ namespace aether
 		{
 			return 258;
 		}
+		if (name == "home")
+		{
+			return static_cast<int>(Key::Home);
+		}
 		if (name == "shift" || name == "lshift")
 		{
 			return 340;

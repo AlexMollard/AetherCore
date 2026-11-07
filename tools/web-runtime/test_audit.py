@@ -53,6 +53,23 @@ class CrossBuildBoundaryTests(unittest.TestCase):
         self.assertEqual(len(audit_sources([world, jolt, physics])), 3)
         with self.assertRaises(ValueError):
             audit_sources([world, dict(file=jolt["file"], command="em++ -pthread -c")])
+
+    def test_server_message_transport_has_an_exact_portable_source_allowance(self):
+        world = dict(file="src/engine/scene/World.cpp", command="em++ -c")
+        transport = "src/app/net/ServerConnection.cpp"
+        portable = (transport, "src/engine/platform/web/PlatformPathsWeb.cpp", "src/engine/ui/UiEntities.cpp",
+                    "src/app/scripting/interop/ServerConnectionExports.cpp")
+        self.assertEqual(len(audit_sources([world, *(dict(file=path, command="em++ -c") for path in portable)])), 5)
+        for path in ("src/engine/net/ServerConnection.cpp", "src/app/net/ServerConnectionNative.cpp",
+                     "other/net/ServerConnection.cpp", "src/engine/net/NetworkSubsystem.cpp",
+                     "src/app/net/NetTraversalSession.cpp", "src/editor/editor/ControlServer.cpp",
+                     "src/engine/scripting/DotNetHost.cpp"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                audit_sources([world, dict(file=path, command="em++ -c")])
+        with self.assertRaises(ValueError):
+            audit_sources([world, dict(file=transport, arguments=["em++", "-pthread", "-c"])])
+        with self.assertRaises(ValueError):
+            audit_imports([("env", "aether_server_connection_connect")])
     def test_wasm_cannot_be_disguised_as_host_executable(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "AssetPacker.exe"

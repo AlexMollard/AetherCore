@@ -1027,6 +1027,34 @@ internal static unsafe partial class Native
     internal static partial int aether_net_connect(string host, ushort port);
 
     [LibraryImport(Lib)]
+    internal static partial ulong aether_server_connection_create();
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_server_connection_release(ulong handle);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_server_connection_connect(ulong handle, string host, int port,
+        string gatewayUrl, string gatewayToken, string targetAlias);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_server_connection_poll(ulong handle);
+
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_server_connection_send(ulong handle, byte* message, int length, int reliable);
+
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_server_connection_receive(ulong handle, byte* buffer, int capacity);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_server_connection_disconnect(ulong handle);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_server_connection_is_connected(ulong handle);
+
+    [LibraryImport(Lib)]
+    internal static unsafe partial int aether_server_connection_last_error(ulong handle, byte* buffer, int capacity);
+
+    [LibraryImport(Lib)]
     internal static partial void aether_net_disconnect();
 
     [LibraryImport(Lib)]

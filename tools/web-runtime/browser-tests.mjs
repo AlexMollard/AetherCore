@@ -667,6 +667,11 @@ try {
 		await page.waitForFunction(() => aetherRuntime.audioReady);
 		await page.locator('#canvas').click({position : {x : 32, y : 20}});
 		await page.waitForFunction(() => aetherRuntime.toggleOn === true, undefined, {timeout : 5000});
+		await page.locator('#canvas').click({position : {x : 32, y : 20}, delay : 0});
+		await page.waitForFunction(() => aetherRuntime.toggleOn === false, undefined, {timeout : 5000});
+		const toggledAt = await page.evaluate(() => aetherRuntime.ticks);
+		await page.waitForFunction(tick => aetherRuntime.ticks > tick + 4, toggledAt);
+		assert.equal(await page.evaluate(() => aetherRuntime.toggleOn), false, 'One DOM click must produce one UI activation across later simulation ticks');
 		await page.locator('#canvas').click({position : {x : 145, y : 68}});
 		await page.waitForFunction(() => aetherRuntime.sliderValue > 0.75);
 		// GPU readback completes asynchronously; sample actual pixels across a full animation cycle.

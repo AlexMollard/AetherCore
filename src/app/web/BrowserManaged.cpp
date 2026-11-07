@@ -220,22 +220,8 @@ extern "C"
 		return AE_GAMEPLAY_OK;
 	}
 
-	int aether_entity_valid(std::uint32_t id) { return Valid(id); }
-	void aether_entity_destroy(std::uint32_t id)
-	{
-		AetherGameplayPropertyValue value{};
-		Require(Invoke({.operation = AE_GAMEPLAY_SERVICE_DESTROY_ENTITY, .entity = Handle(id)}, value));
-	}
-	AetherGameplayVec3 aether_get_position(std::uint32_t id)
-	{
-		AetherGameplayVec3 result{};
-		Require(s_engine.getPosition ? s_engine.getPosition(s_engine.context, Handle(id), &result) : AE_GAMEPLAY_UNSUPPORTED);
-		return result;
-	}
-	void aether_set_position(std::uint32_t id, AetherGameplayVec3 position)
-	{
-		Require(s_engine.setPosition ? s_engine.setPosition(s_engine.context, Handle(id), position) : AE_GAMEPLAY_UNSUPPORTED);
-	}
+	// Entity/transform and UI exports use the same SceneContext implementations as native.
+	void aether_set_position(std::uint32_t id, AetherGameplayVec3 position);
 	std::uint32_t aether_scene_find_by_name(const char* name)
 	{
 		AetherGameplayPropertyValue value{};
@@ -263,11 +249,6 @@ extern "C"
 		        .vector = {position.x, position.y, position.z}, .integer = 1, .text = View(name)}, value);
 		Require(status);
 		return status == AE_GAMEPLAY_OK ? value.entity.id : 0;
-	}
-	void aether_ui_set_text(std::uint32_t id, const char* text)
-	{
-		AetherGameplayPropertyValue value{};
-		Require(Invoke({.operation = AE_GAMEPLAY_SERVICE_SET_UI_TEXT, .entity = Handle(id), .text = View(text)}, value));
 	}
 	struct Vec2 { float x, y; };
 	void aether_physics2d_set_linear_velocity(std::uint32_t id, Vec2 velocity)

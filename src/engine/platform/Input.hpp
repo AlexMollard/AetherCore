@@ -529,6 +529,8 @@ namespace aether
 			SetBrowserMouseDelta({});
 			SetBrowserScrollDelta({});
 		}
+		// Use after discarding an unfocused sample; the next focused sample establishes its own origin.
+		void RequestMouseResync() { m_mouseNeedsResync = true; }
 
 		void ClearSyntheticMouse()
 		{

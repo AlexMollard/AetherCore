@@ -244,6 +244,25 @@ namespace aether::net
 		return static_cast<std::uint32_t>(target->roundTripTime);
 	}
 
+	std::size_t NetworkSubsystem::QueuedSendBytes(ConnectionId peer) const
+	{
+		const ENetPeer* target = m_role == NetRole::Client ? m_serverPeer : PeerFor(peer);
+		if (target == nullptr)
+		{
+			return 0;
+		}
+		std::size_t bytes = 0;
+		for (const ENetList* commands : {&target->sentReliableCommands, &target->outgoingSendReliableCommands, &target->outgoingCommands})
+		{
+			for (const ENetListNode* node = commands->sentinel.next; node != &commands->sentinel; node = node->next)
+			{
+				const auto* command = reinterpret_cast<const ENetOutgoingCommand*>(node);
+				bytes += command->fragmentLength + sizeof(ENetProtocol);
+			}
+		}
+		return bytes;
+	}
+
 	void NetworkSubsystem::Send(ConnectionId peer, int channel, bool reliable, std::span<const std::byte> bytes)
 	{
 		if (m_host == nullptr || bytes.empty() || channel < 0 || channel >= kChannelCount)

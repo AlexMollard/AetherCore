@@ -338,6 +338,17 @@ namespace aether::net
 	{
 	} // WebSocket.send queues bytes immediately.
 
+	std::size_t NetworkSubsystem::QueuedSendBytes(ConnectionId) const
+	{
+		if (!m_webSocket)
+		{
+			return 0;
+		}
+		size_t buffered = 0;
+		emscripten_websocket_get_buffered_amount(m_webSocket->socket, &buffered);
+		return buffered + m_webSocket->pendingBytes;
+	}
+
 	void NetworkSubsystem::Send(ConnectionId peer, int channel, bool reliable, std::span<const std::byte> bytes)
 	{
 		if (!m_webSocket || bytes.empty() || bytes.size() > kMaxPacketBytes || channel < 0 || channel >= kChannelCount || (m_role == NetRole::Host && !m_webPeers.contains(peer)))

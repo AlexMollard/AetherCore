@@ -532,7 +532,7 @@ namespace aether::app::web
 				continue;
 			}
 			const auto* renderer = world.TryGet<MeshRendererComponent>(entity);
-			if (!renderer || !renderer->visible || world.Has<DisabledComponent>(entity) || ecs::HasDisabledAncestor(world, entity))
+			if (!MeshRendererVisible(renderer) || world.Has<DisabledComponent>(entity) || ecs::HasDisabledAncestor(world, entity))
 			{
 				continue;
 			}
@@ -543,7 +543,7 @@ namespace aether::app::web
 				draw.world = glm::translate(draw.world, binding.origin);
 			}
 			draw.mesh = binding.slot;
-			draw.castShadows = renderer->castShadows;
+			draw.castShadows = MeshRendererCastsShadows(renderer);
 			draw.material = world.Get<MaterialInstanceComponent>(entity).asset;
 			if (binding.grass)
 			{

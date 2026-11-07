@@ -29,6 +29,38 @@ namespace
 	}
 } // namespace
 
+TEST_CASE("Tick sampled mouse presses activate UI once while held gameplay keys remain down")
+{
+	World world;
+	Input input;
+	const auto button = MakeSelectable(world, {0, 0, 100, 30});
+	input.SetSyntheticMousePos({10, 10});
+	input.SetSyntheticMouseButton(0, true);
+	input.SetSyntheticKey(static_cast<int>(Key::W), true, false);
+	// Render-only frames do not advance input/UI state before the simulation consumes the sample.
+	for (int render = 0; render < 8; ++render)
+	{
+		CHECK_FALSE(Sel(world, button).activated);
+		CHECK_FALSE(input.IsMouseButtonPressed(MouseButton::Left));
+	}
+	input.Update();
+	ui::UiNavigationSystem::Update(world, input);
+	CHECK(Sel(world, button).activated);
+	CHECK(input.IsMouseButtonPressed(MouseButton::Left));
+	CHECK(input.IsKeyPressed(Key::W));
+	input.SetSyntheticMouseButton(0, false);
+	input.Update();
+	ui::UiNavigationSystem::Update(world, input);
+	CHECK_FALSE(Sel(world, button).activated);
+	CHECK_FALSE(input.IsMouseButtonPressed(MouseButton::Left));
+	CHECK(input.IsKeyDown(Key::W));
+	CHECK_FALSE(input.IsKeyPressed(Key::W));
+	input.Update();
+	ui::UiNavigationSystem::Update(world, input);
+	CHECK_FALSE(Sel(world, button).activated);
+	CHECK(input.IsKeyDown(Key::W));
+}
+
 TEST_CASE("A captured focus keeps navigation keys away from the nav system")
 {
 	World w;

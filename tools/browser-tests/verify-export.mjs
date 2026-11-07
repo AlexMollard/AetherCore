@@ -56,9 +56,13 @@ try {
    res.writeHead(200,{'Content-Type':mime,'Cache-Control':options.measure ? 'public, max-age=3600' : 'no-store'}).end(bytes);
   } catch {res.writeHead(404).end();}
  });
- await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const verificationPort=Number(options.port || process.env.AETHER_WEB_VERIFY_PORT || 0);
+ assert.ok(Number.isInteger(verificationPort) && verificationPort>=0 && verificationPort<=65535,'Invalid verification port');
+ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(verificationPort,'127.0.0.1',resolve);});
  const base=`http://127.0.0.1:${server.address().port}`;
- browser=await chromium.launch({channel:'chrome',headless:true,timeout:15000,args:['--enable-gpu']});
+ const executable=options.executable || process.env.AETHER_CHROME_EXECUTABLE;
+ report.environment.browserExecutable=executable ? path.resolve(executable) : 'chrome';
+ browser=await chromium.launch({...executable ? {executablePath:path.resolve(executable)} : {channel:'chrome'},headless:true,timeout:15000,args:['--enable-gpu']});
  report.environment.browserVersion=browser.version();
  const context=await browser.newContext();
  try {

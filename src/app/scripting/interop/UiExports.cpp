@@ -5,7 +5,9 @@
 
 #include <entt/entt.hpp>
 
-#include "assets/AssetManager.hpp"
+#if !defined(AETHERCORE_WEB_RUNTIME)
+#	include "assets/AssetManager.hpp"
+#endif
 #include "material/TextureHandle.hpp"
 #include "material/TextureRegistry.hpp"
 #include "scene/World.hpp"
@@ -285,8 +287,16 @@ AE_SCRIPT_API void aether_ui_set_image_texture(std::uint32_t id, const char* pat
 {
 	SafeExport([&] -> void
 	{
-	auto& ctx = ActiveContext();
 	auto* img = ActiveWorld().TryGet<aether::ui::UIImage>(aether::Entity{id});
+#if defined(AETHERCORE_WEB_RUNTIME)
+	if (img != nullptr)
+	{
+		// The browser owns its texture registry in WebScene, resolved by BuildDrawCommands.
+		img->texturePath = path != nullptr ? path : "";
+		img->textureDirty = true;
+	}
+#else
+	auto& ctx = ActiveContext();
 	if (img == nullptr || ctx.assets == nullptr)
 	{
 		return;
@@ -308,6 +318,7 @@ AE_SCRIPT_API void aether_ui_set_image_texture(std::uint32_t id, const char* pat
 	img->texturePath = path;
 	img->texture = textures.Acquire(path);
 	img->textureDirty = false;
+#endif
 	});
 }
 

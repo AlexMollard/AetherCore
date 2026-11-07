@@ -34,6 +34,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     ui/FontRegistry.cpp
     ui/UiDrawBuilder.cpp
     ui/UiImageSystem.cpp
+    ui/UiEntities.cpp
     ui/UiLayoutSystem.cpp
     ui/UiNavigationSystem.cpp
     ui/UiTextBoxSystem.cpp
@@ -46,6 +47,7 @@ set(AETHER_WEB_ENGINE_SOURCES
     streaming/StreamingBudget.cpp
     scripting/GameplayAbiValidation.cpp
     platform/web/WebLog.cpp
+    platform/web/PlatformPathsWeb.cpp
     platform/web/NetworkSubsystemWeb.cpp
     net/RoomCode.cpp
     platform/web/WebAssetLoader.cpp

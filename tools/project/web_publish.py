@@ -174,6 +174,8 @@ def preflight(project, startup_override=None):
     if language == 'csharp':
         if re.search(r'\b(?:IEditorWindow|EditorGui)\b', code):
             reject('WEB_CAPABILITY_UNSUPPORTED', 'Editor tooling is outside the C# browser profile')
+        if re.search(r'\bDayNight\s*\.', code):
+            reject('WEB_CAPABILITY_UNSUPPORTED', 'The dynamic DayNight driver is outside the C# browser profile; use authored static environment lighting')
         if re.search(r'\b(?:System\s*\.\s*Net\s*\.\s*(?:Sockets|WebSockets)\b|(?:Socket|TcpClient|TcpListener|UdpClient|ClientWebSocket)\b)', code):
             reject('WEB_NETWORK_UNSUPPORTED', 'Raw sockets are outside the C# browser profile')
         supported_net = {'Host', 'Connect', 'Disconnect', 'IsHost', 'IsClient', 'IsConnected',
@@ -185,7 +187,7 @@ def preflight(project, startup_override=None):
             'RoundTripMs', 'GetPlayerPing', 'TryRewind'}
         net_code = re.sub(r'\bSystem\s*\.\s*Net\s*\.', ' ', code)
         members = re.findall(r'\bNet\s*\.\s*([A-Za-z_]\w*)', net_code)
-        uses_network = bool(members or re.search(r'\b(?:NetRpc(?:Attribute)?|Replicated(?:Attribute)?)\b', code))
+        uses_network = bool(members or re.search(r'\b(?:NetRpc(?:Attribute)?|Replicated(?:Attribute)?|ServerConnection)\b', code))
         for member in members:
             if member not in supported_net:
                 reject('WEB_NETWORK_UNSUPPORTED', 'Net.' + member + ' is outside the C# browser profile')

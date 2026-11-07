@@ -9,8 +9,20 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+#include "scene/Components.hpp"
+
 namespace aether
 {
+	inline bool MeshRendererVisible(const MeshRendererComponent* renderer)
+	{
+		return renderer == nullptr || renderer->visible;
+	}
+
+	inline bool MeshRendererCastsShadows(const MeshRendererComponent* renderer)
+	{
+		return renderer == nullptr || renderer->castShadows;
+	}
+
 	inline glm::vec4 ExtractDepthOfFieldParams(float focusDistance, float focalLengthMm, float aperture, bool enabled, bool perspective)
 	{
 		// Thin lens against a 24mm sensor: the shader multiplies this coefficient by

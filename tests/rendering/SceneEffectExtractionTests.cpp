@@ -5,8 +5,24 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "rendering/SceneEffectExtraction.hpp"
+#include "scene/Components.hpp"
 
 using namespace aether;
+
+TEST_CASE("Missing optional mesh renderer flags preserve authored geometry and shadows")
+{
+	CHECK(MeshRendererVisible(nullptr));
+	CHECK(MeshRendererCastsShadows(nullptr));
+	MeshRendererComponent flags{};
+	CHECK(MeshRendererVisible(&flags));
+	CHECK(MeshRendererCastsShadows(&flags));
+	flags.visible = false;
+	CHECK_FALSE(MeshRendererVisible(&flags));
+	flags.visible = true;
+	flags.castShadows = false;
+	CHECK(MeshRendererVisible(&flags));
+	CHECK_FALSE(MeshRendererCastsShadows(&flags));
+}
 
 TEST_CASE("Shared camera effects preserve thin-lens focus and aperture semantics")
 {

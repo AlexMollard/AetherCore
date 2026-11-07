@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <memory>
 #include <functional>
 #include <string>
 #include <vector>
@@ -59,6 +60,11 @@ namespace aether::app::scene
 	class WorldStreaming;
 }
 
+namespace aether::net
+{
+	class ServerConnections;
+}
+
 namespace aether::app::scripting
 {
 	struct SceneContext
@@ -74,6 +80,10 @@ namespace aether::app::scripting
 		aether::Renderer* renderer = nullptr;
 		aether::Input* input = nullptr;
 		aether::ServiceContainer* services = nullptr;
+		// Shared only by temporary context copies; teardown of the scene context owns the sockets.
+		std::shared_ptr<aether::net::ServerConnections> serverConnections;
+		std::uint64_t activeServerConnectionOwner = 0;
+		bool serverConnectionsStopping = false;
 		std::vector<aether::DebugVertex>* debugVertices = nullptr;
 		aether::app::DayNightSystem* dayNight = nullptr;
 		aether::effects::EffectManager* effects = nullptr;
@@ -193,6 +203,21 @@ namespace aether::app::scripting
 
 	private:
 		SceneContext* m_previous = nullptr;
+	};
+
+	// Connection allocation is permitted only in a live script callback. Constructors and teardown
+	// leave the owner at zero, so a failed instance cannot leave an unowned connection behind.
+	struct ServerConnectionOwnerScope
+	{
+		SceneContext& context;
+		std::uint64_t previous;
+		ServerConnectionOwnerScope(SceneContext& ctx, std::uint64_t owner) : context(ctx), previous(ctx.activeServerConnectionOwner)
+		{
+			context.activeServerConnectionOwner = owner;
+		}
+		~ServerConnectionOwnerScope() { context.activeServerConnectionOwner = previous; }
+		ServerConnectionOwnerScope(const ServerConnectionOwnerScope&) = delete;
+		ServerConnectionOwnerScope& operator=(const ServerConnectionOwnerScope&) = delete;
 	};
 
 	struct ActiveScriptEntityScope

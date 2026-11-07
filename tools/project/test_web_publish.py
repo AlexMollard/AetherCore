@@ -119,6 +119,19 @@ class WebPreflightTests(unittest.TestCase):
    with self.subTest(extra=extra):
     (self.root/'ProjectSettings.toml').write_text(self.settings+f'[publish.web.network]\ngatewayUrl="ws://localhost:8080/net"\n{extra}\n',encoding='utf-8')
     self.expect('WEB_NETWORK_CONFIG')
+ def test_server_connection_requires_gateway_configuration(self):
+  settings=self.settings.replace('rust','csharp')
+  (self.root/'ProjectSettings.toml').write_text(settings,encoding='utf-8')
+  (self.root/'scripts/AetherGame.csproj').write_text('<Project/>',encoding='utf-8')
+  (self.root/'scripts/Game.cs').write_text('var server = new AetherCore.ServerConnection(); server.Connect("localhost",27050);',encoding='utf-8')
+  self.expect('WEB_NETWORK_CONFIG')
+  (self.root/'ProjectSettings.toml').write_text(settings+'[publish.web.network]\ngatewayUrl="ws://localhost:8080/net"\ntargetAlias="willowmere"\nauthToken="token"\n',encoding='utf-8')
+  self.assertEqual(self.api.preflight(self.root)['network']['targetAlias'],'willowmere')
+ def test_csharp_daynight_driver_is_outside_the_browser_profile(self):
+  (self.root/'ProjectSettings.toml').write_text(self.settings.replace('rust','csharp'),encoding='utf-8')
+  (self.root/'scripts/AetherGame.csproj').write_text('<Project/>',encoding='utf-8')
+  (self.root/'scripts/Game.cs').write_text('DayNight.Enabled = true;',encoding='utf-8')
+  self.expect('WEB_CAPABILITY_UNSUPPORTED')
  def test_network_capability_requires_config(self):
   (self.root/'ProjectSettings.toml').write_text(self.settings+'[publish.web]\ncapabilities=["network"]\n',encoding='utf-8')
   self.expect('WEB_NETWORK_CONFIG')

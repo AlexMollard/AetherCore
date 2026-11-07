@@ -37,6 +37,7 @@
 #	include "BrowserManaged.hpp"
 #	include "scripting/SceneContext.hpp"
 #	include "net/BrowserScriptBridges.hpp"
+#	include "net/ServerConnection.hpp"
 #endif
 
 #if AE_WEB_TEST_BRIDGE && AE_WEB_PANIC_FIXTURE
@@ -294,6 +295,9 @@ namespace aether::app::web
 
 	void WebGameplay::Stop()
 	{
+#if defined(AE_WEB_MANAGED)
+		ManagedBrowserSceneContext().serverConnectionsStopping = true;
+#endif
 		if (m_streaming)
 		{
 #if defined(AE_WEB_MANAGED)
@@ -314,7 +318,17 @@ namespace aether::app::web
 			m_network->Stop(m_world);
 		m_world.UnregisterSystem("NetworkSendSystem");
 		m_world.UnregisterSystem("NetworkReceiveSystem");
+#if defined(AE_WEB_MANAGED)
+		const scripting::ServerConnectionOwnerScope teardownOwner(ManagedBrowserSceneContext(), 0);
+#endif
 		m_host.Clear(++m_generation);
+#if defined(AE_WEB_MANAGED)
+		if (auto& connections = ManagedBrowserSceneContext().serverConnections)
+		{
+			connections->Clear();
+			connections.reset();
+		}
+#endif
 		m_host_ready = false;
 		m_streaming_budget.reset();
 		m_instances.clear();
@@ -333,6 +347,9 @@ namespace aether::app::web
 
 	Expected<void> WebGameplay::Initialize()
 	{
+#if defined(AE_WEB_MANAGED)
+		ManagedBrowserSceneContext().serverConnectionsStopping = false;
+#endif
 		m_services = std::make_unique<ServiceContainer>();
 		m_audio = std::make_unique<audio::AudioSubsystem>();
 		AE_TRY_VOID(m_audio->Init());
@@ -515,6 +532,12 @@ namespace aether::app::web
 			if (scripts && it->scriptIndex < scripts->scripts.size() && scripts->scripts[it->scriptIndex].attached)
 				AE_TRY_VOID(m_host.Detach(it->handle));
 			AE_TRY_VOID(m_host.Destroy(it->handle));
+#if defined(AE_WEB_MANAGED)
+			if (auto& connections = ManagedBrowserSceneContext().serverConnections)
+			{
+				connections->ReleaseOwner(net::ServerConnections::OwnerKey(it->entity.id, it->scriptIndex));
+			}
+#endif
 			it = m_instances.erase(it);
 		}
 		m_spawned_scripts.clear();
@@ -595,6 +618,7 @@ namespace aether::app::web
 			ActorScope actor(m_callback_entity, instance.entity);
 #if defined(AE_WEB_MANAGED)
 			const scripting::ActiveScriptEntityScope managedActor(ManagedBrowserSceneContext(), instance.entity);
+			const scripting::ServerConnectionOwnerScope connectionOwner(ManagedBrowserSceneContext(), net::ServerConnections::OwnerKey(instance.entity.id, instance.scriptIndex));
 #endif
 			if (!m_instances[index].ownershipSettled)
 			{
@@ -676,6 +700,9 @@ namespace aether::app::web
 			{
 				continue;
 			}
+#if defined(AE_WEB_MANAGED)
+			const scripting::ServerConnectionOwnerScope constructingOwner(ManagedBrowserSceneContext(), 0);
+#endif
 			AE_TRY(handle, m_host.CreateInstance(record.record.type, record.entity.id));
 			EnablePhysicsEvents(record.entity);
 			m_instances.push_back({record.entity, *handle, record.record.type, record.scriptIndex});
@@ -690,6 +717,7 @@ namespace aether::app::web
 			ActorScope actor(m_callback_entity, record.entity);
 #if defined(AE_WEB_MANAGED)
 			const scripting::ActiveScriptEntityScope managedActor(ManagedBrowserSceneContext(), record.entity);
+			const scripting::ServerConnectionOwnerScope connectionOwner(ManagedBrowserSceneContext(), net::ServerConnections::OwnerKey(record.entity.id, record.scriptIndex));
 #endif
 			AE_TRY_VOID(m_host.Attach(handle));
 			if (auto* scripts = m_world.TryGet<ScriptComponent>(record.entity); scripts && record.scriptIndex < scripts->scripts.size())
@@ -716,6 +744,7 @@ namespace aether::app::web
 			ActorScope actor(m_callback_entity, record.entity);
 #if defined(AE_WEB_MANAGED)
 			const scripting::ActiveScriptEntityScope managedActor(ManagedBrowserSceneContext(), record.entity);
+			const scripting::ServerConnectionOwnerScope inactiveOwner(ManagedBrowserSceneContext(), 0);
 #endif
 			if (!progress.attaching)
 			{
@@ -729,6 +758,9 @@ namespace aether::app::web
 			{
 				const auto handle = GetInstanceHandle(record.entity, record.scriptIndex);
 				if (!handle) AE_UNEXPECTED(AetherError::Engine("Streaming script instance disappeared during activation"));
+#if defined(AE_WEB_MANAGED)
+				const scripting::ServerConnectionOwnerScope connectionOwner(ManagedBrowserSceneContext(), net::ServerConnections::OwnerKey(record.entity.id, record.scriptIndex));
+#endif
 				AE_TRY_VOID(m_host.Attach(handle));
 				if (auto* scripts = m_world.TryGet<ScriptComponent>(record.entity); scripts && record.scriptIndex < scripts->scripts.size())
 					scripts->scripts[record.scriptIndex].attached = true;
@@ -987,6 +1019,12 @@ namespace aether::app::web
 				if (scripts && it->scriptIndex < scripts->scripts.size() && scripts->scripts[it->scriptIndex].attached)
 					AE_TRY_VOID(m_host.Detach(it->handle));
 				AE_TRY_VOID(m_host.Destroy(it->handle));
+#if defined(AE_WEB_MANAGED)
+					if (auto& connections = ManagedBrowserSceneContext().serverConnections)
+					{
+						connections->ReleaseOwner(net::ServerConnections::OwnerKey(it->entity.id, it->scriptIndex));
+					}
+#endif
 				it = m_instances.erase(it);
 			}
 			else ++it;
@@ -1030,6 +1068,12 @@ namespace aether::app::web
 				{
 					AE_TRY_VOID(m_host.Detach(instance->handle));
 					AE_TRY_VOID(m_host.Destroy(instance->handle));
+#if defined(AE_WEB_MANAGED)
+					if (auto& connections = ManagedBrowserSceneContext().serverConnections)
+					{
+						connections->ReleaseOwner(net::ServerConnections::OwnerKey(instance->entity.id, instance->scriptIndex));
+					}
+#endif
 					instance = m_instances.erase(instance);
 				}
 				else
@@ -1040,6 +1084,77 @@ namespace aether::app::web
 			m_world.Destroy(entity);
 		}
 		return {};
+	}
+
+	void WebGameplay::SampleInputTick(double now)
+	{
+		EM_ASM({ aetherInput.tick = aetherInput.takeTick(); });
+#if AE_WEB_TEST_BRIDGE
+		std::array<std::uint8_t, 512> testKeys{};
+		EM_ASM({ HEAPU8.set(aetherTestInternal.keys, $0); }, testKeys.data());
+#endif
+		const bool canvasFocused = EM_ASM_INT({ return document.activeElement == Module.canvas && document.hasFocus() && !document.hidden; });
+		for (size_t key = 0; key < m_keys.size(); ++key)
+		{
+			m_input.SetSyntheticKey(static_cast<int>(key),
+			        canvasFocused
+			                && (m_keys[key] || m_pressed_keys[key]
+#if AE_WEB_TEST_BRIDGE
+			                        || testKeys[key]
+#endif
+			                        ),
+			        false);
+		}
+		const int buttons = EM_ASM_INT({ return aetherInput.tick.buttons; });
+		for (int button = 0; button < 3; ++button)
+		{
+			m_input.SetSyntheticMouseButton(button, canvasFocused && (buttons & (1 << button)));
+		}
+		m_input.SetSyntheticMousePos({EM_ASM_DOUBLE({ return aetherInput.tick.x; }), EM_ASM_DOUBLE({ return aetherInput.tick.y; })});
+		const glm::vec2 relativeMouseDelta{static_cast<float>(EM_ASM_DOUBLE({ return aetherInput.tick.dx; })),
+		        static_cast<float>(EM_ASM_DOUBLE({ return aetherInput.tick.dy; }))};
+		m_scroll_delta.y += static_cast<float>(EM_ASM_DOUBLE({ return aetherInput.tick.scroll; }));
+		if (!canvasFocused)
+		{
+			m_mouse_delta = m_scroll_delta = {};
+		}
+		const int textBytes = EM_ASM_INT({ return lengthBytesUTF8(aetherInput.tick.typedText); });
+		if (canvasFocused && textBytes > 0)
+		{
+			std::string text(static_cast<std::size_t>(textBytes) + 1, '\0');
+			EM_ASM({ stringToUTF8(aetherInput.tick.typedText, $0, $1); }, text.data(), text.size());
+			text.resize(static_cast<std::size_t>(textBytes));
+			m_input.SetSyntheticChars(text);
+		}
+		m_input.Update();
+		m_input.UpdateCursorLock(canvasFocused);
+		if (canvasFocused)
+		{
+			// Unlocked motion is in canvas pixels; locked motion uses the browser's unbounded relative sample.
+			m_mouse_delta += m_input.IsCursorLocked() ? relativeMouseDelta : m_input.GetMouseDelta();
+		}
+		m_input.SetBrowserMouseDelta(m_mouse_delta);
+		m_input.SetBrowserScrollDelta(m_scroll_delta);
+		if (EM_ASM_INT({ return aetherInput.pasteText !== null; }))
+		{
+			m_input.SetPendingPasteText(m_input.GetClipboardText());
+		}
+		EM_ASM(
+		        {
+			        aetherRuntime.gamepadConnected = !!$0;
+			        aetherRuntime.padA = !!$1;
+			        aetherRuntime.padLeftX = $2;
+		        },
+		        m_input.IsGamepadConnected(),
+		        m_input.IsGamepadButtonDown(GamepadButton::A),
+		        m_input.GetGamepadStick(GamepadStick::Left).x);
+		int uiWidth = 0, uiHeight = 0;
+		emscripten_get_canvas_element_size("#canvas", &uiWidth, &uiHeight);
+		ui::ResolveCanvases(m_world, {uiWidth, uiHeight});
+		ui::UiNavigationSystem::Update(m_world, m_input);
+		ui::UiWidgetSystem::Update(m_world, m_input, static_cast<float>(now / 1000.0));
+		ui::UiTextBoxSystem::Update(m_world, m_input, &m_scene->Fonts(), static_cast<float>(now / 1000.0));
+		EM_ASM({ aetherInput.pasteText = null; });
 	}
 
 	Expected<void> WebGameplay::Frame(double now, bool& capture)
@@ -1075,81 +1190,31 @@ namespace aether::app::web
 		const bool testManual = EM_ASM_INT({ return aetherTestInternal.manual(); });
 		const bool testStep = !m_manual_pending_frame && EM_ASM_INT({ return aetherTestInternal.beginFrame(); });
 		const auto ticksBeforeFrame = m_ticks;
-		std::array<std::uint8_t, 512> testKeys{};
-		EM_ASM({ HEAPU8.set(aetherTestInternal.keys, $0); }, testKeys.data());
 #endif
-		const bool canvasFocused = EM_ASM_INT({ return document.activeElement == Module.canvas && document.hasFocus() && !document.hidden; });
-		for (size_t key = 0; key < m_keys.size(); ++key)
-		{
-			m_input.SetSyntheticKey(static_cast<int>(key),
-			        canvasFocused
-			                && (m_keys[key] || m_pressed_keys[key]
-#if AE_WEB_TEST_BRIDGE
-			                        || testKeys[key]
-#endif
-			                        ),
-			        false);
-		}
-		const int buttons = EM_ASM_INT({
-			const buttons = aetherInput.buttons | aetherInput.pressed;
-			aetherInput.pressed = 0;
-			return buttons;
-		});
-		for (int button = 0; button < 3; ++button)
-		{
-			m_input.SetSyntheticMouseButton(button, canvasFocused && (buttons & (1 << button)));
-		}
-		m_input.SetSyntheticMousePos({EM_ASM_DOUBLE({ return aetherInput.x; }), EM_ASM_DOUBLE({ return aetherInput.y; })});
-		const glm::vec2 relativeMouseDelta{static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.dx; aetherInput.dx = 0; return v; })),
-		        static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.dy; aetherInput.dy = 0; return v; }))};
-		m_scroll_delta.y += static_cast<float>(EM_ASM_DOUBLE({ const v = aetherInput.scroll; aetherInput.scroll = 0; return v; }));
-		if (!canvasFocused)
-		{
-			m_mouse_delta = m_scroll_delta = {};
-		}
-		const int textBytes = EM_ASM_INT({ return lengthBytesUTF8(aetherInput.typedText); });
-		if (textBytes > 0)
-		{
-			std::string text(static_cast<std::size_t>(textBytes) + 1, '\0');
-			EM_ASM({ stringToUTF8(aetherInput.typedText, $0, $1); aetherInput.typedText = ""; }, text.data(), text.size());
-			text.resize(static_cast<std::size_t>(textBytes));
-			m_input.SetSyntheticChars(text);
-		}
-		m_input.Update();
-		m_input.UpdateCursorLock(canvasFocused);
-		if (canvasFocused)
-		{
-			// Unlocked motion is in canvas pixels; locked motion uses the browser's unbounded relative sample.
-			m_mouse_delta += m_input.IsCursorLocked() ? relativeMouseDelta : m_input.GetMouseDelta();
-		}
-		m_input.SetBrowserMouseDelta(m_mouse_delta);
-		m_input.SetBrowserScrollDelta(m_scroll_delta);
-		if (EM_ASM_INT({ return aetherInput.pasteText !== null; }))
-		{
-			m_input.SetPendingPasteText(m_input.GetClipboardText());
-		}
-		EM_ASM(
-		        {
-			        aetherRuntime.gamepadConnected = !!$0;
-			        aetherRuntime.padA = !!$1;
-			        aetherRuntime.padLeftX = $2;
-		        },
-		        m_input.IsGamepadConnected(),
-		        m_input.IsGamepadButtonDown(GamepadButton::A),
-		        m_input.GetGamepadStick(GamepadStick::Left).x);
-		int uiWidth = 0, uiHeight = 0;
-		emscripten_get_canvas_element_size("#canvas", &uiWidth, &uiHeight);
-		ui::ResolveCanvases(m_world, {uiWidth, uiHeight});
-		ui::UiNavigationSystem::Update(m_world, m_input);
-		ui::UiWidgetSystem::Update(m_world, m_input, static_cast<float>(now / 1000.0));
-		ui::UiTextBoxSystem::Update(m_world, m_input, &m_scene->Fonts(), static_cast<float>(now / 1000.0));
-		EM_ASM({ aetherInput.pasteText = null; });
 		const bool paused = EM_ASM_INT({
 			return document.hidden || !document.hasFocus() || !aetherPlatform.storageReady || !aetherPlatform.started || (aetherPlatform.audioSources.size > 0 && !aetherPlatform.audioReady) || aetherPlatform.busy || aetherPlatform.pending.size > 0;
 		});
 		if (paused)
 		{
 			m_previous = m_accumulator = 0;
+			const bool discardInput = EM_ASM_INT({ return document.hidden || !document.hasFocus() || document.activeElement != Module.canvas || !aetherPlatform.started; });
+			if (discardInput)
+			{
+				m_pressed_keys.fill(false);
+				m_input.ClearSyntheticKeys();
+				m_input.ClearSyntheticMouse();
+				m_input.ClearSyntheticChars();
+				m_input.Update();
+				m_input.RequestMouseResync();
+				m_input.UpdateCursorLock(false);
+				m_mouse_delta = m_scroll_delta = {};
+				EM_ASM({
+					aetherInput.pressed = 0;
+					aetherInput.dx = aetherInput.dy = aetherInput.scroll = 0;
+					aetherInput.typedText = '';
+					aetherInput.pasteText = null;
+				});
+			}
 			EM_ASM({
 				if (aetherPlatform.pending.size && !aetherPlatform.busy)
 				{
@@ -1185,6 +1250,8 @@ namespace aether::app::web
 #endif
 				}
 #endif
+				// Input edges, UI activation and scripts share one simulation-tick boundary.
+				SampleInputTick(now);
 				// Submissions always reflect the last tick: re-submitted every tick, never accumulated.
 				m_custom_passes.frame.passes.clear();
 				// Native order (Application.cpp): Animation, SpriteAnimation, Physics, Physics2D,

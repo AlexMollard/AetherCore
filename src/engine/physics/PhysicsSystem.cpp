@@ -479,19 +479,23 @@ namespace aether
 			{
 				// Finish allocating bookkeeping before changing the filter or handing
 				// the constraint to Jolt. A failed pair insertion leaves neither behind.
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 				try
 				{
+#endif
 					const auto pair = collisionPairReferences.try_emplace(CollisionPairKey(stored->second.bodyA, stored->second.bodyB), 0).first;
 					if (pair->second++ == 0)
 					{
 						groupFilter->DisableCollision(stored->second.bodyA, stored->second.bodyB);
 					}
+#if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 				}
 				catch (...)
 				{
 					constraints.erase(stored);
 					throw;
 				}
+#endif
 			}
 			physics->AddConstraint(stored->second.constraint.GetPtr());
 		}

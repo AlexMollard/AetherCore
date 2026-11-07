@@ -65,41 +65,6 @@ AE_SCRIPT_API std::uint32_t aether_entity_child_at(std::uint32_t id, std::int32_
 	});
 }
 
-AE_SCRIPT_API void aether_entity_set_active(std::uint32_t id, std::int32_t active)
-{
-	SafeExport([&] -> void
-	{
-	auto& world = ActiveWorld();
-	const aether::Entity e{id};
-	if (!world.GetRegistry().valid(aether::World::ToEntt(e)))
-	{
-		return;
-	}
-	if (active != 0)
-	{
-		world.Remove<aether::DisabledComponent>(e);
-	}
-	else
-	{
-		world.EmplaceOrReplace<aether::DisabledComponent>(e);
-	}
-	});
-}
-
-AE_SCRIPT_API std::int32_t aether_entity_is_active(std::uint32_t id)
-{
-	return SafeExport([&] -> std::int32_t
-	{
-	const auto& world = ActiveWorld();
-	const aether::Entity e{id};
-	if (!world.GetRegistry().valid(aether::World::ToEntt(e)))
-	{
-		return 0;
-	}
-	return aether::ecs::IsActiveInHierarchy(world, e) ? 1 : 0;
-	});
-}
-
 AE_SCRIPT_API void aether_scene_load(const char* name)
 {
 	SafeExport([&] -> void
