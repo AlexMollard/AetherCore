@@ -180,11 +180,126 @@ Retained local archives identify the source snapshot used during qualification.
 Later documentation updates and commits do not rewrite that historical manifest;
 release artifacts for a committed ref must be staged from that ref separately.
 
+## Initial Linux local qualification (2026-11-07)
+
+This initial campaign was **incomplete**. Native builds and bounded functional
+checks passed, but the delivered Launcher could not spawn the Editor on Linux.
+The ordinary relocated-product gate failed at the Windows-only handoff. Direct
+Editor execution was recorded separately. The subsequent handoff campaign below
+closes that implementation gap; this section preserves the initial evidence.
+
+The candidate uses source base `095f51af` plus 19 uncommitted code and harness file
+changes. Qualification fixed Clang/libstdc++ delete declarations, portable
+`va_list` initialization, missing integer/math declarations, platform executable
+names, tile-map URI preservation and Unix static-nethost package verification.
+Two runtime defects also reproduced:
+
+- Timing and render-graph statistics both defined `aether::FrameStats`. GDB showed
+  the timing function's 40-byte result invoking the other type's 120-byte
+  constructor and overwriting its caller. Timing now uses `FrameTimingStats`, and
+  a test includes both definitions to prevent recurrence.
+- Linux executables exposed none of the C ABI functions needed by C# P/Invoke.
+  Linux Editor and GameRuntime now enable executable exports. All 456 editor and
+  407 runtime managed entry points are present; 49 editor-GUI declarations remain
+  intentionally outside the runtime.
+
+Publishing also deleted the editor's managed intermediate directory while an
+asynchronous startup compile was writing there. Publish now uses the sibling
+`managed-publish` directory. The direct Editor workflow verifies the current
+editor's retained assembly survives publishing.
+
+| Check | Retained result |
+|---|---|
+| Native Debug and Release | All four expected CTest suites pass; 1,708 executed native cases per configuration |
+| Full Debug gauntlet | Editor/runtime readiness, graceful exit 0 and zero classified Vulkan errors/warnings/advisories |
+| Managed ABI | Debug/Release Editor and runtime symbol inventories match their supported C# declarations |
+| Direct Editor product workflow | 25 phases pass: import/entity persistence, three play/stop/reload transitions, save/process reopen, publish and copied-game execution; Launcher handoff excluded |
+| Lifecycle | Three cycles each Full, UiShell and runtime; one second after readiness per cycle, graceful exit 0 and unchanged inventories |
+| Additional opt-in probes | Window callback ownership passes 8 assertions; texture mip readback passes 77 assertions normally and 45 with host copy forced off |
+| Windows regression | Full Debug gauntlet passes all four suites, 1,715 native cases and clean Editor/runtime GPU shutdown |
+| Harness and archives | Linux 65 / Windows 67 harness checks; portable and three-file ELF-symbol tarballs pass complete per-file/hash/Unix-permission readback and build-ID binding |
+
+The environment is an isolated Ubuntu 26.04 WSL2 distribution, an unprivileged
+qualification user, Clang 21.1.8/C++26 with libstdc++ 15, Vulkan SDK 1.4.350.1,
+Slang 2026.8 and bundled .NET 10.0.12. Rendering used llvmpipe CPU Vulkan on an
+authenticated Xvfb/Openbox X11 desktop. Its driver lacks Tracy's required Linux
+calibrated host clock, so GPU profiling is disabled with a diagnostic; rendering
+and validation remain enabled. WSLg Wayland startup was observed separately, but
+its automated close path was not qualified. No physical Linux GPU result follows.
+
+The eight default-skipped cases are opt-in integration probes, not platform-only
+omissions. Window callbacks and GPU texture uploads were run separately; real
+network/router/STUN, asset-generation and Rust compilation probes remain unrun.
+Imported-entity persistence is covered, but unresolved mesh-source/no-material
+warnings remain in the fixture logs; no visual correctness claim is made. This
+campaign does not establish 101-cycle/hour-long Linux stability or physical audio,
+input and accessibility behavior.
+
+Candidate archives live under
+`C:/Users/alexm/AetherQualification/20261107-linux-candidate/archives`.
+They require `GLIBC_2.43` and `GLIBCXX_3.4.34`; an older supported-distribution
+baseline still needs its own build and qualification. The aggregate
+`logs/linux-qualification-20261107/qualification-summary.json` hashes 34 evidence
+files and keeps the full-product failure separate from passing direct-Editor
+checks. Final platform reports use separate `linux-debug/` and `windows-debug/`
+directories; preliminary parallel reports shared filenames and are not the final
+evidence. Source provenance retains two Linux-generated shader dependency-order
+rewrites as well as the intentional fixes. This documentation update follows the
+artifact freeze and does not rewrite its historical source manifest.
+
+## Linux Launcher handoff qualification (2026-11-07)
+
+The ordinary delivered Launcher-to-Editor workflow now passes on Linux.
+`LauncherProcess` uses `posix_spawn` with literal UTF-8 arguments, the executable's
+working directory and a child-specific control-port environment. A private Unix
+socket carries one-shot readiness after project/layer initialization and window
+reveal. Launcher distinguishes pending startup, readiness and early exit; releasing
+its tracking handle leaves a healthy Editor running. Exact-child waiters reap
+terminated children. Windows retains its named-event handoff.
+
+The qualification harness also handles Linux reparenting. A process-local
+subreaper preserves ancestry under the isolated harness when Launcher exits
+between polls. Exclusive port ownership, executable path and creation time remain
+required. Native `waitpid` collects adopted children and their real exit status;
+regressions verify rejection without ancestry and retain signal exit code 137 in
+crash evidence. Previous subreaper state is restored even if cleanup throws.
+
+| Check | Retained result |
+|---|---|
+| Linux Debug and Release | All four expected suites pass; 1,716 executed native cases in each configuration |
+| Full Debug gauntlet | Guard, build, suites and both GPU smokes pass; zero classified Vulkan findings |
+| Spawn/readiness regressions | Eight cases pass: literal arguments, child environment/cwd/FD isolation, pending/ready/exit, moves, handle release, failed exec cleanup and one-shot readiness |
+| Ordinary relocated product | All 26 phases pass, including Launcher create/handoff, three play/stop/reopen transitions, process restart, publish and copied-game execution; source and copied inventories unchanged |
+| Final candidate lifecycle | Three short cycles each Full, UiShell and runtime; graceful exit 0 and unchanged inventories |
+| Additional opt-in probes | Window callbacks pass 8 assertions; texture readback passes 77 normally and 45 with host copy forced off |
+| Windows regression | Full Debug gauntlet, all four suites and 1,715 native cases pass; clean Editor/runtime validation shutdown |
+| Harness and delivery | Linux 76 / Windows 67 checks; portable and symbol archives pass complete file/hash/Unix-mode readback and ELF build-ID binding |
+
+Authoritative evidence is
+`logs/linux-launcher-qualification-20261107/qualification-summary.json` and its
+hashed reports. The final product report is `product-frozen.json`; the Debug
+reports are under separate `linux-debug-final/` and `windows-debug/` directories.
+Earlier failed ownership attempts and superseded staging reports remain retained
+and are excluded from the final evidence set.
+
+Final private unsigned archives are under
+`C:/Users/alexm/AetherQualification/20261107-linux-launcher-final-candidate/archives`.
+The portable tarball is 59,422,814 bytes; matching native symbols are 225,695,505
+bytes. `release-identity-frozen.json` binds their hashes to the source snapshot,
+payload and ELF build IDs. Source base remains `095f51af` plus uncommitted fixes;
+this documentation follows the artifact freeze. No commit, remote operation,
+release or automatic CI trigger was made.
+
+These are local WSL2, llvmpipe and Xvfb/Openbox results. The earlier environment
+limits still apply: GLIBC 2.43 / GLIBCXX 3.4.34, no physical Linux GPU or native
+Wayland lifecycle qualification, no clean installed-machine or long-duration Linux
+claim, and unresolved mesh/no-material fixture warnings prevent visual acceptance.
+
 ## Remaining release gates
 
 | Area | Required qualification |
 |---|---|
-| Linux | Native build and all expected suites, real desktop GPU/lifecycle and installed-product execution; this Windows host has WSL but no installed distribution |
+| Linux | Qualify an explicit distribution baseline, physical desktop GPU/lifecycle, native Wayland operation and clean installed-product execution; extend bounded lifecycle checks to sustained workloads |
 | Clean Windows/Linux machine | Standard-user installer and portable ZIP; no development tree, SDK/cache or undeclared global dependency; upgrade/uninstall preserve user projects and settings |
 | GPU/driver breadth | Explicit OS/driver/device matrix, integrated/discrete AMD, NVIDIA and Intel; mandatory-feature rejection diagnostics, resize/minimize/DPI/multimonitor, repeated swapchain recreation |
 | Failure handling | Device loss and allocation pressure; documented controlled termination where rollback is impossible; retained crash diagnostics and recovery evidence |
