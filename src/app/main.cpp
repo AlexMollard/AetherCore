@@ -10,6 +10,7 @@
 #include "io/PlatformPaths.hpp"
 #include "utils/AetherExceptions.hpp"
 #include "Application.hpp"
+#include "EditorReadiness.hpp"
 #include "platform/CrashHandler.hpp"
 #include "platform/Window.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
@@ -158,6 +159,17 @@ int main(int argc, char** argv)
 	const std::string project = aether::app::ParseProjectArg(argc, argv);
 #endif
 	const std::string readyEvent = aether::app::ParseOptionArg(argc, argv, "--ready-event");
+	bool launcherHandoff = !readyEvent.empty();
+#if defined(AETHERCORE_EDITOR_APP) && defined(__linux__)
+	const std::string readyFd = aether::app::ParseOptionArg(argc, argv, "--ready-fd");
+	// Adopt the inherited socket before CoreCLR or any tooling subprocess can inherit it.
+	if (!aether::app::InitializeEditorReadiness(readyFd))
+	{
+		std::println(stderr, "Editor requires a valid inherited Unix readiness socket for --ready-fd.");
+		return 2;
+	}
+	launcherHandoff = launcherHandoff || !readyFd.empty();
+#endif
 	// The Vulkan validation layer defaults to on for Debug and off for RelWithDebInfo.
 	// --validation turns it on, --no-validation turns it off, and --no-validation wins if
 	// both are passed - see ResolveValidationEnabled.
@@ -225,7 +237,7 @@ int main(int argc, char** argv)
 		// Only when the launcher started us. Run directly, a window that stays invisible for
 		// several seconds reads as "it didn't launch", and there is nothing watching to say
 		// otherwise.
-		engineConfig.startWindowHidden = !readyEvent.empty() || agentLaunch.background;
+		engineConfig.startWindowHidden = launcherHandoff || agentLaunch.background;
 		// "x,y" from the launcher: the point to centre on before the window is revealed.
 		if (const std::string center = aether::app::ParseOptionArg(argc, argv, "--window-center"); !center.empty())
 		{

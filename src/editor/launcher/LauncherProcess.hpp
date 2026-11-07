@@ -3,6 +3,7 @@
 #include <climits>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 
 namespace aether::app::launcher
@@ -17,7 +18,7 @@ namespace aether::app::launcher
 	class EditorLaunch final
 	{
 	public:
-		EditorLaunch() = default;
+		EditorLaunch();
 		~EditorLaunch();
 
 		EditorLaunch(const EditorLaunch&) = delete;
@@ -33,11 +34,15 @@ namespace aether::app::launcher
 
 		std::uintptr_t m_processHandle = 0;
 		std::uintptr_t m_readyEventHandle = 0;
+#ifdef __linux__
+		struct LinuxProcess;
+		std::unique_ptr<LinuxProcess> m_linuxProcess;
+#endif
 
 		friend std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort, int centerX, int centerY);
 	};
 
-		// centerX/centerY are the desktop point the editor should open centred on - the
+	// centerX/centerY are the desktop point the editor should open centred on - the
 	// launcher's own centre, so the editor appears where the launcher was rather than
 	// wherever the OS decides to put a new window (on a multi-monitor desktop, often a
 	// different screen). INT_MIN leaves the placement alone.

@@ -1,4 +1,78 @@
 # Shared, fail-closed qualification checks. Dot-source; no application is launched here.
+function Set-QualifiedChildSubreaper([bool]$Enabled) {
+    if ($env:OS -eq 'Windows_NT') { throw 'Child subreaping is Linux-only' }
+    if (-not ('AetherQualification.LinuxChildSubreaper' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+namespace AetherQualification {
+    public static class LinuxChildSubreaper {
+        [DllImport("libc", EntryPoint="prctl", SetLastError=true)]
+        private static extern int Get(int option, out int value, UIntPtr a3, UIntPtr a4, UIntPtr a5);
+        [DllImport("libc", EntryPoint="prctl", SetLastError=true)]
+        private static extern int Set(int option, UIntPtr value, UIntPtr a3, UIntPtr a4, UIntPtr a5);
+        [DllImport("libc", SetLastError=true)]
+        private static extern int waitpid(int pid, out int status, int options);
+        private static readonly ConcurrentDictionary<string, Task<int>> exits = new();
+        private static readonly ConditionalWeakTable<Process, Task<int>> bindings = new();
+        private static string[] Stat(int pid) {
+            string text=File.ReadAllText("/proc/"+pid+"/stat");
+            return text.Substring(text.LastIndexOf(')')+2).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        }
+        public static void Track(Process process) {
+            int pid=process.Id;
+            long started=process.StartTime.ToUniversalTime().Ticks;
+            string birth=Stat(pid)[19];
+            var task=exits.GetOrAdd(pid+":"+started, _ => Task.Run(() => {
+                // Do not wait for a non-child or a reused PID. Once adopted, this
+                // exact unreaped child cannot be reused until our waitpid finishes.
+                while (true) {
+                    string[] stat=Stat(pid);
+                    if (stat[19]!=birth) throw new InvalidOperationException("Editor PID was reused");
+                    if (int.Parse(stat[1])==Environment.ProcessId) break;
+                    Thread.Sleep(10);
+                }
+                int status, result;
+                do { result=waitpid(pid, out status, 0); }
+                while (result<0 && Marshal.GetLastPInvokeError()==4);
+                if (result!=pid) throw new Win32Exception(Marshal.GetLastPInvokeError());
+                return (status & 127)==0 ? (status >> 8) & 255 : 128+(status & 127);
+            }));
+            bindings.GetValue(process, _ => task);
+        }
+        public static void Bind(Process process) {
+            string key=process.Id+":"+process.StartTime.ToUniversalTime().Ticks;
+            if (exits.TryGetValue(key, out var task)) bindings.GetValue(process, _ => task);
+        }
+        public static int? ExitCode(Process process) {
+            if (!bindings.TryGetValue(process, out var task)) return null;
+            if (!task.Wait(5000)) throw new TimeoutException("Adopted Editor waitpid did not complete");
+            return task.GetAwaiter().GetResult();
+        }
+        public static int Configure(bool enabled) {
+            int previous;
+            if (Get(37, out previous, UIntPtr.Zero, UIntPtr.Zero, UIntPtr.Zero) != 0)
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            if (Set(36, (UIntPtr)(enabled ? 1u : 0u), UIntPtr.Zero, UIntPtr.Zero, UIntPtr.Zero) != 0)
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            return previous;
+        }
+    }
+}
+'@
+    }
+    # PR_SET_CHILD_SUBREAPER keeps orphan descendants parented to this harness.
+    # https://man7.org/linux/man-pages/man2/PR_SET_CHILD_SUBREAPER.2const.html
+    [AetherQualification.LinuxChildSubreaper]::Configure($Enabled)
+}
+
 function Assert-QualifiedOutputOutsideBundle([string]$Bundle, [string]$OutputPath) {
     $root=[IO.Path]::GetFullPath($Bundle).TrimEnd('\','/')
     $output=[IO.Path]::GetFullPath($OutputPath)
@@ -110,7 +184,9 @@ function Assert-QualifiedProcessAlive($Process, [string]$Context) {
     # HasExited queries the owned process handle while the process is live; no
     # process-name lookup or replacement PID can satisfy this check.
     if ($Process.HasExited) {
-        $code = [int]$Process.ExitCode
+        $actualCode=Get-QualifiedProcessExitCode $Process
+        if ($null -eq $actualCode) { throw "Owned process $($Process.Id) exited while $Context; exit status unavailable" }
+        $code = [int]$actualCode
         $hex = '0x{0:X8}' -f ($code -band 0xffffffffL)
         $failure = [InvalidOperationException]::new("Owned process $($Process.Id) exited while $Context; exitCode=$code ($hex)")
         $failure.Data['ProcessId'] = $Process.Id
@@ -120,11 +196,21 @@ function Assert-QualifiedProcessAlive($Process, [string]$Context) {
     }
 }
 
-function Retain-QualifiedProcessHandle([Diagnostics.Process]$Process) {
+function Retain-QualifiedProcessHandle([Diagnostics.Process]$Process, [switch]$TrackLinuxOrphan) {
     Assert-QualifiedProcessAlive $Process 'retaining the discovered process handle'
     # Get-Process objects otherwise query through temporary handles; after the
     # process exits Windows can no longer supply its exit status. Retain now.
     if ($Process.Handle -eq [IntPtr]::Zero) { throw 'Owned process handle could not be retained' }
+    if ($TrackLinuxOrphan) { [AetherQualification.LinuxChildSubreaper]::Track($Process) }
+    elseif ($env:OS -ne 'Windows_NT' -and ('AetherQualification.LinuxChildSubreaper' -as [type])) { [AetherQualification.LinuxChildSubreaper]::Bind($Process) }
+}
+
+function Get-QualifiedProcessExitCode($Process) {
+    if ($env:OS -ne 'Windows_NT' -and $Process -is [Diagnostics.Process] -and ('AetherQualification.LinuxChildSubreaper' -as [type])) {
+        $code=[AetherQualification.LinuxChildSubreaper]::ExitCode($Process)
+        if ($null -ne $code) { return $code }
+    }
+    $Process.ExitCode
 }
 
 function Stop-QualifiedProcess($Process, [string]$ControlClient = '', [int]$Port = 0, [int]$TimeoutSeconds = 30) {
@@ -155,7 +241,8 @@ function Stop-QualifiedProcess($Process, [string]$ControlClient = '', [int]$Port
     }
     $remaining = [math]::Max(0, [int]($deadline - [datetime]::UtcNow).TotalMilliseconds)
     if ($requested -and $Process.WaitForExit($remaining)) {
-        return @{ status = $(if ($Process.ExitCode -eq 0) { 'pass' } else { 'fail' }); exitCode = $Process.ExitCode; forced = $false; quitResponse = $quitResponse; controlError = $controlError }
+        $exitCode=Get-QualifiedProcessExitCode $Process
+        return @{ status = $(if ($exitCode -eq 0) { 'pass' } else { 'fail' }); exitCode = $exitCode; forced = $false; quitResponse = $quitResponse; controlError = $controlError }
     }
     # Kill only the process handle created by this harness, never a process-name match.
     if (-not $Process.HasExited) { $Process.Kill(); $Process.WaitForExit() }

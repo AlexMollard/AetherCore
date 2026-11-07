@@ -85,6 +85,96 @@ try {
 
 # Load only the product save function's AST, never execute its application flow.
 $productAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'Run-ProductQualification.ps1'),[ref]$null,[ref]$null)
+if ($env:OS -ne 'Windows_NT') {
+    $callAst=$productAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Call'},$true)
+    . ([scriptblock]::Create($callAst.Extent.Text))
+    $handoffRoot=Join-Path ([IO.Path]::GetTempPath()) "aether-handoff-$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory $handoffRoot | Out-Null
+    $product=$handoffRoot; $suffix=''; $report=@{}; $script:editor=$null
+    $owned=[Collections.Generic.List[object]]::new()
+    $launcher=$null; $foreign=$null; $child=$null
+    $linuxSubreaper=$true
+    $previousSubreaper=Set-QualifiedChildSubreaper $true
+    $controlImplementation=${function:Invoke-QualifiedControl}
+    try {
+        function Invoke-QualifiedControl($Client,$Port,$Method,$Parameters,$TimeoutMs) { @{accepted=$true} }
+        $reservation=[Net.Sockets.UdpClient]::new(0)
+        $Port=$reservation.Client.LocalEndPoint.Port; $reservation.Dispose()
+        $python=(Get-Command python3 -CommandType Application | Select-Object -First 1).Source
+        Copy-Item -LiteralPath $python -Destination (Join-Path $product 'Editor')
+        $fixture=Join-Path $handoffRoot 'launcher.py'
+        @'
+import pathlib, subprocess, sys, time
+root=pathlib.Path(sys.argv[1])
+deadline=time.monotonic()+15
+while not (root/'spawn').exists():
+    if time.monotonic()>deadline: sys.exit(1)
+    time.sleep(0.01)
+code='import socket,time; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.bind(("127.0.0.1",'+sys.argv[2]+')); time.sleep(60)'
+child=subprocess.Popen([str(root/'Editor'),'-c',code])
+(root/'child.pid').write_text(str(child.pid))
+while not (root/'exit').exists():
+    if time.monotonic()>deadline: sys.exit(1)
+    time.sleep(0.01)
+'@ | Set-Content -LiteralPath $fixture
+        $start=[Diagnostics.ProcessStartInfo]::new()
+        $start.FileName='/usr/bin/python3'; $start.UseShellExecute=$false
+        $start.ArgumentList.Add($fixture); $start.ArgumentList.Add($handoffRoot); $start.ArgumentList.Add([string]$Port)
+        $launcher=[Diagnostics.Process]::Start($start)
+        $foreignStart=[Diagnostics.ProcessStartInfo]::new()
+        $foreignStart.FileName=Join-Path $product 'Editor'; $foreignStart.UseShellExecute=$false
+        $foreignStart.ArgumentList.Add('-c'); $foreignStart.ArgumentList.Add('import socket,time; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.bind(("127.0.0.1",'+$Port+')); time.sleep(60)')
+        $foreign=[Diagnostics.Process]::Start($foreignStart)
+        $deadline=[datetime]::UtcNow.AddSeconds(5)
+        while (-not ((& ss -H -lunp "sport = :$Port") -match "pid=$($foreign.Id),")) {
+            if ([datetime]::UtcNow -ge $deadline) { throw 'Foreign fixture UDP endpoint deadline' }
+            Start-Sleep -Milliseconds 10
+        }
+        Must-Throw { Call 'info' } 'Same-path process outside live Launcher accepted as its child'
+        Check ($owned.Count -eq 0) 'Rejected endpoint was retained'
+        $foreign.Kill(); $foreign.WaitForExit()
+        Set-Content -LiteralPath (Join-Path $handoffRoot 'spawn') -Value 'go'
+        $deadline=[datetime]::UtcNow.AddSeconds(5)
+        do {
+            if (Test-Path -LiteralPath (Join-Path $handoffRoot 'child.pid')) { break }
+            Start-Sleep -Milliseconds 10
+        } while ([datetime]::UtcNow -lt $deadline)
+        $child=Get-Process -Id ([int](Get-Content -LiteralPath (Join-Path $handoffRoot 'child.pid')))
+        Set-Content -LiteralPath (Join-Path $handoffRoot 'exit') -Value 'go'
+        Check ($launcher.WaitForExit(5000) -and $launcher.ExitCode -eq 0) 'Fixture Launcher did not exit'
+        Check ($owned.Count -eq 0) 'Fixture must exit Launcher before ownership discovery'
+        $parentId=[int]((Get-Content -LiteralPath "/proc/$($child.Id)/status" | Where-Object { $_ -match '^PPid:' }) -replace '^PPid:\s*','')
+        Check ($parentId -eq $PID -and -not $child.HasExited) 'Kernel did not retain the orphaned Editor under the harness subreaper'
+        $deadline=[datetime]::UtcNow.AddSeconds(5)
+        while (-not ((& ss -H -lunp "sport = :$Port") -match "pid=$($child.Id),")) {
+            if ([datetime]::UtcNow -ge $deadline) { throw 'Fixture UDP endpoint deadline' }
+            Start-Sleep -Milliseconds 10
+        }
+        $linuxSubreaper=$false
+        Must-Throw { Call 'info' } 'Reparented Editor accepted without subreaper ownership'
+        $linuxSubreaper=$true
+        Check ((Call 'info').accepted -and $owned.Count -eq 1) 'Owned orphaned Editor rejected after Launcher exited between polls'
+        Check ($report.handoffOwnership.adoptedBySubreaper -and $report.handoffOwnership.pid -eq $child.Id) 'Subreaper handoff identity evidence missing'
+        $child.Kill()
+        Check ($child.WaitForExit(5000)) 'Adopted child was not reaped after termination'
+        Check ((Get-QualifiedProcessExitCode $owned[0]) -eq 137) 'Native adopted-child termination status was lost'
+        try { Assert-QualifiedProcessAlive $owned[0] 'adopted-child crash fixture'; throw 'Terminated adopted Editor accepted as alive' }
+        catch { Check ($_.Exception.Data['ExitCode'] -eq 137) 'Adopted-child crash was reported as exit code zero' }
+    } finally {
+        try {
+        foreach ($process in @($child,$foreign,$launcher)) {
+            if ($process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; $process.Dispose() }
+        }
+        Remove-Item -LiteralPath $handoffRoot -Recurse -Force
+        } finally {
+            try { $null=Set-QualifiedChildSubreaper ([bool]$previousSubreaper) } finally {
+                ${function:Invoke-QualifiedControl}=$controlImplementation
+                Remove-Item function:Call
+                $script:editor=$null
+            }
+        }
+    }
+}
 $saveAst=$productAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Save-CurrentScene'},$true)
 . ([scriptblock]::Create($saveAst.Extent.Text))
 try {
@@ -136,7 +226,7 @@ Must-Throw { Assert-QualifiedBundleUnchanged $before (Get-QualifiedBundleInvento
 Set-Content -LiteralPath "$immutableFixture/original.bin" -Value 'original'
 Set-Content -LiteralPath "$immutableFixture/.added.ini" -Value 'runtime write'
 Must-Throw { Assert-QualifiedBundleUnchanged $before (Get-QualifiedBundleInventory $immutableFixture) } 'Added runtime bundle file accepted'
-Remove-Item -LiteralPath "$immutableFixture/.added.ini"
+Remove-Item -LiteralPath "$immutableFixture/.added.ini" -Force
 Set-Content -LiteralPath "$immutableFixture/remaining.bin" -Value 'keep inventory nonempty'
 $beforeDeletion=Get-QualifiedBundleInventory $immutableFixture
 Remove-Item -LiteralPath "$immutableFixture/original.bin"
@@ -249,8 +339,8 @@ Check ($LASTEXITCODE -ne 0) 'Mismatched assembly notice identity accepted'
 # Synthetic package-presence/provenance integration: these are placeholder bytes,
 # not a runnable engine and never production qualification evidence.
 $suffix=if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
-$nativeHost=if ($env:OS -eq 'Windows_NT') { 'nethost.dll' } else { 'libnethost.so' }
-$required=@("Launcher$suffix","Editor$suffix","AetherGame$suffix",$nativeHost,'DISTRIBUTION.md','data/config/EngineSettings.toml','data/scripts/managed/AetherCore.dll','data/scripts/managed/AetherCore.Interop.dll','data/scripts/managed/AetherCore.Interop.runtimeconfig.json','data/templates/scenes/default.scene.toml','data/templates/scenes/default2d.scene.toml','data/sdk/managed/AetherCore/AetherCore.csproj','data/sdk/managed/Directory.Build.props')
+$required=@("Launcher$suffix","Editor$suffix","AetherGame$suffix",'DISTRIBUTION.md','data/config/EngineSettings.toml','data/scripts/managed/AetherCore.dll','data/scripts/managed/AetherCore.Interop.dll','data/scripts/managed/AetherCore.Interop.runtimeconfig.json','data/templates/scenes/default.scene.toml','data/templates/scenes/default2d.scene.toml','data/sdk/managed/AetherCore/AetherCore.csproj','data/sdk/managed/Directory.Build.props')
+if ($env:OS -eq 'Windows_NT') { $required += 'nethost.dll' }
 foreach ($relative in $required) {
     $path=Join-Path $payload $relative
     New-Item -ItemType Directory -Force (Split-Path $path) | Out-Null

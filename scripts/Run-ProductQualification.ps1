@@ -18,6 +18,8 @@ $ErrorActionPreference = 'Stop'
 $phases = [Collections.Generic.List[object]]::new()
 $report = [ordered]@{ schemaVersion=1; status='fail'; kind='local-relocated-product'; phases=$phases; cleanVm='blocked-requires-external-environment'; installerUpgradeUninstall='blocked-requires-VM'; signing='unsigned-not-verified'; transitions=$Transitions }
 $owned = [Collections.Generic.List[object]]::new()
+$linuxSubreaper=$false
+$previousSubreaper=$null
 function Phase([string]$Name, [scriptblock]$Action) {
     $entry = [ordered]@{ name=$Name; status='fail' }
     try { $entry.evidence = & $Action; $entry.status='pass' } catch {
@@ -42,12 +44,15 @@ function Call([string]$Method, $Params=@{}) {
     $owner=Get-Process -Id ([int]$owners[0])
     $known=@($owned | Where-Object { -not $_.HasExited -and $_.Id -eq $owner.Id -and $_.StartTime -eq $owner.StartTime })
     if (-not $known.Count) {
-        # The only unregistered process accepted is the editor directly spawned by
-        # our Launcher. A copied executable path alone does not establish ownership.
+        # Linux reparents Editor after Launcher exits. A private subreaper keeps
+        # that descendant in our process tree even if it becomes ready between polls.
+        # This proves ancestry within our isolated harness, not a path match alone.
         $parentId=if ($env:OS -eq 'Windows_NT') { (Get-CimInstance Win32_Process -Filter "ProcessId=$($owner.Id)").ParentProcessId } else { [int]((Get-Content "/proc/$($owner.Id)/status" | Where-Object { $_ -match '^PPid:' }) -replace '^PPid:\s*','') }
-        if (-not $launcher -or $parentId -ne $launcher.Id -or [IO.Path]::GetFullPath($owner.Path) -ne (Join-Path $product "Editor$suffix") -or $owner.StartTime -lt $launcher.StartTime) { throw 'Control endpoint is not an owned Launcher/editor child' }
-        Retain-QualifiedProcessHandle $owner
+        $ownedParent=$launcher -and ($parentId -eq $launcher.Id -or ($linuxSubreaper -and $launcher.HasExited -and $parentId -eq $PID))
+        if (-not $ownedParent -or [IO.Path]::GetFullPath($owner.Path) -ne (Join-Path $product "Editor$suffix") -or $owner.StartTime -lt $launcher.StartTime) { $owner.Dispose(); throw 'Control endpoint is not an owned Launcher/editor child' }
+        Retain-QualifiedProcessHandle $owner -TrackLinuxOrphan:$linuxSubreaper
         $owned.Add($owner)
+        $report.handoffOwnership=@{pid=$owner.Id;parentPid=$parentId;startTime=$owner.StartTime;path=$owner.Path;adoptedBySubreaper=($parentId -eq $PID)}
     } else {
         $owner.Dispose()
     }
@@ -135,6 +140,10 @@ try {
     $productBefore=Get-QualifiedBundleInventory $product
     Assert-QualifiedBundleUnchanged $sourceBefore $productBefore
     $report.productBefore=$productBefore
+    if ($env:OS -ne 'Windows_NT') {
+        $previousSubreaper=Set-QualifiedChildSubreaper $true
+        $linuxSubreaper=$true
+    }
     $launcher=Start-Owned (Join-Path $product "Launcher$suffix")
     Phase 'UiShell-ready' { Wait-State 'launcher.info' 'launchingEditor' 'False' }
     Phase 'create' { Call 'launcher.create_project' @{root=$project;name='Reference Ω';template='blank_3d';language='csharp'} }
@@ -230,6 +239,7 @@ try {
     $report.status='pass'
 } catch { $report.detail=$_.Exception.Message }
 finally {
+    try {
     foreach ($process in $owned) {
         if (-not $process.HasExited) {
             $cleanup=Stop-QualifiedProcess $process '' 0 15
@@ -237,6 +247,9 @@ finally {
             if ($cleanup.status -ne 'pass') { $report.status='fail' }
         }
         $process.Dispose()
+    }
+    } finally {
+        if ($null -ne $previousSubreaper) { $null=Set-QualifiedChildSubreaper ([bool]$previousSubreaper) }
     }
     foreach ($binding in @(@{name='source-immutability';before=$sourceBefore;root=$payload},@{name='product-immutability';before=$productBefore;root=$product})) {
         if (-not $binding.before) { continue }

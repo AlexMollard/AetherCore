@@ -22,6 +22,7 @@
 #	include "imgui/ImguiSubsystem.hpp"
 #endif
 #include "io/PlatformPaths.hpp"
+#include "EditorReadiness.hpp"
 #include "RuntimeProjectSettings.hpp"
 #ifdef AETHERCORE_EDITOR_APP
 #	include "utils/TomlConfig.hpp"
@@ -61,27 +62,6 @@ namespace aether::app
 {
 	namespace
 	{
-		void SignalEditorReady()
-		{
-#ifdef _WIN32
-			const std::string eventName = io::PlatformPaths::ReadEnvironmentVariable("AETHER_EDITOR_READY_EVENT");
-			if (eventName.empty())
-			{
-				return;
-			}
-			if (const HANDLE eventHandle = OpenEventA(EVENT_MODIFY_STATE, FALSE, eventName.c_str()))
-			{
-				SetEvent(eventHandle);
-				CloseHandle(eventHandle);
-				AE_INFO(LogCategory::App, "Editor startup readiness confirmed to Launcher.");
-			}
-			else
-			{
-				AE_WARN(LogCategory::App, "Could not signal Editor startup readiness (GetLastError={}).", GetLastError());
-			}
-#endif
-		}
-
 #ifdef AETHERCORE_EDITOR_APP
 		FramebufferSize ResolveEditorBootWindow(int defaultWidth, int defaultHeight)
 		{

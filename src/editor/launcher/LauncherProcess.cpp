@@ -13,11 +13,28 @@
 #		define WIN32_LEAN_AND_MEAN
 #	endif
 #	include <windows.h>
+#elif defined(__linux__)
+#	include <atomic>
+#	include <cerrno>
+#	include <cstring>
+#	include <vector>
+#	include <pthread.h>
+#	include <spawn.h>
+#	include <signal.h>
+#	include <sys/socket.h>
+#	include <sys/wait.h>
+#	include <unistd.h>
+
+extern char** environ;
 #endif
 
 // SpawnEditor is never called; an empty dev path just means "no hint", so the resolver
 #ifndef AETHER_EDITOR_EXE_NAME
-#	define AETHER_EDITOR_EXE_NAME "Editor.exe"
+#	ifdef _WIN32
+#		define AETHER_EDITOR_EXE_NAME "Editor.exe"
+#	else
+#		define AETHER_EDITOR_EXE_NAME "Editor"
+#	endif
 #endif
 #ifndef AETHER_EDITOR_EXE_PATH
 #	define AETHER_EDITOR_EXE_PATH ""
@@ -25,6 +42,78 @@
 
 namespace aether::app::launcher
 {
+#ifdef __linux__
+	struct EditorLaunch::LinuxProcess
+	{
+		int readySocket = -1;
+		std::shared_ptr<std::atomic<bool>> exited = std::make_shared<std::atomic<bool>>(false);
+
+		~LinuxProcess()
+		{
+			if (readySocket >= 0)
+			{
+				close(readySocket);
+			}
+		}
+	};
+
+	namespace
+	{
+		struct EditorExitWait
+		{
+			pid_t pid = -1;
+			std::shared_ptr<std::atomic<bool>> exited;
+		};
+
+		void* ReapEditor(void* pointer)
+		{
+			const std::unique_ptr<EditorExitWait> wait(static_cast<EditorExitWait*>(pointer));
+			int status = 0;
+			while (waitpid(wait->pid, &status, 0) == -1 && errno == EINTR)
+			{
+			}
+			wait->exited->store(true, std::memory_order_release);
+			return nullptr;
+		}
+
+		struct SpawnResources
+		{
+			int sockets[2]{-1, -1};
+			posix_spawn_file_actions_t actions{};
+			posix_spawnattr_t attributes{};
+			pthread_attr_t waiterAttributes{};
+			bool actionsInitialized = false;
+			bool attributesInitialized = false;
+			bool waiterInitialized = false;
+
+			~SpawnResources()
+			{
+				for (const int fd: sockets)
+				{
+					if (fd >= 0)
+					{
+						close(fd);
+					}
+				}
+				if (actionsInitialized)
+				{
+					posix_spawn_file_actions_destroy(&actions);
+				}
+				if (attributesInitialized)
+				{
+					posix_spawnattr_destroy(&attributes);
+				}
+				if (waiterInitialized)
+				{
+					pthread_attr_destroy(&waiterAttributes);
+				}
+			}
+		};
+	} // namespace
+#endif
+
+	EditorLaunch::EditorLaunch() = default;
+
 	EditorLaunch::EditorLaunch(std::uintptr_t processHandle, std::uintptr_t readyEventHandle)
 	      : m_processHandle(processHandle), m_readyEventHandle(readyEventHandle)
 	{
@@ -36,7 +125,12 @@ namespace aether::app::launcher
 	}
 
 	EditorLaunch::EditorLaunch(EditorLaunch&& other) noexcept
-	      : m_processHandle(std::exchange(other.m_processHandle, 0)), m_readyEventHandle(std::exchange(other.m_readyEventHandle, 0))
+	      : m_processHandle(std::exchange(other.m_processHandle, 0)),
+	        m_readyEventHandle(std::exchange(other.m_readyEventHandle, 0))
+#ifdef __linux__
+	        ,
+	        m_linuxProcess(std::move(other.m_linuxProcess))
+#endif
 	{
 	}
 
@@ -47,6 +141,9 @@ namespace aether::app::launcher
 			Reset();
 			m_processHandle = std::exchange(other.m_processHandle, 0);
 			m_readyEventHandle = std::exchange(other.m_readyEventHandle, 0);
+#ifdef __linux__
+			m_linuxProcess = std::move(other.m_linuxProcess);
+#endif
 		}
 		return *this;
 	}
@@ -65,6 +162,9 @@ namespace aether::app::launcher
 #endif
 		m_processHandle = 0;
 		m_readyEventHandle = 0;
+#ifdef __linux__
+		m_linuxProcess.reset();
+#endif
 	}
 
 	EditorStartupState EditorLaunch::Poll() const
@@ -77,6 +177,14 @@ namespace aether::app::launcher
 		}
 		const HANDLE readyEvent = reinterpret_cast<HANDLE>(m_readyEventHandle);
 		return readyEvent != nullptr && WaitForSingleObject(readyEvent, 0) == WAIT_OBJECT_0 ? EditorStartupState::Ready : EditorStartupState::Pending;
+#elif defined(__linux__)
+		if (!m_linuxProcess || m_linuxProcess->exited->load(std::memory_order_acquire))
+		{
+			return EditorStartupState::Exited;
+		}
+		char signal = 0;
+		const auto received = recv(m_linuxProcess->readySocket, &signal, 1, MSG_PEEK | MSG_DONTWAIT);
+		return received == 1 && signal == 'R' ? EditorStartupState::Ready : EditorStartupState::Pending;
 #else
 		return EditorStartupState::Exited;
 #endif
@@ -147,12 +255,134 @@ namespace aether::app::launcher
 		CloseHandle(readyEvent);
 		return std::nullopt;
 	}
+#elif defined(__linux__)
+	std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort, int centerX, int centerY)
+	{
+		const auto resolved = io::PlatformPaths::ResolveToolExecutable("AETHER_EDITOR_EXE", AETHER_EDITOR_EXE_PATH, AETHER_EDITOR_EXE_NAME);
+		if (resolved.empty())
+		{
+			AE_ERROR(LogCategory::App, "Launcher could not find the Editor executable.");
+			return std::nullopt;
+		}
+		const auto editorExe = std::filesystem::absolute(resolved);
+		constexpr int kChildReadyFd = 3;
+		std::vector<std::string> arguments{io::PlatformPaths::PathToUtf8(editorExe), "--project", io::PlatformPaths::PathToUtf8(std::filesystem::absolute(projectRoot)), "--ready-fd", std::to_string(kChildReadyFd)};
+		if (centerX != INT_MIN && centerY != INT_MIN)
+		{
+			arguments.emplace_back("--window-center");
+			arguments.push_back(std::to_string(centerX) + "," + std::to_string(centerY));
+		}
+		std::vector<char*> argv;
+		for (auto& argument: arguments)
+		{
+			argv.push_back(argument.data());
+		}
+		argv.push_back(nullptr);
+
+		// Construct only this child's environment; the Launcher's port/cwd never change.
+		std::vector<std::string> environment;
+		for (char** entry = environ; *entry != nullptr; ++entry)
+		{
+			if (controlPort <= 0 || !std::string_view(*entry).starts_with("AETHER_CONTROL_PORT="))
+			{
+				environment.emplace_back(*entry);
+			}
+		}
+		if (controlPort > 0)
+		{
+			environment.push_back("AETHER_CONTROL_PORT=" + std::to_string(controlPort));
+		}
+		std::vector<char*> envp;
+		for (auto& entry: environment)
+		{
+			envp.push_back(entry.data());
+		}
+		envp.push_back(nullptr);
+
+		auto process = std::make_unique<EditorLaunch::LinuxProcess>();
+		auto wait = std::make_unique<EditorExitWait>();
+		wait->exited = process->exited;
+		SpawnResources resources;
+		if (socketpair(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0, resources.sockets) != 0)
+		{
+			AE_ERROR(LogCategory::App, "Launcher could not create the Editor readiness socket: {}", std::strerror(errno));
+			return std::nullopt;
+		}
+		int error = posix_spawn_file_actions_init(&resources.actions);
+		resources.actionsInitialized = error == 0;
+		if (error == 0)
+		{
+			error = posix_spawnattr_init(&resources.attributes);
+			resources.attributesInitialized = error == 0;
+		}
+		if (error == 0)
+		{
+			error = pthread_attr_init(&resources.waiterAttributes);
+			resources.waiterInitialized = error == 0;
+		}
+		if (error == 0)
+		{
+			error = pthread_attr_setdetachstate(&resources.waiterAttributes, PTHREAD_CREATE_DETACHED);
+		}
+		if (error == 0)
+		{
+			error = posix_spawnattr_setpgroup(&resources.attributes, 0);
+		}
+		if (error == 0)
+		{
+			error = posix_spawnattr_setflags(&resources.attributes, POSIX_SPAWN_SETPGROUP);
+		}
+		if (error == 0)
+		{
+			error = posix_spawn_file_actions_addchdir_np(&resources.actions, editorExe.parent_path().c_str());
+		}
+		// dup2's spawn action clears CLOEXEC even when the source already occupies fd 3.
+		if (error == 0)
+		{
+			error = posix_spawn_file_actions_adddup2(&resources.actions, resources.sockets[1], kChildReadyFd);
+		}
+		if (error == 0)
+		{
+			error = posix_spawn_file_actions_addclosefrom_np(&resources.actions, kChildReadyFd + 1);
+		}
+		if (error == 0)
+		{
+			error = posix_spawn(&wait->pid, editorExe.c_str(), &resources.actions, &resources.attributes, argv.data(), envp.data());
+		}
+		if (error != 0)
+		{
+			AE_ERROR(LogCategory::App, "Launcher failed to spawn Editor: {}", std::strerror(error));
+			return std::nullopt;
+		}
+
+		pthread_t waiter{};
+		error = pthread_create(&waiter, &resources.waiterAttributes, ReapEditor, wait.get());
+		if (error != 0)
+		{
+			// We still own this exact unreaped child; never leave it running untracked.
+			kill(wait->pid, SIGKILL);
+			int status = 0;
+			while (waitpid(wait->pid, &status, 0) == -1 && errno == EINTR)
+			{
+			}
+			AE_ERROR(LogCategory::App, "Launcher could not track the Editor process: {}", std::strerror(error));
+			return std::nullopt;
+		}
+		(void) wait.release(); // The detached waiter owns only exit state, not readiness fds.
+		process->readySocket = std::exchange(resources.sockets[0], -1);
+		EditorLaunch launch;
+		launch.m_linuxProcess = std::move(process);
+		AE_INFO(LogCategory::App, "Launcher spawned Editor for project '{}' (MCP control port {})", io::PlatformPaths::PathToUtf8(projectRoot), controlPort);
+		return launch;
+	}
 #else
 	std::optional<EditorLaunch> SpawnEditor(const std::filesystem::path& projectRoot, int controlPort, int centerX, int centerY)
 	{
 		(void) projectRoot;
 		(void) controlPort;
-		AE_ERROR(LogCategory::App, "Launcher process spawn is only implemented on Windows.");
+		(void) centerX;
+		(void) centerY;
+		AE_ERROR(LogCategory::App, "Launcher process spawn is unsupported on this platform.");
 		return std::nullopt;
 	}
 #endif

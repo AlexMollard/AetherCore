@@ -8,6 +8,7 @@ list(REMOVE_ITEM ENGINE_TEST_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/probes/AsanLiteralNarrow.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/probes/AsanLiteralWide.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/probes/AsanLiteralMain.cpp")
+list(REMOVE_ITEM ENGINE_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/probes/LauncherEditorProbe.cpp")
 
 add_executable(EngineTests
     ${ENGINE_TEST_SOURCES}
@@ -55,6 +56,12 @@ add_executable(EngineTests
     "${CMAKE_SOURCE_DIR}/src/editor/editor/ComponentFields.cpp"
 )
 target_link_libraries(EngineTests PRIVATE Engine AssetPipeline RuntimeFramework doctest::doctest imgui nlohmann_json::nlohmann_json)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(LauncherEditorProbe probes/LauncherEditorProbe.cpp)
+    target_sources(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/editor/launcher/LauncherProcess.cpp")
+    target_compile_definitions(EngineTests PRIVATE AETHER_LAUNCHER_PROBE="$<TARGET_FILE:LauncherEditorProbe>")
+    add_dependencies(EngineTests LauncherEditorProbe)
+endif()
 # The editor-side TUs above include their headers through preserved prefixes
 # ("editor/...", "imgui/..."), which now resolve under src/editor.
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/editor")
