@@ -19,14 +19,17 @@ using namespace aether;
 namespace
 {
 #ifdef _WIN32
+	constexpr const char* kFixtureEditorExe = "Editor.exe";
 	constexpr const char* kFixtureHostFxr = "hostfxr.dll";
 	constexpr const char* kFixtureCoreClr = "coreclr.dll";
 	constexpr const char* kFixtureHostPolicy = "hostpolicy.dll";
 #elif defined(__APPLE__)
+	constexpr const char* kFixtureEditorExe = "Editor";
 	constexpr const char* kFixtureHostFxr = "libhostfxr.dylib";
 	constexpr const char* kFixtureCoreClr = "libcoreclr.dylib";
 	constexpr const char* kFixtureHostPolicy = "libhostpolicy.dylib";
 #else
+	constexpr const char* kFixtureEditorExe = "Editor";
 	constexpr const char* kFixtureHostFxr = "libhostfxr.so";
 	constexpr const char* kFixtureCoreClr = "libcoreclr.so";
 	constexpr const char* kFixtureHostPolicy = "libhostpolicy.so";
@@ -289,12 +292,12 @@ TEST_CASE("VerifyPublishedPackage rejects the Aftermath DLL")
 TEST_CASE("VerifyPublishedPackage rejects the editor executable")
 {
 	const FakePackage package("editor");
-	package.Write("Editor.exe", "binary");
+	package.Write(kFixtureEditorExe, "binary");
 
 	const auto issue = editor::VerifyPublishedPackage(package.root, "AetherGame.exe");
 
 	REQUIRE(issue.has_value());
-	CHECK(issue->message.find("Editor.exe") != std::string::npos);
+	CHECK(issue->message.find(kFixtureEditorExe) != std::string::npos);
 }
 
 // A debug CRT DLL is NOT a verification failure. Build configuration is reported from

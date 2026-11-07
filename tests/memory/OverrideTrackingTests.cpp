@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <new>
 #include <vector>
 

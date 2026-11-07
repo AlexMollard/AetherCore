@@ -108,7 +108,7 @@ namespace aether::editor
 		}
 	} // namespace
 
-	void PerformancePanel::DrawVerdict(const FrameStats& stats) const
+	void PerformancePanel::DrawVerdict(const FrameTimingStats& stats) const
 	{
 		const float fps = stats.avgMs > 0.0f ? 1000.0f / stats.avgMs : 0.0f;
 		ImGui::Text("%.0f fps", static_cast<double>(fps));
@@ -367,7 +367,7 @@ namespace aether::editor
 		ImGui::TextDisabled("The world advances slower than the clock; motion falls behind.");
 	}
 
-	void PerformancePanel::DrawStutterList(const FrameStats& stats) const
+	void PerformancePanel::DrawStutterList(const FrameTimingStats& stats) const
 	{
 		ImGui::SeparatorText("Worst frames");
 		const float threshold = stats.medianMs * 1.5f;
@@ -410,7 +410,7 @@ namespace aether::editor
 		const std::size_t count = timeline->Snapshot(m_frames);
 		m_frames.resize(count);
 
-		const FrameStats stats = ComputeFrameStats(m_frames);
+		const FrameTimingStats stats = ComputeFrameStats(m_frames);
 
 		m_titleAccum += ImGui::GetIO().DeltaTime;
 		if (m_titleFps == 0.0f || m_titleAccum >= kTitleUpdateInterval)

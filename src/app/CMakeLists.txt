@@ -287,6 +287,15 @@ target_link_libraries(Editor PRIVATE Engine AssetPipeline imgui RuntimeFramework
 endif()
 target_link_libraries(GameRuntime PRIVATE Engine RuntimeFramework)
 
+# CoreCLR resolves AetherHost P/Invokes from the process's dynamic symbol table.
+# ELF otherwise drops these unreferenced C exports even though the object files link.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set_target_properties(GameRuntime PROPERTIES ENABLE_EXPORTS ON)
+    if(TARGET Editor)
+        set_target_properties(Editor PROPERTIES ENABLE_EXPORTS ON)
+    endif()
+endif()
+
 # Editor control endpoint (localhost JSON-over-ENet for the AetherCore MCP / aether-ctl).
 # Linked ONLY into Editor - editor/ is excluded from GameRuntime, so a shipped game links
 # neither ENet nor JSON.

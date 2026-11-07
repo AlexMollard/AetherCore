@@ -20,7 +20,7 @@ namespace aether
 
 	[[nodiscard]] std::string_view SmoothnessLabel(Smoothness smoothness);
 
-	struct FrameStats
+	struct FrameTimingStats
 	{
 		std::size_t sampleCount = 0;
 		float avgMs = 0.0f;
@@ -41,7 +41,7 @@ namespace aether
 	inline constexpr float kNoticeableMs = 4.0f;
 
 	// All statistics are over FrameTiming::wallMs, never the clamped simulation delta.
-	[[nodiscard]] FrameStats ComputeFrameStats(std::span<const FrameTiming> frames);
+	[[nodiscard]] FrameTimingStats ComputeFrameStats(std::span<const FrameTiming> frames);
 
 	// Uses at most the last kClassifyWindow frames, against their median m. Every threshold
 	// is relative AND must clear kNoticeableMs in absolute terms:

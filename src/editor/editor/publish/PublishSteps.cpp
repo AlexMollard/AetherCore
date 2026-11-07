@@ -353,7 +353,9 @@ namespace aether::editor
 				return Failed("The project has C# scripts, but the C# host is not running, so they cannot be compiled.", "Reopen the project and publish again.");
 			}
 
-			const std::filesystem::path artifactsDir = plan.projectRoot / "Builds" / "Intermediate" / "managed";
+			// Publishing must not delete a live editor's retained output or an async
+			// startup compile still writing under the sibling managed directory.
+			const std::filesystem::path artifactsDir = plan.projectRoot / "Builds" / "Intermediate" / "managed-publish";
 			std::error_code ec;
 			std::filesystem::remove_all(artifactsDir, ec);
 			if (ec)

@@ -10,6 +10,7 @@ namespace aether::lighting
 using float3 = glm::vec3;
 using float4 = glm::vec4;
 using std::max;
+using std::sqrt;
 #define AE_LIGHT_INLINE inline
 #else
 #define AE_LIGHT_INLINE

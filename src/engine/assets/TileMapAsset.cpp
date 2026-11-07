@@ -9,6 +9,7 @@
 #include <zstd.h>
 
 #include "io/FileSystem.hpp"
+#include "io/PlatformPaths.hpp"
 
 namespace aether
 {
@@ -212,7 +213,7 @@ namespace aether
 			}
 		}
 
-		const std::string pathString = path.generic_string();
+		const std::string pathString = io::PlatformPaths::PathToUtf8(path);
 		if (pathString.contains("://"))
 		{
 			AE_TRY_VOID(io::FileSystem::WriteFile(pathString, std::as_bytes(std::span{out.data(), out.size()})));
@@ -238,7 +239,7 @@ namespace aether
 	Expected<TileMapAsset> TileMapAsset::Load(const std::filesystem::path& path)
 	{
 		std::string bytes;
-		const std::string pathString = path.generic_string();
+		const std::string pathString = io::PlatformPaths::PathToUtf8(path);
 		if (pathString.contains("://"))
 		{
 			AE_TRY(data, io::FileSystem::ReadFile(pathString));

@@ -9,6 +9,8 @@
 
 #include "utils/FrameStats.hpp"
 #include "utils/FrameTimeline.hpp"
+// Keep both statistics definitions in one TU so a shared-name ODR violation cannot recur.
+#include "vulkan/RenderGraphStorage.hpp"
 
 using namespace aether;
 
@@ -48,7 +50,7 @@ TEST_CASE("Percentiles are computed on unclamped wall time and exceed 33.33") {
     }
     const auto frames = FramesFrom(ms);
 
-    const FrameStats stats = ComputeFrameStats(frames);
+    const FrameTimingStats stats = ComputeFrameStats(frames);
 
     CHECK(stats.sampleCount == 100);
     CHECK(stats.maxMs == doctest::Approx(250.0f));
@@ -62,7 +64,7 @@ TEST_CASE("A single bad frame shows up in max even when it cannot move P99") {
     std::vector<float> ms = Repeat(16.0f, 99);
     ms.push_back(250.0f);
 
-    const FrameStats stats = ComputeFrameStats(FramesFrom(ms));
+    const FrameTimingStats stats = ComputeFrameStats(FramesFrom(ms));
 
     CHECK(stats.maxMs == doctest::Approx(250.0f));
     CHECK(stats.p99Ms == doctest::Approx(16.0f));
@@ -122,7 +124,7 @@ TEST_CASE("The same relative spike at 60 fps is still stuttering") {
 }
 
 TEST_CASE("Empty input is reported as no samples rather than dividing by zero") {
-    const FrameStats stats = ComputeFrameStats({});
+    const FrameTimingStats stats = ComputeFrameStats({});
 
     CHECK(stats.sampleCount == 0);
     CHECK(stats.avgMs == doctest::Approx(0.0f));
@@ -147,7 +149,7 @@ TEST_CASE("Stats over a full timeline ring do not corrupt the stack") {
         ms.push_back(16.0f + static_cast<float>(i % 7));
     }
 
-    const FrameStats stats = ComputeFrameStats(FramesFrom(ms));
+    const FrameTimingStats stats = ComputeFrameStats(FramesFrom(ms));
 
     CHECK(stats.sampleCount == 600);
     CHECK(stats.minMs == doctest::Approx(16.0f));
@@ -167,7 +169,7 @@ TEST_CASE("Stats over a stack array of 64 frames do not corrupt the stack") {
         frames[i].simDtMs = 16.0f;
     }
 
-    const FrameStats stats = ComputeFrameStats(std::span<const FrameTiming>(frames));
+    const FrameTimingStats stats = ComputeFrameStats(std::span<const FrameTiming>(frames));
 
     CHECK(stats.sampleCount == 64);
     CHECK(stats.minMs == doctest::Approx(16.0f));

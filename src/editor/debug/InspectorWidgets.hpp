@@ -380,7 +380,7 @@ namespace aether::editor::iw
 		// Shares LabelColumn so a long label ellipsises here too instead of shoving the value
 		// out of alignment with every other row.
 		LabelColumn(label);
-		va_list args = nullptr;
+		va_list args{};
 		va_start(args, fmt);
 		ImGui::TextV(fmt, args);
 		va_end(args);

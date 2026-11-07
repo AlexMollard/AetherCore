@@ -41,9 +41,9 @@ option(AETHERCORE_BUILD_LAUNCHER "Build the Launcher executable" ON)
 # hard-couples the Editor/Launcher to being real targets. Plain cache strings (overridable)
 # keep publish planning and the Launcher's spawn logic working when those exes are OFF -
 # the value is just a name, and defaults match the targets' OUTPUT_NAMEs.
-set(AETHER_EDITOR_EXE_NAME "Editor.exe" CACHE STRING
+set(AETHER_EDITOR_EXE_NAME "Editor${CMAKE_EXECUTABLE_SUFFIX}" CACHE STRING
     "File name of the Editor executable (publish verification and Launcher spawn)")
-set(AETHER_GAME_RUNTIME_EXE_NAME "AetherGame.exe" CACHE STRING
+set(AETHER_GAME_RUNTIME_EXE_NAME "AetherGame${CMAKE_EXECUTABLE_SUFFIX}" CACHE STRING
     "File name of the GameRuntime executable (baked into the editor binary)")
 
 # Default project for the dev runtime and the VS debugger launch args.

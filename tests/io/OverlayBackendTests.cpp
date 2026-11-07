@@ -144,8 +144,15 @@ TEST_CASE("Glob strips a layer prefix case-insensitively")
 	REQUIRE(matches->size() == 1);
 	CHECK((*matches)[0] == "foo.spv");
 
-	CHECK(overlay.Exists("foo.spv"));
-	const auto bytes = overlay.Read("foo.spv");
+	// Prefix removal is case-insensitive; filesystem lookup still obeys the host.
+	const bool prefixMatchesDisk = std::filesystem::exists(dirD / "shaders" / "foo.spv");
+	CHECK(overlay.Exists("foo.spv") == prefixMatchesDisk);
+	CHECK(overlay.Read("foo.spv").has_value() == prefixMatchesDisk);
+	io::OverlayBackend exactOverlay(std::vector<io::OverlayBackend::Layer>{
+	        {.backend = backendD, .prefix = "Shaders/"},
+	});
+	CHECK(exactOverlay.Exists("foo.spv"));
+	const auto bytes = exactOverlay.Read("foo.spv");
 	REQUIRE(bytes.has_value());
 	CHECK(ToString(*bytes) == "spv bytes");
 }

@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "debug/DebugPanel.hpp"
-#include "utils/FrameStats.hpp"   // FrameStats / Smoothness appear in the signatures below
+#include "utils/FrameStats.hpp"
 #include "utils/FrameTimeline.hpp"
 
 namespace aether::editor
@@ -26,12 +26,12 @@ namespace aether::editor
 		void OnImGui(app::LayerContext& context) override;
 
 	private:
-		void DrawVerdict(const FrameStats& stats) const;
+		void DrawVerdict(const FrameTimingStats& stats) const;
 		void DrawPacingStrip() const;
 		void DrawPhaseBreakdown() const;
 		void DrawLatency(app::LayerContext& context) const;
 		void DrawSimVsReal() const;
-		void DrawStutterList(const FrameStats& stats) const;
+		void DrawStutterList(const FrameTimingStats& stats) const;
 
 		// Reused every frame so drawing allocates nothing.
 		std::vector<FrameTiming> m_frames;

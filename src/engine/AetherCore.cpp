@@ -850,14 +850,7 @@ namespace aether
 
 					const std::size_t count = m_frameTimeline.Snapshot(reportFrames);
 
-					// Aggregated here rather than through ComputeFrameStats. That function is
-					// shared with the editor's Performance panel, where it is exercised every
-					// frame without incident, but calling it from THIS loop trips an /RTCs
-					// stack-guard check in a Debug GameRuntime. Same Engine.lib, so the same
-					// machine code passes 600 frames in EngineTests and fails here, which
-					// points at this call site's environment rather than at the statistics.
-					// That is still open (see the frame-report note in docs), and a
-					// diagnostic must not be the thing that takes the process down.
+					// Aggregate wall time and phase costs together for the frame report.
 					reportWall.clear();
 					float gameWork = 0.0f;
 					float inFlight = 0.0f;

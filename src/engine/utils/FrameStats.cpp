@@ -15,11 +15,6 @@ namespace aether
 		// before sorting rather than trusting the timeline's floats. This is a DIAGNOSTIC: it
 		// has to survive whatever it is handed rather than take the process down while
 		// someone is trying to measure a problem.
-		//
-		// This was NOT the cause of the "stack around the variable 'sorted' was corrupted"
-		// failure seen in a Debug GameRuntime - that reproduced with this filter in place and
-		// after a clean rebuild, and does not reproduce in EngineTests against the same
-		// Engine.lib. It remains open; the frame report no longer routes through here.
 		void CollectFinite(const std::span<const FrameTiming> frames, std::vector<float>& out)
 		{
 			out.clear();
@@ -115,9 +110,9 @@ namespace aether
 		return alternating ? Smoothness::Alternating : Smoothness::Even;
 	}
 
-	FrameStats ComputeFrameStats(const std::span<const FrameTiming> frames)
+	FrameTimingStats ComputeFrameStats(const std::span<const FrameTiming> frames)
 	{
-		FrameStats stats;
+		FrameTimingStats stats;
 		if (frames.empty())
 		{
 			return stats;

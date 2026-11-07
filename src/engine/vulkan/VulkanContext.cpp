@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <ctime>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -1037,11 +1038,37 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "Tracy GPU context requires VK_EXT_calibrated_timestamps but function pointers are null. Ensure the extension is supported by the driver."));
 			}
 
-			m_tracyVkCtx = TracyVkContextHostCalibrated(physicalDeviceResult.value().physical_device, m_device->device, qpreset, gpdctd, gct);
-			// and hand it to the engine singleton. Engine code never
-			m_tracyProfilerHandle = aether::vulkan::CreateTracyGpuProfilerContext(m_tracyVkCtx);
-			gpu::GpuProfiler::Get().Initialize({m_tracyProfilerHandle});
-			gpu::GpuProfiler::Get().SetName("AetherCore GPU");
+			// Tracy's host-calibrated constructor asserts unless its platform clock is
+			// exposed by the driver. The extension alone does not guarantee that clock.
+			bool hostDomainSupported = false;
+#	if defined(_WIN32) || (defined(__linux__) && defined(CLOCK_MONOTONIC_RAW))
+#		if defined(_WIN32)
+			constexpr auto kHostTimeDomain = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT;
+#		else
+			constexpr auto kHostTimeDomain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT;
+#		endif
+			std::uint32_t domainCount = 0;
+			if (gpdctd(physicalDeviceResult.value().physical_device, &domainCount, nullptr) == VK_SUCCESS && domainCount > 0)
+			{
+				std::vector<VkTimeDomainEXT> domains(domainCount);
+				if (gpdctd(physicalDeviceResult.value().physical_device, &domainCount, domains.data()) == VK_SUCCESS)
+				{
+					domains.resize(domainCount);
+					hostDomainSupported = std::ranges::find(domains, kHostTimeDomain) != domains.end();
+				}
+			}
+#	endif
+			if (hostDomainSupported)
+			{
+				m_tracyVkCtx = TracyVkContextHostCalibrated(physicalDeviceResult.value().physical_device, m_device->device, qpreset, gpdctd, gct);
+				m_tracyProfilerHandle = aether::vulkan::CreateTracyGpuProfilerContext(m_tracyVkCtx);
+				gpu::GpuProfiler::Get().Initialize({m_tracyProfilerHandle});
+				gpu::GpuProfiler::Get().SetName("AetherCore GPU");
+			}
+			else
+			{
+				AE_WARN(LogCategory::Vulkan, "Tracy GPU profiling disabled: driver does not expose the required calibrated host time domain.");
+			}
 		}
 #endif
 

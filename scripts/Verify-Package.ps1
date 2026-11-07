@@ -40,7 +40,6 @@ if (-not (Test-Path -LiteralPath $PayloadDir)) {
 }
 $root = (Resolve-Path -LiteralPath $PayloadDir).Path
 $exeSuffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
-$netHost = if ($env:OS -eq 'Windows_NT') { 'nethost.dll' } else { 'libnethost.so' }
 Write-Host "Verifying package at $root"
 
 $problems = [System.Collections.Generic.List[string]]::new()
@@ -70,7 +69,11 @@ if (-not $RuntimeOnly) {
     Require-File "Editor$exeSuffix"   'the editor'
 }
 Require-File "AetherGame$exeSuffix" 'the runtime the editor copies when publishing a game'
-Require-File $netHost 'CoreCLR cannot be bootstrapped without it'
+# Windows links the nethost import library; non-Windows links libnethost.a
+# (CMake/DotNet.cmake), so no separate nethost shared object is delivered there.
+if ($env:OS -eq 'Windows_NT') {
+    Require-File 'nethost.dll' 'CoreCLR cannot be bootstrapped without it'
+}
 Require-File 'THIRD_PARTY_NOTICES.txt' 'private redistribution dependency notices'
 Require-File 'DISTRIBUTION.md' 'private distribution terms and qualification limits'
 

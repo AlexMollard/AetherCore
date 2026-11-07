@@ -219,6 +219,8 @@ void* operator new[](const std::size_t size, const std::align_val_t alignment, c
 }
 
 // ── Deallocation ────────────────────────────────────────────────────────────────
+// Keep by-value parameters unqualified: Clang's builtin deallocation checks
+// otherwise reject these replacement overloads when using libstdc++.
 
 void operator delete(void* ptr) noexcept
 {
@@ -234,14 +236,14 @@ void operator delete[](void* ptr) noexcept
 	mi_free(ptr);
 }
 
-void operator delete(void* ptr, const std::size_t size) noexcept
+void operator delete(void* ptr, std::size_t size) noexcept
 {
 	AE_PROFILE_FREE(ptr);
 	TrackFree(ptr);
 	mi_free_size(ptr, size);
 }
 
-void operator delete[](void* ptr, const std::size_t size) noexcept
+void operator delete[](void* ptr, std::size_t size) noexcept
 {
 	AE_PROFILE_FREE(ptr);
 	TrackFree(ptr);
@@ -262,42 +264,42 @@ void operator delete[](void* ptr, const std::nothrow_t&) noexcept
 	mi_free(ptr);
 }
 
-void operator delete(void* ptr, const std::align_val_t alignment) noexcept
+void operator delete(void* ptr, std::align_val_t alignment) noexcept
 {
 	AE_PROFILE_FREE(ptr);
 	TrackFree(ptr);
 	mi_free_aligned(ptr, static_cast<std::size_t>(alignment));
 }
 
-void operator delete[](void* ptr, const std::align_val_t alignment) noexcept
+void operator delete[](void* ptr, std::align_val_t alignment) noexcept
 {
 	AE_PROFILE_FREE(ptr);
 	TrackFree(ptr);
 	mi_free_aligned(ptr, static_cast<std::size_t>(alignment));
 }
 
-void operator delete(void* ptr, const std::size_t size, const std::align_val_t alignment) noexcept
+void operator delete(void* ptr, std::size_t size, std::align_val_t alignment) noexcept
 {
 	AE_PROFILE_FREE(ptr);
 	TrackFree(ptr);
 	mi_free_size_aligned(ptr, size, static_cast<std::size_t>(alignment));
 }
 
-void operator delete[](void* ptr, const std::size_t size, const std::align_val_t alignment) noexcept
+void operator delete[](void* ptr, std::size_t size, std::align_val_t alignment) noexcept
 {
 	AE_PROFILE_FREE(ptr);
 	TrackFree(ptr);
 	mi_free_size_aligned(ptr, size, static_cast<std::size_t>(alignment));
 }
 
-void operator delete(void* ptr, const std::align_val_t alignment, const std::nothrow_t&) noexcept
+void operator delete(void* ptr, std::align_val_t alignment, const std::nothrow_t&) noexcept
 {
 	AE_PROFILE_FREE(ptr);
 	TrackFree(ptr);
 	mi_free_aligned(ptr, static_cast<std::size_t>(alignment));
 }
 
-void operator delete[](void* ptr, const std::align_val_t alignment, const std::nothrow_t&) noexcept
+void operator delete[](void* ptr, std::align_val_t alignment, const std::nothrow_t&) noexcept
 {
 	AE_PROFILE_FREE(ptr);
 	TrackFree(ptr);
