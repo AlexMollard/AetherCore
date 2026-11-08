@@ -104,10 +104,17 @@ namespace aether::assets
 		{
 			return std::unexpected(AetherError::Asset("Invalid prepared browser model: " + std::string(meshPath)));
 		};
-		if (data.size() < 16 || std::memcmp(data.data(), "AEP2", 4) != 0)
+		if (data.size() < 16)
 		{
 			return fail();
 		}
+		const bool legacyVertices = std::memcmp(data.data(), "AEP2", 4) == 0;
+		if (!legacyVertices && std::memcmp(data.data(), "AEP3", 4) != 0)
+		{
+			return fail();
+		}
+		// AEP2 predates vertex opacity; its original member offsets remain unchanged.
+		const std::size_t vertexStride = legacyVertices ? 100 : sizeof(MeshVertex);
 		const std::uint32_t metadata = U32(data.data() + 4), streams = U32(data.data() + 8);
 		if (metadata > data.size() - 16 || streams > data.size() - 16 - metadata)
 		{
@@ -294,14 +301,21 @@ namespace aether::assets
 			{
 				return fail();
 			}
-			const auto vertexBytes = static_cast<std::uint64_t>(vertexCount) * sizeof(MeshVertex), indexBytes = static_cast<std::uint64_t>(indexCount) * sizeof(std::uint32_t);
+			const auto vertexBytes = static_cast<std::uint64_t>(vertexCount) * vertexStride, indexBytes = static_cast<std::uint64_t>(indexCount) * sizeof(std::uint32_t);
 			if (vertexBytes > end - cursor || indexBytes > end - cursor - vertexBytes)
 			{
 				return fail();
 			}
 			primitive.vertices.resize(vertexCount);
 			primitive.indices.resize(indexCount);
-			std::memcpy(primitive.vertices.data(), data.data() + cursor, static_cast<std::size_t>(vertexBytes));
+			for (std::size_t i = 0; i < primitive.vertices.size(); ++i)
+			{
+				std::memcpy(&primitive.vertices[i], data.data() + cursor + i * vertexStride, vertexStride);
+				if (!std::isfinite(primitive.vertices[i].colorAlpha))
+				{
+					return fail();
+				}
+			}
 			cursor += static_cast<std::size_t>(vertexBytes);
 			std::memcpy(primitive.indices.data(), data.data() + cursor, static_cast<std::size_t>(indexBytes));
 			cursor += static_cast<std::size_t>(indexBytes);

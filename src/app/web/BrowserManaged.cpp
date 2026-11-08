@@ -9,6 +9,7 @@
 #include "scripting/GameplayAccess.hpp"
 #include "scripting/GameplayServices.h"
 #include "scene/World.hpp"
+#include "scene/Hierarchy.hpp"
 #include "physics2d/Physics2DComponents.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scripting/interop/InteropCommon.hpp"
@@ -115,6 +116,8 @@ namespace aether::app::web
 
 extern "C"
 {
+#include "BrowserEntityExports.inc"
+
 	EMSCRIPTEN_KEEPALIVE bool aether_streaming_set_source(const char* id, aether::app::scripting::interop::Vec3 position, float loadRadius, float prefetchRadius, std::uint32_t priority)
 	{
 		if (!id || !s_context.streaming || priority > 3) return false;

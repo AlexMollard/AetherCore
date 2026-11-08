@@ -290,7 +290,7 @@ namespace aether::webgpu
 		WGPUShaderModuleDescriptor shaderDescriptor = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
 		shaderDescriptor.nextInChain = &source.chain;
 		const auto shader = wgpuDeviceCreateShaderModule(device, &shaderDescriptor);
-		std::array<WGPUVertexAttribute, 8> attributes{};
+		std::array<WGPUVertexAttribute, 9> attributes{};
 		attributes[0].format = WGPUVertexFormat_Float32x3;
 		attributes[0].offset = offsetof(MeshVertex, position);
 		attributes[0].shaderLocation = 0;
@@ -315,6 +315,9 @@ namespace aether::webgpu
 		attributes[7].format = WGPUVertexFormat_Float32x2;
 		attributes[7].offset = offsetof(MeshVertex, uv2);
 		attributes[7].shaderLocation = 7;
+		attributes[8].format = WGPUVertexFormat_Float32;
+		attributes[8].offset = offsetof(MeshVertex, colorAlpha);
+		attributes[8].shaderLocation = 8;
 		WGPUVertexBufferLayout vertices = WGPU_VERTEX_BUFFER_LAYOUT_INIT;
 		vertices.arrayStride = sizeof(MeshVertex);
 		vertices.stepMode = WGPUVertexStepMode_Vertex;
@@ -493,7 +496,7 @@ namespace aether::webgpu
 		WGPUShaderModuleDescriptor shaderDescriptor = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
 		shaderDescriptor.nextInChain = &source.chain;
 		const auto shader = wgpuDeviceCreateShaderModule(device, &shaderDescriptor);
-		std::array<WGPUVertexAttribute, 8> attributes{};
+		std::array<WGPUVertexAttribute, 9> attributes{};
 		attributes[0].format = WGPUVertexFormat_Float32x3;
 		attributes[0].offset = offsetof(MeshVertex, position);
 		attributes[0].shaderLocation = 0;
@@ -518,6 +521,9 @@ namespace aether::webgpu
 		attributes[7].format = WGPUVertexFormat_Float32x2;
 		attributes[7].offset = offsetof(MeshVertex, uv2);
 		attributes[7].shaderLocation = 7;
+		attributes[8].format = WGPUVertexFormat_Float32;
+		attributes[8].offset = offsetof(MeshVertex, colorAlpha);
+		attributes[8].shaderLocation = 8;
 		WGPUVertexBufferLayout vertices = WGPU_VERTEX_BUFFER_LAYOUT_INIT;
 		vertices.arrayStride = sizeof(MeshVertex);
 		vertices.stepMode = WGPUVertexStepMode_Vertex;
@@ -648,6 +654,11 @@ namespace aether::webgpu
 		bool skinReady = true;
 		for (const auto& vertex: vertices)
 		{
+			if (!std::isfinite(vertex.colorAlpha))
+			{
+				error = "Nonfinite mesh vertex opacity";
+				return false;
+			}
 			if (!gpu::ValidMeshSkinInfluences(vertex.jointIndices, vertex.jointWeights, 256, false))
 			{
 				error = "Invalid mesh skin influences";

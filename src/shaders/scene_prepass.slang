@@ -68,6 +68,7 @@ struct PrepassVSOutput
 	nointerpolation uint materialIndex : TEXCOORD2;
 	float3 vertexColor   : TEXCOORD3;
 	float3 worldPos : TEXCOORD4;
+	float vertexOpacity : TEXCOORD5;
 };
 
 struct PrepassOutput
@@ -82,7 +83,8 @@ PrepassVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_
 	float3 worldPos;
 	float2 depthUv;
 	uint depthMaterialIndex;
-	const float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos, depthUv, depthMaterialIndex);
+	float vertexOpacity;
+	const float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos, depthUv, depthMaterialIndex, vertexOpacity);
 
 	FrameConstantsData* fc = pc.frame.Ptr();
 	const DrawInstanceData instance = pc.instanceData.Load(startInstance);
@@ -139,6 +141,7 @@ PrepassVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_
 	o.materialIndex = instance.materialIndex;
 	o.vertexColor = v.color;
 	o.worldPos = worldPos;
+	o.vertexOpacity = vertexOpacity;
 	return o;
 }
 
@@ -151,7 +154,7 @@ PrepassOutput fragmentMain(PrepassVSOutput input, bool isFrontFace : SV_IsFrontF
 	{
 		discard;
 	}
-	AlphaMaskDiscard(input.materialIndex, input.uv);
+	AlphaMaskDiscard(input.materialIndex, input.uv, input.vertexOpacity);
 	MaterialDistanceDiscard(input.materialIndex, input.worldPos, input.svPosition.xy);
 
 	FrameConstantsData* fc = pc.frame.Ptr();

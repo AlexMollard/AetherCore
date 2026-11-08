@@ -3,6 +3,7 @@
 #include "gpu/SpritePass.hpp"
 #include "gpu/AsyncRenderLifecycle.hpp"
 #include "gpu/MeshPass.hpp"
+#include "mesh/MeshVertex.hpp"
 #include <limits>
 #include <glm/gtc/matrix_transform.hpp>
 #include "../../src/engine/webgpu/WebGpuRequirements.hpp"
@@ -31,6 +32,40 @@ TEST_CASE("WebGPU 3D adapter contract reports all insufficient limits")
 	CHECK(message.find("maxTextureDimension2D") != std::string::npos);
 	CHECK(message.find("maxBindGroups") != std::string::npos);
 	CHECK(message.find("maxVertexAttributes") == std::string::npos);
+}
+
+TEST_CASE("WebGPU requested device limits cover every RGBA mesh vertex attribute")
+{
+	using namespace aether;
+	using namespace aether::webgpu;
+	// Both mesh pipelines expose each of these fields as one vertex attribute.
+	constexpr std::array attributeOffsets{
+		offsetof(MeshVertex, position), offsetof(MeshVertex, color), offsetof(MeshVertex, uv),
+		offsetof(MeshVertex, jointIndices), offsetof(MeshVertex, jointWeights), offsetof(MeshVertex, normal),
+		offsetof(MeshVertex, tangent), offsetof(MeshVertex, uv2), offsetof(MeshVertex, colorAlpha)
+	};
+	auto required = [](std::string_view name) -> std::uint64_t {
+		for (const auto& limit: kAdapter3DLimits)
+		{
+			if (limit.name == name) { return limit.minimum; }
+		}
+		return 0;
+	};
+	CHECK(required("maxVertexAttributes") >= attributeOffsets.size());
+	CHECK(required("maxVertexBufferArrayStride") >= sizeof(MeshVertex));
+	CHECK(attributeOffsets.back() + sizeof(float) == sizeof(MeshVertex));
+	const auto legacyDevice = UnmetAdapter3DLimits([](std::string_view name) -> std::uint64_t {
+		if (name == "maxVertexAttributes") { return 8; }
+		if (name == "maxVertexBufferArrayStride") { return 100; }
+		return UINT64_MAX;
+	});
+	CHECK(legacyDevice.find("maxVertexAttributes") != std::string::npos);
+	CHECK(legacyDevice.find("maxVertexBufferArrayStride") != std::string::npos);
+	CHECK(UnmetAdapter3DLimits([&](std::string_view name) -> std::uint64_t {
+		if (name == "maxVertexAttributes") { return attributeOffsets.size(); }
+		if (name == "maxVertexBufferArrayStride") { return sizeof(MeshVertex); }
+		return UINT64_MAX;
+	}).empty());
 }
 
 TEST_CASE("WebGPU sprite bounds ordering and asynchronous retirement")

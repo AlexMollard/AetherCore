@@ -1,7 +1,7 @@
 #ifndef AETHER_MESH_VERTEX_SLANGH
 #define AETHER_MESH_VERTEX_SLANGH
 
-// Must match aether::Mesh::Vertex (100 bytes).
+// Must match aether::Mesh::Vertex (104 bytes).
 // Included by gltf_mesh.slang and plasma.slang.
 
 struct Vertex
@@ -14,6 +14,7 @@ struct Vertex
     [[vk::offset(56)]] float3 color;
     [[vk::offset(68)]] uint4  jointIndices;
     [[vk::offset(84)]] float4 jointWeights;
+    [[vk::offset(100)]] float colorAlpha;
 };
 
 struct VSOutput
@@ -27,6 +28,9 @@ struct VSOutput
     [[vk::location(5)]] float2 uv2             : TEXCOORD5;
     [[vk::location(6)]] float3 vertexColor     : TEXCOORD6;
     [[vk::location(7)]] nointerpolation uint materialIndex : TEXCOORD7;
+#ifdef AETHER_VS_VERTEX_OPACITY
+    [[vk::location(9)]] float vertexOpacity : TEXCOORD9;
+#endif
 #ifdef AETHER_VS_EFFECT_PARAMS
     // Per-entity EffectParams slot. Only effect shaders (plasma/molten) consume
     // it, so it is an opt-in varying: shaders that do not define

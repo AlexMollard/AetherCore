@@ -15,9 +15,10 @@ namespace aether
 		glm::vec3 color;
 		glm::uvec4 jointIndices{0u, 0u, 0u, 0u};
 		glm::vec4 jointWeights{1.0f, 0.0f, 0.0f, 0.0f};
+		float colorAlpha = 1.0f;
 	};
 
-	static_assert(sizeof(MeshVertex) == 100, "MeshVertex layout changed - update shaders/include/MeshVertex.slangh.");
+	static_assert(sizeof(MeshVertex) == 104, "MeshVertex layout changed - update shaders/include/MeshVertex.slangh.");
 	static_assert(offsetof(MeshVertex, position) == 0);
 	static_assert(offsetof(MeshVertex, normal) == 12);
 	static_assert(offsetof(MeshVertex, tangent) == 24);
@@ -26,4 +27,5 @@ namespace aether
 	static_assert(offsetof(MeshVertex, color) == 56);
 	static_assert(offsetof(MeshVertex, jointIndices) == 68);
 	static_assert(offsetof(MeshVertex, jointWeights) == 84);
+	static_assert(offsetof(MeshVertex, colorAlpha) == 100);
 } // namespace aether

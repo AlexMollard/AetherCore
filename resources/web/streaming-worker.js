@@ -93,13 +93,14 @@ function prepareMesh(bytes, info, meshPath, files, capacity) {
             if(!remap.has(original)) { remap.set(original,vertices.length); vertices.push(original); }
             indices[i]=remap.get(original);
         }
-        const output=new Uint8Array(vertices.length*100), view=new DataView(output.buffer);
+        const output=new Uint8Array(vertices.length*104), view=new DataView(output.buffer);
         for(let i=0;i<vertices.length;++i) {
-            const from=72+vertices[i]*96, to=i*100;
+            const from=72+vertices[i]*96, to=i*104;
             output.set(bytes.subarray(from,from+48),to);
             output.set(bytes.subarray(from+52,from+60),to+48);
             const color=src.getUint32(from+48,true);
             for(let c=0;c<3;++c) view.setFloat32(to+56+c*4,((color>>>(c*8))&255)/255,true);
+            view.setFloat32(to+100,(color>>>24)/255,true);
             output.set(bytes.subarray(from+64,from+96),to+68);
         }
         primitives.push({materialIndex:range.material<materials.length?range.material:materials.length?0:-1, skinIndex:info.skinRef?0:-1, primitiveKey:info.keys[s]||'unidentified',vertexCount:vertices.length,indexCount:range.count});
@@ -109,7 +110,7 @@ function prepareMesh(bytes, info, meshPath, files, capacity) {
     const required=16+metadata.length+streams.reduce((sum,stream)=>sum+stream.length,0);
     if(required>capacity) throw Error('Prepared model exceeds admitted budget');
     const out=new Uint8Array(capacity), view=new DataView(out.buffer);
-    out.set([65,69,80,50]); view.setUint32(4,metadata.length,true); view.setUint32(8,required-16-metadata.length,true);
+    out.set([65,69,80,51]); view.setUint32(4,metadata.length,true); view.setUint32(8,required-16-metadata.length,true);
     out.set(metadata,16); let offset=16+metadata.length;
     for(const stream of streams) { out.set(stream,offset); offset+=stream.length; }
     return out;
@@ -163,7 +164,7 @@ self.onmessage = async ({data}) => {
         const hash=Array.from(digest,x=>x.toString(16).padStart(2,'0')).join('');
         if(hash!==data.sha256) throw Error('Streaming asset hash mismatch');
         let info=null, preparedSize=0, baseSize=0, mipsSize=0, kind='';
-        if(data.path.endsWith('.mesh')) { kind='mesh'; info=meshInfo(bytes); const expanded=info.ranges.length?info.ranges.reduce((n,r)=>n+r.count,0):Math.max(info.indices,info.vertices); const text=info.keys.reduce((n,k)=>n+k.length,0)+info.skinRef.length+info.materialPaths.reduce((n,p)=>n+p.length,0); baseSize=16+104*expanded+8*(text+data.dependencyBytes)+info.ranges.length*256+65536; preparedSize=baseSize; }
+        if(data.path.endsWith('.mesh')) { kind='mesh'; info=meshInfo(bytes); const expanded=info.ranges.length?info.ranges.reduce((n,r)=>n+r.count,0):Math.max(info.indices,info.vertices); const text=info.keys.reduce((n,k)=>n+k.length,0)+info.skinRef.length+info.materialPaths.reduce((n,p)=>n+p.length,0); baseSize=16+108*expanded+8*(text+data.dependencyBytes)+info.ranges.length*256+65536; preparedSize=baseSize; }
         else if(/\.(png|jpe?g|bmp|webp|tga)$/i.test(data.path)) { kind='image'; const [width,height]=dimensions(bytes,data.path); if(!width || !height || width>4096 || height>4096) throw Error('Image dimensions exceed limits'); info={width,height}; baseSize=32+width*height*4; mipsSize=mipSize(width,height); preparedSize=baseSize+mipsSize; }
         else if(data.path.endsWith('.texture')) { const v=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength); if(bytes.length<32 || v.getUint32(0,true)!==0x38524541 || v.getUint32(4,true)!==1 || v.getUint32(16,true)!==1 || v.getUint32(20,true)!==0) throw Error('Invalid cooked texture'); const width=v.getUint32(8,true), height=v.getUint32(12,true); if(!width || !height || width>4096 || height>4096 || v.getBigUint64(24,true)!==BigInt(width*height*4) || bytes.length!==32+width*height*4) throw Error('Invalid cooked texture extent'); kind='cookedImage'; info={width,height}; mipsSize=mipSize(width,height); preparedSize=mipsSize; }
         let prepared=null, mips=null;

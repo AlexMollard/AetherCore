@@ -106,6 +106,9 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartIn
     o.uv          = input.uv;
     o.uv2         = input.uv2;
     o.vertexColor = input.color;
+#ifdef AETHER_VS_VERTEX_OPACITY
+    o.vertexOpacity = input.colorAlpha;
+#endif
     o.materialIndex = instance.materialIndex;
 #ifdef AETHER_VS_EFFECT_PARAMS
     o.effectParamIndex = instance.effectParamIndex;

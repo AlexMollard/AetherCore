@@ -292,6 +292,7 @@ globalThis.aetherInput = {
     }
 };
 const inputCanvas = document.getElementById('canvas');
+inputCanvas.addEventListener('contextmenu', event => event.preventDefault());
 inputCanvas.addEventListener('paste', event => {
     aetherInput.pasteText = event.clipboardData.getData('text/plain').slice(0,65536);
     event.preventDefault();

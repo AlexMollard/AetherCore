@@ -32,20 +32,22 @@ DepthVSOutputWithWorldPos vertexMain(uint vertexId : SV_VertexID, uint startInst
     float3 worldPos;
     float2 uv;
     uint materialIndex;
-    float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos, uv, materialIndex);
+    float vertexOpacity;
+    float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos, uv, materialIndex, vertexOpacity);
 
     DepthVSOutputWithWorldPos o;
     o.svPosition = clipPos;
     o.worldPos   = worldPos;
     o.uv = uv;
     o.materialIndex = materialIndex;
+    o.vertexOpacity = vertexOpacity;
     return o;
 }
 
 [shader("fragment")]
 float fragmentMain(DepthVSOutputWithWorldPos input) : SV_Target
 {
-    AlphaMaskDiscard(input.materialIndex, input.uv);
+    AlphaMaskDiscard(input.materialIndex, input.uv, input.vertexOpacity);
     MaterialDistanceDiscard(input.materialIndex, input.worldPos, input.svPosition.xy);
 
     // Foliage casts here too, matching the directional cascades (see shadow_depth.slang);

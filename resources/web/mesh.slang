@@ -82,7 +82,7 @@ struct VertexOutput
 	float2 sheet : TEXCOORD8;
 };
 [shader("vertex")]
-VertexOutput vertexMain(float3 position : POSITION, float3 color : COLOR0, float2 uv : TEXCOORD0, uint4 joints : BLENDINDICES, float4 weights : BLENDWEIGHT, float3 normal : NORMAL, float4 tangent : TANGENT, float2 uv2 : TEXCOORD7, uint instance : SV_InstanceID)
+VertexOutput vertexMain(float3 position : POSITION, float3 color : COLOR0, float2 uv : TEXCOORD0, uint4 joints : BLENDINDICES, float4 weights : BLENDWEIGHT, float3 normal : NORMAL, float4 tangent : TANGENT, float2 uv2 : TEXCOORD7, float colorAlpha : TEXCOORD8, uint instance : SV_InstanceID)
 {
 	MeshData mesh = meshes[instance];
 	float4 local = float4(position, 1);
@@ -114,7 +114,8 @@ VertexOutput vertexMain(float3 position : POSITION, float3 color : COLOR0, float
 	if ((mesh.metadata.w & 512) != 0) { output.position.z = output.position.w; }
 	float3 vertexColor = (mesh.metadata.w & 8) != 0 ? color : float3(1);
 	if (frame.time.y != 0 && (any(vertexColor < float3(0)) || any(vertexColor > float3(1)) || dot(vertexColor, vertexColor) < 0.0025)) { vertexColor = float3(1); }
-	output.color = mesh.color * float4(vertexColor, 1);
+	const float vertexOpacity = (mesh.metadata.w & 8) != 0 ? colorAlpha : 1.0;
+	output.color = mesh.color * float4(vertexColor, vertexOpacity);
 	output.uv = uv + frac(mesh.uvScroll.xy * frame.time.x);
 	if ((mesh.metadata.w & 512) != 0 && mesh.factors.x > 0 && (uint(mesh.factors.w) & 1) != 0)
 	{
@@ -548,7 +549,7 @@ AuxiliaryOutput auxiliaryMain(VertexOutput input, bool front : SV_IsFrontFace)
 	MeshData mesh = meshes[input.instance];
 	float2 uvDx = ddx(input.rawUv) * exp2(frame.time.z), uvDy = ddy(input.rawUv) * exp2(frame.time.z);
 	float4 base = albedo.SampleGrad(materialSampler, input.rawUv, uvDx, uvDy);
-	float alpha = mesh.color.a * albedo.SampleGrad(materialSampler, input.uv, uvDx, uvDy).a;
+	float alpha = input.color.a * albedo.SampleGrad(materialSampler, input.uv, uvDx, uvDy).a;
 	float3 orm = metallicRoughness.SampleGrad(materialSampler, input.rawUv, uvDx, uvDy).rgb;
 	float3 N = SafeNormal(input.prepassNormal, float3(0, 1, 0)) * (front ? 1 : -1);
 	float3 dx = ddx(N), dy = ddy(N);

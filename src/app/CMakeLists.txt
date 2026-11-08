@@ -74,6 +74,7 @@ if(AETHERCORE_WEB_RUNTIME)
             scripting/interop/CameraExports.cpp
             scripting/interop/UiExports.cpp
             scripting/interop/WorldExports.cpp
+            scripting/interop/MeshRendererExports.cpp
             scripting/interop/RagdollExports.cpp scripting/interop/AnimationExports.cpp
             scripting/interop/NetExports.cpp net/NetRpcExports.cpp net/BrowserScriptBridges.cpp
             scripting/interop/ServerConnectionExports.cpp

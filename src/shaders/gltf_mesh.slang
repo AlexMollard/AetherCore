@@ -28,6 +28,7 @@
 #include "include/ContactShadow.slangh"
 #include "include/LocalShadow.slangh"
 #include "include/PBRUtilities.slangh"
+#define AETHER_VS_VERTEX_OPACITY 1
 #include "include/MeshVertex.slangh"
 #include "include/Water.slangh"
 #include "include/Foliage.slangh"
@@ -227,6 +228,10 @@ float4 fragmentMain(VSOutput input, bool isFrontFace : SV_IsFrontFace) : SV_Targ
         vertexColor = float3(1.0, 1.0, 1.0);
     }
     baseColor.rgb *= vertexColor;
+    if ((mat.flags & kFlagModulateVertexColor) != 0u)
+    {
+        baseColor.a *= input.vertexOpacity;
+    }
 
     const bool lightShaft = (mat.flags & kFlagLightShaft) != 0u;
     if (lightShaft)

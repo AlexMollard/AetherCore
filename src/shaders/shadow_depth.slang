@@ -31,7 +31,8 @@ DepthVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_St
     float3 worldPos;
     float2 uv;
     uint materialIndex;
-    float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos, uv, materialIndex);
+    float vertexOpacity;
+    float4 clipPos = DepthVertexTransform(vertexId, startInstance, worldPos, uv, materialIndex, vertexOpacity);
     if (materialIndex != kNoTexture)
     {
         FrameConstantsData* fc = pc.frame.Ptr();
@@ -47,6 +48,7 @@ DepthVSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_St
     o.uv = uv;
     o.materialIndex = materialIndex;
     o.worldPos = worldPos;
+    o.vertexOpacity = vertexOpacity;
     return o;
 }
 
@@ -70,6 +72,6 @@ void fragmentMain(DepthVSOutput input)
             discard;
         }
     }
-    AlphaMaskDiscard(input.materialIndex, input.uv);
+    AlphaMaskDiscard(input.materialIndex, input.uv, input.vertexOpacity);
     MaterialDistanceDiscard(input.materialIndex, input.worldPos, input.svPosition.xy);
 }

@@ -28,7 +28,7 @@ void MaterialDistanceDiscard(uint materialIndex, float3 worldPos, float2 pixel)
 // a cheaper shader per material. Measured at +0.012 ms across three shadow cascades on a small
 // scene - if a heavy one shows this in a profile, the fix is to split draws into alpha-tested
 // and opaque lists with a pipeline each, not to make the test cheaper.
-void AlphaMaskDiscard(uint materialIndex, float2 uv)
+void AlphaMaskDiscard(uint materialIndex, float2 uv, float vertexOpacity)
 {
     if (materialIndex == kNoTexture)
     {
@@ -45,6 +45,10 @@ void AlphaMaskDiscard(uint materialIndex, float2 uv)
     // out of the same texels it renders (see gltf_mesh.slang).
     float2 scrolledUv = uv + fract(mat.uvScroll * fc->elapsedTime);
     float alpha = mat.baseColorFactor.a;
+    if ((mat.flags & kFlagModulateVertexColor) != 0u)
+    {
+        alpha *= vertexOpacity;
+    }
     if (mat.albedoSlot != kNoTexture)
     {
         alpha *= g_textures[mat.albedoSlot].Sample(g_linearSampler, scrolledUv).a;
