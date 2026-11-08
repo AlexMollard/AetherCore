@@ -4,6 +4,8 @@
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
+#include "scripting/interop/InteropCommon.hpp"
+#include "web/BrowserMaterial.hpp"
 
 extern "C"
 {
@@ -15,6 +17,53 @@ namespace browser_entity_fixture
 {
 	aether::World* s_world = nullptr;
 #include "../../src/app/web/BrowserEntityExports.inc"
+#include "../../src/app/web/BrowserMaterialExports.inc"
+}
+
+TEST_CASE("Browser material edits preserve per-entity values and hand texture paths to the draw resolver")
+{
+	using namespace aether;
+	using namespace browser_entity_fixture;
+	World world;
+	s_world = &world;
+	const auto entity = world.Create();
+	MaterialAsset material;
+	material.baseColorFactor = {1.0f, 1.0f, 1.0f, 0.4f};
+	material.roughnessFactor = 0.7f;
+	material.normalTex = TextureHandle{8, 1};
+	world.Emplace<MaterialInstanceComponent>(entity, MaterialInstanceComponent{material});
+	aether_entity_material_set_color(entity.id, {0.2f, 0.3f, 0.4f});
+	CHECK(world.Get<MaterialInstanceComponent>(entity).asset.baseColorFactor == glm::vec4(0.2f, 0.3f, 0.4f, 0.4f));
+	CHECK(world.Get<MaterialInstanceComponent>(entity).asset.roughnessFactor == 0.7f);
+	aether_set_material_texture(entity.id, "project://skin.png");
+	const auto* texture = world.TryGet<app::web::BrowserMaterialTexture>(entity);
+	REQUIRE(texture);
+	CHECK(texture->path == "project://skin.png");
+	unsigned resolves = 0;
+	auto resolve = [&](std::string_view path) -> Expected<TextureHandle>
+	{
+		++resolves;
+		CHECK(path == "project://skin.png");
+		return TextureHandle{9, 1};
+	};
+	REQUIRE(app::web::ResolveBrowserMaterialTexture(world, entity, resolve));
+	CHECK(resolves == 1);
+	CHECK(world.Get<MaterialInstanceComponent>(entity).asset.albedoTex == TextureHandle{9, 1});
+	CHECK(world.Get<MaterialInstanceComponent>(entity).asset.normalTex == material.normalTex);
+	aether_set_material_texture(entity.id, "project://skin.png");
+	REQUIRE(app::web::ResolveBrowserMaterialTexture(world, entity, resolve));
+	CHECK(resolves == 1);
+	aether_set_material_texture(entity.id, nullptr);
+	REQUIRE(app::web::ResolveBrowserMaterialTexture(world, entity, resolve));
+	CHECK_FALSE(world.Get<MaterialInstanceComponent>(entity).asset.albedoTex.IsValid());
+	CHECK(resolves == 1);
+	world.Destroy(entity);
+	aether_entity_material_set_color(entity.id, {});
+	aether_set_material_texture(entity.id, "project://invalid.png");
+	CHECK_FALSE(world.TryGet<app::web::BrowserMaterialTexture>(entity));
+	s_world = nullptr;
+	aether_entity_material_set_color(entity.id, {});
+	aether_set_material_texture(entity.id, "project://invalid.png");
 }
 
 TEST_CASE("Browser SDK hierarchy exports enumerate children and reject invalid handles and indices")

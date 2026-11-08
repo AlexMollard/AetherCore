@@ -1,4 +1,5 @@
 #include "WebModels.hpp"
+#include "BrowserMaterial.hpp"
 
 #include "WebScene.hpp"
 #include "assets/ModelPose.hpp"
@@ -544,6 +545,11 @@ namespace aether::app::web
 			}
 			draw.mesh = binding.slot;
 			draw.castShadows = MeshRendererCastsShadows(renderer);
+			AE_TRY(appliedTexture, ResolveBrowserMaterialTexture(world, entity, [this](const std::string& path) -> Expected<TextureHandle>
+			{
+				AE_TRY(material, ResolveTextures(MaterialAsset{}, {path, "", "", "", ""}));
+				return material->albedoTex;
+			}));
 			draw.material = world.Get<MaterialInstanceComponent>(entity).asset;
 			if (binding.grass)
 			{

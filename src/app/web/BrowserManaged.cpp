@@ -1,4 +1,5 @@
 #include "BrowserManaged.hpp"
+#include "BrowserMaterial.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -117,6 +118,7 @@ namespace aether::app::web
 extern "C"
 {
 #include "BrowserEntityExports.inc"
+#include "BrowserMaterialExports.inc"
 
 	EMSCRIPTEN_KEEPALIVE bool aether_streaming_set_source(const char* id, aether::app::scripting::interop::Vec3 position, float loadRadius, float prefetchRadius, std::uint32_t priority)
 	{

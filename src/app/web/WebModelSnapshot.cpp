@@ -1,4 +1,5 @@
 #include "WebModels.hpp"
+#include "BrowserMaterial.hpp"
 
 #include "scene/World.hpp"
 #include <limits>
@@ -15,9 +16,11 @@ namespace aether::app::web
 		}
 		const auto& material = component->asset;
 		const TextureHandle handles[] = {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex};
-		std::uint64_t bytes = 0;
-		for (const auto handle: handles)
+		const auto* requested = world.TryGet<BrowserMaterialTexture>(entity);
+		std::uint64_t bytes = requested && !requested->path.empty() ? requested->path.size() + 1 : 0;
+		for (unsigned i = requested ? 1 : 0; i < 5; ++i)
 		{
+			const auto handle = handles[i];
 			if (!handle.IsValid() || handle == m_textures.DefaultHandle() || handle == m_textures.WhiteHandle())
 			{
 				continue;
@@ -47,7 +50,12 @@ namespace aether::app::web
 		material.asset = component->asset;
 		const TextureHandle handles[] = {material.asset.albedoTex, material.asset.normalTex, material.asset.metallicRoughnessTex, material.asset.occlusionTex, material.asset.emissiveTex};
 		std::string* paths[] = {&material.albedoPath, &material.normalPath, &material.metallicRoughnessPath, &material.occlusionPath, &material.emissivePath};
-		for (unsigned i = 0; i < 5; ++i)
+		const auto* requested = world.TryGet<BrowserMaterialTexture>(entity);
+		if (requested)
+		{
+			material.albedoPath = requested->path;
+		}
+		for (unsigned i = requested ? 1 : 0; i < 5; ++i)
 		{
 			if (handles[i].IsValid() && handles[i] != m_textures.DefaultHandle() && handles[i] != m_textures.WhiteHandle() && !m_textures.TryGetPath(handles[i], *paths[i]))
 			{
