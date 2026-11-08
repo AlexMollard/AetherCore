@@ -249,14 +249,12 @@ namespace aether::app::web
 		UiImageSystem::ConnectLifecycle(world, m_model_textures);
 		m_sprite_system.Initialize(m_textures, m_sprites);
 		m_tile_system.Initialize(m_textures, m_sprites, m_tiles);
-		// Native Application order: Animation, SpriteAnimation, Physics, Physics2D, (scripts),
-		// Particles. Scripts run after every world simulation system and before particles so a
-		// burst a script queues emits the same tick, and collision events produced by this tick's
-		// physics step are visible to the same tick's scripts.
+		// Match native: SpriteAnimation, Physics, Physics2D, scripts, Animation, Particles.
+		// Collision/sprite events are available to this tick's scripts. Script-selected skeletal
+		// clips and playback rates then advance in the same tick, before render extraction.
 		auto animation = std::make_unique<AnimationSystem>();
 		m_animation = animation.get();
 		m_animation->SetClipDurationSource([this](World& source, Entity entity, const SkinnedMeshComponent& skin, float& clip, float& fade) { return m_models.ClipDurations(source, entity, skin, clip, fade); });
-		world.RegisterSystem(std::move(animation));
 		world.RegisterSystem(std::make_unique<SpriteAnimationSystem>(m_sprites));
 		auto physics3D = std::make_unique<PhysicsSystem>();
 		m_physics = physics3D.get();
@@ -267,6 +265,7 @@ namespace aether::app::web
 		auto script = std::make_unique<WebScriptSystem>();
 		m_script_system = script.get();
 		world.RegisterSystem(std::move(script));
+		world.RegisterSystem(std::move(animation));
 		auto particles = std::make_unique<ParticleSystem>(m_textures);
 		particles->SetRetireCallback([this](Entity entity) { m_retired_particles.push_back(entity); });
 		world.RegisterSystem(std::move(particles));
@@ -279,11 +278,11 @@ namespace aether::app::web
 #endif
 		UiImageSystem::DisconnectLifecycle(world);
 		world.UnregisterSystem("ParticleSystem");
+		world.UnregisterSystem("AnimationSystem");
 		world.UnregisterSystem("WebScriptSystem");
 		world.UnregisterSystem("Physics2DSystem");
 		world.UnregisterSystem("PhysicsSystem");
 		world.UnregisterSystem("SpriteAnimationSystem");
-		world.UnregisterSystem("AnimationSystem");
 		m_tile_system.Shutdown();
 		m_sprite_system.Shutdown();
 		m_models.ClearEntities();

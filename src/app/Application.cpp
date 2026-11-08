@@ -313,7 +313,6 @@ namespace aether::app
 				// data the host has already superseded.
 				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::net::NetworkReceiveSystem>(networkRef));
 
-				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 				auto spriteAnimationSystem = std::make_unique<aether::SpriteAnimationSystem>(attachContext.Get<aether::SpriteAssetStore>());
 				auto* spriteAnimationPtr = spriteAnimationSystem.get();
 				attachContext.Get<World>().RegisterSystem(std::move(spriteAnimationSystem));
@@ -347,6 +346,10 @@ namespace aether::app
 				auto* scriptPtr = scriptSystem.get();
 				attachContext.Get<World>().RegisterSystem(std::move(scriptSystem));
 				services.Register<ScriptComponentSystem>(*scriptPtr);
+
+				// Gameplay selects clips, rates and fades for this frame before their clocks
+				// advance. Skeletal animation has no physics or sprite-event dependency.
+				attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 
 				// The CLR-backed script bridges are constructed HERE, not inside
 				// NetworkContext: keeping the CoreCLR host out of NetworkContext.cpp is

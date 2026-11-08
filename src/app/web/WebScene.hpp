@@ -107,7 +107,7 @@ namespace aether::app::web
 	};
 
 	// Runs the gameplay (script) tick at ScriptComponentSystem's native position in the world
-	// system order: after Animation/Physics/Physics2D, before Particles.
+	// system order: after SpriteAnimation/Physics/Physics2D, before skeletal Animation/Particles.
 	class WebScriptSystem final : public System
 	{
 	public:

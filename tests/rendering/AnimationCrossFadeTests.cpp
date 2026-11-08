@@ -2,6 +2,9 @@
 
 #include "animation/AnimationSystem.hpp"
 #include "scene/Components.hpp"
+#include "scene/World.hpp"
+
+#include <algorithm>
 
 using namespace aether;
 
@@ -73,4 +76,55 @@ TEST_CASE("Each clip in a crossfade wraps on its own length and looping flag")
 	AdvanceAnimation(smc, 0.3f, 0.25f, kClipLength);
 	CHECK(smc.fadeTime == doctest::Approx(0.2f)); // old clip looped past its 2 s end
 	CHECK(smc.animTime == doctest::Approx(0.3f)); // new clip holds past its 0.25 s end
+}
+
+TEST_CASE("Gameplay-selected skeletal clocks advance in the current frame at variable frame rates")
+{
+	class AnimationAuthor final : public System
+	{
+	public:
+		AnimationAuthor(Entity entity, const float& realDelta) : m_entity(entity), m_real_delta(realDelta)
+		{
+		}
+		void Update(World& world, float dt) override
+		{
+			auto& skin = world.Get<SkinnedMeshComponent>(m_entity);
+			skin.playbackSpeed = m_real_delta / dt;
+			if (m_first)
+			{
+				CrossFadeTo(skin, 1, .18f / skin.playbackSpeed);
+				m_first = false;
+			}
+		}
+		const char* GetName() const override
+		{
+			return "AnimationAuthor";
+		}
+	private:
+		Entity m_entity;
+		const float& m_real_delta;
+		bool m_first = true;
+	};
+	World world;
+	const auto entity = world.Create();
+	world.Emplace<SkinnedMeshComponent>(entity, Playing(0, .7f));
+	float realDelta = 0;
+	world.RegisterSystem(std::make_unique<AnimationAuthor>(entity, realDelta));
+	auto animation = std::make_unique<AnimationSystem>();
+	animation->SetClipDurationSource([](World&, Entity, const SkinnedMeshComponent&, float& clip, float& fade)
+	{
+		clip = fade = 100.f;
+		return true;
+	});
+	world.RegisterSystem(std::move(animation));
+	float elapsed = 0;
+	for (int frame = 0; frame < 40; ++frame)
+	{
+		realDelta = frame % 2 == 0 ? .2f : 1.f / 60;
+		world.UpdateSystems(std::min(realDelta, 1.f / 30));
+		elapsed += realDelta;
+		const auto& skin = world.Get<SkinnedMeshComponent>(entity);
+		CHECK(skin.animTime == doctest::Approx(elapsed).epsilon(.0001));
+		CHECK(skin.fadeWeight == 0.f);
+	}
 }
