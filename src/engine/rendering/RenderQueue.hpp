@@ -86,6 +86,22 @@ namespace aether
 		const char* debugName = "RenderQueue";
 	};
 
+	struct AnimationScratchCapacity
+	{
+		std::uint32_t sampleJobs = 0, skinJobs = 0, nodes = 0, joints = 0, overrides = 0;
+		bool operator==(const AnimationScratchCapacity&) const = default;
+	};
+
+	struct AnimationScratchDraw
+	{
+		render_queue_anim::SampleKey state;
+		std::uint32_t skinIndex = 0, nodeCount = 0, jointCount = 0;
+	};
+
+	// GPU-free sizing over immutable draw metadata; uses the dispatcher's dedupe keys.
+	AnimationScratchCapacity MeasureAnimationScratch(std::span<const AnimationScratchDraw> draws);
+	AnimationScratchCapacity GrowAnimationScratch(AnimationScratchCapacity current, AnimationScratchCapacity demand, AnimationScratchCapacity limits);
+
 	class RenderQueue
 	{
 	public:
@@ -245,7 +261,7 @@ namespace aether
 	private:
 		// Allocates the skinning buffers the first time this queue sees an animated
 		// draw. Called from PrepareAndDispatch on the render thread.
-		void EnsureAnimationBuffers();
+		void EnsureAnimationBuffers(std::uint32_t frameSlot, AnimationScratchCapacity demand);
 
 		// Recreates one slot's BatchDesc buffer at a larger capacity. Runs on the render
 		// thread inside PrepareAndDispatch, after this frame's BeginFrame fence wait has
@@ -343,6 +359,8 @@ namespace aether
 		std::uint32_t m_maxSampledPoses = 0;
 		std::uint32_t m_maxRagdollOverrides = 0;
 		bool m_animationBuffersReady = false;
+		std::array<AnimationScratchCapacity, kFramesInFlight> m_animationCapacity{};
+		std::vector<AnimationScratchDraw> m_animationDemandDraws;
 		std::string m_debugName = "RenderQueue";
 
 		struct BatchRenderInfo

@@ -25,6 +25,64 @@
 
 namespace aether
 {
+	namespace
+	{
+		render_queue_anim::SampleKey AnimationSampleKey(const DrawCommand& draw)
+		{
+			render_queue_anim::SampleKey key{.db = draw.animDb, .dbGeneration = draw.animDb->GetGeneration(), .clip = draw.animClipIndex, .time = draw.animTime, .overrides = draw.ragdollOverrides};
+			if (draw.fadeWeight > 0.0f && draw.fadeClipIndex < draw.animDb->GetClipCount())
+			{
+				key.fadeClip = draw.fadeClipIndex;
+				key.fadeTime = draw.fadeTime;
+				key.fadeWeight = draw.fadeWeight;
+			}
+			return key;
+		}
+	}
+
+	AnimationScratchCapacity MeasureAnimationScratch(std::span<const AnimationScratchDraw> draws)
+	{
+		AnimationScratchCapacity result;
+		render_queue_anim::DedupeTable<render_queue_anim::SampleKey> samples;
+		render_queue_anim::DedupeTable<render_queue_anim::SkinKey> skins;
+		const auto add = [](std::uint32_t& count, std::uint64_t increment)
+		{
+			count = static_cast<std::uint32_t>(std::min<std::uint64_t>(UINT32_MAX, count + increment));
+		};
+		for (const auto& draw: draws)
+		{
+			if (draw.nodeCount == 0 || draw.jointCount == 0) { continue; }
+			auto sample = samples.Find(draw.state);
+			if (sample == decltype(samples)::kNone)
+			{
+				sample = samples.Add(draw.state);
+				add(result.nodes, draw.nodeCount);
+				add(result.overrides, draw.state.overrides.size());
+			}
+			const render_queue_anim::SkinKey skin{.sampleJob = sample, .skinIndex = draw.skinIndex};
+			if (skins.Find(skin) == decltype(skins)::kNone)
+			{
+				skins.Add(skin);
+				add(result.joints, draw.jointCount);
+			}
+		}
+		result.sampleJobs = samples.Size();
+		result.skinJobs = skins.Size();
+		return result;
+	}
+
+	AnimationScratchCapacity GrowAnimationScratch(AnimationScratchCapacity current, AnimationScratchCapacity demand, AnimationScratchCapacity limits)
+	{
+		const auto grow = [](std::uint32_t old, std::uint32_t needed, std::uint32_t cap)
+		{
+			if (needed <= old) { return std::min(old, cap); }
+			// 64-bit rounding also handles UINT32_MAX without bit_ceil overflow.
+			return static_cast<std::uint32_t>(std::min<std::uint64_t>(cap, std::bit_ceil(static_cast<std::uint64_t>(needed))));
+		};
+		return {grow(current.sampleJobs, demand.sampleJobs, limits.sampleJobs), grow(current.skinJobs, demand.skinJobs, limits.skinJobs),
+		        grow(current.nodes, demand.nodes, limits.nodes), grow(current.joints, demand.joints, limits.joints), grow(current.overrides, demand.overrides, limits.overrides)};
+	}
+
 	void RenderQueue::Initialize(const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config)
 	{
 		m_sharedPipelines = &pipelines;
@@ -163,134 +221,82 @@ namespace aether
 		AE_INFO(LogCategory::Render, "RenderQueue({}): slot {} batch capacity grown to {}.", m_debugName, frameSlot, newCapacity);
 	}
 
-	// The skinning buffers are sized for the queue's worst case (maxAnimationDraws
-	// skeletons of 128 joints, triple-buffered) and that reservation costs over a
-	// hundred megabytes per queue. A scene with no skinned meshes - every 2D scene,
-	// and most 3D ones - would never touch a byte of it, so the buffers are created
-	// the first time this queue is actually handed an animated draw and kept from
-	// then on. Capacity is unchanged; only the moment of allocation moved.
-	void RenderQueue::EnsureAnimationBuffers()
+	// Grow only the slot BeginFrame has fenced. Other slots keep their live addresses.
+	// New handles are published together; an allocation failure leaves the old set intact.
+	void RenderQueue::EnsureAnimationBuffers(std::uint32_t frameSlot, AnimationScratchCapacity demand)
 	{
 		AE_PROFILE_ZONE();
-		if (m_animationBuffersReady || m_maxAnimationDraws == 0u)
-		{
-			return;
-		}
+		const AnimationScratchCapacity limits{m_maxAnimationDraws, m_maxAnimationDraws, m_maxSampledPoses, m_maxSkinJoints, m_maxRagdollOverrides};
+		const auto capacity = GrowAnimationScratch(m_animationCapacity[frameSlot], demand, limits);
+		if (capacity == m_animationCapacity[frameSlot] || capacity.sampleJobs == 0) { return; }
 
 		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
-		constexpr gpu::BufferUsage kAnimationSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst;
-
-		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		constexpr gpu::BufferUsage kAnimationFlags = kSsboFlags | gpu::BufferUsage::TransferDst;
+		std::vector<gpu::BufferHandle> allocations;
+		allocations.reserve(6);
+		struct Rollback
 		{
-			const gpu::MappedBufferDesc desc{
-			        .size = static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::SkinCopyJob),
-			        .usage = kSsboFlags,
-			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
-			        .debugName = "RenderQueue.SkinCopyJobs",
-			};
-			m_skinCopyJobs[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-			if (!m_skinCopyJobs[i].handle.IsValid())
+			std::vector<gpu::BufferHandle>& handles;
+			bool published = false;
+			~Rollback()
 			{
-				Throw(AetherError::Engine("RenderQueue: SkinCopyJobs CreateMappedBuffer failed"));
+				if (!published)
+				{
+					for (auto handle: handles) { gpu::ResourceRegistry::Destroy(handle); }
+				}
 			}
-			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_skinCopyJobs[i].handle);
-			m_skinCopyJobs[i].mapped = view.mappedPtr;
-			m_skinCopyJobs[i].address = view.deviceAddress;
-		}
-
-		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		} rollback{allocations};
+		const auto mapped = [&](std::uint32_t count, std::size_t stride, const char* name) -> MappedPerFrame
 		{
-			const gpu::MappedBufferDesc desc{
-			        .size = static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::AnimatorSampleJob),
-			        .usage = kSsboFlags,
-			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
-			        .debugName = "RenderQueue.AnimSampleJobs",
-			};
-			m_animationSampleJobs[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-			if (!m_animationSampleJobs[i].handle.IsValid())
-			{
-				Throw(AetherError::Engine("RenderQueue: AnimSampleJobs CreateMappedBuffer failed"));
-			}
-			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_animationSampleJobs[i].handle);
-			m_animationSampleJobs[i].mapped = view.mappedPtr;
-			m_animationSampleJobs[i].address = view.deviceAddress;
-		}
-
-		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+			if (count == 0) { return {}; }
+			const gpu::MappedBufferDesc desc{.size = static_cast<gpu::DeviceSize>(count) * stride, .usage = kSsboFlags, .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu, .debugName = name};
+			const auto handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!handle.IsValid()) { Throw(AetherError::Engine("RenderQueue: animation mapped allocation failed")); }
+			allocations.push_back(handle);
+			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(handle);
+			if (view.mappedPtr == nullptr) { Throw(AetherError::Engine("RenderQueue: animation mapping failed")); }
+			return {.handle = handle, .mapped = view.mappedPtr, .address = view.deviceAddress};
+		};
+		const auto device = [&](std::uint32_t count, std::size_t stride, const char* name) -> DevicePerFrame
 		{
-			const gpu::MappedBufferDesc desc{
-			        .size = static_cast<gpu::DeviceSize>(m_maxRagdollOverrides) * sizeof(AnimationContracts::RagdollOverrideEntry),
-			        .usage = kSsboFlags,
-			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
-			        .debugName = "RenderQueue.RagdollOverrides",
-			};
-			m_ragdollOverrides[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-			if (!m_ragdollOverrides[i].handle.IsValid())
-			{
-				Throw(AetherError::Engine("RenderQueue: RagdollOverrides CreateMappedBuffer failed"));
-			}
-			const auto ragdollView = gpu::ResourceRegistry::ResolveMappedBuffer(m_ragdollOverrides[i].handle);
-			m_ragdollOverrides[i].mapped = ragdollView.mappedPtr;
-			m_ragdollOverrides[i].address = ragdollView.deviceAddress;
-		}
-
-		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+			if (count == 0) { return {}; }
+			const gpu::BufferDesc desc{.size = static_cast<gpu::DeviceSize>(count) * stride, .usage = kAnimationFlags, .debugName = name};
+			const auto handle = gpu::ResourceRegistry::CreateBuffer(desc);
+			if (!handle.IsValid()) { Throw(AetherError::Engine("RenderQueue: animation device allocation failed")); }
+			allocations.push_back(handle);
+			return {.handle = handle, .address = gpu::ResourceRegistry::ResolveBuffer(handle).deviceAddress};
+		};
+		const auto skinJobs = mapped(capacity.skinJobs, sizeof(AnimationContracts::SkinCopyJob), "RenderQueue.SkinCopyJobs");
+		const auto sampleJobs = mapped(capacity.sampleJobs, sizeof(AnimationContracts::AnimatorSampleJob), "RenderQueue.AnimSampleJobs");
+		const auto overrides = mapped(capacity.overrides, sizeof(AnimationContracts::RagdollOverrideEntry), "RenderQueue.RagdollOverrides");
+		const auto palette = device(capacity.joints, sizeof(glm::mat4), "RenderQueue.SkinPalette");
+		const auto poses = device(capacity.nodes, sizeof(AnimationContracts::SampledNodePose), "RenderQueue.SampledPoses");
+		const auto globals = device(capacity.nodes, sizeof(glm::mat4), "RenderQueue.NodeGlobalTransforms");
+		// ResourceRegistry retires old allocations through its destruction ring. This slot's
+		// preceding submission is already complete, and no other slot refers to these buffers.
+		const auto publish = [](auto& target, const auto& replacement)
 		{
-			const gpu::BufferDesc desc{
-			        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
-			        .usage = kAnimationSsboFlags,
-			        .debugName = "RenderQueue.SkinPalette",
-			};
-			m_skinPalette[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
-			if (!m_skinPalette[i].handle.IsValid())
-			{
-				Throw(AetherError::Engine("RenderQueue: SkinPalette CreateBuffer failed"));
-			}
-			m_skinPalette[i].address = gpu::ResourceRegistry::ResolveBuffer(m_skinPalette[i].handle).deviceAddress;
-		}
-
-		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
-		{
-			const gpu::BufferDesc desc{
-			        .size = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose),
-			        .usage = kAnimationSsboFlags,
-			        .debugName = "RenderQueue.SampledPoses",
-			};
-			m_sampledPoses[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
-			if (!m_sampledPoses[i].handle.IsValid())
-			{
-				Throw(AetherError::Engine("RenderQueue: SampledPoses CreateBuffer failed"));
-			}
-			m_sampledPoses[i].address = gpu::ResourceRegistry::ResolveBuffer(m_sampledPoses[i].handle).deviceAddress;
-		}
-
-		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
-		{
-			const gpu::BufferDesc desc{
-			        .size = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4),
-			        .usage = kAnimationSsboFlags,
-			        .debugName = "RenderQueue.NodeGlobalTransforms",
-			};
-			m_nodeGlobalTransforms[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
-			if (!m_nodeGlobalTransforms[i].handle.IsValid())
-			{
-				Throw(AetherError::Engine("RenderQueue: NodeGlobalTransforms CreateBuffer failed"));
-			}
-			m_nodeGlobalTransforms[i].address = gpu::ResourceRegistry::ResolveBuffer(m_nodeGlobalTransforms[i].handle).deviceAddress;
-		}
-
-		// Freshly created buffers hold garbage, so every slot needs its zero-fill
-		// again before the animation compute passes read from it.
-		m_animationSlotCleared.fill(false);
-		m_animationInputHash.fill(0ull);
+			gpu::ResourceRegistry::Destroy(target.handle);
+			target = replacement;
+		};
+		publish(m_skinCopyJobs[frameSlot], skinJobs);
+		publish(m_animationSampleJobs[frameSlot], sampleJobs);
+		publish(m_ragdollOverrides[frameSlot], overrides);
+		publish(m_skinPalette[frameSlot], palette);
+		publish(m_sampledPoses[frameSlot], poses);
+		publish(m_nodeGlobalTransforms[frameSlot], globals);
+		rollback.published = true;
+		m_animationCapacity[frameSlot] = capacity;
+		m_animationSlotCleared[frameSlot] = false;
+		m_animationInputHash[frameSlot] = 0;
 		m_animationBuffersReady = true;
-
-		AE_INFO(LogCategory::Render,
-		        "RenderQueue({}): animation buffers created on first skinned draw: skinPalette[0]=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}",
-		        m_debugName,
-		        m_skinPalette[0].address,
-		        m_sampledPoses[0].address,
-		        m_nodeGlobalTransforms[0].address);
+		const auto deviceBytes = static_cast<std::uint64_t>(capacity.joints) * sizeof(glm::mat4)
+		        + static_cast<std::uint64_t>(capacity.nodes) * (sizeof(AnimationContracts::SampledNodePose) + sizeof(glm::mat4));
+		const auto mappedBytes = static_cast<std::uint64_t>(capacity.skinJobs) * sizeof(AnimationContracts::SkinCopyJob)
+		        + static_cast<std::uint64_t>(capacity.sampleJobs) * sizeof(AnimationContracts::AnimatorSampleJob)
+		        + static_cast<std::uint64_t>(capacity.overrides) * sizeof(AnimationContracts::RagdollOverrideEntry);
+		AE_INFO(LogCategory::Render, "RenderQueue({}): slot {} animation scratch grown: sampleJobs={}, skinJobs={}, nodes={}, joints={}, overrides={}, deviceBytes={}, mappedBytes={}",
+		        m_debugName, frameSlot, capacity.sampleJobs, capacity.skinJobs, capacity.nodes, capacity.joints, capacity.overrides, deviceBytes, mappedBytes);
 	}
 
 	// The mirror of EnsureAnimationBuffers. Everything it touches is put back exactly as
@@ -299,8 +305,8 @@ namespace aether
 	// skinning this frame" - it is the state every queue starts life in - so releasing
 	// cannot make a frame render wrong, only make the next skinned frame re-create.
 	//
-	// Capacity (m_maxAnimationDraws and friends) is deliberately left alone: it is the
-	// queue's configuration, not its allocation, and EnsureAnimationBuffers reads it.
+	// Configured limits (m_maxAnimationDraws and friends) stay unchanged; allocated
+	// per-slot capacities reset so the next animated packet sizes them again.
 	void RenderQueue::ReleaseAnimationBuffers()
 	{
 		AE_PROFILE_ZONE();
@@ -341,6 +347,7 @@ namespace aether
 		// The palettes those hashes described are gone.
 		m_animationInputHash.fill(0ull);
 		m_animationBuffersReady = false;
+		m_animationCapacity = {};
 
 		AE_INFO(LogCategory::Render, "RenderQueue({}): animation buffers released after sustained absence of skinned draws.", m_debugName);
 	}
@@ -397,6 +404,7 @@ namespace aether
 		m_animationSlotCleared = {};
 		m_animationInputHash = {};
 		m_animationBuffersReady = false;
+		m_animationCapacity = {};
 		m_slotHasAnimatedDraws = {};
 	}
 
@@ -446,10 +454,22 @@ namespace aether
 		prepared.frameAddr = frameAddr;
 		m_animationSampleJobCount = 0;
 
-		if (!m_animationBuffersReady && std::ranges::any_of(commands, [](const DrawCommand& dc) { return dc.animDb != nullptr; }))
+		m_animationDemandDraws.clear();
+		for (const auto& draw: commands)
 		{
-			EnsureAnimationBuffers();
+			const auto* db = draw.animDb;
+			if (!db || (draw.animDbGeneration != 0 && (!db->IsAlive() || draw.animDbGeneration != db->GetGeneration()))
+			    || !db->IsValid() || draw.skinJointCount == 0 || draw.skinIndex < 0 || draw.animClipIndex >= db->GetClipCount() || !std::cmp_less(draw.skinIndex, db->GetSkinCount()))
+			{
+				continue;
+			}
+			if (draw.mesh == nullptr || !draw.mesh->IsAlive() || !draw.mesh->IsValid() || draw.mesh->GetGeneration() != draw.meshGeneration || !draw.mesh->GetIndexBuffer().IsValid())
+			{
+				continue;
+			}
+			m_animationDemandDraws.push_back({.state = AnimationSampleKey(draw), .skinIndex = static_cast<std::uint32_t>(draw.skinIndex), .nodeCount = db->GetNodeCount(), .jointCount = draw.skinJointCount});
 		}
+		EnsureAnimationBuffers(frameSlot, MeasureAnimationScratch(m_animationDemandDraws));
 
 		const std::uint32_t animJobBase = 0;
 
@@ -465,17 +485,17 @@ namespace aether
 			m_animationSlotCleared[frameSlot] = true;
 			if (m_skinPalette[frameSlot].handle.IsValid())
 			{
-				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
+				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_animationCapacity[frameSlot].joints) * sizeof(glm::mat4);
 				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_skinPalette[frameSlot].handle), 0, slotSize, 0);
 			}
 			if (m_sampledPoses[frameSlot].handle.IsValid())
 			{
-				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose);
+				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_animationCapacity[frameSlot].nodes) * sizeof(AnimationContracts::SampledNodePose);
 				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_sampledPoses[frameSlot].handle), 0, slotSize, 0);
 			}
 			if (m_nodeGlobalTransforms[frameSlot].handle.IsValid())
 			{
-				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4);
+				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_animationCapacity[frameSlot].nodes) * sizeof(glm::mat4);
 				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_nodeGlobalTransforms[frameSlot].handle), 0, slotSize, 0);
 			}
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
@@ -652,19 +672,7 @@ namespace aether
 					// meshes all submit the same one, and so does every draw of it the shadow
 					// cascades share. Overrides are part of the key, so a ragdoll's or a
 					// script's per-instance node overrides still get their own job.
-					render_queue_anim::SampleKey sampleKey{
-					        .db = drawAnimDb,
-					        .dbGeneration = drawAnimDb->GetGeneration(),
-					        .clip = dc.animClipIndex,
-					        .time = dc.animTime,
-					        .overrides = dc.ragdollOverrides,
-					};
-					if (dc.fadeWeight > 0.0f && dc.fadeClipIndex < drawClipCount)
-					{
-						sampleKey.fadeClip = dc.fadeClipIndex;
-						sampleKey.fadeTime = dc.fadeTime;
-						sampleKey.fadeWeight = dc.fadeWeight;
-					}
+					const auto sampleKey = AnimationSampleKey(dc);
 
 					std::uint32_t sampleIdx = m_sampleKeys.Find(sampleKey);
 					if (sampleIdx == render_queue_anim::DedupeTable<render_queue_anim::SampleKey>::kNone)

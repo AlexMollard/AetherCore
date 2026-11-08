@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "rendering/AnimJobDedupe.hpp"
+#include "rendering/RenderQueue.hpp"
 
 #include <vector>
 
@@ -97,6 +98,74 @@ TEST_CASE("Skin jobs are distinct per skin of one sampled state")
 	CHECK(add({.sampleJob = 0, .skinIndex = 0}) == 0u);
 	CHECK(add({.sampleJob = 1, .skinIndex = 0}) == 2u);
 	CHECK(skins.Size() == 3u);
+}
+
+TEST_CASE("Animation scratch counts unique states skins nodes joints and overrides")
+{
+	std::vector<AnimationContracts::RagdollOverrideEntry> overrides(11);
+	SampleKey plain = Key(&kDbA, 0, 1.0f);
+	SampleKey ragdoll = plain;
+	ragdoll.overrides = overrides;
+	std::vector<AnimationScratchDraw> draws(8, {.state = plain, .skinIndex = 0, .nodeCount = 69, .jointCount = 65});
+	draws.push_back({.state = plain, .skinIndex = 1, .nodeCount = 69, .jointCount = 12});
+	draws.push_back({.state = ragdoll, .skinIndex = 0, .nodeCount = 69, .jointCount = 65});
+	draws.push_back(draws.back());
+	CHECK(MeasureAnimationScratch(draws) == AnimationScratchCapacity{2, 3, 138, 142, 11});
+	CHECK(MeasureAnimationScratch({}) == AnimationScratchCapacity{});
+	const AnimationScratchCapacity limits{1024, 1024, 262144, 131072, 2048};
+	const auto grown = GrowAnimationScratch({}, MeasureAnimationScratch(draws), limits);
+	CHECK(grown == AnimationScratchCapacity{2, 4, 256, 256, 16});
+	const std::uint64_t deviceBytes = grown.nodes * (sizeof(AnimationContracts::SampledNodePose) + sizeof(glm::mat4)) + grown.joints * sizeof(glm::mat4);
+	CHECK(deviceBytes < 64 * 1024);
+	CHECK(GrowAnimationScratch(grown, {}, limits) == grown);
+	CHECK(GrowAnimationScratch(grown, {3, 5, 257, 257, 17}, limits) == AnimationScratchCapacity{4, 8, 512, 512, 32});
+}
+
+TEST_CASE("Animation scratch growth honors configured caps without wrapping")
+{
+	const AnimationScratchCapacity limits{3, 5, 1000, 700, 17};
+	CHECK(GrowAnimationScratch({}, {UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX}, limits) == limits);
+	CHECK(GrowAnimationScratch({}, {1, 1, 69, 65, 0}, {}) == AnimationScratchCapacity{});
+	std::vector<AnimationScratchDraw> draws{
+		{.state = Key(&kDbA, 0, 0), .nodeCount = UINT32_MAX, .jointCount = UINT32_MAX},
+		{.state = Key(&kDbB, 0, 0), .nodeCount = 69, .jointCount = 65}
+	};
+	CHECK(MeasureAnimationScratch(draws) == AnimationScratchCapacity{2, 2, UINT32_MAX, UINT32_MAX, 0});
+}
+
+TEST_CASE("Animation scratch accommodates growing crowds up to the unchanged animator limit")
+{
+	const AnimationScratchCapacity limits{1024, 1024, 262144, 131072, 2048};
+	AnimationScratchCapacity capacity;
+	for (const std::uint32_t actors: {2u, 64u, 1024u})
+	{
+		std::vector<AnimationScratchDraw> draws;
+		for (std::uint32_t actor = 0; actor < actors; ++actor)
+		{
+			SampleKey state = Key(&kDbA, 0, static_cast<float>(actor));
+			state.fadeClip = 1;
+			state.fadeTime = static_cast<float>(actor) + 0.25f;
+			state.fadeWeight = 0.5f;
+			// Body and visible tool share the actor's pose and skin palette.
+			draws.push_back({.state = state, .nodeCount = 69, .jointCount = 65});
+			draws.push_back(draws.back());
+		}
+		const auto demand = MeasureAnimationScratch(draws);
+		CHECK(demand == AnimationScratchCapacity{actors, actors, actors * 69, actors * 65, 0});
+		capacity = GrowAnimationScratch(capacity, demand, limits);
+		CHECK(capacity.sampleJobs >= demand.sampleJobs);
+		CHECK(capacity.skinJobs >= demand.skinJobs);
+		CHECK(capacity.nodes >= demand.nodes);
+		CHECK(capacity.joints >= demand.joints);
+		CHECK(capacity.sampleJobs <= limits.sampleJobs);
+		CHECK(capacity.nodes <= limits.nodes);
+		CHECK(capacity.joints <= limits.joints);
+		if (actors == 64)
+		{
+			const auto bytes = static_cast<std::uint64_t>(capacity.nodes) * 112 + static_cast<std::uint64_t>(capacity.joints) * 64;
+			CHECK(bytes < 2 * 1024 * 1024);
+		}
+	}
 }
 
 TEST_CASE("Dedupe table survives growth and clears between frames")
