@@ -9,6 +9,7 @@ import {pathToFileURL} from 'node:url';
 import {checkBudgets, measureDistribution, qualifyAgentGame} from './distribution-metrics.mjs';
 import {isHardwareAdapter} from '../experiments/rust-webgpu/browser-checks.mjs';
 import {isExportPath, pakPaths, streamingPaths, validate3dAssets} from './export-paths.mjs';
+import {overrideVerificationGateway} from './gateway-override.mjs';
 
 const options=Object.fromEntries(process.argv.slice(2).map(arg=>{const i=arg.indexOf('=');return [arg.slice(2,i),arg.slice(i+1)];}));
 const root=path.resolve(options.root), reportPath=path.resolve(options.report);
@@ -41,6 +42,13 @@ try {
   report.checks.push({name:'3d-cooked-package-contract',status:'passed'});
  }
  report.checks.push({name:'manifest-integrity-and-production-boundary',status:'passed'});
+ let servedProject;
+ if(process.env.AETHER_WEB_VERIFY_GATEWAY_URL!==undefined){
+  assert.ok(manifest.files.some(file=>file.path==='project.js'),'Gateway override requires manifest-verified project.js');
+  const overridden=overrideVerificationGateway(await readFile(path.join(root,'project.js')),process.env.AETHER_WEB_VERIFY_GATEWAY_URL);
+  servedProject=overridden.bytes;report.gatewayOverride=overridden.override;
+  report.checks.push({name:'verification-gateway-deployment-override',status:'passed',...overridden.override});
+ }
  const require=createRequire(import.meta.url), module=process.env.AETHER_PLAYWRIGHT_MODULE || 'playwright';
  const {chromium}=require(module);assert.equal(require(path.join(module,'package.json')).version,manifest.toolchains.playwright);
  server=createServer(async(req,res)=>{
@@ -51,7 +59,7 @@ try {
    if(!url.pathname.startsWith('/nested/game/')){res.writeHead(404).end();return;}
    const name=decodeURIComponent(url.pathname.slice('/nested/game/'.length)) || 'index.html';
    if(!isExportPath(name) || !manifest.files.some(file=>file.path===name)){res.writeHead(403).end();return;}
-   const bytes=await readFile(path.join(root,name));
+   const bytes=name==='project.js' && servedProject!==undefined ? servedProject : await readFile(path.join(root,name));
    const mime={'.js':'text/javascript','.mjs':'text/javascript','.html':'text/html','.wasm':'application/wasm','.json':'application/json'}[path.extname(name)] || 'application/octet-stream';
    res.writeHead(200,{'Content-Type':mime,'Cache-Control':options.measure ? 'public, max-age=3600' : 'no-store'}).end(bytes);
   } catch {res.writeHead(404).end();}
